@@ -468,7 +468,7 @@ function productionAdapterConfigs(): ProductionAdapterConfig[] {
       runtimeMode: "official_public_api",
       sourceFamily: "github_security_advisory",
       parserProfile: "advisory_signal",
-      implemented: false,
+      implemented: true,
       canaryOnly: false,
       maxBytes: 1_000_000,
       timeoutMs: 15_000,

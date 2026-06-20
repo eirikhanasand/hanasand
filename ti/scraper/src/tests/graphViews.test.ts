@@ -14,6 +14,12 @@ import {
   buildGraphExportSlaDto,
   buildGraphNeighborhoodView,
   buildGraphIntegrityReport,
+  buildGraphIncidentClaimWorkspaceDto,
+  buildGraphActorTimelineChangeWorkspaceDto,
+  buildGraphActorProductPacketDto,
+  buildGraphStixTaxiiMarketplaceReadinessDto,
+  buildGraphStixTaxiiMonetizationExportContractsDto,
+  buildGraphActorComparisonNotebookDto,
   buildGraphQueryApiContract,
   buildGraphReviewApplyPlan,
   buildGraphReviewPlanApiDto,
@@ -30,6 +36,8 @@ import {
 } from "../export/graphViews.ts";
 import { buildProgressiveGraphUpdate } from "../export/progressiveGraph.ts";
 import type { RelationshipGraph, ProgressiveGraphEvidence } from "../types.ts";
+
+type TestGraphReviewState = "accepted" | "needs_review" | "rejected" | "contradicted" | "expired" | "unreviewed";
 
 const apt29 = { type: "actor" as const, value: "APT29", confidence: 0.86, aliases: ["Cozy Bear", "Nobelium"] };
 const apt42 = { type: "actor" as const, value: "APT42", confidence: 0.8, aliases: ["Charming Kitten"] };
@@ -1056,6 +1064,478 @@ describe("CTI graph persistence and query views", () => {
     expect(stix.endpoint).toBe("/v1/exports/stix");
     expect(stix.blockedCount).toBeGreaterThan(0);
     expect(stix.preview.excludedCount).toBeGreaterThan(0);
+    expect(stix.releaseCandidate).toEqual(stix.certification.rcGate);
+    expect(stix.runtime.releaseCandidate).toEqual(stix.runtime.certification.rcGate);
+    expect(stix.releaseCandidate.taxiiBoundary).toBe("descriptor_only_no_server");
+  });
+
+  test("builds canonical incident claim clusters with corroboration merge split and STIX hold semantics", () => {
+    const nodes = [
+      { id: "node--incident--apt29-june", type: "incident" as const, value: "APT29 June embassy intrusion claim", confidence: 0.78, provenance: [], properties: { claimType: "intrusion" } },
+      { id: "node--incident--volt-infra", type: "incident" as const, value: "Volt Typhoon Pacific infrastructure claim", confidence: 0.74, provenance: [] },
+      { id: "node--incident--lockbit-victim", type: "incident" as const, value: "LockBit Alpine Manufacturing victim claim", confidence: 0.62, provenance: [], properties: { recurringVictimClaim: true } },
+      { id: "node--incident--alias-ambiguous", type: "incident" as const, value: "Ambiguous Spider alias attribution claim", confidence: 0.46, provenance: [], properties: { splitRequired: true } },
+      { id: "node--incident--same-day-a", type: "incident" as const, value: "Same-day campaign wave Alpha", confidence: 0.66, provenance: [] },
+      { id: "node--incident--same-day-b", type: "incident" as const, value: "Same-day campaign wave Beta", confidence: 0.65, provenance: [] },
+      { id: "node--incident--contradicted-victim", type: "incident" as const, value: "Contradicted victim claim", confidence: 0.4, provenance: [] },
+      { id: "node--actor--apt29", type: "actor" as const, value: "APT29", confidence: 0.86, provenance: [] },
+      { id: "node--actor--volt", type: "actor" as const, value: "Volt Typhoon", confidence: 0.8, provenance: [] },
+      { id: "node--actor--lockbit", type: "actor" as const, value: "LockBit", confidence: 0.75, provenance: [] },
+      { id: "node--actor--scattered", type: "actor" as const, value: "Scattered Spider", confidence: 0.72, provenance: [] },
+      { id: "node--actor--octo", type: "actor" as const, value: "Octo Tempest", confidence: 0.71, provenance: [] },
+      { id: "node--victim--embassy", type: "victim" as const, value: "Example Embassy", confidence: 0.7, provenance: [] },
+      { id: "node--victim--pacific", type: "victim" as const, value: "Pacific Energy Operator", confidence: 0.72, provenance: [] },
+      { id: "node--victim--alpine", type: "victim" as const, value: "Alpine Manufacturing", confidence: 0.62, provenance: [] },
+      { id: "node--victim--alpha", type: "victim" as const, value: "Alpha Port Authority", confidence: 0.68, provenance: [] },
+      { id: "node--victim--beta", type: "victim" as const, value: "Beta Water Utility", confidence: 0.67, provenance: [] },
+      { id: "node--victim--disputed", type: "victim" as const, value: "Disputed Hospital", confidence: 0.48, provenance: [] },
+      { id: "node--campaign--embassy-wave", type: "campaign" as const, value: "Embassy spearphish wave", confidence: 0.78, provenance: [] },
+      { id: "node--campaign--old-reuse", type: "campaign" as const, value: "Old campaign reuse", confidence: 0.5, provenance: [] },
+      { id: "node--ttp--phishing", type: "attack-pattern" as const, value: "T1566 Phishing", confidence: 0.78, provenance: [] },
+      { id: "node--ttp--lolbin", type: "attack-pattern" as const, value: "T1218 System Binary Proxy Execution", confidence: 0.76, provenance: [] },
+      { id: "node--malware--lockbit", type: "malware" as const, value: "LockBit ransomware", confidence: 0.76, provenance: [] },
+      { id: "node--sector--energy", type: "sector" as const, value: "Energy", confidence: 0.76, provenance: [] },
+      { id: "node--country--us", type: "country" as const, value: "United States", confidence: 0.76, provenance: [] },
+      { id: "node--report--vendor-a", type: "report" as const, value: "Vendor A report", confidence: 0.8, provenance: [] },
+      { id: "node--report--rss-b", type: "report" as const, value: "RSS B syndicated report", confidence: 0.72, provenance: [] }
+    ];
+    const rel = (
+      id: string,
+      sourceRef: string,
+      targetRef: string,
+      type: RelationshipGraph["relationships"][number]["type"],
+      sourceId: string,
+      observedAt: string,
+      confidence = 0.74,
+      reviewState: "accepted" | "needs_review" | "contradicted" = "accepted"
+    ): RelationshipGraph["relationships"][number] => ({
+      id,
+      sourceRef,
+      targetRef,
+      type,
+      confidence,
+      firstSeenAt: observedAt,
+      lastSeenAt: observedAt,
+      provenance: [{
+        sourceId,
+        captureId: `capture_${id}`,
+        url: "https://example.test/public-report",
+        collectedAt: observedAt,
+        contentHash: `hash_${id}`,
+        extractorVersion: "graph-claim-test"
+      }],
+      properties: {
+        reviewState,
+        stage: reviewState === "accepted" ? "reviewed" : "captured",
+        contradicted: reviewState === "contradicted",
+        evidenceLedgerIds: [`ledger_${id}`]
+      }
+    });
+    const graph: RelationshipGraph = {
+      nodes,
+      relationships: [
+        rel("rel--apt29-incident-actor", "node--incident--apt29-june", "node--actor--apt29", "attributed-to", "vendor_report_a", "2026-06-11T10:00:00.000Z", 0.84),
+        rel("rel--apt29-incident-victim", "node--incident--apt29-june", "node--victim--embassy", "targets", "vendor_report_a", "2026-06-11T10:00:00.000Z", 0.82),
+        rel("rel--apt29-incident-campaign", "node--incident--apt29-june", "node--campaign--embassy-wave", "related-to", "rss_feed_b", "2026-06-11T11:00:00.000Z", 0.78),
+        rel("rel--apt29-incident-ttp", "node--incident--apt29-june", "node--ttp--phishing", "uses", "rss_feed_b", "2026-06-11T11:00:00.000Z", 0.8),
+        rel("rel--report-a-apt29-incident", "node--report--vendor-a", "node--incident--apt29-june", "mentions", "vendor_report_a", "2026-06-11T10:00:00.000Z", 0.7),
+        rel("rel--report-b-apt29-incident", "node--report--rss-b", "node--incident--apt29-june", "mentions", "rss_feed_b", "2026-06-11T11:00:00.000Z", 0.68),
+        rel("rel--volt-incident-actor", "node--incident--volt-infra", "node--actor--volt", "attributed-to", "public_advisory_cisa", "2026-06-12T08:00:00.000Z", 0.78),
+        rel("rel--volt-incident-victim", "node--incident--volt-infra", "node--victim--pacific", "targets", "public_advisory_cisa", "2026-06-12T08:00:00.000Z", 0.76),
+        rel("rel--volt-incident-sector", "node--incident--volt-infra", "node--sector--energy", "related-to", "public_advisory_cisa", "2026-06-12T08:00:00.000Z", 0.7),
+        rel("rel--volt-incident-country", "node--incident--volt-infra", "node--country--us", "located-in", "public_advisory_cisa", "2026-06-12T08:00:00.000Z", 0.7),
+        rel("rel--volt-incident-ttp", "node--incident--volt-infra", "node--ttp--lolbin", "uses", "vendor_blog_volt", "2026-06-12T08:30:00.000Z", 0.77),
+        rel("rel--lockbit-incident-actor", "node--incident--lockbit-victim", "node--actor--lockbit", "attributed-to", "public_channel_lockbit", "2026-06-13T09:00:00.000Z", 0.64, "needs_review"),
+        rel("rel--lockbit-incident-victim", "node--incident--lockbit-victim", "node--victim--alpine", "targets", "public_channel_lockbit", "2026-06-13T09:00:00.000Z", 0.61, "needs_review"),
+        rel("rel--lockbit-incident-malware", "node--incident--lockbit-victim", "node--malware--lockbit", "uses", "public_channel_lockbit", "2026-06-13T09:00:00.000Z", 0.66, "needs_review"),
+        rel("rel--alias-incident-scattered", "node--incident--alias-ambiguous", "node--actor--scattered", "attributed-to", "vendor_report_alias", "2026-06-14T09:00:00.000Z", 0.52, "needs_review"),
+        rel("rel--alias-incident-octo", "node--incident--alias-ambiguous", "node--actor--octo", "attributed-to", "contradictory_vendor_alias", "2026-06-14T09:15:00.000Z", 0.5, "contradicted"),
+        rel("rel--same-day-alpha", "node--incident--same-day-a", "node--victim--alpha", "targets", "vendor_report_same_day", "2026-06-15T08:00:00.000Z", 0.66, "needs_review"),
+        rel("rel--same-day-beta", "node--incident--same-day-b", "node--victim--beta", "targets", "vendor_report_same_day", "2026-06-15T08:00:00.000Z", 0.65, "needs_review"),
+        rel("rel--contradicted-victim", "node--incident--contradicted-victim", "node--victim--disputed", "targets", "contradictory_vendor_victim", "2026-06-16T08:00:00.000Z", 0.4, "contradicted"),
+        rel("rel--old-campaign-reuse", "node--incident--same-day-b", "node--campaign--old-reuse", "related-to", "vendor_report_same_day", "2026-06-15T08:00:00.000Z", 0.5, "needs_review")
+      ]
+    };
+    graph.nodes.find((node) => node.id === "node--incident--same-day-b")!.properties = { oldCampaignReuse: true };
+    const snapshot = buildPersistedGraphSnapshot(graph, { generatedAt: "2026-06-20T12:00:00.000Z" });
+    const workspace = buildGraphIncidentClaimWorkspaceDto(snapshot, { query: "incident claims", generatedAt: "2026-06-20T12:00:00.000Z" });
+    const query = buildCorrelationGraphQuery(snapshot, { query: "APT29", generatedAt: "2026-06-20T12:00:00.000Z", maxRelationships: 50 });
+
+    expect(workspace.clusters.map((cluster) => cluster.canonicalValue)).toEqual(expect.arrayContaining([
+      "APT29 June embassy intrusion claim",
+      "Volt Typhoon Pacific infrastructure claim",
+      "LockBit Alpine Manufacturing victim claim",
+      "Ambiguous Spider alias attribution claim",
+      "Same-day campaign wave Alpha",
+      "Same-day campaign wave Beta",
+      "Contradicted victim claim"
+    ]));
+    const apt29Cluster = workspace.clusters.find((cluster) => cluster.canonicalValue === "APT29 June embassy intrusion claim")!;
+    expect(apt29Cluster.publisherCount).toBeGreaterThanOrEqual(2);
+    expect(apt29Cluster.sourceFamilyCount).toBeGreaterThanOrEqual(2);
+    expect(apt29Cluster.mergeSemantics.decision).toBe("merged_public_reports");
+    expect(apt29Cluster.mergeSemantics.rules).toEqual(expect.arrayContaining(["same_day_syndication", "publisher_diversity", "actor_victim_campaign_overlap"]));
+    expect(apt29Cluster.corroboratingEvidenceIds.length).toBeGreaterThan(0);
+    expect(apt29Cluster.reviewedStixSubset.eligibleRelationshipIds.length).toBeGreaterThan(0);
+    expect(apt29Cluster.reviewedStixSubset.heldRelationshipIds).toEqual(expect.arrayContaining([
+      "rel--apt29-incident-actor",
+      "rel--apt29-incident-victim",
+      "rel--apt29-incident-ttp"
+    ]));
+
+    const lockbitCluster = workspace.clusters.find((cluster) => cluster.canonicalValue === "LockBit Alpine Manufacturing victim claim")!;
+    expect(lockbitCluster.claimType).toBe("ransomware_claim");
+    expect(lockbitCluster.exportState).toBe("held_unreviewed_inference");
+    expect(lockbitCluster.mergeSemantics.rules).toContain("recurring_victim_claim_hold");
+
+    const aliasCluster = workspace.clusters.find((cluster) => cluster.canonicalValue === "Ambiguous Spider alias attribution claim")!;
+    expect(aliasCluster.exportState).toBe("held_contradicted");
+    expect(aliasCluster.mergeSemantics.decision).toBe("split_required");
+    expect(aliasCluster.mergeSemantics.splitRequiredWhen).toContain("contradictory_attribution");
+    expect(aliasCluster.contradictingEvidenceIds.length).toBeGreaterThan(0);
+
+    const sameDayClusters = workspace.clusters.filter((cluster) => cluster.canonicalValue.startsWith("Same-day campaign wave"));
+    expect(sameDayClusters).toHaveLength(2);
+    expect(sameDayClusters.find((cluster) => cluster.canonicalValue.endsWith("Beta"))?.mergeSemantics.rules).toContain("old_campaign_reuse_hold");
+
+    expect(workspace.summary.clusterCount).toBe(7);
+    expect(workspace.summary.heldClusterCount).toBeGreaterThan(0);
+    expect(workspace.noLeak).toMatchObject({ rawRestrictedMaterialIncluded: false, objectKeysIncluded: false, unsafeUrlsIncluded: false, metadataOnly: true });
+    expect(query.incidentClaimWorkspace.clusters.some((cluster) => cluster.canonicalValue === "APT29 June embassy intrusion claim")).toBe(true);
+    expect(query.investigationWorkspace.incidentClaims.clusters.some((cluster) => cluster.canonicalValue === "APT29 June embassy intrusion claim")).toBe(true);
+  });
+
+  test("builds graph-backed actor timelines with campaign-change detection and export holds", () => {
+    const nodes = [
+      { id: "node--actor--apt29", type: "actor" as const, value: "APT29", confidence: 0.88, provenance: [] },
+      { id: "node--actor--cozy", type: "actor" as const, value: "Cozy Bear", confidence: 0.7, provenance: [] },
+      { id: "node--actor--random", type: "actor" as const, value: "Random Actor", confidence: 0.2, provenance: [] },
+      { id: "node--campaign--embassy", type: "campaign" as const, value: "Embassy phishing 2026", confidence: 0.8, provenance: [] },
+      { id: "node--campaign--legacy", type: "campaign" as const, value: "Legacy diplomatic campaign", confidence: 0.52, provenance: [] },
+      { id: "node--campaign--disputed", type: "campaign" as const, value: "Disputed campaign membership", confidence: 0.43, provenance: [] },
+      { id: "node--ttp--phish", type: "attack-pattern" as const, value: "T1566 Phishing", confidence: 0.78, provenance: [], properties: { attackId: "T1566", tactic: "initial-access" } },
+      { id: "node--ttp--lolbin", type: "attack-pattern" as const, value: "T1218 System Binary Proxy Execution", confidence: 0.76, provenance: [], properties: { attackId: "T1218", tactic: "defense-evasion" } },
+      { id: "node--victim--embassy", type: "victim" as const, value: "Example Embassy", confidence: 0.74, provenance: [] },
+      { id: "node--victim--manufacturer", type: "victim" as const, value: "Ransomware Manufacturer", confidence: 0.6, provenance: [] },
+      { id: "node--malware--lockbit", type: "malware" as const, value: "LockBit ransomware", confidence: 0.7, provenance: [] },
+      { id: "node--tool--ps", type: "tool" as const, value: "PowerShell", confidence: 0.72, provenance: [] },
+      { id: "node--vuln--edge", type: "vulnerability" as const, value: "CVE-2026-4242", confidence: 0.66, provenance: [] },
+      { id: "node--infra--c2", type: "infrastructure" as const, value: "c2.example.net", confidence: 0.61, provenance: [] },
+      { id: "node--incident--embassy", type: "incident" as const, value: "APT29 embassy intrusion timeline claim", confidence: 0.76, provenance: [] },
+      { id: "node--report--vendor", type: "report" as const, value: "Vendor timeline report", confidence: 0.78, provenance: [] }
+    ];
+    const rel = (
+      id: string,
+      sourceRef: string,
+      targetRef: string,
+      type: RelationshipGraph["relationships"][number]["type"],
+      observedAt: string,
+      confidence = 0.72,
+      reviewState: "accepted" | "needs_review" | "contradicted" = "accepted",
+      sourceId = "vendor_timeline_report"
+    ): RelationshipGraph["relationships"][number] => ({
+      id,
+      sourceRef,
+      targetRef,
+      type,
+      confidence,
+      firstSeenAt: observedAt,
+      lastSeenAt: observedAt,
+      provenance: [{
+        sourceId,
+        captureId: `capture_${id}`,
+        url: "https://example.test/timeline",
+        collectedAt: observedAt,
+        contentHash: `hash_${id}`,
+        extractorVersion: "graph-bg-test"
+      }],
+      properties: {
+        reviewState,
+        stage: reviewState === "accepted" ? "reviewed" : "captured",
+        contradicted: reviewState === "contradicted",
+        evidenceLedgerIds: [`ledger_${id}`]
+      }
+    });
+    const graph: RelationshipGraph = {
+      nodes,
+      relationships: [
+        rel("rel--apt29-alias-cozy", "node--actor--apt29", "node--actor--cozy", "alias-of", "2026-06-10T08:00:00.000Z", 0.72, "needs_review"),
+        rel("rel--apt29-campaign-embassy", "node--actor--apt29", "node--campaign--embassy", "attributed-to", "2026-06-11T08:00:00.000Z", 0.82),
+        rel("rel--apt29-campaign-legacy", "node--actor--apt29", "node--campaign--legacy", "related-to", "2025-01-01T08:00:00.000Z", 0.52),
+        rel("rel--apt29-campaign-disputed", "node--actor--apt29", "node--campaign--disputed", "related-to", "2026-06-12T08:00:00.000Z", 0.44, "contradicted", "contradictory_vendor_campaign"),
+        rel("rel--apt29-ttp-phish", "node--actor--apt29", "node--ttp--phish", "uses", "2026-06-13T08:00:00.000Z", 0.8),
+        rel("rel--apt29-ttp-lolbin", "node--actor--apt29", "node--ttp--lolbin", "uses", "2026-06-14T08:00:00.000Z", 0.76),
+        rel("rel--apt29-victim-embassy", "node--actor--apt29", "node--victim--embassy", "targets", "2026-06-15T08:00:00.000Z", 0.74),
+        rel("rel--apt29-tool-ps", "node--actor--apt29", "node--tool--ps", "uses", "2026-06-16T08:00:00.000Z", 0.72),
+        rel("rel--apt29-cve-edge", "node--actor--apt29", "node--vuln--edge", "exploits", "2026-06-17T08:00:00.000Z", 0.66, "needs_review"),
+        rel("rel--apt29-c2", "node--actor--apt29", "node--infra--c2", "communicates-with", "2026-06-18T08:00:00.000Z", 0.61, "needs_review"),
+        rel("rel--incident-apt29-actor", "node--incident--embassy", "node--actor--apt29", "attributed-to", "2026-06-19T08:00:00.000Z", 0.76),
+        rel("rel--report-incident", "node--report--vendor", "node--incident--embassy", "mentions", "2026-06-19T09:00:00.000Z", 0.68),
+        rel("rel--ransomware-victim-churn", "node--malware--lockbit", "node--victim--manufacturer", "targets", "2026-06-18T10:00:00.000Z", 0.6, "needs_review", "public_channel_lockbit")
+      ]
+    };
+    graph.relationships.find((relationship) => relationship.id === "rel--apt29-campaign-legacy")!.properties = {
+      ...graph.relationships.find((relationship) => relationship.id === "rel--apt29-campaign-legacy")!.properties,
+      stale: true
+    };
+    const snapshot = buildPersistedGraphSnapshot(graph, { generatedAt: "2026-06-20T12:00:00.000Z" });
+    const workspace = buildGraphActorTimelineChangeWorkspaceDto(snapshot, {
+      query: "APT29",
+      focusNodeId: "node--actor--apt29",
+      generatedAt: "2026-06-20T12:00:00.000Z"
+    });
+    const emptyWorkspace = buildGraphActorTimelineChangeWorkspaceDto(snapshot, {
+      query: "Random Actor",
+      focusNodeId: "node--actor--random",
+      generatedAt: "2026-06-20T12:00:00.000Z"
+    });
+    const query = buildCorrelationGraphQuery(snapshot, { query: "APT29", generatedAt: "2026-06-20T12:00:00.000Z", maxRelationships: 50 });
+    const stix = buildStixExportReadinessApiDto(snapshot, { requireAccepted: true });
+
+    expect(workspace.mode).toBe("graph_backed_actor_timeline_campaign_change_detection");
+    expect(workspace.timelineEvents.map((event) => event.eventKind)).toEqual(expect.arrayContaining([
+      "incident_claim",
+      "attack_technique",
+      "campaign_change",
+      "victim_targeting",
+      "tooling_change",
+      "vulnerability_change",
+      "infrastructure_change"
+    ]));
+    expect(workspace.campaignChanges.map((change) => change.changeKind)).toEqual(expect.arrayContaining([
+      "actor_alias_change",
+      "campaign_membership_change",
+      "ttp_change",
+      "targeting_change",
+      "tooling_change",
+      "vulnerability_change",
+      "infrastructure_change",
+      "incident_claim_change"
+    ]));
+    expect(workspace.timelineEvents.find((event) => event.relationshipId === "rel--apt29-campaign-legacy")?.publicFactState).toBe("held_stale");
+    expect(workspace.timelineEvents.find((event) => event.relationshipId === "rel--apt29-campaign-disputed")?.contradictionState).toBe("contradicted");
+    expect(workspace.timelineEvents.find((event) => event.relationshipId === "rel--apt29-cve-edge")?.publicFactState).not.toBe("eligible_reviewed_fact");
+    expect(workspace.summary.heldEventCount).toBeGreaterThan(0);
+    expect(workspace.reviewedStixSubset.heldRelationshipIds).toEqual(expect.arrayContaining([
+      "rel--apt29-campaign-disputed",
+      "rel--apt29-cve-edge",
+      "rel--apt29-c2"
+    ]));
+    expect(emptyWorkspace.summary.eventCount).toBe(0);
+    expect(emptyWorkspace.noLeak).toMatchObject({ rawRestrictedMaterialIncluded: false, objectKeysIncluded: false, unsafeUrlsIncluded: false, metadataOnly: true });
+    expect(query.actorTimelineChanges.timelineEvents.some((event) => event.relationshipId === "rel--incident-apt29-actor")).toBe(true);
+    expect(query.investigationWorkspace.actorTimelineChanges.summary.changeCount).toBeGreaterThan(0);
+    expect(query.runtime.actorTimelineChanges.deltaContract.nextPollSeconds).toBe(3);
+    expect(stix.actorTimelineChanges.reviewedStixSubset.policy).toBe("actor_timeline_reviewed_events_only");
+  });
+
+  test("packages actor graph intelligence for product summaries and reviewed STIX previews", () => {
+    const provenance = (sourceId: string) => [{
+      sourceId,
+      captureId: `capture_${sourceId}`,
+      url: "https://example.test/product",
+      collectedAt: "2026-06-18T08:00:00.000Z",
+      contentHash: `hash_${sourceId}`,
+      extractorVersion: "graph-bh-test",
+      ledgerIds: [`ledger_${sourceId}`]
+    }];
+    const graphNode = (
+      id: string,
+      type: RelationshipGraph["nodes"][number]["type"],
+      value: string,
+      confidence: number,
+      properties: Record<string, unknown> = {}
+    ): RelationshipGraph["nodes"][number] => ({
+      id,
+      type,
+      value,
+      confidence,
+      provenance: provenance(`source_${id}`),
+      properties
+    });
+    const nodes: RelationshipGraph["nodes"] = [
+      graphNode("node--actor--apt29", "actor", "APT29", 0.86),
+      graphNode("node--actor--apt42", "actor", "APT42", 0.78),
+      graphNode("node--actor--unknown", "actor", "Made Up Actor", 0.2),
+      graphNode("node--campaign--cloud", "campaign", "Cloud embassy wave", 0.76),
+      graphNode("node--ttp--phish", "attack-pattern", "T1566 Phishing", 0.8, { tactic: "initial-access" }),
+      graphNode("node--malware--loader", "malware", "Cloud Loader", 0.72),
+      graphNode("node--victim--embassy", "victim", "Example Embassy", 0.74),
+      graphNode("node--sector--gov", "sector", "Government", 0.73),
+      graphNode("node--country--no", "country", "Norway", 0.71),
+      graphNode("node--vuln--edge", "vulnerability", "CVE-2026-4242", 0.64),
+      graphNode("node--infra--c2", "infrastructure", "edge-gw.example", 0.62),
+      graphNode("node--incident--cloud", "incident", "Embassy cloud intrusion claim", 0.78)
+    ];
+    const rel = (
+      id: string,
+      sourceRef: string,
+      targetRef: string,
+      type: RelationshipGraph["relationships"][number]["type"],
+      confidence: number,
+      reviewState: "accepted" | "needs_review" | "contradicted",
+      sourceId: string
+    ): RelationshipGraph["relationships"][number] => ({
+      id,
+      sourceRef,
+      targetRef,
+      type,
+      confidence,
+      firstSeenAt: "2026-06-18T08:00:00.000Z",
+      lastSeenAt: "2026-06-18T08:00:00.000Z",
+      provenance: provenance(sourceId),
+      properties: {
+        reviewState,
+        stage: reviewState === "accepted" ? "reviewed" : "captured",
+        evidenceLedgerIds: [`ledger_${id}`],
+        contradicted: reviewState === "contradicted"
+      }
+    });
+    const graph: RelationshipGraph = {
+      nodes,
+      relationships: [
+        rel("rel--apt29-cloud", "node--actor--apt29", "node--campaign--cloud", "attributed-to", 0.84, "accepted", "vendor_report_cloud"),
+        rel("rel--apt29-phish", "node--actor--apt29", "node--ttp--phish", "uses", 0.86, "accepted", "cisa_advisory_phish"),
+        rel("rel--apt29-loader", "node--actor--apt29", "node--malware--loader", "uses", 0.78, "accepted", "rss_feed_loader"),
+        rel("rel--apt29-victim", "node--actor--apt29", "node--victim--embassy", "targets", 0.8, "accepted", "vendor_report_victim"),
+        rel("rel--victim-sector", "node--victim--embassy", "node--sector--gov", "related-to", 0.74, "accepted", "vendor_report_victim"),
+        rel("rel--victim-country", "node--victim--embassy", "node--country--no", "located-in", 0.72, "accepted", "vendor_report_victim"),
+        rel("rel--apt29-cve", "node--actor--apt29", "node--vuln--edge", "exploits", 0.62, "needs_review", "public_channel_cve"),
+        rel("rel--apt29-c2", "node--actor--apt29", "node--infra--c2", "communicates-with", 0.58, "needs_review", "restricted_metadata_c2"),
+        rel("rel--apt42-phish", "node--actor--apt42", "node--ttp--phish", "uses", 0.79, "accepted", "vendor_report_apt42"),
+        rel("rel--apt42-loader", "node--actor--apt42", "node--malware--loader", "uses", 0.66, "needs_review", "public_channel_apt42"),
+        rel("rel--incident-actor", "node--incident--cloud", "node--actor--apt29", "attributed-to", 0.76, "accepted", "vendor_report_incident"),
+        rel("rel--incident-victim", "node--incident--cloud", "node--victim--embassy", "targets", 0.74, "accepted", "vendor_report_incident")
+      ]
+    };
+    const snapshot = buildPersistedGraphSnapshot(graph, { generatedAt: "2026-06-20T12:00:00.000Z" });
+    const packet = buildGraphActorProductPacketDto(snapshot, {
+      query: "APT29",
+      focusNodeId: "node--actor--apt29",
+      generatedAt: "2026-06-20T12:00:00.000Z"
+    });
+    const unknownPacket = buildGraphActorProductPacketDto(snapshot, {
+      query: "Unindexed Quartz",
+      generatedAt: "2026-06-20T12:00:00.000Z"
+    });
+    const marketplaceReadiness = buildGraphStixTaxiiMarketplaceReadinessDto(snapshot, {
+      query: "APT29",
+      focusNodeId: "node--actor--apt29",
+      generatedAt: "2026-06-20T12:00:00.000Z",
+      actorProductPacket: packet
+    });
+    const monetizationContracts = buildGraphStixTaxiiMonetizationExportContractsDto(snapshot, {
+      query: "APT29",
+      focusNodeId: "node--actor--apt29",
+      generatedAt: "2026-06-20T12:00:00.000Z",
+      actorProductPacket: packet,
+      marketplaceReadiness
+    });
+    const comparisonNotebook = buildGraphActorComparisonNotebookDto(snapshot, {
+      query: "APT29 vs APT42",
+      focusNodeId: "node--actor--apt29",
+      generatedAt: "2026-06-20T12:00:00.000Z"
+    });
+    const query = buildCorrelationGraphQuery(snapshot, { query: "APT29", generatedAt: "2026-06-20T12:00:00.000Z", maxRelationships: 50 });
+    const stix = buildStixExportReadinessApiDto(snapshot, { requireAccepted: true });
+
+    expect(packet.mode).toBe("graph_export_product_packaging");
+    expect(packet.actorTimelineSummary.whatChanged.join(" ")).toContain("campaign membership change");
+    expect(packet.publicCopyHints.whyItMatters.length).toBeGreaterThan(0);
+    expect(packet.publicCopyHints.confidenceDrivers.join(" ")).toContain("ledger-backed");
+    expect(packet.publicCopyHints.sourceCoverageGaps).toEqual(expect.any(Array));
+    expect(packet.publicCopyHints.reviewRequired.join(" ")).toContain("held_restricted_or_weak");
+    expect(packet.victimTargetingPatternSummary.patternLabels).toEqual(expect.arrayContaining(["victim:Example Embassy", "cve:CVE-2026-4242", "infrastructure:edge-gw.example"]));
+    expect(packet.ttpSourceCorroboration.some((row) => row.ttpNodeId === "node--ttp--phish" && row.corroborationState !== "held")).toBe(true);
+    expect(packet.reviewedExportReadiness.readyRelationshipIds).toContain("rel--apt29-phish");
+    expect(packet.reviewedExportReadiness.heldRelationshipIds).toEqual(expect.arrayContaining(["rel--apt29-cve", "rel--apt29-c2"]));
+    expect(packet.stixPreviewReadiness.map((row) => row.objectType)).toEqual(expect.arrayContaining(["intrusion-set", "campaign", "attack-pattern", "malware", "identity", "relationship", "sighting"]));
+    expect(packet.apifySummary.reviewRequired).toBe(true);
+    expect(packet.noLeak).toMatchObject({
+      rawUrlsIncluded: false,
+      rawRestrictedMaterialIncluded: false,
+      leakedContentIncluded: false,
+      credentialOrPayloadEvidenceIncluded: false,
+      privateChannelMaterialIncluded: false,
+      actorInteractionIncluded: false,
+      unsafeDarkwebDetailsIncluded: false,
+      metadataOnly: true
+    });
+    expect(unknownPacket.unknownActorHandling.matchedGraphEvidence).toBe(false);
+    expect(unknownPacket.apifySummary.status).toBe("searching");
+    expect(unknownPacket.publicCopyHints.sourceCoverageGaps).toContain("actor_not_indexed_in_graph");
+    expect(query.actorProductPacket.publicCopyHints.whatChanged.length).toBeGreaterThan(0);
+    expect(query.investigationWorkspace.actorProductPacket.reviewedExportReadiness.publicFactPolicy).toBe("reviewed_evidence_only");
+    expect(query.runtime.actorProductPacket.noLeak.metadataOnly).toBe(true);
+    expect(stix.actorProductPacket.mode).toBe("graph_export_product_packaging");
+    expect(stix.actorProductPacket.noLeak.metadataOnly).toBe(true);
+    expect(marketplaceReadiness.mode).toBe("reviewed_stix_bundle_examples_taxii_descriptor_marketplace_readiness");
+    expect(marketplaceReadiness.reviewedBundleExamples.map((example) => example.exampleUse)).toEqual(expect.arrayContaining(["apify_sample_row", "ti_preview", "enterprise_stix_preview"]));
+    expect(marketplaceReadiness.reviewedBundleExamples[0]?.objectTypes).toEqual(expect.arrayContaining(["attack-pattern", "identity", "malware"]));
+    expect(marketplaceReadiness.taxiiDescriptorPricingReadiness.descriptorOnly).toBe(true);
+    expect(marketplaceReadiness.taxiiDescriptorPricingReadiness.serverImplemented).toBe(false);
+    expect(marketplaceReadiness.taxiiDescriptorPricingReadiness.pricingTiers.map((tier) => tier.tier)).toEqual(["free_sample", "analyst", "enterprise"]);
+    expect(marketplaceReadiness.taxiiDescriptorPricingReadiness.pricingTiers.find((tier) => tier.tier === "enterprise")?.includedObjectTypes).toEqual(expect.arrayContaining(["intrusion-set", "relationship", "sighting"]));
+    expect(marketplaceReadiness.readinessGates.find((gate) => gate.gate === "held_rows_excluded")?.relationshipIds).toEqual(expect.arrayContaining(["rel--apt29-cve", "rel--apt29-c2"]));
+    expect(marketplaceReadiness.noLeak.taxiiServerClaimed).toBe(false);
+    expect(query.stixTaxiiMarketplaceReadiness.taxiiDescriptorPricingReadiness.collectionName).toBe("ti-graph-reviewed-stix-21");
+    expect(query.investigationWorkspace.stixTaxiiMarketplaceReadiness.noLeak.objectKeysIncluded).toBe(false);
+    expect(query.runtime.stixTaxiiMarketplaceReadiness.taxiiDescriptorPricingReadiness.serverImplemented).toBe(false);
+    expect(stix.stixTaxiiMarketplaceReadiness.reviewedBundleExamples.some((example) => example.mediaType === "application/stix+json;version=2.1")).toBe(true);
+    expect(monetizationContracts.mode).toBe("stix_taxii_monetization_export_contracts");
+    expect(monetizationContracts.exportContracts.map((contract) => contract.tier)).toEqual(["free_sample", "analyst", "enterprise"]);
+    expect(monetizationContracts.exportContracts.find((contract) => contract.tier === "free_sample")).toMatchObject({
+      rowLimit: 25,
+      implementedSurface: "apify_dataset",
+      stixReady: true,
+      taxiiDescriptorReady: true
+    });
+    expect(monetizationContracts.exportContracts.find((contract) => contract.tier === "enterprise")).toMatchObject({
+      rowLimit: 500,
+      implementedSurface: "taxii_descriptor_only",
+      reviewedObjectEligibility: "descriptor_future_interface"
+    });
+    expect(monetizationContracts.exportContracts.find((contract) => contract.tier === "enterprise")?.exportBlockers).toContain("taxii_server_not_implemented");
+    expect(monetizationContracts.objectEligibilityMatrix.map((row) => row.objectType)).toEqual(expect.arrayContaining(["intrusion-set", "campaign", "malware", "tool", "attack-pattern", "identity", "relationship", "sighting", "indicator", "report"]));
+    expect(monetizationContracts.objectEligibilityMatrix.find((row) => row.objectType === "attack-pattern")?.eligibleRelationshipIds).toContain("rel--apt29-phish");
+    expect(monetizationContracts.objectEligibilityMatrix.find((row) => row.objectType === "indicator")?.blockers).toContain("missing_analyst_review");
+    expect(monetizationContracts.heldExportBlockedReasons.map((row) => row.reason)).toEqual(expect.arrayContaining(["missing_analyst_review", "restricted_metadata_only", "public_channel_only", "taxii_server_not_implemented"]));
+    expect(monetizationContracts.apifyDatasetFields).toMatchObject({
+      stixReady: true,
+      taxiiDescriptorReady: true,
+      exportTier: "free_sample"
+    });
+    expect(monetizationContracts.apifyDatasetFields.exportBlockers).toEqual(expect.arrayContaining(["missing_analyst_review"]));
+    expect(monetizationContracts.noLeak).toMatchObject({
+      rawUrlsIncluded: false,
+      leakedContentIncluded: false,
+      credentialOrPayloadEvidenceIncluded: false,
+      privateChannelMaterialIncluded: false,
+      objectKeysIncluded: false,
+      actorInteractionIncluded: false,
+      unsafeDarkwebDetailsIncluded: false,
+      metadataOnly: true
+    });
+    expect(query.stixTaxiiMonetizationExportContracts.apifyDatasetFields.stixReady).toBe(true);
+    expect(query.investigationWorkspace.stixTaxiiMonetizationExportContracts.implementationBoundary.taxiiServerImplemented).toBe(false);
+    expect(query.runtime.stixTaxiiMonetizationExportContracts.exportContracts.find((contract) => contract.tier === "enterprise")?.taxiiDescriptorReady).toBe(true);
+    expect(stix.stixTaxiiMonetizationExportContracts.objectEligibilityMatrix.some((row) => row.objectType === "report")).toBe(true);
+    expect(comparisonNotebook.mode).toBe("graph_backed_actor_comparison_buyer_ready_notebooks");
+    expect(comparisonNotebook.comparedActorNodeIds).toEqual(expect.arrayContaining(["node--actor--apt29", "node--actor--apt42"]));
+    expect(comparisonNotebook.comparisonRows.find((row) => row.actorNodeId === "node--actor--apt42")?.sharedWithFocus.ttpNodeIds).toContain("node--ttp--phish");
+    expect(comparisonNotebook.notebooks.map((notebook) => notebook.useCase)).toEqual(["apify_listing_sample", "public_ti_investigation", "enterprise_export_review"]);
+    expect(comparisonNotebook.notebooks.find((notebook) => notebook.useCase === "enterprise_export_review")?.sectionKeys).toContain("stix_export");
+    expect(comparisonNotebook.buyerReadiness).toMatchObject({
+      publicPreviewReady: true,
+      apifySampleReady: true,
+      enterpriseNotebookContractReady: true,
+      taxiiStillDescriptorOnly: true
+    });
+    expect(comparisonNotebook.noLeak.objectKeysIncluded).toBe(false);
+    expect(query.actorComparisonNotebook.notebooks.length).toBe(3);
+    expect(query.investigationWorkspace.actorComparisonNotebook.buyerReadiness.taxiiStillDescriptorOnly).toBe(true);
+    expect(query.runtime.actorComparisonNotebook.noLeak.metadataOnly).toBe(true);
+    expect(stix.actorComparisonNotebook.notebooks.some((notebook) => notebook.exportTier === "enterprise")).toBe(true);
   });
 
   test("freezes graph query edge fields and STIX mapping semantics across review states", () => {
@@ -1224,6 +1704,11 @@ describe("CTI graph persistence and query views", () => {
       allowedActions: expect.arrayContaining(["mark_stale"])
     });
     expect(query.investigationWorkspace.reviewActions.map((item) => item.action)).toEqual(expect.arrayContaining(["hold", "attach_contradiction", "mark_stale"]));
+    expect(query.investigationWorkspace.releaseCandidate).toMatchObject({
+      gate: "graph_stix_release_candidate",
+      taxiiBoundary: "descriptor_only_no_server"
+    });
+    expect(query.runtime.releaseCandidate).toEqual(query.runtime.certification.rcGate);
     expect(JSON.stringify(query.investigationWorkspace)).not.toContain("https://");
 
     const byTarget = (target: string) => query.relationships.find((relationship) => relationship.target.value === target);
@@ -2035,6 +2520,8 @@ describe("CTI graph persistence and query views", () => {
       readyCount: readiness.readyCount,
       blockedCount: readiness.blockedCount
     });
+    expect(readiness.releaseCandidate).toEqual(readiness.certification.rcGate);
+    expect(readiness.releaseCandidate.agent10ReleaseTrain.field).toBe("graphStixReleaseCandidateGate");
     expect(query.runtime.taxiiStixGovernance.futureTaxiiInterface.mountedRoutes).toEqual([]);
     expect(query.investigationWorkspace.taxiiStixGovernance.descriptorOnly).toBe(true);
     expect(readiness.runtime.relationships.some((relationship) => relationship.exportHolds.includes("unreviewed_cve_exploitation"))).toBe(true);

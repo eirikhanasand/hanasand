@@ -21,9 +21,18 @@ import {
   type ObjectEvidenceStore
 } from "../storage/evidenceStore.ts";
 import {
+  buildEvidencePromotionTransactionPlan,
+  buildEvidencePromotionTransactionAuditReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
+  buildEvidenceSearchReadModelPromotionReplay,
+  evidencePromotionExecutionToPostgresRows,
+  executeEvidencePromotionTransactionPlan,
   evidenceSearchReadModelReadiness,
+  type EvidencePromotionTransactionAuditReplay,
+  type EvidencePromotionTransactionExecutionReceipt,
+  type EvidencePromotionTransactionPlan,
   type EvidenceSearchReadModelBackendWriteSet,
+  type EvidenceSearchReadModelPromotionReplay,
   type EvidenceSearchReadModelReadiness
 } from "../storage/evidenceSearchReadModel.ts";
 import type {
@@ -181,6 +190,10 @@ export interface EvidenceSearchReadModelCutoverDto {
     legalHoldPreserved: true;
     staleExtractorReprocessingRequired: true;
   };
+  promotionReplay: EvidenceSearchReadModelPromotionReplay;
+  promotionTransaction: EvidencePromotionTransactionPlan;
+  promotionExecution: EvidencePromotionTransactionExecutionReceipt;
+  promotionAuditReplay: EvidencePromotionTransactionAuditReplay;
   safeOutput: {
     rawBodiesExposed: false;
     objectKeysExposed: false;
@@ -398,6 +411,16 @@ function buildEvidenceSearchReadModelCutoverDto(
     generatedAt
   });
   const writeSet = buildEvidenceSearchReadModelBackendWriteSet(handoff, { generatedAt });
+  const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(writeSet, {
+    query,
+    normalizedQuery: handoff.normalizedQuery,
+    tenantId: handoff.tenantId,
+    generatedAt
+  });
+  const promotionTransaction = buildEvidencePromotionTransactionPlan(writeSet, promotionReplay, { generatedAt });
+  const promotionExecution = executeEvidencePromotionTransactionPlan(promotionTransaction, { generatedAt });
+  const promotionAuditRows = evidencePromotionExecutionToPostgresRows(promotionExecution);
+  const promotionAuditReplay = buildEvidencePromotionTransactionAuditReplay(promotionAuditRows, { generatedAt });
   const restrictedVectorRows = writeSet.pgvectorCandidates.filter((row) => row.restricted_metadata || row.metadata_only).length;
   const embedded = evidenceSearchReadModelReadiness({ backend: "embedded_memory", enabled: true });
   const postgres = evidenceSearchReadModelReadiness({ backend: "postgres_read_model" });
@@ -444,6 +467,10 @@ function buildEvidenceSearchReadModelCutoverDto(
       legalHoldPreserved: true,
       staleExtractorReprocessingRequired: true
     },
+    promotionReplay,
+    promotionTransaction,
+    promotionExecution,
+    promotionAuditReplay,
     safeOutput: {
       rawBodiesExposed: false,
       objectKeysExposed: false,

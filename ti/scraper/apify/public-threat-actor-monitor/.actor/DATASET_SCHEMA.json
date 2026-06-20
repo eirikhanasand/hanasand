@@ -65,6 +65,11 @@
       "sourceCoverageState": { "type": "string" },
       "sourceCoverageGapCount": { "type": "integer", "minimum": 0 },
       "sourceCoverageGaps": { "type": "array", "items": { "type": "string" } },
+      "freshnessExpectation": { "type": "string" },
+      "highestValueMissingFamily": { "type": "string" },
+      "nextBestSourceAction": { "type": "string" },
+      "buyerCaveat": { "type": "string" },
+      "expectedTimeToUsefulSignal": { "type": "string" },
       "pollingHint": { "type": "string" },
       "evidenceGrade": { "type": "string", "enum": ["corroborated", "single_source", "unverified"] },
       "isActionable": { "type": "boolean" },
@@ -124,6 +129,11 @@
       "sourceCoverageState",
       "sourceCoverageGapCount",
       "sourceCoverageGaps",
+      "freshnessExpectation",
+      "highestValueMissingFamily",
+      "nextBestSourceAction",
+      "buyerCaveat",
+      "expectedTimeToUsefulSignal",
       "pollingHint",
       "evidenceGrade",
       "isActionable",
@@ -139,7 +149,7 @@
     "overview": {
       "title": "Actor intelligence",
       "transformation": {
-        "fields": ["actor", "rowType", "title", "summary", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
+        "fields": ["actor", "rowType", "title", "summary", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "freshnessExpectation", "highestValueMissingFamily", "nextBestSourceAction", "expectedTimeToUsefulSignal", "buyerCaveat", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
       },
       "display": {
         "component": "table",
@@ -159,6 +169,11 @@
           "retryAfterSeconds": { "label": "Retry after", "format": "number" },
           "sourceCoverageState": { "label": "Coverage state", "format": "text" },
           "sourceCoverageGaps": { "label": "Coverage gaps", "format": "array" },
+          "freshnessExpectation": { "label": "Expected cadence", "format": "text" },
+          "highestValueMissingFamily": { "label": "Top missing family", "format": "text" },
+          "nextBestSourceAction": { "label": "Best source action", "format": "text" },
+          "expectedTimeToUsefulSignal": { "label": "Signal ETA", "format": "text" },
+          "buyerCaveat": { "label": "Buyer caveat", "format": "text" },
           "evidenceGrade": { "label": "Evidence", "format": "text" },
           "coverageStatus": { "label": "Coverage", "format": "text" },
           "collectionPriority": { "label": "Priority", "format": "text" },

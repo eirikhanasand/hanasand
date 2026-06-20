@@ -2081,11 +2081,18 @@ export interface GraphInvestigationWorkspaceDto {
   reviewPersistence: GraphReviewPersistenceLedgerDto;
   exportGovernance: GraphReviewedExportSubsetGovernanceDto;
   taxiiStixGovernance: GraphTaxiiDescriptorStixBundleGovernanceDto;
+  releaseCandidate: GraphReleaseCandidateGateDto;
   costControls: GraphQueryCostControlsDto;
   driftMonitor: GraphRelationshipDriftMonitorDto;
   relationshipExplanations: GraphRelationshipExplainabilityDto;
   notebookExport: GraphInvestigationNotebookExportDto;
   backendMigrationCertification: GraphBackendMigrationCertificationDto;
+  incidentClaims: GraphIncidentClaimWorkspaceDto;
+  actorTimelineChanges: GraphActorTimelineChangeWorkspaceDto;
+  actorProductPacket: GraphActorProductPacketDto;
+  stixTaxiiMarketplaceReadiness: GraphStixTaxiiMarketplaceReadinessDto;
+  stixTaxiiMonetizationExportContracts: GraphStixTaxiiMonetizationExportContractsDto;
+  actorComparisonNotebook: GraphActorComparisonNotebookDto;
   reviewActions: Array<{
     action: GraphInvestigationWorkspaceReviewAction;
     relationshipIds: string[];
@@ -2422,6 +2429,466 @@ export interface GraphAttackCampaignWorkspaceDto {
   };
 }
 
+export interface GraphIncidentClaimWorkspaceDto {
+  endpoint: "/v1/graph/query";
+  mode: "incident_claim_graph_corroboration";
+  generatedAt: string;
+  query: string;
+  focusNodeId?: string;
+  clusters: Array<{
+    claimId: string;
+    incidentNodeId: string;
+    canonicalValue: string;
+    claimType: "intrusion_activity" | "victim_claim" | "campaign_claim" | "vulnerability_claim" | "ransomware_claim" | "ambiguous_alias_claim";
+    relationshipIds: string[];
+    nodeIds: string[];
+    actorNodeIds: string[];
+    victimNodeIds: string[];
+    campaignNodeIds: string[];
+    sectorNodeIds: string[];
+    countryNodeIds: string[];
+    malwareToolNodeIds: string[];
+    ttpNodeIds: string[];
+    sourceNodeIds: string[];
+    reportNodeIds: string[];
+    firstReportedAt: string;
+    lastReportedAt: string;
+    publisherCount: number;
+    sourceFamilyCount: number;
+    corroboratingEvidenceIds: string[];
+    contradictingEvidenceIds: string[];
+    ledgerIds: string[];
+    confidence: number;
+    freshness: "fresh" | "watch" | "stale";
+    reviewState: GraphRelationshipReviewState;
+    exportState: "eligible_reviewed_subset" | "held_unreviewed_inference" | "held_contradicted" | "held_missing_provenance";
+    mergeSemantics: {
+      decision: "merged_public_reports" | "single_report" | "split_required";
+      rules: Array<"same_incident_node" | "same_day_syndication" | "actor_victim_campaign_overlap" | "publisher_diversity" | "alias_collision_hold" | "old_campaign_reuse_hold" | "recurring_victim_claim_hold">;
+      splitRequiredWhen: Array<"distinct_incident_node" | "contradictory_attribution" | "different_victim_same_day" | "renamed_campaign_without_review" | "old_campaign_reuse_without_fresh_evidence">;
+    };
+    reviewedStixSubset: {
+      eligibleRelationshipIds: string[];
+      heldRelationshipIds: string[];
+      policy: "reviewed_relationships_only_unreviewed_claim_inference_held";
+    };
+  }>;
+  summary: {
+    clusterCount: number;
+    eligibleClusterCount: number;
+    heldClusterCount: number;
+    contradictedClusterCount: number;
+    publisherCount: number;
+    sourceFamilyCount: number;
+  };
+  handoffs: {
+    agent04ConflictResolution: "consume_alias_campaign_victim_contradiction_rows";
+    agent06EvidenceLedger: "claim_clusters_require_capture_ledger_and_content_hash_replay";
+    agent07QualityGate: "hold_unreviewed_contradicted_or_source_biased_claim_clusters";
+    agent09ApiFrontend: "render_incident_claim_clusters_as_partial_or_review_held_graph_context";
+    agent10ReleaseGate: "authoritative_stix_requires_reviewed_claim_cluster_subset";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphActorTimelineChangeWorkspaceDto {
+  endpoint: "/v1/graph/query";
+  mode: "graph_backed_actor_timeline_campaign_change_detection";
+  generatedAt: string;
+  query: string;
+  focusActorNodeId?: string;
+  timelineEvents: Array<{
+    eventId: string;
+    relationshipId: string;
+    eventKind:
+      | "relationship"
+      | "incident_claim"
+      | "attack_technique"
+      | "campaign_change"
+      | "victim_targeting"
+      | "tooling_change"
+      | "vulnerability_change"
+      | "infrastructure_change"
+      | "source_signal";
+    actorNodeIds: string[];
+    incidentClaimIds: string[];
+    campaignNodeIds: string[];
+    ttpNodeIds: string[];
+    malwareToolNodeIds: string[];
+    victimNodeIds: string[];
+    vulnerabilityNodeIds: string[];
+    infrastructureNodeIds: string[];
+    sourceNodeIds: string[];
+    firstSeenAt: string;
+    lastSeenAt: string;
+    confidence: number;
+    confidenceTrend: GraphAttackTechniqueTimelineEventDto["confidenceTrend"];
+    freshness: "fresh" | "watch" | "stale";
+    reviewState: GraphRelationshipReviewState;
+    workflowState: AnalystGraphWorkflowState;
+    contradictionState: "none" | "suspected" | "contradicted";
+    sourceIds: string[];
+    sourceFamilies: string[];
+    evidenceIds: string[];
+    ledgerIds: string[];
+    captureIds: string[];
+    exportEligible: boolean;
+    exportBlockers: GraphIntegrityFindingCode[];
+    publicFactState: "eligible_reviewed_fact" | "held_for_review" | "held_stale" | "held_contradicted" | "held_missing_ledger" | "held_restricted_or_weak";
+  }>;
+  campaignChanges: Array<{
+    changeId: string;
+    changeKind:
+      | "actor_alias_change"
+      | "campaign_membership_change"
+      | "ttp_change"
+      | "targeting_change"
+      | "tooling_change"
+      | "vulnerability_change"
+      | "infrastructure_change"
+      | "source_family_change"
+      | "incident_claim_change";
+    relationshipIds: string[];
+    actorNodeIds: string[];
+    nodeIds: string[];
+    firstSeenAt: string;
+    lastSeenAt: string;
+    confidenceTrend: GraphAttackTechniqueTimelineEventDto["confidenceTrend"];
+    reviewState: GraphRelationshipReviewState;
+    contradictionState: "none" | "suspected" | "contradicted";
+    exportEligible: boolean;
+    exportBlockers: GraphIntegrityFindingCode[];
+    recommendedAction: GraphInvestigationWorkspaceReviewAction | "request_evidence" | "hold_public_fact";
+    releaseImpact: "promote" | "watch" | "hold" | "rollback";
+  }>;
+  summary: {
+    eventCount: number;
+    changeCount: number;
+    actorCount: number;
+    incidentClaimEventCount: number;
+    campaignChangeCount: number;
+    staleEventCount: number;
+    contradictedEventCount: number;
+    heldEventCount: number;
+    exportEligibleEventCount: number;
+  };
+  deltaContract: {
+    cursorField: "graph.deltas[].cursor";
+    nextPollSeconds: 3;
+    eventTypes: Array<"graph.actor_timeline.event_added" | "graph.actor_timeline.change_detected" | "graph.actor_timeline.review_hold" | "graph.actor_timeline.export_ready">;
+  };
+  reviewedStixSubset: {
+    eligibleRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    policy: "actor_timeline_reviewed_events_only";
+  };
+  handoffs: {
+    agent04ConflictResolution: "consume_actor_timeline_campaign_change_conflicts";
+    agent06EvidenceReplay: "replay_timeline_events_missing_ledger_or_capture_refs";
+    agent07QualityGate: "hold_stale_contradicted_or_weak_timeline_events";
+    agent09ApiFrontend: "render_actor_timeline_and_campaign_change_rows";
+    agent10ReleaseGate: "hold_release_when_actor_timeline_changes_are_unreviewed_or_contradicted";
+  };
+  noLeak: {
+    rawRestrictedMaterialIncluded: false;
+    objectKeysIncluded: false;
+    unsafeUrlsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphActorProductPacketDto {
+  endpoint: "/v1/graph/query";
+  mode: "graph_export_product_packaging";
+  generatedAt: string;
+  query: string;
+  focusActorNodeId?: string;
+  actorTimelineSummary: {
+    eventCount: number;
+    latestEventAt?: string;
+    whatChanged: string[];
+    whyItMatters: string[];
+  };
+  campaignChangeSummary: {
+    changeCount: number;
+    highImpactChangeCount: number;
+    changeKinds: GraphActorTimelineChangeWorkspaceDto["campaignChanges"][number]["changeKind"][];
+  };
+  incidentClaimSummary: {
+    clusterCount: number;
+    eligibleClusterCount: number;
+    heldClusterCount: number;
+    canonicalClaims: string[];
+  };
+  victimTargetingPatternSummary: {
+    victimNodeIds: string[];
+    sectorNodeIds: string[];
+    countryNodeIds: string[];
+    infrastructureNodeIds: string[];
+    vulnerabilityNodeIds: string[];
+    patternLabels: string[];
+  };
+  ttpSourceCorroboration: Array<{
+    ttpNodeId?: string;
+    malwareToolNodeId?: string;
+    relationshipIds: string[];
+    sourceFamilies: string[];
+    evidenceIds: string[];
+    ledgerIds: string[];
+    confidence: number;
+    corroborationState: "well_corroborated" | "single_source" | "needs_evidence" | "held";
+  }>;
+  contradictionState: {
+    state: "none" | "suspected" | "contradicted";
+    relationshipIds: string[];
+    reasons: string[];
+  };
+  reviewedExportReadiness: {
+    readyRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    reviewRequiredRelationshipIds: string[];
+    publicFactPolicy: "reviewed_evidence_only";
+    taxiiBoundary: "descriptor_only_no_server";
+  };
+  stixPreviewReadiness: Array<{
+    objectType: "intrusion-set" | "campaign" | "malware" | "tool" | "attack-pattern" | "identity" | "relationship" | "sighting";
+    nodeIds: string[];
+    relationshipIds: string[];
+    readiness: "ready" | "held";
+    holdReasons: GraphIntegrityFindingCode[];
+  }>;
+  publicCopyHints: {
+    whatChanged: string[];
+    whyItMatters: string[];
+    confidenceDrivers: string[];
+    sourceCoverageGaps: string[];
+    reviewRequired: string[];
+  };
+  apifySummary: {
+    title: string;
+    status: "ready" | "partial" | "review_required" | "searching";
+    whatChanged: string;
+    whyItMatters: string;
+    reviewRequired: boolean;
+  };
+  unknownActorHandling: {
+    matchedGraphEvidence: boolean;
+    message: string;
+    safeNextPivots: string[];
+    missingSourceFamilies: string[];
+  };
+  noLeak: {
+    rawUrlsIncluded: false;
+    rawRestrictedMaterialIncluded: false;
+    leakedContentIncluded: false;
+    credentialOrPayloadEvidenceIncluded: false;
+    privateChannelMaterialIncluded: false;
+    actorInteractionIncluded: false;
+    unsafeDarkwebDetailsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphStixTaxiiMarketplaceReadinessDto {
+  mode: "reviewed_stix_bundle_examples_taxii_descriptor_marketplace_readiness";
+  generatedAt: string;
+  query: string;
+  reviewedBundleExamples: Array<{
+    exampleId: string;
+    mediaType: "application/stix+json;version=2.1";
+    bundleKind: "reviewed_actor_intelligence_subset";
+    ready: boolean;
+    objectTypes: GraphActorProductPacketDto["stixPreviewReadiness"][number]["objectType"][];
+    readyRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    objectCounts: Record<GraphActorProductPacketDto["stixPreviewReadiness"][number]["objectType"], number>;
+    exampleUse: "apify_sample_row" | "ti_preview" | "enterprise_stix_preview";
+  }>;
+  taxiiDescriptorPricingReadiness: {
+    collectionName: "ti-graph-reviewed-stix-21";
+    descriptorOnly: true;
+    serverImplemented: false;
+    mediaType: "application/stix+json;version=2.1";
+    pageSize: number;
+    pricingTiers: Array<{
+      tier: "free_sample" | "analyst" | "enterprise";
+      includedObjectTypes: GraphActorProductPacketDto["stixPreviewReadiness"][number]["objectType"][];
+      maxObjectsPerPage: number;
+      readiness: "ready" | "needs_review" | "future_interface";
+      buyerValue: string;
+      requiredGate: "reviewed_relationships" | "provenance_complete" | "taxii_server_not_built";
+    }>;
+  };
+  readinessGates: Array<{
+    gate: "reviewed_relationships" | "provenance_complete" | "no_leak" | "descriptor_only_taxii" | "held_rows_excluded";
+    state: "pass" | "hold";
+    relationshipIds: string[];
+    reason: string;
+  }>;
+  marketplaceDifferentiators: string[];
+  noLeak: {
+    rawUrlsIncluded: false;
+    rawRestrictedMaterialIncluded: false;
+    leakedContentIncluded: false;
+    credentialOrPayloadEvidenceIncluded: false;
+    privateChannelMaterialIncluded: false;
+    actorInteractionIncluded: false;
+    unsafeDarkwebDetailsIncluded: false;
+    objectKeysIncluded: false;
+    taxiiServerClaimed: false;
+    metadataOnly: true;
+  };
+}
+
+export type GraphProductExportTier = "free_sample" | "analyst" | "enterprise";
+
+export type GraphStixProductObjectType =
+  | "intrusion-set"
+  | "campaign"
+  | "malware"
+  | "tool"
+  | "attack-pattern"
+  | "identity"
+  | "relationship"
+  | "sighting"
+  | "indicator"
+  | "report";
+
+export type GraphProductExportBlocker =
+  | "weak_evidence"
+  | "stale_activity"
+  | "contradiction"
+  | "restricted_metadata_only"
+  | "public_channel_only"
+  | "missing_ledger"
+  | "missing_analyst_review"
+  | "unsafe_source"
+  | "tenant_policy_hold"
+  | "taxii_server_not_implemented";
+
+export interface GraphStixTaxiiMonetizationExportContractsDto {
+  mode: "stix_taxii_monetization_export_contracts";
+  generatedAt: string;
+  query: string;
+  exportContracts: Array<{
+    tier: GraphProductExportTier;
+    implementedSurface: "apify_dataset" | "public_ti_preview" | "enterprise_export_package" | "taxii_descriptor_only";
+    rowLimit: number;
+    reviewedObjectEligibility: "ready_reviewed_only" | "descriptor_future_interface";
+    evidenceRequirements: Array<"ledger_ids" | "capture_ids" | "source_ids" | "analyst_review" | "freshness_window" | "tenant_policy_allow">;
+    confidenceThreshold: number;
+    freshnessWindowDays: number;
+    updateCadence: "per_run" | "polling_delta" | "daily_snapshot" | "future_taxii_collection";
+    pricingReadinessNote: string;
+    stixReady: boolean;
+    taxiiDescriptorReady: boolean;
+    reviewedObjectTypes: GraphStixProductObjectType[];
+    exportBlockers: GraphProductExportBlocker[];
+  }>;
+  objectEligibilityMatrix: Array<{
+    objectType: GraphStixProductObjectType;
+    eligibleRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    requiredEvidence: Array<"ledger_ids" | "capture_ids" | "source_ids" | "analyst_review" | "safe_public_or_reviewed_metadata">;
+    confidenceThreshold: number;
+    freshnessWindowDays: number;
+    eligibleTiers: GraphProductExportTier[];
+    blockers: GraphProductExportBlocker[];
+  }>;
+  heldExportBlockedReasons: Array<{
+    reason: GraphProductExportBlocker;
+    relationshipIds: string[];
+    publicExplanation: string;
+  }>;
+  apifyDatasetFields: {
+    stixReady: boolean;
+    taxiiDescriptorReady: boolean;
+    exportTier: GraphProductExportTier;
+    exportBlockers: GraphProductExportBlocker[];
+    reviewedObjectTypes: GraphStixProductObjectType[];
+  };
+  implementationBoundary: {
+    apifyDatasetImplemented: true;
+    publicTiPreviewImplemented: true;
+    enterprisePackageContractOnly: true;
+    taxiiServerImplemented: false;
+    taxiiDescriptorOnly: true;
+    authoritativeStixRequiresReviewedRelationships: true;
+  };
+  noLeak: {
+    rawUrlsIncluded: false;
+    leakedContentIncluded: false;
+    credentialOrPayloadEvidenceIncluded: false;
+    privateChannelMaterialIncluded: false;
+    objectKeysIncluded: false;
+    actorInteractionIncluded: false;
+    unsafeDarkwebDetailsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
+export interface GraphActorComparisonNotebookDto {
+  mode: "graph_backed_actor_comparison_buyer_ready_notebooks";
+  generatedAt: string;
+  query: string;
+  comparedActorNodeIds: string[];
+  comparisonRows: Array<{
+    actorNodeId: string;
+    actorName: string;
+    relationshipIds: string[];
+    reviewedRelationshipCount: number;
+    heldRelationshipCount: number;
+    averageConfidence: number;
+    latestSeenAt?: string;
+    reviewedObjectTypes: GraphStixProductObjectType[];
+    sourceFamilies: string[];
+    exportTierReadiness: Record<GraphProductExportTier, "ready" | "partial" | "held" | "future_interface">;
+    exportBlockers: GraphProductExportBlocker[];
+    differentiators: string[];
+    sharedWithFocus: {
+      ttpNodeIds: string[];
+      malwareToolNodeIds: string[];
+      victimNodeIds: string[];
+      campaignNodeIds: string[];
+    };
+  }>;
+  notebooks: Array<{
+    notebookId: string;
+    useCase: "apify_listing_sample" | "public_ti_investigation" | "enterprise_export_review";
+    title: string;
+    includedActorNodeIds: string[];
+    sectionKeys: Array<"summary" | "timeline" | "incident_claims" | "ttps" | "victims" | "sources" | "stix_export" | "holds">;
+    reviewedRelationshipIds: string[];
+    heldRelationshipIds: string[];
+    reviewedObjectTypes: GraphStixProductObjectType[];
+    exportTier: GraphProductExportTier;
+    safeForBuyerPreview: boolean;
+    maxRows: number;
+    nextActions: Array<"open_ti_preview" | "export_reviewed_stix" | "request_more_evidence" | "hold_unreviewed_edges" | "compare_actor_overlap">;
+  }>;
+  buyerReadiness: {
+    publicPreviewReady: boolean;
+    apifySampleReady: boolean;
+    enterpriseNotebookContractReady: boolean;
+    taxiiStillDescriptorOnly: true;
+  };
+  noLeak: {
+    rawUrlsIncluded: false;
+    leakedContentIncluded: false;
+    credentialOrPayloadEvidenceIncluded: false;
+    privateChannelMaterialIncluded: false;
+    objectKeysIncluded: false;
+    actorInteractionIncluded: false;
+    unsafeDarkwebDetailsIncluded: false;
+    metadataOnly: true;
+  };
+}
+
 export interface CorrelationGraphQueryDto {
   endpoint: "/v1/graph/query";
   generatedAt: string;
@@ -2431,6 +2898,12 @@ export interface CorrelationGraphQueryDto {
   relationships: CorrelationGraphRelationshipDto[];
   investigationWorkspace: GraphInvestigationWorkspaceDto;
   attackCampaignWorkspace: GraphAttackCampaignWorkspaceDto;
+  incidentClaimWorkspace: GraphIncidentClaimWorkspaceDto;
+  actorTimelineChanges: GraphActorTimelineChangeWorkspaceDto;
+  actorProductPacket: GraphActorProductPacketDto;
+  stixTaxiiMarketplaceReadiness: GraphStixTaxiiMarketplaceReadinessDto;
+  stixTaxiiMonetizationExportContracts: GraphStixTaxiiMonetizationExportContractsDto;
+  actorComparisonNotebook: GraphActorComparisonNotebookDto;
   neighborhoods: CorrelationGraphNeighborhoodDto[];
   readinessFacets: GraphQueryReadinessFacetDto[];
   attackMatrix: AttackMatrixCellDto[];
@@ -3107,6 +3580,12 @@ export interface GraphRuntimeApiDto {
   reviewPersistence: GraphReviewPersistenceLedgerDto;
   reviewedExportSubset: GraphReviewedExportSubsetGovernanceDto;
   taxiiStixGovernance: GraphTaxiiDescriptorStixBundleGovernanceDto;
+  releaseCandidate: GraphReleaseCandidateGateDto;
+  actorTimelineChanges: GraphActorTimelineChangeWorkspaceDto;
+  actorProductPacket: GraphActorProductPacketDto;
+  stixTaxiiMarketplaceReadiness: GraphStixTaxiiMarketplaceReadinessDto;
+  stixTaxiiMonetizationExportContracts: GraphStixTaxiiMonetizationExportContractsDto;
+  actorComparisonNotebook: GraphActorComparisonNotebookDto;
   relationships: GraphRuntimeRelationshipDto[];
   reviewQueue: GraphReviewQueueSummaryDto;
 }
@@ -3428,8 +3907,14 @@ export interface StixExportReadinessApiDto {
   persistence: GraphReviewPersistenceLedgerDto;
   exportGovernance: GraphReviewedExportSubsetGovernanceDto;
   taxiiStixGovernance: GraphTaxiiDescriptorStixBundleGovernanceDto;
+  releaseCandidate: GraphReleaseCandidateGateDto;
   driftMonitor: GraphRelationshipDriftMonitorDto;
   backendMigrationCertification: GraphBackendMigrationCertificationDto;
+  actorTimelineChanges: GraphActorTimelineChangeWorkspaceDto;
+  actorProductPacket: GraphActorProductPacketDto;
+  stixTaxiiMarketplaceReadiness: GraphStixTaxiiMarketplaceReadinessDto;
+  stixTaxiiMonetizationExportContracts: GraphStixTaxiiMonetizationExportContractsDto;
+  actorComparisonNotebook: GraphActorComparisonNotebookDto;
   preview: StixExportPreviewDto;
   taxiiCollections: TaxiiCollectionDescriptor[];
 }

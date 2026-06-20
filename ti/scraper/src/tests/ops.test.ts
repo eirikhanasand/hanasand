@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { evaluateAdapterMetricAlerts, recordAdapterRunMetrics } from "../ops/adapterMetrics.ts";
 import { loadRuntimeConfig, validateResourceBudget } from "../ops/config.ts";
 import {
@@ -26,9 +29,10 @@ import {
 import type { CutoverApplyPlanAction, CutoverDeploymentProofSlot, CutoverMountedRouteProof, CutoverRehearsalInput, CutoverRuntimeReleaseProof, CutoverSoakWorkstreamInput, DeploymentDriftProbe } from "../ops/liveSearch.ts";
 import { sanitizeFields } from "../ops/logger.ts";
 import { MetricsRegistry } from "../ops/metrics.ts";
+import { appendLiveProductDailySnapshot, buildLiveProductSloDashboard, readLiveProductDailySnapshots } from "../ops/productSlo.ts";
 import { assertCapacityWithinBudget, buildResourceSnapshot, estimateCapacity, sizeWorkerPools } from "../ops/resourceControls.ts";
 import { WorkerSupervisor } from "../ops/supervisor.ts";
-import type { GraphExportEnforcementDto, GraphExportSlaDto } from "../types.ts";
+import type { CollectionRun, IncidentCandidate, RawCapture, SourceRecord, GraphExportEnforcementDto, GraphExportSlaDto } from "../types.ts";
 import type { TelegramPublicSlaReportDto } from "../adapters/telegramPublic.ts";
 
 const logger = {
@@ -37,6 +41,73 @@ const logger = {
   warn() {},
   error() {}
 };
+
+function collectionRun(id: string, status: CollectionRun["status"], createdAt: string, updatedAt: string, captureCount: number): CollectionRun {
+  return {
+    id,
+    planId: `plan_${id}`,
+    requestId: `req_${id}`,
+    status,
+    createdAt,
+    updatedAt,
+    startedAt: updatedAt,
+    completedAt: status === "completed" ? updatedAt : undefined,
+    taskCount: 1,
+    reviewTaskCount: 0,
+    rejectedSourceCount: 0,
+    captureCount,
+    incidentCount: captureCount > 0 ? 1 : 0
+  };
+}
+
+function sourceRecord(id: string, lastCollectedAt: string): SourceRecord {
+  return {
+    id,
+    name: id,
+    type: "rss",
+    url: `https://example.test/${id}.xml`,
+    accessMethod: "public_http",
+    status: "active",
+    risk: "low",
+    trustScore: 0.9,
+    crawlFrequencySeconds: 3600,
+    legalNotes: "public fixture",
+    createdAt: "2026-06-19T00:00:00.000Z",
+    updatedAt: lastCollectedAt,
+    lastSeenAt: lastCollectedAt,
+    crawlState: { lastCollectedAt, retryCount: 0 }
+  };
+}
+
+function rawCapture(id: string, sourceId: string, collectedAt: string, metadata: Record<string, unknown>): RawCapture {
+  return {
+    id,
+    sourceId,
+    url: `https://example.test/${id}`,
+    collectedAt,
+    contentHash: `hash_${id}`,
+    mediaType: "text/plain",
+    storageKind: "metadata_only",
+    metadata,
+    sensitive: false
+  };
+}
+
+function incidentCandidate(id: string, captureId: string): IncidentCandidate {
+  return {
+    id,
+    sourceId: "src_mandiant",
+    captureId,
+    extractorVersion: "test",
+    title: "APT29 June infrastructure claim",
+    summary: "Safe metadata incident cluster",
+    firstSeenAt: "2026-06-20T10:01:00.000Z",
+    confidence: 0.8,
+    entities: [],
+    indicators: [],
+    reviewReasons: []
+  };
+}
 
 describe("ops controls", () => {
   test("keeps default Inspur budgets within the normal scraper ceiling", () => {
@@ -197,6 +268,80 @@ describe("ops controls", () => {
     expect(config.resourceBudget.maxDarknetMetadataWorkers).toBeLessThanOrEqual(2);
     expect(pools.browser).toBe(0);
     expect(pools.darknetMetadata).toBeLessThanOrEqual(8);
+  });
+
+  test("builds live product SLO dashboard with null revenue unknowns and append-only daily snapshots", async () => {
+    const generatedAt = "2026-06-20T12:00:00.000Z";
+    const dashboard = buildLiveProductSloDashboard({
+      generatedAt,
+      proofMode: "inspur",
+      runs: [collectionRun("run_apt29", "completed", "2026-06-20T11:59:55.000Z", "2026-06-20T11:59:56.000Z", 29)],
+      sources: [sourceRecord("src_mandiant", "2026-06-20T10:00:00.000Z")],
+      captures: [rawCapture("cap_claim_1", "src_mandiant", "2026-06-20T10:01:00.000Z", { claimClusterId: "claim_apt29_june" })],
+      incidents: [incidentCandidate("inc_apt29", "cap_claim_1")],
+      frontier: {
+        total: 2,
+        queued: 1,
+        leased: 1,
+        groups: { tenants: { global: 2 }, sources: { src_mandiant: 2 }, adapterTypes: { rss: 2 }, priorityBuckets: { high: 2 }, ageBuckets: { fresh: 2 } },
+        budgets: {},
+        metrics: {
+          queueAgeSeconds: { max: 12, average: 8, highPriorityMax: 10 },
+          throughput: { completed: 4, failed: 0, cancelled: 0, retryScheduled: 0, retryExhausted: 0 },
+          retryPressure: 0,
+          budgetExhaustion: 0,
+          sourceStarvation: 0,
+          tenantStarvation: 0,
+          adapterSaturation: { rss: 1 }
+        }
+      },
+      resource: { memoryRssGb: 4.5, diskGrowthGbPerDay: 3 },
+      queryMeasurements: [
+        { query: "APT29", proofMode: "inspur", firstResponseMs: 900, firstFreshEvidenceMs: 7000, pollIntervalMs: 3000, status: "ready", rowCount: 29, usefulRowCount: 12, activityClaimCount: 4, duplicateArticleRate: 0.05, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false },
+        { query: "Made Up Actor", proofMode: "inspur", firstResponseMs: 650, pollIntervalMs: 3000, status: "empty", rowCount: 0, usefulRowCount: 0, activityClaimCount: 0, duplicateArticleRate: 0, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false }
+      ],
+      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.4", buildId: "build_123", runId: "run_actor_123", datasetId: "ds_123", status: "succeeded", queryCount: 2, rowCount: 29, usefulRowCount: 12, activityClaimRowCount: 4 },
+      snapshotStoragePath: "var/ops/live-product-slo/test.jsonl"
+    });
+
+    expect(dashboard.schemaVersion).toBe("ti.live_product_slo_dashboard.v1");
+    expect(dashboard.route).toBe("/v1/ops/product-slo");
+    expect(dashboard.proofMode).toBe("inspur");
+    expect(dashboard.metrics.apiFirstResponseLatencyMs.p95).toBe(900);
+    expect(dashboard.metrics.threeSecondPolling.withinTargetRate).toBe(1);
+    expect(dashboard.metrics.claimClusterYield.count).toBe(1);
+    expect(dashboard.metrics.actorRunSuccessRate.value).toBe(1);
+    expect(dashboard.dashboard.state).toBe("pass");
+    expect(dashboard.slos.find((item) => item.name === "known_actor_summary_latency")).toMatchObject({ state: "pass", target: "<=2000" });
+    expect(dashboard.slos.find((item) => item.name === "stale_result_rejection")).toMatchObject({ state: "pass", target: ">=0.95" });
+    expect(dashboard.metrics.costPerUsefulRowUsd.value).toBeNull();
+    expect(dashboard.apifyLaunchExperiment.grossPpeRevenueUsd).toBeNull();
+    expect(dashboard.apifyLaunchExperiment.unknowns).toContain("uniqueUsers");
+    expect(dashboard.apifyLaunchExperiment.unknowns).toContain("grossPpeRevenueUsd");
+    expect(dashboard.deploymentProof.actorBuildId).toBe("build_123");
+    expect(dashboard.deploymentProof.publicProofCommands).toContain("bun run smoke:apify-threat-actor-monitor");
+    expect(dashboard.resourceGuardrails).toMatchObject({
+      scraperTargetRamGb: 96,
+      scraperNormalCeilingGb: 160,
+      ctiReserveDiskGb: 500,
+      browserPoolDefault: "disabled",
+      gpuRequired: false
+    });
+    expect(JSON.stringify(dashboard)).not.toContain("object_key");
+    expect(JSON.stringify(dashboard)).not.toContain("credential");
+
+    const dir = mkdtempSync(join(tmpdir(), "product-slo-"));
+    const path = join(dir, "daily.jsonl");
+    try {
+      await appendLiveProductDailySnapshot(path, dashboard.dailySnapshot);
+      await appendLiveProductDailySnapshot(path, { ...dashboard.dailySnapshot, snapshotId: "snapshot_second" });
+      const snapshots = await readLiveProductDailySnapshots(path);
+      expect(snapshots).toHaveLength(2);
+      expect(snapshots[0]?.appendOnly).toBe(true);
+      expect(snapshots[1]?.snapshotId).toBe("snapshot_second");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("rejects excessive darknet metadata worker counts", () => {

@@ -20,6 +20,8 @@ The same routes expose `ctiEvaluationDatasetPack` with schema `ti.cti_evaluation
 
 The same routes expose `qualityRuntimeValueGates` with schema `ti.quality_runtime_value_gates.v1`. This is the Program BC value gate for arbitrary actor, campaign, malware/tool, CVE, country, sector, victim, infrastructure, and unknown queries. It scores timeliness, specificity, source diversity, provenance completeness, contradiction state, evidence freshness, analyst actionability, dark-web metadata caveats, source-atlas value, stale-answer rejection, and unknown-query honesty.
 
+`qualityRuntimeValueGates.programBdQualityEvaluationPack` exposes schema `ti.program_bd_quality_evaluation_pack.v1`. This is the Program BD marketplace-usefulness fixture pack for the default watchlist. It covers at least 20 state actor, ransomware, and cybercrime rows plus random/unknown actor guardrails. Every row carries route-visible quality metrics for summary specificity, source support, recency, false-victim risk, legal-proceeding detection, alias resolution, TTP support, source-family diversity, contradiction flags, and actionability correctness.
+
 ## Field Gates
 
 Each field emits `pass`, `warn`, `hold`, or `missing` for:
@@ -105,3 +107,13 @@ Runtime value gates answer the operator question: "is this useful enough for a C
 Dark-web metadata can improve hints, liveness, and caveats, but metadata-only records cannot stand alone as public facts. They require public corroboration or human review, and the DTO exposes only compact labels, ids, and reasons. Raw unsafe targets, credentials, payloads, dumps, private material, and object keys remain forbidden.
 
 Source-atlas feedback flags low-yield source families, duplicate-heavy packs, stale-only packs, parser gaps, language gaps, and activation candidates. These are scored for expected answer impact but are not source activation. Activation, crawl starts, ranking changes, and public promotion remain human-approved downstream work.
+
+## Program BD Marketplace Quality
+
+The Program BD pack gives Agent 09 and Agent 10 row-level pass/warn/hold packets for public UI, Apify output, graph export, and STIX export eligibility. It intentionally distinguishes "can appear as a caveated marketplace row" from "can promote into graph/STIX." Ransomware victim rows may remain useful in Apify as caveated metadata while public UI, graph, and STIX export stay held.
+
+Regression guardrails cover person-as-victim, actor-alias-as-victim, not-indexed fallbacks, stale-only activity, headline-as-summary, raw unsafe URL leakage, and generic non-CTI web results. The pack is fixture and contract data only: it cannot mutate extractors, activate sources, start crawls, promote public answers, export graph/STIX data, or expose raw evidence, source URLs, restricted payloads, or object keys.
+
+Program BD bad-case regressions also feed `qualityRegressionSuite`, `analystFeedbackLearningLoop.fixtures`, and `activeLearningCandidateQueue.fixturePack`. This keeps legal-proceeding false victims, actor-alias victim collisions, stale reposts, headline-only summaries, not-indexed fallbacks, raw-locator no-leak checks, and generic non-CTI source support in the same append-only replay path as analyst feedback. The learning handoff is still manual-only: it can propose parser, source reliability, claim-ledger, API, graph, and release-gate work, but it cannot change model weights, activate sources, start collection, or publish answers.
+
+`activeLearningCandidateQueue` also exposes summary-specificity thresholds, row usefulness deltas, and `replayPromotionReport` with schema `ti.analyst_approved_replay_promotion_report.v1`. These fields explain how much each candidate is expected to improve marketplace row usefulness after approved fixture replay, which summary/victim/TTP/source-support thresholds must be met, and why promotion remains held until analyst approval plus replay. The report is metadata-only and preserves the same forbidden actions as the learning queue: no source activation, crawl start, model-weight change, extractor mutation, public-answer publication, or restricted-payload export.

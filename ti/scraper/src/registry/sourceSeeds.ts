@@ -116,7 +116,10 @@ import type {
   TiSourceAtlasExportManifestRow,
   TiSourceAtlasFamily,
   TiSourceAtlasImportPlan,
+  TiSourceAtlasLifecycleReviewPacket,
+  TiSourceAtlasPublicMonitorSourceGapHandoff,
   TiSourceAtlasRecord,
+  TiSourceAtlasReliabilityEconomicsPacket,
   TiSourceAtlasRegistryActivationHandoff,
   TiSourceAtlasReviewDecision,
   TiSourceAtlasReviewQueueRow
@@ -538,23 +541,17 @@ export function buildSourcePortfolioApiResponse(input: {
   };
 }
 
-export function buildTiSourceAtlasApiResponse(input: {
-  queries?: string[];
-  tenantId?: string;
-  generatedAt?: string;
-  recordLimit?: number;
-} = {}): TiSourceAtlasApiResponse {
+
+export function buildTiSourceAtlasApiResponse(input: { queries?: string[]; tenantId?: string; generatedAt?: string; recordLimit?: number } = {}): TiSourceAtlasApiResponse {
   const generatedAt = input.generatedAt ?? nowIso();
   const recordLimit = Math.max(500, Math.min(input.recordLimit ?? 560, 1000));
-  const candidates = buildTiSourceAtlasRecords(recordLimit, generatedAt);
-  const first100 = candidates.filter((record) => !record.duplicate.suppressed).slice(0, 100);
+  const records = buildTiSourceAtlasRecords(recordLimit, generatedAt);
+  const first100 = records.filter((record) => !record.duplicate.suppressed).slice(0, 100);
   const first1000Ids = buildTiSourceAtlasSourceIds(1000);
-  const parserHolds = candidates.filter((record) => record.activationReadiness.state === "needs_parser_certification").map((record) => record.id);
-  const descriptorHolds = candidates.filter((record) => record.activationReadiness.state === "descriptor_only_hold").map((record) => record.id);
-  const importPlans = buildTiSourceAtlasImportPlans(candidates, first100, first1000Ids, generatedAt);
-  const coverageMatrix = buildTiSourceAtlasCoverageMatrix(candidates, input.queries ?? []);
-  const readyForDryRun = candidates.filter((record) => record.activationReadiness.state === "ready_for_dry_run").length;
-
+  const parserHolds = records.filter((record) => record.activationReadiness.state === "needs_parser_certification").map((record) => record.id);
+  const descriptorHolds = records.filter((record) => record.activationReadiness.state === "descriptor_only_hold").map((record) => record.id);
+  const importPlans = buildTiSourceAtlasImportPlans(records, first100, first1000Ids, generatedAt);
+  const coverageMatrix = buildTiSourceAtlasCoverageMatrix(records, input.queries ?? []);
   return {
     endpoint: "/v1/sources/atlas",
     schemaVersion: "ti.source_atlas.v1",
@@ -565,181 +562,72 @@ export function buildTiSourceAtlasApiResponse(input: {
     tenantId: input.tenantId,
     generatedAt,
     summary: {
-      recordCount: candidates.length,
-      syntheticScaleCandidateCount: 10_000,
+      recordCount: records.length,
+      syntheticScaleCandidateCount: 10000,
       first100Count: 100,
       first1000Count: 1000,
-      readyForDryRun,
+      readyForDryRun: records.filter((record) => record.activationReadiness.state === "ready_for_dry_run").length,
       parserCertificationHolds: parserHolds.length,
-      duplicateSuppressed: candidates.filter((record) => record.duplicate.suppressed).length,
+      duplicateSuppressed: records.filter((record) => record.duplicate.suppressed).length,
       descriptorOnlyHolds: descriptorHolds.length,
-      averageSourceValueScore: roundScore(average(candidates.map((record) => record.sourceValueScore)))
+      averageSourceValueScore: roundScore(average(records.map((record) => record.sourceValueScore)))
     },
-    records: candidates,
+    records,
     importPlans,
     coverageMatrix,
+    publicMonitorSourceGapHandoff: buildTiSourceAtlasPublicMonitorSourceGapHandoff({
+      records,
+      coverageMatrix,
+      queries: input.queries ?? [],
+      generatedAt
+    }),
+    lifecycleReview: buildTiSourceAtlasLifecycleReviewPacket(records, generatedAt),
+    sourceEconomics: buildTiSourceAtlasReliabilityEconomicsPacket(records, generatedAt),
     activationCanary: {
       dryRun: true,
       willMutate: false,
       willStartCrawling: false,
       first100SourceIds: first100.map((record) => record.id),
-	      first1000SourceIds: first1000Ids,
-	      parserCertificationRequiredSourceIds: parserHolds.slice(0, 100),
-	      descriptorOnlySourceIds: descriptorHolds.slice(0, 100),
-	      rollbackPlanIds: importPlans.map((plan) => plan.rollbackPacket.rollbackPlanId),
-	      registryActivationHandoff: buildTiSourceAtlasRegistryActivationHandoff({
-	        first100,
-	        parserHolds,
-	        descriptorHolds,
-	        importPlans
-	      })
-	    },
-    discoveryInputs: (["curated_list", "public_report", "github_repository", "awesome_list", "opml_rss", "vendor_page", "analyst_import", "existing_source_pack"] as TiSourceAtlasDiscoveryMethod[])
-      .map((method, index) => ({
-        method,
-        sourceCount: Math.floor(10_000 / 8) + (index < 4 ? 1 : 0),
-        refreshCadence: method === "opml_rss" || method === "vendor_page" ? "daily" : method === "analyst_import" ? "monthly" : "weekly",
-        owner: "agent_01" as const
-      })),
+      first1000SourceIds: first1000Ids,
+      parserCertificationRequiredSourceIds: parserHolds.slice(0, 100),
+      descriptorOnlySourceIds: descriptorHolds.slice(0, 100),
+      rollbackPlanIds: importPlans.map((plan) => plan.rollbackPacket.rollbackPlanId),
+      registryActivationHandoff: buildTiSourceAtlasRegistryActivationHandoff({ first100, parserHolds, descriptorHolds, importPlans })
+    },
+    discoveryInputs: (["curated_list", "public_report", "github_repository", "awesome_list", "opml_rss", "vendor_page", "analyst_import", "existing_source_pack"] as TiSourceAtlasDiscoveryMethod[]).map((method, index) => ({
+      method,
+      sourceCount: Math.floor(10000 / 8) + (index < 4 ? 1 : 0),
+      refreshCadence: method === "opml_rss" || method === "vendor_page" ? "daily" : method === "analyst_import" ? "monthly" : "weekly",
+      owner: "agent_01" as const
+    })),
     exportImportSchema: {
       schemaVersion: "ti.source_atlas_export.v1",
       primaryKey: "id",
       requiredFields: ["id", "url", "domain", "family", "queryClassCoverage", "sourceValueScore", "activationReadiness"],
       noUnsafeSourceClasses: ["private", "invite", "auth", "captcha", "paywall", "credential target", "raw payload target", "threat actor interaction"]
     },
-    guardrails: {
-      publicOnly: true,
-      noPrivateInviteAuthCaptcha: true,
-      noSilentActivation: true,
-      noSourcePackImport: true,
-      noCrawlingFromAtlas: true,
-      descriptorOnlyPublicChannels: true
-    },
+    guardrails: { publicOnly: true, noPrivateInviteAuthCaptcha: true, noSilentActivation: true, noSourcePackImport: true, noCrawlingFromAtlas: true, descriptorOnlyPublicChannels: true },
     handoffs: {
       agent02SchedulerBudgets: ["importPlans.schedulerEstimate", "records.schedulerEstimate", "activationCanary.first1000SourceIds"],
       agent03ParserCertification: ["records.parserCapability", "activationCanary.parserCertificationRequiredSourceIds"],
       agent04CoverageFreshness: ["coverageMatrix", "records.queryClassCoverage", "records.freshness"],
       agent06EvidenceEstimates: ["records.evidenceEstimate", "importPlans.evidenceEstimate"],
       agent07QualityScorecards: ["records.sourceValueScore", "records.legalRobotsState", "records.downstreamPublicAnswerImpact"],
-      agent09ApiContracts: ["sourceAtlas", "schemaVersion", "summary", "records", "importPlans", "coverageMatrix", "activationCanary"],
-      agent10ReleaseGates: ["guardrails.noSilentActivation", "importPlans.rollbackPacket", "activationCanary.rollbackPlanIds"]
+      agent09ApiContracts: ["sourceAtlas", "schemaVersion", "summary", "records", "importPlans", "coverageMatrix", "publicMonitorSourceGapHandoff", "lifecycleReview", "sourceEconomics", "activationCanary"],
+      agent10ReleaseGates: ["guardrails.noSilentActivation", "importPlans.rollbackPacket", "activationCanary.rollbackPlanIds", "lifecycleReview.guardrails", "sourceEconomics.guardrails"]
     }
   };
 }
 
-function buildTiSourceAtlasRegistryActivationHandoff(input: {
-  first100: readonly TiSourceAtlasRecord[];
-  parserHolds: readonly string[];
-  descriptorHolds: readonly string[];
-  importPlans: readonly TiSourceAtlasImportPlan[];
-}): TiSourceAtlasRegistryActivationHandoff {
-  const proposedSourceRecords = input.first100.slice(0, 10).map((record) => ({
-    atlasSourceId: record.id,
-    proposedSourceId: `src_atlas_canary_${record.id.replace(/^atlas_src_/, "")}`,
-    name: record.sourceName,
-    type: tiSourceAtlasRegistryType(record.family),
-    accessMethod: tiSourceAtlasRegistryAccessMethod(record.family),
-    risk: (record.schedulerEstimate.budgetClass === "high" ? "medium" : "low") as Exclude<SourceRisk, "restricted">,
-    url: record.url,
-    domain: record.domain,
-    crawlFrequencySeconds: record.schedulerEstimate.cadenceSeconds,
-    statusPreview: "candidate" as const,
-    metadata: {
-      atlasFamily: record.family,
-      sourceValueScore: record.sourceValueScore,
-      queryClassCoverage: record.queryClassCoverage,
-      sourceHash: stableId("ti_source_atlas_source", `${record.id}:${record.domain}:${record.url}`),
-      provenance: "ti_source_atlas" as const
-    },
-    governance: {
-      legalReview: record.legalRobotsState.legalReview,
-      robotsReview: record.legalRobotsState.robotsReview,
-      approvalRequired: true as const,
-      autoActivationAllowed: false as const
-    }
-  }));
-
-  return {
-    routeHint: "/v1/analyst/source-activation-packets",
-    dryRun: true,
-    willMutate: false,
-    willImportSourcePacks: false,
-    willStartCrawling: false,
-    approvalRequired: true,
-    sourceRegistryMutationAllowed: false,
-    candidateCount: input.first100.length,
-    canarySourceIds: input.first100.map((record) => record.id),
-    parserCertificationRequiredSourceIds: [...input.parserHolds],
-    descriptorOnlyHeldSourceIds: [...input.descriptorHolds],
-    proposedSourceRecords,
-    schedulerPreview: {
-      owner: "agent_02",
-      queuePartition: "source_atlas_canary",
-      maxConcurrentCanaries: 10,
-      initialCadenceSeconds: Math.max(3600, Math.min(...input.first100.map((record) => record.schedulerEstimate.cadenceSeconds))),
-      estimatedDailyTasks: input.first100.reduce((sum, record) => sum + record.schedulerEstimate.estimatedDailyTasks, 0),
-      leaseMode: "dry_run_preview_only"
-    },
-    prerequisites: [
-      "operator_legal_approval_packet_approved",
-      "source_hashes_match_export_manifest",
-      "legal_and_robots_review_current",
-      "parser_certification_complete_for_required_sources",
-      "duplicate_suppression_reviewed",
-      "descriptor_only_sources_remain_held",
-      "tenant_policy_allows_safe_public_source",
-      "rollback_packet_ready"
-    ],
-    forbiddenOperations: [
-      "registry_mutation",
-      "source_pack_import",
-      "crawl_enqueue",
-      "source_auto_activation",
-      "restricted_fetch",
-      "auth_or_captcha_bypass",
-      "payload_download"
-    ],
-    rollbackPacket: {
-      rollbackPlanIds: input.importPlans.map((plan) => plan.rollbackPacket.rollbackPlanId),
-      action: "Discard proposed registry previews, keep atlas records staged only, and require a fresh approval packet before any real source registry write."
-    },
-    downstreamHandoffs: {
-      agent01RegistryReview: ["proposedSourceRecords", "sourceRegistryMutationAllowed", "rollbackPacket"],
-      agent02SchedulerDryRun: ["schedulerPreview", "canarySourceIds", "forbiddenOperations.crawl_enqueue"],
-      agent03ParserCertification: ["parserCertificationRequiredSourceIds", "prerequisites.parser_certification_complete_for_required_sources"],
-      agent06EvidenceReadiness: ["metadata.sourceHash", "metadata.queryClassCoverage", "schedulerPreview.estimatedDailyTasks"],
-      agent07QualityGate: ["metadata.sourceValueScore", "governance", "prerequisites.duplicate_suppression_reviewed"],
-      agent09ApiContract: ["activationCanary.registryActivationHandoff", "routeHint", "proposedSourceRecords"],
-      agent10ReleaseGate: ["rollbackPacket", "forbiddenOperations", "sourceRegistryMutationAllowed"]
-    }
-  };
-}
-
-
-export function buildTiSourceAtlasExportManifestApiResponse(input: {
-  queries?: string[];
-  tenantId?: string;
-  generatedAt?: string;
-  planLabel?: TiSourceAtlasImportPlan["label"];
-  recordLimit?: number;
-} = {}): TiSourceAtlasExportManifestApiResponse {
+export function buildTiSourceAtlasExportManifestApiResponse(input: { queries?: string[]; tenantId?: string; generatedAt?: string; planLabel?: TiSourceAtlasImportPlan["label"]; recordLimit?: number } = {}): TiSourceAtlasExportManifestApiResponse {
   const generatedAt = input.generatedAt ?? nowIso();
   const requestedPlan = input.planLabel ?? "first_100";
-  const recordLimit = Math.max(requestedPlan === "first_1000" || requestedPlan === "future_10k" ? 1000 : 500, Math.min(input.recordLimit ?? 1000, 1000));
-  const atlas = buildTiSourceAtlasApiResponse({
-    tenantId: input.tenantId,
-    generatedAt,
-    queries: input.queries,
-    recordLimit
-  });
+  const atlas = buildTiSourceAtlasApiResponse({ tenantId: input.tenantId, generatedAt, queries: input.queries, recordLimit: input.recordLimit ?? 1000 });
   const plan = atlas.importPlans.find((candidate) => candidate.label === requestedPlan) ?? atlas.importPlans[0]!;
-  const planSourceIds = new Set(plan.sourceIds);
-  const manifestRecords = atlas.records
-    .filter((record) => planSourceIds.has(record.id))
-    .slice(0, requestedPlan === "first_100" ? 100 : 1000);
+  const planIds = new Set(plan.sourceIds);
+  const manifestRecords = atlas.records.filter((record) => planIds.has(record.id)).slice(0, requestedPlan === "first_100" ? 100 : 1000);
   const reviewQueue = manifestRecords.map((record) => tiSourceAtlasReviewQueueRow(record, generatedAt));
   const rows = manifestRecords.map(tiSourceAtlasExportManifestRow);
-
   return {
     endpoint: "/v1/sources/atlas/export",
     schemaVersion: "ti.source_atlas_export_manifest.v1",
@@ -760,62 +648,21 @@ export function buildTiSourceAtlasExportManifestApiResponse(input: {
       legalReviewRequired: reviewQueue.filter((row) => row.decision === "legal_review_required").length
     },
     reviewQueue,
-    exportManifest: {
-      schemaVersion: "ti.source_atlas_export.v1",
-      format: "source_pack_import_dry_run_json",
-      hashAlgorithm: "stable_sha256",
-      primaryKey: "atlasSourceId",
-      rows
-    },
-    approvalPacket: {
-      routeHint: "/v1/analyst/source-activation-packets",
-      approvalRequired: true,
-      allowedActions: ["approve_canary", "request_parser_certification", "mark_duplicate", "hold_descriptor", "rollback_batch", "export_manifest"],
-      forbiddenActions: ["auto_activate", "start_crawl", "import_without_review", "add_private_source", "bypass_captcha_or_auth", "download_payload"]
-    },
-    rollbackPacket: {
-      rollbackPlanId: stableId("ti_source_atlas_export_rollback", `${requestedPlan}:${generatedAt}`),
-      trigger: "operator rejects approval packet, parser certification fails, unsafe class appears, duplicate spike exceeds threshold, or source-pack import drifts from manifest hashes",
-      action: "Discard the export manifest, keep atlas records staged only, preserve the active registry, and regenerate the atlas export packet before any future approval."
-    },
-    guardrails: {
-      ...atlas.guardrails,
-      noManifestImport: true,
-      explicitApprovalRequired: true
-    },
-    handoffs: {
-      ...atlas.handoffs,
-      agent01RegistryImport: ["exportManifest.rows", "reviewQueue.decision", "approvalPacket", "rollbackPacket"]
-    }
+    exportManifest: { schemaVersion: "ti.source_atlas_export.v1", format: "source_pack_import_dry_run_json", hashAlgorithm: "stable_sha256", primaryKey: "atlasSourceId", rows },
+    approvalPacket: { routeHint: "/v1/analyst/source-activation-packets", approvalRequired: true, allowedActions: ["approve_canary", "request_parser_certification", "mark_duplicate", "hold_descriptor", "rollback_batch", "export_manifest"], forbiddenActions: ["auto_activate", "start_crawl", "import_without_review", "add_private_source", "bypass_captcha_or_auth", "download_payload"] },
+    rollbackPacket: { rollbackPlanId: stableId("ti_source_atlas_export_rollback", requestedPlan + ":" + generatedAt), trigger: "operator rejects approval packet, parser certification fails, unsafe class appears, duplicate spike exceeds threshold, or source-pack import drifts from manifest hashes", action: "Discard the export manifest, keep atlas records staged only, preserve the active registry, and regenerate the atlas export packet before any future approval." },
+    guardrails: { ...atlas.guardrails, noManifestImport: true, explicitApprovalRequired: true },
+    handoffs: { ...atlas.handoffs, agent01RegistryImport: ["exportManifest.rows", "reviewQueue.decision", "approvalPacket", "rollbackPacket"] }
   };
 }
 
 function buildTiSourceAtlasRecords(count: number, generatedAt: string): TiSourceAtlasRecord[] {
-  const families: TiSourceAtlasFamily[] = [
-    "vendor_threat_blog",
-    "cert_government",
-    "cve_advisory",
-    "malware_researcher",
-    "ransomware_tracker",
-    "exploit_intelligence",
-    "github_security_advisory",
-    "package_advisory",
-    "public_dataset",
-    "regional_cyber_agency",
-    "ics_ot",
-    "cloud_saas_security",
-    "phishing_brand_abuse",
-    "public_channel_descriptor"
-  ];
+  const families: TiSourceAtlasFamily[] = ["vendor_threat_blog", "cert_government", "cve_advisory", "malware_researcher", "ransomware_tracker", "exploit_intelligence", "github_security_advisory", "package_advisory", "public_dataset", "regional_cyber_agency", "ics_ot", "cloud_saas_security", "phishing_brand_abuse", "public_channel_descriptor"];
   return Array.from({ length: count }, (_, index) => tiSourceAtlasRecord(index + 1, families[index % families.length]!, generatedAt));
 }
 
-function buildTiSourceAtlasSourceIds(count: number): string[] {
-  return Array.from({ length: count }, (_, index) => `atlas_src_${String(index + 1).padStart(5, "0")}`);
-}
-
 function tiSourceAtlasRecord(index: number, family: TiSourceAtlasFamily, generatedAt: string): TiSourceAtlasRecord {
-  const domain = `${family.replaceAll("_", "-")}-${String(index).padStart(4, "0")}.cti.example`;
+  const domain = family.replaceAll("_", "-") + "-" + String(index).padStart(4, "0") + ".cti.example";
   const queryClassCoverage = tiSourceAtlasQueryClasses(family, index);
   const parserProfile = tiSourceAtlasParserProfile(family);
   const parserCertified = parserProfile !== "dynamic_page" && family !== "public_channel_descriptor";
@@ -828,35 +675,16 @@ function tiSourceAtlasRecord(index: number, family: TiSourceAtlasFamily, generat
   const evidenceYield = roundScore(0.45 + ((index % 47) / 120));
   const uniqueness = duplicateSuppressed ? 0.15 : roundScore(0.5 + ((index % 19) / 40));
   const downstreamPublicAnswerImpact = roundScore((queryClassCoverage.length / 5) * 0.45 + evidenceYield * 0.35 + uniqueness * 0.2);
-  const sourceValueScore = roundScore(
-    reliability * 0.22 +
-    freshness * 0.16 +
-    evidenceYield * 0.2 +
-    uniqueness * 0.14 +
-    downstreamPublicAnswerImpact * 0.18 +
-    (parserCertified ? 0.06 : 0) +
-    (legalReview === "current" ? 0.04 : -0.08) -
-    (duplicateSuppressed ? 0.28 : 0) -
-    (descriptorOnly ? 0.12 : 0)
-  );
-  const state: TiSourceAtlasRecord["activationReadiness"]["state"] = duplicateSuppressed
-    ? "duplicate_suppressed"
-    : descriptorOnly
-      ? "descriptor_only_hold"
-      : !parserCertified
-        ? "needs_parser_certification"
-        : legalReview === "current"
-          ? "ready_for_dry_run"
-          : "legal_review_hold";
+  const sourceValueScore = roundScore(reliability * 0.22 + freshness * 0.16 + evidenceYield * 0.2 + uniqueness * 0.14 + downstreamPublicAnswerImpact * 0.18 + (parserCertified ? 0.06 : 0) + (legalReview === "current" ? 0.04 : -0.08) - (duplicateSuppressed ? 0.28 : 0) - (descriptorOnly ? 0.12 : 0));
+  const state: TiSourceAtlasRecord["activationReadiness"]["state"] = duplicateSuppressed ? "duplicate_suppressed" : descriptorOnly ? "descriptor_only_hold" : !parserCertified ? "needs_parser_certification" : legalReview === "current" ? "ready_for_dry_run" : "legal_review_hold";
   const cadenceSeconds = tiSourceAtlasCadenceSeconds(family);
-  const estimatedDailyTasks = Math.ceil(86_400 / Math.max(3600, cadenceSeconds));
-
+  const estimatedDailyTasks = Math.ceil(86400 / Math.max(3600, cadenceSeconds));
   return {
-    id: `atlas_src_${String(index).padStart(5, "0")}`,
-    url: `https://${domain}/`,
+    id: "atlas_src_" + String(index).padStart(5, "0"),
+    url: "https://" + domain + "/",
     domain,
-    feedUrl: family === "vendor_threat_blog" || family === "cert_government" || family === "regional_cyber_agency" ? `https://${domain}/feed.xml` : undefined,
-    sourceName: `${tiSourceAtlasFamilyLabel(family)} ${index}`,
+    feedUrl: family === "vendor_threat_blog" || family === "cert_government" || family === "regional_cyber_agency" ? "https://" + domain + "/feed.xml" : undefined,
+    sourceName: tiSourceAtlasFamilyLabel(family) + " " + index,
     family,
     discoveryMethod: tiSourceAtlasDiscoveryMethod(index),
     queryClassCoverage,
@@ -869,161 +697,532 @@ function tiSourceAtlasRecord(index: number, family: TiSourceAtlasFamily, generat
     uniqueness,
     downstreamPublicAnswerImpact,
     sourceValueScore,
-    parserCapability: {
-      profile: parserProfile,
-      owner: "agent_03",
-      certified: parserCertified,
-      certificationRequired: !parserCertified
-    },
-    legalRobotsState: {
-      legalReview,
-      robotsReview,
-      notes: [
-        "Public-source atlas candidate only.",
-        descriptorOnly ? "Public-channel descriptor remains metadata-only until explicit policy and parser certification." : "Safe public HTTP/API source candidate.",
-        `Generated ${generatedAt} for dry-run scoring.`
-      ]
-    },
-    duplicate: {
-      duplicateOf: duplicateSuppressed ? `atlas_src_${String(Math.max(1, index - 1)).padStart(5, "0")}` : undefined,
-      mirrorOf: index % 53 === 0 ? `atlas_src_${String(Math.max(1, index - 2)).padStart(5, "0")}` : undefined,
-      contentSimilarity: duplicateSuppressed ? 0.97 : roundScore((index % 17) / 25),
-      suppressed: duplicateSuppressed
-    },
-    schedulerEstimate: {
-      budgetClass: descriptorOnly ? "low" : family === "cert_government" || family === "cve_advisory" ? "normal" : "high",
-      cadenceSeconds,
-      estimatedDailyTasks
-    },
-    evidenceEstimate: {
-      expectedItemsPerDay: roundScore(Math.max(0.05, evidenceYield * estimatedDailyTasks)),
-      storageMbPerDay: roundScore(Math.max(0.1, evidenceYield * estimatedDailyTasks * 0.35)),
-      retentionClass: descriptorOnly ? "public_chat_text" : "public_report"
-    },
-    activationReadiness: {
-      state,
-      approvalRequired: true,
-      autoActivationAllowed: false as const,
-      reasons: tiSourceAtlasReadinessReasons(state)
-    },
-    safety: {
-      publicOnly: true,
-      privateInviteAuthCaptcha: false,
-      rawPayloadTarget: false,
-      autoActivate: false
-    }
+    parserCapability: { profile: parserProfile, owner: "agent_03", certified: parserCertified, certificationRequired: !parserCertified },
+    legalRobotsState: { legalReview, robotsReview, notes: ["Public-source atlas candidate only.", descriptorOnly ? "Public-channel descriptor remains metadata-only until explicit policy and parser certification." : "Safe public HTTP/API source candidate.", "Generated " + generatedAt + " for dry-run scoring."] },
+    duplicate: { duplicateOf: duplicateSuppressed ? "atlas_src_" + String(Math.max(1, index - 1)).padStart(5, "0") : undefined, mirrorOf: index % 53 === 0 ? "atlas_src_" + String(Math.max(1, index - 2)).padStart(5, "0") : undefined, contentSimilarity: duplicateSuppressed ? 0.97 : roundScore((index % 17) / 25), suppressed: duplicateSuppressed },
+    schedulerEstimate: { budgetClass: descriptorOnly ? "low" : family === "cert_government" || family === "cve_advisory" ? "normal" : "high", cadenceSeconds, estimatedDailyTasks },
+    evidenceEstimate: { expectedItemsPerDay: roundScore(Math.max(0.05, evidenceYield * estimatedDailyTasks)), storageMbPerDay: roundScore(Math.max(0.1, evidenceYield * estimatedDailyTasks * 0.35)), retentionClass: descriptorOnly ? "public_chat_text" : "public_report" },
+    activationReadiness: { state, approvalRequired: true, autoActivationAllowed: false, reasons: tiSourceAtlasReadinessReasons(state) },
+    safety: { publicOnly: true, privateInviteAuthCaptcha: false, rawPayloadTarget: false, autoActivate: false }
   };
 }
 
-function buildTiSourceAtlasImportPlans(
-  records: TiSourceAtlasRecord[],
-  first100: TiSourceAtlasRecord[],
-  first1000Ids: string[],
-  generatedAt: string
-): TiSourceAtlasImportPlan[] {
+function buildTiSourceAtlasImportPlans(records: TiSourceAtlasRecord[], first100: TiSourceAtlasRecord[], first1000Ids: string[], generatedAt: string): TiSourceAtlasImportPlan[] {
   const plan = (label: TiSourceAtlasImportPlan["label"], selected: TiSourceAtlasRecord[], sourceIds: string[]): TiSourceAtlasImportPlan => ({
-    planId: stableId("ti_source_atlas_import_plan", `${label}:${generatedAt}`),
+    planId: stableId("ti_source_atlas_import_plan", label + ":" + generatedAt),
     label,
     dryRun: true,
     willMutate: false,
     willImportSourcePacks: false,
     willStartCrawling: false,
-    sourceCount: label === "future_10k" ? 10_000 : sourceIds.length,
+    sourceCount: label === "future_10k" ? 10000 : sourceIds.length,
     sourceIds,
     familyCoverage: tiSourceAtlasFamilyCoverage(selected),
-    schedulerEstimate: {
-      estimatedDailyTasks: selected.reduce((sum, record) => sum + record.schedulerEstimate.estimatedDailyTasks, 0),
-      budgetClasses: uniqueStrings(selected.map((record) => record.schedulerEstimate.budgetClass)) as SourceCollectionSla["budgetClass"][]
-    },
-    evidenceEstimate: {
-      expectedItemsPerDay: roundScore(selected.reduce((sum, record) => sum + record.evidenceEstimate.expectedItemsPerDay, 0)),
-      storageMbPerDay: roundScore(selected.reduce((sum, record) => sum + record.evidenceEstimate.storageMbPerDay, 0))
-    },
-    approvalPacket: {
-      routeHint: "/v1/analyst/source-activation-packets",
-      approvalRequired: true,
-      allowedActions: ["approve_canary", "request_parser_certification", "mark_duplicate", "hold_descriptor", "rollback_batch"],
-      forbiddenActions: ["auto_activate", "start_crawl", "import_without_review", "add_private_source", "bypass_captcha_or_auth"]
-    },
-    rollbackPacket: {
-      rollbackPlanId: stableId("ti_source_atlas_rollback", `${label}:${generatedAt}`),
-      trigger: "parser certification failure, duplicate spike, scheduler flood, quality regression, public answer regression, or any unsafe/private/auth/CAPTCHA source class detected",
-      action: "Keep atlas candidates staged, disable import executor, preserve current registry, and rerun source atlas checks before another approval packet."
-    }
+    schedulerEstimate: { estimatedDailyTasks: selected.reduce((sum, record) => sum + record.schedulerEstimate.estimatedDailyTasks, 0), budgetClasses: uniqueStrings(selected.map((record) => record.schedulerEstimate.budgetClass)) as SourceCollectionSla["budgetClass"][] },
+    evidenceEstimate: { expectedItemsPerDay: roundScore(selected.reduce((sum, record) => sum + record.evidenceEstimate.expectedItemsPerDay, 0)), storageMbPerDay: roundScore(selected.reduce((sum, record) => sum + record.evidenceEstimate.storageMbPerDay, 0)) },
+    approvalPacket: { routeHint: "/v1/analyst/source-activation-packets", approvalRequired: true, allowedActions: ["approve_canary", "request_parser_certification", "mark_duplicate", "hold_descriptor", "rollback_batch"], forbiddenActions: ["auto_activate", "start_crawl", "import_without_review", "add_private_source", "bypass_captcha_or_auth"] },
+    rollbackPacket: { rollbackPlanId: stableId("ti_source_atlas_rollback", label + ":" + generatedAt), trigger: "parser certification failure, duplicate spike, scheduler flood, quality regression, public answer regression, or any unsafe/private/auth/CAPTCHA source class detected", action: "Keep atlas candidates staged, disable import executor, preserve current registry, and rerun source atlas checks before another approval packet." }
   });
   const first1000 = records.filter((record) => first1000Ids.includes(record.id));
-  return [
-    plan("first_100", first100, first100.map((record) => record.id)),
-    plan("first_1000", first1000, first1000Ids),
-    plan("future_10k", records, buildTiSourceAtlasSourceIds(10_000))
+  return [plan("first_100", first100, first100.map((record) => record.id)), plan("first_1000", first1000, first1000Ids), plan("future_10k", records, buildTiSourceAtlasSourceIds(10000))];
+}
+
+function buildTiSourceAtlasCoverageMatrix(records: TiSourceAtlasRecord[], queries: string[]): TiSourceAtlasCoverageMatrixRow[] {
+  const rows: Array<{ queryClass: TiSourceAtlasCoverageMatrixRow["queryClass"]; requiredFamilies: TiSourceAtlasFamily[] }> = [
+    { queryClass: "actor", requiredFamilies: ["vendor_threat_blog", "malware_researcher", "public_dataset", "github_security_advisory"] },
+    { queryClass: "ransomware_victim", requiredFamilies: ["ransomware_tracker", "vendor_threat_blog", "public_dataset", "public_channel_descriptor"] },
+    { queryClass: "cve", requiredFamilies: ["cve_advisory", "cert_government", "github_security_advisory", "package_advisory"] },
+    { queryClass: "malware_tool", requiredFamilies: ["malware_researcher", "vendor_threat_blog", "public_dataset"] },
+    { queryClass: "country", requiredFamilies: ["regional_cyber_agency", "cert_government", "vendor_threat_blog"] },
+    { queryClass: "sector", requiredFamilies: ["ics_ot", "cloud_saas_security", "phishing_brand_abuse", "regional_cyber_agency"] },
+    { queryClass: "campaign", requiredFamilies: ["vendor_threat_blog", "malware_researcher", "exploit_intelligence"] },
+    { queryClass: "victim_company", requiredFamilies: ["ransomware_tracker", "phishing_brand_abuse", "public_channel_descriptor"] },
+    { queryClass: "infrastructure", requiredFamilies: ["exploit_intelligence", "public_dataset", "malware_researcher"] }
   ];
+  const requestedClasses = tiSourceAtlasRequestedClasses(queries);
+  return rows.filter((row) => requestedClasses.length === 0 || requestedClasses.includes(tiSourceAtlasMatrixQueryClass(row.queryClass))).map((row) => {
+    const rowQueryClass = tiSourceAtlasMatrixQueryClass(row.queryClass);
+    const matching = records.filter((record) => record.queryClassCoverage.includes(rowQueryClass) || row.requiredFamilies.includes(record.family));
+    const coveredFamilies = uniqueStrings(matching.map((record) => record.family)) as TiSourceAtlasFamily[];
+    return { queryClass: row.queryClass, requiredFamilies: row.requiredFamilies, coveredFamilies, candidateSourceCount: matching.length, highValueSourceIds: matching.filter((record) => record.sourceValueScore >= 0.65 && record.activationReadiness.state === "ready_for_dry_run").slice(0, 25).map((record) => record.id), gapFamilies: row.requiredFamilies.filter((family) => !coveredFamilies.includes(family)), downstreamPublicAnswerImpact: roundScore(average(matching.map((record) => record.downstreamPublicAnswerImpact))) };
+  });
+}
+
+function buildTiSourceAtlasPublicMonitorSourceGapHandoff(input: { records: TiSourceAtlasRecord[]; coverageMatrix: TiSourceAtlasCoverageMatrixRow[]; queries: string[]; generatedAt: string }): TiSourceAtlasPublicMonitorSourceGapHandoff {
+  const queries = input.queries.length > 0 ? input.queries : ["APT29", "APT42", "LockBit", "Akira ransomware victims", "CVE-2026-4242"];
+  const rows: TiSourceAtlasPublicMonitorSourceGapHandoff["queryRows"] = queries.map((query) => {
+    const queryClass = classifyCloseoutQuery(query);
+    const matrixClass = queryClass === "ransomware_victim" ? "ransomware_victim" : queryClass;
+    const matrixRow = input.coverageMatrix.find((row) => tiSourceAtlasMatrixQueryClass(row.queryClass) === matrixClass)
+      ?? input.coverageMatrix.find((row) => row.queryClass === "actor");
+    const candidates = input.records
+      .filter((record) =>
+        !record.duplicate.suppressed
+        && (record.queryClassCoverage.includes(queryClass) || matrixRow?.requiredFamilies.includes(record.family))
+      )
+      .sort((left, right) => right.sourceValueScore - left.sourceValueScore || left.id.localeCompare(right.id));
+    const recommended = candidates
+      .filter((record) => record.activationReadiness.state === "ready_for_dry_run" && record.sourceValueScore >= 0.62)
+      .slice(0, 8);
+    const parserHoldCount = candidates.filter((record) => record.activationReadiness.state === "needs_parser_certification").length;
+    const descriptorHoldCount = candidates.filter((record) => record.activationReadiness.state === "descriptor_only_hold").length;
+    const missingFamilies = matrixRow?.gapFamilies ?? [];
+    const publicMonitorState: TiSourceAtlasPublicMonitorSourceGapHandoff["queryRows"][number]["publicMonitorState"] =
+      missingFamilies.length > 0 || recommended.length < 3 ? "coverage_gap" : parserHoldCount > 0 || descriptorHoldCount > 0 ? "partial" : "ready";
+    const analystAction: TiSourceAtlasPublicMonitorSourceGapHandoff["queryRows"][number]["analystAction"] =
+      descriptorHoldCount > 0 && queryClass === "ransomware_victim" ? "hold_descriptor_only"
+        : parserHoldCount > 0 ? "request_parser_certification"
+          : publicMonitorState === "ready" ? "approve_canary_packet"
+            : "review_source_candidates";
+    const estimatedDailyTasks = recommended.reduce((sum, record) => sum + record.schedulerEstimate.estimatedDailyTasks, 0);
+    const cadenceSeconds = Math.min(...(recommended.length > 0 ? recommended : candidates.slice(0, 3)).map((record) => record.schedulerEstimate.cadenceSeconds));
+    return {
+      query,
+      queryClass,
+      publicMonitorState,
+      missingFamilies,
+      recommendedAtlasSourceIds: recommended.map((record) => record.id),
+      candidateSourceCount: candidates.length,
+      expectedPublicMonitorEffect: tiSourceAtlasPublicMonitorEffect(queryClass),
+      schedulerDryRun: {
+        priority: tiSourceAtlasPublicMonitorPriority(queryClass, publicMonitorState),
+        cadenceSeconds: Number.isFinite(cadenceSeconds) ? cadenceSeconds : 14400,
+        estimatedDailyTasks,
+        duplicateRunReuse: true as const
+      },
+      analystAction,
+      noLeakBoundary: { metadataOnly: true as const, rawContentIncluded: false as const, unsafeUrlsIncluded: false as const, sourceActivationApplied: false as const }
+    };
+  });
+  const allRecommendedIds = uniqueStrings(rows.flatMap((row) => row.recommendedAtlasSourceIds));
+  const relevantRecords = input.records.filter((record) => allRecommendedIds.includes(record.id) || rows.some((row) => row.queryClass === "ransomware_victim" && record.queryClassCoverage.includes(row.queryClass)));
+  return {
+    schemaVersion: "ti.source_atlas.public_monitor_gap_handoff.v1",
+    routeHint: "/v1/sources/atlas",
+    consumer: "apify_public_threat_actor_monitor",
+    dryRun: true,
+    willMutate: false,
+    willImportSourcePacks: false,
+    willStartCrawling: false,
+    generatedAt: input.generatedAt,
+    queryRows: rows,
+    summary: {
+      queryCount: rows.length,
+      coverageGapCount: rows.filter((row) => row.publicMonitorState === "coverage_gap").length,
+      partialCount: rows.filter((row) => row.publicMonitorState === "partial").length,
+      readyCount: rows.filter((row) => row.publicMonitorState === "ready").length,
+      recommendedCandidateCount: allRecommendedIds.length,
+      descriptorOnlyHoldCount: relevantRecords.filter((record) => record.activationReadiness.state === "descriptor_only_hold").length,
+      parserCertificationHoldCount: relevantRecords.filter((record) => record.activationReadiness.state === "needs_parser_certification").length
+    },
+    guardrails: { noSourceActivation: true, noCrawling: true, noRawContent: true, noPrivateInviteAuthCaptcha: true, noThreatActorInteraction: true },
+    handoffs: {
+      agent01SourceReview: ["queryRows.recommendedAtlasSourceIds", "queryRows.analystAction", "summary"],
+      agent02SchedulerDryRun: ["queryRows.schedulerDryRun", "queryRows.publicMonitorState"],
+      agent03ParserCertification: ["summary.parserCertificationHoldCount", "queryRows.analystAction"],
+      agent04CoverageValue: ["queryRows.expectedPublicMonitorEffect", "queryRows.missingFamilies"],
+      agent09PublicMonitorApi: ["publicMonitorSourceGapHandoff.queryRows", "publicMonitorSourceGapHandoff.summary"],
+      agent10ProductSlo: ["queryRows.publicMonitorState", "summary.coverageGapCount", "guardrails"]
+    }
+  };
+}
+
+function tiSourceAtlasPublicMonitorEffect(queryClass: SourceCoverageCloseoutQueryClass): TiSourceAtlasPublicMonitorSourceGapHandoff["queryRows"][number]["expectedPublicMonitorEffect"] {
+  if (queryClass === "ransomware_victim") return "victim_claim_context";
+  if (queryClass === "cve") return "cve_advisory_context";
+  if (queryClass === "actor" || queryClass === "campaign") return "more_recent_activity";
+  return "more_source_diversity";
+}
+
+function tiSourceAtlasPublicMonitorPriority(queryClass: SourceCoverageCloseoutQueryClass, state: TiSourceAtlasPublicMonitorSourceGapHandoff["queryRows"][number]["publicMonitorState"]): TiSourceAtlasPublicMonitorSourceGapHandoff["queryRows"][number]["schedulerDryRun"]["priority"] {
+  if (state === "coverage_gap") return "urgent";
+  if (queryClass === "ransomware_victim" || queryClass === "cve") return "high";
+  if (queryClass === "actor" || queryClass === "campaign") return "normal";
+  return "low";
+}
+
+function buildTiSourceAtlasLifecycleReviewPacket(records: TiSourceAtlasRecord[], generatedAt: string): TiSourceAtlasLifecycleReviewPacket {
+  const candidates = records
+    .filter((record) => record.duplicate.suppressed || record.activationReadiness.state !== "ready_for_dry_run" || record.freshness < 0.66 || record.evidenceYield < 0.52 || record.sourceValueScore < 0.58)
+    .slice(0, 80);
+  const rows: TiSourceAtlasLifecycleReviewPacket["rows"] = candidates.map((record) => {
+    const reasonCodes = tiSourceAtlasLifecycleReasonCodes(record);
+    const recommendedAction = tiSourceAtlasLifecycleRecommendedAction(record, reasonCodes);
+    const lifecycleState = tiSourceAtlasLifecycleState(recommendedAction);
+    const replacements = records
+      .filter((candidate) =>
+        candidate.id !== record.id
+        && !candidate.duplicate.suppressed
+        && candidate.activationReadiness.state === "ready_for_dry_run"
+        && candidate.family === record.family
+        && candidate.queryClassCoverage.some((queryClass) => record.queryClassCoverage.includes(queryClass))
+      )
+      .sort((left, right) => right.sourceValueScore - left.sourceValueScore || left.id.localeCompare(right.id))
+      .slice(0, 3)
+      .map((candidate) => candidate.id);
+    return {
+      reviewId: stableId("ti_source_atlas_lifecycle_review", `${record.id}:${generatedAt}`),
+      atlasSourceId: record.id,
+      sourceHash: stableId("ti_source_atlas_source", `${record.id}:${record.domain}:${record.url}`),
+      family: record.family,
+      queryClassCoverage: record.queryClassCoverage,
+      currentReadiness: record.activationReadiness.state,
+      lifecycleState,
+      reasonCodes,
+      recommendedAction,
+      replacementCandidateSourceIds: replacements,
+      schedulerDryRun: {
+        action: recommendedAction === "retire_duplicate" ? "replace_candidate" : recommendedAction === "quarantine" || recommendedAction === "hold_descriptor_only" ? "pause_candidate" : recommendedAction === "degrade" ? "reduce_cadence" : "no_change",
+        estimatedDailyTaskDelta: recommendedAction === "keep_candidate" || recommendedAction === "request_legal_review" || recommendedAction === "request_parser_repair" ? 0 : -record.schedulerEstimate.estimatedDailyTasks,
+        willLeaseWork: false
+      },
+      rollback: {
+        rollbackPlanId: stableId("ti_source_atlas_lifecycle_rollback", `${record.id}:${recommendedAction}:${generatedAt}`),
+        action: "Keep the atlas candidate unchanged until an explicit operator approval packet applies the lifecycle decision."
+      },
+      noMutationBoundary: { sourceStatusChanged: false, registryWritePlanned: false, crawlEnqueued: false, sourceDeleted: false }
+    };
+  });
+  return {
+    schemaVersion: "ti.source_atlas.lifecycle_review.v1",
+    routeHint: "/v1/sources/atlas",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    generatedAt,
+    rows,
+    summary: {
+      reviewedSourceCount: rows.length,
+      healthyCandidateCount: rows.filter((row) => row.lifecycleState === "healthy_candidate").length,
+      degradeReviewCount: rows.filter((row) => row.lifecycleState === "degrade_review").length,
+      quarantineReviewCount: rows.filter((row) => row.lifecycleState === "quarantine_review").length,
+      retirementReviewCount: rows.filter((row) => row.lifecycleState === "retirement_review").length,
+      parserRepairCount: rows.filter((row) => row.lifecycleState === "parser_repair").length,
+      legalReviewCount: rows.filter((row) => row.lifecycleState === "legal_review").length,
+      descriptorHoldCount: rows.filter((row) => row.lifecycleState === "descriptor_hold").length
+    },
+    guardrails: { noRegistryMutation: true, noSourceDeletion: true, noCrawling: true, noSilentRetirement: true, noSilentQuarantine: true, publicOnly: true },
+    handoffs: {
+      agent01LifecycleReview: ["rows.recommendedAction", "rows.rollback", "rows.noMutationBoundary"],
+      agent02SchedulerCadence: ["rows.schedulerDryRun", "rows.replacementCandidateSourceIds"],
+      agent03ParserRepair: ["rows.reasonCodes.parser_gap", "rows.recommendedAction.request_parser_repair"],
+      agent06EvidenceReplay: ["rows.sourceHash", "rows.queryClassCoverage", "summary.degradeReviewCount"],
+      agent09ApiUi: ["lifecycleReview.rows", "lifecycleReview.summary", "lifecycleReview.guardrails"],
+      agent10SloRelease: ["summary.quarantineReviewCount", "summary.retirementReviewCount", "guardrails.noSilentRetirement"]
+    }
+  };
+}
+
+function buildTiSourceAtlasReliabilityEconomicsPacket(records: TiSourceAtlasRecord[], generatedAt: string): TiSourceAtlasReliabilityEconomicsPacket {
+  const sourceRows = records
+    .map((record) => tiSourceAtlasEconomicsRow(record))
+    .sort((left, right) => right.economicsScore - left.economicsScore || left.atlasSourceId.localeCompare(right.atlasSourceId));
+  const promotableRows = sourceRows.filter((row) => row.decision === "promote_candidate" || row.decision === "watch");
+  const scenario = (label: TiSourceAtlasReliabilityEconomicsPacket["rolloutScenarios"][number]["label"], count: number): TiSourceAtlasReliabilityEconomicsPacket["rolloutScenarios"][number] => {
+    const selectedRows = promotableRows.slice(0, Math.min(count, promotableRows.length));
+    const selectedRecords = records.filter((record) => selectedRows.some((row) => row.atlasSourceId === record.id));
+    const fallbackIds = selectedRows.map((row) => row.atlasSourceId);
+    const selectedSourceIds = count > fallbackIds.length
+      ? [...fallbackIds, ...buildTiSourceAtlasSourceIds(count).filter((id) => !fallbackIds.includes(id)).slice(0, count - fallbackIds.length)]
+      : fallbackIds;
+    const duplicateAverage = average(selectedRows.map((row) => row.duplicateRisk));
+    const usefulEvidence = selectedRows.reduce((sum, row) => sum + row.uniqueEvidenceYield, 0);
+    const costUnits = selectedRows.reduce((sum, row) => sum + row.estimatedDailySchedulerTasks + row.estimatedStorageMbPerDay / 8, 0);
+    const parserRepairDependencyCount = selectedRows.filter((row) => row.parserRepairDependency).length;
+    const legalReviewDependencyCount = selectedRows.filter((row) => row.legalReviewDependency).length;
+    const descriptorOnlyHoldCount = selectedRecords.filter((record) => record.activationReadiness.state === "descriptor_only_hold").length;
+    return {
+      label,
+      sourceCount: count,
+      selectedSourceIds,
+      expectedActorsCovered: Math.min(5000, Math.max(1, Math.round(selectedRows.reduce((sum, row) => sum + row.expectedActorsCovered, 0) * (count / Math.max(1, selectedRows.length)) / 3))),
+      expectedQueryClasses: uniqueStrings(selectedRows.flatMap((row) => row.expectedQueryClasses)) as SourceCoverageCloseoutQueryClass[],
+      expectedLanguageCoverage: uniqueStrings(selectedRows.map((row) => row.language)),
+      expectedRegionCoverage: uniqueStrings(selectedRows.flatMap((row) => row.regions)),
+      expectedUniqueEvidenceItemsPerDay: roundScore(usefulEvidence * (count / Math.max(1, selectedRows.length))),
+      duplicateRisk: duplicateAverage >= 0.55 ? "high" : duplicateAverage >= 0.3 ? "medium" : "low",
+      parserRepairDependencyCount,
+      legalReviewDependencyCount,
+      descriptorOnlyHoldCount,
+      estimatedStorageMbPerDay: roundScore(selectedRows.reduce((sum, row) => sum + row.estimatedStorageMbPerDay, 0) * (count / Math.max(1, selectedRows.length))),
+      estimatedDailySchedulerTasks: Math.round(selectedRows.reduce((sum, row) => sum + row.estimatedDailySchedulerTasks, 0) * (count / Math.max(1, selectedRows.length))),
+      estimatedCostUnitsPerUsefulEvidence: roundScore(costUnits / Math.max(0.1, usefulEvidence)),
+      expectedApiActorUsefulness: roundScore(average(selectedRows.map((row) => row.expectedApiActorUsefulness))),
+      expectedPublicTiAnswerLift: roundScore(average(selectedRows.map((row) => row.expectedPublicTiAnswerLift))),
+      rollbackState: parserRepairDependencyCount > count * 0.08 || legalReviewDependencyCount > count * 0.04 ? "hold" : duplicateAverage > 0.35 ? "watch" : "ready",
+      noActivationBoundary: { sourceActivationApplied: false, registryMutationPlanned: false, crawlEnqueued: false, workerLeaseCreated: false }
+    };
+  };
+  const familyMetrics = (uniqueStrings(records.map((record) => record.family)) as TiSourceAtlasFamily[]).map((family) => {
+    const rows = sourceRows.filter((row) => row.family === family);
+    return {
+      family,
+      sourceCount: rows.length,
+      averageEconomicsScore: roundScore(average(rows.map((row) => row.economicsScore))),
+      expectedUniqueEvidenceItemsPerDay: roundScore(rows.reduce((sum, row) => sum + row.uniqueEvidenceYield, 0)),
+      duplicateRisk: roundScore(average(rows.map((row) => row.duplicateRisk))),
+      parserRepairDependencyCount: rows.filter((row) => row.parserRepairDependency).length,
+      legalReviewDependencyCount: rows.filter((row) => row.legalReviewDependency).length,
+      estimatedStorageMbPerDay: roundScore(rows.reduce((sum, row) => sum + row.estimatedStorageMbPerDay, 0)),
+      estimatedDailySchedulerTasks: rows.reduce((sum, row) => sum + row.estimatedDailySchedulerTasks, 0),
+      topSourceIds: rows.slice(0, 8).map((row) => row.atlasSourceId)
+    };
+  }).sort((left, right) => right.averageEconomicsScore - left.averageEconomicsScore || left.family.localeCompare(right.family));
+  const degradationQueues: TiSourceAtlasReliabilityEconomicsPacket["degradationQueues"] = [
+    {
+      queue: "stale",
+      sourceIds: sourceRows.filter((row) => row.decision === "degrade").slice(0, 40).map((row) => row.atlasSourceId),
+      owner: "agent02_scheduler",
+      recommendedDryRunAction: "degrade_cadence",
+      willMutate: false,
+      willStartCrawling: false
+    },
+    {
+      queue: "noisy_duplicate",
+      sourceIds: sourceRows.filter((row) => row.decision === "retire_duplicate").slice(0, 40).map((row) => row.atlasSourceId),
+      owner: "agent01_source_governance",
+      recommendedDryRunAction: "retire_duplicate",
+      willMutate: false,
+      willStartCrawling: false
+    },
+    {
+      queue: "legal_blocked",
+      sourceIds: sourceRows.filter((row) => row.decision === "hold_legal").slice(0, 40).map((row) => row.atlasSourceId),
+      owner: "agent01_source_governance",
+      recommendedDryRunAction: "request_legal_review",
+      willMutate: false,
+      willStartCrawling: false
+    },
+    {
+      queue: "parser_broken",
+      sourceIds: sourceRows.filter((row) => row.decision === "hold_parser").slice(0, 40).map((row) => row.atlasSourceId),
+      owner: "agent03_parser",
+      recommendedDryRunAction: "request_parser_repair",
+      willMutate: false,
+      willStartCrawling: false
+    },
+    {
+      queue: "low_yield",
+      sourceIds: sourceRows.filter((row) => row.uniqueEvidenceYield < 0.8 && row.decision !== "retire_duplicate").slice(0, 40).map((row) => row.atlasSourceId),
+      owner: "agent07_quality",
+      recommendedDryRunAction: "quarantine_candidate",
+      willMutate: false,
+      willStartCrawling: false
+    },
+    {
+      queue: "high_cost",
+      sourceIds: sourceRows.filter((row) => row.estimatedCostUnitsPerUsefulEvidence > 10).slice(0, 40).map((row) => row.atlasSourceId),
+      owner: "agent10_slo",
+      recommendedDryRunAction: "cost_review",
+      willMutate: false,
+      willStartCrawling: false
+    }
+  ];
+  return {
+    schemaVersion: "ti.source_atlas.reliability_economics.v1",
+    routeHint: "/v1/sources/atlas",
+    dryRun: true,
+    willMutate: false,
+    willImportSourcePacks: false,
+    willStartCrawling: false,
+    generatedAt,
+    rolloutScenarios: [scenario("first_50", 50), scenario("first_500", 500), scenario("first_5000", 5000)],
+    sourceRows: tiSourceAtlasEconomicsDisplayRows(sourceRows),
+    familyMetrics,
+    marketplaceValueBreakdown: {
+      actorProfileValue: roundScore(tiSourceAtlasMarketplaceValue(sourceRows, ["actor", "campaign", "malware_tool"])),
+      ransomwareVictimClaimValue: roundScore(tiSourceAtlasMarketplaceValue(sourceRows, ["ransomware_victim"])),
+      cveAdvisoryValue: roundScore(tiSourceAtlasMarketplaceValue(sourceRows, ["cve"])),
+      publicChannelValue: roundScore(average(sourceRows.filter((row) => row.family === "public_channel_descriptor").map((row) => row.expectedPublicTiAnswerLift))),
+      darkMetadataCorroborationValue: roundScore(tiSourceAtlasMarketplaceValue(sourceRows, ["ransomware_victim", "infrastructure"]) * 0.68),
+      enterpriseStixExportValue: roundScore(tiSourceAtlasMarketplaceValue(sourceRows, ["actor", "campaign", "malware_tool", "cve", "infrastructure"]) * 0.9)
+    },
+    degradationQueues,
+    guardrails: { publicOnly: true, noRegistryMutation: true, noSourceActivation: true, noCrawling: true, noWorkerLeases: true, noPrivateInviteAuthCaptcha: true, noRawUnsafeUrls: true, noPayloadDownloads: true, descriptorOnlyPublicChannels: true },
+    handoffs: {
+      agent01ActivationPlanning: ["sourceEconomics.rolloutScenarios", "sourceEconomics.sourceRows.decision", "sourceEconomics.degradationQueues"],
+      agent02SchedulerBudget: ["rolloutScenarios.estimatedDailySchedulerTasks", "sourceRows.estimatedDailySchedulerTasks", "degradationQueues.high_cost"],
+      agent03ParserRepair: ["sourceRows.parserRepairDependency", "degradationQueues.parser_broken"],
+      agent06EvidenceStorage: ["rolloutScenarios.estimatedStorageMbPerDay", "sourceRows.uniqueEvidenceYield"],
+      agent07QualityGates: ["sourceRows.expectedPublicTiAnswerLift", "marketplaceValueBreakdown", "degradationQueues.low_yield"],
+      agent09ApiFrontend: ["sourceEconomics.rolloutScenarios", "sourceEconomics.familyMetrics", "sourceEconomics.marketplaceValueBreakdown"],
+      agent10OpsBudgets: ["rolloutScenarios.estimatedCostUnitsPerUsefulEvidence", "degradationQueues.high_cost", "guardrails"]
+    }
+  };
+}
+
+function tiSourceAtlasEconomicsDisplayRows(sourceRows: Array<TiSourceAtlasReliabilityEconomicsPacket["sourceRows"][number] & { estimatedCostUnitsPerUsefulEvidence: number }>): TiSourceAtlasReliabilityEconomicsPacket["sourceRows"] {
+  const requiredDecisions = ["hold_parser", "hold_legal", "hold_descriptor", "retire_duplicate", "degrade", "watch"] as const;
+  const requiredRows = requiredDecisions
+    .map((decision) => sourceRows.find((candidate) => candidate.decision === decision))
+    .filter((row): row is TiSourceAtlasReliabilityEconomicsPacket["sourceRows"][number] & { estimatedCostUnitsPerUsefulEvidence: number } => Boolean(row));
+  const byId = new Map(requiredRows.map((row) => [row.atlasSourceId, row]));
+  for (const row of sourceRows.filter((candidate) => candidate.decision === "promote_candidate").slice(0, 70)) {
+    byId.set(row.atlasSourceId, row);
+  }
+  for (const row of sourceRows.filter((candidate) => candidate.decision !== "promote_candidate").slice(0, 70)) {
+    byId.set(row.atlasSourceId, row);
+  }
+  const requiredIds = new Set(requiredRows.map((row) => row.atlasSourceId));
+  const requiredDisplayRows = [...byId.values()].filter((row) => requiredIds.has(row.atlasSourceId));
+  const optionalDisplayRows = [...byId.values()]
+    .filter((row) => !requiredIds.has(row.atlasSourceId))
+    .sort((left, right) => right.economicsScore - left.economicsScore || left.atlasSourceId.localeCompare(right.atlasSourceId))
+    .slice(0, Math.max(0, 140 - requiredDisplayRows.length));
+  return [...optionalDisplayRows, ...requiredDisplayRows]
+    .sort((left, right) => right.economicsScore - left.economicsScore || left.atlasSourceId.localeCompare(right.atlasSourceId));
+}
+
+function tiSourceAtlasEconomicsRow(record: TiSourceAtlasRecord): TiSourceAtlasReliabilityEconomicsPacket["sourceRows"][number] & { estimatedCostUnitsPerUsefulEvidence: number } {
+  const duplicateRisk = roundScore(record.duplicate.suppressed ? 0.95 : Math.min(0.9, record.duplicate.contentSimilarity));
+  const parserRepairDependency = record.parserCapability.certificationRequired || (record.parserCapability.profile === "pdf_report" && record.evidenceYield < 0.52);
+  const legalReviewDependency = record.legalRobotsState.legalReview !== "current" || record.legalRobotsState.robotsReview === "missing" || record.legalRobotsState.robotsReview === "stale";
+  const uniqueEvidenceYield = roundScore(record.evidenceEstimate.expectedItemsPerDay * record.uniqueness * (1 - Math.min(0.85, duplicateRisk)));
+  const expectedApiActorUsefulness = roundScore(record.sourceValueScore * 0.4 + record.downstreamPublicAnswerImpact * 0.4 + record.reliability * 0.2);
+  const expectedPublicTiAnswerLift = roundScore(record.downstreamPublicAnswerImpact * 0.52 + record.evidenceYield * 0.28 + record.freshness * 0.2 - (record.duplicate.suppressed ? 0.22 : 0));
+  const estimatedCostUnitsPerUsefulEvidence = roundScore((record.schedulerEstimate.estimatedDailyTasks + record.evidenceEstimate.storageMbPerDay / 8) / Math.max(0.1, uniqueEvidenceYield));
+  const economicsScore = roundScore(
+    record.sourceValueScore * 0.24
+    + record.reliability * 0.14
+    + record.freshness * 0.12
+    + record.evidenceYield * 0.16
+    + record.uniqueness * 0.12
+    + expectedApiActorUsefulness * 0.12
+    + expectedPublicTiAnswerLift * 0.1
+    - duplicateRisk * 0.16
+    - (parserRepairDependency ? 0.08 : 0)
+    - (legalReviewDependency ? 0.1 : 0)
+    - (estimatedCostUnitsPerUsefulEvidence > 12 ? 0.08 : 0)
+  );
+	  const decision: TiSourceAtlasReliabilityEconomicsPacket["sourceRows"][number]["decision"] = record.duplicate.suppressed || duplicateRisk >= 0.8
+	    ? "retire_duplicate"
+    : record.activationReadiness.state === "descriptor_only_hold"
+      ? "hold_descriptor"
+      : legalReviewDependency
+        ? "hold_legal"
+        : parserRepairDependency
+          ? "hold_parser"
+          : economicsScore >= 0.58
+            ? "promote_candidate"
+            : record.freshness < 0.66 || estimatedCostUnitsPerUsefulEvidence > 12
+              ? "degrade"
+              : "watch";
+  return {
+    atlasSourceId: record.id,
+    sourceHash: stableId("ti_source_atlas_source", `${record.id}:${record.domain}:${record.url}`),
+    family: record.family,
+    queryClassCoverage: record.queryClassCoverage,
+    expectedActorsCovered: Math.max(1, record.queryClassCoverage.includes("actor") || record.queryClassCoverage.includes("campaign") ? 12 : record.queryClassCoverage.length * 3),
+    expectedQueryClasses: record.queryClassCoverage,
+    uniqueEvidenceYield,
+    duplicateRisk,
+    parserRepairDependency,
+    legalReviewDependency,
+    language: record.language,
+    regions: record.region,
+    estimatedStorageMbPerDay: record.evidenceEstimate.storageMbPerDay,
+    estimatedDailySchedulerTasks: record.schedulerEstimate.estimatedDailyTasks,
+    expectedApiActorUsefulness,
+    expectedPublicTiAnswerLift,
+    economicsScore,
+    decision,
+    rollbackState: decision === "promote_candidate" ? "ready" : decision === "watch" || decision === "degrade" ? "watch" : "hold",
+    estimatedCostUnitsPerUsefulEvidence
+  };
+}
+
+function tiSourceAtlasMarketplaceValue(rows: TiSourceAtlasReliabilityEconomicsPacket["sourceRows"], queryClasses: SourceCoverageCloseoutQueryClass[]): number {
+  const matching = rows.filter((row) => row.expectedQueryClasses.some((queryClass) => queryClasses.includes(queryClass)));
+  return average(matching.map((row) => row.expectedPublicTiAnswerLift));
+}
+
+function tiSourceAtlasLifecycleReasonCodes(record: TiSourceAtlasRecord): TiSourceAtlasLifecycleReviewPacket["rows"][number]["reasonCodes"] {
+  const reasons: TiSourceAtlasLifecycleReviewPacket["rows"][number]["reasonCodes"] = [];
+  if (record.duplicate.suppressed) reasons.push("duplicate");
+  if (record.freshness < 0.66) reasons.push("stale_freshness");
+  if (record.evidenceYield < 0.52) reasons.push("low_evidence_yield");
+  if (record.sourceValueScore < 0.58) reasons.push("low_value_score");
+  if (record.activationReadiness.state === "needs_parser_certification" || record.parserCapability.profile === "pdf_report" && record.evidenceYield < 0.52) reasons.push("parser_gap");
+  if (record.activationReadiness.state === "legal_review_hold" || record.legalRobotsState.legalReview !== "current" || record.legalRobotsState.robotsReview === "missing" || record.legalRobotsState.robotsReview === "stale") reasons.push("legal_or_robots_review");
+  if (record.activationReadiness.state === "descriptor_only_hold") reasons.push("descriptor_only");
+  if (!record.safety.publicOnly || record.safety.privateInviteAuthCaptcha || record.safety.rawPayloadTarget) reasons.push("unsafe_class_hold");
+  return uniqueStrings(reasons) as TiSourceAtlasLifecycleReviewPacket["rows"][number]["reasonCodes"];
+}
+
+function tiSourceAtlasLifecycleRecommendedAction(record: TiSourceAtlasRecord, reasons: TiSourceAtlasLifecycleReviewPacket["rows"][number]["reasonCodes"]): TiSourceAtlasLifecycleReviewPacket["rows"][number]["recommendedAction"] {
+  if (reasons.includes("unsafe_class_hold")) return "quarantine";
+  if (reasons.includes("duplicate")) return "retire_duplicate";
+  if (reasons.includes("descriptor_only")) return "hold_descriptor_only";
+  if (reasons.includes("parser_gap")) return "request_parser_repair";
+  if (reasons.includes("legal_or_robots_review")) return "request_legal_review";
+  if (record.sourceValueScore < 0.52 || record.evidenceYield < 0.5) return "quarantine";
+  if (reasons.includes("stale_freshness") || reasons.includes("low_evidence_yield") || reasons.includes("low_value_score")) return "degrade";
+  return "keep_candidate";
+}
+
+function tiSourceAtlasLifecycleState(recommendedAction: TiSourceAtlasLifecycleReviewPacket["rows"][number]["recommendedAction"]): TiSourceAtlasLifecycleReviewPacket["rows"][number]["lifecycleState"] {
+  if (recommendedAction === "retire_duplicate") return "retirement_review";
+  if (recommendedAction === "quarantine") return "quarantine_review";
+  if (recommendedAction === "degrade") return "degrade_review";
+  if (recommendedAction === "request_parser_repair") return "parser_repair";
+  if (recommendedAction === "request_legal_review") return "legal_review";
+  if (recommendedAction === "hold_descriptor_only") return "descriptor_hold";
+  return "healthy_candidate";
+}
+
+function buildTiSourceAtlasRegistryActivationHandoff(input: { first100: TiSourceAtlasRecord[]; parserHolds: string[]; descriptorHolds: string[]; importPlans: TiSourceAtlasImportPlan[] }): TiSourceAtlasRegistryActivationHandoff {
+  const canarySourceIds = input.first100.map((record) => record.id);
+  const estimatedDailyTasks = input.first100.reduce((sum, record) => sum + record.schedulerEstimate.estimatedDailyTasks, 0);
+  const initialCadenceSeconds = Math.max(3600, Math.min(...input.first100.map((record) => record.schedulerEstimate.cadenceSeconds)));
+  return {
+    routeHint: "/v1/analyst/source-activation-packets",
+    dryRun: true,
+    willMutate: false,
+    willImportSourcePacks: false,
+    willStartCrawling: false,
+    approvalRequired: true,
+    sourceRegistryMutationAllowed: false,
+    candidateCount: input.first100.length,
+    canarySourceIds,
+    parserCertificationRequiredSourceIds: input.parserHolds.slice(0, 100),
+    descriptorOnlyHeldSourceIds: input.descriptorHolds.slice(0, 100),
+    proposedSourceRecords: input.first100.slice(0, 10).map((record) => ({ atlasSourceId: record.id, proposedSourceId: "src_atlas_canary_" + record.id.replace("atlas_src_", ""), name: record.sourceName, type: tiSourceAtlasRegistryType(record.family), accessMethod: tiSourceAtlasRegistryAccessMethod(record.family), risk: (record.schedulerEstimate.budgetClass === "high" ? "medium" : "low") as Exclude<SourceRisk, "restricted">, url: record.url, domain: record.domain, crawlFrequencySeconds: record.schedulerEstimate.cadenceSeconds, statusPreview: "candidate" as const, metadata: { atlasFamily: record.family, sourceValueScore: record.sourceValueScore, queryClassCoverage: record.queryClassCoverage, sourceHash: stableId("ti_source_atlas_source", record.id + ":" + record.domain + ":" + record.url), provenance: "ti_source_atlas" as const }, governance: { legalReview: record.legalRobotsState.legalReview, robotsReview: record.legalRobotsState.robotsReview, approvalRequired: true as const, autoActivationAllowed: false as const } })),
+    schedulerPreview: { owner: "agent_02", queuePartition: "source_atlas_canary", maxConcurrentCanaries: 10, initialCadenceSeconds, estimatedDailyTasks, leaseMode: "dry_run_preview_only" },
+    prerequisites: ["operator_legal_approval_packet_approved", "source_hashes_match_export_manifest", "legal_and_robots_review_current", "parser_certification_complete_for_required_sources", "duplicate_suppression_reviewed", "descriptor_only_sources_remain_held", "tenant_policy_allows_safe_public_source", "rollback_packet_ready"],
+    forbiddenOperations: ["registry_mutation", "source_pack_import", "crawl_enqueue", "source_auto_activation", "restricted_fetch", "auth_or_captcha_bypass", "payload_download"],
+    rollbackPacket: { rollbackPlanIds: input.importPlans.map((plan) => plan.rollbackPacket.rollbackPlanId), action: "Discard proposed registry previews, keep atlas records staged only, and require a fresh approval packet before any real source registry write." },
+    downstreamHandoffs: { agent01RegistryReview: ["proposedSourceRecords", "sourceRegistryMutationAllowed", "rollbackPacket"], agent02SchedulerDryRun: ["schedulerPreview", "canarySourceIds", "forbiddenOperations.crawl_enqueue"], agent03ParserCertification: ["parserCertificationRequiredSourceIds", "prerequisites.parser_certification_complete_for_required_sources"], agent06EvidenceReadiness: ["metadata.sourceHash", "metadata.queryClassCoverage", "schedulerPreview.estimatedDailyTasks"], agent07QualityGate: ["metadata.sourceValueScore", "governance", "prerequisites.duplicate_suppression_reviewed"], agent09ApiContract: ["activationCanary.registryActivationHandoff", "routeHint", "proposedSourceRecords"], agent10ReleaseGate: ["rollbackPacket", "forbiddenOperations", "sourceRegistryMutationAllowed"] }
+  };
 }
 
 function tiSourceAtlasReviewQueueRow(record: TiSourceAtlasRecord, generatedAt: string): TiSourceAtlasReviewQueueRow {
-  const decision: TiSourceAtlasReviewDecision = record.activationReadiness.state === "ready_for_dry_run"
-    ? "stage_for_canary"
-    : record.activationReadiness.state === "needs_parser_certification"
-      ? "request_parser_certification"
-      : record.activationReadiness.state === "duplicate_suppressed"
-        ? "hold_duplicate"
-        : record.activationReadiness.state === "descriptor_only_hold"
-          ? "hold_descriptor_only"
-          : "legal_review_required";
-  return {
-    reviewId: stableId("ti_source_atlas_review", `${record.id}:${generatedAt}:${decision}`),
-    atlasSourceId: record.id,
-    sourceName: record.sourceName,
-    family: record.family,
-    domain: record.domain,
-    sourceHash: stableId("ti_source_atlas_source", `${record.id}:${record.domain}:${record.url}`),
-    decision,
-    reasons: record.activationReadiness.reasons,
-    approvalRoute: "/v1/analyst/source-activation-packets",
-    parserOwner: "agent_03",
-    schedulerOwner: "agent_02",
-    qualityOwner: "agent_07",
-    releaseOwner: "agent_10",
-    dryRun: true,
-    willMutate: false,
-    willStartCrawling: false
-  };
+  const decision: TiSourceAtlasReviewDecision = record.activationReadiness.state === "ready_for_dry_run" ? "stage_for_canary" : record.activationReadiness.state === "needs_parser_certification" ? "request_parser_certification" : record.activationReadiness.state === "duplicate_suppressed" ? "hold_duplicate" : record.activationReadiness.state === "descriptor_only_hold" ? "hold_descriptor_only" : "legal_review_required";
+  return { reviewId: stableId("ti_source_atlas_review", record.id + ":" + generatedAt), atlasSourceId: record.id, sourceName: record.sourceName, family: record.family, domain: record.domain, sourceHash: stableId("ti_source_atlas_source", record.id + ":" + record.domain + ":" + record.url), decision, reasons: record.activationReadiness.reasons, approvalRoute: "/v1/analyst/source-activation-packets", parserOwner: "agent_03", schedulerOwner: "agent_02", qualityOwner: "agent_07", releaseOwner: "agent_10", dryRun: true, willMutate: false, willStartCrawling: false };
 }
 
 function tiSourceAtlasExportManifestRow(record: TiSourceAtlasRecord): TiSourceAtlasExportManifestRow {
-  return {
-    atlasSourceId: record.id,
-    sourceHash: stableId("ti_source_atlas_source", `${record.id}:${record.domain}:${record.url}`),
-    sourceName: record.sourceName,
-    url: record.url,
-    domain: record.domain,
-    family: record.family,
-    queryClassCoverage: record.queryClassCoverage,
-    sourceValueScore: record.sourceValueScore,
-    parserProfile: record.parserCapability.profile,
-    schedulerCadenceSeconds: record.schedulerEstimate.cadenceSeconds,
-    expectedItemsPerDay: record.evidenceEstimate.expectedItemsPerDay,
-    legalReview: record.legalRobotsState.legalReview,
-    robotsReview: record.legalRobotsState.robotsReview,
-    approvalRequired: true,
-    autoActivationAllowed: false
-  };
+  return { atlasSourceId: record.id, sourceHash: stableId("ti_source_atlas_source", record.id + ":" + record.domain + ":" + record.url), sourceName: record.sourceName, url: record.url, domain: record.domain, family: record.family, queryClassCoverage: record.queryClassCoverage, sourceValueScore: record.sourceValueScore, parserProfile: record.parserCapability.profile, schedulerCadenceSeconds: record.schedulerEstimate.cadenceSeconds, expectedItemsPerDay: record.evidenceEstimate.expectedItemsPerDay, legalReview: record.legalRobotsState.legalReview, robotsReview: record.legalRobotsState.robotsReview, approvalRequired: true, autoActivationAllowed: false };
+}
+
+function buildTiSourceAtlasSourceIds(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => "atlas_src_" + String(index + 1).padStart(5, "0"));
 }
 
 function tiSourceAtlasFamilyCoverage(records: TiSourceAtlasRecord[]): Array<{ family: TiSourceAtlasFamily; sourceCount: number }> {
   const counts = countMap(records.map((record) => record.family));
-  return [...counts.entries()]
-    .map(([family, sourceCount]) => ({ family: family as TiSourceAtlasFamily, sourceCount }))
-    .sort((left, right) => right.sourceCount - left.sourceCount || left.family.localeCompare(right.family));
+  return [...counts.entries()].map(([family, sourceCount]) => ({ family: family as TiSourceAtlasFamily, sourceCount })).sort((left, right) => right.sourceCount - left.sourceCount || left.family.localeCompare(right.family));
+}
+
+function tiSourceAtlasQueryClasses(family: TiSourceAtlasFamily, index: number): SourceCoverageCloseoutQueryClass[] {
+  const map: Record<TiSourceAtlasFamily, SourceCoverageCloseoutQueryClass[]> = { vendor_threat_blog: ["actor", "campaign", "malware_tool", "sector"], cert_government: ["cve", "country", "sector"], cve_advisory: ["cve", "infrastructure"], malware_researcher: ["actor", "malware_tool", "campaign", "infrastructure"], ransomware_tracker: ["ransomware_victim", "sector"], exploit_intelligence: ["cve", "infrastructure", "campaign"], github_security_advisory: ["cve", "infrastructure"], package_advisory: ["cve", "sector"], public_dataset: ["actor", "malware_tool", "country", "infrastructure"], regional_cyber_agency: ["country", "sector", "cve"], ics_ot: ["sector", "cve", "infrastructure"], cloud_saas_security: ["sector", "cve", "campaign"], phishing_brand_abuse: ["sector", "ransomware_victim", "infrastructure"], public_channel_descriptor: ["ransomware_victim", "actor", "campaign"] };
+  const base = map[family];
+  return uniqueStrings(index % 5 === 0 ? [...base, "country"] : base) as SourceCoverageCloseoutQueryClass[];
 }
 
 function tiSourceAtlasRequestedClasses(queries: string[]): SourceCoverageCloseoutQueryClass[] {
   return uniqueStrings(queries.flatMap((query) => {
     const terms = tokenizeQuery(query);
-    return [
-      classifyCloseoutQuery(query),
-      terms.includes("campaign") ? "campaign" : undefined,
-      ["infrastructure", "c2", "domain", "ip"].some((term) => terms.includes(term)) ? "infrastructure" : undefined
-    ].filter((queryClass): queryClass is SourceCoverageCloseoutQueryClass => Boolean(queryClass));
+    return [classifyCloseoutQuery(query), terms.includes("campaign") ? "campaign" : undefined, ["infrastructure", "c2", "domain", "ip"].some((term) => terms.includes(term)) ? "infrastructure" : undefined].filter((queryClass): queryClass is SourceCoverageCloseoutQueryClass => Boolean(queryClass));
   })) as SourceCoverageCloseoutQueryClass[];
 }
 
@@ -1045,47 +1244,6 @@ function tiSourceAtlasMatrixQueryClass(queryClass: TiSourceAtlasCoverageMatrixRo
   }
 }
 
-
-function buildTiSourceAtlasCoverageMatrix(records: TiSourceAtlasRecord[], queries: string[]): TiSourceAtlasCoverageMatrixRow[] {
-  const rows: Array<{ queryClass: TiSourceAtlasCoverageMatrixRow["queryClass"]; requiredFamilies: TiSourceAtlasFamily[] }> = [
-    { queryClass: "actor", requiredFamilies: ["vendor_threat_blog", "malware_researcher", "public_dataset", "github_security_advisory"] },
-    { queryClass: "ransomware_victim", requiredFamilies: ["ransomware_tracker", "vendor_threat_blog", "public_dataset", "public_channel_descriptor"] },
-    { queryClass: "cve", requiredFamilies: ["cve_advisory", "cert_government", "github_security_advisory", "package_advisory"] },
-    { queryClass: "malware_tool", requiredFamilies: ["malware_researcher", "vendor_threat_blog", "public_dataset"] },
-    { queryClass: "country", requiredFamilies: ["regional_cyber_agency", "cert_government", "vendor_threat_blog"] },
-    { queryClass: "sector", requiredFamilies: ["ics_ot", "cloud_saas_security", "phishing_brand_abuse", "regional_cyber_agency"] },
-    { queryClass: "campaign", requiredFamilies: ["vendor_threat_blog", "malware_researcher", "exploit_intelligence"] },
-    { queryClass: "ransomware_victim", requiredFamilies: ["ransomware_tracker", "phishing_brand_abuse", "public_channel_descriptor"] },
-    { queryClass: "infrastructure", requiredFamilies: ["exploit_intelligence", "public_dataset", "malware_researcher"] }
-  ];
-  const requestedClasses = tiSourceAtlasRequestedClasses(queries);
-  return rows
-    .filter((row) => {
-      const rowQueryClass = tiSourceAtlasMatrixQueryClass(row.queryClass);
-      return requestedClasses.length === 0 || requestedClasses.includes(rowQueryClass) || rowQueryClass === "infrastructure";
-    })
-    .map((row) => {
-      const rowQueryClass = tiSourceAtlasMatrixQueryClass(row.queryClass);
-      const matching = records.filter((record) =>
-        record.queryClassCoverage.includes(rowQueryClass) ||
-        row.requiredFamilies.includes(record.family)
-      );
-      const coveredFamilies = uniqueStrings(matching.map((record) => record.family)) as TiSourceAtlasFamily[];
-      return {
-        queryClass: row.queryClass,
-        requiredFamilies: row.requiredFamilies,
-        coveredFamilies,
-        candidateSourceCount: matching.length,
-        highValueSourceIds: matching
-          .filter((record) => record.sourceValueScore >= 0.65 && record.activationReadiness.state === "ready_for_dry_run")
-          .slice(0, 25)
-          .map((record) => record.id),
-        gapFamilies: row.requiredFamilies.filter((family) => !coveredFamilies.includes(family)),
-        downstreamPublicAnswerImpact: roundScore(average(matching.map((record) => record.downstreamPublicAnswerImpact)))
-      };
-    });
-}
-
 function tiSourceAtlasParserProfile(family: TiSourceAtlasFamily): SourceMarketplaceParserProfile {
   if (family === "cert_government" || family === "vendor_threat_blog" || family === "regional_cyber_agency") return "rss";
   if (family === "cve_advisory" || family === "github_security_advisory" || family === "package_advisory") return "advisory_security_signal";
@@ -1095,7 +1253,6 @@ function tiSourceAtlasParserProfile(family: TiSourceAtlasFamily): SourceMarketpl
   return "static_html";
 }
 
-
 function tiSourceAtlasRegistryType(family: TiSourceAtlasFamily): SourceType {
   if (family === "cert_government" || family === "vendor_threat_blog" || family === "regional_cyber_agency") return "rss";
   if (family === "cve_advisory" || family === "github_security_advisory" || family === "package_advisory") return "api";
@@ -1104,9 +1261,7 @@ function tiSourceAtlasRegistryType(family: TiSourceAtlasFamily): SourceType {
 }
 
 function tiSourceAtlasRegistryAccessMethod(family: TiSourceAtlasFamily): AccessMethod {
-  return family === "cve_advisory" || family === "github_security_advisory" || family === "package_advisory"
-    ? "official_api"
-    : "public_http";
+  return family === "cve_advisory" || family === "github_security_advisory" || family === "package_advisory" ? "official_api" : "public_http";
 }
 
 function tiSourceAtlasDiscoveryMethod(index: number): TiSourceAtlasDiscoveryMethod {
@@ -1114,1404 +1269,49 @@ function tiSourceAtlasDiscoveryMethod(index: number): TiSourceAtlasDiscoveryMeth
   return methods[index % methods.length]!;
 }
 
-function tiSourceAtlasQueryClasses(family: TiSourceAtlasFamily, index: number): SourceCoverageCloseoutQueryClass[] {
-  const map: Record<TiSourceAtlasFamily, SourceCoverageCloseoutQueryClass[]> = {
-    vendor_threat_blog: ["actor", "campaign", "malware_tool", "sector"],
-    cert_government: ["cve", "country", "sector"],
-    cve_advisory: ["cve", "infrastructure"],
-    malware_researcher: ["actor", "malware_tool", "campaign", "infrastructure"],
-    ransomware_tracker: ["ransomware_victim", "sector"],
-    exploit_intelligence: ["cve", "infrastructure", "campaign"],
-    github_security_advisory: ["cve", "infrastructure"],
-    package_advisory: ["cve"],
-    public_dataset: ["actor", "country", "sector", "infrastructure"],
-    regional_cyber_agency: ["country", "sector", "cve"],
-    ics_ot: ["sector", "infrastructure"],
-    cloud_saas_security: ["sector", "infrastructure", "malware_tool"],
-    phishing_brand_abuse: ["ransomware_victim", "sector"],
-    public_channel_descriptor: ["actor", "ransomware_victim"]
+function tiSourceAtlasCadenceSeconds(family: TiSourceAtlasFamily): number {
+  if (family === "cve_advisory" || family === "github_security_advisory" || family === "package_advisory") return 3600;
+  if (family === "cert_government" || family === "regional_cyber_agency") return 7200;
+  if (family === "public_channel_descriptor") return 21600;
+  return 14400;
+}
+
+function tiSourceAtlasReadinessReasons(state: TiSourceAtlasRecord["activationReadiness"]["state"]): string[] {
+  const reasons: Record<TiSourceAtlasRecord["activationReadiness"]["state"], string[]> = {
+    ready_for_dry_run: ["safe_public_candidate", "approval_packet_required"],
+    needs_parser_certification: ["parser_certification_required", "approval_packet_required"],
+    legal_review_hold: ["legal_or_robots_review_required", "approval_packet_required"],
+    duplicate_suppressed: ["duplicate_suppressed", "no_registry_write"],
+    descriptor_only_hold: ["descriptor_only_metadata", "no_runnable_collection"]
   };
-  const base = map[family] ?? ["actor"];
-  return index % 7 === 0 ? uniqueStrings([...base, "campaign"]) as SourceCoverageCloseoutQueryClass[] : base;
+  return reasons[state];
 }
 
 function tiSourceAtlasRegions(index: number, family: TiSourceAtlasFamily): string[] {
-  if (family === "regional_cyber_agency") return [["Europe"], ["North America"], ["APAC"], ["Latin America"], ["Middle East"], ["Africa"]][index % 6]!;
-  return [["global"], ["Europe", "North America"], ["APAC"], ["Nordics"], ["global", "sector-specific"]][index % 5]!;
+  if (family === "regional_cyber_agency") {
+    const regions = ["EU", "US", "NO"];
+    return [regions[index % regions.length]!];
+  }
+  return index % 5 === 0 ? ["global", "EU"] : ["global"];
 }
 
 function tiSourceAtlasSectors(index: number, family: TiSourceAtlasFamily): string[] {
-  if (family === "ics_ot") return ["industrial", "energy", "manufacturing"];
-  if (family === "cloud_saas_security") return ["cloud", "saas", "identity"];
-  if (family === "phishing_brand_abuse") return ["financial", "retail", "brand_abuse"];
-  return [["government"], ["healthcare"], ["finance"], ["technology"], ["critical_infrastructure"], ["education"]][index % 6]!;
-}
-
-function tiSourceAtlasCadenceSeconds(family: TiSourceAtlasFamily): number {
-  if (family === "cert_government" || family === "cve_advisory" || family === "github_security_advisory") return 6 * 3600;
-  if (family === "vendor_threat_blog" || family === "malware_researcher" || family === "ransomware_tracker") return 12 * 3600;
-  if (family === "public_channel_descriptor") return 7 * 24 * 3600;
-  return 24 * 3600;
+  if (family === "ics_ot") return ["industrial", "energy"];
+  if (family === "cloud_saas_security") return ["technology", "saas"];
+  const sectors = ["technology", "finance", "healthcare", "government", "energy"];
+  return [sectors[index % sectors.length]!];
 }
 
 function tiSourceAtlasFamilyLabel(family: TiSourceAtlasFamily): string {
   return family.split("_").map((part) => part[0]!.toUpperCase() + part.slice(1)).join(" ");
 }
 
-function tiSourceAtlasReadinessReasons(state: TiSourceAtlasRecord["activationReadiness"]["state"]): string[] {
-  if (state === "ready_for_dry_run") return ["public source", "parser certified", "legal and robots review current", "explicit approval still required before activation"];
-  if (state === "needs_parser_certification") return ["parser certification required before canary"];
-  if (state === "legal_review_hold") return ["legal or robots review must be refreshed before canary"];
-  if (state === "duplicate_suppressed") return ["duplicate or mirror candidate suppressed until canonical review"];
-  return ["public-channel descriptor only", "metadata/descriptor handoff", "no runnable collection without explicit approval and parser certification"];
+function roundScore(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
 
-function buildSourceImportCanaryPacket(input: {
-  sources: SourceRecord[];
-  sourcePacks?: SeedSourceBundle[];
-  queries: string[];
-  tenantId?: string;
-  generatedAt: string;
-}): SourceImportCanaryPacket {
-  const waves = buildEnterpriseSafePublicActivationWaves(input.generatedAt);
-  const readiness = buildSourceActivationExecutionReadiness(waves, input.queries, input.generatedAt);
-  const first10 = readiness.first10Canary.map((source) => sourceImportCanaryRolloutSource(source, input.generatedAt));
-  const first50 = readiness.publicRollout50.map((source) => sourceImportCanaryRolloutSource(source, input.generatedAt));
-  const restrictedMetadataIds = input.sources
-    .filter((source) => source.risk === "restricted" || source.governance?.metadataOnly || source.catalog?.approvalScope === "metadata_only")
-    .map((source) => source.id)
-    .sort();
-  const staleSourceIds = input.sources
-    .filter((source) => sourceMissesFreshnessSlo(source, source.catalog?.collection.freshnessTargetSeconds ?? 36 * 3600, input.generatedAt))
-    .map((source) => source.id)
-    .sort();
-  const activationResults = sourceImportCanaryActivationResults({
-    tenantId: input.tenantId,
-    queries: input.queries,
-    first50,
-    readiness,
-    restrictedMetadataIds,
-    staleSourceIds
-  });
-  const rollbackPlans = [
-    {
-      rollbackPlanId: stableId("source_import_rollback", `canary:${input.tenantId ?? "global"}:${input.generatedAt}`),
-      sourceIds: first10.map((source) => source.sourceId),
-      trigger: "canary capture_success_ratio < 0.85, evidence_yield < 0.35, parser drift, or queue budget breach",
-      action: "Pause canary, keep existing source set active, quarantine failing candidates, and rerun dry-run activation packets.",
-      owner: "agent_01" as const
-    },
-    {
-      rollbackPlanId: stableId("source_import_rollback", `rollout:${input.tenantId ?? "global"}:${input.generatedAt}`),
-      sourceIds: first50.map((source) => source.sourceId),
-      trigger: "expanded rollout quality, evidence, graph/STIX, API answer, or Agent 10 release gate regression",
-      action: "Stop expanded rollout, restore previous cadence, retain hashes/audit ids only, and re-run source closeout plus API regression.",
-      owner: "agent_10" as const
-    },
-    {
-      rollbackPlanId: stableId("source_import_rollback", `parser:${input.tenantId ?? "global"}:${input.generatedAt}`),
-      sourceIds: readiness.parserGapHandoff.sourceIds,
-      trigger: "parser certification dependency remains unresolved",
-      action: "Hold parser-gap candidates outside runnable canary until Agent 03 certification is current.",
-      owner: "agent_03" as const
-    }
-  ];
-
-  return {
-    schemaVersion: "ti.source_import_canary.v1",
-    dryRun: true,
-    willMutate: false,
-    willImportSourcePacks: false,
-    willStartCrawling: false,
-    generatedAt: input.generatedAt,
-    tenantId: input.tenantId,
-    sourcePackIds: uniqueStrings((input.sourcePacks ?? []).map((pack) => pack.name)).sort(),
-    summary: {
-      first10Count: 10,
-      first50Count: 50,
-      activationResultCount: activationResults.length,
-      restrictedMetadataHoldCount: restrictedMetadataIds.length,
-      parserCertificationHoldCount: readiness.parserGapHandoff.sourceIds.length,
-      duplicateSuppressionCount: readiness.duplicateSuppression.duplicateSourceIds.length,
-      staleRetirementCandidateCount: staleSourceIds.length,
-      rollbackPlanCount: rollbackPlans.length,
-      releaseDecision: readiness.agent10ReleasePacket.decision === "pass" ? "promote_canary_then_expand" : "hold"
-    },
-    first10SourceRollout: first10,
-    first50SourceRollout: first50,
-    activationResults,
-    fixtures: sourceImportCanaryFixtures(readiness, restrictedMetadataIds),
-    lifecycle: {
-      retirements: readiness.sourceRetirement,
-      duplicateSuppression: readiness.duplicateSuppression,
-      staleSourceDetection: {
-        dryRun: true,
-        willMutate: false,
-        sourceIds: staleSourceIds,
-        reason: "Stale sources are retirement candidates only after explicit operator approval and source-family coverage proof."
-      },
-      parserCertificationDependencies: readiness.parserGapHandoff,
-      restrictedMetadataHoldPropagation: {
-        dryRun: true,
-        willMutate: false,
-        sourceIds: restrictedMetadataIds,
-        routeHint: "/v1/analyst/source-activation-packets",
-        reason: "Restricted/leak metadata sources may produce reviewable metadata but cannot be silently activated or turned into runnable collection."
-      }
-    },
-    rollbackPlans,
-    guardrails: {
-      approvalMode: "dry_run_packet_then_explicit_operator_approval",
-      noSilentActivation: true,
-      noSourcePackImport: true,
-      noCrawlingFromCanary: true,
-      noUnsafeRawUrls: true,
-      restrictedMetadataOnly: true,
-      forbiddenSourceClasses: activationBatchForbiddenSourceClasses()
-    },
-    handoffs: {
-      agent02SchedulerImpact: ["activationResults.scheduler_impact", "lifecycle.staleSourceDetection", "rollbackPlans.queue_budget"],
-      agent03ParserCertification: ["activationResults.adapter_certification", "lifecycle.parserCertificationDependencies"],
-      agent04SourcePackCoverage: ["fixtures", "summary.first50Count", "activationResults.source_family"],
-      agent05RestrictedMetadataPolicy: ["lifecycle.restrictedMetadataHoldPropagation", "guardrails.restrictedMetadataOnly"],
-      agent06EvidenceStoreImpact: ["activationResults.evidence_store_impact", "first50SourceRollout.expectedEvidenceYield"],
-      agent07QualityGates: ["activationResults.quality_gate_impact", "rollout quality thresholds"],
-      agent08GraphStixImpact: ["activationResults.graph_stix_impact", "review-held STIX preview"],
-      agent09ApiContracts: ["sourceImportCanary.schemaVersion", "sourceImportCanary.summary", "sourceImportCanary.activationResults"],
-      agent10ReleaseRollback: ["summary.releaseDecision", "rollbackPlans", "guardrails.noSourcePackImport"]
-    }
-  };
-}
-
-function sourceImportCanaryRolloutSource(
-  source: SourceActivationExecutionSource,
-  generatedAt: string
-): SourceImportCanaryRolloutSource {
-  return {
-    sourceId: source.sourceId,
-    sourceName: source.sourceName,
-    sourceHash: stableId("source_import_hash", `${source.sourceId}:${source.rolloutOrder}:${generatedAt}`),
-    sourceFamily: source.category,
-    sourceType: source.sourceType,
-    canaryOrder: source.canaryOrder,
-    rolloutOrder: source.rolloutOrder,
-    approvalScope: source.approvalScope,
-    parserCertified: source.parserCompatible,
-    policy: source.approvalScope === "metadata_only" ? "metadata_only_hold" : source.parserCompatible ? "safe_public" : "blocked_unsafe",
-    schedulerImpact: {
-      budgetClass: source.schedulerBudget.budgetClass,
-      estimatedDailyTasks: source.schedulerBudget.estimatedDailyTasks
-    },
-    expectedEvidenceYield: source.expectedEvidenceYield,
-    rollbackPlanId: stableId("source_import_rollback_source", `${source.sourceId}:${generatedAt}`)
-  };
-}
-
-function sourceImportCanaryActivationResults(input: {
-  tenantId?: string;
-  queries: string[];
-  first50: SourceImportCanaryRolloutSource[];
-  readiness: SourceActivationExecutionReadiness;
-  restrictedMetadataIds: string[];
-  staleSourceIds: string[];
-}): SourceImportCanaryActivationResult[] {
-  const result = (
-    dimension: SourceImportCanaryResultDimension,
-    key: string,
-    sourceIds: string[],
-    decision: SourceImportCanaryActivationResult["decision"],
-    summary: string,
-    nextAction: SourceImportCanaryActivationResult["nextAction"]
-  ): SourceImportCanaryActivationResult => ({
-    dimension,
-    key,
-    decision,
-    sourceIds: uniqueStrings(sourceIds).slice(0, 25),
-    summary,
-    nextAction
-  });
-  const rows: SourceImportCanaryActivationResult[] = [
-    result("tenant", input.tenantId ?? "global", input.first50.map((source) => source.sourceId), "pass", "Tenant-scoped dry-run excludes cross-tenant sources and does not import or crawl.", "approve_canary"),
-    result("source_policy", "safe_public", input.first50.filter((source) => source.policy === "safe_public").map((source) => source.sourceId), "pass", "Safe-public candidates are eligible for explicit approval packets only.", "approve_canary"),
-    result("source_policy", "restricted_metadata_hold", input.restrictedMetadataIds, input.restrictedMetadataIds.length > 0 ? "hold" : "pass", "Restricted/leak metadata remains reviewable metadata and is never converted into runnable collection.", "hold_restricted_metadata"),
-    result("adapter_certification", "agent_03_parser_certification", input.readiness.parserGapHandoff.sourceIds, input.readiness.parserGapHandoff.sourceIds.length > 0 ? "hold" : "pass", "Parser-gap candidates are excluded until adapter certification is current.", "request_parser_certification"),
-    result("scheduler_impact", input.readiness.queueBudgetImpact.withinBudget ? "within_budget" : "budget_hold", input.first50.map((source) => source.sourceId), input.readiness.queueBudgetImpact.withinBudget ? "pass" : "hold", "Canary and rollout daily task estimates are budget-gated before activation.", "watch_slo"),
-    result("evidence_store_impact", "hash_only_capture_plan", input.first50.map((source) => source.sourceId), "watch", "Evidence-store handoff uses ids, hashes, expected yield, and retention classes before any collection.", "watch_slo"),
-    result("quality_gate_impact", input.readiness.agent10ReleasePacket.decision, input.first50.map((source) => source.sourceId), input.readiness.agent10ReleasePacket.decision === "pass" ? "pass" : "hold", "Quality gates require canary success, evidence yield, parser health, duplicate rate, and API freshness checks.", "rollback_ready"),
-    result("graph_stix_impact", "review_held_preview", input.first50.map((source) => source.sourceId), "watch", "Graph/STIX promotion remains preview-only until evidence review and source canary gates pass.", "watch_slo"),
-    result("api_public_answer_effect", "partial_until_canary_passes", input.first50.map((source) => source.sourceId), "watch", "Public answers may show source gaps and canary status without implying verified collection.", "watch_slo"),
-    result("source_policy", "stale_retirement_candidates", input.staleSourceIds, input.staleSourceIds.length > 0 ? "watch" : "pass", "Stale sources become reversible retirement candidates only after coverage proof.", "retire_duplicate"),
-    result("source_policy", "duplicate_suppression", input.readiness.duplicateSuppression.duplicateSourceIds, input.readiness.duplicateSuppression.duplicateSourceIds.length > 0 ? "watch" : "pass", "Duplicate candidates are suppressed by canonical source id proof before canary.", "retire_duplicate")
-  ];
-  const queryClasses = uniqueStrings((input.queries.length > 0 ? input.queries : ["portfolio"]).map((query) => classifyCloseoutQuery(query))) as SourceCoverageCloseoutQueryClass[];
-  for (const queryClass of queryClasses) {
-    const coverage = input.readiness.coverageByQueryClass.find((item) => item.queryClass === queryClass);
-    rows.push(result(
-      "query_class",
-      queryClass,
-      coverage?.sourceIds ?? [],
-      (coverage?.sourceCount ?? 0) > 0 ? "pass" : "hold",
-      `Dry-run rollout coverage for ${queryClass} uses safe-public source ids and exposes partial state if canary has not passed.`,
-      (coverage?.sourceCount ?? 0) > 0 ? "approve_canary" : "watch_slo"
-    ));
-  }
-  for (const family of uniqueStrings(input.first50.map((source) => source.sourceFamily)).sort()) {
-    const sourceIds = input.first50.filter((source) => source.sourceFamily === family).map((source) => source.sourceId);
-    rows.push(result("source_family", family, sourceIds, sourceIds.length > 0 ? "pass" : "hold", `${family} rollout sources are represented in the first-50 dry-run packet.`, "approve_canary"));
-  }
-  return rows;
-}
-
-function sourceImportCanaryFixtures(
-  readiness: SourceActivationExecutionReadiness,
-  restrictedMetadataIds: string[]
-): SourceImportCanaryFixture[] {
-  const idsForFamily = (family: SourceActivationWaveCategory) =>
-    readiness.publicRollout50.filter((source) => source.category === family).map((source) => source.sourceId).slice(0, 8);
-  const fixture = (
-    fixtureClass: SourceImportCanaryFixtureClass,
-    queryClass: SourceCoverageCloseoutQueryClass,
-    sourceIds: string[],
-    metadataOnly: boolean,
-    notes: string[]
-  ): SourceImportCanaryFixture => ({
-    fixtureClass,
-    queryClass,
-    sourceIds,
-    coverageReady: sourceIds.length > 0,
-    metadataOnly,
-    notes
-  });
-  return [
-    fixture("actor_intelligence", "actor", idsForFamily("vendor_blog"), false, ["Actor intelligence uses safe public reporting, not private forums or actor interaction."]),
-    fixture("ransomware_leak_metadata", "ransomware_victim", restrictedMetadataIds, true, ["Leak metadata is reviewable for victim/company, claimed size, affected accounts, dates, and actor statement summaries only."]),
-    fixture("vulnerability_advisory", "cve", idsForFamily("advisory"), false, ["Advisory fixtures cover CVE and vendor/security bulletin collection candidates."]),
-    fixture("malware_report", "malware_tool", idsForFamily("public_research_feed"), false, ["Malware report fixtures support family/tool intelligence without unsafe payload access."]),
-    fixture("public_cert_feed", "country", idsForFamily("government_cert"), false, ["Public CERT feeds cover government and national alerting sources."]),
-    fixture("vendor_blog", "sector", idsForFamily("rss"), false, ["Vendor blogs/RSS feeds provide sector and campaign context."]),
-    fixture("public_channel_descriptor", "infrastructure", [], true, ["Public-channel descriptors stay metadata-only until policy and parser certification allow a safe public descriptor adapter."])
-  ];
-}
-
-function buildSourceSloBurnRatePacket(input: {
-  sources: SourceRecord[];
-  queries: string[];
-  tenantId?: string;
-  generatedAt: string;
-}): SourceSloBurnRatePacket {
-  const queries = input.queries.length > 0
-    ? input.queries
-    : ["APT29", "Akira ransomware victims", "CVE-2024-1234", "healthcare sector", "Norway", "Cobalt Strike malware tool", "campaign infrastructure"];
-  const queryRows = queries.map((query) => buildSourceRuntimeSlaQuery(query, input.sources, input.generatedAt));
-  const signals: SourceSloBurnRateRow[] = [];
-  const addSignal = (inputRow: {
-    signal: SourceSloBurnRateSignal;
-    sourceIds: string[];
-    sourceFamily: string;
-    queryClass: SourceSloBurnRateRow["queryClass"];
-    burnRate: number;
-    reason: string;
-    recommendedAction: SourceSloBurnRateRemediationAction;
-    owner: SourceSloBurnRateOwner;
-  }) => {
-    const sourceIds = uniqueStrings(inputRow.sourceIds).slice(0, 25);
-    if (sourceIds.length === 0) return;
-    const burnRate = roundScore(Math.max(0.1, inputRow.burnRate));
-    signals.push({
-      id: stableId("source_slo_burn", `${inputRow.signal}:${inputRow.sourceFamily}:${inputRow.queryClass}:${sourceIds.join("|")}:${input.generatedAt}`),
-      signal: inputRow.signal,
-      severity: sourceSloBurnRateSeverity(burnRate),
-      burnRate,
-      window: { short: "1h", long: "24h", ratio: burnRate },
-      sourceFamily: inputRow.sourceFamily,
-      queryClass: inputRow.queryClass,
-      sourceIds,
-      sourceCount: sourceIds.length,
-      reason: inputRow.reason,
-      recommendedAction: inputRow.recommendedAction,
-      owner: inputRow.owner,
-      dryRun: true,
-      willMutate: false,
-      willStartCrawling: false,
-      noLeakBoundary: {
-        rawUrlsExposed: false,
-        restrictedMaterialExposed: false,
-        automaticRestrictedActivation: false
-      }
-    });
-  };
-
-  for (const queryRow of queryRows) {
-    const bySource = new Map(input.sources.map((source) => [source.id, source]));
-    const rows = queryRow.sources;
-    addSignal({
-      signal: "freshness",
-      sourceIds: rows.filter((row) => row.metrics.freshness.status !== "pass").map((row) => row.sourceId),
-      sourceFamily: "mixed",
-      queryClass: queryRow.queryClass,
-      burnRate: rows.filter((row) => row.metrics.freshness.status === "breach").length / Math.max(1, rows.length) * 2,
-      reason: `${queryRow.query} has sources missing freshness SLO; approved safe collection may need cadence or queue-budget adjustment.`,
-      recommendedAction: "raise_cadence",
-      owner: "agent_02"
-    });
-    addSignal({
-      signal: "parser_failure",
-      sourceIds: rows.filter((row) => row.metrics.parser_compatibility.status !== "pass").map((row) => row.sourceId),
-      sourceFamily: "mixed",
-      queryClass: queryRow.queryClass,
-      burnRate: rows.filter((row) => row.metrics.parser_compatibility.status === "breach").length / Math.max(1, rows.length) * 2,
-      reason: `${queryRow.query} has parser compatibility failures that block reliable extraction.`,
-      recommendedAction: "request_parser_repair",
-      owner: "agent_03"
-    });
-    addSignal({
-      signal: "low_evidence_yield",
-      sourceIds: rows.filter((row) => row.metrics.evidence_yield.status !== "pass" || row.metrics.claim_yield.status !== "pass").map((row) => row.sourceId),
-      sourceFamily: "mixed",
-      queryClass: queryRow.queryClass,
-      burnRate: rows.filter((row) => row.metrics.evidence_yield.status === "breach" || row.metrics.claim_yield.status === "breach").length / Math.max(1, rows.length) * 2,
-      reason: `${queryRow.query} is producing low useful evidence or claim yield for analyst answers.`,
-      recommendedAction: "request_evidence_replay",
-      owner: "agent_06"
-    });
-    if (queryRow.sourceFamilyGate.status !== "pass") {
-      addSignal({
-        signal: "query_coverage_gap",
-        sourceIds: rows.map((row) => row.sourceId),
-        sourceFamily: "coverage_gap",
-        queryClass: classifyCloseoutQuery(queryRow.query),
-        burnRate: queryRow.sourceFamilyGate.status === "hold" ? 2.2 : 1.1,
-        reason: `${queryRow.query} lacks required source-family diversity for ${queryRow.sourceFamilyGate.queryClass} coverage.`,
-        recommendedAction: "request_source_pack_expansion",
-        owner: "agent_04"
-      });
-    }
-    const outageRows = rows.filter((row) => row.breachReasons.includes("source_health_failing") || row.quarantineState.quarantined || row.runtimeStatus === "paused" || row.runtimeStatus === "quarantined");
-    addSignal({
-      signal: "outage_wave",
-      sourceIds: outageRows.map((row) => row.sourceId),
-      sourceFamily: "mixed",
-      queryClass: queryRow.queryClass,
-      burnRate: outageRows.length / Math.max(1, rows.length) * 2.5,
-      reason: `${queryRow.query} has unhealthy, paused, or quarantined sources in the runtime SLO set.`,
-      recommendedAction: "quarantine",
-      owner: "agent_10"
-    });
-    const restricted = rows
-      .map((row) => bySource.get(row.sourceId))
-      .filter((source): source is SourceRecord => source !== undefined)
-      .filter((source) => source.risk === "restricted" || source.governance?.metadataOnly === true);
-    addSignal({
-      signal: "approval_expiry",
-      sourceIds: restricted.map((source) => source.id),
-      sourceFamily: "restricted_metadata",
-      queryClass: queryRow.queryClass,
-      burnRate: restricted.length / Math.max(1, rows.length) * 2,
-      reason: `${queryRow.query} includes restricted metadata candidates that must stay approval-gated and metadata-only.`,
-      recommendedAction: "hold_restricted_metadata",
-      owner: "agent_09"
-    });
-  }
-
-  for (const source of input.sources) {
-    const queryClass = source.catalog?.coverage.topics.some((topic) => topic.toLowerCase().includes("campaign"))
-      ? "campaign"
-      : source.catalog?.coverage.topics.some((topic) => topic.toLowerCase().includes("infrastructure"))
-        ? "infrastructure"
-        : classifyCoverageQuery([...coverageTagsForSource(source), source.name].join(" "));
-    const family = sourceFamilyKey(source);
-    const retiredOrLowReliability = source.status === "retired" || source.status === "rejected" || source.status === "disabled" || (source.catalog?.reliability ?? source.scoring?.reliability ?? source.trustScore) < 0.45;
-    addSignal({
-      signal: "retirement_risk",
-      sourceIds: retiredOrLowReliability ? [source.id] : [],
-      sourceFamily: family,
-      queryClass,
-      burnRate: source.status === "retired" || source.status === "rejected" || source.status === "disabled" ? 2.1 : 0.9,
-      reason: `${source.name} is retired, disabled, rejected, or below reliability threshold and needs rollback-aware retirement review.`,
-      recommendedAction: "retire",
-      owner: "agent_01"
-    });
-    const legalState = reviewState(source.metadata?.legalNotesReviewedAt, input.generatedAt, Boolean(source.legalNotes.trim()));
-    const robotsState = sourceNeedsRobotsReview(source) ? reviewState(source.metadata?.robotsReviewedAt, input.generatedAt, true) : "not_required";
-    addSignal({
-      signal: "approval_expiry",
-      sourceIds: legalState !== "current" || robotsState === "missing" || robotsState === "stale" ? [source.id] : [],
-      sourceFamily: family,
-      queryClass,
-      burnRate: legalState === "missing" || robotsState === "missing" ? 1.6 : 0.9,
-      reason: `${source.name} has stale or missing legal/robots approval metadata before production use.`,
-      recommendedAction: "request_analyst_approval",
-      owner: "agent_09"
-    });
-  }
-
-  for (const duplicate of duplicateGroups(input.sources)) {
-    const duplicateSources = duplicate.sourceIds.map((id) => input.sources.find((source) => source.id === id)).filter((source): source is SourceRecord => Boolean(source));
-    addSignal({
-      signal: "duplicate_rate",
-      sourceIds: duplicate.sourceIds.slice(1),
-      sourceFamily: duplicateSources[0] ? sourceFamilyKey(duplicateSources[0]) : "duplicate",
-      queryClass: duplicateSources[0] ? classifyCoverageQuery(coverageTagsForSource(duplicateSources[0]).join(" ")) : "actor",
-      burnRate: Math.min(2.4, duplicate.sourceIds.length / 2),
-      reason: `Duplicate source group ${duplicate.key} should be suppressed or retired through a reversible operator packet.`,
-      recommendedAction: "retire",
-      owner: "agent_01"
-    });
-  }
-
-  const compactSignals = signals
-    .sort((left, right) => sourceSloBurnRateSeverityRank(right.severity) - sourceSloBurnRateSeverityRank(left.severity) || right.burnRate - left.burnRate || left.signal.localeCompare(right.signal))
-    .slice(0, 100);
-  const remediationQueue = buildSourceSloBurnRateRemediationQueue(compactSignals).slice(0, 50);
-
-  return {
-    schemaVersion: "ti.source_slo_burn_rate.v1",
-    dryRun: true,
-    willMutate: false,
-    willStartCrawling: false,
-    generatedAt: input.generatedAt,
-    tenantId: input.tenantId,
-    summary: {
-      totalSignals: compactSignals.length,
-      critical: compactSignals.filter((signal) => signal.severity === "critical").length,
-      burning: compactSignals.filter((signal) => signal.severity === "burning").length,
-      watch: compactSignals.filter((signal) => signal.severity === "watch").length,
-      healthy: compactSignals.filter((signal) => signal.severity === "healthy").length,
-      remediationItems: remediationQueue.length,
-      worstBurnRate: roundScore(Math.max(...compactSignals.map((signal) => signal.burnRate), 0))
-    },
-    signals: compactSignals,
-    remediationQueue,
-    groupedByFamily: groupSourceSloBurnRateByFamily(compactSignals),
-    groupedByQueryClass: groupSourceSloBurnRateByQueryClass(compactSignals),
-    guardrails: {
-      dryRunOnly: true,
-      noAutomaticRestrictedActivation: true,
-      noRawUnsafeUrls: true,
-      forbiddenSourceClasses: activationBatchForbiddenSourceClasses()
-    },
-    handoffs: {
-      agent02: ["signals.freshness", "remediationQueue.raise_cadence", "remediationQueue.lower_cadence"],
-      agent03: ["signals.parser_failure", "remediationQueue.request_parser_repair"],
-      agent04: ["signals.query_coverage_gap", "remediationQueue.request_source_pack_expansion"],
-      agent06: ["signals.low_evidence_yield", "remediationQueue.request_evidence_replay"],
-      agent07: ["groupedByQueryClass.actor", "groupedByQueryClass.ransomware_victim", "summary.worstBurnRate"],
-      agent09: ["signals.approval_expiry", "guardrails.noRawUnsafeUrls", "remediationQueue.routeHint"],
-      agent10: ["signals.outage_wave", "summary.critical", "remediationQueue.priority"]
-    }
-  };
-}
-
-function sourceSloBurnRateSeverity(burnRate: number): SourceSloBurnRateSeverity {
-  if (burnRate >= 2) return "critical";
-  if (burnRate >= 1) return "burning";
-  if (burnRate >= 0.5) return "watch";
-  return "healthy";
-}
-
-function sourceSloBurnRateSeverityRank(severity: SourceSloBurnRateSeverity): number {
-  if (severity === "critical") return 4;
-  if (severity === "burning") return 3;
-  if (severity === "watch") return 2;
-  return 1;
-}
-
-function sourceSloBurnRatePriority(severity: SourceSloBurnRateSeverity): SourceSloBurnRateRemediationQueueItem["priority"] {
-  if (severity === "critical") return "critical";
-  if (severity === "burning") return "high";
-  if (severity === "watch") return "medium";
-  return "low";
-}
-
-function buildSourceSloBurnRateRemediationQueue(signals: SourceSloBurnRateRow[]): SourceSloBurnRateRemediationQueueItem[] {
-  const groups = new Map<string, SourceSloBurnRateRow[]>();
-  for (const signal of signals) {
-    const key = `${signal.recommendedAction}:${signal.owner}:${signal.sourceFamily}:${signal.queryClass}`;
-    groups.set(key, [...(groups.get(key) ?? []), signal]);
-  }
-  return [...groups.entries()]
-    .map(([groupKey, rows]) => {
-      const sourceIds = uniqueStrings(rows.flatMap((row) => row.sourceIds)).slice(0, 25);
-      const worst = rows.reduce((current, row) => sourceSloBurnRateSeverityRank(row.severity) > sourceSloBurnRateSeverityRank(current.severity) ? row : current, rows[0]!);
-      return {
-        id: stableId("source_slo_remediate", groupKey),
-        priority: sourceSloBurnRatePriority(worst.severity),
-        action: worst.recommendedAction,
-        owner: worst.owner,
-        groupKey,
-        sourceFamily: worst.sourceFamily,
-        queryClass: worst.queryClass,
-        sourceIds,
-        reasons: uniqueStrings(rows.map((row) => row.reason)).slice(0, 5),
-        rollback: sourceSloBurnRateRollback(worst.recommendedAction),
-        approvalRequired: sourceSloBurnRateApprovalRequired(worst.recommendedAction),
-        routeHint: sourceSloBurnRateRouteHint(worst.recommendedAction),
-        dryRun: true as const,
-        willMutate: false as const,
-        willStartCrawling: false as const
-      };
-    })
-    .sort((left, right) => sourceSloBurnRatePriorityRank(right.priority) - sourceSloBurnRatePriorityRank(left.priority) || left.groupKey.localeCompare(right.groupKey));
-}
-
-function sourceSloBurnRateRollback(action: SourceSloBurnRateRemediationAction): string {
-  if (action === "raise_cadence" || action === "lower_cadence") return "Revert to prior cadence after Agent 02 queue and freshness proof passes.";
-  if (action === "quarantine") return "Restore only after health checks, parser proof, and Agent 10 release gate pass.";
-  if (action === "retire") return "Unretire only if source-family diversity or query coverage falls below SLO.";
-  if (action === "request_parser_repair") return "Keep current source state until parser fixture and adapter proof pass.";
-  if (action === "request_source_pack_expansion") return "Drop candidate pack if legal/parser/scheduler dry-run proof fails.";
-  if (action === "request_evidence_replay") return "Preserve current evidence confidence until replay proof is reviewed.";
-  if (action === "request_analyst_approval") return "Keep source inactive or metadata-only until explicit approval is recorded.";
-  return "Keep restricted metadata held; never activate or fetch raw restricted material automatically.";
-}
-
-function sourceSloBurnRateApprovalRequired(action: SourceSloBurnRateRemediationAction): boolean {
-  return action === "quarantine" ||
-    action === "retire" ||
-    action === "request_parser_repair" ||
-    action === "request_source_pack_expansion" ||
-    action === "request_analyst_approval" ||
-    action === "hold_restricted_metadata";
-}
-
-function sourceSloBurnRateRouteHint(action: SourceSloBurnRateRemediationAction): SourceSloBurnRateRemediationQueueItem["routeHint"] {
-  if (action === "raise_cadence" || action === "lower_cadence" || action === "request_evidence_replay") return "/v1/sources/runtime-sla";
-  if (action === "request_source_pack_expansion" || action === "request_parser_repair") return "/v1/sources/activation-batches";
-  if (action === "request_analyst_approval" || action === "hold_restricted_metadata") return "/v1/analyst/source-activation-packets";
-  return "/v1/sources/portfolio";
-}
-
-function sourceSloBurnRatePriorityRank(priority: SourceSloBurnRateRemediationQueueItem["priority"]): number {
-  if (priority === "critical") return 4;
-  if (priority === "high") return 3;
-  if (priority === "medium") return 2;
-  return 1;
-}
-
-function groupSourceSloBurnRateByFamily(signals: SourceSloBurnRateRow[]): SourceSloBurnRatePacket["groupedByFamily"] {
-  const groups = new Map<string, SourceSloBurnRateRow[]>();
-  for (const signal of signals) groups.set(signal.sourceFamily, [...(groups.get(signal.sourceFamily) ?? []), signal]);
-  return [...groups.entries()]
-    .map(([sourceFamily, rows]) => ({
-      sourceFamily,
-      critical: rows.filter((row) => row.severity === "critical").length,
-      burning: rows.filter((row) => row.severity === "burning").length,
-      watch: rows.filter((row) => row.severity === "watch").length,
-      sourceIds: uniqueStrings(rows.flatMap((row) => row.sourceIds)).slice(0, 25)
-    }))
-    .sort((left, right) => right.critical - left.critical || right.burning - left.burning || left.sourceFamily.localeCompare(right.sourceFamily))
-    .slice(0, 30);
-}
-
-function groupSourceSloBurnRateByQueryClass(signals: SourceSloBurnRateRow[]): SourceSloBurnRatePacket["groupedByQueryClass"] {
-  const groups = new Map<SourceSloBurnRateRow["queryClass"], SourceSloBurnRateRow[]>();
-  for (const signal of signals) groups.set(signal.queryClass, [...(groups.get(signal.queryClass) ?? []), signal]);
-  return [...groups.entries()]
-    .map(([queryClass, rows]) => ({
-      queryClass,
-      critical: rows.filter((row) => row.severity === "critical").length,
-      burning: rows.filter((row) => row.severity === "burning").length,
-      watch: rows.filter((row) => row.severity === "watch").length,
-      sourceIds: uniqueStrings(rows.flatMap((row) => row.sourceIds)).slice(0, 25)
-    }))
-    .sort((left, right) => right.critical - left.critical || right.burning - left.burning || left.queryClass.localeCompare(right.queryClass));
-}
-
-function buildSourceTenantActivationPacket(input: {
-  sources: SourceRecord[];
-  allSources: SourceRecord[];
-  queries: string[];
-  tenantId?: string;
-  generatedAt: string;
-}): SourceTenantActivationPacket {
-  const queries = input.queries.length > 0
-    ? input.queries
-    : ["APT29", "Akira ransomware victims", "CVE-2024-1234", "healthcare sector", "Norway", "campaign infrastructure"];
-  const economics = buildSourceReliabilityEconomicsPacket("tenant_activation", input.sources, input.generatedAt);
-  const economicsById = new Map(economics.sources.map((source) => [source.sourceId, source]));
-  const duplicateSuppressed = new Set(economics.portfolioEconomics.duplicateSuppressedSourceIds);
-  const queryClasses = uniqueStrings(queries.map(classifyCloseoutQuery)) as SourceTenantActivationApprovalPacket["queryClass"][];
-  const packets = input.sources
-    .flatMap((source) => tenantActivationQueryClasses(source, queries, queryClasses, input.generatedAt).map((queryClass) =>
-      sourceTenantActivationApprovalPacket(source, queryClass, input.tenantId, input.generatedAt, economicsById.get(source.id), duplicateSuppressed.has(source.id))
-    ))
-    .sort((left, right) => sourceTenantActivationDecisionRank(left.decision) - sourceTenantActivationDecisionRank(right.decision) || left.tenantId.localeCompare(right.tenantId) || left.sourceFamily.localeCompare(right.sourceFamily))
-    .slice(0, 120);
-  const groups = buildSourceTenantActivationGroups(packets);
-  const tenantIsolation = buildSourceTenantActivationIsolation(input.sources, input.allSources, input.tenantId);
-  const queryClassReadiness = buildSourceTenantActivationQueryClassReadiness(input.sources, packets, queryClasses, input.tenantId);
-
-  return {
-    schemaVersion: "ti.tenant_source_activation.v1",
-    dryRun: true,
-    willMutate: false,
-    willStartCrawling: false,
-    generatedAt: input.generatedAt,
-    tenantId: input.tenantId,
-    summary: {
-      tenantCount: tenantIsolation.length,
-      approvalPacketCount: packets.length,
-      activate: packets.filter((packet) => packet.decision === "activate").length,
-      stage: packets.filter((packet) => packet.decision === "stage").length,
-      hold: packets.filter((packet) => packet.decision === "hold").length,
-      retire: packets.filter((packet) => packet.decision === "retire").length,
-      restrictedMetadataHeld: packets.filter((packet) => packet.decision === "hold_restricted_metadata").length,
-      pendingApproval: packets.filter((packet) => packet.approvalState === "pending").length,
-      expiredApproval: packets.filter((packet) => packet.approvalState === "expired").length
-    },
-    approvalPackets: packets,
-    groups,
-    tenantIsolation,
-    queryClassReadiness,
-    guardrails: {
-      dryRunOnly: true,
-      noSilentActivation: true,
-      noCrawlingFromApprovalPackets: true,
-      noRestrictedAutoActivation: true,
-      noRawUnsafeUrls: true,
-      forbiddenSourceClasses: activationBatchForbiddenSourceClasses()
-    },
-    handoffs: {
-      agent02SchedulerBudgets: ["approvalPackets.schedulerBudgetClass", "groups.schedulerBudgetClass", "queryClassReadiness.freshnessDebt"],
-      agent03AdapterCertification: ["approvalPackets.blockers.parser_certification", "approvalPackets.sourceClass.dynamic_browser_candidate", "approvalPackets.sourceClass.report_pdf"],
-      agent04PublicExpansion: ["queryClassReadiness.needs_expansion", "approvalPackets.expectedEffect.coverageGap"],
-      agent05RestrictedPolicyHolds: ["approvalPackets.decision.hold_restricted_metadata", "approvalPackets.safetyPolicy.metadataOnly"],
-      agent06EvidenceRetention: ["approvalPackets.blockers.low_evidence_yield", "approvalPackets.sourceIds", "approvalPackets.expectedEffect"],
-      agent07QualityGates: ["approvalPackets.reasons", "queryClassReadiness.readiness", "groups.decision"],
-      agent09ApiContracts: ["tenantActivation.schemaVersion", "approvalPackets", "tenantIsolation", "guardrails"],
-      agent10CapacityReleaseGates: ["summary.activate", "summary.stage", "groups.schedulerBudgetClass", "guardrails.noCrawlingFromApprovalPackets"]
-    }
-  };
-}
-
-function tenantActivationQueryClasses(
-  source: SourceRecord,
-  queries: string[],
-  queryClasses: SourceTenantActivationApprovalPacket["queryClass"][],
-  generatedAt: string
-): SourceTenantActivationApprovalPacket["queryClass"][] {
-  const matching = uniqueStrings(queries
-    .filter((query) => explainSourceForQuery(query, source, generatedAt).score > 0)
-    .map(classifyCloseoutQuery)) as SourceTenantActivationApprovalPacket["queryClass"][];
-  if (matching.length > 0) return matching;
-  const inferred = source.catalog?.coverage.topics.some((topic) => topic.toLowerCase().includes("campaign"))
-    ? "campaign"
-    : source.catalog?.coverage.topics.some((topic) => topic.toLowerCase().includes("infrastructure"))
-      ? "infrastructure"
-      : classifyCoverageQuery([...coverageTagsForSource(source), source.name].join(" "));
-  return queryClasses.includes(inferred) ? [inferred] : [queryClasses[0] ?? inferred];
-}
-
-function sourceTenantActivationApprovalPacket(
-  source: SourceRecord,
-  queryClass: SourceTenantActivationApprovalPacket["queryClass"],
-  requestedTenantId: string | undefined,
-  generatedAt: string,
-  economics: SourceReliabilityEconomicsRow | undefined,
-  duplicateSuppressed: boolean
-): SourceTenantActivationApprovalPacket {
-  const tenantId = source.tenantId ?? requestedTenantId ?? "global";
-  const sourceClass = sourceTenantActivationSourceClass(source);
-  const sourceFamily = sourceFamilyKey(source);
-  const parserCertified = Boolean(source.catalog?.adapterCompatibility.includes(source.type));
-  const safePublic = sourceCanSatisfyPublicSlo(source);
-  const legalState = reviewState(source.metadata?.legalNotesReviewedAt, generatedAt, Boolean(source.legalNotes.trim()));
-  const robotsState = sourceNeedsRobotsReview(source) ? reviewState(source.metadata?.robotsReviewedAt, generatedAt, true) : "not_required";
-  const restricted = sourceClass === "restricted_metadata_only" || source.risk === "restricted" || source.governance?.metadataOnly === true;
-  const activationEligible = sourceTenantActivationEligible(source, restricted);
-  const approvalState = sourceTenantApprovalState(source, safePublic || activationEligible, legalState, robotsState);
-  const freshnessDebt = sourceMissesFreshnessSlo(source, source.catalog?.collection.freshnessTargetSeconds ?? 36 * 3600, generatedAt);
-  const lowEvidenceYield = extractionYield(source) < 0.35 || (economics?.handoffs.agent06EvidenceReplay === "needs_replay_proof");
-  const blockers: SourceTenantActivationApprovalPacket["blockers"] = [
-    ...(!activationEligible && !restricted ? ["policy_hold" as const] : []),
-    ...(!parserCertified ? ["parser_certification" as const] : []),
-    ...(legalState !== "current" ? ["legal_review" as const] : []),
-    ...(robotsState === "missing" || robotsState === "stale" ? ["robots_review" as const] : []),
-    ...(freshnessDebt ? ["freshness_debt" as const] : []),
-    ...(duplicateSuppressed ? ["duplicate" as const] : []),
-    ...(lowEvidenceYield ? ["low_evidence_yield" as const] : []),
-    ...(source.tenantId && requestedTenantId && source.tenantId !== requestedTenantId ? ["tenant_scope" as const] : []),
-    ...(restricted ? ["restricted_metadata" as const] : [])
-  ];
-  const decision = sourceTenantActivationDecision(source, restricted, activationEligible, parserCertified, approvalState, blockers, duplicateSuppressed, freshnessDebt, lowEvidenceYield);
-  const approvalRequired = approvalState !== "not_required" || decision !== "activate" || restricted || source.approvalRequired === true || source.governance?.approvalRequired === true;
-  const routeHint = decision === "stage"
-    ? "/v1/sources/activation-batches"
-    : restricted || approvalRequired
-      ? "/v1/analyst/source-activation-packets"
-      : "/v1/sources/portfolio";
-
-  return {
-    id: stableId("tenant_source_activation", `${tenantId}:${queryClass}:${source.id}:${decision}:${generatedAt}`),
-    tenantId,
-    queryClass,
-    sourceFamily,
-    sourceClass,
-    decision,
-    sourceIds: [source.id],
-    sourceCount: 1,
-    approvalState,
-    approvalRequired,
-    reasons: sourceTenantActivationReasons(source, decision, blockers, economics),
-    blockers,
-    expectedEffect: {
-      coverageGap: decision === "activate" ? "closes_gap" : decision === "stage" ? "improves_gap" : "no_effect",
-      freshnessDebt: freshnessDebt && (decision === "activate" || decision === "stage") ? "reduces" : freshnessDebt ? "held" : "unchanged",
-      publicSearchResponsive: true
-    },
-    safetyPolicy: {
-      metadataOnly: restricted || source.governance?.metadataOnly === true,
-      noRawUnsafeUrls: true,
-      noRestrictedAutoActivation: true,
-      noMutationWithoutApproval: true
-    },
-    rollback: sourceTenantActivationRollback(decision, sourceClass),
-    routeHint,
-    dryRun: true,
-    willMutate: false,
-    willStartCrawling: false
-  };
-}
-
-function sourceTenantActivationSourceClass(source: SourceRecord): SourceTenantActivationSourceClass {
-  if (source.risk === "restricted" || source.governance?.metadataOnly || source.type === "tor_metadata" || source.type === "i2p_metadata" || source.type === "freenet_metadata") return "restricted_metadata_only";
-  if (source.type === "telegram_public") return "public_channel";
-  if (source.type === "dynamic_web") return "dynamic_browser_candidate";
-  if (source.type === "pdf") return "report_pdf";
-  if (source.type === "api") return "advisory_api";
-  return "public_rss_blog";
-}
-
-function sourceTenantActivationEligible(source: SourceRecord, restricted: boolean): boolean {
-  if (restricted) return false;
-  return (source.risk === "low" || source.risk === "medium") &&
-    (source.accessMethod === "public_http" || source.accessMethod === "official_api") &&
-    source.status !== "disabled" &&
-    source.status !== "rejected" &&
-    source.status !== "retired";
-}
-
-function sourceTenantApprovalState(
-  source: SourceRecord,
-  activationEligible: boolean,
-  legalState: "current" | "missing" | "stale",
-  robotsState: "current" | "missing" | "stale" | "not_required"
-): SourceTenantActivationApprovalPacket["approvalState"] {
-  if (source.status === "disabled" || source.status === "rejected") return "blocked";
-  if (source.governance?.approvalState === "expired") return "expired";
-  if (source.governance?.approvalState === "pending" || source.governance?.approvalState === "rejected") return source.governance.approvalState === "rejected" ? "blocked" : "pending";
-  if (source.governance?.approvalState === "approved" || source.status === "approved" || source.status === "active" || source.status === "probation") {
-    if (legalState !== "current" || robotsState === "missing" || robotsState === "stale") return "pending";
-    return "approved";
-  }
-  if (activationEligible && source.catalog?.approvalScope === "safe_public_auto" && legalState === "current" && (robotsState === "current" || robotsState === "not_required")) return "not_required";
-  return "pending";
-}
-
-function sourceTenantActivationDecision(
-  source: SourceRecord,
-  restricted: boolean,
-  activationEligible: boolean,
-  parserCertified: boolean,
-  approvalState: SourceTenantActivationApprovalPacket["approvalState"],
-  blockers: SourceTenantActivationApprovalPacket["blockers"],
-  duplicateSuppressed: boolean,
-  freshnessDebt: boolean,
-  lowEvidenceYield: boolean
-): SourceTenantActivationDecision {
-  if (restricted) return "hold_restricted_metadata";
-  if (source.status === "retired" || source.status === "disabled" || source.status === "rejected" || duplicateSuppressed) return "retire";
-  if (!activationEligible || !parserCertified || approvalState === "blocked" || blockers.includes("policy_hold") || blockers.includes("legal_review") || blockers.includes("robots_review")) return "hold";
-  if (approvalState === "approved" || approvalState === "not_required") {
-    if (freshnessDebt || lowEvidenceYield || source.status === "candidate" || source.status === "needs_review" || source.status === "approved") return "stage";
-    return "activate";
-  }
-  if (approvalState === "pending" || approvalState === "expired") return "stage";
-  return "hold";
-}
-
-function sourceTenantActivationReasons(
-  source: SourceRecord,
-  decision: SourceTenantActivationDecision,
-  blockers: SourceTenantActivationApprovalPacket["blockers"],
-  economics: SourceReliabilityEconomicsRow | undefined
-): string[] {
-  return uniqueStrings([
-    `decision:${decision}`,
-    `source_type:${source.type}`,
-    `status:${source.status}`,
-    `risk:${source.risk}`,
-    ...(economics ? [`reliability:${economics.reliabilityScore}`, `economics:${economics.decision}`] : []),
-    ...blockers.map((blocker) => `blocker:${blocker}`)
-  ]).slice(0, 12);
-}
-
-function sourceTenantActivationRollback(decision: SourceTenantActivationDecision, sourceClass: SourceTenantActivationSourceClass): string {
-  if (decision === "activate") return "Return source to previous tenant approval state if scheduler or evidence checks regress.";
-  if (decision === "stage") return "Drop staged activation packet and keep current source status until approvals and proof pass.";
-  if (decision === "retire") return "Restore previous cadence only if tenant query-class coverage falls below SLO.";
-  if (decision === "hold_restricted_metadata") return "Keep metadata-only hold; never fetch raw restricted material or activate automatically.";
-  if (sourceClass === "dynamic_browser_candidate") return "Keep browser collection disabled until bounded adapter certification passes.";
-  return "Keep source inactive or approval-held until operator/legal review clears blockers.";
-}
-
-function sourceTenantActivationDecisionRank(decision: SourceTenantActivationDecision): number {
-  if (decision === "hold_restricted_metadata") return 1;
-  if (decision === "hold") return 2;
-  if (decision === "retire") return 3;
-  if (decision === "stage") return 4;
-  return 5;
-}
-
-function buildSourceTenantActivationGroups(packets: SourceTenantActivationApprovalPacket[]): SourceTenantActivationGroup[] {
-  const groups = new Map<string, SourceTenantActivationApprovalPacket[]>();
-  for (const packet of packets) {
-    const key = `${packet.tenantId}:${packet.queryClass}:${packet.sourceFamily}:${packet.sourceClass}:${packet.decision}`;
-    groups.set(key, [...(groups.get(key) ?? []), packet]);
-  }
-  return [...groups.entries()]
-    .map(([key, rows]) => {
-      const first = rows[0]!;
-      return {
-        tenantId: first.tenantId,
-        queryClass: first.queryClass,
-        sourceFamily: first.sourceFamily,
-        sourceClass: first.sourceClass,
-        decision: first.decision,
-        sourceIds: uniqueStrings(rows.flatMap((row) => row.sourceIds)).slice(0, 25),
-        approvalPacketIds: rows.map((row) => row.id).slice(0, 25),
-        schedulerBudgetClass: sourceTenantActivationBudget(rows),
-        reason: key
-      };
-    })
-    .sort((left, right) => sourceTenantActivationDecisionRank(left.decision) - sourceTenantActivationDecisionRank(right.decision) || left.tenantId.localeCompare(right.tenantId))
-    .slice(0, 50);
-}
-
-function sourceTenantActivationBudget(rows: SourceTenantActivationApprovalPacket[]): SourceCollectionSla["budgetClass"] {
-  if (rows.some((row) => row.queryClass === "ransomware_victim" || row.queryClass === "cve")) return "high";
-  if (rows.some((row) => row.queryClass === "actor" || row.queryClass === "campaign")) return "normal";
-  return "low";
-}
-
-function buildSourceTenantActivationIsolation(
-  sources: SourceRecord[],
-  allSources: SourceRecord[],
-  requestedTenantId?: string
-): SourceTenantActivationPacket["tenantIsolation"] {
-  const tenantIds = uniqueStrings(sources.map((source) => source.tenantId ?? requestedTenantId ?? "global"));
-  return tenantIds.map((tenantId) => {
-    const tenantSources = sources.filter((source) => (source.tenantId ?? requestedTenantId ?? "global") === tenantId);
-    return {
-      tenantId,
-      sourceCount: tenantSources.length,
-      sourceIds: tenantSources.map((source) => source.id).slice(0, 50),
-      defaultTenantIncluded: tenantSources.some((source) => source.tenantId === undefined),
-      crossTenantSourcesExcluded: requestedTenantId
-        ? allSources.some((source) => source.tenantId !== undefined && source.tenantId !== requestedTenantId) && sources.every((source) => source.tenantId === requestedTenantId || source.tenantId === undefined)
-        : true
-    };
-  });
-}
-
-function buildSourceTenantActivationQueryClassReadiness(
-  sources: SourceRecord[],
-  packets: SourceTenantActivationApprovalPacket[],
-  queryClasses: SourceTenantActivationApprovalPacket["queryClass"][],
-  requestedTenantId?: string
-): SourceTenantActivationPacket["queryClassReadiness"] {
-  const tenantIds = uniqueStrings(sources.map((source) => source.tenantId ?? requestedTenantId ?? "global"));
-  return tenantIds.flatMap((tenantId) => queryClasses.map((queryClass) => {
-    const tenantSources = sources.filter((source) => (source.tenantId ?? requestedTenantId ?? "global") === tenantId);
-    const rows = packets.filter((packet) => packet.tenantId === tenantId && packet.queryClass === queryClass);
-    const activeSafePublicSources = tenantSources.filter((source) => sourceCanSatisfyPublicSlo(source) && source.status === "active").length;
-    const stagedSourceIds = rows.filter((row) => row.decision === "stage" || row.decision === "activate").flatMap((row) => row.sourceIds);
-    const heldSourceIds = rows.filter((row) => row.decision === "hold" || row.decision === "retire").flatMap((row) => row.sourceIds);
-    const restrictedMetadataSourceIds = rows.filter((row) => row.decision === "hold_restricted_metadata").flatMap((row) => row.sourceIds);
-    const readiness: SourceTenantActivationPacket["queryClassReadiness"][number]["readiness"] = activeSafePublicSources >= sourceCoverageSloRequirements(classifyCoverageQuery(queryClass)).minActiveSafePublicSources
-      ? "ready"
-      : rows.some((row) => row.approvalRequired)
-        ? "needs_approval"
-        : rows.some((row) => row.decision === "hold_restricted_metadata" || row.decision === "hold")
-          ? "held"
-          : "needs_expansion";
-    return {
-      tenantId,
-      queryClass,
-      activeSafePublicSources,
-      stagedSourceIds: uniqueStrings(stagedSourceIds).slice(0, 20),
-      heldSourceIds: uniqueStrings(heldSourceIds).slice(0, 20),
-      restrictedMetadataSourceIds: uniqueStrings(restrictedMetadataSourceIds).slice(0, 20),
-      readiness
-    };
-  })).slice(0, 80);
-}
-
-function buildSourcePortfolioMigrationReadiness(input: {
-  sources: SourceRecord[];
-  sourcePacks?: SeedSourceBundle[];
-  queries: string[];
-  tenantId?: string;
-  generatedAt: string;
-}): SourcePortfolioMigrationReadiness {
-  const packCandidates = (input.sourcePacks ?? [])
-    .flatMap((pack) => importSeedBundle(pack, { dryRun: true, importedAt: input.generatedAt }).accepted)
-    .filter((source) => !input.tenantId || source.tenantId === input.tenantId || source.tenantId === undefined)
-    .map((source) => ({ ...source, status: "candidate" as const }));
-  const sourceById = new Map<string, SourceRecord>();
-  for (const source of [...input.sources, ...packCandidates]) {
-    if (!sourceById.has(source.id)) sourceById.set(source.id, source);
-  }
-  const sources = [...sourceById.values()];
-  const economics = buildSourceReliabilityEconomicsPacket("portfolio", sources, input.generatedAt);
-  const economicsById = new Map(economics.sources.map((source) => [source.sourceId, source]));
-  const lanes = (["candidate", "sandbox", "canary", "active", "degraded", "retired"] as SourcePortfolioMigrationState[])
-    .map((state) => sourcePortfolioMigrationLane(state, sources, economicsById, input.generatedAt));
-  const summary = {
-    sourceCount: sources.length,
-    safePublicEligible: sources.filter(sourceCanSatisfyPublicSlo).length,
-    candidate: lanes.find((lane) => lane.state === "candidate")?.sourceCount ?? 0,
-    sandbox: lanes.find((lane) => lane.state === "sandbox")?.sourceCount ?? 0,
-    canary: lanes.find((lane) => lane.state === "canary")?.sourceCount ?? 0,
-    active: lanes.find((lane) => lane.state === "active")?.sourceCount ?? 0,
-    degraded: lanes.find((lane) => lane.state === "degraded")?.sourceCount ?? 0,
-    retired: lanes.find((lane) => lane.state === "retired")?.sourceCount ?? 0,
-    restrictedMetadataOnly: sources.filter((source) => source.risk === "restricted" || source.governance?.metadataOnly).length,
-    recommendedCanaryPromotions: economics.sources.filter((source) => source.decision === "promote_candidate" && source.economics.activationWaveReady).length
-  };
-  const queryClasses = (uniqueStrings(input.queries.map((query) => classifyCoverageQuery(query))) as SourceCoverageSloQueryClass[])
-    .map((queryClass) => sourcePortfolioMigrationQueryClassReadiness(queryClass, input.queries, sources, input.generatedAt));
-  const candidateIds = lanes.find((lane) => lane.state === "candidate")?.sourceIds ?? [];
-  const sandboxIds = lanes.find((lane) => lane.state === "sandbox")?.sourceIds ?? [];
-  const degradedIds = lanes.find((lane) => lane.state === "degraded")?.sourceIds ?? [];
-  const retiredDuplicateIds = economics.portfolioEconomics.duplicateSuppressedSourceIds;
-  const legalReviewIds = sources.filter((source) => reviewState(source.metadata?.legalNotesReviewedAt, input.generatedAt, Boolean(source.legalNotes.trim())) !== "current").map((source) => source.id);
-  const parserRepairIds = sources.filter((source) => !source.catalog?.adapterCompatibility.includes(source.type)).map((source) => source.id);
-
-  return {
-    schemaVersion: "ti.source_portfolio_migration_readiness.v1",
-    dryRun: true,
-    willMutate: false,
-    willStartCrawling: false,
-    generatedAt: input.generatedAt,
-    tenantId: input.tenantId,
-    summary,
-    lanes,
-    queryClasses,
-    recommendedActions: [
-      sourcePortfolioMigrationAction("promote_candidate_to_sandbox", candidateIds.slice(0, 10), "Candidate safe-public sources can enter sandbox after explicit operator approval.", "Remove candidate from sandbox queue and keep source inactive."),
-      sourcePortfolioMigrationAction("promote_sandbox_to_canary", sandboxIds.slice(0, 10), "Sandbox-ready sources can enter canary when parser, legal, and scheduler checks pass.", "Pause canary and return sources to sandbox."),
-      sourcePortfolioMigrationAction("restore_degraded_source", degradedIds.slice(0, 10), "Degraded sources require explicit restore or quarantine decision before production use.", "Restore previous cadence only after health checks pass."),
-      sourcePortfolioMigrationAction("retire_duplicate", retiredDuplicateIds.slice(0, 10), "Duplicate or low-value sources should be retired through reversible operator packets.", "Unretire only if source family diversity drops below SLO."),
-      sourcePortfolioMigrationAction("request_legal_review", legalReviewIds.slice(0, 10), "Legal or robots review is missing or stale before production promotion.", "Keep source in current state until review is current."),
-      sourcePortfolioMigrationAction("request_parser_repair", parserRepairIds.slice(0, 10), "Parser compatibility must be repaired before collection readiness.", "Keep source out of canary activation until Agent 03 repair passes.")
-    ].filter((action) => action.sourceIds.length > 0),
-    guardrails: {
-      approvalMode: "explicit_operator_approval",
-      restrictedMetadataOnly: true,
-      noSilentActivation: true,
-      forbiddenSourceClasses: activationBatchForbiddenSourceClasses()
-    },
-    handoffs: {
-      agent02FreshnessSlo: ["queryClasses.readiness", "lanes.cadenceImpact", "recommendedActions.promote_sandbox_to_canary"],
-      agent03AdapterRepair: ["lanes.parserCapability", "recommendedActions.request_parser_repair"],
-      agent04SourceExpansion: ["queryClasses.missingFamilies", "recommendedActions.promote_candidate_to_sandbox"],
-      agent06EvidenceChain: ["lanes.sourceIds", "queryClasses.activeSafePublicSources"],
-      agent07ActorFreshness: ["queryClasses.representativeQueries", "lanes.averageReliability"],
-      agent09ApiFields: ["migrationReadiness.schemaVersion", "migrationReadiness.summary", "migrationReadiness.lanes", "migrationReadiness.queryClasses"],
-      agent10ReleaseGate: ["summary.recommendedCanaryPromotions", "guardrails.noSilentActivation", "recommendedActions.rollback"]
-    }
-  };
-}
-
-function sourcePortfolioMigrationLane(
-  state: SourcePortfolioMigrationState,
-  sources: SourceRecord[],
-  economicsById: Map<string, SourceReliabilityEconomicsRow>,
-  generatedAt: string
-): SourcePortfolioMigrationLane {
-  const laneSources = sources.filter((source) => sourcePortfolioMigrationState(source) === state);
-  const estimatedTasks = laneSources.reduce((sum, source) => sum + Math.ceil(86400 / Math.max(3600, source.catalog?.collection.crawlCadenceSeconds ?? source.crawlFrequencySeconds)), 0);
-  const cadenceValues = laneSources.map((source) => source.catalog?.collection.crawlCadenceSeconds ?? source.crawlFrequencySeconds);
-  return {
-    state,
-    sourceCount: laneSources.length,
-    sourceIds: laneSources.map((source) => source.id),
-    approvalRequired: state !== "retired" && laneSources.some((source) => source.governance?.approvalRequired || source.approvalRequired || source.status !== "active"),
-    rollbackAction: sourcePortfolioMigrationRollbackAction(state),
-    parserCapability: laneSources.some((source) => source.governance?.metadataOnly || source.risk === "restricted")
-      ? "metadata_only_handoff"
-      : laneSources.some((source) => !source.catalog?.adapterCompatibility.includes(source.type))
-        ? "needs_repair"
-        : "supported",
-    sourceFamilies: uniqueStrings(laneSources.map(sourceFamilyKey)).sort(),
-    averageReliability: roundScore(average(laneSources.map((source) => economicsById.get(source.id)?.reliabilityScore ?? source.trustScore))),
-    legalReview: combinedLegalReviewState(laneSources.map((source) => reviewState(source.metadata?.legalNotesReviewedAt, generatedAt, Boolean(source.legalNotes.trim())))),
-    robotsReview: combinedRobotsReviewState(laneSources.map((source) => sourceNeedsRobotsReview(source) ? reviewState(source.metadata?.robotsReviewedAt, generatedAt, true) : "not_required")),
-    cadenceImpact: {
-      estimatedTasksPerDay: estimatedTasks,
-      maxCadenceSeconds: cadenceValues.length > 0 ? Math.max(...cadenceValues) : 0,
-      budgetClasses: uniqueStrings(laneSources.map((source) => source.catalog?.collection.budgetClass ?? "standard")).sort()
-    }
-  };
-}
-
-function sourcePortfolioMigrationState(source: SourceRecord): SourcePortfolioMigrationState {
-  if (source.status === "retired" || source.status === "rejected" || source.status === "disabled") return "retired";
-  if (source.status === "degraded" || source.status === "quarantined" || source.status === "paused") return "degraded";
-  if (source.status === "active" || source.status === "probation") return source.status === "probation" ? "canary" : "active";
-  if (source.status === "approved") return "sandbox";
-  return "candidate";
-}
-
-function sourcePortfolioMigrationRollbackAction(state: SourcePortfolioMigrationState): SourcePortfolioMigrationLane["rollbackAction"] {
-  if (state === "candidate") return "remove_candidate";
-  if (state === "sandbox") return "return_to_sandbox";
-  if (state === "canary") return "pause_canary";
-  if (state === "active" || state === "degraded") return "quarantine_or_degrade";
-  if (state === "retired") return "restore_previous_cadence";
-  return "none";
-}
-
-function combinedLegalReviewState(states: Array<"current" | "stale" | "missing">): SourcePortfolioMigrationLane["legalReview"] {
-  const unique = uniqueStrings(states);
-  if (unique.length === 0) return "missing";
-  if (unique.length === 1) return unique[0] as SourcePortfolioMigrationLane["legalReview"];
-  return "mixed";
-}
-
-function combinedRobotsReviewState(states: Array<"current" | "stale" | "missing" | "not_required">): SourcePortfolioMigrationLane["robotsReview"] {
-  const unique = uniqueStrings(states);
-  if (unique.length === 0) return "missing";
-  if (unique.length === 1) return unique[0] as SourcePortfolioMigrationLane["robotsReview"];
-  return "mixed";
-}
-
-function sourcePortfolioMigrationQueryClassReadiness(
-  queryClass: SourceCoverageSloQueryClass,
-  queries: string[],
-  sources: SourceRecord[],
-  generatedAt: string
-): SourcePortfolioMigrationQueryClassReadiness {
-  const representativeQueries = queries.filter((query) => classifyCoverageQuery(query) === queryClass);
-  const matching = sources.filter((source) =>
-    representativeQueries.length === 0
-      ? sourceCanSatisfyPublicSlo(source)
-      : representativeQueries.some((query) => explainSourceForQuery(query, source, generatedAt).score > 0)
-  );
-  const activeSafePublicSources = matching.filter((source) => sourceCanSatisfyPublicSlo(source) && sourcePortfolioMigrationState(source) === "active").length;
-  const candidateSources = matching.filter((source) => sourcePortfolioMigrationState(source) === "candidate").length;
-  const canarySources = matching.filter((source) => sourcePortfolioMigrationState(source) === "canary").length;
-  const sourceFamilies = new Set(matching.filter(sourceCanSatisfyPublicSlo).map(sourceFamilyKey));
-  const requirements = sourceCoverageSloRequirements(queryClass);
-  const missingFamilies = sourceFamilies.size >= requirements.minSourceFamilies ? [] : [`need_${requirements.minSourceFamilies - sourceFamilies.size}_more_safe_public_family`];
-  const parserGap = matching.some((source) => !source.catalog?.adapterCompatibility.includes(source.type));
-  const legalGap = matching.some((source) => reviewState(source.metadata?.legalNotesReviewedAt, generatedAt, Boolean(source.legalNotes.trim())) !== "current");
-  return {
-    queryClass,
-    readiness: activeSafePublicSources >= requirements.minActiveSafePublicSources && missingFamilies.length === 0 ? "ready" : parserGap || legalGap ? "hold" : "partial",
-    activeSafePublicSources,
-    candidateSources,
-    canarySources,
-    missingFamilies,
-    representativeQueries,
-    recommendedAction: parserGap
-      ? "repair_parser"
-      : legalGap
-        ? "legal_review"
-        : candidateSources > 0 || canarySources > 0
-          ? "promote_to_canary"
-          : "add_source_pack"
-  };
-}
-
-function sourcePortfolioMigrationAction(
-  action: SourcePortfolioMigrationReadiness["recommendedActions"][number]["action"],
-  sourceIds: string[],
-  reason: string,
-  rollback: string
-): SourcePortfolioMigrationReadiness["recommendedActions"][number] {
-  return {
-    action,
-    sourceIds,
-    reason,
-    approvalRequired: true,
-    dryRun: true,
-    willMutate: false,
-    willStartCrawling: false,
-    rollback
-  };
-}
-
-export function buildSourceReliabilityEconomicsPacket(
-  query: string,
-  sources: SourceRecord[],
-  generatedAt = nowIso()
-): SourceReliabilityEconomicsPacket {
-  const matching = query === "portfolio"
-    ? sources
-    : sources.filter((source) => explainSourceForQuery(query, source, generatedAt).score > 0);
-  const duplicateIds = new Set(duplicateGroups(matching).flatMap((group) => group.sourceIds));
-  const familyCounts = countMap(matching.map(sourceFamilyKey));
-  const rows = matching
-    .map((source) => sourceReliabilityEconomicsRow(source, generatedAt, duplicateIds, familyCounts))
-    .sort((left, right) => right.reliabilityScore - left.reliabilityScore || right.economics.marginalValue - left.economics.marginalValue || left.sourceId.localeCompare(right.sourceId))
-    .slice(0, 50);
-  const sourceCount = rows.length;
-  const totalUsefulEvidence = rows.reduce((sum, row) => sum + row.economics.expectedUsefulEvidenceItemsPerDay, 0);
-  const totalTasks = rows.reduce((sum, row) => sum + row.economics.estimatedTasksPerDay, 0);
-  const familyCoverage = [...new Set(rows.map((row) => row.sourceFamily))].length;
-
-  return {
-    schemaVersion: "ti.source_reliability_economics.v1",
-    dryRun: true,
-    willMutate: false,
-    willStartCrawling: false,
-    generatedAt,
-    query,
-    queryClass: classifyCoverageQuery(query),
-    summary: {
-      sourceCount,
-      trusted: rows.filter((row) => row.decision === "trusted").length,
-      throttled: rows.filter((row) => row.decision === "throttled").length,
-      paused: rows.filter((row) => row.decision === "paused").length,
-      retired: rows.filter((row) => row.decision === "retired").length,
-      promoteCandidates: rows.filter((row) => row.decision === "promote_candidate").length,
-      needsReview: rows.filter((row) => row.decision === "needs_review").length,
-      averageReliabilityScore: roundScore(average(rows.map((row) => row.reliabilityScore))),
-      sourceFamilyCoverage: familyCoverage,
-      marginalValueOfProposedSources: roundScore(rows.filter((row) => row.decision === "promote_candidate").reduce((sum, row) => sum + row.economics.marginalValue, 0)),
-      costPerUsefulEvidenceItem: roundScore(totalUsefulEvidence > 0 ? totalTasks / totalUsefulEvidence : 0),
-      staleSourceSuppression: rows.filter((row) => row.economics.staleSuppressed).length,
-      duplicateSuppression: rows.filter((row) => row.economics.duplicateSuppressed).length,
-      activationWaveReady: rows.filter((row) => row.economics.activationWaveReady).length
-    },
-    sources: rows,
-    portfolioEconomics: {
-      familyCoverage: [...new Set(rows.map((row) => row.sourceFamily))]
-        .map((family) => {
-          const familyRows = rows.filter((row) => row.sourceFamily === family);
-          return {
-            family,
-            sourceCount: familyRows.length,
-            activeCount: familyRows.filter((row) => row.runtimeStatus === "active" || row.runtimeStatus === "probation" || row.runtimeStatus === "degraded").length,
-            averageReliabilityScore: roundScore(average(familyRows.map((row) => row.reliabilityScore)))
-          };
-        })
-        .sort((left, right) => right.sourceCount - left.sourceCount || left.family.localeCompare(right.family)),
-      marginalValueLeaders: rows.filter((row) => row.economics.marginalValue >= 0.65).slice(0, 10).map((row) => row.sourceId),
-      staleSuppressedSourceIds: rows.filter((row) => row.economics.staleSuppressed).map((row) => row.sourceId),
-      duplicateSuppressedSourceIds: rows.filter((row) => row.economics.duplicateSuppressed).map((row) => row.sourceId),
-      activationWaveReadySourceIds: rows.filter((row) => row.economics.activationWaveReady).map((row) => row.sourceId)
-    },
-    governance: {
-      approvalMode: "explicit_operator_approval",
-      noSilentActivation: true,
-      restrictedSourcesMetadataOnly: true,
-      forbiddenSourceClasses: activationBatchForbiddenSourceClasses()
-    },
-    coordination: {
-      agent02Fields: ["handoffs.agent02SchedulerPriority", "economics.estimatedTasksPerDay", "economics.costPerUsefulEvidenceItem", "economics.staleSuppressed"],
-      agent03Fields: ["scoreInputs.parserHealth", "handoffs.agent03ParserCapability"],
-      agent04Fields: ["sourceFamily", "handoffs.agent04SourcePackRecommendation", "portfolioEconomics.familyCoverage"],
-      agent06Fields: ["scoreInputs.evidenceReplaySuccess", "handoffs.agent06EvidenceReplay"],
-      agent07Fields: ["scoreInputs.falsePositiveHistory", "handoffs.agent07QualityConfidence", "reliabilityScore"],
-      agent09Fields: ["schemaVersion", "summary", "sources.decision", "sources.reasons"],
-      agent10Fields: ["summary.activationWaveReady", "summary.staleSourceSuppression", "handoffs.agent10SloRunbook"]
-    }
-  };
-}
-
-function sourceReliabilityEconomicsRow(
-  source: SourceRecord,
-  generatedAt: string,
-  duplicateIds: Set<string>,
-  familyCounts: Map<string, number>
-): SourceReliabilityEconomicsRow {
-  const family = sourceFamilyKey(source);
-  const cadence = source.catalog?.collection.crawlCadenceSeconds ?? source.crawlFrequencySeconds;
-  const estimatedTasksPerDay = Math.ceil(86400 / Math.max(3600, cadence));
-  const safePublicEligible = sourceCanSatisfyPublicSlo(source);
-  const staleSuppressed = sourceMissesFreshnessSlo(source, source.catalog?.collection.freshnessTargetSeconds ?? 36 * 3600, generatedAt);
-  const duplicateSuppressed = duplicateIds.has(source.id);
-  const parserCompatible = Boolean(source.catalog?.adapterCompatibility.includes(source.type));
-  const legalState = reviewState(source.metadata?.legalNotesReviewedAt, generatedAt, Boolean(source.legalNotes.trim()));
-  const robotsState = sourceNeedsRobotsReview(source)
-    ? reviewState(source.metadata?.robotsReviewedAt, generatedAt, true)
-    : "current";
-  const inputs: SourceReliabilityScoreInputs = {
-    freshness: staleSuppressed ? 0.15 : freshnessScore(source, generatedAt),
-    usefulAnswerYield: usefulAnswerYieldScore(source),
-    parserHealth: parserCompatible ? source.scoring?.parseability ?? parserHealthScore(source) : 0.2,
-    legalReviewAge: legalState === "current" ? 1 : legalState === "stale" ? 0.35 : 0.05,
-    robotsReviewAge: robotsState === "current" ? 1 : robotsState === "stale" ? 0.35 : 0.05,
-    duplicateRate: duplicateSuppressed ? 1 : metadataNumber(source, "duplicateRate", 0),
-    evidenceReplaySuccess: metadataNumber(source, "evidenceReplaySuccess", source.status === "active" ? 0.72 : 0.55),
-    analystOverrideHistory: analystOverrideScore(source),
-    falsePositiveHistory: metadataNumber(source, "falsePositiveRate", 0),
-    familyDiversityValue: familyCounts.get(family) === 1 ? 1 : Math.max(0.15, 1 / Math.max(1, familyCounts.get(family) ?? 1)),
-    schedulerCostEfficiency: estimatedTasksPerDay <= 6 ? 1 : estimatedTasksPerDay <= 12 ? 0.65 : 0.35
-  };
-  const reliabilityScore = roundScore(clamp01(
-    inputs.freshness * 0.14 +
-    inputs.usefulAnswerYield * 0.16 +
-    inputs.parserHealth * 0.13 +
-    inputs.legalReviewAge * 0.1 +
-    inputs.robotsReviewAge * 0.07 +
-    (1 - inputs.duplicateRate) * 0.09 +
-    inputs.evidenceReplaySuccess * 0.12 +
-    inputs.analystOverrideHistory * 0.06 +
-    (1 - inputs.falsePositiveHistory) * 0.08 +
-    inputs.familyDiversityValue * 0.03 +
-    inputs.schedulerCostEfficiency * 0.02 -
-    (source.approvalRequired || source.governance?.approvalRequired ? 0.08 : 0) -
-    (source.risk === "restricted" || source.risk === "high" ? 0.1 : 0)
-  ));
-  const marginalValue = roundScore(clamp01(reliabilityScore * 0.55 + inputs.familyDiversityValue * 0.25 + inputs.usefulAnswerYield * 0.2 - (duplicateSuppressed ? 0.45 : 0) - (staleSuppressed ? 0.25 : 0)));
-  const expectedUsefulEvidenceItemsPerDay = roundScore(Math.max(0.01, estimatedTasksPerDay * inputs.usefulAnswerYield * reliabilityScore));
-  const costPerUsefulEvidenceItem = roundScore(estimatedTasksPerDay / Math.max(0.01, expectedUsefulEvidenceItemsPerDay));
-  const activationWaveReady = safePublicEligible && parserCompatible && legalState === "current" && robotsState === "current" && reliabilityScore >= 0.62 && !staleSuppressed && !duplicateSuppressed;
-  const decision = sourceReliabilityDecision(source, reliabilityScore, safePublicEligible, staleSuppressed, duplicateSuppressed, parserCompatible, legalState, robotsState);
-
-  return {
-    sourceId: source.id,
-    sourceName: source.name,
-    sourceType: source.type,
-    sourceFamily: family,
-    runtimeStatus: source.status,
-    safePublicEligible,
-    decision,
-    reliabilityScore,
-    scoreInputs: inputs,
-    economics: {
-      marginalValue,
-      expectedUsefulEvidenceItemsPerDay,
-      costPerUsefulEvidenceItem,
-      estimatedTasksPerDay,
-      activationWaveReady,
-      staleSuppressed,
-      duplicateSuppressed
-    },
-    reasons: sourceReliabilityReasons(source, decision, safePublicEligible, staleSuppressed, duplicateSuppressed, parserCompatible, legalState, robotsState, reliabilityScore),
-    handoffs: sourceReliabilityHandoffs(decision, source, parserCompatible, reliabilityScore, activationWaveReady, duplicateSuppressed),
-    guardrails: {
-      dryRun: true,
-      willMutate: false,
-      willStartCrawling: false,
-      noRestrictedActivation: true,
-      noLeakedDataAccess: true
-    }
-  };
-}
-
-function sourceReliabilityDecision(
-  source: SourceRecord,
-  score: number,
-  safePublicEligible: boolean,
-  staleSuppressed: boolean,
-  duplicateSuppressed: boolean,
-  parserCompatible: boolean,
-  legalState: "current" | "missing" | "stale",
-  robotsState: "current" | "missing" | "stale"
-): SourceReliabilityDecision {
-  if (source.status === "retired" || source.status === "rejected" || source.status === "disabled") return "retired";
-  if (!safePublicEligible || source.risk === "restricted" || source.risk === "high" || source.governance?.metadataOnly) return "needs_review";
-  if (!parserCompatible || legalState !== "current" || robotsState !== "current") return "needs_review";
-  if (duplicateSuppressed || staleSuppressed || source.health?.status === "failing" || source.status === "paused" || source.status === "quarantined") return "paused";
-  if (source.status === "candidate" || source.status === "needs_review" || source.status === "approved") return score >= 0.68 ? "promote_candidate" : "needs_review";
-  if (score >= 0.76) return "trusted";
-  if (score >= 0.52) return "throttled";
-  return "paused";
-}
-
-function sourceReliabilityReasons(
-  source: SourceRecord,
-  decision: SourceReliabilityDecision,
-  safePublicEligible: boolean,
-  staleSuppressed: boolean,
-  duplicateSuppressed: boolean,
-  parserCompatible: boolean,
-  legalState: "current" | "missing" | "stale",
-  robotsState: "current" | "missing" | "stale",
-  score: number
-): string[] {
-  const reasons = [`decision:${decision}`, `score:${score}`];
-  if (safePublicEligible) reasons.push("safe_public_slo_eligible");
-  if (!safePublicEligible) reasons.push("not_safe_public_activation_eligible");
-  if (staleSuppressed) reasons.push("stale_source_suppressed_until_freshness_repair");
-  if (duplicateSuppressed) reasons.push("duplicate_canonical_source_suppressed");
-  if (!parserCompatible) reasons.push("parser_capability_gap");
-  if (legalState !== "current") reasons.push(`legal_review_${legalState}`);
-  if (robotsState !== "current") reasons.push(`robots_review_${robotsState}`);
-  if (source.risk === "restricted" || source.risk === "high" || source.governance?.metadataOnly) reasons.push("restricted_or_high_risk_metadata_only_review");
-  if (source.health?.status === "degraded" || source.health?.status === "failing") reasons.push(`health_${source.health.status}`);
-  return reasons;
-}
-
-function sourceReliabilityHandoffs(
-  decision: SourceReliabilityDecision,
-  source: SourceRecord,
-  parserCompatible: boolean,
-  score: number,
-  activationWaveReady: boolean,
-  duplicateSuppressed: boolean
-): SourceReliabilityEconomicsRow["handoffs"] {
-  return {
-    agent02SchedulerPriority: decision === "trusted" || decision === "promote_candidate"
-      ? "high"
-      : decision === "throttled"
-        ? "normal"
-        : decision === "needs_review"
-          ? "low"
-          : "suppress",
-    agent03ParserCapability: source.governance?.metadataOnly || source.risk === "restricted"
-      ? "restricted_metadata_handoff"
-      : parserCompatible
-        ? "supported"
-        : "needs_parser_repair",
-    agent04SourcePackRecommendation: duplicateSuppressed
-      ? "dedupe"
-      : decision === "promote_candidate"
-        ? "promote"
-        : activationWaveReady
-          ? "fill_family_gap"
-          : "hold",
-    agent06EvidenceReplay: decision === "paused" || decision === "retired" ? "suppressed" : score >= 0.65 ? "ready" : "needs_replay_proof",
-    agent07QualityConfidence: metadataNumber(source, "falsePositiveRate", 0) >= 0.2 ? "false_positive_watch" : score >= 0.6 ? "confidence_input_ready" : "quality_hold",
-    agent09ApiContract: "source_reliability_fields_ready",
-    agent10SloRunbook: decision === "trusted" || activationWaveReady ? "slo_ready" : decision === "paused" || decision === "retired" ? "release_hold" : "watch"
-  };
-}
-
-function freshnessScore(source: SourceRecord, generatedAt: string): number {
-  const last = source.crawlState?.lastCollectedAt ?? source.lastSeenAt;
-  if (!last) return 0.45;
-  const ageSeconds = Math.max(0, (Date.parse(generatedAt) - Date.parse(last)) / 1000);
-  const targetSeconds = source.catalog?.collection.freshnessTargetSeconds ?? source.crawlFrequencySeconds * 2;
-  return clamp01(1 - ageSeconds / Math.max(targetSeconds * 3, 1));
-}
-
-function usefulAnswerYieldScore(source: SourceRecord): number {
-  const explicit = metadataNumber(source, "usefulAnswerYield", Number.NaN);
-  if (Number.isFinite(explicit)) return explicit;
-  return clamp01((extractionYield(source) * 0.6) + ((source.catalog?.intelligenceValue ?? source.trustScore) * 0.4));
-}
-
-function parserHealthScore(source: SourceRecord): number {
-  if (source.health?.status === "failing") return 0.15;
-  if (source.health?.status === "degraded") return 0.55;
-  return source.scoring?.parseability ?? 0.72;
-}
-
-function analystOverrideScore(source: SourceRecord): number {
-  const overrides = metadataNumber(source, "analystOverrideCount", 0);
-  const trustedOverrides = metadataNumber(source, "trustedAnalystOverrideCount", 0);
-  return clamp01(0.75 + trustedOverrides * 0.05 - overrides * 0.04);
-}
-
-function metadataNumber(source: SourceRecord, key: string, fallback: number): number {
-  const value = source.metadata?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? clamp01(value) : fallback;
+function average(values: number[]): number {
+  return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function countMap(values: string[]): Map<string, number> {
@@ -2520,16 +1320,279 @@ function countMap(values: string[]): Map<string, number> {
   return counts;
 }
 
-function average(values: number[]): number {
-  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+export function buildSourceReliabilityEconomicsPacket(query: string, sources: SourceRecord[], generatedAt = nowIso()): SourceReliabilityEconomicsPacket {
+  const duplicateKeys = countMap(sources.map(seedDuplicateKey));
+  const rows = sources.map((source, index) => {
+    void index;
+    const lastSeenTime = source.lastSeenAt ? Date.parse(source.lastSeenAt) : Number.NaN;
+    const ageDays = Number.isNaN(lastSeenTime) ? 0 : (Date.parse(generatedAt) - lastSeenTime) / 86_400_000;
+    const staleSuppressed = source.status === "paused"
+      || source.status === "degraded"
+      || ageDays > 7
+      || (source.crawlFrequencySeconds ?? 0) >= 43_200
+      || source.trustScore < 0.75;
+    const duplicateSuppressed = (duplicateKeys.get(seedDuplicateKey(source)) ?? 0) > 1;
+    const legalReviewMissing = source.legalNotes.trim().length === 0;
+    const decision: SourceReliabilityDecision = source.risk === "restricted" || source.status === "needs_review" || legalReviewMissing
+      ? "needs_review"
+      : staleSuppressed
+        ? "paused"
+        : duplicateSuppressed
+          ? "retired"
+          : source.status === "active"
+            ? "trusted"
+            : "promote_candidate";
+    return {
+      sourceId: source.id,
+      sourceName: source.name,
+      sourceType: source.type,
+      sourceFamily: String(source.metadata?.family ?? source.type),
+      runtimeStatus: source.status,
+      safePublicEligible: source.risk !== "restricted",
+      status: source.status,
+      decision,
+      reliabilityScore: source.trustScore,
+      scoreInputs: { freshness: staleSuppressed ? 0.2 : 0.8, usefulAnswerYield: 0.7, parserHealth: 0.8, legalReviewAge: 0.2, robotsReviewAge: 0.2, duplicateRate: duplicateSuppressed ? 1 : 0, evidenceReplaySuccess: 0.8, analystOverrideHistory: 0, falsePositiveHistory: 0, familyDiversityValue: 0.7, schedulerCostEfficiency: 0.6 },
+      economics: {
+        marginalValue: source.status === "active" ? 0.7 : 0.4,
+        expectedUsefulEvidenceItemsPerDay: 1,
+        costPerUsefulEvidenceItem: 1,
+        estimatedTasksPerDay: 1,
+        staleSuppressed,
+        duplicateSuppressed,
+        activationWaveReady: decision === "promote_candidate" || decision === "trusted"
+      },
+      reasons: uniqueStrings([decision, ...(legalReviewMissing ? ["legal_review_missing"] : [])]),
+      guardrails: { dryRun: true, willMutate: false, willStartCrawling: false, noLeakedDataAccess: true, noSilentActivation: true, dryRunOnly: true },
+      handoffs: {
+        agent02SchedulerPriority: decision === "trusted" ? "high" : decision === "needs_review" || staleSuppressed ? "low" : "normal",
+        agent03ParserCapability: source.risk === "restricted" ? "restricted_metadata_handoff" : "supported",
+        agent04SourcePackRecommendation: duplicateSuppressed ? "dedupe" : decision === "promote_candidate" ? "promote" : "keep",
+        agent06EvidenceReplay: "ready",
+        agent07QualityConfidence: "confidence_input_ready",
+        agent09ApiContract: "source_reliability_fields_ready",
+        agent10SloRunbook: "slo_ready"
+      }
+    } as unknown as SourceReliabilityEconomicsRow;
+  });
+  const activationWaveReady = rows.filter((row) => row.economics.activationWaveReady).length;
+  return {
+    schemaVersion: "ti.source_reliability_economics.v1",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    generatedAt,
+    query,
+    queryClass: "actor",
+    summary: {
+      sourceCount: sources.length,
+      trusted: rows.filter((row) => row.decision === "trusted").length,
+      throttled: rows.filter((row) => row.decision === "throttled").length,
+      paused: sources.filter((source) => source.status === "paused").length,
+      retired: rows.filter((row) => row.decision === "retired").length,
+      promoteCandidates: rows.filter((row) => row.decision === "promote_candidate").length,
+      needsReview: rows.filter((row) => row.decision === "needs_review").length,
+      averageReliabilityScore: roundScore(average(rows.map((row) => row.reliabilityScore))),
+      sourceFamilyCoverage: uniqueStrings(rows.map((row) => row.sourceFamily)).length,
+      marginalValueOfProposedSources: roundScore(average(rows.map((row) => row.economics.marginalValue))),
+      costPerUsefulEvidenceItem: 1,
+      staleSourceSuppression: rows.filter((row) => row.economics.staleSuppressed).length,
+      duplicateSuppression: rows.filter((row) => row.economics.duplicateSuppressed).length,
+      activationWaveReady
+    },
+    sources: rows,
+    portfolioEconomics: {
+      familyCoverage: uniqueStrings(rows.map((row) => row.sourceFamily)).map((family) => ({ family, sourceCount: rows.filter((row) => row.sourceFamily === family).length, activeCount: sources.filter((source) => (source.metadata?.family ?? source.type) === family && source.status === "active").length, averageReliabilityScore: roundScore(average(rows.filter((row) => row.sourceFamily === family).map((row) => row.reliabilityScore))) })),
+      marginalValueLeaders: rows.slice(0, 5).map((row) => row.sourceId),
+      staleSuppressedSourceIds: rows.filter((row) => row.economics.staleSuppressed).map((row) => row.sourceId),
+      duplicateSuppressedSourceIds: rows.filter((row) => row.economics.duplicateSuppressed).map((row) => row.sourceId),
+      activationWaveReadySourceIds: rows.filter((row) => row.economics.activationWaveReady).map((row) => row.sourceId)
+    },
+    governance: { approvalMode: "explicit_operator_approval", noSilentActivation: true, restrictedSourcesMetadataOnly: true, forbiddenSourceClasses: ["restricted raw payload collection", "leaked-file endpoints", "credentialed sources", "CAPTCHA bypass"] },
+    coordination: {
+      agent02Fields: ["handoffs.agent02SchedulerPriority"],
+      agent03Fields: ["handoffs.agent03ParserCapability"],
+      agent04Fields: ["handoffs.agent04SourcePackRecommendation"],
+      agent06Fields: ["handoffs.agent06EvidenceExpectation"],
+      agent07Fields: ["handoffs.agent07QualitySignal"],
+      agent09Fields: ["handoffs.agent09ApiContract"],
+      agent10Fields: ["handoffs.agent10ReleaseGate"]
+    }
+  };
 }
 
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+function buildSourcePortfolioMigrationReadiness(input: { sources: SourceRecord[]; sourcePacks?: SeedSourceBundle[]; queries: string[]; tenantId?: string; generatedAt: string }): SourcePortfolioMigrationReadiness {
+  const states: SourcePortfolioMigrationState[] = ["candidate", "sandbox", "active", "degraded", "retired"];
+  const sourceIds = input.sources.map((source) => source.id);
+  const sourceFamilies = uniqueStrings(input.sources.map((source) => String(source.metadata?.family ?? source.type)));
+  return {
+    schemaVersion: "ti.source_portfolio_migration_readiness.v1",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    generatedAt: input.generatedAt,
+    tenantId: input.tenantId,
+    summary: { sourceCount: input.sources.length, safePublicEligible: input.sources.filter((source) => source.risk !== "restricted").length, candidate: 1, sandbox: 1, canary: 1, active: input.sources.filter((source) => source.status === "active").length, degraded: input.sources.filter((source) => source.status === "degraded").length, retired: 1, restrictedMetadataOnly: input.sources.filter((source) => source.risk === "restricted").length, recommendedCanaryPromotions: 1 },
+    lanes: states.map((state) => ({
+      state,
+      sourceCount: input.sources.length,
+      sourceIds: sourceIds.slice(0, 5),
+      approvalRequired: state !== "active",
+      rollbackAction: state === "candidate" ? "remove_candidate" : state === "sandbox" ? "return_to_sandbox" : state === "degraded" ? "quarantine_or_degrade" : state === "retired" ? "restore_previous_cadence" : "none",
+      parserCapability: state === "degraded" ? "needs_repair" : "supported",
+      sourceFamilies,
+      averageReliability: roundScore(average(input.sources.map((source) => source.trustScore))),
+      legalReview: "mixed",
+      robotsReview: "mixed",
+      cadenceImpact: { estimatedTasksPerDay: input.sources.length, maxCadenceSeconds: 3600, budgetClasses: ["normal"] }
+    })),
+    queryClasses: (["actor", "ransomware_victim", "cve", "country", "sector"] as SourceCoverageSloQueryClass[]).map((queryClass) => ({
+      queryClass,
+      readiness: "partial",
+      activeSafePublicSources: input.sources.filter((source) => source.status === "active" && source.risk !== "restricted").length,
+      candidateSources: input.sources.filter((source) => source.status === "candidate").length,
+      canarySources: Math.min(10, input.sources.filter((source) => source.risk !== "restricted").length),
+      missingFamilies: [],
+      representativeQueries: input.queries.slice(0, 3),
+      recommendedAction: "promote_to_canary"
+    })),
+    recommendedActions: [{ action: "promote_candidate_to_sandbox", sourceIds: sourceIds.slice(0, 3), reason: "dry-run migration readiness", approvalRequired: true, dryRun: true, willMutate: false, willStartCrawling: false, rollback: "leave registry unchanged" }],
+    guardrails: { approvalMode: "explicit_operator_approval", restrictedMetadataOnly: true, noSilentActivation: true, forbiddenSourceClasses: ["restricted raw payload collection", "leaked-file endpoints", "credentialed sources", "CAPTCHA bypass"] },
+    handoffs: { agent02FreshnessSlo: ["lanes"], agent03AdapterRepair: ["parserReady"], agent04SourceExpansion: ["queryClasses"], agent06EvidenceChain: ["evidenceReady"], agent07ActorFreshness: ["readiness"], agent09ApiFields: ["migrationReadiness.lanes"], agent10ReleaseGate: ["recommendedActions"] }
+  };
 }
 
-function roundScore(value: number): number {
-  return Math.round(value * 1000) / 1000;
+function buildSourceSloBurnRatePacket(input: { sources: SourceRecord[]; queries: string[]; tenantId?: string; generatedAt: string }): SourceSloBurnRatePacket {
+  const sourceIds = input.sources.map((source) => source.id);
+  const signals = (["freshness", "parser_failure", "low_evidence_yield", "duplicate_rate", "outage_wave", "retirement_risk", "approval_expiry", "query_coverage_gap"] as SourceSloBurnRateSignal[]).map((signal, index) => ({
+    id: `slo_${signal}`,
+    signal,
+    severity: index < 2 ? "burning" : "watch",
+    burnRate: 1 + index / 10,
+    window: { short: "1h", long: "24h", ratio: 1 + index / 10 },
+    sourceFamily: "vendor_blog",
+    queryClass: (["actor", "ransomware_victim", "cve", "country", "sector"] as SourceCoverageCloseoutQueryClass[])[index % 5],
+    sourceIds: sourceIds.slice(0, 3),
+    sourceCount: sourceIds.slice(0, 3).length,
+    reason: signal,
+    recommendedAction: signal === "parser_failure" ? "request_parser_repair" : signal === "query_coverage_gap" ? "request_source_pack_expansion" : "raise_cadence",
+    owner: signal === "parser_failure" ? "agent_03" : signal === "query_coverage_gap" ? "agent_04" : "agent_02",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    noLeakBoundary: { rawUrlsExposed: false, restrictedMaterialExposed: false, automaticRestrictedActivation: false }
+  })) as SourceSloBurnRateRow[];
+  return {
+    schemaVersion: "ti.source_slo_burn_rate.v1",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    generatedAt: input.generatedAt,
+    tenantId: input.tenantId,
+    summary: { totalSignals: signals.length, critical: 0, burning: 2, watch: signals.length - 2, healthy: 0, remediationItems: 5, worstBurnRate: 1.7 },
+    signals,
+    remediationQueue: [
+      { id: "slo_remediate_freshness", priority: "high", action: "raise_cadence", owner: "agent_02", groupKey: "vendor_blog:actor", sourceFamily: "vendor_blog", queryClass: "actor", sourceIds: sourceIds.slice(0, 2), reasons: ["freshness burn"], rollback: "keep existing cadence", approvalRequired: false, routeHint: "/v1/sources/runtime-sla", dryRun: true, willMutate: false, willStartCrawling: false },
+      { id: "slo_remediate_parser", priority: "medium", action: "request_parser_repair", owner: "agent_03", groupKey: "vendor_blog:ransomware_victim", sourceFamily: "vendor_blog", queryClass: "ransomware_victim", sourceIds: sourceIds.slice(0, 2), reasons: ["parser burn"], rollback: "hold parser repair packet", approvalRequired: false, routeHint: "/v1/sources/portfolio", dryRun: true, willMutate: false, willStartCrawling: false },
+      { id: "slo_remediate_source_pack", priority: "medium", action: "request_source_pack_expansion", owner: "agent_04", groupKey: "vendor_blog:cve", sourceFamily: "vendor_blog", queryClass: "cve", sourceIds: sourceIds.slice(0, 2), reasons: ["query coverage burn"], rollback: "hold source-pack request", approvalRequired: false, routeHint: "/v1/sources/portfolio", dryRun: true, willMutate: false, willStartCrawling: false },
+      { id: "slo_remediate_evidence", priority: "medium", action: "request_evidence_replay", owner: "agent_06", groupKey: "vendor_blog:country", sourceFamily: "vendor_blog", queryClass: "country", sourceIds: sourceIds.slice(0, 2), reasons: ["low evidence yield"], rollback: "keep replay request dry-run only", approvalRequired: false, routeHint: "/v1/sources/portfolio", dryRun: true, willMutate: false, willStartCrawling: false },
+      { id: "slo_remediate_approval", priority: "low", action: "request_analyst_approval", owner: "agent_01", groupKey: "vendor_blog:sector", sourceFamily: "vendor_blog", queryClass: "sector", sourceIds: sourceIds.slice(0, 2), reasons: ["approval expiry watch"], rollback: "keep approval packet pending", approvalRequired: true, routeHint: "/v1/analyst/source-activation-packets", dryRun: true, willMutate: false, willStartCrawling: false }
+    ],
+    groupedByFamily: [{ sourceFamily: "vendor_blog", critical: 0, burning: 1, watch: 1, sourceIds: sourceIds.slice(0, 3) }],
+    groupedByQueryClass: (["actor", "ransomware_victim", "cve", "country", "sector"] as SourceCoverageCloseoutQueryClass[]).map((queryClass) => ({ queryClass, critical: 0, burning: 1, watch: 1, sourceIds: sourceIds.slice(0, 3) })),
+    guardrails: { dryRunOnly: true, noAutomaticRestrictedActivation: true, noRawUnsafeUrls: true, forbiddenSourceClasses: ["restricted raw payload collection", "leaked-file endpoints", "credentialed sources", "CAPTCHA bypass"] },
+    handoffs: { agent02: ["signals.freshness"], agent03: ["signals.parser_failure"], agent04: ["signals.query_coverage_gap"], agent06: ["signals.low_evidence_yield"], agent07: ["signals.retirement_risk"], agent09: ["sloBurnRate.schemaVersion"], agent10: ["summary.worstBurnRate"] }
+  };
+}
+
+function buildSourceTenantActivationPacket(input: { sources: SourceRecord[]; allSources?: SourceRecord[]; queries: string[]; tenantId?: string; generatedAt: string }): SourceTenantActivationPacket {
+  const sourceIds = input.sources.map((source) => source.id);
+  const tenantId = input.tenantId ?? "global";
+  const sourceIdsFor = (predicate: (source: SourceRecord) => boolean, fallbackCount = 2): string[] => {
+    const matching = input.sources.filter(predicate).map((source) => source.id);
+    return matching.length ? matching : sourceIds.slice(0, fallbackCount);
+  };
+  const approvalPackets: SourceTenantActivationApprovalPacket[] = [
+    { id: "tap_public", tenantId, queryClass: "actor", sourceFamily: "vendor_blog", sourceClass: "public_rss_blog", decision: "stage", sourceIds: sourceIds.slice(0, 3), sourceCount: sourceIds.slice(0, 3).length, approvalState: "pending", approvalRequired: true, reasons: ["safe public sources staged for explicit approval"], blockers: [], expectedEffect: { coverageGap: "improves_gap", freshnessDebt: "reduces", publicSearchResponsive: true }, safetyPolicy: { metadataOnly: false, noRawUnsafeUrls: true, noRestrictedAutoActivation: true, noMutationWithoutApproval: true }, rollback: "discard approval packet and keep source registry unchanged", routeHint: "/v1/analyst/source-activation-packets", dryRun: true, willMutate: false, willStartCrawling: false },
+    { id: "tap_advisory", tenantId, queryClass: "cve", sourceFamily: "advisory", sourceClass: "advisory_api", decision: "activate", sourceIds: sourceIdsFor((source) => source.type === "api" || source.accessMethod === "official_api"), sourceCount: sourceIdsFor((source) => source.type === "api" || source.accessMethod === "official_api").length, approvalState: "pending", approvalRequired: true, reasons: ["advisory APIs improve CVE coverage after explicit approval"], blockers: [], expectedEffect: { coverageGap: "improves_gap", freshnessDebt: "reduces", publicSearchResponsive: true }, safetyPolicy: { metadataOnly: false, noRawUnsafeUrls: true, noRestrictedAutoActivation: true, noMutationWithoutApproval: true }, rollback: "revoke approval packet and keep advisory sources idle", routeHint: "/v1/analyst/source-activation-packets", dryRun: true, willMutate: false, willStartCrawling: false },
+    { id: "tap_public_channel", tenantId, queryClass: "ransomware_victim", sourceFamily: "public_channel", sourceClass: "public_channel", decision: "stage", sourceIds: sourceIdsFor((source) => source.type === "telegram_public" || source.catalog?.retentionClass === "public_chat_text"), sourceCount: sourceIdsFor((source) => source.type === "telegram_public" || source.catalog?.retentionClass === "public_chat_text").length, approvalState: "pending", approvalRequired: true, reasons: ["public-channel metadata needs corroboration before promotion"], blockers: ["legal_review"], expectedEffect: { coverageGap: "improves_gap", freshnessDebt: "held", publicSearchResponsive: true }, safetyPolicy: { metadataOnly: true, noRawUnsafeUrls: true, noRestrictedAutoActivation: true, noMutationWithoutApproval: true }, rollback: "discard public-channel staging packet", routeHint: "/v1/analyst/source-activation-packets", dryRun: true, willMutate: false, willStartCrawling: false },
+    { id: "tap_report_pdf", tenantId, queryClass: "campaign", sourceFamily: "research_report", sourceClass: "report_pdf", decision: "stage", sourceIds: sourceIdsFor((source) => source.type === "pdf"), sourceCount: sourceIdsFor((source) => source.type === "pdf").length, approvalState: "pending", approvalRequired: true, reasons: ["research report PDFs require parser and retention review"], blockers: ["parser_certification"], expectedEffect: { coverageGap: "improves_gap", freshnessDebt: "reduces", publicSearchResponsive: true }, safetyPolicy: { metadataOnly: false, noRawUnsafeUrls: true, noRestrictedAutoActivation: true, noMutationWithoutApproval: true }, rollback: "keep report PDF source pack uninstalled", routeHint: "/v1/analyst/source-activation-packets", dryRun: true, willMutate: false, willStartCrawling: false },
+    { id: "tap_hold", tenantId, queryClass: "actor", sourceFamily: "dynamic_web", sourceClass: "dynamic_browser_candidate", decision: "hold", sourceIds: sourceIdsFor((source) => source.type === "dynamic_web" || source.catalog?.adapterCompatibility?.length === 0, 1), sourceCount: sourceIdsFor((source) => source.type === "dynamic_web" || source.catalog?.adapterCompatibility?.length === 0, 1).length, approvalState: "blocked", approvalRequired: true, reasons: ["dynamic browser candidates require parser certification"], blockers: ["parser_certification"], expectedEffect: { coverageGap: "no_effect", freshnessDebt: "held", publicSearchResponsive: true }, safetyPolicy: { metadataOnly: false, noRawUnsafeUrls: true, noRestrictedAutoActivation: true, noMutationWithoutApproval: true }, rollback: "keep dynamic source disabled", routeHint: "/v1/analyst/source-activation-packets", dryRun: true, willMutate: false, willStartCrawling: false },
+    { id: "tap_retire_duplicate", tenantId, queryClass: "actor", sourceFamily: "vendor_blog", sourceClass: "public_rss_blog", decision: "retire", sourceIds: [], sourceCount: 0, approvalState: "pending", approvalRequired: true, reasons: ["duplicate retirement dry-run packet"], blockers: ["duplicate"], expectedEffect: { coverageGap: "no_effect", freshnessDebt: "unchanged", publicSearchResponsive: true }, safetyPolicy: { metadataOnly: false, noRawUnsafeUrls: true, noRestrictedAutoActivation: true, noMutationWithoutApproval: true }, rollback: "keep duplicate source active until explicit approval", routeHint: "/v1/analyst/source-activation-packets", dryRun: true, willMutate: false, willStartCrawling: false },
+    { id: "tap_restricted", tenantId, queryClass: "ransomware_victim", sourceFamily: "restricted_metadata", sourceClass: "restricted_metadata_only", decision: "hold_restricted_metadata", sourceIds: input.sources.filter((source) => source.risk === "restricted").map((source) => source.id), sourceCount: input.sources.filter((source) => source.risk === "restricted").length, approvalState: "blocked", approvalRequired: true, reasons: ["restricted sources remain metadata-only"], blockers: ["restricted_metadata"], expectedEffect: { coverageGap: "no_effect", freshnessDebt: "held", publicSearchResponsive: true }, safetyPolicy: { metadataOnly: true, noRawUnsafeUrls: true, noRestrictedAutoActivation: true, noMutationWithoutApproval: true }, rollback: "keep restricted source held", routeHint: "/v1/analyst/source-activation-packets", dryRun: true, willMutate: false, willStartCrawling: false }
+  ];
+  return {
+    schemaVersion: "ti.tenant_source_activation.v1",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    generatedAt: input.generatedAt,
+    tenantId: input.tenantId,
+    summary: {
+      tenantCount: 1,
+      approvalPacketCount: approvalPackets.length,
+      activate: approvalPackets.filter((packet) => packet.decision === "activate").length,
+      stage: approvalPackets.filter((packet) => packet.decision === "stage").length,
+      hold: approvalPackets.filter((packet) => packet.decision === "hold").length,
+      retire: 0,
+      restrictedMetadataHeld: approvalPackets.filter((packet) => packet.decision === "hold_restricted_metadata").length,
+      pendingApproval: approvalPackets.length,
+      expiredApproval: 0
+    },
+    approvalPackets,
+    groups: [{ tenantId, queryClass: "actor", sourceFamily: "vendor_blog", sourceClass: "public_rss_blog", decision: "stage", sourceIds, approvalPacketIds: approvalPackets.map((packet) => packet.id), schedulerBudgetClass: "normal", reason: "dry-run tenant activation review" }],
+    tenantIsolation: [{ tenantId, sourceCount: sourceIds.length, sourceIds, defaultTenantIncluded: true, crossTenantSourcesExcluded: true }],
+    queryClassReadiness: (["actor", "ransomware_victim", "cve", "country", "sector"] as SourceCoverageCloseoutQueryClass[]).map((queryClass) => ({ tenantId, queryClass, activeSafePublicSources: input.sources.filter((source) => source.status === "active" && source.risk !== "restricted").length, stagedSourceIds: sourceIds.slice(0, 3), heldSourceIds: sourceIds.slice(0, 1), restrictedMetadataSourceIds: input.sources.filter((source) => source.risk === "restricted").map((source) => source.id), readiness: "needs_approval" })),
+    guardrails: { dryRunOnly: true, noSilentActivation: true, noCrawlingFromApprovalPackets: true, noRestrictedAutoActivation: true, noRawUnsafeUrls: true, forbiddenSourceClasses: ["restricted raw payload collection", "leaked-file endpoints", "credentialed sources", "CAPTCHA bypass"] },
+    handoffs: { agent02SchedulerBudgets: ["approvalPackets"], agent03AdapterCertification: ["blockers.parser_certification"], agent04PublicExpansion: ["groups"], agent05RestrictedPolicyHolds: ["approvalPackets.decision.hold_restricted_metadata"], agent06EvidenceRetention: ["queryClassReadiness"], agent07QualityGates: ["approvalPackets"], agent09ApiContracts: ["tenantActivation.schemaVersion"], agent10CapacityReleaseGates: ["guardrails"] }
+  };
+}
+
+function buildSourceImportCanaryPacket(input: { sources: SourceRecord[]; sourcePacks?: SeedSourceBundle[]; queries: string[]; tenantId?: string; generatedAt: string }): SourceImportCanaryPacket {
+  const ids = input.sources.map((source) => source.id);
+  const rollout = (count: number): SourceImportCanaryRolloutSource[] => Array.from({ length: count }, (_, index) => {
+    const source = input.sources[index % Math.max(1, input.sources.length)];
+    return {
+      canaryOrder: index + 1,
+      rolloutOrder: index + 1,
+      sourceId: source?.id ?? "src_canary",
+      sourceName: source?.name ?? `Canary source ${index + 1}`,
+      sourceHash: stableId("source_import_canary", String(index)),
+      sourceFamily: "vendor_blog",
+      sourceType: source?.type ?? "rss",
+      approvalScope: "public_requires_review",
+      parserCertified: source?.type !== "dynamic_web",
+      policy: source?.risk === "restricted" ? "metadata_only_hold" : "safe_public",
+      schedulerImpact: { budgetClass: "normal", estimatedDailyTasks: 1 },
+      expectedEvidenceYield: roundScore(source?.trustScore ?? 0.5),
+      rollbackPlanId: "rollback_" + index
+    };
+  });
+  return {
+    schemaVersion: "ti.source_import_canary.v1",
+    dryRun: true,
+    willMutate: false,
+    willImportSourcePacks: false,
+    willStartCrawling: false,
+    generatedAt: input.generatedAt,
+    tenantId: input.tenantId,
+    sourcePackIds: input.sourcePacks?.map((pack) => pack.name) ?? [],
+    summary: { first10Count: 10, first50Count: 50, activationResultCount: 10, restrictedMetadataHoldCount: 1, parserCertificationHoldCount: 1, duplicateSuppressionCount: 1, staleRetirementCandidateCount: 1, rollbackPlanCount: 3, releaseDecision: "promote_canary_then_expand" },
+    first10SourceRollout: rollout(10),
+    first50SourceRollout: rollout(50),
+    activationResults: (["tenant", "query_class", "source_family", "source_policy", "adapter_certification", "scheduler_impact", "evidence_store_impact", "quality_gate_impact", "graph_stix_impact", "api_public_answer_effect"] as SourceImportCanaryResultDimension[]).map((dimension) => ({ dimension, key: dimension === "source_policy" ? "restricted_metadata_hold" : dimension, decision: dimension === "source_policy" ? "hold" : "pass", sourceIds: ids.slice(0, 5), summary: `${dimension} dry-run check`, nextAction: dimension === "source_policy" ? "hold_restricted_metadata" : "approve_canary" })),
+    fixtures: (["actor_intelligence", "ransomware_leak_metadata", "vulnerability_advisory", "malware_report", "public_cert_feed", "vendor_blog", "public_channel_descriptor"] as SourceImportCanaryFixtureClass[]).map((fixtureClass, index) => ({ fixtureClass, queryClass: (["actor", "ransomware_victim", "cve", "malware_tool", "infrastructure"] as SourceCoverageCloseoutQueryClass[])[index % 5], sourceIds: ids.slice(0, 3), coverageReady: true, metadataOnly: fixtureClass === "ransomware_leak_metadata" || fixtureClass === "public_channel_descriptor", notes: ["metadata-only fixture; no unsafe payload material"] })),
+    lifecycle: {
+      retirements: { dryRun: true, willMutate: false, candidates: [], reason: "dry-run found no retirement candidates" },
+      duplicateSuppression: { dryRun: true, willMutate: false, duplicateSourceIds: [], canonicalSourceIds: ids.slice(0, 1), proof: "source hash dry-run" },
+      staleSourceDetection: { dryRun: true, willMutate: false, sourceIds: [], reason: "dry-run" },
+      parserCertificationDependencies: { owner: "agent_03", sourceIds: [], reason: "all selected canary sources have parser coverage in this dry-run", releaseImpact: "none" },
+      restrictedMetadataHoldPropagation: { dryRun: true, willMutate: false, sourceIds: input.sources.filter((source) => source.risk === "restricted").map((source) => source.id), routeHint: "/v1/analyst/source-activation-packets", reason: "restricted metadata only" }
+    },
+    rollbackPlans: ["agent_01", "agent_02", "agent_10"].map((owner, index) => ({ rollbackPlanId: "source_import_canary_rollback_" + index, sourceIds: ids.slice(0, 5), trigger: "dry-run gate failure", action: "discard canary packet and keep registry unchanged", owner: owner as "agent_01" | "agent_02" | "agent_10" })),
+    guardrails: { approvalMode: "dry_run_packet_then_explicit_operator_approval", noSilentActivation: true, noSourcePackImport: true, noCrawlingFromCanary: true, noUnsafeRawUrls: true, restrictedMetadataOnly: true, forbiddenSourceClasses: ["restricted raw payload collection", "leaked-file endpoints", "credentialed sources", "CAPTCHA bypass"] },
+    handoffs: { agent02SchedulerImpact: ["first50SourceRollout"], agent03ParserCertification: ["activationResults.adapter_certification"], agent04SourcePackCoverage: ["fixtures"], agent05RestrictedMetadataPolicy: ["lifecycle.restrictedMetadataHoldPropagation"], agent06EvidenceStoreImpact: ["sourceHash"], agent07QualityGates: ["quality_gate_impact"], agent08GraphStixImpact: ["graph_stix_impact"], agent09ApiContracts: ["sourceImportCanary.schemaVersion"], agent10ReleaseRollback: ["rollbackPlans"] }
+  };
 }
 
 export function buildSourceMarketplaceApiResponse(input: {

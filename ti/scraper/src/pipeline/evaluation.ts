@@ -319,6 +319,95 @@ export interface QualityRuntimeFixtureRow {
   noLeak: true;
 }
 
+export type ProgramBdRowQualityMetric =
+  | "summary_specificity"
+  | "source_support"
+  | "recency"
+  | "false_victim_risk"
+  | "legal_proceeding_detection"
+  | "actor_alias_resolution"
+  | "ttp_evidence_support"
+  | "source_family_diversity"
+  | "contradiction_flags"
+  | "actionability_correctness";
+
+export interface ProgramBdWatchlistQualityFixtureRow {
+  id: string;
+  actor: string;
+  actorClass: "state_actor" | "ransomware" | "cybercrime" | "unknown";
+  queryClass: QualityRuntimeQueryClass;
+  expectedPublicState: QualityRuntimeFixtureRow["expectedPublicState"];
+  requiredMetrics: ProgramBdRowQualityMetric[];
+  sourceFamilyMix: Array<"vendor_blog" | "rss_security_feed" | "advisory" | "public_channel" | "government_advisory" | "synthetic_guardrail">;
+  regressionFocus: Array<
+    | "alias_collision"
+    | "false_victim"
+    | "legal_proceeding"
+    | "stale_repost"
+    | "generic_summary"
+    | "uncited_claim"
+    | "single_source_overconfidence"
+    | "unknown_actor_fallback"
+    | "not_indexed_fallback"
+    | "ttp_without_evidence"
+  >;
+  gatePacket: {
+    status: "pass" | "warn" | "hold";
+    failingFields: ProgramBdRowQualityMetric[];
+    remediationAction: string;
+    downstreamEligibility: {
+      publicUi: boolean;
+      apifyOutput: boolean;
+      graphExport: boolean;
+      stixExport: boolean;
+    };
+  };
+  provenance: {
+    fixtureIds: string[];
+    evidenceRefs: string[];
+    redacted: true;
+  };
+  noLeak: true;
+}
+
+export interface ProgramBdQualityEvaluationPackDto {
+  schemaVersion: "ti.program_bd_quality_evaluation_pack.v1";
+  generatedAt: string;
+  summary: {
+    defaultWatchlistActorCount: number;
+    unknownFixtureCount: number;
+    passCount: number;
+    warningCount: number;
+    holdCount: number;
+    routeVisibleGatePacket: true;
+  };
+  rowMetricNames: ProgramBdRowQualityMetric[];
+  watchlistFixtures: ProgramBdWatchlistQualityFixtureRow[];
+  regressionGuardrails: Array<{
+    id: string;
+    status: "pass" | "warn" | "hold";
+    prevents: string;
+    remediationAction: string;
+  }>;
+  routing: {
+    agent07ExtractorFixtures: string[];
+    agent09ApiGatePacket: string[];
+    agent10ReleaseGate: string[];
+  };
+  policy: {
+    analystApprovalRequired: true;
+    preservesUncertainty: true;
+    noAutomaticPromotion: true;
+    noAutonomousScraping: true;
+  };
+  safety: {
+    rawEvidenceExposed: false;
+    sourceUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    objectKeysExposed: false;
+  };
+}
+
 export interface QualityRuntimeValueGatesDto {
   schemaVersion: "ti.quality_runtime_value_gates.v1";
   generatedAt: string;
@@ -348,6 +437,7 @@ export interface QualityRuntimeValueGatesDto {
     remediationOwner: "Agent 01" | "Agent 03" | "Agent 04" | "Agent 07" | "Agent 10";
   }>;
   fixtureCorpus: QualityRuntimeFixtureRow[];
+  programBdQualityEvaluationPack: ProgramBdQualityEvaluationPackDto;
   remediationHandoffs: {
     agent01SourceActivation: string[];
     agent02SchedulerCadence: string[];
@@ -417,6 +507,10 @@ export function buildQualityRuntimeValueGatesDto(input: {
   const passCount = gates.filter((gate) => gate.status === "pass").length;
   const analystUsefulnessScore = Number((gates.reduce((total, gate) => total + gate.score * gate.weight, 0) / gates.reduce((total, gate) => total + gate.weight, 0)).toFixed(2));
   const decision = unknownQuery ? "searching" : holdCount > 0 ? "hold" : warningCount > 0 ? "partial" : "ready";
+  const programBdQualityEvaluationPack = buildProgramBdQualityEvaluationPackDto({
+    generatedAt,
+    ctiEvaluationDatasetPack: input.ctiEvaluationDatasetPack
+  });
 
   return {
     schemaVersion: "ti.quality_runtime_value_gates.v1",
@@ -441,6 +535,7 @@ export function buildQualityRuntimeValueGatesDto(input: {
     },
     sourceAtlasFeedback: qualityRuntimeSourceAtlasFeedback(queryClass),
     fixtureCorpus: qualityRuntimeFixtureCorpus(input.ctiEvaluationDatasetPack),
+    programBdQualityEvaluationPack,
     remediationHandoffs: {
       agent01SourceActivation: ["prioritize approved public source families that improve query-class coverage and source diversity"],
       agent02SchedulerCadence: ["increase cadence only for high-value fresh-evidence gaps and preserve queue limits"],
@@ -480,6 +575,58 @@ export function buildQualityRuntimeValueGatesDto(input: {
   };
 }
 
+export function buildProgramBdQualityEvaluationPackDto(input: {
+  generatedAt?: string;
+  ctiEvaluationDatasetPack?: { fixtures?: Array<{ id?: string; scenario?: string; evidenceIds?: string[] }> };
+} = {}): ProgramBdQualityEvaluationPackDto {
+  const generatedAt = input.generatedAt ?? "2026-05-24T00:00:00.000Z";
+  const watchlistFixtures = programBdWatchlistFixtures(input.ctiEvaluationDatasetPack);
+  const passCount = watchlistFixtures.filter((fixture) => fixture.gatePacket.status === "pass").length;
+  const warningCount = watchlistFixtures.filter((fixture) => fixture.gatePacket.status === "warn").length;
+  const holdCount = watchlistFixtures.filter((fixture) => fixture.gatePacket.status === "hold").length;
+
+  return {
+    schemaVersion: "ti.program_bd_quality_evaluation_pack.v1",
+    generatedAt,
+    summary: {
+      defaultWatchlistActorCount: watchlistFixtures.filter((fixture) => fixture.actorClass !== "unknown").length,
+      unknownFixtureCount: watchlistFixtures.filter((fixture) => fixture.actorClass === "unknown").length,
+      passCount,
+      warningCount,
+      holdCount,
+      routeVisibleGatePacket: true
+    },
+    rowMetricNames: PROGRAM_BD_ROW_METRICS,
+    watchlistFixtures,
+    regressionGuardrails: [
+      regressionGuardrail("person_treated_as_victim", "hold", "person or legal-case subject promoted as victim/company", "send victim field to analyst review and suppress public victim chip"),
+      regressionGuardrail("actor_alias_mistaken_as_victim", "hold", "actor alias or ransomware brand extracted as victim", "route alias to entity-resolution workbench before graph/STIX export"),
+      regressionGuardrail("not_indexed_fallback", "hold", "not-indexed fallback appearing as analyst summary", "return Searching or partial with explicit source gap"),
+      regressionGuardrail("stale_2025_only_activity", "hold", "stale activity described as latest activity", "expire stale claim until fresh captured evidence is replayed"),
+      regressionGuardrail("headline_repeated_as_summary", "warn", "source headline repeated as summary without extracted facts", "require summary specificity and source-support metrics to pass"),
+      regressionGuardrail("raw_unsafe_url_leak", "hold", "unsafe source URL or object locator exposed", "redact locator and fail no-leak gate"),
+      regressionGuardrail("generic_non_cti_web_result", "warn", "generic web result ranked as CTI evidence", "down-rank source and require parser/source-family support")
+    ],
+    routing: {
+      agent07ExtractorFixtures: watchlistFixtures.map((fixture) => fixture.id),
+      agent09ApiGatePacket: watchlistFixtures.filter((fixture) => fixture.gatePacket.status !== "pass").map((fixture) => fixture.id),
+      agent10ReleaseGate: watchlistFixtures.filter((fixture) => fixture.gatePacket.status === "hold").map((fixture) => fixture.id)
+    },
+    policy: {
+      analystApprovalRequired: true,
+      preservesUncertainty: true,
+      noAutomaticPromotion: true,
+      noAutonomousScraping: true
+    },
+    safety: {
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
+}
+
 function qualityGate(
   name: QualityRuntimeGateName,
   status: QualityRuntimeValueGateRow["status"],
@@ -491,6 +638,158 @@ function qualityGate(
   weight = 1
 ): QualityRuntimeValueGateRow {
   return { name, status, score, weight, evidenceRefs, reasons, publicAnswerEffect, remediationOwners };
+}
+
+const PROGRAM_BD_ROW_METRICS: ProgramBdRowQualityMetric[] = [
+  "summary_specificity",
+  "source_support",
+  "recency",
+  "false_victim_risk",
+  "legal_proceeding_detection",
+  "actor_alias_resolution",
+  "ttp_evidence_support",
+  "source_family_diversity",
+  "contradiction_flags",
+  "actionability_correctness"
+];
+
+const PROGRAM_BD_WATCHLIST_ACTORS: Array<{
+  actor: string;
+  actorClass: ProgramBdWatchlistQualityFixtureRow["actorClass"];
+  expectedPublicState: ProgramBdWatchlistQualityFixtureRow["expectedPublicState"];
+  sourceFamilyMix: ProgramBdWatchlistQualityFixtureRow["sourceFamilyMix"];
+  regressionFocus: ProgramBdWatchlistQualityFixtureRow["regressionFocus"];
+}> = [
+  { actor: "APT29", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "government_advisory", "rss_security_feed"], regressionFocus: ["alias_collision", "stale_repost", "single_source_overconfidence"] },
+  { actor: "APT28", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "advisory", "rss_security_feed"], regressionFocus: ["alias_collision", "uncited_claim"] },
+  { actor: "APT42", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "government_advisory", "rss_security_feed"], regressionFocus: ["legal_proceeding", "false_victim", "stale_repost"] },
+  { actor: "Sandworm", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["government_advisory", "vendor_blog", "rss_security_feed"], regressionFocus: ["stale_repost", "ttp_without_evidence"] },
+  { actor: "Volt Typhoon", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["government_advisory", "vendor_blog", "advisory"], regressionFocus: ["single_source_overconfidence", "ttp_without_evidence", "generic_summary"] },
+  { actor: "Lazarus", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "advisory", "rss_security_feed"], regressionFocus: ["alias_collision", "uncited_claim"] },
+  { actor: "Turla", actorClass: "state_actor", expectedPublicState: "hold", sourceFamilyMix: ["vendor_blog", "rss_security_feed"], regressionFocus: ["stale_repost", "single_source_overconfidence"] },
+  { actor: "MuddyWater", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "government_advisory", "rss_security_feed"], regressionFocus: ["alias_collision", "generic_summary"] },
+  { actor: "Mustang Panda", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "rss_security_feed"], regressionFocus: ["alias_collision", "uncited_claim"] },
+  { actor: "Kimsuky", actorClass: "state_actor", expectedPublicState: "partial", sourceFamilyMix: ["government_advisory", "vendor_blog", "rss_security_feed"], regressionFocus: ["alias_collision", "legal_proceeding"] },
+  { actor: "LockBit", actorClass: "ransomware", expectedPublicState: "hold", sourceFamilyMix: ["rss_security_feed", "vendor_blog", "public_channel"], regressionFocus: ["false_victim", "legal_proceeding", "single_source_overconfidence"] },
+  { actor: "Akira", actorClass: "ransomware", expectedPublicState: "hold", sourceFamilyMix: ["rss_security_feed", "vendor_blog", "public_channel"], regressionFocus: ["false_victim", "single_source_overconfidence", "uncited_claim"] },
+  { actor: "Clop", actorClass: "ransomware", expectedPublicState: "hold", sourceFamilyMix: ["advisory", "rss_security_feed", "vendor_blog"], regressionFocus: ["false_victim", "stale_repost"] },
+  { actor: "ALPHV", actorClass: "ransomware", expectedPublicState: "hold", sourceFamilyMix: ["rss_security_feed", "vendor_blog", "public_channel"], regressionFocus: ["alias_collision", "false_victim"] },
+  { actor: "Black Basta", actorClass: "ransomware", expectedPublicState: "hold", sourceFamilyMix: ["rss_security_feed", "vendor_blog"], regressionFocus: ["false_victim", "generic_summary"] },
+  { actor: "Play", actorClass: "ransomware", expectedPublicState: "hold", sourceFamilyMix: ["rss_security_feed", "vendor_blog"], regressionFocus: ["false_victim", "uncited_claim"] },
+  { actor: "Scattered Spider", actorClass: "cybercrime", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "rss_security_feed", "public_channel"], regressionFocus: ["alias_collision", "legal_proceeding", "single_source_overconfidence"] },
+  { actor: "FIN7", actorClass: "cybercrime", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "advisory", "rss_security_feed"], regressionFocus: ["alias_collision", "stale_repost"] },
+  { actor: "TA505", actorClass: "cybercrime", expectedPublicState: "partial", sourceFamilyMix: ["vendor_blog", "rss_security_feed"], regressionFocus: ["alias_collision", "stale_repost"] },
+  { actor: "ShinyHunters", actorClass: "cybercrime", expectedPublicState: "hold", sourceFamilyMix: ["rss_security_feed", "public_channel"], regressionFocus: ["alias_collision", "legal_proceeding", "false_victim"] },
+  { actor: "Random Actor", actorClass: "unknown", expectedPublicState: "searching", sourceFamilyMix: ["synthetic_guardrail"], regressionFocus: ["unknown_actor_fallback", "generic_summary"] },
+  { actor: "Crimson Pineapple", actorClass: "unknown", expectedPublicState: "searching", sourceFamilyMix: ["synthetic_guardrail"], regressionFocus: ["unknown_actor_fallback", "not_indexed_fallback"] }
+];
+
+function programBdWatchlistFixtures(
+  input?: { fixtures?: Array<{ id?: string; scenario?: string; evidenceIds?: string[] }> }
+): ProgramBdWatchlistQualityFixtureRow[] {
+  return PROGRAM_BD_WATCHLIST_ACTORS.map((row) => {
+    const status = row.expectedPublicState === "hold"
+      ? "hold"
+      : row.expectedPublicState === "searching"
+        ? "pass"
+        : row.regressionFocus.includes("single_source_overconfidence") || row.regressionFocus.includes("stale_repost")
+          ? "warn"
+          : "pass";
+    const failingFields = programBdFailingFields(row.regressionFocus, status);
+    const fixtureIds = relatedProgramBdFixtureIds(row, input);
+    return {
+      id: `program_bd_${slug(row.actor)}`,
+      actor: row.actor,
+      actorClass: row.actorClass,
+      queryClass: row.actorClass === "ransomware" ? "victim_company" : row.actorClass === "unknown" ? "unknown" : "actor",
+      expectedPublicState: row.expectedPublicState,
+      requiredMetrics: PROGRAM_BD_ROW_METRICS,
+      sourceFamilyMix: row.sourceFamilyMix,
+      regressionFocus: row.regressionFocus,
+      gatePacket: {
+        status,
+        failingFields,
+        remediationAction: programBdRemediationAction(row.regressionFocus, status),
+        downstreamEligibility: {
+          publicUi: status !== "hold",
+          apifyOutput: status !== "hold" || row.actorClass === "ransomware",
+          graphExport: status === "pass",
+          stixExport: status === "pass" && row.actorClass !== "unknown"
+        }
+      },
+      provenance: {
+        fixtureIds,
+        evidenceRefs: fixtureIds.map((id) => `ev_${id}`),
+        redacted: true
+      },
+      noLeak: true
+    };
+  });
+}
+
+function programBdFailingFields(
+  regressionFocus: ProgramBdWatchlistQualityFixtureRow["regressionFocus"],
+  status: ProgramBdWatchlistQualityFixtureRow["gatePacket"]["status"]
+): ProgramBdRowQualityMetric[] {
+  if (status === "pass") return [];
+  const fields = new Set<ProgramBdRowQualityMetric>();
+  if (regressionFocus.includes("alias_collision") || regressionFocus.includes("unknown_actor_fallback")) fields.add("actor_alias_resolution");
+  if (regressionFocus.includes("false_victim")) fields.add("false_victim_risk");
+  if (regressionFocus.includes("legal_proceeding")) fields.add("legal_proceeding_detection");
+  if (regressionFocus.includes("stale_repost")) fields.add("recency");
+  if (regressionFocus.includes("single_source_overconfidence") || regressionFocus.includes("uncited_claim")) fields.add("source_support");
+  if (regressionFocus.includes("single_source_overconfidence")) fields.add("source_family_diversity");
+  if (regressionFocus.includes("ttp_without_evidence")) fields.add("ttp_evidence_support");
+  if (regressionFocus.includes("generic_summary") || regressionFocus.includes("not_indexed_fallback")) fields.add("summary_specificity");
+  if (fields.size === 0) fields.add("actionability_correctness");
+  return [...fields];
+}
+
+function programBdRemediationAction(
+  regressionFocus: ProgramBdWatchlistQualityFixtureRow["regressionFocus"],
+  status: ProgramBdWatchlistQualityFixtureRow["gatePacket"]["status"]
+): string {
+  if (status === "pass") return "allow row with provenance and uncertainty labels";
+  if (regressionFocus.includes("false_victim") || regressionFocus.includes("legal_proceeding")) {
+    return "hold victim/company fields for analyst review and keep Apify row caveated";
+  }
+  if (regressionFocus.includes("stale_repost")) return "request fresh source replay before latest-activity wording";
+  if (regressionFocus.includes("single_source_overconfidence") || regressionFocus.includes("uncited_claim")) {
+    return "keep public answer partial until another approved source family corroborates the claim";
+  }
+  if (regressionFocus.includes("unknown_actor_fallback") || regressionFocus.includes("not_indexed_fallback")) {
+    return "return Searching with source-gap reasons and no default actor facts";
+  }
+  return "route row to Agent 07 quality review before promotion";
+}
+
+function relatedProgramBdFixtureIds(
+  row: { actor: string; actorClass: ProgramBdWatchlistQualityFixtureRow["actorClass"] },
+  input?: { fixtures?: Array<{ id?: string; scenario?: string; evidenceIds?: string[] }> }
+): string[] {
+  const scenario = row.actorClass === "unknown"
+    ? "unknown_actor_searching_only"
+    : row.actorClass === "ransomware"
+      ? "victim_extraction"
+      : "actor_extraction";
+  const ids = input?.fixtures
+    ?.filter((fixture) => fixture.scenario === scenario)
+    .map((fixture) => fixture.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0) ?? [];
+  return ids.length > 0 ? ids : [`cti_eval_${scenario}`];
+}
+
+function regressionGuardrail(
+  id: string,
+  status: "pass" | "warn" | "hold",
+  prevents: string,
+  remediationAction: string
+): ProgramBdQualityEvaluationPackDto["regressionGuardrails"][number] {
+  return { id, status, prevents, remediationAction };
+}
+
+function slug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 function classifyQualityRuntimeQuery(query: string): QualityRuntimeQueryClass {

@@ -186,6 +186,53 @@ describe("api v1", () => {
     expect(JSON.stringify(response).toLowerCase()).not.toContain("cookie=");
   });
 
+  test("exposes live product SLO dashboard for Agent 10 revenue monitoring", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    store.saveSource(source({
+      id: "src_product_slo",
+      status: "active",
+      crawlState: { lastCollectedAt: "2026-06-20T11:00:00.000Z", retryCount: 0 }
+    }));
+    store.saveRun({
+      id: "run_product_slo",
+      planId: "plan_product_slo",
+      requestId: "req_product_slo",
+      status: "completed",
+      createdAt: "2026-06-20T11:59:55.000Z",
+      startedAt: "2026-06-20T11:59:56.000Z",
+      updatedAt: "2026-06-20T11:59:56.000Z",
+      completedAt: "2026-06-20T11:59:56.000Z",
+      taskCount: 1,
+      reviewTaskCount: 0,
+      rejectedSourceCount: 0,
+      captureCount: 29,
+      incidentCount: 1
+    });
+    store.saveCapture(fixtureCapture({
+      id: "cap_product_slo",
+      sourceId: "src_product_slo",
+      collectedAt: "2026-06-20T11:01:00.000Z",
+      metadata: { claimClusterId: "claim_product_slo" }
+    }));
+
+    const response = await body(await handleApiRequest(api("/v1/ops/product-slo?generatedAt=2026-06-20T12:00:00.000Z&proofMode=inspur&actorBuildId=build_live&actorRunId=run_live&actorDatasetId=ds_live&actorStatus=succeeded&actorQueryCount=3&actorRowCount=29&actorUsefulRowCount=12"), { store, frontier }));
+
+    expect(response.schemaVersion).toBe("ti.live_product_slo_dashboard.v1");
+    expect(response.route).toBe("/v1/ops/product-slo");
+    expect((response.dashboard as { proofMode: string }).proofMode).toBe("inspur");
+    expect((response.metrics as { apiFirstResponseLatencyMs: { p95: number } }).apiFirstResponseLatencyMs.p95).toBe(1000);
+    expect((response.metrics as { actorRunSuccessRate: { value: number } }).actorRunSuccessRate.value).toBe(1);
+    expect((response.apifyLaunchExperiment as { uniqueUsers: null }).uniqueUsers).toBeNull();
+    expect((response.apifyLaunchExperiment as { unknowns: string[] }).unknowns).toContain("grossPpeRevenueUsd");
+    expect((response.deploymentProof as { actorBuildId: string }).actorBuildId).toBe("build_live");
+    expect((response.resourceGuardrails as { scraperTargetRamGb: number }).scraperTargetRamGb).toBe(96);
+
+    const contracts = await body(await handleApiRequest(api("/v1/contracts"), { store, frontier }));
+    expect((contracts.routeInventory as { routes: Array<{ path: string }> }).routes.some((route) => route.path === "/v1/ops/product-slo")).toBe(true);
+    expect(JSON.stringify((contracts.surfaces as Array<{ name: string }>).find((surface) => surface.name === "ops"))).toContain("live_product_slo_dashboard");
+  });
+
   test("reviews claim ledger entries through metadata-only API actions", async () => {
     const store = new InMemoryScraperStore();
     const now = "2026-05-24T12:30:00.000Z";
@@ -1335,6 +1382,21 @@ describe("api v1", () => {
       noLeak: { forbiddenPayloadFields: string[]; rule: string };
       proofCommands: string[];
     };
+    const apifyStoreReadiness = contract.apifyStoreReadiness as {
+      schemaVersion: string;
+      status: string;
+      actor: { name: string; version: string; categories: string[]; outputContract: string };
+      storeReadiness: { listingFields: Record<string, string>; knownBlockers: string[]; readinessDecision: string; latestProofRun: { runId: string; datasetId: string } };
+      defaultSampleInput: { queries: string[]; maxRowsPerQuery: number; includeActivity: boolean; includeTargets: boolean; includeTtps: boolean; includeSources: boolean; includeDatasets: boolean; includeCoverageGaps: boolean };
+      sampleOutputDtos: Array<{ query: string; rowType: string; rawContentIncluded: boolean; safety: { metadataOnly: boolean; credentialsIncluded: boolean; stolenFilesIncluded: boolean; privateContentIncluded: boolean; actorInteraction: boolean } }>;
+      publicProofDtos: Array<{ schemaVersion: string; runId: string; buildVersion: string; datasetId: string; query: string; rowCount: number; freshness: string; sourceFamilies: string[]; safetyContract: string; noLeakProof: Record<string, unknown> }>;
+      frontendApiCompatibility: { states: Array<{ state: string; copy: string; refreshAfterSeconds: number; preservePriorAnswer: boolean }>; stableFields: string[]; unknownActorCopy: string; emptyDeltaRule: string };
+      pricingHooks: { model: string; unitEvent: string; payoutStatus: string; revenueTelemetryHandoff: string };
+      marketplaceGuardrails: { noPlaceholderDefaults: boolean; noHelloWorldSampleInput: boolean; noGenericCategories: boolean; noAiFlavoredCopy: boolean; safeOutputOnly: boolean; bannedListingTerms: string[] };
+      safetyContract: { outputContract: string; rawContentIncluded: boolean; metadataOnly: boolean; forbiddenFields: string[] };
+      proofCommands: string[];
+      noLeakProof: { forbiddenPatternGate: string; proofFields: string[] };
+    };
     const darkwebIndexFrontendContract = contract.darkwebIndexFrontendContract as {
       schemaVersion: string;
       status: string;
@@ -1402,6 +1464,7 @@ describe("api v1", () => {
       clientGenerationFreeze: typeof clientGenerationFreeze;
       frontendProgressiveUpdateContract: typeof frontendProgressiveUpdateContract;
       scraperNativeReplacementReadiness: typeof scraperNativeReplacementReadiness;
+      apifyStoreReadiness: typeof apifyStoreReadiness;
       darkwebIndexFrontendContract: typeof darkwebIndexFrontendContract;
       sourceAtlasFrontendContract: typeof sourceAtlasFrontendContract;
       publicCanaryControlPlane: {
@@ -2605,6 +2668,113 @@ describe("api v1", () => {
       "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
     ]));
     expect(JSON.stringify(scraperNativeReplacementReadiness)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
+    expect(apifyStoreReadiness).toMatchObject({
+      schemaVersion: "ti.apify_store_readiness.v1",
+      status: "buyer_ready_with_external_payout_blocker"
+    });
+    expect(apifyStoreReadiness.actor).toMatchObject({
+      name: "public-threat-actor-monitor",
+      version: "0.6",
+      outputContract: "safe_metadata_only.v1"
+    });
+    expect(apifyStoreReadiness.actor.categories).toEqual(["SECURITY", "MONITORING"]);
+    expect(apifyStoreReadiness.defaultSampleInput).toEqual({
+      queries: [
+        "APT29",
+        "APT28",
+        "APT42",
+        "Lazarus Group",
+        "Volt Typhoon",
+        "Salt Typhoon",
+        "Turla",
+        "Sandworm",
+        "Kimsuky",
+        "MuddyWater",
+        "Charming Kitten",
+        "Scattered Spider",
+        "LockBit",
+        "Clop",
+        "Akira",
+        "Black Basta",
+        "Play",
+        "RansomHub",
+        "ALPHV",
+        "Hunters International"
+      ],
+      maxRowsPerQuery: 25,
+      includeActivity: true,
+      includeTargets: true,
+      includeTtps: true,
+      includeSources: true,
+      includeDatasets: false,
+      includeCoverageGaps: true
+    });
+    expect(apifyStoreReadiness.storeReadiness.listingFields).toMatchObject({
+      title: "complete",
+      readme: "complete",
+      changelog: "complete",
+      exampleInput: "complete",
+      pricingModel: "complete",
+      payoutMonetizationStatus: "external_verification_required"
+    });
+    expect(apifyStoreReadiness.storeReadiness.knownBlockers).toEqual(expect.arrayContaining([
+      "apify_beneficiary_and_payout_method_not_stored_in_repo",
+      "public_apify_build_id_and_dataset_id_must_be_refreshed_after_publish"
+    ]));
+    expect(apifyStoreReadiness.publicProofDtos.map((proof) => proof.query)).toEqual(expect.arrayContaining([
+      "APT29",
+      "Volt Typhoon",
+      "Scattered Spider",
+      "LockBit"
+    ]));
+    for (const proof of apifyStoreReadiness.publicProofDtos) {
+      expect(proof.schemaVersion).toBe("ti.public_proof_dto.v1");
+      expect(proof.runId).toMatch(/^apify_sample_run_/);
+      expect(proof.datasetId).toMatch(/^apify_sample_dataset_/);
+      expect(proof.rowCount).toBeGreaterThan(0);
+      expect(proof.safetyContract).toBe("safe_metadata_only.v1");
+      expect(proof.sourceFamilies.length).toBeGreaterThan(0);
+    }
+    for (const row of apifyStoreReadiness.sampleOutputDtos) {
+      expect(row.rawContentIncluded).toBe(false);
+      expect(row.safety).toMatchObject({
+        metadataOnly: true,
+        credentialsIncluded: false,
+        stolenFilesIncluded: false,
+        privateContentIncluded: false,
+        actorInteraction: false
+      });
+    }
+    expect(apifyStoreReadiness.frontendApiCompatibility.states.map((state) => state.state)).toEqual(expect.arrayContaining([
+      "queued",
+      "searching",
+      "partial",
+      "ready",
+      "empty_delta"
+    ]));
+    expect(apifyStoreReadiness.frontendApiCompatibility.unknownActorCopy).toBe("Searching");
+    expect(apifyStoreReadiness.frontendApiCompatibility.emptyDeltaRule).toContain("preserve the last safe answer");
+    expect(apifyStoreReadiness.pricingHooks).toMatchObject({
+      model: "pay_per_dataset_row",
+      unitEvent: "apify-default-dataset-item",
+      payoutStatus: "not_available_without_external_apify_account_verification"
+    });
+    expect(apifyStoreReadiness.marketplaceGuardrails).toMatchObject({
+      noPlaceholderDefaults: true,
+      noHelloWorldSampleInput: true,
+      noGenericCategories: true,
+      noAiFlavoredCopy: true,
+      safeOutputOnly: true
+    });
+    expect(apifyStoreReadiness.proofCommands).toEqual(expect.arrayContaining([
+      "bun run check:apify-threat-actor-monitor",
+      "bun run smoke:apify-threat-actor-monitor",
+      "bun run check:apify-publication",
+      "TI_SEARCH_READINESS_QUERY='Volt Typhoon' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Scattered Spider' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY=LockBit bun run check:scraper-native-search"
+    ]));
+    expect(JSON.stringify(apifyStoreReadiness)).not.toMatch(/authorization:|cookie=|password=|bearer_token_value|raw_body_value|restricted_raw_url_value|object_key_value|leaked_row_value|webhook_secret_value/i);
     expect(darkwebIndexFrontendContract).toMatchObject({
       schemaVersion: "ti.darkweb_index_frontend_contract.v1",
       status: "frozen_metadata_only_frontend_contract",
@@ -2671,6 +2841,7 @@ describe("api v1", () => {
     expect(semantics.clientGenerationFreeze).toEqual(clientGenerationFreeze);
     expect(semantics.frontendProgressiveUpdateContract).toEqual(frontendProgressiveUpdateContract);
     expect(semantics.scraperNativeReplacementReadiness).toEqual(scraperNativeReplacementReadiness);
+    expect(semantics.apifyStoreReadiness).toEqual(apifyStoreReadiness);
     expect(semantics.darkwebIndexFrontendContract).toEqual(darkwebIndexFrontendContract);
     expect(semantics.sourceAtlasFrontendContract).toEqual(sourceAtlasFrontendContract);
     expect(semantics.authBoundary).toEqual(enterpriseApiSurface.authBoundary);
@@ -3574,6 +3745,174 @@ describe("api v1", () => {
         restrictedMetadataEmbedded: false,
         restrictedMetadataVectorRows: 0,
         vectorRowsHashOnly: true
+      },
+      promotionReplay: {
+        schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1",
+        handoffId: expect.any(String),
+        query: "APT29",
+        normalizedQuery: "apt29",
+        publicAnswer: {
+          evidenceItemCount: expect.any(Number),
+          supportDocumentIds: expect.any(Array),
+          blockers: expect.any(Array),
+          warnings: expect.any(Array)
+        },
+        graphPromotion: {
+          relationshipIds: expect.any(Array),
+          blockers: expect.any(Array)
+        },
+        retention: {
+          tombstoneRowsRequired: expect.any(Number),
+          staleExtractorReplayRequired: expect.any(Boolean)
+        },
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
+      promotionTransaction: {
+        schemaVersion: "ti.evidence_promotion_transaction_plan.v1",
+        handoffId: expect.any(String),
+        transactionId: expect.any(String),
+        state: expect.any(String),
+        dryRun: true,
+        willMutate: false,
+        sourceReplay: "durable_read_model_rows",
+        consumers: {
+          publicAnswer: {
+            targetReadModel: "public_answer_read_model",
+            supportDocumentIds: expect.any(Array)
+          },
+          graph: {
+            targetReadModel: "graph_relationship_read_model",
+            blockers: expect.any(Array)
+          },
+          stix: {
+            targetReadModel: "stix_preview_read_model",
+            blockers: expect.any(Array)
+          },
+          api: {
+            targetReadModel: "api_intel_search_answer_cache",
+            warnings: expect.any(Array)
+          }
+        },
+        restrictedHandling: {
+          metadataOnlyDocumentIds: expect.any(Array),
+          graphRelationshipsHeld: expect.any(Array),
+          vectorPromotionAllowed: false
+        },
+        replayGuarantees: {
+          requiresReplayIds: true,
+          requiresCitationSpans: true,
+          requiresClaimLedgerRefs: true,
+          requiresRetentionState: true,
+          requiresReviewState: true,
+          deterministicIdempotencyKeys: true
+        },
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
+      promotionExecution: {
+        schemaVersion: "ti.evidence_promotion_transaction_execution.v1",
+        transactionId: expect.any(String),
+        handoffId: expect.any(String),
+        state: "blocked",
+        enabled: false,
+        willMutateProductionConsumers: false,
+        sourcePlan: "ti.evidence_promotion_transaction_plan.v1",
+        appliedSteps: [],
+        heldSteps: expect.any(Array),
+        failClosedReasons: expect.arrayContaining(["promotion_transaction_repository_disabled"]),
+        committedConsumerRows: {
+          publicAnswer: 0,
+          graph: 0,
+          stix: 0,
+          api: 0
+        },
+        restrictedHandling: {
+          metadataOnlyDocumentIds: expect.any(Array),
+          graphRelationshipsHeld: expect.any(Array),
+          vectorPromotionAllowed: false
+        },
+        replayGuarantees: {
+          requiresReplayIds: true,
+          requiresCitationSpans: true,
+          requiresClaimLedgerRefs: true,
+          requiresRetentionState: true,
+          requiresReviewState: true,
+          deterministicIdempotencyKeys: true
+        },
+        audit: {
+          dryRunPlanAccepted: true,
+          deterministicReceipts: true,
+          liveBackendConnection: false,
+          explicitEnablementRequired: true
+        },
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
+      promotionAuditReplay: {
+        schemaVersion: "ti.evidence_promotion_transaction_audit_replay.v1",
+        transactionId: expect.any(String),
+        handoffId: expect.any(String),
+        state: "blocked",
+        repository: {
+          backend: "postgres_transaction_audit",
+          enabled: false,
+          disabledByDefault: true,
+          liveBackendConnection: false,
+          requiredTables: expect.arrayContaining([
+            "evidence_promotion_execution_receipts",
+            "evidence_promotion_execution_steps",
+            "evidence_promotion_execution_held_steps",
+            "evidence_promotion_execution_rollbacks"
+          ])
+        },
+        rowCounts: {
+          executionReceipts: 1,
+          appliedSteps: 0,
+          heldSteps: expect.any(Number),
+          rollbackRefs: 0
+        },
+        replayReady: true,
+        deterministicReceiptIds: true,
+        canReplayWithoutRawEvidence: true,
+        committedConsumerRows: {
+          publicAnswer: 0,
+          graph: 0,
+          stix: 0,
+          api: 0
+        },
+        failClosedReasons: expect.arrayContaining(["promotion_transaction_repository_disabled"]),
+        restrictedHandling: {
+          metadataOnlyDocumentIds: expect.any(Array),
+          graphRelationshipsHeld: expect.any(Array),
+          vectorPromotionAllowed: false
+        },
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
       },
       safeOutput: {
         rawBodiesExposed: false,
@@ -5704,6 +6043,75 @@ describe("api v1", () => {
           runtime: { hostNetworkAllowed: boolean; output: string };
           blockedActions: string[];
         };
+        downstreamHandoff: {
+          schemaVersion: string;
+          quality: {
+            fixtures: Array<{ scenario: string; publicPromotionAllowed: boolean; expectedReviewState: string }>;
+            releaseGate: { blocksStandaloneDarkwebClaims: boolean };
+          };
+          graphStix: { relationshipPolicy: string; heldEdges: string[]; stixExportDefault: string };
+          apiUi: { route: string; safeActions: string[]; forbiddenActions: string[] };
+          opsRunbook: { killSwitch: { flag: string }; alerts: Array<{ code: string }>; rollback: string[] };
+        };
+        restrictedReconciliation: {
+          schemaVersion: string;
+          mode: string;
+          willFetchNetwork: boolean;
+          willMutateSources: boolean;
+          dependsOnRoutes: string[];
+          auditRows: Array<{ checkId: string; blockingIfMissing: boolean }>;
+          fieldMapping: { joinKeys: string[] };
+          releaseGate: { restrictedApplyPlanGreenRequired: boolean; noLeakSerializationRequired: boolean };
+        };
+        refreshOperations: {
+          schemaVersion: string;
+          mode: string;
+          targetRecordCount: number;
+          willFetchNetwork: boolean;
+          willScheduleLiveWork: boolean;
+          disabledUntilApprovedHarness: boolean;
+          lanes: Array<{ laneId: string; targetRecords: number; safeOutput: string }>;
+          blockedActions: string[];
+        };
+        driftPacket: {
+          schemaVersion: string;
+          mode: string;
+          rows: Array<{ driftType: string; evidence: { sourceHash: string; contentHash: string; rawUrlHash: string } }>;
+          noLeakSerialization: { passed: boolean };
+        };
+        searchQuality: {
+          schemaVersion: string;
+          mode: string;
+          languageHints: Array<{ language: string; count: number }>;
+          entityExtractionConfidence: {
+            actorHintCount: number;
+            victimHintCount: number;
+            datasetHintCount: number;
+            ttpHintCount: number;
+            averageConfidence: number;
+          };
+          blockedUnsafeEvidenceCounts: {
+            payloadLike: number;
+            credentialLike: number;
+            privateAccessLike: number;
+            actorInteractionLike: number;
+          };
+          publicSafeDisplayReadiness: {
+            requiredWarnings: string[];
+            readyCount: number;
+            heldCount: number;
+            blockedCount: number;
+          };
+        };
+        operatorRunbook: {
+          schemaVersion: string;
+          mode: string;
+          isolatedCollectorPool: { enabledByDefault: boolean; approvedHarnessRequired: boolean; hostNetworkAllowed: boolean };
+          proxyBoundary: { approvedProxyRequired: boolean; directEgressAllowed: boolean; networkAllowlist: string[] };
+          diskBudget: { rawBodyStorageAllowed: boolean; payloadStorageAllowed: boolean };
+          emergencyStop: { flag: string; publicSearchEffect: string };
+          rollback: string[];
+        };
       };
       contract: {
         field: string;
@@ -5730,6 +6138,27 @@ describe("api v1", () => {
           parserMode: string;
           schedulerId: string;
           parserProfiles: string[];
+        };
+        downstreamHandoff: {
+          schemaVersion: string;
+          qualityFixtures: string[];
+          graphStixPolicy: string;
+          uiRoute: string;
+          opsKillSwitch: string;
+        };
+        restrictedReconciliation: {
+          schemaVersion: string;
+          mode: string;
+          routeCount: number;
+          releaseGate: string;
+        };
+        operationsModel: {
+          refreshSchemaVersion: string;
+          driftSchemaVersion: string;
+          searchQualitySchemaVersion: string;
+          operatorRunbookSchemaVersion: string;
+          targetRecordCount: number;
+          liveCollectionEnabled: boolean;
         };
       };
     };
@@ -5809,6 +6238,133 @@ describe("api v1", () => {
       "CAPTCHA solving",
       "threat actor interaction"
     ]));
+    expect(statusResponse.status.downstreamHandoff).toMatchObject({
+      schemaVersion: "ti.darkweb_index_downstream_handoff.v1",
+      quality: {
+        releaseGate: {
+          blocksStandaloneDarkwebClaims: true
+        }
+      },
+      graphStix: {
+        relationshipPolicy: "descriptor_edges_review_hold",
+        stixExportDefault: "hold_until_reviewed_and_correlated"
+      },
+      apiUi: {
+        route: "/ti/darkweb/index"
+      },
+      opsRunbook: {
+        killSwitch: {
+          flag: "DARKWEB_INDEX_KILL_SWITCH"
+        }
+      }
+    });
+    expect(statusResponse.status.downstreamHandoff.quality.fixtures.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "benign_directory",
+      "leak_claim_hold",
+      "credential_abuse_block",
+      "malware_payload_block"
+    ]));
+    expect(statusResponse.status.downstreamHandoff.quality.fixtures.filter((fixture) => fixture.publicPromotionAllowed).every((fixture) => fixture.expectedReviewState === "approved_metadata_only")).toBe(true);
+    expect(statusResponse.status.downstreamHandoff.graphStix.heldEdges).toEqual(expect.arrayContaining(["victim_claim", "credential_claim", "payload_claim", "actor_statement"]));
+    expect(statusResponse.status.downstreamHandoff.apiUi.safeActions).toEqual(expect.arrayContaining(["filter", "paginate", "copy_hash"]));
+    expect(statusResponse.status.downstreamHandoff.apiUi.forbiddenActions).toEqual(expect.arrayContaining(["open_raw_url", "download_payload", "download_credentials", "contact_actor"]));
+    expect(statusResponse.status.downstreamHandoff.opsRunbook.alerts.map((alert) => alert.code)).toEqual(expect.arrayContaining(["unsafe_action_attempt", "proxy_boundary_failure", "storage_forbidden_column"]));
+    expect(statusResponse.status.downstreamHandoff.opsRunbook.rollback).toEqual(expect.arrayContaining(["pause_darkweb_index_workers", "disable_source_ingest", "rerun_no_leak_checks"]));
+    expect(statusResponse.status.restrictedReconciliation).toMatchObject({
+      schemaVersion: "ti.darkweb_index_restricted_reconciliation.v1",
+      mode: "contract_only_audit_reconciliation",
+      willFetchNetwork: false,
+      willMutateSources: false,
+      releaseGate: {
+        restrictedApplyPlanGreenRequired: true,
+        noLeakSerializationRequired: true
+      }
+    });
+    expect(statusResponse.status.restrictedReconciliation.dependsOnRoutes).toEqual(expect.arrayContaining([
+      "/v1/darkweb/status",
+      "/v1/darkweb/search",
+      "/v1/restricted-metadata/status",
+      "/v1/restricted-metadata/apply-plan",
+      "/v1/contracts"
+    ]));
+    expect(statusResponse.status.restrictedReconciliation.auditRows.map((row) => row.checkId)).toEqual(expect.arrayContaining([
+      "darkweb_status_route_visible",
+      "restricted_apply_plan_green",
+      "operator_hash_lookup_only"
+    ]));
+    expect(statusResponse.status.restrictedReconciliation.auditRows.every((row) => row.blockingIfMissing)).toBe(true);
+    expect(statusResponse.status.restrictedReconciliation.fieldMapping.joinKeys).toEqual(["rawUrlHash_to_urlHash", "sourceHash_to_sourceId_or_policyAuditId"]);
+    expect(statusResponse.status.refreshOperations).toMatchObject({
+      schemaVersion: "ti.darkweb_index_refresh_operations.v1",
+      mode: "metadata_only_operations_model",
+      targetRecordCount: 60000,
+      willFetchNetwork: false,
+      willScheduleLiveWork: false,
+      disabledUntilApprovedHarness: true
+    });
+    expect(statusResponse.status.refreshOperations.lanes.map((lane) => lane.laneId)).toEqual(expect.arrayContaining([
+      "tor_high_risk_refresh",
+      "i2p_standard_refresh",
+      "freenet_liveness_recheck",
+      "directory_bulk_metadata",
+      "analyst_import_review",
+      "public_report_reference_import"
+    ]));
+    expect(statusResponse.status.refreshOperations.lanes.reduce((sum, lane) => sum + lane.targetRecords, 0)).toBe(60000);
+    expect(statusResponse.status.refreshOperations.lanes.every((lane) => lane.safeOutput === "hashes_redacted_labels_and_quarantine_descriptors")).toBe(true);
+    expect(statusResponse.status.refreshOperations.blockedActions).toEqual(expect.arrayContaining(["stolen-file download", "credential dump download", "threat actor interaction"]));
+    expect(statusResponse.status.driftPacket).toMatchObject({
+      schemaVersion: "ti.darkweb_index_liveness_classification_drift.v1",
+      mode: "metadata_only_drift_rows",
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(statusResponse.status.driftPacket.rows.map((row) => row.driftType)).toEqual(expect.arrayContaining([
+      "newly_alive",
+      "newly_dead",
+      "category_changed",
+      "legal_risk_changed",
+      "source_reputation_changed",
+      "duplicate_cluster_changed",
+      "review_priority_changed",
+      "graph_export_hold_changed"
+    ]));
+    expect(statusResponse.status.driftPacket.rows.every((row) =>
+      row.evidence.sourceHash.length > 0 &&
+      row.evidence.contentHash.length > 0 &&
+      row.evidence.rawUrlHash.length > 0
+    )).toBe(true);
+    expect(statusResponse.status.searchQuality).toMatchObject({
+      schemaVersion: "ti.darkweb_index_search_quality.v1",
+      mode: "metadata_only_quality_metrics"
+    });
+    expect(statusResponse.status.searchQuality.languageHints.length).toBeGreaterThan(0);
+    expect(statusResponse.status.searchQuality.entityExtractionConfidence.averageConfidence).toBeGreaterThan(0);
+    expect(statusResponse.status.searchQuality.publicSafeDisplayReadiness.requiredWarnings).toEqual(["metadata_only", "review_required", "blocked_unsafe", "legal_hold"]);
+    expect(statusResponse.status.operatorRunbook).toMatchObject({
+      schemaVersion: "ti.darkweb_index_operator_runbook.v1",
+      mode: "operator_controls_no_live_collection",
+      isolatedCollectorPool: {
+        enabledByDefault: false,
+        approvedHarnessRequired: true,
+        hostNetworkAllowed: false
+      },
+      proxyBoundary: {
+        approvedProxyRequired: true,
+        directEgressAllowed: false,
+        networkAllowlist: ["tor", "i2p", "freenet"]
+      },
+      diskBudget: {
+        rawBodyStorageAllowed: false,
+        payloadStorageAllowed: false
+      },
+      emergencyStop: {
+        flag: "DARKWEB_INDEX_KILL_SWITCH",
+        publicSearchEffect: "non_blocking_existing_metadata_only_search"
+      }
+    });
+    expect(statusResponse.status.operatorRunbook.rollback).toEqual(expect.arrayContaining(["pause_darkweb_index_workers", "clear_pending_refresh_queue", "rerun_no_leak_checks"]));
     expect(statusResponse.status.storageReadiness.handoff).toMatchObject({
       schemaVersion: "ti.darkweb_index_storage_handoff.v1",
       migrationMode: "contract_only_no_database_connection",
@@ -5861,6 +6417,27 @@ describe("api v1", () => {
       parserMode: "isolated_landing_page_metadata_parser_contract",
       schedulerId: "darkweb_index_refresh",
       parserProfiles: expect.arrayContaining(["tor_landing_metadata", "blocked_unsafe_stub"])
+    });
+    expect(statusResponse.contract.downstreamHandoff).toMatchObject({
+      schemaVersion: "ti.darkweb_index_downstream_handoff.v1",
+      qualityFixtures: expect.arrayContaining(["quality_benign_directory", "quality_leak_claim_hold"]),
+      graphStixPolicy: "descriptor_edges_review_hold",
+      uiRoute: "/ti/darkweb/index",
+      opsKillSwitch: "DARKWEB_INDEX_KILL_SWITCH"
+    });
+    expect(statusResponse.contract.restrictedReconciliation).toMatchObject({
+      schemaVersion: "ti.darkweb_index_restricted_reconciliation.v1",
+      mode: "contract_only_audit_reconciliation",
+      routeCount: 5,
+      releaseGate: "restricted_apply_plan_and_no_leak_required"
+    });
+    expect(statusResponse.contract.operationsModel).toMatchObject({
+      refreshSchemaVersion: "ti.darkweb_index_refresh_operations.v1",
+      driftSchemaVersion: "ti.darkweb_index_liveness_classification_drift.v1",
+      searchQualitySchemaVersion: "ti.darkweb_index_search_quality.v1",
+      operatorRunbookSchemaVersion: "ti.darkweb_index_operator_runbook.v1",
+      targetRecordCount: 60000,
+      liveCollectionEnabled: false
     });
     expect(statusResponse.contract.sourceIngest).toMatchObject({
       runtimeMode: "contract_only_no_network",
@@ -6792,6 +7369,22 @@ describe("api v1", () => {
       records: Array<{ id: string; family: string; sourceValueScore: number; parserCapability: { certificationRequired: boolean }; activationReadiness: { state: string; autoActivationAllowed: boolean }; safety: { publicOnly: boolean; privateInviteAuthCaptcha: boolean; rawPayloadTarget: boolean; autoActivate: boolean } }>;
       importPlans: Array<{ label: string; sourceCount: number; sourceIds: string[]; dryRun: boolean; willMutate: boolean; willImportSourcePacks: boolean; willStartCrawling: boolean; approvalPacket: { forbiddenActions: string[] }; rollbackPacket: { rollbackPlanId: string } }>;
       coverageMatrix: Array<{ queryClass: string; candidateSourceCount: number; downstreamPublicAnswerImpact: number }>;
+      publicMonitorSourceGapHandoff: { schemaVersion: string; consumer: string; dryRun: boolean; willMutate: boolean; willImportSourcePacks: boolean; willStartCrawling: boolean; summary: { queryCount: number; recommendedCandidateCount: number }; queryRows: Array<{ query: string; publicMonitorState: string; recommendedAtlasSourceIds: string[]; candidateSourceCount: number; schedulerDryRun: { duplicateRunReuse: boolean }; noLeakBoundary: { metadataOnly: boolean; rawContentIncluded: boolean; unsafeUrlsIncluded: boolean; sourceActivationApplied: boolean } }>; guardrails: { noSourceActivation: boolean; noCrawling: boolean; noRawContent: boolean }; handoffs: { agent09PublicMonitorApi: string[] } };
+      lifecycleReview: { schemaVersion: string; dryRun: boolean; willMutate: boolean; willStartCrawling: boolean; summary: { reviewedSourceCount: number; retirementReviewCount: number }; rows: Array<{ atlasSourceId: string; sourceHash: string; recommendedAction: string; schedulerDryRun: { willLeaseWork: boolean }; noMutationBoundary: { sourceStatusChanged: boolean; registryWritePlanned: boolean; crawlEnqueued: boolean; sourceDeleted: boolean } }>; guardrails: { noRegistryMutation: boolean; noSourceDeletion: boolean; noCrawling: boolean; noSilentRetirement: boolean; noSilentQuarantine: boolean }; handoffs: { agent09ApiUi: string[] } };
+      sourceEconomics: {
+        schemaVersion: string;
+        dryRun: boolean;
+        willMutate: boolean;
+        willImportSourcePacks: boolean;
+        willStartCrawling: boolean;
+        rolloutScenarios: Array<{ label: string; sourceCount: number; selectedSourceIds: string[]; expectedUniqueEvidenceItemsPerDay: number; estimatedStorageMbPerDay: number; estimatedDailySchedulerTasks: number; estimatedCostUnitsPerUsefulEvidence: number; noActivationBoundary: { sourceActivationApplied: boolean; registryMutationPlanned: boolean; crawlEnqueued: boolean; workerLeaseCreated: boolean } }>;
+        sourceRows: Array<{ atlasSourceId: string; sourceHash: string; decision: string; uniqueEvidenceYield: number; expectedApiActorUsefulness: number; expectedPublicTiAnswerLift: number; economicsScore: number }>;
+        familyMetrics: Array<{ sourceCount: number; estimatedStorageMbPerDay: number; estimatedDailySchedulerTasks: number; topSourceIds: string[] }>;
+        marketplaceValueBreakdown: Record<string, number>;
+        degradationQueues: Array<{ queue: string; willMutate: boolean; willStartCrawling: boolean }>;
+        guardrails: { noRegistryMutation: boolean; noSourceActivation: boolean; noCrawling: boolean; noWorkerLeases: boolean; noRawUnsafeUrls: boolean; noPayloadDownloads: boolean };
+        handoffs: { agent09ApiFrontend: string[] };
+      };
 	      activationCanary: {
 	        first100SourceIds: string[];
 	        first1000SourceIds: string[];
@@ -7101,6 +7694,108 @@ describe("api v1", () => {
     expect(atlasResponse.importPlans.find((plan) => plan.label === "first_1000")?.sourceIds).toHaveLength(1000);
     expect(atlasResponse.importPlans.every((plan) => plan.dryRun && plan.willMutate === false && plan.willImportSourcePacks === false && plan.willStartCrawling === false && plan.approvalPacket.forbiddenActions.includes("auto_activate"))).toBe(true);
     expect(atlasResponse.coverageMatrix.map((row) => row.queryClass)).toEqual(expect.arrayContaining(["actor", "ransomware_victim", "cve", "country"]));
+    expect(atlasResponse.publicMonitorSourceGapHandoff).toMatchObject({
+      schemaVersion: "ti.source_atlas.public_monitor_gap_handoff.v1",
+      consumer: "apify_public_threat_actor_monitor",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      guardrails: {
+        noSourceActivation: true,
+        noCrawling: true,
+        noRawContent: true
+      }
+    });
+    expect(atlasResponse.publicMonitorSourceGapHandoff.queryRows.map((row) => row.query)).toEqual(expect.arrayContaining(["APT29", "Akira ransomware victims", "CVE-2024-1234"]));
+    expect(atlasResponse.publicMonitorSourceGapHandoff.queryRows.every((row) =>
+      row.candidateSourceCount > 0 &&
+      row.recommendedAtlasSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.schedulerDryRun.duplicateRunReuse &&
+      row.noLeakBoundary.metadataOnly &&
+      row.noLeakBoundary.rawContentIncluded === false &&
+      row.noLeakBoundary.unsafeUrlsIncluded === false &&
+      row.noLeakBoundary.sourceActivationApplied === false
+    )).toBe(true);
+    expect(atlasResponse.publicMonitorSourceGapHandoff.summary.queryCount).toBe(atlasResponse.publicMonitorSourceGapHandoff.queryRows.length);
+    expect(atlasResponse.publicMonitorSourceGapHandoff.handoffs.agent09PublicMonitorApi).toContain("publicMonitorSourceGapHandoff.queryRows");
+    expect(JSON.stringify(atlasResponse.publicMonitorSourceGapHandoff)).not.toContain("https://");
+    expect(atlasResponse.lifecycleReview).toMatchObject({
+      schemaVersion: "ti.source_atlas.lifecycle_review.v1",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      guardrails: {
+        noRegistryMutation: true,
+        noSourceDeletion: true,
+        noCrawling: true,
+        noSilentRetirement: true,
+        noSilentQuarantine: true
+      }
+    });
+    expect(atlasResponse.lifecycleReview.rows.length).toBeGreaterThan(0);
+    expect(atlasResponse.lifecycleReview.rows.map((row) => row.recommendedAction)).toEqual(expect.arrayContaining(["retire_duplicate", "request_parser_repair", "request_legal_review", "hold_descriptor_only"]));
+    expect(atlasResponse.lifecycleReview.rows.every((row) =>
+      row.atlasSourceId.startsWith("atlas_src_") &&
+      row.sourceHash.startsWith("ti_source_atlas_source_") &&
+      row.schedulerDryRun.willLeaseWork === false &&
+      row.noMutationBoundary.sourceStatusChanged === false &&
+      row.noMutationBoundary.registryWritePlanned === false &&
+      row.noMutationBoundary.crawlEnqueued === false &&
+      row.noMutationBoundary.sourceDeleted === false
+    )).toBe(true);
+    expect(atlasResponse.lifecycleReview.summary.reviewedSourceCount).toBe(atlasResponse.lifecycleReview.rows.length);
+    expect(atlasResponse.lifecycleReview.summary.retirementReviewCount).toBeGreaterThan(0);
+    expect(atlasResponse.lifecycleReview.handoffs.agent09ApiUi).toContain("lifecycleReview.rows");
+    expect(JSON.stringify(atlasResponse.lifecycleReview)).not.toContain("https://");
+    expect(atlasResponse.sourceEconomics).toMatchObject({
+      schemaVersion: "ti.source_atlas.reliability_economics.v1",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      guardrails: {
+        noRegistryMutation: true,
+        noSourceActivation: true,
+        noCrawling: true,
+        noWorkerLeases: true,
+        noRawUnsafeUrls: true,
+        noPayloadDownloads: true
+      }
+    });
+    expect(atlasResponse.sourceEconomics.rolloutScenarios.map((scenario) => scenario.label)).toEqual(["first_50", "first_500", "first_5000"]);
+    expect(atlasResponse.sourceEconomics.rolloutScenarios.every((scenario) =>
+      scenario.selectedSourceIds.length === scenario.sourceCount &&
+      scenario.expectedUniqueEvidenceItemsPerDay > 0 &&
+      scenario.estimatedStorageMbPerDay > 0 &&
+      scenario.estimatedDailySchedulerTasks > 0 &&
+      scenario.estimatedCostUnitsPerUsefulEvidence > 0 &&
+      scenario.noActivationBoundary.sourceActivationApplied === false &&
+      scenario.noActivationBoundary.registryMutationPlanned === false &&
+      scenario.noActivationBoundary.crawlEnqueued === false &&
+      scenario.noActivationBoundary.workerLeaseCreated === false
+    )).toBe(true);
+    expect(atlasResponse.sourceEconomics.sourceRows.map((row) => row.decision)).toEqual(expect.arrayContaining(["promote_candidate", "hold_parser", "hold_legal", "hold_descriptor", "retire_duplicate"]));
+    expect(atlasResponse.sourceEconomics.sourceRows.every((row) =>
+      row.atlasSourceId.startsWith("atlas_src_") &&
+      row.sourceHash.startsWith("ti_source_atlas_source_") &&
+      row.uniqueEvidenceYield >= 0 &&
+      row.expectedApiActorUsefulness >= 0 &&
+      row.expectedPublicTiAnswerLift >= 0 &&
+      row.economicsScore <= 1
+    )).toBe(true);
+    expect(atlasResponse.sourceEconomics.familyMetrics.length).toBeGreaterThan(5);
+    expect(atlasResponse.sourceEconomics.familyMetrics.every((family) =>
+      family.sourceCount > 0 &&
+      family.estimatedStorageMbPerDay >= 0 &&
+      family.estimatedDailySchedulerTasks > 0 &&
+      family.topSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_"))
+    )).toBe(true);
+    expect(Object.values(atlasResponse.sourceEconomics.marketplaceValueBreakdown).every((value) => typeof value === "number")).toBe(true);
+    expect(atlasResponse.sourceEconomics.degradationQueues.map((queue) => queue.queue)).toEqual(expect.arrayContaining(["stale", "noisy_duplicate", "legal_blocked", "parser_broken", "low_yield", "high_cost"]));
+    expect(atlasResponse.sourceEconomics.degradationQueues.every((queue) => queue.willMutate === false && queue.willStartCrawling === false)).toBe(true);
+    expect(atlasResponse.sourceEconomics.handoffs.agent09ApiFrontend).toContain("sourceEconomics.rolloutScenarios");
+    expect(JSON.stringify(atlasResponse.sourceEconomics)).not.toContain("https://");
 	    expect(atlasResponse.activationCanary.first100SourceIds).toHaveLength(100);
 	    expect(atlasResponse.activationCanary.first1000SourceIds).toHaveLength(1000);
 	    expect(atlasResponse.activationCanary.descriptorOnlySourceIds.length).toBeGreaterThan(0);
@@ -8883,6 +9578,16 @@ describe("api v1", () => {
       workflow: { appendOnly: boolean; humanApprovalRequired: boolean; fixtureRequiredBeforeApproval: boolean; replayRequiredBeforePromotion: boolean; mutationBoundary: string };
       scorecards: Array<{ metric: string; before: number; expectedAfter: number; delta: number }>;
       fixturePack: Array<{ scenario: string; noLeak: boolean }>;
+      summarySpecificityThresholds: Array<{ field: string; minimumSpecificity: number; warnBelow: number; holdBelow: number; requiredSignals: string[]; publicAnswerEffect: string }>;
+      rowUsefulnessDeltas: Array<{ candidateId: string; before: number; expectedAfter: number; delta: number; expectedMarketplaceEffect: string; promotionState: string; regressionCaseIds: string[] }>;
+      replayPromotionReport: {
+        schemaVersion: string;
+        candidateCount: number;
+        promotionChecks: Array<{ code: string; status: string }>;
+        forbiddenActions: string[];
+        policy: { analystApprovalRequired: boolean; replayRequiredBeforePromotion: boolean; noAutomaticPromotion: boolean; noRuntimeMutation: boolean };
+        safety: { rawEvidenceExposed: boolean; sourceUrlsExposed: boolean; restrictedPayloadsExposed: boolean; objectKeysExposed: boolean };
+      };
       routing: {
         agent03ParserCertification: string[];
         agent04FreshnessSourceGaps: string[];
@@ -8902,6 +9607,26 @@ describe("api v1", () => {
       darkwebMetadataRules: { metadataMayImproveHints: boolean; publicPromotionRequiresCorroboration: boolean; heldStates: string[]; forbiddenFields: string[] };
       sourceAtlasFeedback: Array<{ signal: string; status: string; expectedAnswerImpact: string }>;
       fixtureCorpus: Array<{ id: string; queryClass: string; expectedPublicState: string; noLeak: boolean }>;
+      programBdQualityEvaluationPack: {
+        schemaVersion: string;
+        summary: { defaultWatchlistActorCount: number; unknownFixtureCount: number; routeVisibleGatePacket: boolean };
+        rowMetricNames: string[];
+        watchlistFixtures: Array<{
+          actor: string;
+          requiredMetrics: string[];
+          regressionFocus: string[];
+          gatePacket: {
+            status: string;
+            failingFields: string[];
+            remediationAction: string;
+            downstreamEligibility: { publicUi: boolean; apifyOutput: boolean; graphExport: boolean; stixExport: boolean };
+          };
+          provenance: { fixtureIds: string[]; redacted: boolean };
+          noLeak: boolean;
+        }>;
+        regressionGuardrails: Array<{ id: string; status: string; prevents: string; remediationAction: string }>;
+        routing: { agent07ExtractorFixtures: string[]; agent09ApiGatePacket: string[]; agent10ReleaseGate: string[] };
+      };
       remediationHandoffs: { agent01SourceActivation: string[]; agent05RestrictedReview: string[]; agent10ReleaseRollback: string[] };
       releaseGate: { decision: string; blocksReadyPromotion: boolean; proofCommands: string[] };
       policy: { analystApprovalRequired: boolean; noAutomaticPromotion: boolean; unknownActorSearchingOnly: boolean; staleEvidenceCannotBeLatest: boolean; metadataOnlyDarkwebCannotStandAlone: boolean };
@@ -9138,7 +9863,14 @@ describe("api v1", () => {
       "stale_2025_only_answer_rejection",
       "public_channel_rumor_demotion",
       "restricted_metadata_hold",
-      "graph_contradiction"
+      "graph_contradiction",
+      "program_bd_legal_proceeding_false_victim",
+      "program_bd_actor_alias_as_victim",
+      "program_bd_stale_repost_suppression",
+      "program_bd_summary_specificity",
+      "program_bd_not_indexed_fallback",
+      "program_bd_raw_url_no_leak",
+      "program_bd_generic_non_cti_result"
     ]));
     expect(analystFeedbackLearningLoop.fixtures.every((fixture) => fixture.noLeak)).toBe(true);
     expect(analystFeedbackLearningLoop.persistence).toMatchObject({
@@ -9202,6 +9934,48 @@ describe("api v1", () => {
       "provenance_completeness",
       "stale_answer_rejection"
     ]));
+    expect(activeLearningCandidateQueue.summarySpecificityThresholds.map((threshold) => threshold.field)).toEqual(expect.arrayContaining([
+      "summary",
+      "recent_activity",
+      "victims",
+      "ttps",
+      "source_support"
+    ]));
+    expect(activeLearningCandidateQueue.summarySpecificityThresholds.every((threshold) =>
+      threshold.minimumSpecificity > threshold.warnBelow && threshold.warnBelow > threshold.holdBelow && threshold.requiredSignals.length > 0
+    )).toBe(true);
+    expect(activeLearningCandidateQueue.rowUsefulnessDeltas.length).toBe(activeLearningCandidateQueue.candidates.length);
+    expect(activeLearningCandidateQueue.rowUsefulnessDeltas.map((row) => row.expectedMarketplaceEffect)).toEqual(expect.arrayContaining([
+      "more_actionable",
+      "less_stale",
+      "less_false_positive",
+      "better_corroborated"
+    ]));
+    expect(activeLearningCandidateQueue.replayPromotionReport).toMatchObject({
+      schemaVersion: "ti.analyst_approved_replay_promotion_report.v1",
+      candidateCount: activeLearningCandidateQueue.candidates.length,
+      policy: {
+        analystApprovalRequired: true,
+        replayRequiredBeforePromotion: true,
+        noAutomaticPromotion: true,
+        noRuntimeMutation: true
+      },
+      safety: {
+        rawEvidenceExposed: false,
+        sourceUrlsExposed: false,
+        restrictedPayloadsExposed: false,
+        objectKeysExposed: false
+      }
+    });
+    expect(activeLearningCandidateQueue.replayPromotionReport.promotionChecks.map((check) => check.code)).toEqual(expect.arrayContaining([
+      "human_approval",
+      "fixture_replay",
+      "no_leak",
+      "source_activation_boundary",
+      "public_answer_boundary",
+      "rollback"
+    ]));
+    expect(activeLearningCandidateQueue.replayPromotionReport.forbiddenActions).toEqual(expect.arrayContaining(["activate_source", "start_crawl", "change_model_weights", "publish_public_answer"]));
     expect(activeLearningCandidateQueue.fixturePack.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
       "apt29_daily_activity_freshness",
       "apt42_instant_summary",
@@ -9209,7 +9983,14 @@ describe("api v1", () => {
       "stale_2025_only_answer_rejection",
       "public_channel_rumor_demotion",
       "restricted_metadata_hold",
-      "graph_contradiction"
+      "graph_contradiction",
+      "program_bd_legal_proceeding_false_victim",
+      "program_bd_actor_alias_as_victim",
+      "program_bd_stale_repost_suppression",
+      "program_bd_summary_specificity",
+      "program_bd_not_indexed_fallback",
+      "program_bd_raw_url_no_leak",
+      "program_bd_generic_non_cti_result"
     ]));
     expect(activeLearningCandidateQueue.fixturePack.every((fixture) => fixture.noLeak)).toBe(true);
     expect(activeLearningCandidateQueue.routing.agent03ParserCertification.length).toBeGreaterThan(0);
@@ -9256,6 +10037,40 @@ describe("api v1", () => {
     expect(qualityRuntimeValueGates.sourceAtlasFeedback.map((row) => row.signal)).toEqual(expect.arrayContaining(["low_yield_source_family", "stale_only_pack", "activation_candidate"]));
     expect(qualityRuntimeValueGates.fixtureCorpus.map((fixture) => fixture.id)).toEqual(expect.arrayContaining(["fresh_high_activity_actor", "made_up_actor_no_result", "darkweb_metadata_only_hold", "contradictory_source_cluster"]));
     expect(qualityRuntimeValueGates.fixtureCorpus.every((fixture) => fixture.noLeak)).toBe(true);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.schemaVersion).toBe("ti.program_bd_quality_evaluation_pack.v1");
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.summary.defaultWatchlistActorCount).toBeGreaterThanOrEqual(20);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.summary.unknownFixtureCount).toBeGreaterThanOrEqual(2);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.summary.routeVisibleGatePacket).toBe(true);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.rowMetricNames).toEqual(expect.arrayContaining([
+      "summary_specificity",
+      "source_support",
+      "false_victim_risk",
+      "actor_alias_resolution",
+      "source_family_diversity",
+      "actionability_correctness"
+    ]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT42",
+      "Volt Typhoon",
+      "Turla",
+      "LockBit",
+      "Akira",
+      "Scattered Spider",
+      "Random Actor",
+      "Crimson Pineapple"
+    ]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.every((fixture) => fixture.requiredMetrics.length > 0 && fixture.gatePacket.remediationAction.length > 0)).toBe(true);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.every((fixture) => fixture.provenance.redacted && fixture.provenance.fixtureIds.length > 0 && fixture.noLeak)).toBe(true);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.find((fixture) => fixture.actor === "LockBit")?.gatePacket.downstreamEligibility.publicUi).toBe(false);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.find((fixture) => fixture.actor === "Random Actor")?.gatePacket.downstreamEligibility.stixExport).toBe(false);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.regressionGuardrails.map((guardrail) => guardrail.id)).toEqual(expect.arrayContaining([
+      "person_treated_as_victim",
+      "not_indexed_fallback",
+      "raw_unsafe_url_leak"
+    ]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.routing.agent09ApiGatePacket.length).toBeGreaterThan(0);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.routing.agent10ReleaseGate.length).toBeGreaterThan(0);
     expect(qualityRuntimeValueGates.remediationHandoffs.agent01SourceActivation.length).toBeGreaterThan(0);
     expect(qualityRuntimeValueGates.remediationHandoffs.agent05RestrictedReview.length).toBeGreaterThan(0);
     expect(qualityRuntimeValueGates.remediationHandoffs.agent10ReleaseRollback.length).toBeGreaterThan(0);

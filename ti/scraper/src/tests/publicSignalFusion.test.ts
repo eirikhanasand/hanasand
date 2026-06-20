@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildAnalystPublicSourceWorkbench,
+  buildActorSourceCoverageMatrix,
   buildEnterpriseSourceCoverageRadar,
   buildPublicAdvisoryCorrelation,
   buildPublicAdvisorySignalConnector,
@@ -1414,5 +1415,200 @@ describe("public advisory signal connector", () => {
       noAccountAutomation: true,
       unsafeUrlsExposed: false
     });
+  });
+
+  test("builds actor source coverage matrix for Program BI actors and product gaps", () => {
+    const actors = [
+      "APT29", "APT42", "Sandworm", "Volt Typhoon", "Salt Typhoon", "Lazarus", "Kimsuky", "Charming Kitten", "MuddyWater", "OilRig",
+      "FIN7", "TA505", "Scattered Spider", "LockBit", "Akira", "Cl0p", "Play", "BlackSuit", "RansomHub", "Qilin",
+      "Medusa", "DragonForce", "8Base", "Hunters International", "BianLian", "ALPHV/BlackCat", "Royal", "Conti legacy", "DarkSide/BlackMatter legacy", "Unknown Query Control"
+    ];
+    const sources = [
+      source({
+        id: "src_apt29_vendor",
+        name: "APT29 vendor research",
+        type: "static_web",
+        accessMethod: "public_http",
+        url: "https://vendor.example/research/apt29",
+        tags: ["APT29", "Cozy Bear", "vendor"],
+        metadata: { actors: ["APT29"], aliases: ["Cozy Bear"], sourceFamilies: ["vendor_report"] },
+        updatedAt: "2026-05-24T10:00:00.000Z",
+        lastSeenAt: "2026-05-24T10:00:00.000Z"
+      }),
+      source({
+        id: "src_apt29_cert",
+        name: "CERT APT29 advisory",
+        type: "api",
+        accessMethod: "official_api",
+        url: "https://cert.example/advisories/apt29",
+        tags: ["APT29", "CERT"],
+        metadata: { actors: ["APT29"], sourceFamilies: ["cert_government"] },
+        updatedAt: "2026-05-24T09:00:00.000Z"
+      }),
+      source({
+        id: "src_apt29_malware",
+        name: "Malware feed for Nobelium tooling",
+        type: "api",
+        accessMethod: "official_api",
+        url: "https://threatfox.example/api/apt29",
+        tags: ["APT29", "Nobelium", "malware"],
+        metadata: { actors: ["APT29"], tools: ["Nobelium tooling"] },
+        updatedAt: "2026-05-24T09:00:00.000Z"
+      }),
+      source({
+        id: "src_lockbit_channel",
+        name: "LockBit public channel descriptor",
+        type: "telegram_public",
+        accessMethod: "official_api",
+        url: "https://t.me/lockbit_public",
+        tags: ["LockBit", "public channel"],
+        metadata: { actors: ["LockBit"] },
+        updatedAt: "2025-01-01T00:00:00.000Z",
+        lastSeenAt: "2025-01-01T00:00:00.000Z"
+      }),
+      source({
+        id: "src_scattered_spider_vendor",
+        name: "Scattered Spider vendor report",
+        type: "static_web",
+        accessMethod: "public_http",
+        url: "https://vendor.example/research/scattered-spider",
+        tags: ["Scattered Spider", "UNC3944", "vendor"],
+        metadata: { actors: ["Scattered Spider"], aliases: ["UNC3944"] },
+        updatedAt: "2026-05-24T08:00:00.000Z",
+        lastSeenAt: "2026-05-24T08:00:00.000Z"
+      })
+    ];
+    const publicSignalDeltas: PublicSignalDeltaDto[] = [
+      {
+        id: "delta_apt29_ghsa",
+        sourceId: "src_apt29_cert",
+        family: "github_advisory",
+        title: "APT29 GHSA exploitation context",
+        url: "https://github.com/advisories/GHSA-apt29-test",
+        state: "new",
+        confidence: 0.82,
+        matchedEntities: { actors: ["APT29"], cves: ["CVE-2026-4242"] },
+        collectedAt: generatedAt,
+        publishedAt: "2026-05-24T08:00:00.000Z",
+        provenance: { sourceId: "src_apt29_cert", publicOnly: true, evidenceBacked: true, safeUrl: true }
+      },
+      {
+        id: "delta_scattered_channel",
+        sourceId: "src_scattered_spider_vendor",
+        family: "public_channel",
+        title: "Scattered Spider public channel corroboration",
+        url: "https://t.me/securityalerts/100",
+        state: "new",
+        confidence: 0.62,
+        matchedEntities: { actors: ["Scattered Spider"], campaigns: ["social engineering campaign"] },
+        collectedAt: generatedAt,
+        publishedAt: "2026-05-24T08:00:00.000Z",
+        provenance: { sourceId: "src_scattered_spider_vendor", publicOnly: true, evidenceBacked: true, safeUrl: true }
+      }
+    ];
+
+    const matrix = buildActorSourceCoverageMatrix({
+      query: "APT29",
+      actors,
+      sources,
+      publicSignalDeltas,
+      darkwebMetadataSignals: [{
+        id: "restricted_lockbit_meta",
+        redactedSiteId: "dwsite_lockbit_redacted",
+        category: "ransomware_leak",
+        risk: "high",
+        liveness: "active",
+        observedAt: "2026-05-24T07:00:00.000Z",
+        actors: ["LockBit"],
+        victims: [],
+        sectors: [],
+        countries: [],
+        ttps: ["data leak extortion"],
+        blockedPayloadMarkers: ["raw_url", "dump"],
+        metadataOnly: true
+      }],
+      generatedAt
+    });
+
+    expect(matrix.schemaVersion).toBe("ti.actor_source_coverage_matrix.v1");
+    expect(matrix.actorCount).toBe(30);
+    expect(matrix.rows.map((row) => row.actor)).toEqual(expect.arrayContaining(actors));
+	    expect(matrix.rows.find((row) => row.actor === "APT29")).toMatchObject({
+	      actorClass: "apt",
+	      coveredFamilies: expect.arrayContaining(["vendor_report", "cert_government", "malware_report_feed", "github_advisory"]),
+	      missingFamilies: expect.arrayContaining(["public_research_feed"]),
+	      coverageStatus: "partial",
+	      publicAdvisoryValue: "strong",
+	      freshnessExpectation: "weekly",
+	      highestValueMissingFamily: "public_research_feed",
+	      nextBestSourceAction: "activate_public_blog_news",
+	      expectedTimeToUsefulSignal: "3_7_days"
+	    });
+	    expect(matrix.rows.find((row) => row.actor === "APT29")?.sourceFamilyPriorities.slice(0, 3)).toEqual([
+	      expect.objectContaining({ family: "vendor_report", rank: 1, currentState: "fresh", cadenceRecommendation: "daily" }),
+	      expect.objectContaining({ family: "cert_government", rank: 2, currentState: "fresh", cadenceRecommendation: "daily" }),
+	      expect.objectContaining({ family: "malware_report_feed", rank: 3, currentState: "fresh", cadenceRecommendation: "daily" })
+	    ]);
+	    expect(matrix.rows.find((row) => row.actor === "LockBit")).toMatchObject({
+	      actorClass: "ransomware",
+	      staleFamilies: expect.arrayContaining(["public_channel"]),
+	      coverageStatus: "metadata_hold",
+	      darkMetadataCaveatState: "metadata_only_context",
+	      blockedRestrictedFamilies: ["darkweb_metadata"],
+	      freshnessExpectation: "daily",
+	      nextBestSourceAction: "raise_cadence",
+	      expectedTimeToUsefulSignal: "same_day"
+	    });
+	    expect(matrix.rows.find((row) => row.actor === "LockBit")?.sourceFamilyPriorities).toEqual(expect.arrayContaining([
+	      expect.objectContaining({ family: "public_channel", rank: 1, currentState: "stale", cadenceRecommendation: "hourly", fallbackFamily: "clear_web" }),
+	      expect.objectContaining({ family: "darkweb_metadata", currentState: "metadata_only", cadenceRecommendation: "metadata_review_only" })
+	    ]));
+	    expect(matrix.rows.find((row) => row.actor === "Unknown Query Control")).toMatchObject({
+	      actorClass: "unknown",
+	      coverageStatus: "unknown_query",
+	      freshnessExpectation: "searching_only",
+	      nextBestSourceAction: "keep_searching",
+	      expectedTimeToUsefulSignal: "unknown_until_sources_added"
+	    });
+	    expect(matrix.compactProductFields).toMatchObject({
+	      apifyDatasetFields: expect.arrayContaining([
+	        "sourceCoverageGaps",
+	        "coverageStatus",
+	        "missingSourceFamilies",
+	        "freshnessExpectation",
+	        "highestValueMissingFamily",
+	        "nextBestSourceAction",
+	        "buyerCaveat",
+	        "expectedTimeToUsefulSignal"
+	      ])
+	    });
+	    expect(matrix.compactProductFields.actorFeedPriorities).toEqual(expect.arrayContaining([
+	      expect.objectContaining({
+	        actor: "LockBit",
+	        coverageStatus: "metadata_hold",
+	        freshnessExpectation: "daily",
+	        nextBestSourceAction: "raise_cadence",
+	        expectedTimeToUsefulSignal: "same_day"
+	      })
+	    ]));
+    expect(matrix.compactProductFields.sourceCoverageGaps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ actor: "LockBit", coverageStatus: "metadata_hold" }),
+      expect.objectContaining({ actor: "Unknown Query Control", coverageStatus: "unknown_query" })
+    ]));
+    expect(matrix.handoffs).toMatchObject({
+      agent01SourceAtlas: expect.arrayContaining(["stage_safe_public_sources_for:APT42"]),
+      agent02Scheduler: expect.arrayContaining(["raise_cadence_for:LockBit"]),
+      agent09ApiFields: ["publicSignalFusion.actorSourceCoverageMatrix", "sourceCoverageGaps", "coverageStatus"]
+    });
+    expect(matrix.guardrails).toMatchObject({
+      publicOnly: true,
+      restrictedMetadataOnly: true,
+      noPrivateChannels: true,
+      noAccountAutomation: true,
+      noRawUnsafeUrls: true,
+      noActorInteraction: true,
+      noDefaultActorAssumption: true
+    });
+    expect(JSON.stringify(matrix)).not.toContain("dwsite_lockbit_redacted.onion");
   });
 });

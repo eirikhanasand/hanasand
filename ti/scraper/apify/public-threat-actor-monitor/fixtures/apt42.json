@@ -100,6 +100,46 @@
   "sourceCoverage": {
     "coverageState": "thin",
     "gaps": ["missing_public_channel_evidence"],
+    "actorSourceCoverageMatrix": {
+      "schemaVersion": "ti.actor_source_coverage_matrix.v1",
+      "rows": [
+        {
+          "actor": "APT42",
+          "aliases": ["Charming Kitten", "Mint Sandstorm"],
+          "coverageStatus": "partial",
+          "freshnessExpectation": "daily",
+          "highestValueMissingFamily": "public_channel",
+          "nextBestSourceAction": "activate_public_channel",
+          "buyerCaveat": "Public reporting is available for APT42, but public-channel coverage is still missing.",
+          "expectedTimeToUsefulSignal": "1_3_days",
+          "missingFamilies": ["public_channel"],
+          "staleFamilies": []
+        }
+      ],
+      "compactProductFields": {
+        "sourceCoverageGaps": [
+          {
+            "actor": "APT42",
+            "missingFamilies": ["public_channel"],
+            "coverageStatus": "partial"
+          }
+        ],
+        "coverageStatusByActor": {
+          "APT42": "partial"
+        },
+        "actorFeedPriorities": [
+          {
+            "actor": "APT42",
+            "coverageStatus": "partial",
+            "freshnessExpectation": "daily",
+            "highestValueMissingFamily": "public_channel",
+            "nextBestSourceAction": "activate_public_channel",
+            "buyerCaveat": "Public reporting is available for APT42, but public-channel coverage is still missing.",
+            "expectedTimeToUsefulSignal": "1_3_days"
+          }
+        ]
+      }
+    },
     "slo": {
       "status": "watch"
     }

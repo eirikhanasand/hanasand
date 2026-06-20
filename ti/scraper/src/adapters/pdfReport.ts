@@ -10,6 +10,7 @@ import {
   selectParserProfile,
   type ParserFailureCategory
 } from "./parserProfiles.ts";
+import { productionEvidenceReplayRef } from "./productionAdapterRuntime.ts";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -42,6 +43,45 @@ export interface PdfReportAdapterOptions {
 }
 
 export type PdfReportFailureCategory = ParserFailureCategory;
+
+export interface PdfReportExtractionReadinessDto {
+  schemaVersion: "ti.pdf_report_extraction_readiness.v1";
+  generatedAt: string;
+  sourceId: string;
+  status: "pass" | "watch" | "hold";
+  ocr: {
+    enabled: false;
+    defaultState: "disabled";
+    canRequestSeparateOperatorApproval: true;
+    reason: string;
+  };
+  textOnlyProjection: {
+    enabled: true;
+    projectionId?: string;
+    textHash?: string;
+    language?: string;
+    citationSpanCount: number;
+    parserConfidence: number;
+    extractionWarnings: string[];
+  };
+  evidenceReplay: {
+    ready: boolean;
+    replayId?: string;
+    canonicalUrlHash?: string;
+    contentHash?: string;
+    retentionClass: "public_report";
+  };
+  gates: {
+    publicOnly: true;
+    legalNotesPresent: boolean;
+    rawPdfBytesExposed: false;
+    rawTextExposed: false;
+    objectKeyExposed: false;
+    ocrVendorCoupled: false;
+  };
+  failureCategory?: PdfReportFailureCategory;
+  forbiddenFields: string[];
+}
 
 export class PdfReportAdapter implements CollectionAdapter {
   readonly type = "pdf" as const;
@@ -162,6 +202,72 @@ export class PdfReportAdapter implements CollectionAdapter {
   }
 }
 
+export function buildPdfReportExtractionReadiness(input: {
+  source: SourceRecord;
+  result: AdapterRunResult;
+  generatedAt?: string;
+}): PdfReportExtractionReadinessDto {
+  const generatedAt = input.generatedAt ?? nowIso();
+  const item = input.result.items[0];
+  const failureCategory = input.result.metadata?.failureCategory as PdfReportFailureCategory | undefined;
+  const parserConfidence = numberValue(item?.metadata.extractionConfidence) ?? numberValue(item?.metadata.provenance, "confidence") ?? 0;
+  const canonicalUrlHash = item?.url ? `urlhash:${hashContent(item.url).slice(0, 16)}` : undefined;
+  const contentHash = item?.contentHash;
+  const replayId = item && canonicalUrlHash && contentHash
+    ? productionEvidenceReplayRef({ sourceId: input.source.id, canonicalUrlHash, contentHash, fetchedAt: item.collectedAt })
+    : undefined;
+  const warnings = [
+    ...input.result.warnings,
+    ...arrayStrings(item?.metadata.parserWarnings),
+    ...arrayStrings(item?.metadata.extractionWarnings)
+  ];
+  const citationSpanCount = Array.isArray(item?.metadata.citationSpans) ? item.metadata.citationSpans.length : 0;
+  const status: PdfReportExtractionReadinessDto["status"] = !item || failureCategory
+    ? "hold"
+    : parserConfidence < 0.7 || citationSpanCount === 0 || warnings.length > 0
+      ? "watch"
+      : "pass";
+
+  return {
+    schemaVersion: "ti.pdf_report_extraction_readiness.v1",
+    generatedAt,
+    sourceId: input.source.id,
+    status,
+    ocr: {
+      enabled: false,
+      defaultState: "disabled",
+      canRequestSeparateOperatorApproval: true,
+      reason: "OCR remains disabled by default; text-layer extraction must pass before separate OCR allocation is requested."
+    },
+    textOnlyProjection: {
+      enabled: true,
+      projectionId: item ? `pdf_text_projection_${hashContent(`${input.source.id}:${contentHash}`).slice(0, 16)}` : undefined,
+      textHash: item?.rawText ? `texthash:${hashContent(item.rawText).slice(0, 16)}` : undefined,
+      language: item?.language ?? input.source.language,
+      citationSpanCount,
+      parserConfidence,
+      extractionWarnings: warnings
+    },
+    evidenceReplay: {
+      ready: Boolean(replayId),
+      replayId,
+      canonicalUrlHash,
+      contentHash,
+      retentionClass: "public_report"
+    },
+    gates: {
+      publicOnly: true,
+      legalNotesPresent: Boolean(input.source.legalNotes.trim()),
+      rawPdfBytesExposed: false,
+      rawTextExposed: false,
+      objectKeyExposed: false,
+      ocrVendorCoupled: false
+    },
+    failureCategory,
+    forbiddenFields: ["url", "canonicalUrl", "rawText", "html", "body", "pdfBytes", "ocrImageBytes", "objectRef", "objectKey", "ocrVendor", "apiKey", "credential", "token", "onionUrl"]
+  };
+}
+
 class PlainTextPdfExtractor implements PdfReportExtractor {
   async extract(input: PdfExtractionInput): Promise<PdfExtractionResult> {
     const text = new TextDecoder().decode(input.bytes);
@@ -211,4 +317,13 @@ function retryAfterSeconds(response: Response): number | undefined {
   if (!value) return undefined;
   const seconds = Number.parseInt(value, 10);
   return Number.isFinite(seconds) ? seconds : undefined;
+}
+
+function arrayStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function numberValue(value: unknown, key?: string): number | undefined {
+  const candidate = key && typeof value === "object" && value !== null ? (value as Record<string, unknown>)[key] : value;
+  return typeof candidate === "number" && Number.isFinite(candidate) ? candidate : undefined;
 }

@@ -205,6 +205,194 @@ describe("darkweb metadata index contracts", () => {
       schedulerId: "darkweb_index_refresh",
       parserProfiles: expect.arrayContaining(["tor_landing_metadata", "blocked_unsafe_stub"])
     });
+    expect(status.downstreamHandoff).toMatchObject({
+      schemaVersion: "ti.darkweb_index_downstream_handoff.v1",
+      quality: {
+        owner: "Agent 07",
+        releaseGate: {
+          requiresHumanReviewForRestrictedClaims: true,
+          requiresCorroboratingPublicEvidence: true,
+          blocksStandaloneDarkwebClaims: true
+        }
+      },
+      graphStix: {
+        owner: "Agent 08",
+        relationshipPolicy: "descriptor_edges_review_hold",
+        stixExportDefault: "hold_until_reviewed_and_correlated"
+      },
+      apiUi: {
+        owner: "Agent 09",
+        route: "/ti/darkweb/index",
+        statusRoute: "/v1/darkweb/status",
+        searchRoute: "/v1/darkweb/search"
+      },
+      opsRunbook: {
+        owner: "Agent 10",
+        killSwitch: {
+          flag: "DARKWEB_INDEX_KILL_SWITCH",
+          defaultState: "armed",
+          action: "pause_workers_and_hold_sources"
+        }
+      }
+    });
+    expect(status.downstreamHandoff.quality.fixtures.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
+      "benign_directory",
+      "leak_claim_hold",
+      "credential_abuse_block",
+      "malware_payload_block",
+      "false_positive_review",
+      "stale_or_dead_recheck"
+    ]));
+    expect(status.downstreamHandoff.quality.fixtures.filter((fixture) => fixture.publicPromotionAllowed).every((fixture) => fixture.expectedReviewState === "approved_metadata_only")).toBe(true);
+    expect(status.downstreamHandoff.graphStix.allowedEdges).toEqual(expect.arrayContaining(["source_describes_actor", "source_mentions_victim", "source_mentions_ttp", "mirror_of"]));
+    expect(status.downstreamHandoff.graphStix.heldEdges).toEqual(expect.arrayContaining(["victim_claim", "credential_claim", "payload_claim", "actor_statement"]));
+    expect(status.downstreamHandoff.graphStix.forbiddenStixObjects).toEqual(expect.arrayContaining(["malware_payload", "credential_dump", "raw_url_indicator", "private_message", "actor_interaction"]));
+    expect(status.downstreamHandoff.apiUi.panels).toEqual(expect.arrayContaining(["overview", "records", "review_queue", "ops_runbook"]));
+    expect(status.downstreamHandoff.apiUi.safeActions).toEqual(expect.arrayContaining(["filter", "paginate", "copy_hash", "open_review_ticket"]));
+    expect(status.downstreamHandoff.apiUi.forbiddenActions).toEqual(expect.arrayContaining(["open_raw_url", "download_payload", "download_credentials", "contact_actor"]));
+    expect(status.downstreamHandoff.opsRunbook.soak.stages).toEqual(expect.arrayContaining(["contract_fixture", "dry_run_replay", "isolated_canary", "metadata_only_limited_rollout"]));
+    expect(status.downstreamHandoff.opsRunbook.alerts.map((alert) => alert.code)).toEqual(expect.arrayContaining(["unsafe_action_attempt", "proxy_boundary_failure", "parser_leak_attempt", "storage_forbidden_column"]));
+    expect(status.downstreamHandoff.opsRunbook.rollback).toEqual(expect.arrayContaining(["pause_darkweb_index_workers", "disable_source_ingest", "rerun_no_leak_checks"]));
+    expect(contract.downstreamHandoff).toMatchObject({
+      schemaVersion: "ti.darkweb_index_downstream_handoff.v1",
+      qualityFixtures: expect.arrayContaining(["quality_benign_directory", "quality_leak_claim_hold", "quality_malware_payload_block"]),
+      graphStixPolicy: "descriptor_edges_review_hold",
+      uiRoute: "/ti/darkweb/index",
+      opsKillSwitch: "DARKWEB_INDEX_KILL_SWITCH"
+    });
+    expect(status.restrictedReconciliation).toMatchObject({
+      schemaVersion: "ti.darkweb_index_restricted_reconciliation.v1",
+      owner: "Agent 05",
+      mode: "contract_only_audit_reconciliation",
+      willFetchNetwork: false,
+      willMutateSources: false,
+      releaseGate: {
+        routeVisibleRequired: true,
+        restrictedApplyPlanGreenRequired: true,
+        standaloneDarkwebClaimsHeld: true,
+        noLeakSerializationRequired: true
+      }
+    });
+    expect(status.restrictedReconciliation.dependsOnRoutes).toEqual([
+      "/v1/darkweb/status",
+      "/v1/darkweb/search",
+      "/v1/restricted-metadata/status",
+      "/v1/restricted-metadata/apply-plan",
+      "/v1/contracts"
+    ]);
+    expect(status.restrictedReconciliation.auditRows.map((row) => row.checkId)).toEqual(expect.arrayContaining([
+      "darkweb_status_route_visible",
+      "darkweb_search_non_blocking",
+      "restricted_status_metadata_only",
+      "restricted_apply_plan_green",
+      "operator_hash_lookup_only",
+      "kill_switch_ready"
+    ]));
+    expect(status.restrictedReconciliation.auditRows.every((row) => row.blockingIfMissing && row.reconciliationRule.length > 0)).toBe(true);
+    expect(status.restrictedReconciliation.fieldMapping).toMatchObject({
+      darkwebIndexFields: expect.arrayContaining(["rawUrlHash", "sourceHash", "legalTriage", "reviewState", "retentionClass"]),
+      restrictedMetadataFields: expect.arrayContaining(["sourceId", "urlHash", "policyAuditId", "redactionProof", "auditEventIds"]),
+      joinKeys: ["rawUrlHash_to_urlHash", "sourceHash_to_sourceId_or_policyAuditId"]
+    });
+    expect(status.restrictedReconciliation.unresolvedExternalBlockers).toEqual([]);
+    expect(contract.restrictedReconciliation).toMatchObject({
+      schemaVersion: "ti.darkweb_index_restricted_reconciliation.v1",
+      mode: "contract_only_audit_reconciliation",
+      routeCount: 5,
+      releaseGate: "restricted_apply_plan_and_no_leak_required"
+    });
+    expect(status.refreshOperations).toMatchObject({
+      schemaVersion: "ti.darkweb_index_refresh_operations.v1",
+      owner: "Agent 05",
+      mode: "metadata_only_operations_model",
+      targetRecordCount: 60000,
+      willFetchNetwork: false,
+      willScheduleLiveWork: false,
+      disabledUntilApprovedHarness: true,
+      budgets: {
+        maxWorkerCount: 8,
+        maxRunMinutes: 45,
+        maxBytesPerPage: 262144,
+        quarantineRetentionDays: 14,
+        diskBudgetGb: 24
+      }
+    });
+    expect(status.refreshOperations.lanes.map((lane) => lane.laneId)).toEqual(expect.arrayContaining([
+      "tor_high_risk_refresh",
+      "i2p_standard_refresh",
+      "freenet_liveness_recheck",
+      "directory_bulk_metadata",
+      "analyst_import_review",
+      "public_report_reference_import"
+    ]));
+    expect(status.refreshOperations.lanes.reduce((sum, lane) => sum + lane.targetRecords, 0)).toBe(60000);
+    expect(status.refreshOperations.blockedActions).toEqual(expect.arrayContaining(["stolen-file download", "credential dump download", "threat actor interaction"]));
+    expect(status.driftPacket).toMatchObject({
+      schemaVersion: "ti.darkweb_index_liveness_classification_drift.v1",
+      owner: "Agent 05",
+      mode: "metadata_only_drift_rows",
+      generatedFromFixtureCount: 100,
+      noLeakSerialization: { passed: true }
+    });
+    expect(status.driftPacket.rows.map((row) => row.driftType)).toEqual(expect.arrayContaining([
+      "newly_alive",
+      "newly_dead",
+      "category_changed",
+      "legal_risk_changed",
+      "source_reputation_changed",
+      "duplicate_cluster_changed",
+      "review_priority_changed",
+      "graph_export_hold_changed"
+    ]));
+    expect(status.driftPacket.rows.every((row) =>
+      row.evidence.sourceHash.length > 0 &&
+      row.evidence.contentHash.length > 0 &&
+      row.evidence.rawUrlHash.length > 0
+    )).toBe(true);
+    expect(status.searchQuality).toMatchObject({
+      schemaVersion: "ti.darkweb_index_search_quality.v1",
+      owner: "Agent 05",
+      mode: "metadata_only_quality_metrics",
+      publicSafeDisplayReadiness: {
+        requiredWarnings: ["metadata_only", "review_required", "blocked_unsafe", "legal_hold"]
+      }
+    });
+    expect(Object.keys(status.searchQuality.categoryCoverage)).toEqual(expect.arrayContaining(["forum", "leak_extortion", "directory"]));
+    expect(status.searchQuality.languageHints.length).toBeGreaterThan(0);
+    expect(status.searchQuality.entityExtractionConfidence.averageConfidence).toBeGreaterThan(0);
+    expect(status.searchQuality.titleSummaryUsefulness.usefulSummaryCount).toBeGreaterThan(0);
+    expect(status.operatorRunbook).toMatchObject({
+      schemaVersion: "ti.darkweb_index_operator_runbook.v1",
+      owner: "Agent 05",
+      mode: "operator_controls_no_live_collection",
+      isolatedCollectorPool: {
+        enabledByDefault: false,
+        approvedHarnessRequired: true,
+        hostNetworkAllowed: false
+      },
+      proxyBoundary: {
+        approvedProxyRequired: true,
+        directEgressAllowed: false,
+        networkAllowlist: ["tor", "i2p", "freenet"]
+      },
+      diskBudget: {
+        rawBodyStorageAllowed: false,
+        payloadStorageAllowed: false
+      },
+      emergencyStop: {
+        flag: "DARKWEB_INDEX_KILL_SWITCH",
+        publicSearchEffect: "non_blocking_existing_metadata_only_search"
+      }
+    });
+    expect(status.operatorRunbook.rollback).toEqual(expect.arrayContaining(["pause_darkweb_index_workers", "clear_pending_refresh_queue", "rerun_no_leak_checks"]));
+    expect(contract.operationsModel).toMatchObject({
+      refreshSchemaVersion: "ti.darkweb_index_refresh_operations.v1",
+      driftSchemaVersion: "ti.darkweb_index_liveness_classification_drift.v1",
+      searchQualitySchemaVersion: "ti.darkweb_index_search_quality.v1",
+      operatorRunbookSchemaVersion: "ti.darkweb_index_operator_runbook.v1",
+      targetRecordCount: 60000,
+      liveCollectionEnabled: false
+    });
     expect(status.sourceIngestReadiness.sources).toHaveLength(6);
     expect(status.sourceIngestReadiness.sources.every((source) =>
       source.sourceHash.length > 0 &&

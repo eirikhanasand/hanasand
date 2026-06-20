@@ -23,6 +23,7 @@ const realtimeDeliverySoak = isRecord(contract.realtimeDeliverySoak) ? contract.
 const clientGenerationFreeze = isRecord(contract.clientGenerationFreeze) ? contract.clientGenerationFreeze : {};
 const frontendProgressiveUpdateContract = isRecord(contract.frontendProgressiveUpdateContract) ? contract.frontendProgressiveUpdateContract : {};
 const scraperNativeReplacementReadiness = isRecord(contract.scraperNativeReplacementReadiness) ? contract.scraperNativeReplacementReadiness : {};
+const apifyStoreReadiness = isRecord(contract.apifyStoreReadiness) ? contract.apifyStoreReadiness : {};
 const darkwebIndexFrontendContract = isRecord(contract.darkwebIndexFrontendContract) ? contract.darkwebIndexFrontendContract : {};
 const sourceAtlasFrontendContract = isRecord(contract.sourceAtlasFrontendContract) ? contract.sourceAtlasFrontendContract : {};
 const openapi = isRecord(contract.openapi) ? contract.openapi : {};
@@ -44,6 +45,7 @@ const realtimeDeliverySoakInvariant = isRecord(sentinel.realtimeDeliverySoakInva
 const clientGenerationFreezeInvariant = isRecord(sentinel.clientGenerationFreezeInvariant) ? sentinel.clientGenerationFreezeInvariant : {};
 const frontendProgressiveUpdateInvariant = isRecord(sentinel.frontendProgressiveUpdateInvariant) ? sentinel.frontendProgressiveUpdateInvariant : {};
 const scraperNativeReplacementInvariant = isRecord(sentinel.scraperNativeReplacementInvariant) ? sentinel.scraperNativeReplacementInvariant : {};
+const apifyStoreReadinessInvariant = isRecord(sentinel.apifyStoreReadinessInvariant) ? sentinel.apifyStoreReadinessInvariant : {};
 const darkwebIndexFrontendInvariant = isRecord(sentinel.darkwebIndexFrontendInvariant) ? sentinel.darkwebIndexFrontendInvariant : {};
 const sourceAtlasFrontendInvariant = isRecord(sentinel.sourceAtlasFrontendInvariant) ? sentinel.sourceAtlasFrontendInvariant : {};
 
@@ -188,6 +190,19 @@ for (const proofCase of ["known_actor", "random_actor", "made_up_actor", "empty_
 }
 check(stringArray(scraperNativeReplacementInvariant.blockers).includes("default_actor_detected"), "scraper-native replacement default actor blocker missing");
 check(stringArray(scraperNativeReplacementInvariant.proofCommands).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"), "scraper-native replacement made-up actor proof missing");
+check(apifyStoreReadiness.schemaVersion === "ti.apify_store_readiness.v1", "Apify store readiness schema drifted");
+check(apifyStoreReadiness.status === "buyer_ready_with_external_payout_blocker", "Apify store readiness status drifted");
+check(apifyStoreReadinessInvariant.schemaVersion === "ti.apify_store_readiness.v1", "sentinel Apify store readiness invariant schema drifted");
+check(apifyStoreReadinessInvariant.actorName === "public-threat-actor-monitor", "Apify actor name drifted");
+for (const query of ["APT29", "Volt Typhoon", "Scattered Spider", "LockBit"]) {
+  check(stringArray(apifyStoreReadinessInvariant.sampleQueries).includes(query), `Apify sample proof missing ${query}`);
+}
+for (const state of ["queued", "searching", "partial", "ready", "empty_delta"]) {
+  check(stringArray(apifyStoreReadinessInvariant.compatibilityStates).includes(state), `Apify compatibility state missing ${state}`);
+}
+check(stringArray(apifyStoreReadinessInvariant.defaultQueries).length === 20, "Apify default watchlist must contain 20 queries");
+check(stringArray(apifyStoreReadinessInvariant.blockers).includes("apify_beneficiary_and_payout_method_not_stored_in_repo"), "Apify payout blocker missing");
+check(stringArray(apifyStoreReadinessInvariant.proofCommands).includes("bun run check:apify-publication"), "Apify publication proof missing");
 check(darkwebIndexFrontendContract.schemaVersion === "ti.darkweb_index_frontend_contract.v1", "darkweb index frontend contract schema drifted");
 check(darkwebIndexFrontendContract.status === "frozen_metadata_only_frontend_contract", "darkweb index frontend contract status drifted");
 check(darkwebIndexFrontendInvariant.schemaVersion === "ti.darkweb_index_frontend_contract.v1", "sentinel darkweb frontend invariant schema drifted");
@@ -251,7 +266,7 @@ check(stringArray(streamingWebhookInvariant.forbiddenPayloadFields).includes("we
 check(clientCompatibilityMatrix.status === "contract_frozen_for_client_generation", "client compatibility matrix is not frozen");
 check(enterpriseApiSurface.status === "contract_frozen_for_openapi_generation", "enterprise API surface is not frozen");
 check(sdkIntegration.status === "contract_only_no_push_delivery", "SDK integration status drifted");
-check(!forbiddenPattern.test(JSON.stringify({ sentinel, enterpriseApiSurface, sdkIntegration, clientCompatibilityMatrix, streamingWebhookCompatibility, publicWrapperCutoverReadiness, realtimeDeliveryPrototype, realtimeDeliverySoak, clientGenerationFreeze, frontendProgressiveUpdateContract, scraperNativeReplacementReadiness, darkwebIndexFrontendContract, sourceAtlasFrontendContract })), "contract examples contain unsafe material");
+check(!forbiddenPattern.test(JSON.stringify({ sentinel, enterpriseApiSurface, sdkIntegration, clientCompatibilityMatrix, streamingWebhookCompatibility, publicWrapperCutoverReadiness, realtimeDeliveryPrototype, realtimeDeliverySoak, clientGenerationFreeze, frontendProgressiveUpdateContract, scraperNativeReplacementReadiness, apifyStoreReadiness, darkwebIndexFrontendContract, sourceAtlasFrontendContract })), "contract examples contain unsafe material");
 check(!forbiddenPattern.test(JSON.stringify(gateway)), "gateway examples contain unsafe material");
 
 const ok = failures.length === 0;

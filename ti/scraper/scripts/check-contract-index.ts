@@ -111,6 +111,16 @@ const scraperNativeReplacementProofMatrix = Array.isArray(scraperNativeReplaceme
   ? scraperNativeReplacementReadiness.proofMatrix.filter(isRecord)
   : [];
 const scraperNativeReplacementCases = scraperNativeReplacementProofMatrix.map((row) => String(row.case ?? ""));
+const apifyStoreReadiness = isRecord(record.apifyStoreReadiness) ? record.apifyStoreReadiness : {};
+const apifyStoreActor = isRecord(apifyStoreReadiness.actor) ? apifyStoreReadiness.actor : {};
+const apifyStoreReadinessPacket = isRecord(apifyStoreReadiness.storeReadiness) ? apifyStoreReadiness.storeReadiness : {};
+const apifyListingFields = isRecord(apifyStoreReadinessPacket.listingFields) ? apifyStoreReadinessPacket.listingFields : {};
+const apifyDefaultInput = isRecord(apifyStoreReadiness.defaultSampleInput) ? apifyStoreReadiness.defaultSampleInput : {};
+const apifyProofDtos = Array.isArray(apifyStoreReadiness.publicProofDtos) ? apifyStoreReadiness.publicProofDtos.filter(isRecord) : [];
+const apifyProofQueries = apifyProofDtos.map((proof) => String(proof.query ?? ""));
+const apifyCompatibility = isRecord(apifyStoreReadiness.frontendApiCompatibility) ? apifyStoreReadiness.frontendApiCompatibility : {};
+const apifyCompatibilityStates = Array.isArray(apifyCompatibility.states) ? apifyCompatibility.states.filter(isRecord).map((state) => String(state.state ?? "")) : [];
+const apifyGuardrails = isRecord(apifyStoreReadiness.marketplaceGuardrails) ? apifyStoreReadiness.marketplaceGuardrails : {};
 const darkwebIndexFrontendContract = isRecord(record.darkwebIndexFrontendContract) ? record.darkwebIndexFrontendContract : {};
 const darkwebFrontendApiRoutes = isRecord(darkwebIndexFrontendContract.apiRoutes) ? darkwebIndexFrontendContract.apiRoutes : {};
 const darkwebFrontendTable = isRecord(darkwebIndexFrontendContract.table) ? darkwebIndexFrontendContract.table : {};
@@ -163,7 +173,7 @@ const checks = [
   Number(regressionRouteInvariant.expectedRouteCount ?? 0) === routes.length,
   ["GET /v1/contracts", "GET /v1/intel/search", "POST /v1/intel/runs", "GET /v1/intel/runs/{id}/results", "POST /api/ti/search"]
     .every((route) => stringArray(regressionRouteInvariant.requiredStableRoutes).includes(route)),
-  ["endpoint", "routeInventory", "apiRegressionSentinel", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "openapi", "semantics"]
+  ["endpoint", "routeInventory", "apiRegressionSentinel", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "apifyStoreReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "openapi", "semantics"]
     .every((key) => stringArray(regressionResponseInvariant.requiredTopLevelKeys).includes(key)),
   ["status", "runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "publicTiAnswer", "publicWrapperDelta"]
     .every((field) => stringArray(regressionResponseInvariant.publicSearchRequiredKeys).includes(field)),
@@ -274,6 +284,26 @@ const checks = [
   stringArray(scraperNativeReplacementReadiness.blockers).includes("default_actor_detected"),
   stringArray(scraperNativeReplacementReadiness.blockers).includes("unknown_ready_without_evidence"),
   stringArray(scraperNativeReplacementReadiness.proofCommands).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"),
+  apifyStoreReadiness.schemaVersion === "ti.apify_store_readiness.v1",
+  isRecord(semantics.apifyStoreReadiness) && semantics.apifyStoreReadiness.schemaVersion === "ti.apify_store_readiness.v1",
+  apifyStoreReadiness.status === "buyer_ready_with_external_payout_blocker",
+  apifyStoreActor.name === "public-threat-actor-monitor",
+  apifyStoreActor.outputContract === "safe_metadata_only.v1",
+  stringArray(apifyStoreActor.categories).join(",") === "SECURITY,MONITORING",
+  stringArray(apifyDefaultInput.queries).length === 20,
+  apifyDefaultInput.maxRowsPerQuery === 25,
+  apifyDefaultInput.includeDatasets === false,
+  apifyDefaultInput.includeCoverageGaps === true,
+  ["APT29", "Volt Typhoon", "Scattered Spider", "LockBit"].every((query) => apifyProofQueries.includes(query)),
+  ["queued", "searching", "partial", "ready", "empty_delta"].every((state) => apifyCompatibilityStates.includes(state)),
+  apifyListingFields.title === "complete",
+  apifyListingFields.exampleInput === "complete",
+  apifyListingFields.payoutMonetizationStatus === "external_verification_required",
+  stringArray(apifyStoreReadinessPacket.knownBlockers).includes("apify_beneficiary_and_payout_method_not_stored_in_repo"),
+  apifyGuardrails.noPlaceholderDefaults === true,
+  apifyGuardrails.noHelloWorldSampleInput === true,
+  apifyGuardrails.noGenericCategories === true,
+  stringArray(apifyStoreReadiness.proofCommands).includes("bun run check:apify-publication"),
   darkwebIndexFrontendContract.schemaVersion === "ti.darkweb_index_frontend_contract.v1",
   isRecord(semantics.darkwebIndexFrontendContract) && semantics.darkwebIndexFrontendContract.schemaVersion === "ti.darkweb_index_frontend_contract.v1",
   darkwebIndexFrontendContract.status === "frozen_metadata_only_frontend_contract",
@@ -619,6 +649,15 @@ console.log(JSON.stringify({
     cases: scraperNativeReplacementCases,
     blockers: stringArray(scraperNativeReplacementReadiness.blockers),
     proofCommands: stringArray(scraperNativeReplacementReadiness.proofCommands)
+  },
+  apifyStoreReadiness: {
+    schemaVersion: String(apifyStoreReadiness.schemaVersion ?? ""),
+    status: String(apifyStoreReadiness.status ?? ""),
+    actorName: String(apifyStoreActor.name ?? ""),
+    defaultQueryCount: stringArray(apifyDefaultInput.queries).length,
+    proofQueries: apifyProofQueries,
+    compatibilityStates: apifyCompatibilityStates,
+    blockers: stringArray(apifyStoreReadinessPacket.knownBlockers)
   },
   darkwebIndexFrontendContract: {
     schemaVersion: String(darkwebIndexFrontendContract.schemaVersion ?? ""),

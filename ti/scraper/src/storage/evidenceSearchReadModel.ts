@@ -232,6 +232,273 @@ export interface EvidenceSearchReadModelBackendWriteSet {
   safeOutput: EvidenceSearchReadModelSafety;
 }
 
+export interface EvidenceSearchReadModelPromotionReplay {
+  schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
+  generatedAt: string;
+  handoffId: string;
+  query: string;
+  normalizedQuery: string;
+  tenantId?: string;
+  state: "ready" | "partial" | "hold";
+  canPromotePublicAnswer: boolean;
+  canPromoteGraph: boolean;
+  publicAnswer: {
+    status: "ready" | "partial" | "hold";
+    supportDocumentIds: string[];
+    claimLedgerEntryIds: string[];
+    captureIds: string[];
+    sourceIds: string[];
+    restrictedMetadataDocumentIds: string[];
+    metadataOnlyClaimCount: number;
+    evidenceItemCount: number;
+    summaryBullets: string[];
+    blockers: string[];
+    warnings: string[];
+  };
+  graphPromotion: {
+    status: "ready" | "hold";
+    relationshipIds: string[];
+    supportingClaimLedgerEntryIds: string[];
+    supportingCaptureIds: string[];
+    heldRestrictedRelationshipIds: string[];
+    blockers: string[];
+  };
+  replayInputs: Array<{
+    documentId: string;
+    kind: EvidenceSearchIndexDocument["kind"];
+    replayId: string;
+    captureId?: string;
+    claimLedgerEntryId?: string;
+    relationshipId?: string;
+    sourceId?: string;
+    confidence?: number;
+    retentionClass?: RetentionClass;
+    restrictedMetadata: boolean;
+    metadataOnly: boolean;
+    citationCount: number;
+    embeddingEligible: boolean;
+  }>;
+  retention: {
+    legalHoldDocumentIds: string[];
+    tombstoneRowsRequired: number;
+    staleExtractorReplayRequired: boolean;
+  };
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidencePromotionTransactionPlan {
+  schemaVersion: "ti.evidence_promotion_transaction_plan.v1";
+  generatedAt: string;
+  handoffId: string;
+  transactionId: string;
+  state: "ready" | "partial" | "hold";
+  dryRun: true;
+  willMutate: false;
+  sourceReplay: "durable_read_model_rows";
+  consumers: {
+    publicAnswer: EvidencePromotionConsumerPlan;
+    graph: EvidencePromotionConsumerPlan;
+    stix: EvidencePromotionConsumerPlan;
+    api: EvidencePromotionConsumerPlan;
+  };
+  transactionSteps: Array<{
+    stepId: string;
+    order: number;
+    consumer: "public_answer" | "graph" | "stix" | "api";
+    action: string;
+    inputDocumentIds: string[];
+    idempotencyKey: string;
+    status: "ready" | "hold";
+    blockers: string[];
+  }>;
+  rollbackSteps: string[];
+  restrictedHandling: {
+    metadataOnlyDocumentIds: string[];
+    caveatedPublicAnswerAllowed: boolean;
+    graphRelationshipsHeld: string[];
+    stixExportHeld: boolean;
+    vectorPromotionAllowed: false;
+  };
+  replayGuarantees: {
+    requiresReplayIds: true;
+    requiresCitationSpans: true;
+    requiresClaimLedgerRefs: true;
+    requiresRetentionState: true;
+    requiresReviewState: true;
+    deterministicIdempotencyKeys: true;
+  };
+  downstreamHandoffs: {
+    agent07Extraction: string[];
+    agent08GraphStix: string[];
+    agent09Api: string[];
+    agent10ReleaseGate: string[];
+  };
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidencePromotionConsumerPlan {
+  status: "ready" | "partial" | "hold";
+  targetReadModel: string;
+  supportDocumentIds: string[];
+  requiredClaimLedgerEntryIds: string[];
+  requiredCaptureIds: string[];
+  requiredRelationshipIds: string[];
+  blockers: string[];
+  warnings: string[];
+}
+
+export interface EvidencePromotionTransactionExecutionConfig {
+  enabled?: boolean;
+  allowPartial?: boolean;
+  generatedAt?: string;
+  operator?: string;
+}
+
+export interface EvidencePromotionTransactionExecutionReceipt {
+  schemaVersion: "ti.evidence_promotion_transaction_execution.v1";
+  generatedAt: string;
+  transactionId: string;
+  handoffId: string;
+  state: "blocked" | "committed" | "partial";
+  enabled: boolean;
+  willMutateProductionConsumers: false;
+  sourcePlan: "ti.evidence_promotion_transaction_plan.v1";
+  appliedSteps: Array<{
+    stepId: string;
+    order: number;
+    consumer: EvidencePromotionTransactionPlan["transactionSteps"][number]["consumer"];
+    idempotencyKey: string;
+    receiptId: string;
+    documentCount: number;
+    claimLedgerEntryCount: number;
+    captureCount: number;
+    relationshipCount: number;
+    committedTo: string;
+  }>;
+  heldSteps: Array<{
+    stepId: string;
+    consumer: EvidencePromotionTransactionPlan["transactionSteps"][number]["consumer"];
+    blockers: string[];
+  }>;
+  failClosedReasons: string[];
+  committedConsumerRows: {
+    publicAnswer: number;
+    graph: number;
+    stix: number;
+    api: number;
+  };
+  rollbackRefs: Array<{
+    receiptId: string;
+    idempotencyKey: string;
+    rollbackAction: string;
+  }>;
+  restrictedHandling: EvidencePromotionTransactionPlan["restrictedHandling"];
+  replayGuarantees: EvidencePromotionTransactionPlan["replayGuarantees"];
+  audit: {
+    operator: string;
+    dryRunPlanAccepted: true;
+    deterministicReceipts: true;
+    liveBackendConnection: false;
+    explicitEnablementRequired: true;
+  };
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidencePromotionTransactionExecutionPostgresRows {
+  execution_receipts: EvidencePromotionExecutionReceiptRow[];
+  execution_steps: EvidencePromotionExecutionStepRow[];
+  held_steps: EvidencePromotionExecutionHeldStepRow[];
+  rollback_refs: EvidencePromotionExecutionRollbackRow[];
+}
+
+export interface EvidencePromotionExecutionReceiptRow {
+  execution_id: string;
+  schema_version: EvidencePromotionTransactionExecutionReceipt["schemaVersion"];
+  transaction_id: string;
+  handoff_id: string;
+  generated_at: string;
+  state: EvidencePromotionTransactionExecutionReceipt["state"];
+  enabled: boolean;
+  source_plan: EvidencePromotionTransactionExecutionReceipt["sourcePlan"];
+  will_mutate_production_consumers: false;
+  fail_closed_reasons: string[];
+  committed_consumer_rows: EvidencePromotionTransactionExecutionReceipt["committedConsumerRows"];
+  restricted_handling: EvidencePromotionTransactionExecutionReceipt["restrictedHandling"];
+  replay_guarantees: EvidencePromotionTransactionExecutionReceipt["replayGuarantees"];
+  operator: string;
+  dry_run_plan_accepted: true;
+  deterministic_receipts: true;
+  live_backend_connection: false;
+  explicit_enablement_required: true;
+  safe_output: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidencePromotionExecutionStepRow {
+  execution_id: string;
+  transaction_id: string;
+  step_id: string;
+  step_order: number;
+  consumer: EvidencePromotionTransactionPlan["transactionSteps"][number]["consumer"];
+  idempotency_key: string;
+  receipt_id: string;
+  document_count: number;
+  claim_ledger_entry_count: number;
+  capture_count: number;
+  relationship_count: number;
+  committed_to: string;
+  applied_at: string;
+}
+
+export interface EvidencePromotionExecutionHeldStepRow {
+  execution_id: string;
+  transaction_id: string;
+  step_id: string;
+  consumer: EvidencePromotionTransactionPlan["transactionSteps"][number]["consumer"];
+  blockers: string[];
+}
+
+export interface EvidencePromotionExecutionRollbackRow {
+  execution_id: string;
+  transaction_id: string;
+  receipt_id: string;
+  idempotency_key: string;
+  rollback_action: string;
+}
+
+export interface EvidencePromotionTransactionAuditReplay {
+  schemaVersion: "ti.evidence_promotion_transaction_audit_replay.v1";
+  generatedAt: string;
+  transactionId: string;
+  handoffId: string;
+  state: EvidencePromotionTransactionExecutionReceipt["state"] | "missing";
+  repository: {
+    backend: "postgres_transaction_audit";
+    enabled: false;
+    disabledByDefault: true;
+    liveBackendConnection: false;
+    requiredTables: [
+      "evidence_promotion_execution_receipts",
+      "evidence_promotion_execution_steps",
+      "evidence_promotion_execution_held_steps",
+      "evidence_promotion_execution_rollbacks"
+    ];
+  };
+  rowCounts: {
+    executionReceipts: number;
+    appliedSteps: number;
+    heldSteps: number;
+    rollbackRefs: number;
+  };
+  replayReady: boolean;
+  replayBlockers: string[];
+  deterministicReceiptIds: boolean;
+  canReplayWithoutRawEvidence: true;
+  committedConsumerRows: EvidencePromotionTransactionExecutionReceipt["committedConsumerRows"];
+  failClosedReasons: string[];
+  restrictedHandling: EvidencePromotionTransactionExecutionReceipt["restrictedHandling"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
 export interface EvidenceSearchReadModelRepository {
   readonly backend: EvidenceSearchReadModelBackend;
   readiness(): EvidenceSearchReadModelReadiness;
@@ -431,6 +698,491 @@ export function buildEvidenceSearchReadModelBackendWriteSet(
       metadataOnlyDocuments: postgresDocuments.filter((row) => row.metadata_only).length,
       legalHoldDocuments: postgresDocuments.filter((row) => row.legal_hold).length,
       unsafeDocumentsSkipped: skippedDocuments.length
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function buildEvidenceSearchReadModelPromotionReplay(
+  writeSet: EvidenceSearchReadModelBackendWriteSet,
+  input: { query: string; normalizedQuery?: string; tenantId?: string; generatedAt?: string } 
+): EvidenceSearchReadModelPromotionReplay {
+  const generatedAt = input.generatedAt ?? writeSet.generatedAt;
+  const normalizedQuery = input.normalizedQuery ?? input.query.trim().toLowerCase();
+  const activeRows = writeSet.postgresDocuments.filter((row) => !row.tombstoned_at);
+  const unsafeSkipped = writeSet.counts.unsafeDocumentsSkipped > 0;
+  const publicSupport = activeRows.filter((row) => !row.restricted_metadata && !row.metadata_only);
+  const claimRows = activeRows.filter((row) => row.kind === "claim");
+  const captureRows = activeRows.filter((row) => row.kind === "capture");
+  const relationshipRows = activeRows.filter((row) => row.kind === "graph_relationship");
+  const restrictedRows = activeRows.filter((row) => row.restricted_metadata || row.metadata_only);
+  const legalHoldRows = activeRows.filter((row) => row.legal_hold);
+  const citationlessRows = activeRows.filter((row) => row.citation_spans.length === 0);
+  const staleExtractorRows = activeRows.filter((row) => !row.replay.extractorVersion && (row.kind === "capture" || row.kind === "claim"));
+
+  const publicAnswerBlockers = [
+    ...(unsafeSkipped ? ["unsafe_documents_skipped"] : []),
+    ...(activeRows.length === 0 ? ["no_replay_documents"] : []),
+    ...(citationlessRows.length > 0 ? ["missing_citation_spans"] : []),
+    ...(publicSupport.length === 0 && restrictedRows.length > 0 ? ["metadata_only_support_requires_caveat"] : [])
+  ];
+  const graphBlockers = [
+    ...(unsafeSkipped ? ["unsafe_documents_skipped"] : []),
+    ...(relationshipRows.length === 0 ? ["no_graph_relationship_rows"] : []),
+    ...(relationshipRows.some((row) => row.restricted_metadata || row.metadata_only) ? ["restricted_relationship_review_required"] : [])
+  ];
+  const publicWarnings = [
+    ...(restrictedRows.length > 0 ? ["restricted_metadata_used_as_caveated_defensive_context"] : []),
+    ...(staleExtractorRows.length > 0 ? ["stale_extractor_replay_required"] : []),
+    ...(legalHoldRows.length > 0 ? ["legal_hold_preserves_evidence_rows"] : [])
+  ];
+  const canPromotePublicAnswer = publicAnswerBlockers.filter((blocker) => blocker !== "metadata_only_support_requires_caveat").length === 0 && activeRows.length > 0;
+  const canPromoteGraph = graphBlockers.length === 0;
+  const state: EvidenceSearchReadModelPromotionReplay["state"] = canPromotePublicAnswer && canPromoteGraph
+    ? "ready"
+    : activeRows.length > 0 && !unsafeSkipped
+      ? "partial"
+      : "hold";
+
+  return {
+    schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1",
+    generatedAt,
+    handoffId: writeSet.handoffId,
+    query: input.query,
+    normalizedQuery,
+    tenantId: input.tenantId,
+    state,
+    canPromotePublicAnswer,
+    canPromoteGraph,
+    publicAnswer: {
+      status: canPromotePublicAnswer ? "ready" : state === "partial" ? "partial" : "hold",
+      supportDocumentIds: activeRows.map((row) => row.document_id),
+      claimLedgerEntryIds: uniqueDefined(activeRows.map((row) => row.claim_ledger_entry_id)),
+      captureIds: uniqueDefined(activeRows.map((row) => row.capture_id)),
+      sourceIds: uniqueDefined(activeRows.map((row) => row.source_id)),
+      restrictedMetadataDocumentIds: restrictedRows.map((row) => row.document_id),
+      metadataOnlyClaimCount: claimRows.filter((row) => row.metadata_only || row.restricted_metadata).length,
+      evidenceItemCount: captureRows.length + claimRows.length,
+      summaryBullets: summarizePromotionRows(activeRows, restrictedRows),
+      blockers: publicAnswerBlockers,
+      warnings: publicWarnings
+    },
+    graphPromotion: {
+      status: canPromoteGraph ? "ready" : "hold",
+      relationshipIds: uniqueDefined(relationshipRows.map((row) => row.relationship_id)),
+      supportingClaimLedgerEntryIds: uniqueDefined(relationshipRows.map((row) => row.claim_ledger_entry_id)),
+      supportingCaptureIds: uniqueDefined(relationshipRows.map((row) => row.capture_id)),
+      heldRestrictedRelationshipIds: uniqueDefined(relationshipRows.filter((row) => row.restricted_metadata || row.metadata_only).map((row) => row.relationship_id)),
+      blockers: graphBlockers
+    },
+    replayInputs: activeRows.map((row) => ({
+      documentId: row.document_id,
+      kind: row.kind,
+      replayId: row.replay.replayId,
+      captureId: row.capture_id,
+      claimLedgerEntryId: row.claim_ledger_entry_id,
+      relationshipId: row.relationship_id,
+      sourceId: row.source_id,
+      confidence: row.confidence,
+      retentionClass: row.retention_class,
+      restrictedMetadata: row.restricted_metadata,
+      metadataOnly: row.metadata_only,
+      citationCount: row.citation_spans.length,
+      embeddingEligible: row.embedding.eligible && !row.restricted_metadata && !row.metadata_only
+    })),
+    retention: {
+      legalHoldDocumentIds: legalHoldRows.map((row) => row.document_id),
+      tombstoneRowsRequired: activeRows.length,
+      staleExtractorReplayRequired: staleExtractorRows.length > 0
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function buildEvidencePromotionTransactionPlan(
+  writeSet: EvidenceSearchReadModelBackendWriteSet,
+  replay: EvidenceSearchReadModelPromotionReplay,
+  input: { generatedAt?: string } = {}
+): EvidencePromotionTransactionPlan {
+  const generatedAt = input.generatedAt ?? replay.generatedAt;
+  const activeRows = writeSet.postgresDocuments.filter((row) => !row.tombstoned_at);
+  const restrictedRows = activeRows.filter((row) => row.restricted_metadata || row.metadata_only);
+  const publicAnswerWarnings = Array.isArray(replay.publicAnswer.warnings) ? [...replay.publicAnswer.warnings] : [];
+  const publicAnswerBlockers = Array.isArray(replay.publicAnswer.blockers) ? [...replay.publicAnswer.blockers] : [];
+  const graphBlockers = Array.isArray(replay.graphPromotion.blockers) ? [...replay.graphPromotion.blockers] : [];
+  const apiWarnings = replay.publicAnswer.status === "ready" && restrictedRows.length > 0
+    ? [...publicAnswerWarnings, "api_response_requires_restricted_metadata_caveat"]
+    : publicAnswerWarnings;
+  const stixBlockers = [
+    ...graphBlockers,
+    ...(replay.graphPromotion.heldRestrictedRelationshipIds.length > 0 ? ["restricted_relationships_not_exportable_to_stix"] : [])
+  ];
+  const consumers: EvidencePromotionTransactionPlan["consumers"] = {
+    publicAnswer: {
+      status: replay.publicAnswer.status,
+      targetReadModel: "public_answer_read_model",
+      supportDocumentIds: replay.publicAnswer.supportDocumentIds,
+      requiredClaimLedgerEntryIds: replay.publicAnswer.claimLedgerEntryIds,
+      requiredCaptureIds: replay.publicAnswer.captureIds,
+      requiredRelationshipIds: [],
+      blockers: publicAnswerBlockers,
+      warnings: publicAnswerWarnings
+    },
+    graph: {
+      status: replay.graphPromotion.status,
+      targetReadModel: "graph_relationship_read_model",
+      supportDocumentIds: replay.publicAnswer.supportDocumentIds,
+      requiredClaimLedgerEntryIds: replay.graphPromotion.supportingClaimLedgerEntryIds,
+      requiredCaptureIds: replay.graphPromotion.supportingCaptureIds,
+      requiredRelationshipIds: replay.graphPromotion.relationshipIds,
+      blockers: graphBlockers,
+      warnings: replay.graphPromotion.heldRestrictedRelationshipIds.length > 0 ? ["restricted_relationships_require_review"] : []
+    },
+    stix: {
+      status: stixBlockers.length === 0 && replay.canPromoteGraph ? "ready" : "hold",
+      targetReadModel: "stix_preview_read_model",
+      supportDocumentIds: replay.publicAnswer.supportDocumentIds,
+      requiredClaimLedgerEntryIds: replay.graphPromotion.supportingClaimLedgerEntryIds,
+      requiredCaptureIds: replay.graphPromotion.supportingCaptureIds,
+      requiredRelationshipIds: replay.graphPromotion.relationshipIds,
+      blockers: stixBlockers,
+      warnings: []
+    },
+    api: {
+      status: replay.canPromotePublicAnswer ? "ready" : replay.publicAnswer.status,
+      targetReadModel: "api_intel_search_answer_cache",
+      supportDocumentIds: replay.publicAnswer.supportDocumentIds,
+      requiredClaimLedgerEntryIds: replay.publicAnswer.claimLedgerEntryIds,
+      requiredCaptureIds: replay.publicAnswer.captureIds,
+      requiredRelationshipIds: replay.graphPromotion.status === "ready" ? replay.graphPromotion.relationshipIds : [],
+      blockers: publicAnswerBlockers,
+      warnings: apiWarnings
+    }
+  };
+  const transactionSteps: EvidencePromotionTransactionPlan["transactionSteps"] = [
+    promotionTransactionStep(writeSet.handoffId, 1, "public_answer", consumers.publicAnswer),
+    promotionTransactionStep(writeSet.handoffId, 2, "graph", consumers.graph),
+    promotionTransactionStep(writeSet.handoffId, 3, "stix", consumers.stix),
+    promotionTransactionStep(writeSet.handoffId, 4, "api", consumers.api)
+  ];
+  const state: EvidencePromotionTransactionPlan["state"] = transactionSteps.every((step) => step.status === "ready")
+    ? "ready"
+    : transactionSteps.some((step) => step.status === "ready")
+      ? "partial"
+      : "hold";
+
+  return {
+    schemaVersion: "ti.evidence_promotion_transaction_plan.v1",
+    generatedAt,
+    handoffId: writeSet.handoffId,
+    transactionId: stableId("evidence-promotion-transaction", `${writeSet.handoffId}:${replay.normalizedQuery}:${generatedAt}`),
+    state,
+    dryRun: true,
+    willMutate: false,
+    sourceReplay: "durable_read_model_rows",
+    consumers,
+    transactionSteps,
+    rollbackSteps: [
+      "Keep durable read-model rows unchanged.",
+      "Do not publish public answer deltas until all ready consumer steps commit in order.",
+      "Drop generated graph/STIX/API cache writes for this dry-run transaction id.",
+      "Replay from Postgres read-model rows using the same handoff id and idempotency keys."
+    ],
+    restrictedHandling: {
+      metadataOnlyDocumentIds: restrictedRows.map((row) => row.document_id),
+      caveatedPublicAnswerAllowed: replay.canPromotePublicAnswer && restrictedRows.length > 0,
+      graphRelationshipsHeld: replay.graphPromotion.heldRestrictedRelationshipIds,
+      stixExportHeld: stixBlockers.length > 0,
+      vectorPromotionAllowed: false
+    },
+    replayGuarantees: {
+      requiresReplayIds: true,
+      requiresCitationSpans: true,
+      requiresClaimLedgerRefs: true,
+      requiresRetentionState: true,
+      requiresReviewState: true,
+      deterministicIdempotencyKeys: true
+    },
+    downstreamHandoffs: {
+      agent07Extraction: ["replayInputs.replayId", "replayInputs.citationCount", "retention.staleExtractorReplayRequired"],
+      agent08GraphStix: ["consumers.graph", "consumers.stix", "restrictedHandling.graphRelationshipsHeld"],
+      agent09Api: ["consumers.api", "transactionSteps", "rollbackSteps"],
+      agent10ReleaseGate: ["state", "restrictedHandling", "replayGuarantees"]
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function executeEvidencePromotionTransactionPlan(
+  plan: EvidencePromotionTransactionPlan,
+  input: EvidencePromotionTransactionExecutionConfig = {}
+): EvidencePromotionTransactionExecutionReceipt {
+  const generatedAt = input.generatedAt ?? plan.generatedAt;
+  const failClosedReasons: string[] = [];
+  if (input.enabled !== true) failClosedReasons.push("promotion_transaction_repository_disabled");
+  if (plan.dryRun !== true || plan.willMutate !== false) failClosedReasons.push("non_dry_run_plan_rejected");
+  if (plan.sourceReplay !== "durable_read_model_rows") failClosedReasons.push("unsupported_source_replay");
+  if (!plan.replayGuarantees.deterministicIdempotencyKeys) failClosedReasons.push("missing_deterministic_idempotency_keys");
+  if (plan.transactionSteps.some((step) => !step.idempotencyKey)) failClosedReasons.push("missing_step_idempotency_key");
+  if (plan.restrictedHandling.vectorPromotionAllowed !== false) failClosedReasons.push("restricted_vector_promotion_rejected");
+  if (plan.state !== "ready" && input.allowPartial !== true) failClosedReasons.push("held_consumer_steps_require_partial_enablement");
+
+  const executionAllowed = failClosedReasons.length === 0;
+  const candidateSteps = executionAllowed
+    ? plan.transactionSteps.filter((step) => step.status === "ready")
+    : [];
+  const appliedSteps: EvidencePromotionTransactionExecutionReceipt["appliedSteps"] = candidateSteps.map((step) => {
+    const consumer = consumerPlanForStep(plan, step.consumer);
+    const receiptId = stableId("evidence-promotion-receipt", `${plan.transactionId}:${step.idempotencyKey}:${generatedAt}`);
+    return {
+      stepId: step.stepId,
+      order: step.order,
+      consumer: step.consumer,
+      idempotencyKey: step.idempotencyKey,
+      receiptId,
+      documentCount: step.inputDocumentIds.length,
+      claimLedgerEntryCount: consumer.requiredClaimLedgerEntryIds.length,
+      captureCount: consumer.requiredCaptureIds.length,
+      relationshipCount: consumer.requiredRelationshipIds.length,
+      committedTo: consumer.targetReadModel
+    };
+  });
+  const heldSteps: EvidencePromotionTransactionExecutionReceipt["heldSteps"] = [
+    ...plan.transactionSteps
+      .filter((step) => step.status !== "ready")
+      .map((step) => ({
+        stepId: step.stepId,
+        consumer: step.consumer,
+        blockers: step.blockers.length > 0 ? step.blockers : ["consumer_not_ready"]
+      })),
+    ...(!executionAllowed
+      ? plan.transactionSteps
+        .filter((step) => step.status === "ready")
+        .map((step) => ({
+          stepId: step.stepId,
+          consumer: step.consumer,
+          blockers: failClosedReasons
+        }))
+      : [])
+  ].sort((left, right) => left.stepId.localeCompare(right.stepId));
+  const state: EvidencePromotionTransactionExecutionReceipt["state"] = !executionAllowed
+    ? "blocked"
+    : heldSteps.length > 0 || appliedSteps.length < plan.transactionSteps.length
+      ? "partial"
+      : "committed";
+
+  return {
+    schemaVersion: "ti.evidence_promotion_transaction_execution.v1",
+    generatedAt,
+    transactionId: plan.transactionId,
+    handoffId: plan.handoffId,
+    state,
+    enabled: input.enabled === true,
+    willMutateProductionConsumers: false,
+    sourcePlan: plan.schemaVersion,
+    appliedSteps,
+    heldSteps,
+    failClosedReasons,
+    committedConsumerRows: {
+      publicAnswer: countAppliedConsumer(appliedSteps, "public_answer"),
+      graph: countAppliedConsumer(appliedSteps, "graph"),
+      stix: countAppliedConsumer(appliedSteps, "stix"),
+      api: countAppliedConsumer(appliedSteps, "api")
+    },
+    rollbackRefs: appliedSteps.map((step) => ({
+      receiptId: step.receiptId,
+      idempotencyKey: step.idempotencyKey,
+      rollbackAction: `delete_rehearsal_rows_for_${step.committedTo}`
+    })),
+    restrictedHandling: plan.restrictedHandling,
+    replayGuarantees: plan.replayGuarantees,
+    audit: {
+      operator: input.operator ?? "agent_06",
+      dryRunPlanAccepted: true,
+      deterministicReceipts: true,
+      liveBackendConnection: false,
+      explicitEnablementRequired: true
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function evidencePromotionExecutionToPostgresRows(
+  receipt: EvidencePromotionTransactionExecutionReceipt
+): EvidencePromotionTransactionExecutionPostgresRows {
+  const executionId = stableId("evidence-promotion-execution", `${receipt.transactionId}:${receipt.generatedAt}:${receipt.state}`);
+  return {
+    execution_receipts: [{
+      execution_id: executionId,
+      schema_version: receipt.schemaVersion,
+      transaction_id: receipt.transactionId,
+      handoff_id: receipt.handoffId,
+      generated_at: receipt.generatedAt,
+      state: receipt.state,
+      enabled: receipt.enabled,
+      source_plan: receipt.sourcePlan,
+      will_mutate_production_consumers: receipt.willMutateProductionConsumers,
+      fail_closed_reasons: [...receipt.failClosedReasons],
+      committed_consumer_rows: { ...receipt.committedConsumerRows },
+      restricted_handling: cloneRestrictedHandling(receipt.restrictedHandling),
+      replay_guarantees: { ...receipt.replayGuarantees },
+      operator: receipt.audit.operator,
+      dry_run_plan_accepted: receipt.audit.dryRunPlanAccepted,
+      deterministic_receipts: receipt.audit.deterministicReceipts,
+      live_backend_connection: receipt.audit.liveBackendConnection,
+      explicit_enablement_required: receipt.audit.explicitEnablementRequired,
+      safe_output: SAFE_OUTPUT
+    }],
+    execution_steps: receipt.appliedSteps.map((step) => ({
+      execution_id: executionId,
+      transaction_id: receipt.transactionId,
+      step_id: step.stepId,
+      step_order: step.order,
+      consumer: step.consumer,
+      idempotency_key: step.idempotencyKey,
+      receipt_id: step.receiptId,
+      document_count: step.documentCount,
+      claim_ledger_entry_count: step.claimLedgerEntryCount,
+      capture_count: step.captureCount,
+      relationship_count: step.relationshipCount,
+      committed_to: step.committedTo,
+      applied_at: receipt.generatedAt
+    })),
+    held_steps: receipt.heldSteps.map((step) => ({
+      execution_id: executionId,
+      transaction_id: receipt.transactionId,
+      step_id: step.stepId,
+      consumer: step.consumer,
+      blockers: [...step.blockers]
+    })),
+    rollback_refs: receipt.rollbackRefs.map((rollback) => ({
+      execution_id: executionId,
+      transaction_id: receipt.transactionId,
+      receipt_id: rollback.receiptId,
+      idempotency_key: rollback.idempotencyKey,
+      rollback_action: rollback.rollbackAction
+    }))
+  };
+}
+
+export function evidencePromotionExecutionFromPostgresRows(
+  rows: EvidencePromotionTransactionExecutionPostgresRows
+): EvidencePromotionTransactionExecutionReceipt | undefined {
+  const receiptRow = rows.execution_receipts[0];
+  if (!receiptRow) return undefined;
+  const executionId = receiptRow.execution_id;
+  const appliedSteps: EvidencePromotionTransactionExecutionReceipt["appliedSteps"] = rows.execution_steps
+    .filter((step) => step.execution_id === executionId)
+    .sort((left, right) => left.step_order - right.step_order)
+    .map((step) => ({
+      stepId: step.step_id,
+      order: step.step_order,
+      consumer: step.consumer,
+      idempotencyKey: step.idempotency_key,
+      receiptId: step.receipt_id,
+      documentCount: step.document_count,
+      claimLedgerEntryCount: step.claim_ledger_entry_count,
+      captureCount: step.capture_count,
+      relationshipCount: step.relationship_count,
+      committedTo: step.committed_to
+    }));
+  const heldSteps: EvidencePromotionTransactionExecutionReceipt["heldSteps"] = rows.held_steps
+    .filter((step) => step.execution_id === executionId)
+    .sort((left, right) => left.step_id.localeCompare(right.step_id))
+    .map((step) => ({
+      stepId: step.step_id,
+      consumer: step.consumer,
+      blockers: [...step.blockers]
+    }));
+  const rollbackRefs: EvidencePromotionTransactionExecutionReceipt["rollbackRefs"] = rows.rollback_refs
+    .filter((rollback) => rollback.execution_id === executionId)
+    .map((rollback) => ({
+      receiptId: rollback.receipt_id,
+      idempotencyKey: rollback.idempotency_key,
+      rollbackAction: rollback.rollback_action
+    }));
+
+  return {
+    schemaVersion: receiptRow.schema_version,
+    generatedAt: receiptRow.generated_at,
+    transactionId: receiptRow.transaction_id,
+    handoffId: receiptRow.handoff_id,
+    state: receiptRow.state,
+    enabled: receiptRow.enabled,
+    willMutateProductionConsumers: receiptRow.will_mutate_production_consumers,
+    sourcePlan: receiptRow.source_plan,
+    appliedSteps,
+    heldSteps,
+    failClosedReasons: [...receiptRow.fail_closed_reasons],
+    committedConsumerRows: { ...receiptRow.committed_consumer_rows },
+    rollbackRefs,
+    restrictedHandling: cloneRestrictedHandling(receiptRow.restricted_handling),
+    replayGuarantees: { ...receiptRow.replay_guarantees },
+    audit: {
+      operator: receiptRow.operator,
+      dryRunPlanAccepted: receiptRow.dry_run_plan_accepted,
+      deterministicReceipts: receiptRow.deterministic_receipts,
+      liveBackendConnection: receiptRow.live_backend_connection,
+      explicitEnablementRequired: receiptRow.explicit_enablement_required
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function buildEvidencePromotionTransactionAuditReplay(
+  rows: EvidencePromotionTransactionExecutionPostgresRows,
+  input: { generatedAt?: string } = {}
+): EvidencePromotionTransactionAuditReplay {
+  const receipt = evidencePromotionExecutionFromPostgresRows(rows);
+  const generatedAt = input.generatedAt ?? receipt?.generatedAt ?? nowIso();
+  const replayBlockers = receipt
+    ? [
+        ...(receipt.failClosedReasons.length > 0 ? receipt.failClosedReasons : []),
+        ...(rows.execution_receipts.length !== 1 ? ["unexpected_execution_receipt_count"] : []),
+        ...(receipt.appliedSteps.length !== rows.execution_steps.length ? ["applied_step_row_mismatch"] : []),
+        ...(receipt.rollbackRefs.length !== rows.rollback_refs.length ? ["rollback_row_mismatch"] : [])
+      ]
+    : ["missing_execution_receipt"];
+  const deterministicReceiptIds = receipt
+    ? receipt.appliedSteps.every((step) => Boolean(step.receiptId) && Boolean(step.idempotencyKey))
+    : false;
+
+  return {
+    schemaVersion: "ti.evidence_promotion_transaction_audit_replay.v1",
+    generatedAt,
+    transactionId: receipt?.transactionId ?? "missing",
+    handoffId: receipt?.handoffId ?? "missing",
+    state: receipt?.state ?? "missing",
+    repository: {
+      backend: "postgres_transaction_audit",
+      enabled: false,
+      disabledByDefault: true,
+      liveBackendConnection: false,
+      requiredTables: [
+        "evidence_promotion_execution_receipts",
+        "evidence_promotion_execution_steps",
+        "evidence_promotion_execution_held_steps",
+        "evidence_promotion_execution_rollbacks"
+      ]
+    },
+    rowCounts: {
+      executionReceipts: rows.execution_receipts.length,
+      appliedSteps: rows.execution_steps.length,
+      heldSteps: rows.held_steps.length,
+      rollbackRefs: rows.rollback_refs.length
+    },
+    replayReady: Boolean(receipt) && deterministicReceiptIds && replayBlockers.every((blocker) => blocker === "promotion_transaction_repository_disabled" || blocker === "held_consumer_steps_require_partial_enablement"),
+    replayBlockers,
+    deterministicReceiptIds,
+    canReplayWithoutRawEvidence: true,
+    committedConsumerRows: receipt?.committedConsumerRows ?? { publicAnswer: 0, graph: 0, stix: 0, api: 0 },
+    failClosedReasons: receipt?.failClosedReasons ?? [],
+    restrictedHandling: receipt?.restrictedHandling ?? {
+      metadataOnlyDocumentIds: [],
+      caveatedPublicAnswerAllowed: false,
+      graphRelationshipsHeld: [],
+      stixExportHeld: true,
+      vectorPromotionAllowed: false
     },
     safeOutput: SAFE_OUTPUT
   };
@@ -658,6 +1410,76 @@ function resultForRecord(record: EvidenceSearchReadModelRecord, terms: string[])
       restrictedRawContentExposed: false
     }
   };
+}
+
+function uniqueDefined(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
+}
+
+function promotionTransactionStep(
+  handoffId: string,
+  order: number,
+  consumer: EvidencePromotionTransactionPlan["transactionSteps"][number]["consumer"],
+  plan: EvidencePromotionConsumerPlan
+): EvidencePromotionTransactionPlan["transactionSteps"][number] {
+  const inputDocumentIds = plan.supportDocumentIds;
+  const blockers = plan.blockers;
+  return {
+    stepId: stableId("evidence-promotion-step", `${handoffId}:${order}:${consumer}:${inputDocumentIds.join(",")}`),
+    order,
+    consumer,
+    action: `write_${plan.targetReadModel}`,
+    inputDocumentIds,
+    idempotencyKey: stableId("evidence-promotion-idempotency", `${handoffId}:${consumer}:${plan.targetReadModel}`),
+    status: plan.status === "ready" ? "ready" : "hold",
+    blockers
+  };
+}
+
+function consumerPlanForStep(
+  plan: EvidencePromotionTransactionPlan,
+  consumer: EvidencePromotionTransactionPlan["transactionSteps"][number]["consumer"]
+): EvidencePromotionConsumerPlan {
+  if (consumer === "public_answer") return plan.consumers.publicAnswer;
+  if (consumer === "graph") return plan.consumers.graph;
+  if (consumer === "stix") return plan.consumers.stix;
+  return plan.consumers.api;
+}
+
+function countAppliedConsumer(
+  steps: EvidencePromotionTransactionExecutionReceipt["appliedSteps"],
+  consumer: EvidencePromotionTransactionPlan["transactionSteps"][number]["consumer"]
+): number {
+  return steps.filter((step) => step.consumer === consumer).reduce((sum, step) => sum + step.documentCount, 0);
+}
+
+function cloneRestrictedHandling(
+  restrictedHandling: EvidencePromotionTransactionPlan["restrictedHandling"]
+): EvidencePromotionTransactionPlan["restrictedHandling"] {
+  return {
+    metadataOnlyDocumentIds: [...restrictedHandling.metadataOnlyDocumentIds],
+    caveatedPublicAnswerAllowed: restrictedHandling.caveatedPublicAnswerAllowed,
+    graphRelationshipsHeld: [...restrictedHandling.graphRelationshipsHeld],
+    stixExportHeld: restrictedHandling.stixExportHeld,
+    vectorPromotionAllowed: false
+  };
+}
+
+function summarizePromotionRows(
+  rows: EvidenceSearchReadModelPostgresDocumentRow[],
+  restrictedRows: EvidenceSearchReadModelPostgresDocumentRow[]
+): string[] {
+  if (rows.length === 0) return ["No durable read-model rows are available for public answer replay."];
+  const kinds = new Map<EvidenceSearchIndexDocument["kind"], number>();
+  for (const row of rows) kinds.set(row.kind, (kinds.get(row.kind) ?? 0) + 1);
+  const bullets = [
+    `Durable replay includes ${rows.length} read-model documents across ${[...kinds.entries()].map(([kind, count]) => `${count} ${kind}`).join(", ")}.`,
+    `Replay references ${uniqueDefined(rows.map((row) => row.capture_id)).length} captures, ${uniqueDefined(rows.map((row) => row.claim_ledger_entry_id)).length} claims, and ${uniqueDefined(rows.map((row) => row.relationship_id)).length} graph relationships.`
+  ];
+  if (restrictedRows.length > 0) {
+    bullets.push(`${restrictedRows.length} restricted or metadata-only documents are available only as caveated defensive context and are excluded from embedding/vector promotion.`);
+  }
+  return bullets;
 }
 
 function tokenize(query: string): string[] {

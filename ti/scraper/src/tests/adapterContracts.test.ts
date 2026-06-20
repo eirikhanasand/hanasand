@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DynamicWebAdapter, type DynamicPageRenderer } from "../adapters/dynamicWeb.ts";
-import { PdfReportAdapter, type PdfReportExtractor } from "../adapters/pdfReport.ts";
+import { buildPdfReportExtractionReadiness, PdfReportAdapter, type PdfReportExtractor } from "../adapters/pdfReport.ts";
 import { adapterPromotionContract, selectParserProfile } from "../adapters/parserProfiles.ts";
 import { canonicalizeUrl } from "../adapters/staticWeb.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
@@ -164,6 +164,39 @@ describe("dynamic PDF and report adapter contracts", () => {
       agent07: { parserProfile: "pdf_report", citationSpansAvailable: true },
       agent10: { costClass: "medium" }
     });
+    const readiness = buildPdfReportExtractionReadiness({
+      source: src,
+      result,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    expect(readiness).toMatchObject({
+      schemaVersion: "ti.pdf_report_extraction_readiness.v1",
+      status: "watch",
+      ocr: {
+        enabled: false,
+        defaultState: "disabled",
+        canRequestSeparateOperatorApproval: true
+      },
+      textOnlyProjection: {
+        enabled: true,
+        textHash: expect.stringMatching(/^texthash:/),
+        citationSpanCount: expect.any(Number),
+        parserConfidence: 0.79
+      },
+      evidenceReplay: {
+        ready: true,
+        replayId: expect.stringMatching(/^evidence_replay_ref:/),
+        retentionClass: "public_report"
+      },
+      gates: {
+        rawPdfBytesExposed: false,
+        rawTextExposed: false,
+        objectKeyExposed: false,
+        ocrVendorCoupled: false
+      }
+    });
+    expect(JSON.stringify(readiness)).not.toContain("APT29 campaign advisory");
+    expect(readiness.forbiddenFields).toEqual(expect.arrayContaining(["pdfBytes", "ocrVendor", "objectKey"]));
 
     const store = new InMemoryScraperStore();
     const first = store.savePipelineResult(processCollectedItem(item));

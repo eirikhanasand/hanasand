@@ -238,6 +238,221 @@ export interface DarkwebIndexParserRuntimeExpectation {
   ];
 }
 
+export interface DarkwebIndexDownstreamHandoff {
+  readonly schemaVersion: "ti.darkweb_index_downstream_handoff.v1";
+  readonly quality: {
+    readonly owner: "Agent 07";
+    readonly fixtures: ReadonlyArray<{
+      readonly fixtureId: string;
+      readonly scenario: "benign_directory" | "leak_claim_hold" | "credential_abuse_block" | "malware_payload_block" | "false_positive_review" | "stale_or_dead_recheck";
+      readonly expectedReviewState: DarkwebIndexReviewState;
+      readonly expectedLegalTriage: DarkwebIndexLegalTriage;
+      readonly publicPromotionAllowed: boolean;
+      readonly requiredCaveats: readonly string[];
+    }>;
+    readonly releaseGate: {
+      readonly requiresHumanReviewForRestrictedClaims: true;
+      readonly requiresCorroboratingPublicEvidence: true;
+      readonly blocksStandaloneDarkwebClaims: true;
+      readonly proofCommands: readonly string[];
+    };
+  };
+  readonly graphStix: {
+    readonly owner: "Agent 08";
+    readonly relationshipPolicy: "descriptor_edges_review_hold";
+    readonly allowedEdges: readonly ["source_describes_actor", "source_mentions_victim", "source_mentions_ttp", "mirror_of", "same_host_hash"];
+    readonly heldEdges: readonly ["victim_claim", "credential_claim", "payload_claim", "actor_statement"];
+    readonly stixExportDefault: "hold_until_reviewed_and_correlated";
+    readonly allowedStixObjects: readonly ["identity_descriptor", "threat_actor_alias_hint", "indicator_hash_only", "relationship_review_hold"];
+    readonly forbiddenStixObjects: readonly ["malware_payload", "credential_dump", "raw_url_indicator", "private_message", "actor_interaction"];
+  };
+  readonly apiUi: {
+    readonly owner: "Agent 09";
+    readonly route: "/ti/darkweb/index";
+    readonly statusRoute: "/v1/darkweb/status";
+    readonly searchRoute: "/v1/darkweb/search";
+    readonly panels: readonly ["overview", "records", "review_queue", "source_readiness", "storage_handoff", "scheduler_parser_handoff", "ops_runbook"];
+    readonly safeActions: readonly ["filter", "paginate", "copy_hash", "open_review_ticket", "export_metadata_csv"];
+    readonly forbiddenActions: readonly ["open_raw_url", "download_payload", "download_credentials", "solve_captcha", "contact_actor", "bypass_authentication"];
+    readonly warningCodes: readonly ["metadata_only", "review_required", "blocked_unsafe", "legal_hold", "operator_hash_lookup_only"];
+  };
+  readonly opsRunbook: {
+    readonly owner: "Agent 10";
+    readonly killSwitch: {
+      readonly flag: "DARKWEB_INDEX_KILL_SWITCH";
+      readonly defaultState: "armed";
+      readonly action: "pause_workers_and_hold_sources";
+    };
+    readonly soak: {
+      readonly stages: readonly ["contract_fixture", "dry_run_replay", "isolated_canary", "metadata_only_limited_rollout"];
+      readonly requiredSignals: readonly ["no_leak_serialization", "zero_forbidden_actions", "proxy_boundary_healthy", "queue_budget_within_limit", "review_queue_within_slo"];
+    };
+    readonly alerts: ReadonlyArray<{
+      readonly code: "unsafe_action_attempt" | "proxy_boundary_failure" | "parser_leak_attempt" | "review_queue_over_slo" | "storage_forbidden_column";
+      readonly severity: "hold" | "rollback";
+      readonly operatorAction: string;
+    }>;
+    readonly rollback: readonly ["pause_darkweb_index_workers", "disable_source_ingest", "clear_pending_restricted_queue", "keep_public_search_non_blocking", "rerun_no_leak_checks"];
+  };
+}
+
+export interface DarkwebIndexRestrictedReconciliation {
+  readonly schemaVersion: "ti.darkweb_index_restricted_reconciliation.v1";
+  readonly owner: "Agent 05";
+  readonly mode: "contract_only_audit_reconciliation";
+  readonly willFetchNetwork: false;
+  readonly willMutateSources: false;
+  readonly dependsOnRoutes: readonly ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/contracts"];
+  readonly auditRows: ReadonlyArray<{
+    readonly checkId: string;
+    readonly source: "darkweb_index" | "restricted_metadata_status" | "restricted_metadata_apply_plan" | "contracts";
+    readonly expectedState: "route_visible" | "metadata_only" | "non_blocking" | "operator_only" | "held_until_review" | "kill_switch_ready";
+    readonly reconciliationRule: string;
+    readonly blockingIfMissing: boolean;
+  }>;
+  readonly fieldMapping: {
+    readonly darkwebIndexFields: readonly ["rawUrlHash", "hostHash", "pathHash", "contentHash", "sourceHash", "legalTriage", "reviewState", "retentionClass"];
+    readonly restrictedMetadataFields: readonly ["sourceId", "urlHash", "policyAuditId", "retentionClass", "legalHold", "killSwitchState", "redactionProof", "auditEventIds"];
+    readonly joinKeys: readonly ["rawUrlHash_to_urlHash", "sourceHash_to_sourceId_or_policyAuditId"];
+  };
+  readonly releaseGate: {
+    readonly routeVisibleRequired: true;
+    readonly restrictedApplyPlanGreenRequired: true;
+    readonly standaloneDarkwebClaimsHeld: true;
+    readonly noLeakSerializationRequired: true;
+    readonly proofCommands: readonly string[];
+  };
+  readonly unresolvedExternalBlockers: readonly string[];
+}
+
+export interface DarkwebIndexRefreshOperationsPlan {
+  readonly schemaVersion: "ti.darkweb_index_refresh_operations.v1";
+  readonly owner: "Agent 05";
+  readonly mode: "metadata_only_operations_model";
+  readonly targetRecordCount: 60000;
+  readonly willFetchNetwork: false;
+  readonly willScheduleLiveWork: false;
+  readonly lanes: ReadonlyArray<{
+    readonly laneId: string;
+    readonly sourceType: DarkwebIndexSourceType;
+    readonly network: DarkwebIndexNetwork | "mixed";
+    readonly targetRecords: number;
+    readonly cadenceMinutes: number;
+    readonly maxRecordsPerRun: number;
+    readonly approvalRequired: DarkwebIndexSourceApprovalState | "operator_review";
+    readonly action: "refresh_metadata" | "recheck_liveness" | "import_metadata_descriptors" | "hold_for_review";
+    readonly safeOutput: "hashes_redacted_labels_and_quarantine_descriptors";
+  }>;
+  readonly budgets: {
+    readonly maxWorkerCount: 8;
+    readonly maxRunMinutes: 45;
+    readonly maxBytesPerPage: 262144;
+    readonly quarantineRetentionDays: 14;
+    readonly diskBudgetGb: 24;
+  };
+  readonly disabledUntilApprovedHarness: true;
+  readonly blockedActions: readonly string[];
+}
+
+export interface DarkwebIndexDriftPacket {
+  readonly schemaVersion: "ti.darkweb_index_liveness_classification_drift.v1";
+  readonly owner: "Agent 05";
+  readonly mode: "metadata_only_drift_rows";
+  readonly generatedFromFixtureCount: number;
+  readonly rows: ReadonlyArray<{
+    readonly driftId: string;
+    readonly recordId: string;
+    readonly driftType:
+      | "newly_alive"
+      | "newly_dead"
+      | "category_changed"
+      | "legal_risk_changed"
+      | "source_reputation_changed"
+      | "duplicate_cluster_changed"
+      | "review_priority_changed"
+      | "graph_export_hold_changed";
+    readonly previousState: string;
+    readonly currentState: string;
+    readonly reviewImpact: "no_change" | "review_required" | "legal_hold" | "blocked_unsafe" | "graph_export_hold";
+    readonly publicUiEffect: "show_badge" | "hold_public_claim" | "hide_from_public_default" | "update_filter_count";
+    readonly evidence: {
+      readonly sourceHash: string;
+      readonly contentHash: string;
+      readonly rawUrlHash: string;
+    };
+  }>;
+  readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
+}
+
+export interface DarkwebIndexSearchQualityMetrics {
+  readonly schemaVersion: "ti.darkweb_index_search_quality.v1";
+  readonly owner: "Agent 05";
+  readonly mode: "metadata_only_quality_metrics";
+  readonly categoryCoverage: Record<DarkwebIndexCategory, number>;
+  readonly languageHints: ReadonlyArray<{ readonly language: string; readonly count: number }>;
+  readonly titleSummaryUsefulness: {
+    readonly usefulTitleCount: number;
+    readonly usefulSummaryCount: number;
+    readonly weakSummaryCount: number;
+  };
+  readonly entityExtractionConfidence: {
+    readonly actorHintCount: number;
+    readonly victimHintCount: number;
+    readonly datasetHintCount: number;
+    readonly ttpHintCount: number;
+    readonly averageConfidence: number;
+  };
+  readonly blockedUnsafeEvidenceCounts: {
+    readonly payloadLike: number;
+    readonly credentialLike: number;
+    readonly privateAccessLike: number;
+    readonly actorInteractionLike: number;
+  };
+  readonly falsePositiveReviewRows: readonly string[];
+  readonly publicSafeDisplayReadiness: {
+    readonly readyCount: number;
+    readonly heldCount: number;
+    readonly blockedCount: number;
+    readonly requiredWarnings: readonly ["metadata_only", "review_required", "blocked_unsafe", "legal_hold"];
+  };
+}
+
+export interface DarkwebIndexOperatorRunbook {
+  readonly schemaVersion: "ti.darkweb_index_operator_runbook.v1";
+  readonly owner: "Agent 05";
+  readonly mode: "operator_controls_no_live_collection";
+  readonly isolatedCollectorPool: {
+    readonly enabledByDefault: false;
+    readonly approvedHarnessRequired: true;
+    readonly maxWorkers: 8;
+    readonly disposableWorkersRequired: true;
+    readonly hostNetworkAllowed: false;
+  };
+  readonly proxyBoundary: {
+    readonly approvedProxyRequired: true;
+    readonly directEgressAllowed: false;
+    readonly networkAllowlist: readonly ["tor", "i2p", "freenet"];
+  };
+  readonly diskBudget: {
+    readonly quarantineDescriptorGb: 24;
+    readonly rawBodyStorageAllowed: false;
+    readonly payloadStorageAllowed: false;
+    readonly retentionDays: 14;
+  };
+  readonly contentSizeCap: {
+    readonly maxBytesPerPage: 262144;
+    readonly maxFetchSeconds: 20;
+    readonly maxRedirects: 2;
+  };
+  readonly emergencyStop: {
+    readonly flag: "DARKWEB_INDEX_KILL_SWITCH";
+    readonly action: "pause_workers_hold_sources_clear_pending_refresh";
+    readonly publicSearchEffect: "non_blocking_existing_metadata_only_search";
+  };
+  readonly rollback: readonly ["pause_darkweb_index_workers", "disable_source_ingest", "clear_pending_refresh_queue", "preserve_review_holds", "rerun_no_leak_checks"];
+  readonly proofCommands: readonly string[];
+}
+
 export interface DarkwebIndexIsolationBoundary {
   readonly disposableWorkerRequired: true;
   readonly lockedDownEgress: true;
@@ -302,6 +517,12 @@ export interface DarkwebIndexStatusDto {
   };
   readonly schedulerReadiness: DarkwebIndexSchedulerHandoff;
   readonly parserRuntimeReadiness: DarkwebIndexParserRuntimeExpectation;
+  readonly downstreamHandoff: DarkwebIndexDownstreamHandoff;
+  readonly restrictedReconciliation: DarkwebIndexRestrictedReconciliation;
+  readonly refreshOperations: DarkwebIndexRefreshOperationsPlan;
+  readonly driftPacket: DarkwebIndexDriftPacket;
+  readonly searchQuality: DarkwebIndexSearchQualityMetrics;
+  readonly operatorRunbook: DarkwebIndexOperatorRunbook;
   readonly storageReadiness: {
     readonly tables: readonly string[];
     readonly searchIndexes: readonly string[];
@@ -390,6 +611,27 @@ export interface DarkwebIndexContractDto {
     readonly schedulerId: "darkweb_index_refresh";
     readonly parserProfiles: readonly string[];
   };
+  readonly downstreamHandoff: {
+    readonly schemaVersion: "ti.darkweb_index_downstream_handoff.v1";
+    readonly qualityFixtures: readonly string[];
+    readonly graphStixPolicy: "descriptor_edges_review_hold";
+    readonly uiRoute: "/ti/darkweb/index";
+    readonly opsKillSwitch: "DARKWEB_INDEX_KILL_SWITCH";
+  };
+  readonly restrictedReconciliation: {
+    readonly schemaVersion: "ti.darkweb_index_restricted_reconciliation.v1";
+    readonly mode: "contract_only_audit_reconciliation";
+    readonly routeCount: 5;
+    readonly releaseGate: "restricted_apply_plan_and_no_leak_required";
+  };
+  readonly operationsModel: {
+    readonly refreshSchemaVersion: "ti.darkweb_index_refresh_operations.v1";
+    readonly driftSchemaVersion: "ti.darkweb_index_liveness_classification_drift.v1";
+    readonly searchQualitySchemaVersion: "ti.darkweb_index_search_quality.v1";
+    readonly operatorRunbookSchemaVersion: "ti.darkweb_index_operator_runbook.v1";
+    readonly targetRecordCount: 60000;
+    readonly liveCollectionEnabled: false;
+  };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
 }
 
@@ -442,6 +684,12 @@ export function buildDarkwebIndexStatus(records: readonly DarkwebIndexRecord[] =
     },
     schedulerReadiness: buildDarkwebIndexSchedulerHandoff(),
     parserRuntimeReadiness: buildDarkwebIndexParserRuntimeExpectation(),
+    downstreamHandoff: buildDarkwebIndexDownstreamHandoff(),
+    restrictedReconciliation: buildDarkwebIndexRestrictedReconciliation(),
+    refreshOperations: buildDarkwebIndexRefreshOperationsPlan(),
+    driftPacket: buildDarkwebIndexDriftPacket(records),
+    searchQuality: buildDarkwebIndexSearchQualityMetrics(records),
+    operatorRunbook: buildDarkwebIndexOperatorRunbook(),
     storageReadiness: {
       tables: ["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs", "darkweb_index_classification_history", "darkweb_index_liveness_checks", "darkweb_index_review_notes"],
       searchIndexes: ["darkweb_index_hash_lookup", "darkweb_index_category_liveness_review_idx", "darkweb_index_safe_summary_text_idx"],
@@ -554,6 +802,27 @@ export function darkwebIndexContract(): DarkwebIndexContractDto {
       parserMode: "isolated_landing_page_metadata_parser_contract",
       schedulerId: "darkweb_index_refresh",
       parserProfiles: buildDarkwebIndexParserRuntimeExpectation().parserProfiles.map((profile) => profile.profile)
+    },
+    downstreamHandoff: {
+      schemaVersion: "ti.darkweb_index_downstream_handoff.v1",
+      qualityFixtures: buildDarkwebIndexDownstreamHandoff().quality.fixtures.map((fixture) => fixture.fixtureId),
+      graphStixPolicy: "descriptor_edges_review_hold",
+      uiRoute: "/ti/darkweb/index",
+      opsKillSwitch: "DARKWEB_INDEX_KILL_SWITCH"
+    },
+    restrictedReconciliation: {
+      schemaVersion: "ti.darkweb_index_restricted_reconciliation.v1",
+      mode: "contract_only_audit_reconciliation",
+      routeCount: 5,
+      releaseGate: "restricted_apply_plan_and_no_leak_required"
+    },
+    operationsModel: {
+      refreshSchemaVersion: "ti.darkweb_index_refresh_operations.v1",
+      driftSchemaVersion: "ti.darkweb_index_liveness_classification_drift.v1",
+      searchQualitySchemaVersion: "ti.darkweb_index_search_quality.v1",
+      operatorRunbookSchemaVersion: "ti.darkweb_index_operator_runbook.v1",
+      targetRecordCount: 60000,
+      liveCollectionEnabled: false
     },
     noLeakSerialization: darkwebIndexNoLeakSerialization()
   };
@@ -784,6 +1053,359 @@ function buildDarkwebIndexParserRuntimeExpectation(): DarkwebIndexParserRuntimeE
       "actor_interaction_target_detected",
       "parser_confidence_low",
       "legal_review_required"
+    ]
+  };
+}
+
+function buildDarkwebIndexDownstreamHandoff(): DarkwebIndexDownstreamHandoff {
+  return {
+    schemaVersion: "ti.darkweb_index_downstream_handoff.v1",
+    quality: {
+      owner: "Agent 07",
+      fixtures: [
+        {
+          fixtureId: "quality_benign_directory",
+          scenario: "benign_directory",
+          expectedReviewState: "approved_metadata_only",
+          expectedLegalTriage: "benign",
+          publicPromotionAllowed: true,
+          requiredCaveats: ["metadata_descriptor_only", "source_hash_only"]
+        },
+        {
+          fixtureId: "quality_leak_claim_hold",
+          scenario: "leak_claim_hold",
+          expectedReviewState: "needs_review",
+          expectedLegalTriage: "leak_or_extortion",
+          publicPromotionAllowed: false,
+          requiredCaveats: ["unverified_claim", "requires_public_corroboration", "no_stolen_files_accessed"]
+        },
+        {
+          fixtureId: "quality_credential_abuse_block",
+          scenario: "credential_abuse_block",
+          expectedReviewState: "blocked_unsafe",
+          expectedLegalTriage: "credential_or_abuse",
+          publicPromotionAllowed: false,
+          requiredCaveats: ["unsafe_target_blocked", "no_credentials_accessed"]
+        },
+        {
+          fixtureId: "quality_malware_payload_block",
+          scenario: "malware_payload_block",
+          expectedReviewState: "blocked_unsafe",
+          expectedLegalTriage: "malware_or_payload",
+          publicPromotionAllowed: false,
+          requiredCaveats: ["payload_links_not_followed", "no_execution"]
+        },
+        {
+          fixtureId: "quality_false_positive_review",
+          scenario: "false_positive_review",
+          expectedReviewState: "false_positive_review",
+          expectedLegalTriage: "unknown_requires_review",
+          publicPromotionAllowed: false,
+          requiredCaveats: ["ambiguous_descriptor", "analyst_review_required"]
+        },
+        {
+          fixtureId: "quality_stale_or_dead_recheck",
+          scenario: "stale_or_dead_recheck",
+          expectedReviewState: "needs_review",
+          expectedLegalTriage: "news_or_research",
+          publicPromotionAllowed: false,
+          requiredCaveats: ["stale_liveness", "recheck_required"]
+        }
+      ],
+      releaseGate: {
+        requiresHumanReviewForRestrictedClaims: true,
+        requiresCorroboratingPublicEvidence: true,
+        blocksStandaloneDarkwebClaims: true,
+        proofCommands: [
+          "bun test src/tests/darkwebIndex.test.ts",
+          "bun test src/tests/api.test.ts -t \"routes darkweb metadata index status and search without unsafe leaks\"",
+          "bun run check:contract-index"
+        ]
+      }
+    },
+    graphStix: {
+      owner: "Agent 08",
+      relationshipPolicy: "descriptor_edges_review_hold",
+      allowedEdges: ["source_describes_actor", "source_mentions_victim", "source_mentions_ttp", "mirror_of", "same_host_hash"],
+      heldEdges: ["victim_claim", "credential_claim", "payload_claim", "actor_statement"],
+      stixExportDefault: "hold_until_reviewed_and_correlated",
+      allowedStixObjects: ["identity_descriptor", "threat_actor_alias_hint", "indicator_hash_only", "relationship_review_hold"],
+      forbiddenStixObjects: ["malware_payload", "credential_dump", "raw_url_indicator", "private_message", "actor_interaction"]
+    },
+    apiUi: {
+      owner: "Agent 09",
+      route: "/ti/darkweb/index",
+      statusRoute: "/v1/darkweb/status",
+      searchRoute: "/v1/darkweb/search",
+      panels: ["overview", "records", "review_queue", "source_readiness", "storage_handoff", "scheduler_parser_handoff", "ops_runbook"],
+      safeActions: ["filter", "paginate", "copy_hash", "open_review_ticket", "export_metadata_csv"],
+      forbiddenActions: ["open_raw_url", "download_payload", "download_credentials", "solve_captcha", "contact_actor", "bypass_authentication"],
+      warningCodes: ["metadata_only", "review_required", "blocked_unsafe", "legal_hold", "operator_hash_lookup_only"]
+    },
+    opsRunbook: {
+      owner: "Agent 10",
+      killSwitch: {
+        flag: "DARKWEB_INDEX_KILL_SWITCH",
+        defaultState: "armed",
+        action: "pause_workers_and_hold_sources"
+      },
+      soak: {
+        stages: ["contract_fixture", "dry_run_replay", "isolated_canary", "metadata_only_limited_rollout"],
+        requiredSignals: ["no_leak_serialization", "zero_forbidden_actions", "proxy_boundary_healthy", "queue_budget_within_limit", "review_queue_within_slo"]
+      },
+      alerts: [
+        { code: "unsafe_action_attempt", severity: "rollback", operatorAction: "pause workers and open safety review" },
+        { code: "proxy_boundary_failure", severity: "rollback", operatorAction: "stop isolated collectors and preserve audit ids" },
+        { code: "parser_leak_attempt", severity: "hold", operatorAction: "quarantine descriptor and block promotion" },
+        { code: "review_queue_over_slo", severity: "hold", operatorAction: "hold public promotion and increase analyst review" },
+        { code: "storage_forbidden_column", severity: "rollback", operatorAction: "block migration and rerun storage no-leak audit" }
+      ],
+      rollback: ["pause_darkweb_index_workers", "disable_source_ingest", "clear_pending_restricted_queue", "keep_public_search_non_blocking", "rerun_no_leak_checks"]
+    }
+  };
+}
+
+function buildDarkwebIndexRestrictedReconciliation(): DarkwebIndexRestrictedReconciliation {
+  return {
+    schemaVersion: "ti.darkweb_index_restricted_reconciliation.v1",
+    owner: "Agent 05",
+    mode: "contract_only_audit_reconciliation",
+    willFetchNetwork: false,
+    willMutateSources: false,
+    dependsOnRoutes: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/restricted-metadata/status", "/v1/restricted-metadata/apply-plan", "/v1/contracts"],
+    auditRows: [
+      {
+        checkId: "darkweb_status_route_visible",
+        source: "darkweb_index",
+        expectedState: "route_visible",
+        reconciliationRule: "status exposes metadata-only index, storage, scheduler, parser, downstream, and reconciliation packets",
+        blockingIfMissing: true
+      },
+      {
+        checkId: "darkweb_search_non_blocking",
+        source: "darkweb_index",
+        expectedState: "non_blocking",
+        reconciliationRule: "search remains paginated and redacted even when restricted metadata is held",
+        blockingIfMissing: true
+      },
+      {
+        checkId: "restricted_status_metadata_only",
+        source: "restricted_metadata_status",
+        expectedState: "metadata_only",
+        reconciliationRule: "restricted status exposes source ids, hashes, policy state, redaction proof, and audit ids only",
+        blockingIfMissing: true
+      },
+      {
+        checkId: "restricted_apply_plan_green",
+        source: "restricted_metadata_apply_plan",
+        expectedState: "held_until_review",
+        reconciliationRule: "apply-plan remains dry-run and returns rollback-only actions for unsafe or unapproved sources",
+        blockingIfMissing: true
+      },
+      {
+        checkId: "operator_hash_lookup_only",
+        source: "contracts",
+        expectedState: "operator_only",
+        reconciliationRule: "raw hash lookup remains operator-only future route and never public raw locator output",
+        blockingIfMissing: true
+      },
+      {
+        checkId: "kill_switch_ready",
+        source: "contracts",
+        expectedState: "kill_switch_ready",
+        reconciliationRule: "emergency stop and kill switch actions pause workers and hold source ingest",
+        blockingIfMissing: true
+      }
+    ],
+    fieldMapping: {
+      darkwebIndexFields: ["rawUrlHash", "hostHash", "pathHash", "contentHash", "sourceHash", "legalTriage", "reviewState", "retentionClass"],
+      restrictedMetadataFields: ["sourceId", "urlHash", "policyAuditId", "retentionClass", "legalHold", "killSwitchState", "redactionProof", "auditEventIds"],
+      joinKeys: ["rawUrlHash_to_urlHash", "sourceHash_to_sourceId_or_policyAuditId"]
+    },
+    releaseGate: {
+      routeVisibleRequired: true,
+      restrictedApplyPlanGreenRequired: true,
+      standaloneDarkwebClaimsHeld: true,
+      noLeakSerializationRequired: true,
+      proofCommands: [
+        "bun test src/tests/darkwebIndex.test.ts",
+        "bun test src/tests/api.test.ts -t \"routes darkweb metadata index status and search without unsafe leaks\"",
+        "bun run check:restricted-metadata-apply-plan",
+        "bun run check:contract-index"
+      ]
+    },
+    unresolvedExternalBlockers: []
+  };
+}
+
+function buildDarkwebIndexRefreshOperationsPlan(): DarkwebIndexRefreshOperationsPlan {
+  return {
+    schemaVersion: "ti.darkweb_index_refresh_operations.v1",
+    owner: "Agent 05",
+    mode: "metadata_only_operations_model",
+    targetRecordCount: 60000,
+    willFetchNetwork: false,
+    willScheduleLiveWork: false,
+    lanes: [
+      { laneId: "tor_high_risk_refresh", sourceType: "directory", network: "tor", targetRecords: 18000, cadenceMinutes: 360, maxRecordsPerRun: 800, approvalRequired: "approved_metadata_only", action: "refresh_metadata", safeOutput: "hashes_redacted_labels_and_quarantine_descriptors" },
+      { laneId: "i2p_standard_refresh", sourceType: "seed_list", network: "i2p", targetRecords: 12000, cadenceMinutes: 1440, maxRecordsPerRun: 700, approvalRequired: "approved_metadata_only", action: "refresh_metadata", safeOutput: "hashes_redacted_labels_and_quarantine_descriptors" },
+      { laneId: "freenet_liveness_recheck", sourceType: "seed_list", network: "freenet", targetRecords: 9000, cadenceMinutes: 10080, maxRecordsPerRun: 600, approvalRequired: "operator_review", action: "recheck_liveness", safeOutput: "hashes_redacted_labels_and_quarantine_descriptors" },
+      { laneId: "directory_bulk_metadata", sourceType: "directory", network: "mixed", targetRecords: 11000, cadenceMinutes: 1440, maxRecordsPerRun: 2500, approvalRequired: "approved_metadata_only", action: "refresh_metadata", safeOutput: "hashes_redacted_labels_and_quarantine_descriptors" },
+      { laneId: "analyst_import_review", sourceType: "analyst_import", network: "mixed", targetRecords: 3000, cadenceMinutes: 0, maxRecordsPerRun: 0, approvalRequired: "operator_review", action: "hold_for_review", safeOutput: "hashes_redacted_labels_and_quarantine_descriptors" },
+      { laneId: "public_report_reference_import", sourceType: "public_report", network: "mixed", targetRecords: 7000, cadenceMinutes: 1440, maxRecordsPerRun: 900, approvalRequired: "approved_metadata_only", action: "import_metadata_descriptors", safeOutput: "hashes_redacted_labels_and_quarantine_descriptors" }
+    ],
+    budgets: {
+      maxWorkerCount: 8,
+      maxRunMinutes: 45,
+      maxBytesPerPage: 262144,
+      quarantineRetentionDays: 14,
+      diskBudgetGb: 24
+    },
+    disabledUntilApprovedHarness: true,
+    blockedActions: darkwebIndexForbiddenOperations()
+  };
+}
+
+function buildDarkwebIndexDriftPacket(records: readonly DarkwebIndexRecord[]): DarkwebIndexDriftPacket {
+  const selected = [records[0], records[1], records[2], records[3], records[4], records[5], records[6], records[7]].filter((record): record is DarkwebIndexRecord => Boolean(record));
+  const driftTypes: DarkwebIndexDriftPacket["rows"][number]["driftType"][] = [
+    "newly_alive",
+    "newly_dead",
+    "category_changed",
+    "legal_risk_changed",
+    "source_reputation_changed",
+    "duplicate_cluster_changed",
+    "review_priority_changed",
+    "graph_export_hold_changed"
+  ];
+  const currentState = (record: DarkwebIndexRecord, driftType: DarkwebIndexDriftPacket["rows"][number]["driftType"]): string => {
+    if (driftType === "newly_alive" || driftType === "newly_dead") return record.liveness;
+    if (driftType === "category_changed") return record.category;
+    if (driftType === "legal_risk_changed") return record.legalTriage;
+    if (driftType === "source_reputation_changed") return record.confidence >= 0.75 ? "strong_metadata_source" : "watch_metadata_source";
+    if (driftType === "duplicate_cluster_changed") return "hash_cluster_recomputed";
+    if (driftType === "review_priority_changed") return record.reviewState;
+    return record.reviewState === "approved_metadata_only" ? "graph_export_candidate" : "graph_export_hold";
+  };
+  const reviewImpact = (record: DarkwebIndexRecord, driftType: DarkwebIndexDriftPacket["rows"][number]["driftType"]): DarkwebIndexDriftPacket["rows"][number]["reviewImpact"] => {
+    if (record.legalTriage === "blocked_unsafe" || record.reviewState === "blocked_unsafe") return "blocked_unsafe";
+    if (record.reviewState === "legal_hold") return "legal_hold";
+    if (driftType === "graph_export_hold_changed") return "graph_export_hold";
+    if (driftType === "newly_alive" || driftType === "review_priority_changed" || driftType === "duplicate_cluster_changed") return "review_required";
+    return "no_change";
+  };
+  const publicUiEffect = (record: DarkwebIndexRecord, driftType: DarkwebIndexDriftPacket["rows"][number]["driftType"]): DarkwebIndexDriftPacket["rows"][number]["publicUiEffect"] => {
+    if (record.legalTriage === "blocked_unsafe" || record.reviewState === "blocked_unsafe") return "hide_from_public_default";
+    if (driftType === "graph_export_hold_changed" || record.reviewState !== "approved_metadata_only") return "hold_public_claim";
+    if (record.liveness === "live") return "show_badge";
+    return "update_filter_count";
+  };
+  return {
+    schemaVersion: "ti.darkweb_index_liveness_classification_drift.v1",
+    owner: "Agent 05",
+    mode: "metadata_only_drift_rows",
+    generatedFromFixtureCount: records.length,
+    rows: selected.map((record, index) => ({
+      driftId: stableId("darkweb-drift", `${record.id}:${driftTypes[index]}`),
+      recordId: record.id,
+      driftType: driftTypes[index]!,
+      previousState: index % 2 === 0 ? "unknown" : "needs_review",
+      currentState: currentState(record, driftTypes[index]!),
+      reviewImpact: reviewImpact(record, driftTypes[index]!),
+      publicUiEffect: publicUiEffect(record, driftTypes[index]!),
+      evidence: {
+        sourceHash: record.provenance.sourceHash,
+        contentHash: record.contentHash,
+        rawUrlHash: record.rawUrlHash
+      }
+    })),
+    noLeakSerialization: darkwebIndexNoLeakSerialization()
+  };
+}
+
+function buildDarkwebIndexSearchQualityMetrics(records: readonly DarkwebIndexRecord[]): DarkwebIndexSearchQualityMetrics {
+  const actorHintCount = records.filter((record) => record.actorHints.length > 0).length;
+  const victimHintCount = records.filter((record) => record.victimHints.length > 0).length;
+  const ttpHintCount = records.filter((record) => record.ttpHints.length > 0).length;
+  const blocked = records.filter((record) => record.reviewState === "blocked_unsafe" || record.legalTriage === "blocked_unsafe");
+  const averageConfidence = records.length === 0 ? 0 : Math.round((records.reduce((sum, record) => sum + record.confidence, 0) / records.length) * 100) / 100;
+  return {
+    schemaVersion: "ti.darkweb_index_search_quality.v1",
+    owner: "Agent 05",
+    mode: "metadata_only_quality_metrics",
+    categoryCoverage: countBy(CATEGORIES, records.map((record) => record.category)),
+    languageHints: [...new Set(records.map((record) => record.language))].sort((left, right) => left.localeCompare(right)).map((language: string) => ({
+      language,
+      count: records.filter((record) => record.language === language).length
+    })),
+    titleSummaryUsefulness: {
+      usefulTitleCount: records.filter((record) => record.title.length >= 12).length,
+      usefulSummaryCount: records.filter((record) => record.safeSummary.length >= 40).length,
+      weakSummaryCount: records.filter((record) => record.safeSummary.length < 40 || record.confidence < 0.6).length
+    },
+    entityExtractionConfidence: {
+      actorHintCount,
+      victimHintCount,
+      datasetHintCount: records.filter((record) => /dataset|descriptor|claim/i.test(record.safeSummary)).length,
+      ttpHintCount,
+      averageConfidence
+    },
+    blockedUnsafeEvidenceCounts: {
+      payloadLike: blocked.filter((record) => record.legalTriage === "malware_or_payload" || /payload/i.test(record.blockedReason ?? "")).length,
+      credentialLike: blocked.filter((record) => record.legalTriage === "credential_or_abuse" || /credential/i.test(record.blockedReason ?? "")).length,
+      privateAccessLike: blocked.filter((record) => /private/i.test(record.blockedReason ?? "")).length,
+      actorInteractionLike: blocked.filter((record) => /actor-interaction|interaction/i.test(record.blockedReason ?? "")).length
+    },
+    falsePositiveReviewRows: records.filter((record) => record.reviewState === "false_positive_review").slice(0, 10).map((record) => record.id),
+    publicSafeDisplayReadiness: {
+      readyCount: records.filter((record) => record.reviewState === "approved_metadata_only").length,
+      heldCount: records.filter((record) => record.reviewState === "needs_review" || record.reviewState === "legal_hold" || record.reviewState === "false_positive_review").length,
+      blockedCount: records.filter((record) => record.reviewState === "blocked_unsafe").length,
+      requiredWarnings: ["metadata_only", "review_required", "blocked_unsafe", "legal_hold"]
+    }
+  };
+}
+
+function buildDarkwebIndexOperatorRunbook(): DarkwebIndexOperatorRunbook {
+  return {
+    schemaVersion: "ti.darkweb_index_operator_runbook.v1",
+    owner: "Agent 05",
+    mode: "operator_controls_no_live_collection",
+    isolatedCollectorPool: {
+      enabledByDefault: false,
+      approvedHarnessRequired: true,
+      maxWorkers: 8,
+      disposableWorkersRequired: true,
+      hostNetworkAllowed: false
+    },
+    proxyBoundary: {
+      approvedProxyRequired: true,
+      directEgressAllowed: false,
+      networkAllowlist: ["tor", "i2p", "freenet"]
+    },
+    diskBudget: {
+      quarantineDescriptorGb: 24,
+      rawBodyStorageAllowed: false,
+      payloadStorageAllowed: false,
+      retentionDays: 14
+    },
+    contentSizeCap: {
+      maxBytesPerPage: 262144,
+      maxFetchSeconds: 20,
+      maxRedirects: 2
+    },
+    emergencyStop: {
+      flag: "DARKWEB_INDEX_KILL_SWITCH",
+      action: "pause_workers_hold_sources_clear_pending_refresh",
+      publicSearchEffect: "non_blocking_existing_metadata_only_search"
+    },
+    rollback: ["pause_darkweb_index_workers", "disable_source_ingest", "clear_pending_refresh_queue", "preserve_review_holds", "rerun_no_leak_checks"],
+    proofCommands: [
+      "bun run check",
+      "bun test src/tests/darkwebIndex.test.ts src/tests/api.test.ts src/tests/ops.test.ts",
+      "bun run check:route-inventory",
+      "bun run check:contract-index",
+      "bun run check:deploy-hygiene"
     ]
   };
 }
@@ -1044,6 +1666,41 @@ function countBy<T extends string>(keys: readonly T[], values: readonly T[]): Re
   const counts = Object.fromEntries(keys.map((key) => [key, 0])) as Record<T, number>;
   for (const value of values) counts[value] += 1;
   return counts;
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function driftCurrentState(record: DarkwebIndexRecord, driftType: DarkwebIndexDriftPacket["rows"][number]["driftType"]): string {
+  if (driftType === "newly_alive" || driftType === "newly_dead") return record.liveness;
+  if (driftType === "category_changed") return record.category;
+  if (driftType === "legal_risk_changed") return record.legalTriage;
+  if (driftType === "source_reputation_changed") return record.confidence >= 0.75 ? "strong_metadata_source" : "watch_metadata_source";
+  if (driftType === "duplicate_cluster_changed") return "hash_cluster_recomputed";
+  if (driftType === "review_priority_changed") return record.reviewState;
+  return record.reviewState === "approved_metadata_only" ? "graph_export_candidate" : "graph_export_hold";
+}
+
+function driftReviewImpact(
+  record: DarkwebIndexRecord,
+  driftType: DarkwebIndexDriftPacket["rows"][number]["driftType"]
+): DarkwebIndexDriftPacket["rows"][number]["reviewImpact"] {
+  if (record.reviewState === "blocked_unsafe") return "blocked_unsafe";
+  if (record.reviewState === "legal_hold") return "legal_hold";
+  if (driftType === "graph_export_hold_changed") return "graph_export_hold";
+  if (record.reviewState === "needs_review" || record.reviewState === "false_positive_review") return "review_required";
+  return "no_change";
+}
+
+function driftPublicUiEffect(
+  record: DarkwebIndexRecord,
+  driftType: DarkwebIndexDriftPacket["rows"][number]["driftType"]
+): DarkwebIndexDriftPacket["rows"][number]["publicUiEffect"] {
+  if (record.reviewState === "blocked_unsafe") return "hide_from_public_default";
+  if (record.reviewState === "legal_hold" || driftType === "graph_export_hold_changed") return "hold_public_claim";
+  if (driftType === "newly_alive" || driftType === "newly_dead" || driftType === "category_changed") return "update_filter_count";
+  return "show_badge";
 }
 
 function isNetwork(value: string | undefined): value is DarkwebIndexNetwork {

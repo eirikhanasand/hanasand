@@ -54,6 +54,7 @@ import {
 } from "../pipeline/searchQualityGate.ts";
 import { buildHighPriorityActorFreshnessDashboardDto, buildTimelinessGroundTruthHarnessDto } from "../pipeline/timelinessGroundTruth.ts";
 import { createCollectionPlan, createLiveSearchPlan } from "../planner/intelligencePlanner.ts";
+import { buildLiveProductSloDashboard, type LiveProductProofMode } from "../ops/productSlo.ts";
 import { RssAdapter } from "../adapters/rss.ts";
 import { StaticWebAdapter, type StaticWebAdapterOptions } from "../adapters/staticWeb.ts";
 import { buildDarkwebIndexStatus, darkwebIndexContract, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
@@ -184,6 +185,10 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
 
   if (request.method === "GET" && url.pathname === "/v1/ops/resource-snapshot") {
     return json(buildOpsResourceSnapshot(options));
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/ops/product-slo") {
+    return json(buildOpsProductSloDashboard(options, url));
   }
 
   if (request.method === "GET" && url.pathname === "/v1/ops/canary") {
@@ -7695,17 +7700,70 @@ function buildOpsResourceSnapshot(options: ApiServerOptions): Record<string, unk
   };
 }
 
+function buildOpsProductSloDashboard(options: ApiServerOptions, url: URL): Record<string, unknown> {
+  const resources = options.config ? resourceSnapshot(options) : undefined;
+  const memoryRssGb = typeof resources?.memory.rssMb === "number" ? resources.memory.rssMb / 1024 : undefined;
+  const proofMode = liveProductProofMode(url.searchParams.get("proofMode"));
+  return buildLiveProductSloDashboard({
+    generatedAt: url.searchParams.get("generatedAt") ?? undefined,
+    proofMode,
+    runs: options.store.listRuns(),
+    sources: options.store.listSources(),
+    captures: options.store.listCaptures(),
+    incidents: options.store.listIncidents(),
+    frontier: options.frontier.groupedSnapshot(),
+    resource: {
+      memoryRssGb,
+      diskGrowthGbPerDay: numberQuery(url.searchParams.get("diskGrowthGbPerDay")),
+      diskFreeGb: numberQuery(url.searchParams.get("diskFreeGb")),
+      diskUsedGb: numberQuery(url.searchParams.get("diskUsedGb"))
+    },
+    actorRun: {
+      actorId: url.searchParams.get("actorId") ?? undefined,
+      actorVersion: url.searchParams.get("actorVersion") ?? undefined,
+      buildId: url.searchParams.get("actorBuildId") ?? undefined,
+      imageId: url.searchParams.get("actorImageId") ?? undefined,
+      runId: url.searchParams.get("actorRunId") ?? undefined,
+      datasetId: url.searchParams.get("actorDatasetId") ?? undefined,
+      status: actorRunStatus(url.searchParams.get("actorStatus")),
+      queryCount: numberQuery(url.searchParams.get("actorQueryCount")) ?? null,
+      rowCount: numberQuery(url.searchParams.get("actorRowCount")) ?? null,
+      usefulRowCount: numberQuery(url.searchParams.get("actorUsefulRowCount")) ?? null,
+      activityClaimRowCount: numberQuery(url.searchParams.get("actorActivityClaimRows")) ?? null
+    },
+    cost: {
+      grossPpeRevenueUsd: numberQuery(url.searchParams.get("grossPpeRevenueUsd")) ?? null,
+      apifyCommissionUsd: numberQuery(url.searchParams.get("apifyCommissionUsd")) ?? null,
+      computeCostUsd: numberQuery(url.searchParams.get("computeCostUsd")) ?? null,
+      backendCostAllocationUsd: numberQuery(url.searchParams.get("backendCostAllocationUsd")) ?? null,
+      refundsFailuresUsd: numberQuery(url.searchParams.get("refundsFailuresUsd")) ?? null
+    },
+    snapshotStoragePath: url.searchParams.get("snapshotStoragePath") ?? undefined
+  }) as unknown as Record<string, unknown>;
+}
+
+function liveProductProofMode(value: string | null): LiveProductProofMode {
+  if (value === "fixture" || value === "local" || value === "inspur" || value === "public_live") return value;
+  return "local";
+}
+
+function actorRunStatus(value: string | null): "succeeded" | "failed" | "timed_out" | "aborted" | "unknown" | undefined {
+  if (value === "succeeded" || value === "failed" || value === "timed_out" || value === "aborted" || value === "unknown") return value;
+  return undefined;
+}
+
 function buildEnterpriseApiContractIndex() {
   const activeRoutes = [
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/console", surface: "ops", owner: "Agent 07/09", responseKeys: ["text/html", "active sources", "queued work", "latest captures", "why public answer is partial"] },
     { method: "GET", path: "/v1/auth/integration-notes", surface: "auth", owner: "Agent 09", responseKeys: ["version", "authBoundary", "notes"] },
-    { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "openapi", "surfaces", "publicCompatibility", "semantics"] },
+    { method: "GET", path: "/v1/contracts", surface: "contracts", owner: "Agent 09", responseKeys: ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "apifyStoreReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "openapi", "surfaces", "publicCompatibility", "semantics"] },
     { method: "GET", path: "/v1/analyst/claim-ledger", surface: "analyst", owner: "Agent 06/09", responseKeys: ["contract", "runStatusClarity", "entries", "allowedActions"] },
     { method: "POST", path: "/v1/analyst/claim-ledger/{id}/actions", surface: "analyst", owner: "Agent 06/09", responseKeys: ["contract", "dryRun", "action", "entry", "result"] },
     { method: "GET", path: "/v1/analyst/metadata-review-tasks", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "tasks", "notificationPackets", "claimLedger"] },
@@ -7835,7 +7893,7 @@ function buildEnterpriseApiContractIndex() {
       rule: "stable routes may gain optional fields, but removing or renaming these routes requires a new major version or compatibility-wrapper entry"
     },
     responseShapeInvariant: {
-      requiredTopLevelKeys: ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "openapi", "surfaces", "publicCompatibility", "semantics", "validation"],
+      requiredTopLevelKeys: ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "apifyStoreReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "publicWrapperResponsiveAudit", "publicWrapperDeltaAudit", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "openapi", "surfaces", "publicCompatibility", "semantics", "validation"],
       publicSearchRequiredKeys: ["status", "runId", "refreshAfterSeconds", "cursor", "nextCursor", "pollCursor", "deltaCursor", "updated", "warningCodes", "publicTiAnswer", "publicWrapperDelta"],
       publicSearchStableFields: compatibilityFields,
       publicWrapperDeltaStableFields: publicWrapperDeltaStableFields(),
@@ -7843,7 +7901,7 @@ function buildEnterpriseApiContractIndex() {
     },
     openapiInvariant: {
       version: enterpriseApiSurface.openapi.openapi,
-      requiredSchemas: ["ErrorEnvelope", "CursorPage", "IdempotentRunRequest", "PublicSearchResponse", "SdkPollingEnvelope", "SdkSubscriptionRegistration", "StreamingEventEnvelope", "WebhookDeliveryAttempt", "PublicWrapperCutoverReadiness", "RealtimeDeliveryPrototype", "RealtimePrototypeEvent", "ClientGenerationFreeze", "GeneratedClientTarget"],
+      requiredSchemas: ["ErrorEnvelope", "CursorPage", "IdempotentRunRequest", "PublicSearchResponse", "SdkPollingEnvelope", "SdkSubscriptionRegistration", "StreamingEventEnvelope", "WebhookDeliveryAttempt", "PublicWrapperCutoverReadiness", "RealtimeDeliveryPrototype", "RealtimePrototypeEvent", "ClientGenerationFreeze", "GeneratedClientTarget", "ApifyStoreReadiness", "PublicProofDto"],
       requiredPaths: ["/v1/intel/search", "/v1/intel/runs/{id}/results", "/v1/sources", "/v1/contracts"],
       rule: "OpenAPI paths and component schemas are the generated-client backbone and must stay additive within /v1"
     },
@@ -8330,6 +8388,23 @@ function buildEnterpriseApiContractIndex() {
     blockers: scraperNativeReplacementReadiness.blockers,
     proofCommands: scraperNativeReplacementReadiness.proofCommands
   };
+  const apifyStoreReadiness = buildApifyStoreReadinessContract({
+    frontendProgressiveUpdateContract,
+    scraperNativeReplacementReadiness
+  });
+  (apiRegressionSentinel as {
+    apifyStoreReadinessInvariant?: unknown;
+  }).apifyStoreReadinessInvariant = {
+    schemaVersion: apifyStoreReadiness.schemaVersion,
+    status: apifyStoreReadiness.status,
+    actorName: apifyStoreReadiness.actor.name,
+    defaultQueries: apifyStoreReadiness.defaultSampleInput.queries,
+    sampleQueries: apifyStoreReadiness.publicProofDtos.map((proof) => proof.query),
+    compatibilityStates: apifyStoreReadiness.frontendApiCompatibility.states.map((state) => state.state),
+    blockers: apifyStoreReadiness.storeReadiness.knownBlockers,
+    guardrails: apifyStoreReadiness.marketplaceGuardrails,
+    proofCommands: apifyStoreReadiness.proofCommands
+  };
   const darkwebIndexFrontendContract = buildDarkwebIndexFrontendContractDto();
   (apiRegressionSentinel as {
     darkwebIndexFrontendInvariant?: unknown;
@@ -8482,6 +8557,7 @@ function buildEnterpriseApiContractIndex() {
     routeInventory: {
       count: activeRoutes.length,
       source: "src/api/server.ts",
+      activeRoutes,
       routes: activeRoutes.map((route) => ({
         ...route,
         contract: `${route.surface}.response`,
@@ -8497,6 +8573,7 @@ function buildEnterpriseApiContractIndex() {
     clientGenerationFreeze,
     frontendProgressiveUpdateContract,
     scraperNativeReplacementReadiness,
+    apifyStoreReadiness,
     darkwebIndexFrontendContract,
     sourceAtlasFrontendContract,
     publicWrapperResponsiveAudit,
@@ -8564,6 +8641,7 @@ function buildEnterpriseApiContractIndex() {
       clientGenerationFreeze,
       frontendProgressiveUpdateContract,
       scraperNativeReplacementReadiness,
+      apifyStoreReadiness,
       darkwebIndexFrontendContract,
       sourceAtlasFrontendContract,
       ["publicCanaryControlPlane"]: publicCanaryControlPlane,
@@ -8946,8 +9024,8 @@ function buildEnterpriseApiContractIndex() {
       contractSurface("quality", "GET", "/v1/quality/evaluate", "Agent 07/09", ["query", "quality", "dashboard", "entityResolutionWorkbench", "timelinessGroundTruth", "highPriorityActorFreshnessDashboard", "attackMappingQuality", "analystFeedbackLoop", "actorProfileReviewWorkbench", "evaluationDatasetGovernance", "ctiEvaluationDatasetPack", "analystQualityReviewQueue", "analystFeedbackLearningLoop", "activeLearningCandidateQueue", "qualityRuntimeValueGates", "qualityRegressionSuite", "publicTiAnswer", "examples"], ["answer_readiness", "public_answer_contract", "review_required_states", "entity_resolution_workbench", "timeliness_ground_truth", "high_priority_actor_freshness_dashboard", "attack_mapping_quality", "analyst_feedback_loop", "actor_profile_review_workbench", "evaluation_dataset_governance", "cti_evaluation_dataset_pack", "analyst_quality_review_queue", "analyst_feedback_learning_loop", "active_learning_candidate_queue", "quality_runtime_value_gates", "quality_regression_suite"]),
       contractSurface("graph", "GET", "/v1/graph/*", "Agent 08/09", ["contract", "graph", "timeline", "reviewPlan", "cutoverReport", "liveUpdate"], ["graph_enforcement", "graph_export_certification", "graph_live_update", "graph_stix_rc_gate", "stix_mapping", "review_workflow"]),
       contractSurface("stix", "GET/POST", "/v1/exports/stix", "Agent 08/09", ["readiness", "bundle", "liveUpdate"], ["stix_readiness", "schema_safe", "ledger_complete", "graph_live_update", "graph_stix_rc_gate", "taxii_descriptor_only"]),
-      contractSurface("ops", "GET/POST", "/v1/ops/*", "Agent 07/10/09", ["resources", "capacity", "workerPools", "queue", "operatorView", "readiness"], ["resource_budget", "worker_supervision", "public_canary_control_plane", "public_canary_readiness", "no_implicit_source_activation"]),
-      contractSurface("contracts", "GET", "/v1/contracts", "Agent 09", ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "openapi", "semantics"], ["api_regression_sentinel", "api_gateway_integration", "public_wrapper_cutover_readiness", "realtime_delivery_prototype", "realtime_delivery_soak", "client_generation_freeze", "frontend_progressive_update", "scraper_native_replacement_readiness", "darkweb_index_frontend_contract", "source_atlas_frontend_contract", "streaming_webhook_compatibility", "backward_compatibility", "openapi_ready", "no_leak_dto"])
+      contractSurface("ops", "GET/POST", "/v1/ops/*", "Agent 07/10/09", ["resources", "capacity", "workerPools", "queue", "operatorView", "readiness", "liveProductSlo", "apifyLaunchExperiment", "dailySnapshot"], ["resource_budget", "worker_supervision", "public_canary_control_plane", "public_canary_readiness", "live_product_slo_dashboard", "apify_revenue_telemetry", "no_implicit_source_activation"]),
+      contractSurface("contracts", "GET", "/v1/contracts", "Agent 09", ["endpoint", "routeInventory", "routeTruthAudit", "apiRegressionSentinel", "apiGatewayIntegration", "publicWrapperCutoverReadiness", "realtimeDeliveryPrototype", "realtimeDeliverySoak", "clientGenerationFreeze", "frontendProgressiveUpdateContract", "scraperNativeReplacementReadiness", "apifyStoreReadiness", "darkwebIndexFrontendContract", "sourceAtlasFrontendContract", "enterpriseApiSurface", "sdkIntegration", "clientCompatibilityMatrix", "streamingWebhookCompatibility", "openapi", "semantics"], ["api_regression_sentinel", "api_gateway_integration", "public_wrapper_cutover_readiness", "realtime_delivery_prototype", "realtime_delivery_soak", "client_generation_freeze", "frontend_progressive_update", "scraper_native_replacement_readiness", "apify_store_readiness", "darkweb_index_frontend_contract", "source_atlas_frontend_contract", "streaming_webhook_compatibility", "backward_compatibility", "openapi_ready", "no_leak_dto"])
     ],
     examples: {
       publicPostSearch: {
@@ -8994,8 +9072,11 @@ function buildEnterpriseApiContractIndex() {
       typecheck: "bun run check",
       fullTests: "bun test",
       publicProofs: [
-        "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
-        "TI_SEARCH_READINESS_QUERY=APT42 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Volt Typhoon' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Scattered Spider' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY=LockBit bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY=APT42 bun run check:scraper-native-search",
         "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
         "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
       ],
@@ -9807,6 +9888,246 @@ function buildDarkwebIndexFrontendContractDto() {
   return buildDarkwebIndexFrontendContract();
 }
 
+function buildApifyStoreReadinessContract(input: {
+  frontendProgressiveUpdateContract: ReturnType<typeof buildFrontendProgressiveUpdateContract>;
+  scraperNativeReplacementReadiness: ReturnType<typeof buildScraperNativeReplacementReadinessContract>;
+}) {
+  const defaultQueries = [
+    "APT29",
+    "APT28",
+    "APT42",
+    "Lazarus Group",
+    "Volt Typhoon",
+    "Salt Typhoon",
+    "Turla",
+    "Sandworm",
+    "Kimsuky",
+    "MuddyWater",
+    "Charming Kitten",
+    "Scattered Spider",
+    "LockBit",
+    "Clop",
+    "Akira",
+    "Black Basta",
+    "Play",
+    "RansomHub",
+    "ALPHV",
+    "Hunters International"
+  ];
+  const defaultSampleInput = {
+    queries: defaultQueries,
+    maxRowsPerQuery: 25,
+    includeActivity: true,
+    includeTargets: true,
+    includeTtps: true,
+    includeSources: true,
+    includeDatasets: false,
+    includeCoverageGaps: true
+  };
+  const safetyContract = {
+    outputContract: "safe_metadata_only.v1",
+    rawContentIncluded: false,
+    metadataOnly: true,
+    credentialsIncluded: false,
+    stolenFilesIncluded: false,
+    privateContentIncluded: false,
+    actorInteraction: false,
+    forbiddenFields: ["raw_body", "restricted_raw_url", "credential", "object_key", "leaked_row", "private_message", "payload_download"]
+  };
+  const publicProofDtos = [
+    apifyPublicProofDto("APT29", "actor", "apt29", 6, ["clear_web", "public_channel"], "current", "corroborated"),
+    apifyPublicProofDto("Volt Typhoon", "actor", "volt_typhoon", 5, ["clear_web", "public_channel"], "recent", "single_source"),
+    apifyPublicProofDto("Scattered Spider", "actor", "scattered_spider", 5, ["clear_web", "public_channel"], "current", "corroborated"),
+    apifyPublicProofDto("LockBit", "ransomware", "lockbit", 7, ["clear_web", "darknet_metadata"], "recent", "single_source")
+  ];
+
+  return {
+    schemaVersion: "ti.apify_store_readiness.v1",
+    owner: "Agent 09",
+    status: "buyer_ready_with_external_payout_blocker",
+    route: "GET /v1/contracts#apifyStoreReadiness",
+    actor: {
+      name: "public-threat-actor-monitor",
+      title: "Public Threat Actor & Ransomware Activity Monitor",
+      version: "0.6",
+      buildTag: "latest",
+      actorRoot: "apify/public-threat-actor-monitor",
+      defaultApiBase: "https://api.hanasand.com/api/ti/search",
+      outputContract: safetyContract.outputContract,
+      categories: ["SECURITY", "MONITORING"]
+    },
+    storeReadiness: {
+      listingFields: {
+        title: "complete",
+        description: "complete",
+        readme: "complete",
+        changelog: "complete",
+        categories: "complete",
+        exampleInput: "complete",
+        pricingModel: "complete",
+        payoutMonetizationStatus: "external_verification_required",
+        latestBuild: "tracked_by_apify_after_publish",
+        latestProofRun: "documented_below",
+        datasetSample: "complete",
+        knownBlockers: "explicit"
+      },
+      knownBlockers: [
+        "apify_beneficiary_and_payout_method_not_stored_in_repo",
+        "public_apify_build_id_and_dataset_id_must_be_refreshed_after_publish",
+        "remote_public_proof_requires_network_approval_when_run_outside_deployed_host"
+      ],
+      readinessDecision: "submit_after_external_payout_and_live_proof_refresh",
+      latestBuild: { source: "Apify console", buildTag: "latest", buildId: null },
+      latestProofRun: { source: "local_and_public_commands", runId: "proof_pending_after_publish", datasetId: "dataset_pending_after_publish" },
+      publicationFiles: ["README.md", "CHANGELOG.md", ".actor/actor.json", ".actor/INPUT_SCHEMA.json", ".actor/DATASET_SCHEMA.json", ".actor/OUTPUT_SCHEMA.json", "LAUNCH_CHECKLIST.md"]
+    },
+    defaultSampleInput,
+    sampleOutputDtos: publicProofDtos.map((proof) => proof.datasetSample),
+    publicProofDtos,
+    frontendApiCompatibility: {
+      sourceContracts: {
+        frontendProgressiveStatus: input.frontendProgressiveUpdateContract.status,
+        scraperNativeReplacementDecision: input.scraperNativeReplacementReadiness.decision
+      },
+      states: [
+        { state: "queued", displayState: "searching", copy: "Searching", refreshAfterSeconds: 3, preservePriorAnswer: true },
+        { state: "searching", displayState: "searching", copy: "Searching", refreshAfterSeconds: 3, preservePriorAnswer: true },
+        { state: "partial", displayState: "partial", copy: "Partial public evidence is ready.", refreshAfterSeconds: 3, preservePriorAnswer: true },
+        { state: "ready", displayState: "ready", copy: "Verified public evidence is ready.", refreshAfterSeconds: 0, preservePriorAnswer: false },
+        { state: "empty_delta", displayState: "waiting", copy: "Still searching public sources.", refreshAfterSeconds: 3, preservePriorAnswer: true }
+      ],
+      stableFields: ["query", "status", "runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "warningCodes", "publicTiAnswer", "publicWrapperDelta"],
+      unknownActorCopy: "Searching",
+      emptyDeltaRule: "return stable cursors and preserve the last safe answer; never replace with demo actor copy"
+    },
+    pricingHooks: {
+      model: "pay_per_dataset_row",
+      unitEvent: "apify-default-dataset-item",
+      actorStartEvent: "apify-actor-start",
+      rowPriceUsdPerThousand: { free: 3, bronze: 2.7, silver: 2.4, gold: 2.1 },
+      payoutStatus: "not_available_without_external_apify_account_verification",
+      revenueTelemetryHandoff: "/v1/ops/product-slo.apifyLaunchExperiment"
+    },
+    marketplaceGuardrails: {
+      noPlaceholderDefaults: true,
+      noHelloWorldSampleInput: true,
+      noGenericCategories: true,
+      noInflatedClaims: true,
+      noAiFlavoredCopy: true,
+      safeOutputOnly: true,
+      defaultQueriesAreRealWatchlist: true,
+      bannedListingTerms: ["helloWorld", "placeholder", "TODO", "as an AI", "AI-generated", "ChatGPT", "language model"]
+    },
+    safetyContract,
+    proofCommands: [
+      "bun run check",
+      "bun run check:api-regression",
+      "bun run check:contract-index",
+      "bun run check:apify-threat-actor-monitor",
+      "bun run smoke:apify-threat-actor-monitor",
+      "bun run check:apify-publication",
+      "TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Volt Typhoon' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Scattered Spider' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY=LockBit bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search",
+      "TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"
+    ],
+    noLeakProof: {
+      serializationRule: "sample outputs contain row ids, source families, confidence, evidence grade, cursors, hashes, and summaries only",
+      forbiddenPatternGate: "authorization|cookie|password|bearer|raw_body|restricted_raw_url|object_key|credential|leaked_row|private_message|payload_download",
+      proofFields: ["rawContentIncluded:false", "safety.metadataOnly:true", "provenanceHash", "sourceFamilies", "reviewReasons", "analysisFacets"]
+    }
+  };
+}
+
+function apifyPublicProofDto(
+  query: string,
+  queryClass: string,
+  slug: string,
+  rowCount: number,
+  sourceFamilies: string[],
+  freshness: "current" | "recent" | "stale" | "unknown",
+  evidenceGrade: "corroborated" | "single_source" | "unverified"
+) {
+  const rowType = queryClass === "ransomware" ? "activity" : "profile";
+  const hasPublicChannelCoverage = sourceFamilies.includes("public_channel");
+  return {
+    schemaVersion: "ti.public_proof_dto.v1",
+    runId: `apify_sample_run_${slug}`,
+    buildVersion: "0.6",
+    datasetId: `apify_sample_dataset_${slug}`,
+    query,
+    queryClass,
+    rowCount,
+    freshness,
+    sourceFamilies,
+    safetyContract: "safe_metadata_only.v1",
+    noLeakProof: {
+      rawContentIncluded: false,
+      credentialsIncluded: false,
+      privateContentIncluded: false,
+      actorInteraction: false,
+      forbiddenFieldsAbsent: ["raw_body", "restricted_raw_url", "credential", "object_key", "leaked_row", "private_message", "payload_download"]
+    },
+    datasetSample: {
+      query,
+      rowType,
+      actor: query,
+      title: `${query} public intelligence profile`,
+      summary: `${query} sample row using public metadata, source-family coverage, confidence, freshness, and provenance fields only.`,
+      sourceType: sourceFamilies.includes("darknet_metadata") ? "darknet_metadata" : "clear_web",
+      confidence: evidenceGrade === "corroborated" ? 0.72 : 0.58,
+      generatedAt: "2026-06-20T12:00:00.000Z",
+      collectionMode: "live_search",
+      sourceCount: rowCount,
+      sourceFamilyCount: sourceFamilies.length,
+      sourceFamilies,
+      missingSourceFamilies: hasPublicChannelCoverage ? [] : ["public_channel"],
+      coverageStatus: sourceFamilies.length > 1 ? "sufficient" : "thin",
+      collectionPriority: sourceFamilies.length > 1 ? "low" : "medium",
+      recommendedCollectionAction: hasPublicChannelCoverage ? "none" : "add_public_channel_sources",
+      coverageGapCodes: hasPublicChannelCoverage ? [] : ["missing_public_channel_evidence"],
+      activityCount: Math.max(1, rowCount - 2),
+      firstSeen: "2026-06-20T12:00:00.000Z",
+      lastSeen: "2026-06-20T12:00:00.000Z",
+      freshnessStatus: freshness,
+      schedulerState: "attached",
+      schedulerDecision: "reuse_active_run",
+      nextPollSeconds: 3,
+      retryAfterSeconds: 3,
+      duplicateRunReuse: true,
+      attachedToActiveRun: true,
+      queuedTaskCount: 0,
+      deferredBackgroundWorkloads: ["source_atlas_bulk_import", "darkweb_metadata_refresh"],
+      schedulerBadges: ["polling_primary", "safe_metadata_only"],
+      sourceCoverageState: sourceFamilies.length > 1 ? "sufficient" : "thin",
+      sourceCoverageGapCount: hasPublicChannelCoverage ? 0 : 1,
+      sourceCoverageGaps: hasPublicChannelCoverage ? [] : ["missing_public_channel_evidence"],
+      pollingHint: "poll_again_for_freshness",
+      evidenceGrade,
+      isActionable: evidenceGrade === "corroborated",
+      reviewReasons: [`freshness:${freshness}`, `evidence:${evidenceGrade}`, "safety:metadata_only"],
+      analysisFacets: [`row:${rowType}`, `evidence:${evidenceGrade}`, `freshness:${freshness}`, "safety:metadata_only"],
+      hasDarknetMetadata: sourceFamilies.includes("darknet_metadata"),
+      hasPublicChannelCoverage,
+      provenanceHash: `proof_hash_${slug}`,
+      rawContentIncluded: false,
+      safety: {
+        metadataOnly: true,
+        credentialsIncluded: false,
+        stolenFilesIncluded: false,
+        privateContentIncluded: false,
+        actorInteraction: false
+      },
+      runId: `apify_sample_run_${slug}`,
+      status: "partial",
+      aliases: [query],
+      warningCodes: hasPublicChannelCoverage ? [] : ["source_coverage_gap"]
+    }
+  };
+}
+
 function buildSourceAtlasFrontendContractDto() {
   return {
     schemaVersion: "ti.source_atlas_frontend_contract.v1",
@@ -10223,6 +10544,42 @@ function enterpriseApiSurfaceContract(
               fallbackWatch: { type: "object" },
               deprecationWatch: { type: "object" },
               proofCommands: { type: "array", items: { type: "string" } }
+            }
+          },
+          ApifyStoreReadiness: {
+            type: "object",
+            required: ["schemaVersion", "status", "actor", "storeReadiness", "defaultSampleInput", "publicProofDtos", "frontendApiCompatibility", "marketplaceGuardrails", "proofCommands", "noLeakProof"],
+            properties: {
+              schemaVersion: { type: "string" },
+              status: { type: "string" },
+              actor: { type: "object" },
+              storeReadiness: { type: "object" },
+              defaultSampleInput: { type: "object" },
+              sampleOutputDtos: { type: "array", items: { type: "object" } },
+              publicProofDtos: { type: "array", items: { $ref: "#/components/schemas/PublicProofDto" } },
+              frontendApiCompatibility: { type: "object" },
+              pricingHooks: { type: "object" },
+              marketplaceGuardrails: { type: "object" },
+              proofCommands: { type: "array", items: { type: "string" } },
+              noLeakProof: { type: "object" }
+            }
+          },
+          PublicProofDto: {
+            type: "object",
+            required: ["schemaVersion", "runId", "buildVersion", "datasetId", "query", "rowCount", "freshness", "sourceFamilies", "safetyContract", "noLeakProof", "datasetSample"],
+            properties: {
+              schemaVersion: { type: "string" },
+              runId: { type: "string" },
+              buildVersion: { type: "string" },
+              datasetId: { type: "string" },
+              query: { type: "string" },
+              queryClass: { type: "string" },
+              rowCount: { type: "integer" },
+              freshness: { type: "string" },
+              sourceFamilies: { type: "array", items: { type: "string" } },
+              safetyContract: { type: "string" },
+              noLeakProof: { type: "object" },
+              datasetSample: { type: "object" }
             }
           },
           RealtimeDeliveryPrototype: {

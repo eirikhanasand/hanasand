@@ -13,6 +13,15 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-20 16:14 CEST
+
+- Completed the next Apify monitor source-coverage handoff slice for `apify/public-threat-actor-monitor`.
+- Actor dataset rows now consume `actorSourceCoverageMatrix` product fields when available and expose `freshnessExpectation`, `highestValueMissingFamily`, `nextBestSourceAction`, `buyerCaveat`, and `expectedTimeToUsefulSignal` with safe scheduler/source-gap fallbacks.
+- Updated the APT42 fixture, smoke test, dataset schema, publication gate, launch checklist, and changelog so the marketplace output explains what source family is missing, what to do next, and how quickly useful signal is expected.
+- Helped clear shared graph DTO drift by ensuring graph query/workspace/runtime/STIX response shapes carry the required actor comparison notebook.
+- Green: `bun run check`, full `bun test`, `bun run check:apify-threat-actor-monitor`, `bun run check:apify-publication`, and `bun run smoke:apify-threat-actor-monitor`.
+- Next: keep improving live data freshness/source coverage feeding the Apify monitor, especially real source-family coverage actions and scheduled-run freshness quality.
+
 ## Progress - 2026-06-20 15:48 CEST
 
 - Completed the next Apify monitor listing-readiness slice by strengthening `check:publication` from text checks into schema and fixture contract validation.

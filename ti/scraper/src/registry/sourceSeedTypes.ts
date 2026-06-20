@@ -666,7 +666,7 @@ export interface SourceSloBurnRateRemediationQueueItem {
   reasons: string[];
   rollback: string;
   approvalRequired: boolean;
-  routeHint: "/v1/sources/portfolio" | "/v1/sources/runtime-sla" | "/v1/sources/activation-batches" | "/v1/analyst/source-activation-packets";
+  routeHint: "/v1/sources/portfolio" | "/v1/sources/runtime-sla" | "/v1/sources/activation-batches" | "/v1/sources/coverage-closeout" | "/v1/analyst/source-activation-packets";
   dryRun: true;
   willMutate: false;
   willStartCrawling: false;
@@ -748,7 +748,7 @@ export interface SourceTenantActivationApprovalPacket {
   approvalState: "not_required" | "approved" | "pending" | "expired" | "blocked";
   approvalRequired: boolean;
   reasons: string[];
-  blockers: Array<"policy_hold" | "parser_certification" | "legal_review" | "robots_review" | "freshness_debt" | "duplicate" | "low_evidence_yield" | "tenant_scope" | "restricted_metadata">;
+  blockers: Array<"policy_hold" | "parser_certification" | "parser_retention_review" | "legal_review" | "robots_review" | "freshness_debt" | "duplicate" | "low_evidence_yield" | "tenant_scope" | "restricted_metadata" | "corroboration_required">;
   expectedEffect: {
     coverageGap: "closes_gap" | "improves_gap" | "no_effect";
     freshnessDebt: "reduces" | "unchanged" | "held";
@@ -1184,6 +1184,230 @@ export interface TiSourceAtlasRegistryActivationHandoff {
   };
 }
 
+export interface TiSourceAtlasPublicMonitorSourceGapHandoff {
+  schemaVersion: "ti.source_atlas.public_monitor_gap_handoff.v1";
+  routeHint: "/v1/sources/atlas";
+  consumer: "apify_public_threat_actor_monitor";
+  dryRun: true;
+  willMutate: false;
+  willImportSourcePacks: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  queryRows: Array<{
+    query: string;
+    queryClass: SourceCoverageCloseoutQueryClass;
+    publicMonitorState: "coverage_gap" | "partial" | "ready";
+    missingFamilies: TiSourceAtlasFamily[];
+    recommendedAtlasSourceIds: string[];
+    candidateSourceCount: number;
+    expectedPublicMonitorEffect: "more_recent_activity" | "more_source_diversity" | "victim_claim_context" | "cve_advisory_context" | "no_effect_until_review";
+    schedulerDryRun: {
+      priority: "low" | "normal" | "high" | "urgent";
+      cadenceSeconds: number;
+      estimatedDailyTasks: number;
+      duplicateRunReuse: true;
+    };
+    analystAction: "review_source_candidates" | "request_parser_certification" | "approve_canary_packet" | "hold_descriptor_only";
+    noLeakBoundary: {
+      metadataOnly: true;
+      rawContentIncluded: false;
+      unsafeUrlsIncluded: false;
+      sourceActivationApplied: false;
+    };
+  }>;
+  summary: {
+    queryCount: number;
+    coverageGapCount: number;
+    partialCount: number;
+    readyCount: number;
+    recommendedCandidateCount: number;
+    descriptorOnlyHoldCount: number;
+    parserCertificationHoldCount: number;
+  };
+  guardrails: {
+    noSourceActivation: true;
+    noCrawling: true;
+    noRawContent: true;
+    noPrivateInviteAuthCaptcha: true;
+    noThreatActorInteraction: true;
+  };
+  handoffs: {
+    agent01SourceReview: string[];
+    agent02SchedulerDryRun: string[];
+    agent03ParserCertification: string[];
+    agent04CoverageValue: string[];
+    agent09PublicMonitorApi: string[];
+    agent10ProductSlo: string[];
+  };
+}
+
+export interface TiSourceAtlasLifecycleReviewPacket {
+  schemaVersion: "ti.source_atlas.lifecycle_review.v1";
+  routeHint: "/v1/sources/atlas";
+  dryRun: true;
+  willMutate: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  rows: Array<{
+    reviewId: string;
+    atlasSourceId: string;
+    sourceHash: string;
+    family: TiSourceAtlasFamily;
+    queryClassCoverage: SourceCoverageCloseoutQueryClass[];
+    currentReadiness: TiSourceAtlasRecord["activationReadiness"]["state"];
+    lifecycleState: "healthy_candidate" | "degrade_review" | "quarantine_review" | "retirement_review" | "legal_review" | "parser_repair" | "descriptor_hold";
+    reasonCodes: Array<"duplicate" | "stale_freshness" | "low_evidence_yield" | "low_value_score" | "parser_gap" | "legal_or_robots_review" | "descriptor_only" | "unsafe_class_hold">;
+    recommendedAction: "keep_candidate" | "degrade" | "quarantine" | "retire_duplicate" | "request_parser_repair" | "request_legal_review" | "hold_descriptor_only";
+    replacementCandidateSourceIds: string[];
+    schedulerDryRun: {
+      action: "no_change" | "reduce_cadence" | "pause_candidate" | "replace_candidate";
+      estimatedDailyTaskDelta: number;
+      willLeaseWork: false;
+    };
+    rollback: {
+      rollbackPlanId: string;
+      action: string;
+    };
+    noMutationBoundary: {
+      sourceStatusChanged: false;
+      registryWritePlanned: false;
+      crawlEnqueued: false;
+      sourceDeleted: false;
+    };
+  }>;
+  summary: {
+    reviewedSourceCount: number;
+    healthyCandidateCount: number;
+    degradeReviewCount: number;
+    quarantineReviewCount: number;
+    retirementReviewCount: number;
+    parserRepairCount: number;
+    legalReviewCount: number;
+    descriptorHoldCount: number;
+  };
+  guardrails: {
+    noRegistryMutation: true;
+    noSourceDeletion: true;
+    noCrawling: true;
+    noSilentRetirement: true;
+    noSilentQuarantine: true;
+    publicOnly: true;
+  };
+  handoffs: {
+    agent01LifecycleReview: string[];
+    agent02SchedulerCadence: string[];
+    agent03ParserRepair: string[];
+    agent06EvidenceReplay: string[];
+    agent09ApiUi: string[];
+    agent10SloRelease: string[];
+  };
+}
+
+export interface TiSourceAtlasReliabilityEconomicsPacket {
+  schemaVersion: "ti.source_atlas.reliability_economics.v1";
+  routeHint: "/v1/sources/atlas";
+  dryRun: true;
+  willMutate: false;
+  willImportSourcePacks: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  rolloutScenarios: Array<{
+    label: "first_50" | "first_500" | "first_5000";
+    sourceCount: number;
+    selectedSourceIds: string[];
+    expectedActorsCovered: number;
+    expectedQueryClasses: SourceCoverageCloseoutQueryClass[];
+    expectedLanguageCoverage: string[];
+    expectedRegionCoverage: string[];
+    expectedUniqueEvidenceItemsPerDay: number;
+    duplicateRisk: "low" | "medium" | "high";
+    parserRepairDependencyCount: number;
+    legalReviewDependencyCount: number;
+    descriptorOnlyHoldCount: number;
+    estimatedStorageMbPerDay: number;
+    estimatedDailySchedulerTasks: number;
+    estimatedCostUnitsPerUsefulEvidence: number;
+    expectedApiActorUsefulness: number;
+    expectedPublicTiAnswerLift: number;
+    rollbackState: "ready" | "watch" | "hold";
+    noActivationBoundary: {
+      sourceActivationApplied: false;
+      registryMutationPlanned: false;
+      crawlEnqueued: false;
+      workerLeaseCreated: false;
+    };
+  }>;
+  sourceRows: Array<{
+    atlasSourceId: string;
+    sourceHash: string;
+    family: TiSourceAtlasFamily;
+    queryClassCoverage: SourceCoverageCloseoutQueryClass[];
+    expectedActorsCovered: number;
+    expectedQueryClasses: SourceCoverageCloseoutQueryClass[];
+    uniqueEvidenceYield: number;
+    duplicateRisk: number;
+    parserRepairDependency: boolean;
+    legalReviewDependency: boolean;
+    language: string;
+    regions: string[];
+    estimatedStorageMbPerDay: number;
+    estimatedDailySchedulerTasks: number;
+    expectedApiActorUsefulness: number;
+    expectedPublicTiAnswerLift: number;
+    economicsScore: number;
+    decision: "promote_candidate" | "watch" | "degrade" | "hold_parser" | "hold_legal" | "hold_descriptor" | "retire_duplicate";
+    rollbackState: "ready" | "watch" | "hold";
+  }>;
+  familyMetrics: Array<{
+    family: TiSourceAtlasFamily;
+    sourceCount: number;
+    averageEconomicsScore: number;
+    expectedUniqueEvidenceItemsPerDay: number;
+    duplicateRisk: number;
+    parserRepairDependencyCount: number;
+    legalReviewDependencyCount: number;
+    estimatedStorageMbPerDay: number;
+    estimatedDailySchedulerTasks: number;
+    topSourceIds: string[];
+  }>;
+  marketplaceValueBreakdown: {
+    actorProfileValue: number;
+    ransomwareVictimClaimValue: number;
+    cveAdvisoryValue: number;
+    publicChannelValue: number;
+    darkMetadataCorroborationValue: number;
+    enterpriseStixExportValue: number;
+  };
+  degradationQueues: Array<{
+    queue: "stale" | "noisy_duplicate" | "legal_blocked" | "parser_broken" | "low_yield" | "high_cost";
+    sourceIds: string[];
+    owner: "agent01_source_governance" | "agent02_scheduler" | "agent03_parser" | "agent06_evidence" | "agent07_quality" | "agent10_slo";
+    recommendedDryRunAction: "degrade_cadence" | "quarantine_candidate" | "request_parser_repair" | "request_legal_review" | "retire_duplicate" | "cost_review";
+    willMutate: false;
+    willStartCrawling: false;
+  }>;
+  guardrails: {
+    publicOnly: true;
+    noRegistryMutation: true;
+    noSourceActivation: true;
+    noCrawling: true;
+    noWorkerLeases: true;
+    noPrivateInviteAuthCaptcha: true;
+    noRawUnsafeUrls: true;
+    noPayloadDownloads: true;
+    descriptorOnlyPublicChannels: true;
+  };
+  handoffs: {
+    agent01ActivationPlanning: string[];
+    agent02SchedulerBudget: string[];
+    agent03ParserRepair: string[];
+    agent06EvidenceStorage: string[];
+    agent07QualityGates: string[];
+    agent09ApiFrontend: string[];
+    agent10OpsBudgets: string[];
+  };
+}
+
 export interface TiSourceAtlasApiResponse {
   endpoint: "/v1/sources/atlas";
   schemaVersion: "ti.source_atlas.v1";
@@ -1207,6 +1431,9 @@ export interface TiSourceAtlasApiResponse {
   records: TiSourceAtlasRecord[];
   importPlans: TiSourceAtlasImportPlan[];
   coverageMatrix: TiSourceAtlasCoverageMatrixRow[];
+  publicMonitorSourceGapHandoff: TiSourceAtlasPublicMonitorSourceGapHandoff;
+  lifecycleReview: TiSourceAtlasLifecycleReviewPacket;
+  sourceEconomics: TiSourceAtlasReliabilityEconomicsPacket;
   activationCanary: {
     dryRun: true;
     willMutate: false;
@@ -1667,7 +1894,7 @@ export interface SourceRuntimeSlaApiResponse {
   };
 }
 
-export type SourceCoverageCloseoutQueryClass = SourceCoverageSloQueryClass | "campaign" | "infrastructure";
+export type SourceCoverageCloseoutQueryClass = SourceCoverageSloQueryClass | "campaign" | "infrastructure" | "victim_company";
 export type SourceActivationWaveCategory = "vendor_blog" | "advisory" | "rss" | "github_security_advisory" | "public_research_feed" | "government_cert";
 
 export interface SourceActivationWaveSource {

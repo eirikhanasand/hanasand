@@ -52,8 +52,14 @@ import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { FileObjectEvidenceStore } from "../storage/fileObjectStore.ts";
 import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/memoryStore.ts";
 import {
+  buildEvidencePromotionTransactionPlan,
+  buildEvidencePromotionTransactionAuditReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
+  buildEvidenceSearchReadModelPromotionReplay,
   createEvidenceSearchReadModelRepository,
+  evidencePromotionExecutionFromPostgresRows,
+  evidencePromotionExecutionToPostgresRows,
+  executeEvidencePromotionTransactionPlan,
   evidenceSearchDocumentFromPostgresRow,
   evidenceSearchDocumentToPgvectorCandidate,
   evidenceSearchReadModelReadiness,
@@ -1826,6 +1832,231 @@ describe("evidence storage cutover", () => {
     expect(backendWriteSet.pgvectorCandidates.every((row) => !row.restricted_metadata && !row.metadata_only && !row.raw_text_present)).toBe(true);
     expect(backendWriteSet.openSearchDocuments.some((document) => document.restrictedMetadata && !document.embeddingEligible && document.embeddingInputHash === undefined)).toBe(true);
     expect(backendWriteSet.postgresDocuments.some((row) => row.restricted_metadata && row.embedding_input_hash === undefined)).toBe(true);
+
+    const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(backendWriteSet, {
+      query: "APT29",
+      normalizedQuery: "apt29",
+      tenantId: "tenant_cutover",
+      generatedAt: "2026-05-24T21:44:45.000Z"
+    });
+    expect(promotionReplay).toMatchObject({
+      schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1",
+      state: "partial",
+      canPromotePublicAnswer: true,
+      canPromoteGraph: false,
+      publicAnswer: {
+        status: "ready",
+        metadataOnlyClaimCount: expect.any(Number),
+        warnings: expect.arrayContaining(["restricted_metadata_used_as_caveated_defensive_context"])
+      },
+      graphPromotion: {
+        status: "hold",
+        blockers: expect.arrayContaining(["restricted_relationship_review_required"])
+      },
+      retention: {
+        tombstoneRowsRequired: backendWriteSet.counts.postgresDocuments,
+        staleExtractorReplayRequired: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(promotionReplay.publicAnswer.restrictedMetadataDocumentIds.length).toBeGreaterThan(0);
+    expect(promotionReplay.replayInputs.every((input) => input.replayId && input.citationCount > 0)).toBe(true);
+
+    const promotionTransaction = buildEvidencePromotionTransactionPlan(backendWriteSet, promotionReplay, {
+      generatedAt: "2026-05-24T21:44:45.000Z"
+    });
+    expect(promotionTransaction).toMatchObject({
+      schemaVersion: "ti.evidence_promotion_transaction_plan.v1",
+      state: "partial",
+      dryRun: true,
+      willMutate: false,
+      sourceReplay: "durable_read_model_rows",
+      consumers: {
+        publicAnswer: { status: "ready", targetReadModel: "public_answer_read_model" },
+        graph: { status: "hold", targetReadModel: "graph_relationship_read_model" },
+        stix: { status: "hold", targetReadModel: "stix_preview_read_model" },
+        api: { status: "ready", targetReadModel: "api_intel_search_answer_cache" }
+      },
+      restrictedHandling: {
+        caveatedPublicAnswerAllowed: true,
+        stixExportHeld: true,
+        vectorPromotionAllowed: false
+      },
+      replayGuarantees: {
+        requiresReplayIds: true,
+        requiresCitationSpans: true,
+        requiresClaimLedgerRefs: true,
+        requiresRetentionState: true,
+        requiresReviewState: true,
+        deterministicIdempotencyKeys: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(promotionTransaction.transactionSteps.map((step) => step.consumer)).toEqual(["public_answer", "graph", "stix", "api"]);
+    expect(promotionTransaction.transactionSteps.every((step) => step.idempotencyKey.length > 0)).toBe(true);
+    expect(promotionTransaction.restrictedHandling.metadataOnlyDocumentIds.length).toBeGreaterThan(0);
+    expect(promotionTransaction.restrictedHandling.graphRelationshipsHeld).toEqual(expect.arrayContaining(["rel_read_model_fjord"]));
+
+    const disabledExecution = executeEvidencePromotionTransactionPlan(promotionTransaction, {
+      generatedAt: "2026-05-24T21:44:50.000Z"
+    });
+    expect(disabledExecution).toMatchObject({
+      schemaVersion: "ti.evidence_promotion_transaction_execution.v1",
+      state: "blocked",
+      enabled: false,
+      willMutateProductionConsumers: false,
+      sourcePlan: "ti.evidence_promotion_transaction_plan.v1",
+      appliedSteps: [],
+      failClosedReasons: expect.arrayContaining(["promotion_transaction_repository_disabled"]),
+      committedConsumerRows: {
+        publicAnswer: 0,
+        graph: 0,
+        stix: 0,
+        api: 0
+      },
+      audit: {
+        dryRunPlanAccepted: true,
+        deterministicReceipts: true,
+        liveBackendConnection: false,
+        explicitEnablementRequired: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(disabledExecution.heldSteps.map((step) => step.consumer)).toEqual(expect.arrayContaining(["public_answer", "api"]));
+    expect(disabledExecution.rollbackRefs).toEqual([]);
+
+    const partialExecution = executeEvidencePromotionTransactionPlan(promotionTransaction, {
+      enabled: true,
+      allowPartial: true,
+      generatedAt: "2026-05-24T21:44:55.000Z",
+      operator: "agent_06_test"
+    });
+    expect(partialExecution).toMatchObject({
+      state: "partial",
+      enabled: true,
+      failClosedReasons: [],
+      committedConsumerRows: {
+        publicAnswer: promotionTransaction.consumers.publicAnswer.supportDocumentIds.length,
+        graph: 0,
+        stix: 0,
+        api: promotionTransaction.consumers.api.supportDocumentIds.length
+      },
+      restrictedHandling: {
+        caveatedPublicAnswerAllowed: true,
+        stixExportHeld: true,
+        vectorPromotionAllowed: false
+      },
+      audit: {
+        operator: "agent_06_test",
+        liveBackendConnection: false,
+        explicitEnablementRequired: true
+      }
+    });
+    expect(partialExecution.appliedSteps.map((step) => step.consumer)).toEqual(["public_answer", "api"]);
+    expect(partialExecution.heldSteps.map((step) => step.consumer)).toEqual(expect.arrayContaining(["graph", "stix"]));
+    expect(partialExecution.appliedSteps.every((step) => step.receiptId.length > 0 && step.idempotencyKey.length > 0)).toBe(true);
+    expect(partialExecution.rollbackRefs).toHaveLength(partialExecution.appliedSteps.length);
+
+    const executionRows = evidencePromotionExecutionToPostgresRows(partialExecution);
+    expect(executionRows.execution_receipts).toHaveLength(1);
+    expect(executionRows.execution_receipts[0]).toMatchObject({
+      schema_version: "ti.evidence_promotion_transaction_execution.v1",
+      transaction_id: partialExecution.transactionId,
+      handoff_id: partialExecution.handoffId,
+      state: "partial",
+      enabled: true,
+      will_mutate_production_consumers: false,
+      operator: "agent_06_test",
+      deterministic_receipts: true,
+      live_backend_connection: false,
+      explicit_enablement_required: true,
+      safe_output: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(executionRows.execution_steps.map((row) => row.consumer)).toEqual(["public_answer", "api"]);
+    expect(executionRows.held_steps.map((row) => row.consumer)).toEqual(expect.arrayContaining(["graph", "stix"]));
+    expect(executionRows.rollback_refs).toHaveLength(partialExecution.rollbackRefs.length);
+    expect(JSON.stringify(executionRows)).not.toContain("hidden sensitive body");
+    expect(JSON.stringify(executionRows)).not.toContain("tenant/source/private-key");
+    const restoredExecution = evidencePromotionExecutionFromPostgresRows(executionRows);
+    expect(restoredExecution).toMatchObject({
+      schemaVersion: "ti.evidence_promotion_transaction_execution.v1",
+      state: "partial",
+      transactionId: partialExecution.transactionId,
+      appliedSteps: partialExecution.appliedSteps,
+      committedConsumerRows: partialExecution.committedConsumerRows,
+      audit: {
+        operator: "agent_06_test",
+        liveBackendConnection: false,
+        explicitEnablementRequired: true
+      }
+    });
+    const auditReplay = buildEvidencePromotionTransactionAuditReplay(executionRows, {
+      generatedAt: "2026-05-24T21:45:05.000Z"
+    });
+    expect(auditReplay).toMatchObject({
+      schemaVersion: "ti.evidence_promotion_transaction_audit_replay.v1",
+      transactionId: partialExecution.transactionId,
+      handoffId: partialExecution.handoffId,
+      state: "partial",
+      repository: {
+        backend: "postgres_transaction_audit",
+        enabled: false,
+        disabledByDefault: true,
+        liveBackendConnection: false
+      },
+      rowCounts: {
+        executionReceipts: 1,
+        appliedSteps: partialExecution.appliedSteps.length,
+        heldSteps: partialExecution.heldSteps.length,
+        rollbackRefs: partialExecution.rollbackRefs.length
+      },
+      replayReady: true,
+      deterministicReceiptIds: true,
+      canReplayWithoutRawEvidence: true,
+      committedConsumerRows: partialExecution.committedConsumerRows,
+      failClosedReasons: [],
+      restrictedHandling: {
+        caveatedPublicAnswerAllowed: true,
+        stixExportHeld: true,
+        vectorPromotionAllowed: false
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
 
     const publicRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === publicCapture.id);
     const restrictedRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === restrictedCapture.id || row.claim_ledger_entry_id === "claim_read_model_fjord");

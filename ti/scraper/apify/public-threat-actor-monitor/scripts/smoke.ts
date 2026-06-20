@@ -59,6 +59,16 @@ for (const row of output) {
   if (!Array.isArray(row.sourceCoverageGaps) || !row.sourceCoverageGaps.includes("missing_public_channel_evidence")) {
     throw new Error("Every row must expose source coverage gaps");
   }
+  if (
+    row.freshnessExpectation !== "daily"
+    || row.highestValueMissingFamily !== "public_channel"
+    || row.nextBestSourceAction !== "activate_public_channel"
+    || row.expectedTimeToUsefulSignal !== "1_3_days"
+    || typeof row.buyerCaveat !== "string"
+    || !row.buyerCaveat.includes("public-channel coverage")
+  ) {
+    throw new Error("Every row must expose actor source coverage matrix product fields");
+  }
 }
 const profile = output.find((row) => row.rowType === "profile");
 if (profile?.sourceCount !== 1 || profile?.sourceFamilyCount !== 1 || profile?.evidenceGrade !== "single_source") {

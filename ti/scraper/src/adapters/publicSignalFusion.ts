@@ -1381,6 +1381,110 @@ export interface PublicCoverageFreshnessValueDto {
   };
 }
 
+export type ActorSourceCoverageStatus = "ready" | "partial" | "stale" | "metadata_hold" | "coverage_gap" | "unknown_query";
+export type ActorFeedPrioritySourceFamily = PublicSignalSourceFamily | "darkweb_metadata";
+
+export interface ActorSourceCoverageMatrixInput {
+  query?: string;
+  actors?: string[];
+  sources: SourceRecord[];
+  selectedSources?: PublicSignalSourceSelectionDto[];
+  publicSignalDeltas?: PublicSignalDeltaDto[];
+  advisoryConnector?: PublicAdvisorySignalConnectorDto;
+  darkwebMetadataSignals?: PublicSignalDarkwebMetadataInput[];
+  generatedAt?: string;
+}
+
+export interface ActorSourceCoverageMatrixDto {
+  schemaVersion: "ti.actor_source_coverage_matrix.v1";
+  generatedAt: string;
+  query?: string;
+  actorCount: number;
+  status: "ready" | "needs_expansion" | "metadata_hold" | "mixed";
+  rows: Array<{
+    actor: string;
+    actorClass: "apt" | "ransomware" | "financial_crime" | "unknown";
+    aliases: string[];
+    requiredFamilies: PublicSignalSourceFamily[];
+    coveredFamilies: PublicSignalSourceFamily[];
+    staleFamilies: PublicSignalSourceFamily[];
+    missingFamilies: PublicSignalSourceFamily[];
+    blockedRestrictedFamilies: Array<"darkweb_metadata" | "restricted_metadata">;
+    coverageStatus: ActorSourceCoverageStatus;
+    freshnessExpectationDays: number;
+    latestPublicEvidenceAt?: string;
+    publicAdvisoryValue: "strong" | "usable" | "thin" | "missing";
+    publicBlogNewsValue: "strong" | "usable" | "thin" | "missing";
+	    publicChannelValue: "strong" | "usable" | "thin" | "missing";
+	    malwareToolFeedValue: "strong" | "usable" | "thin" | "missing";
+	    darkMetadataCaveatState: "none" | "metadata_only_context" | "review_required" | "not_applicable";
+	    freshnessExpectation: "daily" | "every_3_days" | "weekly" | "biweekly" | "searching_only";
+	    sourceFamilyPriorities: Array<{
+	      family: ActorFeedPrioritySourceFamily;
+	      rank: number;
+	      currentState: "fresh" | "stale" | "missing" | "metadata_only" | "not_required";
+	      expectedValue: "critical" | "high" | "medium" | "low";
+	      cadenceRecommendation: "hourly" | "twice_daily" | "daily" | "twice_weekly" | "weekly" | "metadata_review_only" | "do_not_schedule";
+	      fallbackFamily?: ActorFeedPrioritySourceFamily;
+	      reason: string;
+	    }>;
+	    highestValueMissingFamily?: ActorFeedPrioritySourceFamily;
+	    nextBestSourceAction: "activate_public_channel" | "activate_public_advisory" | "activate_public_blog_news" | "activate_malware_feed" | "raise_cadence" | "metadata_review" | "keep_searching" | "maintain_current_mix";
+	    buyerCaveat: string;
+	    expectedTimeToUsefulSignal: "same_day" | "1_3_days" | "3_7_days" | "1_2_weeks" | "unknown_until_sources_added";
+	    sourceIds: string[];
+	    evidenceIds: string[];
+    nextSafeActivationTasks: Array<{
+      id: string;
+      owner: "agent01_source_activation" | "agent02_scheduler_cadence" | "agent03_adapter_repair" | "agent05_restricted_metadata" | "agent07_quality" | "agent08_graph_stix" | "agent09_api";
+      action: "activate_public_source_family" | "raise_cadence" | "repair_parser" | "request_metadata_review" | "hold_stale_answer" | "review_graph_pivot" | "expose_coverage_gap";
+      families: PublicSignalSourceFamily[];
+      priority: "low" | "medium" | "high";
+      reason: string;
+      dryRunOnly: true;
+      willMutate: false;
+      willStartCrawling: false;
+      unsafeUrlExposed: false;
+    }>;
+  }>;
+	  compactProductFields: {
+	    sourceCoverageGaps: Array<{ actor: string; missingFamilies: PublicSignalSourceFamily[]; coverageStatus: ActorSourceCoverageStatus }>;
+	    coverageStatusByActor: Record<string, ActorSourceCoverageStatus>;
+	    actorFeedPriorities: Array<{
+	      actor: string;
+	      coverageStatus: ActorSourceCoverageStatus;
+	      freshnessExpectation: ActorSourceCoverageMatrixDto["rows"][number]["freshnessExpectation"];
+	      highestValueMissingFamily?: ActorFeedPrioritySourceFamily;
+	      nextBestSourceAction: ActorSourceCoverageMatrixDto["rows"][number]["nextBestSourceAction"];
+	      buyerCaveat: string;
+	      expectedTimeToUsefulSignal: ActorSourceCoverageMatrixDto["rows"][number]["expectedTimeToUsefulSignal"];
+	    }>;
+	    apifyDatasetFields: string[];
+	  };
+  handoffs: {
+    agent01SourceAtlas: string[];
+    agent02Scheduler: string[];
+    agent03Adapters: string[];
+    agent05RestrictedMetadata: string[];
+    agent07Quality: string[];
+    agent08GraphStix: string[];
+    agent09ApiFields: string[];
+  };
+  guardrails: {
+    publicOnly: true;
+    restrictedMetadataOnly: true;
+    noPrivateChannels: true;
+    noAccountAutomation: true;
+    noAuthBypass: true;
+    noCaptchaSolving: true;
+    noRawUnsafeUrls: true;
+    noLeakedData: true;
+    noPayloadLinks: true;
+    noActorInteraction: true;
+    noDefaultActorAssumption: true;
+  };
+}
+
 export interface PublicSignalFusionDto {
   generatedAt: string;
   query: string;
@@ -1414,6 +1518,7 @@ export interface PublicSignalFusionDto {
   publicSignalLiveCollectionLoop: PublicSignalLiveCollectionLoopDto;
   publicSignalValueImpact: PublicSignalValueImpactDto;
   publicCoverageFreshnessValue: PublicCoverageFreshnessValueDto;
+  actorSourceCoverageMatrix: ActorSourceCoverageMatrixDto;
   analystWorkQueue: Array<{
     sourceId: string;
     action: "approve_source" | "review_backoff" | "review_unavailable" | "review_duplicate_pressure" | "add_source_family" | "confirm_public_only_claim";
@@ -1445,6 +1550,312 @@ const PUBLIC_SIGNAL_FAMILIES: PublicSignalSourceFamily[] = [
   "public_social",
   "clear_web"
 ];
+
+const PROGRAM_BI_DEFAULT_ACTORS = [
+  "APT29",
+  "APT42",
+  "Sandworm",
+  "Volt Typhoon",
+  "Salt Typhoon",
+  "Lazarus",
+  "Kimsuky",
+  "Charming Kitten",
+  "MuddyWater",
+  "OilRig",
+  "FIN7",
+  "TA505",
+  "Scattered Spider",
+  "LockBit",
+  "Akira",
+  "Cl0p",
+  "Play",
+  "BlackSuit",
+  "RansomHub",
+  "Qilin",
+  "Medusa",
+  "DragonForce",
+  "8Base",
+  "Hunters International",
+  "BianLian",
+  "ALPHV/BlackCat",
+  "Royal",
+  "Conti legacy",
+  "DarkSide/BlackMatter legacy",
+  "Unknown Query Control"
+];
+
+type ActorCoverageProfile = {
+  actor: string;
+  actorClass: "apt" | "ransomware" | "financial_crime" | "unknown";
+  aliases: string[];
+  requiredFamilies: PublicSignalSourceFamily[];
+  freshnessExpectationDays: number;
+};
+
+function actorCoverageProfile(actor: string): ActorCoverageProfile {
+  const normalized = actor.toLowerCase();
+  const ransomware = /lockbit|akira|cl0p|play|blacksuit|ransomhub|qilin|medusa|dragonforce|8base|hunters|bianlian|alphv|blackcat|royal|conti|darkside|blackmatter/.test(normalized);
+  const financialCrime = /fin7|ta505|scattered spider/.test(normalized);
+  const unknown = /unknown|made up|random|control/.test(normalized);
+  const aliases = actorCoverageAliases(actor);
+  const actorClass: ActorCoverageProfile["actorClass"] = unknown
+    ? "unknown"
+    : ransomware
+      ? "ransomware"
+      : financialCrime
+        ? "financial_crime"
+        : "apt";
+  const requiredFamilies: PublicSignalSourceFamily[] = actorClass === "unknown"
+    ? ["clear_web", "public_research_feed"]
+    : actorClass === "ransomware"
+      ? ["public_channel", "vendor_report", "public_research_feed", "clear_web"]
+      : ["cert_government", "vendor_report", "public_research_feed", "github_advisory", "clear_web"];
+  return {
+    actor,
+    actorClass,
+    aliases,
+    requiredFamilies,
+    freshnessExpectationDays: actorClass === "ransomware" || actorClass === "financial_crime" ? 14 : 30
+  };
+}
+
+function actorCoverageAliases(actor: string): string[] {
+  const normalized = actor.toLowerCase();
+  const aliases = new Map<string, string[]>([
+    ["apt29", ["Cozy Bear", "Nobelium", "Midnight Blizzard"]],
+    ["apt42", ["Charming Kitten", "Mint Sandstorm"]],
+    ["volt typhoon", ["Bronze Silhouette", "Vanguard Panda"]],
+    ["scattered spider", ["UNC3944", "Octo Tempest"]],
+    ["lockbit", ["LockBit 3.0", "LockBit Black"]],
+    ["akira", ["Akira ransomware"]]
+  ]);
+  return aliases.get(normalized) ?? [];
+}
+
+function sourceMatchesActorCoverage(source: SourceRecord, actorTerms: string[]): boolean {
+  const haystack = JSON.stringify({
+    id: source.id,
+    name: source.name,
+    url: source.url,
+    tags: source.tags,
+    description: source.description,
+    query: source.query,
+    family: source.family
+  }).toLowerCase();
+  return actorTerms.some((term) => haystack.includes(term));
+}
+
+function signalMatchesActorCoverage(delta: PublicSignalDeltaDto, actorTerms: string[]): boolean {
+  const haystack = JSON.stringify(delta).toLowerCase();
+  return actorTerms.some((term) => haystack.includes(term));
+}
+
+function sourceFamilyStaleForActor(source: SourceRecord, profile: ActorCoverageProfile, generatedAt: string): boolean {
+  const latest = maxTimestamp([
+    source.lastSeenAt,
+    source.crawlState?.lastCollectedAt,
+    source.health?.lastSuccessAt,
+    source.updatedAt
+  ]);
+  return latest ? ageInDays(latest, generatedAt) > profile.freshnessExpectationDays : false;
+}
+
+function actorCoverageStatus(input: {
+  actorClass: ActorCoverageProfile["actorClass"];
+  coveredFamilies: PublicSignalSourceFamily[];
+  missingFamilies: PublicSignalSourceFamily[];
+  staleFamilies: PublicSignalSourceFamily[];
+  latestAgeDays?: number;
+  freshnessExpectationDays: number;
+  blockedRestrictedFamilies: Array<"darkweb_metadata" | "restricted_metadata">;
+}): ActorSourceCoverageStatus {
+  if (input.actorClass === "unknown" && input.coveredFamilies.length === 0) return "unknown_query";
+  if (input.blockedRestrictedFamilies.length > 0 && input.coveredFamilies.length === 0) return "metadata_hold";
+  if (input.staleFamilies.length > 0 || (input.latestAgeDays !== undefined && input.latestAgeDays > input.freshnessExpectationDays)) return "stale";
+  if (input.missingFamilies.length === 0 && input.coveredFamilies.length > 0) return "ready";
+  if (input.coveredFamilies.length > 0) return "partial";
+  return "coverage_gap";
+}
+
+function maxTimestamp(values: Array<string | undefined>): string | undefined {
+  return values
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+}
+
+function ageInDays(value: string, generatedAt: string): number {
+  const ageMs = Date.parse(generatedAt) - Date.parse(value);
+  return Number.isFinite(ageMs) ? Math.max(0, ageMs / 86_400_000) : Number.POSITIVE_INFINITY;
+}
+
+export function buildActorSourceCoverageMatrix(input: ActorSourceCoverageMatrixInput): ActorSourceCoverageMatrixDto {
+  const generatedAt = input.generatedAt ?? nowIso();
+  const actors = uniqueCleanStrings(input.actors ?? PROGRAM_BI_DEFAULT_ACTORS);
+  const selectedBySource = new Map((input.selectedSources ?? []).map((source) => [source.sourceId, source]));
+  const advisorySignals = input.advisoryConnector?.rankedSignals ?? [];
+  const publicDeltas = [...(input.publicSignalDeltas ?? []), ...advisorySignals];
+  const rows = actors.map((actor) => {
+    const profile = actorCoverageProfile(actor);
+    const actorTerms = [profile.actor, ...profile.aliases].map((value) => value.toLowerCase());
+    const matchedSources = input.sources.filter((source) => sourceMatchesActorCoverage(source, actorTerms));
+    const matchedDeltas = publicDeltas.filter((delta) => signalMatchesActorCoverage(delta, actorTerms));
+    const matchedDarkMetadata = (input.darkwebMetadataSignals ?? []).filter((signal) =>
+      signal.actors.some((value) => actorTerms.includes(value.toLowerCase()))
+      || actorTerms.some((term) => [...signal.victims, ...signal.sectors, ...signal.countries, ...signal.ttps].join(" ").toLowerCase().includes(term))
+    );
+    const coveredFamilies = uniqueSignalFamilies([
+      ...matchedSources.map((source) => selectedBySource.get(source.id)?.family ?? inferPublicSignalFamily(source)),
+      ...matchedDeltas.map((delta) => delta.family)
+    ].filter((family) => family !== "public_social" || profile.actorClass !== "unknown"));
+    const latestPublicEvidenceAt = maxTimestamp([
+      ...matchedSources.flatMap((source) => [source.lastSeenAt, source.crawlState?.lastCollectedAt, source.health?.lastSuccessAt, source.updatedAt]),
+      ...matchedDeltas.flatMap((delta) => [delta.observedAt, delta.publishedAt, delta.collectedAt])
+    ]);
+    const latestAgeDays = latestPublicEvidenceAt ? ageInDays(latestPublicEvidenceAt, generatedAt) : undefined;
+    const staleFamilies = uniqueSignalFamilies([
+      ...matchedSources
+        .filter((source) => sourceFamilyStaleForActor(source, profile, generatedAt))
+        .map((source) => selectedBySource.get(source.id)?.family ?? inferPublicSignalFamily(source)),
+      ...matchedDeltas
+        .filter((delta) => deltaFreshnessDays(delta, generatedAt) > profile.freshnessExpectationDays)
+        .map((delta) => delta.family)
+    ]);
+    const missingFamilies = profile.requiredFamilies.filter((family) => !coveredFamilies.includes(family));
+    const blockedRestrictedFamilies = matchedDarkMetadata.length > 0 ? ["darkweb_metadata" as const] : [];
+    const status = actorCoverageStatus({
+      actorClass: profile.actorClass,
+      coveredFamilies,
+      missingFamilies,
+      staleFamilies,
+      latestAgeDays,
+      freshnessExpectationDays: profile.freshnessExpectationDays,
+      blockedRestrictedFamilies
+    });
+	    const sourceIds = uniqueCleanStrings([...matchedSources.map((source) => source.id), ...matchedDeltas.map((delta) => delta.sourceId)]);
+	    const evidenceIds = uniqueCleanStrings(matchedDeltas.map((delta) => delta.id));
+	    const sourceFamilyPriorities = actorFeedSourceFamilyPriorities({
+	      actorClass: profile.actorClass,
+	      requiredFamilies: profile.requiredFamilies,
+	      coveredFamilies,
+	      staleFamilies,
+	      missingFamilies,
+	      blockedRestrictedFamilies
+	    });
+	    const highestValueMissingFamily = highestValueMissingActorFeedFamily(sourceFamilyPriorities);
+	    const nextBestSourceAction = actorFeedNextBestSourceAction({
+	      status,
+	      highestValueMissingFamily,
+	      staleFamilies,
+	      blockedRestrictedFamilies
+	    });
+	    return {
+	      actor: profile.actor,
+	      actorClass: profile.actorClass,
+      aliases: profile.aliases,
+      requiredFamilies: profile.requiredFamilies,
+      coveredFamilies,
+      staleFamilies,
+      missingFamilies,
+      blockedRestrictedFamilies,
+      coverageStatus: status,
+      freshnessExpectationDays: profile.freshnessExpectationDays,
+      latestPublicEvidenceAt,
+      publicAdvisoryValue: familyValueGrade(coveredFamilies, staleFamilies, ["github_advisory", "cert_government"]),
+      publicBlogNewsValue: familyValueGrade(coveredFamilies, staleFamilies, ["vendor_report", "public_research_feed", "clear_web"]),
+	      publicChannelValue: familyValueGrade(coveredFamilies, staleFamilies, ["public_channel"]),
+	      malwareToolFeedValue: familyValueGrade(coveredFamilies, staleFamilies, ["malware_report_feed"]),
+	      darkMetadataCaveatState: matchedDarkMetadata.length > 0 ? "metadata_only_context" as const : profile.actorClass === "ransomware" ? "review_required" as const : "not_applicable" as const,
+	      freshnessExpectation: actorFeedFreshnessExpectation(profile.actorClass),
+	      sourceFamilyPriorities,
+	      highestValueMissingFamily,
+	      nextBestSourceAction,
+	      buyerCaveat: actorFeedBuyerCaveat({
+	        actor: profile.actor,
+	        actorClass: profile.actorClass,
+	        status,
+	        highestValueMissingFamily,
+	        blockedRestrictedFamilies
+	      }),
+	      expectedTimeToUsefulSignal: actorFeedExpectedTimeToUsefulSignal({
+	        status,
+	        actorClass: profile.actorClass,
+	        highestValueMissingFamily,
+	        staleFamilies
+	      }),
+	      sourceIds,
+	      evidenceIds,
+	      nextSafeActivationTasks: actorCoverageActivationTasks({
+        actor: profile.actor,
+        actorClass: profile.actorClass,
+        status,
+        missingFamilies,
+        staleFamilies,
+        blockedRestrictedFamilies
+      })
+    };
+  });
+  const sourceCoverageGaps = rows
+    .filter((row) => row.coverageStatus !== "ready")
+    .map((row) => ({ actor: row.actor, missingFamilies: row.missingFamilies, coverageStatus: row.coverageStatus }));
+  const holdRows = rows.filter((row) => row.coverageStatus === "metadata_hold");
+  const gapRows = rows.filter((row) => row.coverageStatus === "coverage_gap" || row.coverageStatus === "unknown_query");
+  const staleRows = rows.filter((row) => row.coverageStatus === "stale");
+  return {
+    schemaVersion: "ti.actor_source_coverage_matrix.v1",
+    generatedAt,
+    query: input.query,
+    actorCount: rows.length,
+    status: holdRows.length > 0 ? "metadata_hold" : gapRows.length > 0 || staleRows.length > 0 ? "needs_expansion" : rows.every((row) => row.coverageStatus === "ready") ? "ready" : "mixed",
+    rows,
+	    compactProductFields: {
+	      sourceCoverageGaps,
+	      coverageStatusByActor: Object.fromEntries(rows.map((row) => [row.actor, row.coverageStatus])),
+	      actorFeedPriorities: rows.map((row) => ({
+	        actor: row.actor,
+	        coverageStatus: row.coverageStatus,
+	        freshnessExpectation: row.freshnessExpectation,
+	        highestValueMissingFamily: row.highestValueMissingFamily,
+	        nextBestSourceAction: row.nextBestSourceAction,
+	        buyerCaveat: row.buyerCaveat,
+	        expectedTimeToUsefulSignal: row.expectedTimeToUsefulSignal
+	      })),
+	      apifyDatasetFields: [
+	        "sourceCoverageGaps",
+	        "coverageStatus",
+	        "sourceFamilies",
+	        "missingSourceFamilies",
+	        "freshnessExpectation",
+	        "highestValueMissingFamily",
+	        "nextBestSourceAction",
+	        "buyerCaveat",
+	        "expectedTimeToUsefulSignal",
+	        "recommendedCollectionAction"
+	      ]
+	    },
+    handoffs: {
+      agent01SourceAtlas: uniqueCleanStrings(rows.flatMap((row) => row.missingFamilies.length ? [`stage_safe_public_sources_for:${row.actor}`] : [])),
+      agent02Scheduler: uniqueCleanStrings(rows.flatMap((row) => row.staleFamilies.length ? [`raise_cadence_for:${row.actor}`] : [])),
+      agent03Adapters: uniqueCleanStrings(rows.flatMap((row) => row.nextSafeActivationTasks.filter((task) => task.owner === "agent03_adapter_repair").map((task) => task.id))),
+      agent05RestrictedMetadata: uniqueCleanStrings(rows.flatMap((row) => row.blockedRestrictedFamilies.length ? [`review_metadata_only_context_for:${row.actor}`] : [])),
+      agent07Quality: uniqueCleanStrings(rows.flatMap((row) => row.coverageStatus === "stale" || row.coverageStatus === "metadata_hold" ? [`hold_or_caveat_public_answer_for:${row.actor}`] : [])),
+      agent08GraphStix: uniqueCleanStrings(rows.flatMap((row) => row.darkMetadataCaveatState !== "not_applicable" ? [`hold_metadata_only_relationships_for:${row.actor}`] : [])),
+      agent09ApiFields: ["publicSignalFusion.actorSourceCoverageMatrix", "sourceCoverageGaps", "coverageStatus"]
+    },
+    guardrails: {
+      publicOnly: true,
+      restrictedMetadataOnly: true,
+      noPrivateChannels: true,
+      noAccountAutomation: true,
+      noAuthBypass: true,
+      noCaptchaSolving: true,
+      noRawUnsafeUrls: true,
+      noLeakedData: true,
+      noPayloadLinks: true,
+      noActorInteraction: true,
+      noDefaultActorAssumption: true
+    }
+  };
+}
 
 export function buildPublicSignalFusionWorkbench(input: PublicSignalFusionInput): PublicSignalFusionDto {
   const generatedAt = input.generatedAt ?? nowIso();
@@ -1656,6 +2067,15 @@ export function buildPublicSignalFusionWorkbench(input: PublicSignalFusionInput)
     darkwebMetadataSignals: input.darkwebMetadataSignals,
     generatedAt
   });
+  const actorSourceCoverageMatrix = buildActorSourceCoverageMatrix({
+    query: input.query,
+    sources: input.sources,
+    selectedSources,
+    publicSignalDeltas,
+    advisoryConnector,
+    darkwebMetadataSignals: input.darkwebMetadataSignals,
+    generatedAt
+  });
   const status: PublicSignalFusionDto["status"] = selectedSources.length === 0
     ? "needs_source_activation"
     : selectedSources.every((source) => source.provenance.approvedPublic === false)
@@ -1697,6 +2117,7 @@ export function buildPublicSignalFusionWorkbench(input: PublicSignalFusionInput)
     publicSignalLiveCollectionLoop,
     publicSignalValueImpact,
     publicCoverageFreshnessValue,
+    actorSourceCoverageMatrix,
     analystWorkQueue,
     caveats: buildPublicSignalCaveats(selectedSources, selectedFamilies, publicSignalDeltas),
     guardrails: {
@@ -6124,6 +6545,348 @@ function publicAdvisorySignalsFromSources(sources: SourceRecord[], generatedAt: 
         }
       } satisfies PublicAdvisorySignalRecord;
     });
+}
+
+function actorCoverageProfile(actor: string): {
+  actor: string;
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"];
+  aliases: string[];
+  requiredFamilies: PublicSignalSourceFamily[];
+  freshnessExpectationDays: number;
+} {
+  const normalized = actor.toLowerCase();
+  const ransomware = /lockbit|akira|cl0p|play|blacksuit|ransomhub|qilin|medusa|dragonforce|8base|hunters international|bianlian|alphv|blackcat|royal|conti|darkside|blackmatter/.test(normalized);
+  const financialCrime = /fin7|ta505|scattered spider/.test(normalized);
+  const unknown = /unknown/.test(normalized);
+  const aliases: Record<string, string[]> = {
+    "APT29": ["Cozy Bear", "Nobelium", "Midnight Blizzard"],
+    "APT42": ["Charming Kitten", "Mint Sandstorm"],
+    "Sandworm": ["Voodoo Bear"],
+    "Volt Typhoon": ["Bronze Silhouette"],
+    "Salt Typhoon": ["GhostEmperor"],
+    "Lazarus": ["Hidden Cobra"],
+    "Kimsuky": ["Thallium"],
+    "Charming Kitten": ["APT42", "Mint Sandstorm"],
+    "MuddyWater": ["Static Kitten"],
+    "OilRig": ["APT34"],
+    "FIN7": ["Carbon Spider"],
+    "TA505": ["Evil Corp"],
+    "Scattered Spider": ["UNC3944", "Octo Tempest"],
+    "LockBit": ["LockBitSupp"],
+    "Cl0p": ["Clop"],
+    "ALPHV/BlackCat": ["ALPHV", "BlackCat"],
+    "Conti legacy": ["Conti"],
+    "DarkSide/BlackMatter legacy": ["DarkSide", "BlackMatter"]
+  };
+  const actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"] = unknown ? "unknown" : ransomware ? "ransomware" : financialCrime ? "financial_crime" : "apt";
+  const requiredFamilies: PublicSignalSourceFamily[] = actorClass === "unknown"
+    ? ["vendor_report", "public_research_feed", "clear_web"]
+    : actorClass === "ransomware"
+      ? ["public_channel", "vendor_report", "cert_government", "public_research_feed"]
+      : actorClass === "financial_crime"
+        ? ["vendor_report", "public_channel", "malware_report_feed", "public_research_feed"]
+        : ["vendor_report", "cert_government", "malware_report_feed", "github_advisory", "public_research_feed"];
+  return {
+    actor,
+    actorClass,
+    aliases: uniqueCleanStrings(aliases[actor] ?? []),
+    requiredFamilies,
+    freshnessExpectationDays: actorClass === "ransomware" || actorClass === "financial_crime" ? 3 : actorClass === "unknown" ? 7 : 14
+  };
+}
+
+function sourceMatchesActorCoverage(source: SourceRecord, actorTerms: string[]): boolean {
+  const text = sourceSearchableText(source);
+  return actorTerms.some((term) => text.includes(term));
+}
+
+function signalMatchesActorCoverage(signal: PublicSignalDeltaDto, actorTerms: string[]): boolean {
+  const entities = normalizeMatchedEntities(signal.matchedEntities);
+  const text = [
+    signal.title ?? "",
+    signal.summary ?? "",
+    ...(signal.tags ?? []),
+    ...entities.actors,
+    ...entities.campaigns,
+    ...entities.malware,
+    ...entities.tools
+  ].join(" ").toLowerCase();
+  return actorTerms.some((term) => text.includes(term));
+}
+
+function uniqueSignalFamilies(values: Array<PublicSignalSourceFamily | undefined>): PublicSignalSourceFamily[] {
+  return [...new Set(values.filter((value): value is PublicSignalSourceFamily => Boolean(value)))].sort((left, right) => left.localeCompare(right));
+}
+
+function maxTimestamp(values: Array<string | undefined>): string | undefined {
+  return values
+    .filter((value): value is string => typeof value === "string" && Number.isFinite(Date.parse(value)))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+}
+
+function timestampAgeDays(timestamp: string, generatedAt: string): number {
+  return Math.max(0, (Date.parse(generatedAt) - Date.parse(timestamp)) / 86_400_000);
+}
+
+function sourceFamilyStaleForActor(source: SourceRecord, profile: ReturnType<typeof actorCoverageProfile>, generatedAt: string): boolean {
+  const latest = maxTimestamp([source.lastSeenAt, source.crawlState?.lastCollectedAt, source.health?.lastSuccessAt, source.updatedAt]);
+  return latest ? timestampAgeDays(latest, generatedAt) > profile.freshnessExpectationDays : true;
+}
+
+function deltaFreshnessDays(delta: PublicSignalDeltaDto, generatedAt: string): number {
+  const latest = maxTimestamp([delta.observedAt, delta.publishedAt, delta.collectedAt]);
+  return latest ? timestampAgeDays(latest, generatedAt) : Number.POSITIVE_INFINITY;
+}
+
+function familyValueGrade(
+  coveredFamilies: PublicSignalSourceFamily[],
+  staleFamilies: PublicSignalSourceFamily[],
+  families: PublicSignalSourceFamily[]
+): ActorSourceCoverageMatrixDto["rows"][number]["publicAdvisoryValue"] {
+  const covered = families.filter((family) => coveredFamilies.includes(family));
+  if (covered.length === 0) return "missing";
+  if (covered.every((family) => staleFamilies.includes(family))) return "thin";
+  if (covered.length >= 2) return "strong";
+  return "usable";
+}
+
+function actorFeedFreshnessExpectation(
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"]
+): ActorSourceCoverageMatrixDto["rows"][number]["freshnessExpectation"] {
+  if (actorClass === "unknown") return "searching_only";
+  if (actorClass === "ransomware" || actorClass === "financial_crime") return "daily";
+  return "weekly";
+}
+
+function actorFeedPriorityOrder(actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"]): ActorFeedPrioritySourceFamily[] {
+  if (actorClass === "unknown") return ["vendor_report", "public_research_feed", "clear_web"];
+  if (actorClass === "ransomware") return ["public_channel", "clear_web", "vendor_report", "cert_government", "public_research_feed", "darkweb_metadata", "malware_report_feed"];
+  if (actorClass === "financial_crime") return ["vendor_report", "public_channel", "clear_web", "malware_report_feed", "public_research_feed", "cert_government"];
+  return ["vendor_report", "cert_government", "malware_report_feed", "github_advisory", "public_research_feed", "clear_web", "public_channel"];
+}
+
+function actorFeedFamilyExpectedValue(
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"],
+  family: ActorFeedPrioritySourceFamily,
+  rank: number
+): "critical" | "high" | "medium" | "low" {
+  if (family === "darkweb_metadata") return actorClass === "ransomware" ? "medium" : "low";
+  if (rank <= 2) return "critical";
+  if (rank <= 4) return "high";
+  return actorClass === "unknown" ? "low" : "medium";
+}
+
+function actorFeedCadenceRecommendation(input: {
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"];
+  family: ActorFeedPrioritySourceFamily;
+  state: "fresh" | "stale" | "missing" | "metadata_only" | "not_required";
+}): ActorSourceCoverageMatrixDto["rows"][number]["sourceFamilyPriorities"][number]["cadenceRecommendation"] {
+  if (input.actorClass === "unknown" || input.state === "not_required") return "do_not_schedule";
+  if (input.family === "darkweb_metadata" || input.state === "metadata_only") return "metadata_review_only";
+  if (input.actorClass === "ransomware") {
+    if (input.family === "public_channel" || input.family === "clear_web") return input.state === "stale" ? "hourly" : "twice_daily";
+    return "daily";
+  }
+  if (input.actorClass === "financial_crime") {
+    if (input.family === "public_channel" || input.family === "vendor_report") return input.state === "stale" ? "twice_daily" : "daily";
+    return "twice_weekly";
+  }
+  if (input.family === "vendor_report" || input.family === "cert_government" || input.family === "malware_report_feed") return "daily";
+  return "weekly";
+}
+
+function actorFeedSourceFamilyPriorities(input: {
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"];
+  requiredFamilies: PublicSignalSourceFamily[];
+  coveredFamilies: PublicSignalSourceFamily[];
+  staleFamilies: PublicSignalSourceFamily[];
+  missingFamilies: PublicSignalSourceFamily[];
+  blockedRestrictedFamilies: Array<"darkweb_metadata" | "restricted_metadata">;
+}): ActorSourceCoverageMatrixDto["rows"][number]["sourceFamilyPriorities"] {
+  return actorFeedPriorityOrder(input.actorClass).map((family, index) => {
+    const currentState =
+      family === "darkweb_metadata"
+        ? input.blockedRestrictedFamilies.length > 0
+          ? "metadata_only"
+          : "not_required"
+        : input.staleFamilies.includes(family)
+          ? "stale"
+          : input.coveredFamilies.includes(family)
+            ? "fresh"
+            : input.missingFamilies.includes(family) || input.requiredFamilies.includes(family)
+              ? "missing"
+              : "not_required";
+    const rank = index + 1;
+    const fallbackFamily = family === "public_channel"
+      ? "clear_web"
+      : family === "darkweb_metadata"
+        ? "vendor_report"
+        : family === "github_advisory"
+          ? "cert_government"
+          : undefined;
+    return {
+      family,
+      rank,
+      currentState,
+      expectedValue: actorFeedFamilyExpectedValue(input.actorClass, family, rank),
+      cadenceRecommendation: actorFeedCadenceRecommendation({ actorClass: input.actorClass, family, state: currentState }),
+      fallbackFamily,
+      reason: actorFeedPriorityReason(input.actorClass, family, currentState)
+    };
+  });
+}
+
+function actorFeedPriorityReason(
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"],
+  family: ActorFeedPrioritySourceFamily,
+  state: "fresh" | "stale" | "missing" | "metadata_only" | "not_required"
+): string {
+  if (state === "metadata_only") return "Restricted/dark metadata can support triage only and cannot produce public product facts without public corroboration.";
+  if (actorClass === "ransomware" && family === "public_channel") return "High-volume extortion actors need fast public-channel descriptors plus public corroboration for fresh buyer rows.";
+  if (actorClass === "ransomware" && family === "clear_web") return "News and official victim reporting are the safest fallback when public-channel coverage is stale or missing.";
+  if (actorClass === "apt" && (family === "vendor_report" || family === "cert_government")) return "APT updates usually become useful through corroborated vendor or government reporting rather than high-frequency channel chatter.";
+  if (actorClass === "financial_crime" && family === "public_channel") return "Financial-crime clusters often surface infrastructure and victim churn in public-channel style reporting, but claims remain caveated.";
+  if (state === "missing") return "Missing source family is a high-value safe activation candidate for this actor class.";
+  if (state === "stale") return "Existing source family is present but stale enough to reject recent-activity promotion.";
+  if (state === "fresh") return "Fresh enough to contribute to a public or partial answer when provenance and quality gates pass.";
+  return "Not required for the current actor class unless other families are unavailable.";
+}
+
+function highestValueMissingActorFeedFamily(
+  priorities: ActorSourceCoverageMatrixDto["rows"][number]["sourceFamilyPriorities"]
+): ActorFeedPrioritySourceFamily | undefined {
+  return priorities.find((row) => row.currentState === "missing")?.family;
+}
+
+function actorFeedNextBestSourceAction(input: {
+  status: ActorSourceCoverageStatus;
+  highestValueMissingFamily?: ActorFeedPrioritySourceFamily;
+  staleFamilies: PublicSignalSourceFamily[];
+  blockedRestrictedFamilies: Array<"darkweb_metadata" | "restricted_metadata">;
+}): ActorSourceCoverageMatrixDto["rows"][number]["nextBestSourceAction"] {
+  if (input.status === "unknown_query") return "keep_searching";
+  if (input.blockedRestrictedFamilies.length > 0 && !input.highestValueMissingFamily) return "metadata_review";
+  if (input.staleFamilies.length > 0) return "raise_cadence";
+  if (input.highestValueMissingFamily === "public_channel") return "activate_public_channel";
+  if (input.highestValueMissingFamily === "github_advisory" || input.highestValueMissingFamily === "cert_government") return "activate_public_advisory";
+  if (input.highestValueMissingFamily === "malware_report_feed") return "activate_malware_feed";
+  if (input.highestValueMissingFamily && input.highestValueMissingFamily !== "darkweb_metadata") return "activate_public_blog_news";
+  if (input.highestValueMissingFamily === "darkweb_metadata") return "metadata_review";
+  return "maintain_current_mix";
+}
+
+function actorFeedBuyerCaveat(input: {
+  actor: string;
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"];
+  status: ActorSourceCoverageStatus;
+  highestValueMissingFamily?: ActorFeedPrioritySourceFamily;
+  blockedRestrictedFamilies: Array<"darkweb_metadata" | "restricted_metadata">;
+}): string {
+  if (input.status === "unknown_query") return `${input.actor} is treated as an unknown query until public evidence matches the full actor name or alias.`;
+  if (input.status === "metadata_hold" || input.blockedRestrictedFamilies.length > 0) return `${input.actor} has metadata-only restricted context; buyer-visible facts need safe public corroboration.`;
+  if (input.status === "stale") return `${input.actor} has stale-only coverage for at least one required family; recent-activity claims should stay held.`;
+  if (input.highestValueMissingFamily) return `${input.actor} is partial because ${input.highestValueMissingFamily} coverage is missing or not yet useful.`;
+  if (input.actorClass === "ransomware") return `${input.actor} freshness depends on public-channel, clear-web news, and official corroboration staying current.`;
+  return `${input.actor} coverage is usable when vendor, advisory, malware/feed, and research families remain fresh and corroborated.`;
+}
+
+function actorFeedExpectedTimeToUsefulSignal(input: {
+  status: ActorSourceCoverageStatus;
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"];
+  highestValueMissingFamily?: ActorFeedPrioritySourceFamily;
+  staleFamilies: PublicSignalSourceFamily[];
+}): ActorSourceCoverageMatrixDto["rows"][number]["expectedTimeToUsefulSignal"] {
+  if (input.status === "unknown_query" || input.highestValueMissingFamily === undefined && input.status === "coverage_gap") return "unknown_until_sources_added";
+  if (input.staleFamilies.length > 0) return input.actorClass === "ransomware" || input.actorClass === "financial_crime" ? "same_day" : "1_3_days";
+  if (input.highestValueMissingFamily === "public_channel" || input.highestValueMissingFamily === "clear_web") return input.actorClass === "ransomware" ? "1_3_days" : "3_7_days";
+  if (input.highestValueMissingFamily === "vendor_report" || input.highestValueMissingFamily === "cert_government") return input.actorClass === "apt" ? "1_2_weeks" : "3_7_days";
+  if (input.highestValueMissingFamily) return "3_7_days";
+  return input.actorClass === "ransomware" || input.actorClass === "financial_crime" ? "same_day" : "1_3_days";
+}
+
+function actorCoverageStatus(input: {
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"];
+  coveredFamilies: PublicSignalSourceFamily[];
+  missingFamilies: PublicSignalSourceFamily[];
+  staleFamilies: PublicSignalSourceFamily[];
+  latestAgeDays?: number;
+  freshnessExpectationDays: number;
+  blockedRestrictedFamilies: Array<"darkweb_metadata" | "restricted_metadata">;
+}): ActorSourceCoverageStatus {
+  if (input.actorClass === "unknown") return "unknown_query";
+  if (input.blockedRestrictedFamilies.length > 0 && input.coveredFamilies.length < 2) return "metadata_hold";
+  if (input.coveredFamilies.length === 0 || input.missingFamilies.length >= input.coveredFamilies.length + 1) return "coverage_gap";
+  if ((input.latestAgeDays ?? Number.POSITIVE_INFINITY) > input.freshnessExpectationDays || input.staleFamilies.length >= Math.max(1, input.coveredFamilies.length)) return "stale";
+  if (input.missingFamilies.length > 0) return "partial";
+  return "ready";
+}
+
+function actorCoverageActivationTasks(input: {
+  actor: string;
+  actorClass: ActorSourceCoverageMatrixDto["rows"][number]["actorClass"];
+  status: ActorSourceCoverageStatus;
+  missingFamilies: PublicSignalSourceFamily[];
+  staleFamilies: PublicSignalSourceFamily[];
+  blockedRestrictedFamilies: Array<"darkweb_metadata" | "restricted_metadata">;
+}): ActorSourceCoverageMatrixDto["rows"][number]["nextSafeActivationTasks"] {
+  const tasks: ActorSourceCoverageMatrixDto["rows"][number]["nextSafeActivationTasks"] = [];
+  if (input.missingFamilies.length > 0 && input.actorClass !== "unknown") {
+    tasks.push({
+      id: `actor_coverage_activate_${hashContent(`${input.actor}:${input.missingFamilies.join("|")}`).slice(0, 12)}`,
+      owner: "agent01_source_activation",
+      action: "activate_public_source_family",
+      families: input.missingFamilies,
+      priority: input.status === "coverage_gap" ? "high" : "medium",
+      reason: `${input.actor} is missing required safe public source families: ${input.missingFamilies.join(",")}`,
+      dryRunOnly: true,
+      willMutate: false,
+      willStartCrawling: false,
+      unsafeUrlExposed: false
+    });
+  }
+  if (input.staleFamilies.length > 0) {
+    tasks.push({
+      id: `actor_coverage_cadence_${hashContent(`${input.actor}:${input.staleFamilies.join("|")}`).slice(0, 12)}`,
+      owner: "agent02_scheduler_cadence",
+      action: "raise_cadence",
+      families: input.staleFamilies,
+      priority: input.actorClass === "ransomware" || input.actorClass === "financial_crime" ? "high" : "medium",
+      reason: `${input.actor} has stale public coverage for ${input.staleFamilies.join(",")}`,
+      dryRunOnly: true,
+      willMutate: false,
+      willStartCrawling: false,
+      unsafeUrlExposed: false
+    });
+  }
+  if (input.blockedRestrictedFamilies.length > 0) {
+    tasks.push({
+      id: `actor_coverage_metadata_review_${hashContent(`${input.actor}:restricted`).slice(0, 12)}`,
+      owner: "agent05_restricted_metadata",
+      action: "request_metadata_review",
+      families: [],
+      priority: "medium",
+      reason: `${input.actor} has restricted metadata context that must remain metadata-only and review-held`,
+      dryRunOnly: true,
+      willMutate: false,
+      willStartCrawling: false,
+      unsafeUrlExposed: false
+    });
+  }
+  if (input.status === "stale" || input.status === "metadata_hold" || input.status === "unknown_query") {
+    tasks.push({
+      id: `actor_coverage_api_${hashContent(`${input.actor}:${input.status}`).slice(0, 12)}`,
+      owner: "agent09_api",
+      action: "expose_coverage_gap",
+      families: input.missingFamilies,
+      priority: input.status === "unknown_query" ? "low" : "medium",
+      reason: `Expose ${input.actor} coverage status ${input.status} to public product rows`,
+      dryRunOnly: true,
+      willMutate: false,
+      willStartCrawling: false,
+      unsafeUrlExposed: false
+    });
+  }
+  return tasks;
 }
 
 function normalizeMatchedEntities(input: Partial<PublicSignalMatchedEntities> | undefined): PublicSignalMatchedEntities {

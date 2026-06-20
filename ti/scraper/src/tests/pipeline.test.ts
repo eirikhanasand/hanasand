@@ -4,7 +4,7 @@ import { buildActiveLearningCandidateQueueDto, buildActorProfileReviewWorkbenchD
 import { buildAttackMappingQualityDto } from "../pipeline/attackMappingQuality.ts";
 import { buildLiveActorIntelligenceDto, buildPublicIntelAnswerDto, fuseActorProfile, type ActorProfileSnapshot } from "../pipeline/actorProfileFusion.ts";
 import { buildEntityResolutionWorkbenchDto } from "../pipeline/entityResolution.ts";
-import { buildCtiEvaluationDatasetPackDto, buildEvaluationDatasetGovernanceDto, buildQualityRuntimeValueGatesDto, evaluateExtractionCalibration, evaluateExtractionFixtures } from "../pipeline/evaluation.ts";
+import { buildCtiEvaluationDatasetPackDto, buildEvaluationDatasetGovernanceDto, buildProgramBdQualityEvaluationPackDto, buildQualityRuntimeValueGatesDto, evaluateExtractionCalibration, evaluateExtractionFixtures } from "../pipeline/evaluation.ts";
 import { EXTRACTOR_VERSION } from "../pipeline/extractors.ts";
 import { buildActorQueryExtractionProfile, buildLiveTiSearchSummary, buildTiSearchResultDto, extractionProfileKinds, summarizeEvidenceDeltas, type EvidenceStage, type TiConfidenceCaveatCode } from "../pipeline/intelligenceProfiles.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
@@ -1370,6 +1370,26 @@ describe("pipeline", () => {
     expect(regressionSuite.cases.some((item) => item.assertion.includes("stale evidence cannot be described as current activity"))).toBe(true);
     expect(regressionSuite.cases.some((item) => item.assertion.includes("ATT&CK mappings with drift"))).toBe(true);
     expect(regressionSuite.cases.some((item) => item.caveatUpdates.includes("stale activity must remain caveated"))).toBe(true);
+    expect(regressionSuite.cases.map((item) => item.id)).toEqual(expect.arrayContaining([
+      "program_bd_legal_proceeding_false_victim",
+      "program_bd_actor_alias_as_victim",
+      "program_bd_stale_repost_suppression",
+      "program_bd_headline_as_summary_specificity",
+      "program_bd_not_indexed_fallback",
+      "program_bd_raw_url_no_leak",
+      "program_bd_generic_non_cti_result"
+    ]));
+    expect(regressionSuite.cases.find((item) => item.id === "program_bd_legal_proceeding_false_victim")).toMatchObject({
+      state: "false_positive",
+      area: "extraction",
+      field: "victims",
+      provenance: { source: "program_bd_marketplace_quality" },
+      appliesAutomatically: false
+    });
+    expect(regressionSuite.cases.find((item) => item.id === "program_bd_raw_url_no_leak")).toMatchObject({
+      state: "false_positive",
+      field: "provenance"
+    });
     expect(regressionSuite.routing.agent03ParserRepair.length).toBeGreaterThan(0);
     expect(regressionSuite.routing.agent08GraphHolds.length).toBeGreaterThan(0);
     expect(regressionSuite.routing.agent09Api.length).toBe(regressionSuite.cases.length);
@@ -1384,6 +1404,8 @@ describe("pipeline", () => {
       restrictedPayloadsExposed: false
     });
     expect(JSON.stringify(regressionSuite)).not.toContain("https://example.test");
+    expect(JSON.stringify(regressionSuite)).not.toContain("https://");
+    expect(JSON.stringify(regressionSuite)).not.toContain("object/key");
     expect(JSON.stringify(regressionSuite)).not.toContain("may have used phishing");
   });
 
@@ -1661,7 +1683,14 @@ describe("pipeline", () => {
       "stale_2025_only_answer_rejection",
       "public_channel_rumor_demotion",
       "restricted_metadata_hold",
-      "graph_contradiction"
+      "graph_contradiction",
+      "program_bd_legal_proceeding_false_victim",
+      "program_bd_actor_alias_as_victim",
+      "program_bd_stale_repost_suppression",
+      "program_bd_summary_specificity",
+      "program_bd_not_indexed_fallback",
+      "program_bd_raw_url_no_leak",
+      "program_bd_generic_non_cti_result"
     ]));
     expect(learningLoop.persistence).toMatchObject({
       mode: "readiness_contract_append_only",
@@ -1719,6 +1748,54 @@ describe("pipeline", () => {
       "provenance_completeness",
       "stale_answer_rejection"
     ]));
+    expect(activeLearningQueue.summarySpecificityThresholds.map((threshold) => threshold.field)).toEqual(expect.arrayContaining([
+      "summary",
+      "recent_activity",
+      "victims",
+      "ttps",
+      "source_support"
+    ]));
+    expect(activeLearningQueue.summarySpecificityThresholds.find((threshold) => threshold.field === "summary")).toMatchObject({
+      publicAnswerEffect: "partial"
+    });
+    expect(activeLearningQueue.summarySpecificityThresholds.every((threshold) =>
+      threshold.minimumSpecificity > threshold.warnBelow && threshold.warnBelow > threshold.holdBelow && threshold.requiredSignals.length > 0
+    )).toBe(true);
+    expect(activeLearningQueue.rowUsefulnessDeltas.length).toBe(activeLearningQueue.candidates.length);
+    expect(activeLearningQueue.rowUsefulnessDeltas.map((row) => row.expectedMarketplaceEffect)).toEqual(expect.arrayContaining([
+      "more_actionable",
+      "less_stale",
+      "less_false_positive",
+      "better_corroborated"
+    ]));
+    expect(activeLearningQueue.rowUsefulnessDeltas.every((row) =>
+      row.delta >= 0 && (row.promotionState !== "eligible_after_replay" || row.regressionCaseIds.length > 0)
+    )).toBe(true);
+    expect(activeLearningQueue.replayPromotionReport).toMatchObject({
+      schemaVersion: "ti.analyst_approved_replay_promotion_report.v1",
+      candidateCount: activeLearningQueue.candidates.length,
+      policy: {
+        analystApprovalRequired: true,
+        replayRequiredBeforePromotion: true,
+        noAutomaticPromotion: true,
+        noRuntimeMutation: true
+      },
+      safety: {
+        rawEvidenceExposed: false,
+        sourceUrlsExposed: false,
+        restrictedPayloadsExposed: false,
+        objectKeysExposed: false
+      }
+    });
+    expect(activeLearningQueue.replayPromotionReport.promotionChecks.map((check) => check.code)).toEqual(expect.arrayContaining([
+      "human_approval",
+      "fixture_replay",
+      "no_leak",
+      "source_activation_boundary",
+      "public_answer_boundary",
+      "rollback"
+    ]));
+    expect(activeLearningQueue.replayPromotionReport.forbiddenActions).toEqual(expect.arrayContaining(["activate_source", "start_crawl", "change_model_weights", "publish_public_answer"]));
     expect(activeLearningQueue.fixturePack.map((fixture) => fixture.scenario)).toEqual(expect.arrayContaining([
       "apt29_daily_activity_freshness",
       "apt42_instant_summary",
@@ -1726,7 +1803,14 @@ describe("pipeline", () => {
       "stale_2025_only_answer_rejection",
       "public_channel_rumor_demotion",
       "restricted_metadata_hold",
-      "graph_contradiction"
+      "graph_contradiction",
+      "program_bd_legal_proceeding_false_victim",
+      "program_bd_actor_alias_as_victim",
+      "program_bd_stale_repost_suppression",
+      "program_bd_summary_specificity",
+      "program_bd_not_indexed_fallback",
+      "program_bd_raw_url_no_leak",
+      "program_bd_generic_non_cti_result"
     ]));
     expect(activeLearningQueue.workflow).toMatchObject({
       appendOnly: true,
@@ -1853,6 +1937,109 @@ describe("pipeline", () => {
     expect(JSON.stringify(gates)).not.toContain("https://");
     expect(JSON.stringify(gates)).not.toContain("object/key");
     expect(JSON.stringify(gates)).not.toContain("credential dump");
+  });
+
+  test("builds Program BD watchlist quality fixtures with route-visible row gate packets", () => {
+    const governance = buildEvaluationDatasetGovernanceDto({ generatedAt: "2026-05-24T12:00:00.000Z" });
+    const ctiEvaluationDatasetPack = buildCtiEvaluationDatasetPackDto({
+      governance,
+      generatedAt: "2026-05-24T12:00:00.000Z"
+    });
+    const pack = buildProgramBdQualityEvaluationPackDto({
+      generatedAt: "2026-05-24T12:00:00.000Z",
+      ctiEvaluationDatasetPack
+    });
+
+    expect(pack.schemaVersion).toBe("ti.program_bd_quality_evaluation_pack.v1");
+    expect(pack.summary.defaultWatchlistActorCount).toBeGreaterThanOrEqual(20);
+    expect(pack.summary.unknownFixtureCount).toBeGreaterThanOrEqual(2);
+    expect(pack.summary.routeVisibleGatePacket).toBe(true);
+    expect(pack.rowMetricNames).toEqual(expect.arrayContaining([
+      "summary_specificity",
+      "source_support",
+      "recency",
+      "false_victim_risk",
+      "legal_proceeding_detection",
+      "actor_alias_resolution",
+      "ttp_evidence_support",
+      "source_family_diversity",
+      "contradiction_flags",
+      "actionability_correctness"
+    ]));
+    expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT28",
+      "APT42",
+      "Sandworm",
+      "Volt Typhoon",
+      "Lazarus",
+      "Turla",
+      "MuddyWater",
+      "Mustang Panda",
+      "Kimsuky",
+      "LockBit",
+      "Akira",
+      "Clop",
+      "ALPHV",
+      "Black Basta",
+      "Play",
+      "Scattered Spider",
+      "FIN7",
+      "TA505",
+      "ShinyHunters",
+      "Random Actor",
+      "Crimson Pineapple"
+    ]));
+    expect(pack.watchlistFixtures.every((fixture) => fixture.requiredMetrics.length === pack.rowMetricNames.length)).toBe(true);
+    expect(pack.watchlistFixtures.every((fixture) => fixture.gatePacket.remediationAction.length > 0)).toBe(true);
+    expect(pack.watchlistFixtures.every((fixture) => fixture.provenance.redacted && fixture.provenance.fixtureIds.length > 0 && fixture.noLeak)).toBe(true);
+    expect(pack.watchlistFixtures.find((fixture) => fixture.actor === "LockBit")).toMatchObject({
+      expectedPublicState: "hold",
+      gatePacket: {
+        status: "hold",
+        downstreamEligibility: {
+          publicUi: false,
+          graphExport: false,
+          stixExport: false
+        }
+      }
+    });
+    expect(pack.watchlistFixtures.find((fixture) => fixture.actor === "Random Actor")).toMatchObject({
+      expectedPublicState: "searching",
+      gatePacket: {
+        downstreamEligibility: {
+          publicUi: true,
+          graphExport: true,
+          stixExport: false
+        }
+      }
+    });
+    expect(pack.regressionGuardrails.map((guardrail) => guardrail.id)).toEqual(expect.arrayContaining([
+      "person_treated_as_victim",
+      "actor_alias_mistaken_as_victim",
+      "not_indexed_fallback",
+      "stale_2025_only_activity",
+      "headline_repeated_as_summary",
+      "raw_unsafe_url_leak",
+      "generic_non_cti_web_result"
+    ]));
+    expect(pack.routing.agent09ApiGatePacket.length).toBeGreaterThan(0);
+    expect(pack.routing.agent10ReleaseGate.length).toBeGreaterThan(0);
+    expect(pack.policy).toMatchObject({
+      analystApprovalRequired: true,
+      preservesUncertainty: true,
+      noAutomaticPromotion: true,
+      noAutonomousScraping: true
+    });
+    expect(pack.safety).toMatchObject({
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    });
+    expect(JSON.stringify(pack)).not.toContain("https://");
+    expect(JSON.stringify(pack)).not.toContain("object/key");
+    expect(JSON.stringify(pack)).not.toContain("credential dump");
   });
 
   test("builds ATT&CK mapping quality and drift evaluation without raw evidence", () => {

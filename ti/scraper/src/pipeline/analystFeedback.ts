@@ -101,7 +101,7 @@ export interface QualityRegressionCaseDto {
     generatedAt: string;
     feedbackTarget?: AnalystFeedbackTarget;
     attackTechniqueId?: string;
-    source: "analyst_feedback" | "timeliness_harness" | "attack_mapping_quality";
+    source: "analyst_feedback" | "timeliness_harness" | "attack_mapping_quality" | "program_bd_marketplace_quality";
   };
   caveatUpdates: string[];
   handoffs: {
@@ -447,7 +447,14 @@ export interface EvaluationLearningFixtureDto {
     | "stale_2025_only_answer_rejection"
     | "public_channel_rumor_demotion"
     | "restricted_metadata_hold"
-    | "graph_contradiction";
+    | "graph_contradiction"
+    | "program_bd_legal_proceeding_false_victim"
+    | "program_bd_actor_alias_as_victim"
+    | "program_bd_stale_repost_suppression"
+    | "program_bd_summary_specificity"
+    | "program_bd_not_indexed_fallback"
+    | "program_bd_raw_url_no_leak"
+    | "program_bd_generic_non_cti_result";
   expectedPublicState: "ready" | "partial" | "searching" | "review_required";
   eventTypes: AnalystFeedbackLearningEventType[];
   scorecardMetrics: EvaluationScorecardMetric[];
@@ -511,8 +518,15 @@ export type ActiveLearningCandidateType =
   | "freshness_rule_update"
   | "contradiction_resolution";
 
+export type ActiveLearningScorecardMetric =
+  | EvaluationScorecardMetric
+  | "provenance_completeness"
+  | "stale_answer_rejection"
+  | "summary_specificity"
+  | "row_usefulness";
+
 export interface ActiveLearningBeforeAfterScorecardDto {
-  metric: EvaluationScorecardMetric | "provenance_completeness" | "stale_answer_rejection";
+  metric: ActiveLearningScorecardMetric;
   before: number;
   expectedAfter: number;
   delta: number;
@@ -558,6 +572,67 @@ export interface ActiveLearningCandidateDto {
   appliesAutomatically: false;
 }
 
+export interface SummarySpecificityThresholdDto {
+  field: "summary" | "recent_activity" | "victims" | "ttps" | "source_support";
+  minimumSpecificity: number;
+  warnBelow: number;
+  holdBelow: number;
+  requiredSignals: string[];
+  failingRegressionCaseIds: string[];
+  candidateIds: string[];
+  publicAnswerEffect: "ready" | "partial" | "review_required";
+}
+
+export interface RowUsefulnessDeltaDto {
+  id: string;
+  candidateId: string;
+  candidateType: ActiveLearningCandidateType;
+  before: number;
+  expectedAfter: number;
+  delta: number;
+  affectedFields: string[];
+  evidenceIds: string[];
+  regressionCaseIds: string[];
+  expectedMarketplaceEffect: "more_actionable" | "less_stale" | "less_false_positive" | "better_corroborated" | "no_public_change";
+  promotionState: "blocked" | "needs_human_approval" | "eligible_after_replay";
+}
+
+export interface AnalystApprovedReplayPromotionReportDto {
+  schemaVersion: "ti.analyst_approved_replay_promotion_report.v1";
+  generatedAt: string;
+  candidateCount: number;
+  eligibleAfterReplayCount: number;
+  needsHumanApprovalCount: number;
+  blockedCount: number;
+  summarySpecificityThresholds: SummarySpecificityThresholdDto[];
+  rowUsefulnessDeltas: RowUsefulnessDeltaDto[];
+  promotionChecks: Array<{
+    code: "human_approval" | "fixture_replay" | "no_leak" | "source_activation_boundary" | "public_answer_boundary" | "rollback";
+    status: "pass" | "hold";
+    message: string;
+  }>;
+  allowedActions: Array<"approve_fixture" | "reject_candidate" | "request_more_evidence" | "route_to_owner">;
+  forbiddenActions: Array<"activate_source" | "start_crawl" | "change_model_weights" | "mutate_extractor" | "publish_public_answer" | "export_restricted_payload">;
+  routing: {
+    agent03ParserCertification: string[];
+    agent06EvidenceReplay: string[];
+    agent09ApiFields: string[];
+    agent10ReleaseGates: string[];
+  };
+  policy: {
+    analystApprovalRequired: true;
+    replayRequiredBeforePromotion: true;
+    noAutomaticPromotion: true;
+    noRuntimeMutation: true;
+  };
+  safety: {
+    rawEvidenceExposed: false;
+    sourceUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    objectKeysExposed: false;
+  };
+}
+
 export interface ActiveLearningCandidateQueueDto {
   schemaVersion: "ti.active_learning_candidate_queue.v1";
   query: string;
@@ -573,6 +648,9 @@ export interface ActiveLearningCandidateQueueDto {
   };
   scorecards: ActiveLearningBeforeAfterScorecardDto[];
   fixturePack: EvaluationLearningFixtureDto[];
+  summarySpecificityThresholds: SummarySpecificityThresholdDto[];
+  rowUsefulnessDeltas: RowUsefulnessDeltaDto[];
+  replayPromotionReport: AnalystApprovedReplayPromotionReportDto;
   routing: {
     agent03ParserCertification: string[];
     agent04FreshnessSourceGaps: string[];
@@ -765,6 +843,7 @@ export function buildQualityRegressionSuiteDto(input: {
   const generatedAt = input.generatedAt ?? input.feedbackLoop.generatedAt;
   const cases = [
     ...input.feedbackLoop.items.map((feedback) => regressionCaseFromFeedback(input.query, generatedAt, feedback)),
+    ...programBdRegressionCases(input.query, generatedAt),
     ...regressionCasesFromTimeliness(input.query, generatedAt, input.timelinessGroundTruth),
     ...regressionCasesFromAttackMapping(input.query, generatedAt, input.attackMappingQuality)
   ].slice(0, 120);
@@ -974,6 +1053,9 @@ export function buildActiveLearningCandidateQueueDto(input: {
   const generatedAt = input.generatedAt ?? input.analystFeedbackLearningLoop.generatedAt;
   const candidates = activeLearningCandidatesForQueue(input, generatedAt);
   const scorecards = activeLearningAggregateScorecardsForQueue(candidates);
+  const summarySpecificityThresholds = buildSummarySpecificityThresholds(input, candidates);
+  const rowUsefulnessDeltas = buildRowUsefulnessDeltas(candidates);
+  const replayPromotionReport = buildAnalystApprovedReplayPromotionReport(generatedAt, candidates, summarySpecificityThresholds, rowUsefulnessDeltas);
   return {
     schemaVersion: "ti.active_learning_candidate_queue.v1",
     query: input.query,
@@ -995,6 +1077,9 @@ export function buildActiveLearningCandidateQueueDto(input: {
     },
     scorecards,
     fixturePack: input.analystFeedbackLearningLoop.fixtures,
+    summarySpecificityThresholds,
+    rowUsefulnessDeltas,
+    replayPromotionReport,
     routing: {
       agent03ParserCertification: idsByCandidateTypeForQueue(candidates, ["parser_prompt_model_improvement", "ttp_mapping_rule_update", "actor_alias_merge_split", "victim_false_positive_suppression", "ioc_false_positive_suppression"]),
       agent04FreshnessSourceGaps: idsByCandidateTypeForQueue(candidates, ["source_ranking_adjustment", "source_reliability_downgrade", "freshness_rule_update"]),
@@ -1030,6 +1115,127 @@ function activeLearningAggregateScorecardsForQueue(candidates: ActiveLearningCan
 
 function idsByCandidateTypeForQueue(candidates: ActiveLearningCandidateDto[], types: ActiveLearningCandidateType[]): string[] {
   return idsByCandidateTypeLegacyWide(candidates, types);
+}
+
+function buildSummarySpecificityThresholds(
+  input: Parameters<typeof buildActiveLearningCandidateQueueDto>[0],
+  candidates: ActiveLearningCandidateDto[]
+): SummarySpecificityThresholdDto[] {
+  const regressionIds = (patterns: RegExp[]) => input.qualityRegressionSuite.cases
+    .filter((testCase) => patterns.some((pattern) => pattern.test(`${testCase.id}:${testCase.field}:${testCase.assertion}`)))
+    .map((testCase) => testCase.id)
+    .slice(0, 12);
+  const candidateIds = (types: ActiveLearningCandidateType[]) => candidates
+    .filter((candidate) => types.includes(candidate.type))
+    .map((candidate) => candidate.id)
+    .slice(0, 12);
+  const row = (
+    field: SummarySpecificityThresholdDto["field"],
+    minimumSpecificity: number,
+    warnBelow: number,
+    holdBelow: number,
+    requiredSignals: string[],
+    patterns: RegExp[],
+    types: ActiveLearningCandidateType[],
+    publicAnswerEffect: SummarySpecificityThresholdDto["publicAnswerEffect"]
+  ): SummarySpecificityThresholdDto => ({
+    field,
+    minimumSpecificity,
+    warnBelow,
+    holdBelow,
+    requiredSignals,
+    failingRegressionCaseIds: regressionIds(patterns),
+    candidateIds: candidateIds(types),
+    publicAnswerEffect
+  });
+  return [
+    row("summary", 0.72, 0.6, 0.45, ["actor_or_campaign_name", "fresh_activity_or_scope", "source_family_support", "not_headline_copy"], [/summary_specificity|headline|generic_summary/i], ["parser_prompt_model_improvement", "source_reliability_downgrade"], "partial"),
+    row("recent_activity", 0.78, 0.62, 0.5, ["fresh_timestamp", "non_repost_context", "corroborating_capture_or_ledger"], [/stale|repost|recent_activity|timeliness/i], ["freshness_rule_update"], "partial"),
+    row("victims", 0.84, 0.7, 0.55, ["incident_language", "victim_role_context", "not_legal_proceeding_subject", "not_actor_alias"], [/victim|legal_proceeding|alias_as_victim/i], ["victim_false_positive_suppression", "actor_alias_merge_split"], "review_required"),
+    row("ttps", 0.76, 0.64, 0.5, ["ttp_phrase", "actor_relevance", "source_support", "attack_mapping_not_deprecated"], [/attack|ttp|technique/i], ["ttp_mapping_rule_update"], "partial"),
+    row("source_support", 0.8, 0.66, 0.52, ["source_family_diversity", "non_generic_cti_source", "provenance_ids", "ledger_or_capture_support"], [/source|generic_non_cti|provenance/i], ["source_ranking_adjustment", "source_reliability_downgrade"], "partial")
+  ];
+}
+
+function buildRowUsefulnessDeltas(candidates: ActiveLearningCandidateDto[]): RowUsefulnessDeltaDto[] {
+  return candidates.map((candidate, index) => {
+    const before = numericAverage(candidate.beforeAfterScorecards.map((scorecard) => scorecard.before));
+    const expectedAfter = numericAverage(candidate.beforeAfterScorecards.map((scorecard) => scorecard.expectedAfter));
+    return {
+      id: stableId("row-usefulness-delta", `${candidate.id}:${index}`),
+      candidateId: candidate.id,
+      candidateType: candidate.type,
+      before,
+      expectedAfter,
+      delta: Number((expectedAfter - before).toFixed(2)),
+      affectedFields: unique([...candidate.affectedFields.publicApi, ...candidate.affectedFields.graph, ...candidate.affectedFields.stix]).slice(0, 12),
+      evidenceIds: candidate.evidenceIds.slice(0, 8),
+      regressionCaseIds: candidate.sourceRecords.regressionCaseIds.slice(0, 12),
+      expectedMarketplaceEffect: rowUsefulnessEffect(candidate.type),
+      promotionState: candidate.status === "blocked"
+        ? "blocked"
+        : candidate.status === "needs_human_approval"
+          ? "needs_human_approval"
+          : "eligible_after_replay"
+    };
+  });
+}
+
+function rowUsefulnessEffect(type: ActiveLearningCandidateType): RowUsefulnessDeltaDto["expectedMarketplaceEffect"] {
+  if (type === "freshness_rule_update") return "less_stale";
+  if (type === "victim_false_positive_suppression" || type === "ioc_false_positive_suppression" || type === "actor_alias_merge_split") return "less_false_positive";
+  if (type === "source_ranking_adjustment" || type === "source_reliability_downgrade" || type === "contradiction_resolution") return "better_corroborated";
+  if (type === "parser_prompt_model_improvement" || type === "ttp_mapping_rule_update") return "more_actionable";
+  return "no_public_change";
+}
+
+function buildAnalystApprovedReplayPromotionReport(
+  generatedAt: string,
+  candidates: ActiveLearningCandidateDto[],
+  summarySpecificityThresholds: SummarySpecificityThresholdDto[],
+  rowUsefulnessDeltas: RowUsefulnessDeltaDto[]
+): AnalystApprovedReplayPromotionReportDto {
+  const eligibleAfterReplay = rowUsefulnessDeltas.filter((row) => row.promotionState === "eligible_after_replay");
+  const needsHumanApproval = rowUsefulnessDeltas.filter((row) => row.promotionState === "needs_human_approval");
+  const blocked = rowUsefulnessDeltas.filter((row) => row.promotionState === "blocked");
+  return {
+    schemaVersion: "ti.analyst_approved_replay_promotion_report.v1",
+    generatedAt,
+    candidateCount: candidates.length,
+    eligibleAfterReplayCount: eligibleAfterReplay.length,
+    needsHumanApprovalCount: needsHumanApproval.length,
+    blockedCount: blocked.length,
+    summarySpecificityThresholds,
+    rowUsefulnessDeltas,
+    promotionChecks: [
+      { code: "human_approval", status: needsHumanApproval.length > 0 ? "hold" : "pass", message: "high-risk candidate rows require analyst approval before fixture replay can promote behavior" },
+      { code: "fixture_replay", status: "hold", message: "promotion remains held until deterministic extraction, API, graph, and release fixtures replay green" },
+      { code: "no_leak", status: "pass", message: "report contains ids, scores, thresholds, and routing only; no raw evidence or locator fields" },
+      { code: "source_activation_boundary", status: "pass", message: "learning promotion cannot activate sources or start collection" },
+      { code: "public_answer_boundary", status: "pass", message: "learning promotion cannot publish public answers or remove review caveats" },
+      { code: "rollback", status: "pass", message: "rejected candidates preserve current extractor, ranking, source, graph, and API behavior" }
+    ],
+    allowedActions: ["approve_fixture", "reject_candidate", "request_more_evidence", "route_to_owner"],
+    forbiddenActions: ["activate_source", "start_crawl", "change_model_weights", "mutate_extractor", "publish_public_answer", "export_restricted_payload"],
+    routing: {
+      agent03ParserCertification: candidates.filter((candidate) => candidate.type === "parser_prompt_model_improvement" || candidate.type === "ttp_mapping_rule_update").map((candidate) => candidate.id),
+      agent06EvidenceReplay: candidates.map((candidate) => candidate.id),
+      agent09ApiFields: rowUsefulnessDeltas.map((row) => row.id),
+      agent10ReleaseGates: rowUsefulnessDeltas.filter((row) => row.promotionState !== "eligible_after_replay" || row.delta < 0.1).map((row) => row.id)
+    },
+    policy: {
+      analystApprovalRequired: true,
+      replayRequiredBeforePromotion: true,
+      noAutomaticPromotion: true,
+      noRuntimeMutation: true
+    },
+    safety: {
+      rawEvidenceExposed: false,
+      sourceUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
 }
 
 function candidateTypeForLearningRecord(type: AnalystFeedbackLearningEventType): ActiveLearningCandidateType {
@@ -1201,6 +1407,157 @@ function regressionCaseFromFeedback(query: string, generatedAt: string, feedback
     immutable: true,
     appliesAutomatically: false
   };
+}
+
+type ProgramBdRegressionTemplate = {
+  id: string;
+  state: AnalystCorrectionState;
+  area: QualityRegressionArea;
+  field: string;
+  value?: string;
+  assertion: string;
+  expectedOutcome: string;
+  caveatUpdates: string[];
+  handoffs: QualityRegressionCaseDto["handoffs"];
+};
+
+const PROGRAM_BD_REGRESSION_TEMPLATES: ProgramBdRegressionTemplate[] = [
+  {
+    id: "program_bd_legal_proceeding_false_victim",
+    state: "false_positive",
+    area: "extraction",
+    field: "victims",
+    value: "legal-proceeding subject",
+    assertion: "legal, lawsuit, indictment, prosecution, or takedown headlines must not create victim/company claims without incident wording and claim provenance",
+    expectedOutcome: "victim extraction is suppressed or review-held and cannot promote into public UI, graph, STIX, or Apify victim fields without corroborating incident evidence",
+    caveatUpdates: ["legal proceeding context is not victim evidence", "public answer must explain held victim extraction when this is the only support"],
+    handoffs: {
+      agent03ParserRepair: "add_legal_proceeding_false_victim_fixture",
+      agent06ClaimLedger: "record_false_victim_hold_with_provenance",
+      agent08GraphHolds: "block_victim_relationship_from_legal_headline",
+      agent09Api: "surface_false_victim_review_reason",
+      agent10ReleaseGates: "fail_marketplace_row_if_legal_headline_promotes_victim"
+    }
+  },
+  {
+    id: "program_bd_actor_alias_as_victim",
+    state: "false_positive",
+    area: "entity_resolution",
+    field: "victims",
+    value: "actor alias",
+    assertion: "known actor aliases and cluster names must resolve as actor identities, not victim entities",
+    expectedOutcome: "alias-as-victim extraction is held and entity resolution asks for actor alias review instead of victim promotion",
+    caveatUpdates: ["actor alias collision must stay out of victim fields", "answer remains partial until entity role is resolved"],
+    handoffs: {
+      agent03ParserRepair: "add_alias_role_regression_fixture",
+      agent06ClaimLedger: "attach_alias_collision_to_claim_review",
+      agent08GraphHolds: "block_actor_to_victim_self_edge",
+      agent09Api: "surface_alias_role_review_reason",
+      agent10ReleaseGates: "hold_rows_with_alias_victim_collision"
+    }
+  },
+  {
+    id: "program_bd_stale_repost_suppression",
+    state: "stale",
+    area: "public_answer_caveat",
+    field: "recent_activity",
+    value: "reposted older reporting",
+    assertion: "reposts, retrospectives, and 2025-only support must not be presented as fresh actor activity",
+    expectedOutcome: "freshness is downgraded, answer remains partial, and row actions request newer corroboration",
+    caveatUpdates: ["stale repost must not satisfy latest-activity wording", "freshness caveat is required before public answer promotion"],
+    handoffs: {
+      agent06ClaimLedger: "expire_or_caveat_reposted_claim",
+      agent09Api: "surface_stale_repost_caveat",
+      agent10ReleaseGates: "hold_ready_state_on_stale_repost"
+    }
+  },
+  {
+    id: "program_bd_headline_as_summary_specificity",
+    state: "underconfident",
+    area: "ranking",
+    field: "summary",
+    value: "headline-only summary",
+    assertion: "a copied headline or generic actor label is not a specific analyst summary",
+    expectedOutcome: "summary specificity score drops, marketplace row stays caveated, and public answer requests extracted context",
+    caveatUpdates: ["headline repetition is not sufficient summary evidence", "specific actor behavior, target, timing, or technique context is required"],
+    handoffs: {
+      agent03ParserRepair: "add_summary_specificity_fixture",
+      agent06ClaimLedger: "mark_summary_claim_under_evidenced",
+      agent09Api: "publish_summary_specificity_review_reason",
+      agent10ReleaseGates: "warn_marketplace_row_on_generic_summary"
+    }
+  },
+  {
+    id: "program_bd_not_indexed_fallback",
+    state: "needs_evidence",
+    area: "public_answer_caveat",
+    field: "public_answer",
+    value: "not indexed fallback",
+    assertion: "not-indexed fallback states must remain searching or partial and must never fabricate actor facts from defaults",
+    expectedOutcome: "unknown or unavailable evidence returns searching/partial with provenance gaps and no seeded default actor facts",
+    caveatUpdates: ["not-indexed fallback cannot promote seeded content", "answer should expose the evidence gap and collection state"],
+    handoffs: {
+      agent04CoverageRadar: "record_public_coverage_gap_without_default_content",
+      agent09Api: "surface_searching_state_for_not_indexed_query",
+      agent10ReleaseGates: "hold_ready_state_without_fresh_capture"
+    }
+  },
+  {
+    id: "program_bd_raw_url_no_leak",
+    state: "false_positive",
+    area: "public_answer_caveat",
+    field: "provenance",
+    value: "raw unsafe locator",
+    assertion: "public, Apify, graph, and learning-loop DTOs must expose source ids and hashes, not unsafe raw locators or private object references",
+    expectedOutcome: "unsafe locators are redacted to safe ids, answer stays no-leak, and release gates fail on raw locator exposure",
+    caveatUpdates: ["unsafe locator leakage is a release blocker", "public answer keeps citation ids and content hashes only"],
+    handoffs: {
+      agent06ClaimLedger: "record_no_leak_provenance_violation",
+      agent08GraphHolds: "block_export_on_unsafe_locator",
+      agent09Api: "redact_raw_locator_from_public_contract",
+      agent10ReleaseGates: "fail_release_on_raw_locator_leak"
+    }
+  },
+  {
+    id: "program_bd_generic_non_cti_result",
+    state: "source_repair",
+    area: "source_reliability",
+    field: "source_support",
+    value: "generic non-CTI web result",
+    assertion: "generic pages, SEO summaries, and non-CTI search results must not count as high-confidence actor evidence",
+    expectedOutcome: "source support is downgraded, row remains partial, and source governance receives a reliability repair item",
+    caveatUpdates: ["generic non-CTI support cannot satisfy analyst-grade source support", "row needs vendor, advisory, public-channel, or government corroboration"],
+    handoffs: {
+      agent01SourceGovernance: "downgrade_generic_non_cti_source_family",
+      agent04CoverageRadar: "request safer_public_cti_source_family",
+      agent06ClaimLedger: "mark_claim_under_supported_by_generic_source",
+      agent09Api: "surface_source_support_review_reason",
+      agent10ReleaseGates: "warn_or_hold_rows_with_generic_only_support"
+    }
+  }
+];
+
+function programBdRegressionCases(query: string, generatedAt: string): QualityRegressionCaseDto[] {
+  return PROGRAM_BD_REGRESSION_TEMPLATES.map((template) => ({
+    id: template.id,
+    state: template.state,
+    area: template.area,
+    field: template.field,
+    value: template.value,
+    assertion: template.assertion,
+    expectedOutcome: template.expectedOutcome,
+    evidenceIds: [`${template.id}_evidence`],
+    ledgerIds: [`${template.id}_ledger`],
+    provenance: {
+      query,
+      generatedAt,
+      source: "program_bd_marketplace_quality"
+    },
+    caveatUpdates: template.caveatUpdates,
+    handoffs: template.handoffs,
+    immutable: true,
+    appliesAutomatically: false
+  }));
 }
 
 function regressionCasesFromTimeliness(query: string, generatedAt: string, timeliness: TimelinessGroundTruthHarnessDto | undefined): QualityRegressionCaseDto[] {
@@ -1911,7 +2268,14 @@ function learningFixtures(input: {
     fixture("stale_2025_only_answer_rejection", "review_required", ["stale_activity_rejection"], ["freshness"], "2025-only activity cannot be presented as current."),
     fixture("public_channel_rumor_demotion", "partial", ["source_reliability_downgrade"], ["source_diversity"], "Public-channel rumor support is demoted until corroborated by safer public sources."),
     fixture("restricted_metadata_hold", "review_required", ["restricted_hold_confirmation"], ["restricted_no_leak_handling"], "Restricted metadata stays held and no-leak until analyst approval."),
-    fixture("graph_contradiction", "review_required", ["contradiction_merge_split", "ttp_mapping_correction"], ["contradiction_handling"], "Graph contradictions require merge/split review before public or STIX promotion.")
+    fixture("graph_contradiction", "review_required", ["contradiction_merge_split", "ttp_mapping_correction"], ["contradiction_handling"], "Graph contradictions require merge/split review before public or STIX promotion."),
+    fixture("program_bd_legal_proceeding_false_victim", "review_required", ["victim_false_positive"], ["extraction_precision"], "Legal-proceeding headlines cannot create victim claims without incident provenance."),
+    fixture("program_bd_actor_alias_as_victim", "review_required", ["actor_alias_correction", "victim_false_positive"], ["extraction_precision"], "Actor aliases must not be emitted as victims."),
+    fixture("program_bd_stale_repost_suppression", "partial", ["stale_activity_rejection"], ["freshness", "public_answer_latency"], "Stale reposts cannot satisfy current activity wording."),
+    fixture("program_bd_summary_specificity", "partial", ["source_reliability_downgrade"], ["source_diversity", "public_answer_latency"], "Headline-only summaries remain caveated until extracted context is specific."),
+    fixture("program_bd_not_indexed_fallback", "searching", ["unknown_query_searching_approval"], ["unknown_actor_behavior"], "Not-indexed fallback stays searching or partial and never backfills seeded actor facts."),
+    fixture("program_bd_raw_url_no_leak", "review_required", ["restricted_hold_confirmation"], ["restricted_no_leak_handling"], "Unsafe locators and private object references are never exposed in public learning fixtures."),
+    fixture("program_bd_generic_non_cti_result", "partial", ["source_reliability_downgrade"], ["source_diversity"], "Generic non-CTI web results cannot count as high-confidence actor support.")
   ].map((item) => ({
     ...item,
     evidenceIds: item.evidenceIds.length > 0 ? item.evidenceIds : input.qualityRegressionSuite.cases.flatMap((testCase) => testCase.evidenceIds).slice(0, 8),
@@ -1930,9 +2294,13 @@ function feedbackIdMatchesEvent(id: string, type: AnalystFeedbackLearningEventTy
 
 function regressionIdMatchesEvent(id: string, type: AnalystFeedbackLearningEventType): boolean {
   if (type === "ttp_mapping_correction") return /attack|ttp/i.test(id);
-  if (type === "stale_activity_rejection") return /stale|timeliness/i.test(id);
-  if (type === "source_reliability_downgrade") return /source/i.test(id);
+  if (type === "victim_false_positive") return /victim|false|legal_proceeding|alias_as_victim/i.test(id);
+  if (type === "actor_alias_correction") return /alias|entity/i.test(id);
+  if (type === "stale_activity_rejection") return /stale|timeliness|repost/i.test(id);
+  if (type === "source_reliability_downgrade") return /source|summary_specificity|generic_non_cti|headline/i.test(id);
   if (type === "contradiction_merge_split") return /contradict|false/i.test(id);
+  if (type === "unknown_query_searching_approval") return /unknown|not_indexed|fallback/i.test(id);
+  if (type === "restricted_hold_confirmation") return /restricted|raw_url|leak|unsafe/i.test(id);
   return true;
 }
 

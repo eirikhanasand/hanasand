@@ -68,6 +68,7 @@ interface TiSearchResponse {
   }>;
   scheduler?: Record<string, unknown>;
   sourceCoverage?: Record<string, unknown>;
+  publicChannel?: Record<string, unknown>;
   notes: string[];
 }
 
@@ -129,6 +130,11 @@ interface MarketplaceRow {
   sourceCoverageState: string;
   sourceCoverageGapCount: number;
   sourceCoverageGaps: string[];
+  freshnessExpectation: string;
+  highestValueMissingFamily: string;
+  nextBestSourceAction: string;
+  buyerCaveat: string;
+  expectedTimeToUsefulSignal: string;
   pollingHint: string;
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
@@ -409,6 +415,7 @@ function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: stri
     evidenceCount
   );
   const scheduler = schedulerFields(response);
+  const coverageProduct = sourceCoverageProductFields(response);
   return {
     query: response.query,
     rowType: "profile",
@@ -430,6 +437,7 @@ function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: stri
     activityCount: response.recentActivity.length,
     freshnessStatus: quality.freshnessStatus,
     ...scheduler,
+    ...coverageProduct,
     evidenceGrade: quality.evidenceGrade,
     isActionable: quality.isActionable,
     reviewReasons: quality.reviewReasons,
@@ -704,6 +712,71 @@ function schedulerFields(response: TiSearchResponse): Pick<MarketplaceRow,
   };
 }
 
+function sourceCoverageProductFields(response: TiSearchResponse): Pick<MarketplaceRow,
+  | "freshnessExpectation"
+  | "highestValueMissingFamily"
+  | "nextBestSourceAction"
+  | "buyerCaveat"
+  | "expectedTimeToUsefulSignal"
+> {
+  const row = actorCoverageMatrixRow(response);
+  return {
+    freshnessExpectation: safeString(row?.freshnessExpectation ?? "unknown"),
+    highestValueMissingFamily: safeString(row?.highestValueMissingFamily ?? ""),
+    nextBestSourceAction: safeString(row?.nextBestSourceAction ?? fallbackNextBestSourceAction(response)),
+    buyerCaveat: safeString(row?.buyerCaveat ?? fallbackBuyerCaveat(response)),
+    expectedTimeToUsefulSignal: safeString(row?.expectedTimeToUsefulSignal ?? "unknown_until_sources_added")
+  };
+}
+
+function actorCoverageMatrixRow(response: TiSearchResponse): Record<string, unknown> | undefined {
+  const sourceCoverage = record(response.sourceCoverage);
+  const publicChannel = record(response.publicChannel);
+  const signalFusion = record(publicChannel?.signalFusion);
+  const candidates = [
+    record(sourceCoverage?.actorSourceCoverageMatrix),
+    record(sourceCoverage?.matrix),
+    record(signalFusion?.actorSourceCoverageMatrix)
+  ].filter((value): value is Record<string, unknown> => Boolean(value));
+  const normalizedQuery = normalizeKey(response.query);
+  for (const matrix of candidates) {
+    const rows = recordArray(matrix.rows);
+    const direct = rows.find((row) => normalizeKey(safeString(row.actor)) === normalizedQuery);
+    if (direct) return direct;
+    const alias = rows.find((row) => stringArray(row.aliases).some((value) => normalizeKey(value) === normalizedQuery));
+    if (alias) return alias;
+    const compact = record(matrix.compactProductFields);
+    const priorities = recordArray(compact?.actorFeedPriorities);
+    const priority = priorities.find((row) => normalizeKey(safeString(row.actor)) === normalizedQuery);
+    if (priority) return priority;
+  }
+  return undefined;
+}
+
+function fallbackNextBestSourceAction(response: TiSearchResponse): string {
+  const sourceCoverage = record(response.sourceCoverage);
+  const gaps = uniqueStrings([
+    ...stringArray(sourceCoverage?.gaps),
+    ...stringArray(sourceCoverage?.coverageGaps)
+  ]);
+  if (gaps.includes("missing_public_channel_evidence")) return "activate_public_channel";
+  if (gaps.includes("missing_clear_web_evidence") || gaps.includes("no_public_evidence")) return "activate_public_blog_news";
+  if (gaps.includes("stale_or_missing_timestamp")) return "raise_cadence";
+  if (gaps.length > 0) return "expose_coverage_gap";
+  return "maintain_current_mix";
+}
+
+function fallbackBuyerCaveat(response: TiSearchResponse): string {
+  const sourceCoverage = record(response.sourceCoverage);
+  const gaps = uniqueStrings([
+    ...stringArray(sourceCoverage?.gaps),
+    ...stringArray(sourceCoverage?.coverageGaps)
+  ]);
+  if (gaps.length > 0) return `Coverage is partial for ${response.query}; review missing source families before treating this as complete.`;
+  if (response.status === "partial" || response.status === "queued") return `Live collection is still running for ${response.query}; poll again before final triage.`;
+  return "Coverage appears sufficient for the current public metadata snapshot.";
+}
+
 function deferredWorkloadsFor(response: TiSearchResponse, coverageGapCodes: string[]): string[] {
   const workloads = new Set<string>();
   if (response.status === "partial" || response.status === "queued") workloads.add("poll_run_status");
@@ -882,6 +955,12 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
+function recordArray(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(record(item)))
+    : [];
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
@@ -896,6 +975,10 @@ function boolFromUnknown(value: unknown): boolean {
 
 function safeString(value: unknown): string {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, 120) : "unknown";
+}
+
+function normalizeKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function safeIso(value: string): string | undefined {

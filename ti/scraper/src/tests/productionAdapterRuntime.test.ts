@@ -185,8 +185,8 @@ describe("production adapter runtime program", () => {
       "multilingual_handoff"
     ]);
     expect(packet.implementationSummary).toMatchObject({
-      implemented: 3,
-      contractReady: 1,
+      implemented: 4,
+      contractReady: 0,
       canaryContract: 4,
       blocked: 0
     });
@@ -221,7 +221,7 @@ describe("production adapter runtime program", () => {
     const github = packet.capabilities.find((capability) => capability.adapter === "github_security_feed");
     expect(github).toMatchObject({
       runtimeMode: "official_public_api",
-      implementationState: "contract_ready",
+      implementationState: "implemented",
       sourceFamily: "github_security_advisory",
       parserProfile: "advisory_signal"
     });

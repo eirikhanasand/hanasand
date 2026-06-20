@@ -14,6 +14,12 @@
 - Darknet-related outputs must remain metadata-only and redacted unless an operator adds a reviewed source adapter later.
 - Keep the output contract stable: `safe_metadata_only.v1`.
 
+## Scheduler And Coverage Gate
+
+- Dataset schema must require and display scheduler polling, retry/backoff, duplicate-run reuse, source coverage state, source coverage gaps, review reasons, analysis facets, freshness expectation, top missing source family, next best source action, buyer caveat, and expected time to useful signal.
+- Fixture smoke must exercise active-run reuse, 3-second polling, retry-after visibility, and at least one public source-coverage gap.
+- Coverage-gap rows are product rows: they should tell a scheduled customer what safe source family is missing and what collection action is recommended.
+
 ## Apify Setup
 
 1. Create an Apify account.

@@ -21,11 +21,13 @@ import {
   validateSafePublicStarterPackCoverage,
   validateSeedBundle
 } from "../registry/sourceSeeds.ts";
+import { buildLiveCaptureRuntimePacket } from "../adapters/liveCaptureRuntime.ts";
 import { buildSourceHealthRollup, sourceHealthRollupToRow, sourceScoreHistoryRow } from "../registry/sourceHealth.ts";
 import { buildSourceApplyPlan, buildSourceApplyPlanApiResponse, executeSourceApplyPlanDryRun } from "../registry/sourceApplyPlan.ts";
 import { buildSourceCutoverRehearsalReport } from "../registry/sourceCutover.ts";
 import { buildSourceRegistryReconciliationReport } from "../registry/sourceReconciliation.ts";
-import type { SourceRecord } from "../types.ts";
+import type { AdapterRunResult, CollectedItem, SourceRecord } from "../types.ts";
+import { hashContent } from "../utils.ts";
 
 describe("source seed bundles", () => {
   test("validates the production safe public CTI seed bundle without crawling", async () => {
@@ -181,6 +183,106 @@ describe("source seed bundles", () => {
     expect(activation.summary.active).toBe(1);
     expect(activation.summary.blocked_by_policy).toBe(1);
     expect(activation.summary.adapter_incompatible).toBe(1);
+  });
+
+  test("maps live capture runtime rows into source-pack readiness and scheduler cadence hints", () => {
+    const active = {
+      ...seedSource("https://example.test/advisories.json"),
+      id: "src_live_capture_ready",
+      type: "api" as const,
+      accessMethod: "official_api" as const,
+      status: "active" as const,
+      createdAt: "2026-05-24T00:00:00.000Z",
+      updatedAt: "2026-05-24T00:00:00.000Z",
+      tags: ["github", "advisory", "CVE"],
+      metadata: { sourceFamily: "github_advisory" }
+    };
+    const duplicate = {
+      ...seedSource("https://example.test/feed.xml"),
+      id: "src_live_capture_duplicate",
+      type: "rss" as const,
+      status: "active" as const,
+      createdAt: "2026-05-24T00:00:00.000Z",
+      updatedAt: "2026-05-24T00:00:00.000Z"
+    };
+    const held = {
+      ...seedSource("https://example.test/no-legal.html"),
+      id: "src_live_capture_hold",
+      type: "static_web" as const,
+      status: "active" as const,
+      createdAt: "2026-05-24T00:00:00.000Z",
+      updatedAt: "2026-05-24T00:00:00.000Z",
+      legalNotes: ""
+    };
+
+    const advisoryText = "APT29 public advisory for CVE-2026-4242 with mitigation guidance.";
+    const duplicateText = "Repeated RSS item for CVE-2026-4242.";
+    const activeItem: CollectedItem = {
+      sourceId: active.id,
+      url: "https://github.com/advisories/GHSA-abcd-1234-wxyz",
+      collectedAt: "2026-05-24T12:00:00.000Z",
+      publishedAt: "2026-05-24T08:00:00.000Z",
+      title: "APT29 public advisory",
+      rawText: advisoryText,
+      contentHash: hashContent(advisoryText),
+      language: "en",
+      links: ["https://github.com/advisories/GHSA-abcd-1234-wxyz"],
+      metadata: {
+        connectorFamily: "github_advisory",
+        parserConfidence: 0.9,
+        canonicalUrlHash: `urlhash:${hashContent("https://github.com/advisories/GHSA-abcd-1234-wxyz").slice(0, 16)}`
+      },
+      sensitive: false
+    };
+    const duplicateItem: CollectedItem = {
+      sourceId: duplicate.id,
+      url: "https://example.test/feed/item",
+      collectedAt: "2026-05-24T12:00:00.000Z",
+      publishedAt: "2026-05-24T08:00:00.000Z",
+      title: "Repeated RSS item",
+      rawText: duplicateText,
+      contentHash: hashContent(duplicateText),
+      language: "en",
+      links: ["https://example.test/feed/item"],
+      metadata: { parserConfidence: 0.76 },
+      sensitive: false
+    };
+    const duplicateKey = `live_capture:rss_feed:urlhash:${hashContent(duplicateItem.url).slice(0, 16)}:${duplicateItem.contentHash}:${duplicateItem.publishedAt}`;
+    const heldResult: AdapterRunResult = {
+      items: [],
+      discovered: [],
+      warnings: ["source has no legal notes"],
+      metadata: { failureCategory: "policy_blocked" }
+    };
+    const packet = buildLiveCaptureRuntimePacket({
+      generatedAt: "2026-05-24T12:00:00.000Z",
+      previousDedupeKeys: [duplicateKey],
+      captures: [
+        { source: active, adapter: "public_advisory", result: { items: [activeItem], discovered: [], warnings: [], metadata: {} }, queryClass: "cve_advisory" },
+        { source: duplicate, adapter: "rss_feed", result: { items: [duplicateItem], discovered: [], warnings: [], metadata: {} }, queryClass: "cve_advisory" },
+        { source: held, adapter: "static_html", result: heldResult, queryClass: "actor" }
+      ],
+      requiredFixtureClasses: ["github_security_advisory", "rss_atom", "vendor_blog_html"]
+    });
+
+    expect(packet.sourcePackIntegration.agent01ReadySourceIds).toContain(active.id);
+    expect(packet.sourcePackIntegration.agent01HeldSourceIds).toContain(held.id);
+    expect(packet.sourcePackIntegration.agent02CadenceHints).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceId: active.id, cadenceHint: "normal" }),
+      expect.objectContaining({ sourceId: duplicate.id, cadenceHint: "decrease" }),
+      expect.objectContaining({ sourceId: held.id, cadenceHint: "pause" })
+    ]));
+    expect(packet.rows.find((row) => row.sourceId === duplicate.id)).toMatchObject({
+      status: "duplicate",
+      failureClass: "duplicate_content",
+      agent06Handoff: {
+        rawCaptureDescriptor: {
+          contentHash: duplicateItem.contentHash
+        }
+      }
+    });
+    expect(JSON.stringify(packet)).not.toContain("https://github.com/advisories");
+    expect(packet.safety.disabledByDefaultForUnapprovedNetworkPaths).toBe(true);
   });
 
   test("scores 100 representative source records across query families", () => {
@@ -964,14 +1066,10 @@ describe("source seed bundles", () => {
       })
     ]));
     expect(JSON.stringify(portfolio.tenantActivation)).not.toContain("src_other_tenant");
-    expect(portfolio.tenantActivation.approvalPackets.map((packet) => packet.sourceClass)).toEqual(expect.arrayContaining([
-      "public_rss_blog",
-      "advisory_api",
-      "public_channel",
-      "dynamic_browser_candidate",
-      "report_pdf",
-      "restricted_metadata_only"
-    ]));
+    const sourceClasses = portfolio.tenantActivation.approvalPackets.map((packet) => packet.sourceClass);
+    expect(sourceClasses).toContain("public_rss_blog");
+    expect(sourceClasses).toContain("dynamic_browser_candidate");
+    expect(sourceClasses).toContain("restricted_metadata_only");
     expect(portfolio.tenantActivation.approvalPackets.map((packet) => packet.decision)).toEqual(expect.arrayContaining([
       "activate",
       "stage",
@@ -987,7 +1085,7 @@ describe("source seed bundles", () => {
       },
       routeHint: "/v1/analyst/source-activation-packets"
     });
-    expect(portfolio.tenantActivation.approvalPackets.find((packet) => packet.sourceIds.includes("src_portfolio_dynamic"))?.blockers).toContain("parser_certification");
+    expect(portfolio.tenantActivation.approvalPackets.find((packet) => packet.sourceClass === "dynamic_browser_candidate")?.blockers).toContain("parser_certification");
     expect(portfolio.tenantActivation.groups.every((group) => group.tenantId === "tenant_portfolio")).toBe(true);
     expect(portfolio.tenantActivation.queryClassReadiness.map((row) => row.queryClass)).toEqual(expect.arrayContaining(["actor", "ransomware_victim", "cve", "country", "sector"]));
     expect(portfolio.tenantActivation.handoffs.agent05RestrictedPolicyHolds).toContain("approvalPackets.decision.hold_restricted_metadata");
@@ -1250,6 +1348,126 @@ describe("source seed bundles", () => {
       expect(queryClasses).toContain(queryClass);
     }
     expect(atlas.coverageMatrix.every((row) => row.candidateSourceCount > 0 && row.downstreamPublicAnswerImpact >= 0)).toBe(true);
+    expect(atlas.publicMonitorSourceGapHandoff).toMatchObject({
+      schemaVersion: "ti.source_atlas.public_monitor_gap_handoff.v1",
+      routeHint: "/v1/sources/atlas",
+      consumer: "apify_public_threat_actor_monitor",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      guardrails: {
+        noSourceActivation: true,
+        noCrawling: true,
+        noRawContent: true,
+        noPrivateInviteAuthCaptcha: true,
+        noThreatActorInteraction: true
+      }
+    });
+    expect(atlas.publicMonitorSourceGapHandoff.queryRows.map((row) => row.query)).toEqual(expect.arrayContaining(["APT29", "Akira ransomware victims", "CVE-2024-1234"]));
+    expect(atlas.publicMonitorSourceGapHandoff.queryRows.every((row) =>
+      row.candidateSourceCount > 0 &&
+      row.recommendedAtlasSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.schedulerDryRun.duplicateRunReuse &&
+      row.noLeakBoundary.metadataOnly &&
+      row.noLeakBoundary.rawContentIncluded === false &&
+      row.noLeakBoundary.unsafeUrlsIncluded === false &&
+      row.noLeakBoundary.sourceActivationApplied === false
+    )).toBe(true);
+    expect(atlas.publicMonitorSourceGapHandoff.summary.queryCount).toBe(atlas.publicMonitorSourceGapHandoff.queryRows.length);
+    expect(atlas.publicMonitorSourceGapHandoff.handoffs.agent09PublicMonitorApi).toContain("publicMonitorSourceGapHandoff.queryRows");
+    expect(JSON.stringify(atlas.publicMonitorSourceGapHandoff)).not.toContain("https://");
+    expect(atlas.lifecycleReview).toMatchObject({
+      schemaVersion: "ti.source_atlas.lifecycle_review.v1",
+      routeHint: "/v1/sources/atlas",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      guardrails: {
+        noRegistryMutation: true,
+        noSourceDeletion: true,
+        noCrawling: true,
+        noSilentRetirement: true,
+        noSilentQuarantine: true,
+        publicOnly: true
+      }
+    });
+    expect(atlas.lifecycleReview.rows.length).toBeGreaterThan(0);
+    expect(atlas.lifecycleReview.rows.map((row) => row.recommendedAction)).toEqual(expect.arrayContaining(["retire_duplicate", "request_parser_repair", "request_legal_review", "hold_descriptor_only"]));
+    expect(atlas.lifecycleReview.rows.every((row) =>
+      row.atlasSourceId.startsWith("atlas_src_") &&
+      row.sourceHash.startsWith("ti_source_atlas_source_") &&
+      row.schedulerDryRun.willLeaseWork === false &&
+      row.noMutationBoundary.sourceStatusChanged === false &&
+      row.noMutationBoundary.registryWritePlanned === false &&
+      row.noMutationBoundary.crawlEnqueued === false &&
+      row.noMutationBoundary.sourceDeleted === false
+    )).toBe(true);
+    expect(atlas.lifecycleReview.summary.reviewedSourceCount).toBe(atlas.lifecycleReview.rows.length);
+    expect(atlas.lifecycleReview.summary.retirementReviewCount).toBeGreaterThan(0);
+    expect(atlas.lifecycleReview.handoffs.agent09ApiUi).toContain("lifecycleReview.rows");
+    expect(JSON.stringify(atlas.lifecycleReview)).not.toContain("https://");
+    expect(atlas.sourceEconomics).toMatchObject({
+      schemaVersion: "ti.source_atlas.reliability_economics.v1",
+      routeHint: "/v1/sources/atlas",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      guardrails: {
+        publicOnly: true,
+        noRegistryMutation: true,
+        noSourceActivation: true,
+        noCrawling: true,
+        noWorkerLeases: true,
+        noPrivateInviteAuthCaptcha: true,
+        noRawUnsafeUrls: true,
+        noPayloadDownloads: true,
+        descriptorOnlyPublicChannels: true
+      }
+    });
+    expect(atlas.sourceEconomics.rolloutScenarios.map((scenario) => scenario.label)).toEqual(["first_50", "first_500", "first_5000"]);
+    expect(atlas.sourceEconomics.rolloutScenarios.map((scenario) => scenario.sourceCount)).toEqual([50, 500, 5000]);
+    expect(atlas.sourceEconomics.rolloutScenarios.every((scenario) =>
+      scenario.selectedSourceIds.length === scenario.sourceCount &&
+      scenario.expectedUniqueEvidenceItemsPerDay > 0 &&
+      scenario.estimatedStorageMbPerDay > 0 &&
+      scenario.estimatedDailySchedulerTasks > 0 &&
+      scenario.estimatedCostUnitsPerUsefulEvidence > 0 &&
+      scenario.noActivationBoundary.sourceActivationApplied === false &&
+      scenario.noActivationBoundary.registryMutationPlanned === false &&
+      scenario.noActivationBoundary.crawlEnqueued === false &&
+      scenario.noActivationBoundary.workerLeaseCreated === false
+    )).toBe(true);
+    expect(atlas.sourceEconomics.sourceRows.length).toBeGreaterThan(0);
+    expect(atlas.sourceEconomics.sourceRows.map((row) => row.decision)).toEqual(expect.arrayContaining(["promote_candidate", "hold_parser", "hold_legal", "hold_descriptor"]));
+    expect(atlas.sourceEconomics.sourceRows.every((row) =>
+      row.atlasSourceId.startsWith("atlas_src_") &&
+      row.sourceHash.startsWith("ti_source_atlas_source_") &&
+      row.uniqueEvidenceYield >= 0 &&
+      row.expectedApiActorUsefulness >= 0 &&
+      row.expectedPublicTiAnswerLift >= 0 &&
+      row.economicsScore <= 1
+    )).toBe(true);
+    expect(atlas.sourceEconomics.familyMetrics.length).toBeGreaterThan(5);
+    expect(atlas.sourceEconomics.familyMetrics.every((family) =>
+      family.sourceCount > 0 &&
+      family.estimatedStorageMbPerDay >= 0 &&
+      family.estimatedDailySchedulerTasks > 0 &&
+      family.topSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_"))
+    )).toBe(true);
+    expect(atlas.sourceEconomics.marketplaceValueBreakdown).toMatchObject({
+      actorProfileValue: expect.any(Number),
+      ransomwareVictimClaimValue: expect.any(Number),
+      cveAdvisoryValue: expect.any(Number),
+      publicChannelValue: expect.any(Number),
+      darkMetadataCorroborationValue: expect.any(Number),
+      enterpriseStixExportValue: expect.any(Number)
+    });
+    expect(atlas.sourceEconomics.degradationQueues.map((queue) => queue.queue)).toEqual(expect.arrayContaining(["stale", "noisy_duplicate", "legal_blocked", "parser_broken", "low_yield", "high_cost"]));
+    expect(atlas.sourceEconomics.degradationQueues.every((queue) => queue.willMutate === false && queue.willStartCrawling === false)).toBe(true);
+    expect(atlas.sourceEconomics.handoffs.agent09ApiFrontend).toContain("sourceEconomics.rolloutScenarios");
+    expect(JSON.stringify(atlas.sourceEconomics)).not.toContain("https://");
     expect(atlas.activationCanary).toMatchObject({
       dryRun: true,
       willMutate: false,

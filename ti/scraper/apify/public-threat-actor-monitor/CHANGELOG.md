@@ -5,6 +5,8 @@
 - Added the `GET /v1/contracts` `apifyStoreReadiness` publication contract as the source of truth for the exact default input, sample output DTOs, public proof DTOs, frontend polling states, pricing hooks, safety contract, and known Apify payout blockers.
 - Expanded the manifest example input to the full 20-query default watchlist and kept `includeCoverageGaps` enabled by default.
 - Tightened publication guardrails to reject draft listing copy, hello-world input, generic local categories, and unsafe output claims.
+- Tightened the publication gate to validate required scheduler, retry/backoff, duplicate-run reuse, source-coverage, coverage-gap, review, and analysis-facet fields in the actual dataset schema and fixture.
+- Added actor source-coverage action fields to every dataset row: freshness expectation, top missing source family, next best source action, buyer caveat, and expected time to useful signal.
 - Documented public proof commands for `APT29`, `Volt Typhoon`, `Scattered Spider`, `LockBit`, random actor, and made-up actor readiness checks.
 
 ## 0.5.0 - 2026-06-20

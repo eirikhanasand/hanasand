@@ -67,6 +67,15 @@ import type {
   GraphRelationshipDriftSignalKind,
   GraphReviewedExportSubsetGovernanceDto,
   GraphTaxiiDescriptorStixBundleGovernanceDto,
+  GraphIncidentClaimWorkspaceDto,
+  GraphActorTimelineChangeWorkspaceDto,
+  GraphActorProductPacketDto,
+  GraphStixTaxiiMarketplaceReadinessDto,
+  GraphStixTaxiiMonetizationExportContractsDto,
+  GraphProductExportBlocker,
+  GraphProductExportTier,
+  GraphStixProductObjectType,
+  GraphActorComparisonNotebookDto,
   GraphRelationshipViewDto,
   GraphReviewApiExamplesDto,
   GraphReviewApplyAction,
@@ -92,6 +101,7 @@ import type {
   SourceProvenancePanelDto,
   StixExportReadinessApiDto,
   StixExportReadinessOptions,
+  StixExportReadinessRelationshipDto,
   StixExportReadinessReportDto,
   StixExportPreviewDto,
   TaxiiCollectionDescriptor,
@@ -315,6 +325,42 @@ export function buildCorrelationGraphQuery(
       relationshipIds: selectedRelationshipIds,
       deltas
     }),
+    incidentClaimWorkspace: buildGraphIncidentClaimWorkspaceDto(snapshot, {
+      query: options.query,
+      focusNodeId: focusNode?.id,
+      generatedAt,
+      relationshipIds: selectedRelationshipIds
+    }),
+    actorTimelineChanges: buildGraphActorTimelineChangeWorkspaceDto(snapshot, {
+      query: options.query,
+      focusNodeId: focusNode?.id,
+      generatedAt,
+      relationshipIds: selectedRelationshipIds
+    }),
+    actorProductPacket: buildGraphActorProductPacketDto(snapshot, {
+      query: options.query,
+      focusNodeId: focusNode?.id,
+      generatedAt,
+      relationshipIds: selectedRelationshipIds
+    }),
+    stixTaxiiMarketplaceReadiness: buildGraphStixTaxiiMarketplaceReadinessDto(snapshot, {
+      query: options.query,
+      focusNodeId: focusNode?.id,
+      generatedAt,
+      relationshipIds: selectedRelationshipIds
+    }),
+    stixTaxiiMonetizationExportContracts: buildGraphStixTaxiiMonetizationExportContractsDto(snapshot, {
+      query: options.query,
+      focusNodeId: focusNode?.id,
+      generatedAt,
+      relationshipIds: selectedRelationshipIds
+    }),
+    actorComparisonNotebook: buildGraphActorComparisonNotebookDto(snapshot, {
+      query: options.query,
+      focusNodeId: focusNode?.id,
+      generatedAt,
+      relationshipIds: selectedRelationshipIds
+    }),
     neighborhoods: buildCorrelationGraphNeighborhoods(snapshot, selected, readinessById),
     readinessFacets: buildGraphQueryReadinessFacets(snapshot, selected, readinessById, generatedAt),
     attackMatrix: buildAttackMatrixView(snapshot, focusNode?.type === "actor" ? focusNode.id : undefined),
@@ -440,6 +486,52 @@ export function buildGraphInvestigationWorkspaceDto(
     exportGovernance,
     notebookExport
   });
+  const releaseCandidate = buildGraphExportCertificationDto(snapshot, {
+    endpoint: "/v1/graph/query",
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  }).rcGate;
+  const incidentClaims = buildGraphIncidentClaimWorkspaceDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const actorTimelineChanges = buildGraphActorTimelineChangeWorkspaceDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const actorProductPacket = buildGraphActorProductPacketDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    incidentClaims,
+    actorTimelineChanges
+  });
+  const stixTaxiiMarketplaceReadiness = buildGraphStixTaxiiMarketplaceReadinessDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    actorProductPacket
+  });
+  const stixTaxiiMonetizationExportContracts = buildGraphStixTaxiiMonetizationExportContractsDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id),
+    actorProductPacket,
+    marketplaceReadiness: stixTaxiiMarketplaceReadiness
+  });
+  const actorComparisonNotebook = buildGraphActorComparisonNotebookDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
 
   const nodeGroups = buildInvestigationNodeGroups(nodes, ledger);
 
@@ -455,11 +547,18 @@ export function buildGraphInvestigationWorkspaceDto(
     reviewPersistence,
     exportGovernance,
     taxiiStixGovernance,
+    releaseCandidate,
     costControls,
     driftMonitor,
     relationshipExplanations,
     notebookExport,
     backendMigrationCertification,
+    incidentClaims,
+    actorTimelineChanges,
+    actorProductPacket,
+    stixTaxiiMarketplaceReadiness,
+    stixTaxiiMonetizationExportContracts,
+    actorComparisonNotebook,
     reviewActions: buildInvestigationReviewActions(ledger),
     workflowContracts: buildInvestigationWorkflowContracts(options.query, options.focusNodeId, nodes, ledger),
     deltaPolling: {
@@ -728,6 +827,1530 @@ export function buildGraphAttackCampaignWorkspaceDto(
       taxiiBoundary: "descriptor_only_no_server"
     }
   };
+}
+
+export function buildGraphIncidentClaimWorkspaceDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    query: string;
+    focusNodeId?: string;
+    generatedAt?: string;
+    relationshipIds?: string[];
+  }
+): GraphIncidentClaimWorkspaceDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const scopedRelationshipIds = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const scopedRelationships = scopedRelationshipIds
+    ? snapshot.relationships.filter((relationship) => scopedRelationshipIds.has(relationship.id))
+    : snapshot.relationships;
+  const touchedIncidentIds = new Set(scopedRelationships.flatMap((relationship) => {
+    const source = nodesById.get(relationship.sourceRef);
+    const target = nodesById.get(relationship.targetRef);
+    return [
+      source?.type === "incident" ? source.id : undefined,
+      target?.type === "incident" ? target.id : undefined
+    ].filter((value): value is string => Boolean(value));
+  }));
+  const normalizedQuery = options.query.trim().toLowerCase();
+  const incidentNodes = snapshot.nodes
+    .filter((node) => node.type === "incident")
+    .filter((node) =>
+      !scopedRelationshipIds
+      || touchedIncidentIds.has(node.id)
+      || node.id === options.focusNodeId
+      || node.value.toLowerCase().includes(normalizedQuery)
+    );
+  const readiness = checkStixExportReadiness(snapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+
+  const clusters: GraphIncidentClaimWorkspaceDto["clusters"] = incidentNodes.map((incident): GraphIncidentClaimWorkspaceDto["clusters"][number] => {
+    const clusterRelationships = snapshot.relationships
+      .filter((relationship) => relationship.sourceRef === incident.id || relationship.targetRef === incident.id)
+      .sort((left, right) => Date.parse(left.firstSeenAt) - Date.parse(right.firstSeenAt) || left.id.localeCompare(right.id));
+    const clusterNodeIds = uniqueSorted([incident.id, ...clusterRelationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef])]);
+    const clusterNodes = clusterNodeIds.map((nodeId) => nodesById.get(nodeId) ?? fallbackNode(nodeId));
+    const support = clusterRelationships.flatMap((relationship) => supportFor(snapshot, relationship.id));
+    const contradictedRelationships = clusterRelationships.filter((relationship) =>
+      relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true
+    );
+    const corroboratingSupport = support.filter((item) =>
+      !contradictedRelationships.some((relationship) => relationship.id === item.relationshipId)
+    );
+    const contradictingSupport = support.filter((item) =>
+      contradictedRelationships.some((relationship) => relationship.id === item.relationshipId)
+      || /contradict|dispute|rebut|counter/i.test(item.sourceId)
+    );
+    const sourceFamilies = uniqueSorted(support.map((item) => sourceFamilyForClaimSupport(item.sourceId)));
+    const publisherIds = uniqueSorted([
+      ...support.map((item) => item.sourceId),
+      ...clusterNodes.filter((node) => node.type === "source" || node.type === "report").map((node) => node.value)
+    ]);
+    const firstReportedAt = minIsoValues(clusterRelationships.map((relationship) => relationship.firstSeenAt)) ?? incident.firstSeenAt ?? generatedAt;
+    const lastReportedAt = maxIsoValues(clusterRelationships.map((relationship) => relationship.lastSeenAt)) ?? incident.lastSeenAt ?? generatedAt;
+    const reviewState = incidentClaimReviewState(clusterRelationships);
+    const missingProvenance = clusterRelationships.some((relationship) => supportFor(snapshot, relationship.id).length === 0);
+    const hasContradiction = contradictedRelationships.length > 0 || contradictingSupport.length > 0;
+    const eligibleRelationshipIds = uniqueSorted(clusterRelationships
+      .filter((relationship) => readinessById.get(relationship.id)?.ready ?? false)
+      .map((relationship) => relationship.id));
+    const reportOrSourceRelationshipIds = clusterRelationships
+      .filter((relationship) => {
+        const source = nodesById.get(relationship.sourceRef);
+        const target = nodesById.get(relationship.targetRef);
+        return source?.type === "report" || source?.type === "source" || target?.type === "report" || target?.type === "source";
+      })
+      .map((relationship) => relationship.id);
+    const heldRelationshipIds = uniqueSorted([
+      ...clusterRelationships
+        .filter((relationship) => !(readinessById.get(relationship.id)?.ready ?? false))
+        .map((relationship) => relationship.id),
+      ...reportOrSourceRelationshipIds
+    ]);
+    const exportState: GraphIncidentClaimWorkspaceDto["clusters"][number]["exportState"] = hasContradiction
+      ? "held_contradicted"
+      : missingProvenance
+        ? "held_missing_provenance"
+        : eligibleRelationshipIds.length === clusterRelationships.length && clusterRelationships.length > 0
+          ? "eligible_reviewed_subset"
+          : "held_unreviewed_inference";
+    const confidence = clusterRelationships.length === 0
+      ? incident.confidence
+      : clampScore(clusterRelationships.reduce((sum, relationship) => sum + relationship.confidence, 0) / clusterRelationships.length);
+    const actorNodeIds = nodeIdsByType(clusterNodes, ["actor"]);
+    const victimNodeIds = nodeIdsByType(clusterNodes, ["victim"]);
+    const campaignNodeIds = nodeIdsByType(clusterNodes, ["campaign"]);
+    const mergeDecision: GraphIncidentClaimWorkspaceDto["clusters"][number]["mergeSemantics"]["decision"] =
+      hasContradiction || incident.properties?.splitRequired === true || actorNodeIds.length > 1 && victimNodeIds.length > 1
+        ? "split_required"
+        : publisherIds.length > 1
+          ? "merged_public_reports"
+          : "single_report";
+
+    return {
+      claimId: stableId("incident-claim", `${incident.id}:${firstReportedAt}:${clusterRelationships.map((relationship) => relationship.id).join("|")}`),
+      incidentNodeId: incident.id,
+      canonicalValue: incident.value,
+      claimType: incidentClaimType(incident, clusterNodes, hasContradiction),
+      relationshipIds: uniqueSorted(clusterRelationships.map((relationship) => relationship.id)),
+      nodeIds: clusterNodeIds,
+      actorNodeIds,
+      victimNodeIds,
+      campaignNodeIds,
+      sectorNodeIds: nodeIdsByType(clusterNodes, ["sector"]),
+      countryNodeIds: nodeIdsByType(clusterNodes, ["country"]),
+      malwareToolNodeIds: nodeIdsByType(clusterNodes, ["malware", "tool"]),
+      ttpNodeIds: nodeIdsByType(clusterNodes, ["attack-pattern"]),
+      sourceNodeIds: nodeIdsByType(clusterNodes, ["source"]),
+      reportNodeIds: nodeIdsByType(clusterNodes, ["report"]),
+      firstReportedAt,
+      lastReportedAt,
+      publisherCount: publisherIds.length,
+      sourceFamilyCount: sourceFamilies.length,
+      corroboratingEvidenceIds: uniqueSorted(corroboratingSupport.map((item) => item.evidenceText ?? item.captureId)),
+      contradictingEvidenceIds: uniqueSorted(contradictingSupport.map((item) => item.evidenceText ?? item.captureId)),
+      ledgerIds: uniqueSorted(support.flatMap((item) => item.ledgerIds)),
+      confidence,
+      freshness: incidentClaimFreshness(lastReportedAt, generatedAt),
+      reviewState,
+      exportState,
+      mergeSemantics: {
+        decision: mergeDecision,
+        rules: uniqueClaimMergeRules({
+          publisherCount: publisherIds.length,
+          sourceFamilyCount: sourceFamilies.length,
+          actorNodeIds,
+          victimNodeIds,
+          campaignNodeIds,
+          hasContradiction,
+          incident
+        }),
+        splitRequiredWhen: incidentClaimSplitRules({ hasContradiction, actorNodeIds, victimNodeIds, campaignNodeIds, incident })
+      },
+      reviewedStixSubset: {
+        eligibleRelationshipIds,
+        heldRelationshipIds,
+        policy: "reviewed_relationships_only_unreviewed_claim_inference_held"
+      }
+    };
+  }).sort((left, right) =>
+    Date.parse(right.lastReportedAt) - Date.parse(left.lastReportedAt)
+    || right.confidence - left.confidence
+    || left.canonicalValue.localeCompare(right.canonicalValue)
+  );
+
+  return {
+    endpoint: "/v1/graph/query",
+    mode: "incident_claim_graph_corroboration",
+    generatedAt,
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    clusters,
+    summary: {
+      clusterCount: clusters.length,
+      eligibleClusterCount: clusters.filter((cluster) => cluster.exportState === "eligible_reviewed_subset").length,
+      heldClusterCount: clusters.filter((cluster) => cluster.exportState !== "eligible_reviewed_subset").length,
+      contradictedClusterCount: clusters.filter((cluster) => cluster.exportState === "held_contradicted").length,
+      publisherCount: uniqueSorted(clusters.flatMap((cluster) => [...cluster.sourceNodeIds, ...cluster.reportNodeIds])).length,
+      sourceFamilyCount: Math.max(0, ...clusters.map((cluster) => cluster.sourceFamilyCount))
+    },
+    handoffs: {
+      agent04ConflictResolution: "consume_alias_campaign_victim_contradiction_rows",
+      agent06EvidenceLedger: "claim_clusters_require_capture_ledger_and_content_hash_replay",
+      agent07QualityGate: "hold_unreviewed_contradicted_or_source_biased_claim_clusters",
+      agent09ApiFrontend: "render_incident_claim_clusters_as_partial_or_review_held_graph_context",
+      agent10ReleaseGate: "authoritative_stix_requires_reviewed_claim_cluster_subset"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphActorTimelineChangeWorkspaceDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    query: string;
+    focusNodeId?: string;
+    generatedAt?: string;
+    relationshipIds?: string[];
+    maxEvents?: number;
+  }
+): GraphActorTimelineChangeWorkspaceDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const normalizedQuery = options.query.trim().toLowerCase();
+  const focusActor = options.focusNodeId
+    ? nodesById.get(options.focusNodeId)
+    : snapshot.nodes.find((node) => node.type === "actor" && node.value.toLowerCase().includes(normalizedQuery));
+  const readiness = checkStixExportReadiness(snapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const blockersByRelationship = exportBlockingFindingsByRelationship(snapshot);
+  const incidentClaims = buildGraphIncidentClaimWorkspaceDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: options.relationshipIds
+  });
+  const claimIdsByRelationship = new Map<string, string[]>();
+  for (const cluster of incidentClaims.clusters) {
+    for (const relationshipId of cluster.relationshipIds) {
+      claimIdsByRelationship.set(relationshipId, [...(claimIdsByRelationship.get(relationshipId) ?? []), cluster.claimId]);
+    }
+  }
+  const relationships = snapshot.relationships
+    .filter((relationship) => !relationshipIdSet || relationshipIdSet.has(relationship.id))
+    .filter((relationship) => {
+      if (!focusActor || focusActor.type !== "actor") return true;
+      if (relationship.sourceRef === focusActor.id || relationship.targetRef === focusActor.id) return true;
+      return false;
+    });
+  const maxEvents = options.maxEvents ?? 80;
+  const timelineEvents = relationships
+    .map((relationship): GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number] => {
+      const source = nodesById.get(relationship.sourceRef) ?? fallbackNode(relationship.sourceRef);
+      const target = nodesById.get(relationship.targetRef) ?? fallbackNode(relationship.targetRef);
+      const eventNodes = [source, target];
+      const support = supportFor(snapshot, relationship.id);
+      const readinessRow = readinessById.get(relationship.id);
+      const exportBlockers = uniqueFindingCodes([...(readinessRow?.blockers ?? []), ...(blockersByRelationship.get(relationship.id) ?? [])]);
+      const actorNodeIds = nodeIdsByType(eventNodes, ["actor"]);
+      const confidenceTrend = actorTimelineConfidenceTrend(relationship, generatedAt);
+      const contradictionState = actorTimelineContradictionState(relationship, exportBlockers);
+      const relationshipLedgerIds = Array.isArray(relationship.properties?.ledgerIds)
+        ? relationship.properties.ledgerIds.filter((id): id is string => typeof id === "string")
+        : [];
+      const ledgerIds = uniqueSorted([...support.flatMap((item) => item.ledgerIds), ...relationshipLedgerIds]);
+      const publicFactState = actorTimelinePublicFactState({
+        relationship,
+        readinessReady: readinessRow?.ready ?? false,
+        exportBlockers,
+        ledgerIds,
+        freshness: incidentClaimFreshness(relationship.lastSeenAt, generatedAt),
+        contradictionState
+      });
+      return {
+        eventId: stableId("actor-timeline-event", relationship.id),
+        relationshipId: relationship.id,
+        eventKind: actorTimelineEventKind(relationship, source, target, claimIdsByRelationship.get(relationship.id) ?? []),
+        actorNodeIds,
+        incidentClaimIds: uniqueSorted(claimIdsByRelationship.get(relationship.id) ?? []),
+        campaignNodeIds: nodeIdsByType(eventNodes, ["campaign"]),
+        ttpNodeIds: nodeIdsByType(eventNodes, ["attack-pattern"]),
+        malwareToolNodeIds: nodeIdsByType(eventNodes, ["malware", "tool"]),
+        victimNodeIds: nodeIdsByType(eventNodes, ["victim"]),
+        vulnerabilityNodeIds: nodeIdsByType(eventNodes, ["vulnerability"]),
+        infrastructureNodeIds: nodeIdsByType(eventNodes, ["infrastructure", "indicator"]),
+        sourceNodeIds: nodeIdsByType(eventNodes, ["source", "report"]),
+        firstSeenAt: relationship.firstSeenAt,
+        lastSeenAt: relationship.lastSeenAt,
+        confidence: relationship.confidence,
+        confidenceTrend,
+        freshness: incidentClaimFreshness(relationship.lastSeenAt, generatedAt),
+        reviewState: relationship.reviewState,
+        workflowState: analystWorkflowState(relationship),
+        contradictionState,
+        sourceIds: uniqueSorted(support.map((item) => item.sourceId)),
+        sourceFamilies: uniqueSorted(support.map((item) => sourceFamilyForClaimSupport(item.sourceId))),
+        evidenceIds: uniqueSorted(support.map((item) => item.evidenceText ?? item.captureId)),
+        ledgerIds,
+        captureIds: uniqueSorted(support.map((item) => item.captureId)),
+        exportEligible: readinessRow?.ready ?? false,
+        exportBlockers,
+        publicFactState
+      };
+    })
+    .sort((left, right) =>
+      Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt)
+      || Date.parse(right.firstSeenAt) - Date.parse(left.firstSeenAt)
+      || right.confidence - left.confidence
+      || left.relationshipId.localeCompare(right.relationshipId)
+    )
+    .slice(0, maxEvents);
+  const campaignChanges = timelineEvents
+    .map((event): GraphActorTimelineChangeWorkspaceDto["campaignChanges"][number] | undefined => {
+      const changeKind = actorTimelineChangeKind(event);
+      if (!changeKind) return undefined;
+      return {
+        changeId: stableId("actor-timeline-change", `${changeKind}:${event.relationshipId}`),
+        changeKind,
+        relationshipIds: [event.relationshipId],
+        actorNodeIds: event.actorNodeIds,
+        nodeIds: uniqueSorted([
+          ...event.actorNodeIds,
+          ...event.campaignNodeIds,
+          ...event.ttpNodeIds,
+          ...event.malwareToolNodeIds,
+          ...event.victimNodeIds,
+          ...event.vulnerabilityNodeIds,
+          ...event.infrastructureNodeIds,
+          ...event.sourceNodeIds
+        ]),
+        firstSeenAt: event.firstSeenAt,
+        lastSeenAt: event.lastSeenAt,
+        confidenceTrend: event.confidenceTrend,
+        reviewState: event.reviewState,
+        contradictionState: event.contradictionState,
+        exportEligible: event.exportEligible,
+        exportBlockers: event.exportBlockers,
+        recommendedAction: actorTimelineRecommendedAction(event),
+        releaseImpact: actorTimelineReleaseImpact(event)
+      };
+    })
+    .filter((change): change is GraphActorTimelineChangeWorkspaceDto["campaignChanges"][number] => Boolean(change))
+    .sort((left, right) =>
+      actorTimelineReleaseRank(right.releaseImpact) - actorTimelineReleaseRank(left.releaseImpact)
+      || Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt)
+      || left.changeId.localeCompare(right.changeId)
+    );
+  return {
+    endpoint: "/v1/graph/query",
+    mode: "graph_backed_actor_timeline_campaign_change_detection",
+    generatedAt,
+    query: options.query,
+    focusActorNodeId: focusActor?.type === "actor" ? focusActor.id : undefined,
+    timelineEvents,
+    campaignChanges,
+    summary: {
+      eventCount: timelineEvents.length,
+      changeCount: campaignChanges.length,
+      actorCount: uniqueSorted(timelineEvents.flatMap((event) => event.actorNodeIds)).length,
+      incidentClaimEventCount: timelineEvents.filter((event) => event.incidentClaimIds.length > 0).length,
+      campaignChangeCount: campaignChanges.filter((change) => change.changeKind === "campaign_membership_change").length,
+      staleEventCount: timelineEvents.filter((event) => event.freshness === "stale" || event.publicFactState === "held_stale").length,
+      contradictedEventCount: timelineEvents.filter((event) => event.contradictionState === "contradicted").length,
+      heldEventCount: timelineEvents.filter((event) => event.publicFactState !== "eligible_reviewed_fact").length,
+      exportEligibleEventCount: timelineEvents.filter((event) => event.exportEligible).length
+    },
+    deltaContract: {
+      cursorField: "graph.deltas[].cursor",
+      nextPollSeconds: 3,
+      eventTypes: ["graph.actor_timeline.event_added", "graph.actor_timeline.change_detected", "graph.actor_timeline.review_hold", "graph.actor_timeline.export_ready"]
+    },
+    reviewedStixSubset: {
+      eligibleRelationshipIds: uniqueSorted(timelineEvents.filter((event) => event.exportEligible).map((event) => event.relationshipId)),
+      heldRelationshipIds: uniqueSorted(timelineEvents.filter((event) => !event.exportEligible).map((event) => event.relationshipId)),
+      policy: "actor_timeline_reviewed_events_only"
+    },
+    handoffs: {
+      agent04ConflictResolution: "consume_actor_timeline_campaign_change_conflicts",
+      agent06EvidenceReplay: "replay_timeline_events_missing_ledger_or_capture_refs",
+      agent07QualityGate: "hold_stale_contradicted_or_weak_timeline_events",
+      agent09ApiFrontend: "render_actor_timeline_and_campaign_change_rows",
+      agent10ReleaseGate: "hold_release_when_actor_timeline_changes_are_unreviewed_or_contradicted"
+    },
+    noLeak: {
+      rawRestrictedMaterialIncluded: false,
+      objectKeysIncluded: false,
+      unsafeUrlsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphActorProductPacketDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    query: string;
+    focusNodeId?: string;
+    generatedAt?: string;
+    relationshipIds?: string[];
+    incidentClaims?: GraphIncidentClaimWorkspaceDto;
+    actorTimelineChanges?: GraphActorTimelineChangeWorkspaceDto;
+  }
+): GraphActorProductPacketDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const normalizedQuery = options.query.trim().toLowerCase();
+  const focusActor = options.focusNodeId
+    ? nodesById.get(options.focusNodeId)
+    : snapshot.nodes.find((node) => node.type === "actor" && node.value.toLowerCase().includes(normalizedQuery));
+  const hasMissingExplicitFocus = Boolean(options.focusNodeId && !focusActor);
+  const scopedRelationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : focusActor?.type === "actor"
+      ? snapshot.relationships.filter((relationship) => relationship.sourceRef === focusActor.id || relationship.targetRef === focusActor.id)
+      : hasMissingExplicitFocus
+        ? []
+        : snapshot.relationships;
+  const relationships = focusActor?.type === "actor"
+    ? scopedRelationships.filter((relationship) => relationship.sourceRef === focusActor.id || relationship.targetRef === focusActor.id)
+    : scopedRelationships;
+  const incidentClaims = options.incidentClaims ?? buildGraphIncidentClaimWorkspaceDto(snapshot, {
+    query: options.query,
+    focusNodeId: focusActor?.id ?? options.focusNodeId,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const actorTimelineChanges = options.actorTimelineChanges ?? buildGraphActorTimelineChangeWorkspaceDto(snapshot, {
+    query: options.query,
+    focusNodeId: focusActor?.id ?? options.focusNodeId,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
+  const readiness = checkStixExportReadiness(snapshot);
+  const readinessById = new Map(readiness.relationships.map((relationship) => [relationship.relationshipId, relationship]));
+  const blockersByRelationship = exportBlockingFindingsByRelationship(snapshot);
+  const timelineEvents = actorTimelineChanges.timelineEvents;
+  const sourceFamilies = uniqueSorted(timelineEvents.flatMap((event) => event.sourceFamilies));
+  const expectedSourceFamilies = ["clear_web_report", "public_advisory", "rss_feed", "public_channel"];
+  const sourceCoverageGaps = expectedSourceFamilies.filter((family) => !sourceFamilies.includes(family));
+  if (focusActor && timelineEvents.length === 0) sourceCoverageGaps.push("no_graph_evidence_for_actor");
+  if (!focusActor) {
+    sourceCoverageGaps.push("actor_not_indexed_in_graph");
+    if (options.focusNodeId) sourceCoverageGaps.push("no_graph_evidence_for_actor");
+  }
+
+  const nodeLabels = (nodeIds: string[]): string[] => uniqueSorted(nodeIds.map((nodeId) => nodesById.get(nodeId)?.value ?? nodeId));
+  const changedKinds = [...new Set(actorTimelineChanges.campaignChanges.map((change) => change.changeKind))]
+    .sort((left, right) => left.localeCompare(right));
+  const latestEventAt = maxIsoValues(timelineEvents.map((event) => event.lastSeenAt));
+  const heldRelationshipIds = uniqueSorted([
+    ...actorTimelineChanges.reviewedStixSubset.heldRelationshipIds,
+    ...incidentClaims.clusters.flatMap((cluster) => cluster.reviewedStixSubset.heldRelationshipIds)
+  ]);
+  const readyRelationshipIds = uniqueSorted([
+    ...actorTimelineChanges.reviewedStixSubset.eligibleRelationshipIds,
+    ...incidentClaims.clusters.flatMap((cluster) => cluster.reviewedStixSubset.eligibleRelationshipIds)
+  ]);
+  const reviewRequiredRelationshipIds = uniqueSorted(timelineEvents
+    .filter((event) => event.publicFactState !== "eligible_reviewed_fact")
+    .map((event) => event.relationshipId));
+  const contradictionIds = uniqueSorted(timelineEvents
+    .filter((event) => event.contradictionState !== "none")
+    .map((event) => event.relationshipId));
+  const contradictionReasons = uniqueSorted(timelineEvents
+    .filter((event) => event.contradictionState !== "none")
+    .flatMap((event) => event.exportBlockers.length > 0 ? event.exportBlockers : ["contradiction_review_required"]));
+  const whatChanged = productWhatChanged(actorTimelineChanges, nodesById);
+  const whyItMatters = productWhyItMatters(actorTimelineChanges, incidentClaims);
+  const confidenceDrivers = productConfidenceDrivers(timelineEvents, incidentClaims);
+  const reviewRequired = productReviewRequired(timelineEvents, incidentClaims);
+  const victimNodeIds = uniqueSorted(timelineEvents.flatMap((event) => event.victimNodeIds));
+  const focusedTimelineEvents = focusActor
+    ? timelineEvents.filter((event) => event.actorNodeIds.includes(focusActor.id))
+    : [];
+  const focusedIncidentClusters = focusActor
+    ? incidentClaims.clusters.filter((cluster) => cluster.actorNodeIds.includes(focusActor.id))
+    : incidentClaims.clusters.filter((cluster) => cluster.canonicalValue.toLowerCase().includes(normalizedQuery));
+  const targetingContextNodeIds = relatedNodeIdsByType(relationships, nodesById, victimNodeIds, ["sector", "country"]);
+  const sectorNodeIds = uniqueSorted([
+    ...incidentClaims.clusters.flatMap((cluster) => cluster.sectorNodeIds),
+    ...targetingContextNodeIds.filter((nodeId) => nodesById.get(nodeId)?.type === "sector")
+  ]);
+  const countryNodeIds = uniqueSorted([
+    ...incidentClaims.clusters.flatMap((cluster) => cluster.countryNodeIds),
+    ...targetingContextNodeIds.filter((nodeId) => nodesById.get(nodeId)?.type === "country")
+  ]);
+  const infrastructureNodeIds = uniqueSorted(timelineEvents.flatMap((event) => event.infrastructureNodeIds));
+  const vulnerabilityNodeIds = uniqueSorted(timelineEvents.flatMap((event) => event.vulnerabilityNodeIds));
+  const matchedGraphEvidence = focusedTimelineEvents.length > 0 || focusedIncidentClusters.length > 0;
+  const stixPreviewReadiness = buildGraphProductStixPreviewReadiness({
+    timelineEvents,
+    incidentClaims,
+    relationships,
+    nodesById,
+    readinessById,
+    blockersByRelationship
+  });
+  const apifyStatus: GraphActorProductPacketDto["apifySummary"]["status"] = !matchedGraphEvidence
+    ? "searching"
+    : reviewRequiredRelationshipIds.length > 0
+      ? "review_required"
+      : readyRelationshipIds.length > 0
+        ? "ready"
+        : "partial";
+
+  return {
+    endpoint: "/v1/graph/query",
+    mode: "graph_export_product_packaging",
+    generatedAt,
+    query: options.query,
+    focusActorNodeId: focusActor?.type === "actor" ? focusActor.id : undefined,
+    actorTimelineSummary: {
+      eventCount: timelineEvents.length,
+      ...(latestEventAt ? { latestEventAt } : {}),
+      whatChanged,
+      whyItMatters
+    },
+    campaignChangeSummary: {
+      changeCount: actorTimelineChanges.campaignChanges.length,
+      highImpactChangeCount: actorTimelineChanges.campaignChanges.filter((change) => change.releaseImpact === "hold" || change.releaseImpact === "rollback").length,
+      changeKinds: changedKinds
+    },
+    incidentClaimSummary: {
+      clusterCount: incidentClaims.summary.clusterCount,
+      eligibleClusterCount: incidentClaims.summary.eligibleClusterCount,
+      heldClusterCount: incidentClaims.summary.heldClusterCount,
+      canonicalClaims: incidentClaims.clusters.slice(0, 6).map((cluster) => cluster.canonicalValue)
+    },
+    victimTargetingPatternSummary: {
+      victimNodeIds,
+      sectorNodeIds,
+      countryNodeIds,
+      infrastructureNodeIds,
+      vulnerabilityNodeIds,
+      patternLabels: uniqueSorted([
+        ...nodeLabels(victimNodeIds).map((label) => `victim:${label}`),
+        ...nodeLabels(sectorNodeIds).map((label) => `sector:${label}`),
+        ...nodeLabels(countryNodeIds).map((label) => `country:${label}`),
+        ...nodeLabels(infrastructureNodeIds).map((label) => `infrastructure:${label}`),
+        ...nodeLabels(vulnerabilityNodeIds).map((label) => `cve:${label}`)
+      ]).slice(0, 12)
+    },
+    ttpSourceCorroboration: productTtpSourceCorroboration(timelineEvents),
+    contradictionState: {
+      state: contradictionIds.length === 0 ? "none" : timelineEvents.some((event) => event.contradictionState === "contradicted") ? "contradicted" : "suspected",
+      relationshipIds: contradictionIds,
+      reasons: contradictionReasons
+    },
+    reviewedExportReadiness: {
+      readyRelationshipIds,
+      heldRelationshipIds,
+      reviewRequiredRelationshipIds,
+      publicFactPolicy: "reviewed_evidence_only",
+      taxiiBoundary: "descriptor_only_no_server"
+    },
+    stixPreviewReadiness,
+    publicCopyHints: {
+      whatChanged,
+      whyItMatters,
+      confidenceDrivers,
+      sourceCoverageGaps: uniqueSorted(sourceCoverageGaps),
+      reviewRequired
+    },
+    apifySummary: {
+      title: focusActor?.value ?? options.query,
+      status: apifyStatus,
+      whatChanged: whatChanged[0] ?? "No graph-backed actor timeline changes are available yet.",
+      whyItMatters: whyItMatters[0] ?? "The scraper should keep searching public sources before presenting this as actor intelligence.",
+      reviewRequired: reviewRequired.length > 0
+    },
+    unknownActorHandling: {
+      matchedGraphEvidence,
+      message: matchedGraphEvidence
+        ? "Graph-backed public context is available, with reviewed and held export state separated."
+        : "No graph-backed actor evidence is indexed for this query yet; keep the response in searching or partial state and show source gaps.",
+      safeNextPivots: uniqueSorted([
+        ...nodeLabels(victimNodeIds).map((label) => `victim:${label}`),
+        ...nodeLabels(vulnerabilityNodeIds).map((label) => `cve:${label}`),
+        ...nodeLabels(infrastructureNodeIds).map((label) => `infrastructure:${label}`),
+        ...(focusActor ? [`actor:${focusActor.value}`] : [`actor:${options.query}`])
+      ]).slice(0, 8),
+      missingSourceFamilies: uniqueSorted(sourceCoverageGaps)
+    },
+    noLeak: {
+      rawUrlsIncluded: false,
+      rawRestrictedMaterialIncluded: false,
+      leakedContentIncluded: false,
+      credentialOrPayloadEvidenceIncluded: false,
+      privateChannelMaterialIncluded: false,
+      actorInteractionIncluded: false,
+      unsafeDarkwebDetailsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphStixTaxiiMarketplaceReadinessDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    query: string;
+    focusNodeId?: string;
+    generatedAt?: string;
+    relationshipIds?: string[];
+    actorProductPacket?: GraphActorProductPacketDto;
+  }
+): GraphStixTaxiiMarketplaceReadinessDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const actorProductPacket = options.actorProductPacket ?? buildGraphActorProductPacketDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: options.relationshipIds
+  });
+  const readyRows = actorProductPacket.stixPreviewReadiness.filter((row) => row.readiness === "ready");
+  const heldRows = actorProductPacket.stixPreviewReadiness.filter((row) => row.readiness === "held");
+  const readyRelationshipIds = actorProductPacket.reviewedExportReadiness.readyRelationshipIds;
+  const heldRelationshipIds = actorProductPacket.reviewedExportReadiness.heldRelationshipIds;
+  const objectTypes = uniqueSorted(readyRows.map((row) => row.objectType)) as GraphActorProductPacketDto["stixPreviewReadiness"][number]["objectType"][];
+  const emptyCounts: Record<GraphActorProductPacketDto["stixPreviewReadiness"][number]["objectType"], number> = {
+    "intrusion-set": 0,
+    campaign: 0,
+    malware: 0,
+    tool: 0,
+    "attack-pattern": 0,
+    identity: 0,
+    relationship: 0,
+    sighting: 0
+  };
+  const objectCounts = readyRows.reduce((counts, row) => {
+    counts[row.objectType] += Math.max(row.nodeIds.length, row.relationshipIds.length, 1);
+    return counts;
+  }, { ...emptyCounts });
+  const reviewedBundleExamples: GraphStixTaxiiMarketplaceReadinessDto["reviewedBundleExamples"] = [
+    {
+      exampleId: stableId("stix-marketplace-example", `${options.query}:apify:${readyRelationshipIds.join("|")}`),
+      mediaType: STIX_21_MEDIA_TYPE,
+      bundleKind: "reviewed_actor_intelligence_subset",
+      ready: readyRelationshipIds.length > 0,
+      objectTypes,
+      readyRelationshipIds,
+      heldRelationshipIds,
+      objectCounts,
+      exampleUse: "apify_sample_row"
+    },
+    {
+      exampleId: stableId("stix-marketplace-example", `${options.query}:ti:${readyRelationshipIds.join("|")}`),
+      mediaType: STIX_21_MEDIA_TYPE,
+      bundleKind: "reviewed_actor_intelligence_subset",
+      ready: readyRelationshipIds.length > 0 && heldRows.length === 0,
+      objectTypes,
+      readyRelationshipIds,
+      heldRelationshipIds,
+      objectCounts,
+      exampleUse: "ti_preview"
+    },
+    {
+      exampleId: stableId("stix-marketplace-example", `${options.query}:enterprise:${readyRelationshipIds.join("|")}`),
+      mediaType: STIX_21_MEDIA_TYPE,
+      bundleKind: "reviewed_actor_intelligence_subset",
+      ready: readyRelationshipIds.length > 0,
+      objectTypes,
+      readyRelationshipIds,
+      heldRelationshipIds,
+      objectCounts,
+      exampleUse: "enterprise_stix_preview"
+    }
+  ];
+
+  return {
+    mode: "reviewed_stix_bundle_examples_taxii_descriptor_marketplace_readiness",
+    generatedAt,
+    query: options.query,
+    reviewedBundleExamples,
+    taxiiDescriptorPricingReadiness: {
+      collectionName: "ti-graph-reviewed-stix-21",
+      descriptorOnly: true,
+      serverImplemented: false,
+      mediaType: STIX_21_MEDIA_TYPE,
+      pageSize: 100,
+      pricingTiers: [
+        {
+          tier: "free_sample",
+          includedObjectTypes: objectTypes.filter((type) => type === "intrusion-set" || type === "attack-pattern" || type === "relationship"),
+          maxObjectsPerPage: 25,
+          readiness: readyRelationshipIds.length > 0 ? "ready" : "needs_review",
+          buyerValue: "sample reviewed actor TTP and relationship context for Apify listing proof",
+          requiredGate: "reviewed_relationships"
+        },
+        {
+          tier: "analyst",
+          includedObjectTypes: objectTypes,
+          maxObjectsPerPage: 100,
+          readiness: heldRelationshipIds.length === 0 && readyRelationshipIds.length > 0 ? "ready" : "needs_review",
+          buyerValue: "reviewed actor timeline, campaign, victim, TTP, malware/tool, and sighting preview objects",
+          requiredGate: "provenance_complete"
+        },
+        {
+          tier: "enterprise",
+          includedObjectTypes: ["intrusion-set", "campaign", "malware", "tool", "attack-pattern", "identity", "relationship", "sighting"],
+          maxObjectsPerPage: 500,
+          readiness: "future_interface",
+          buyerValue: "descriptor-only TAXII collection contract for future enterprise export integration",
+          requiredGate: "taxii_server_not_built"
+        }
+      ]
+    },
+    readinessGates: [
+      {
+        gate: "reviewed_relationships",
+        state: readyRelationshipIds.length > 0 ? "pass" : "hold",
+        relationshipIds: readyRelationshipIds,
+        reason: "Only reviewed/export-ready relationship IDs appear in bundle examples."
+      },
+      {
+        gate: "provenance_complete",
+        state: actorProductPacket.publicCopyHints.reviewRequired.length === 0 ? "pass" : "hold",
+        relationshipIds: actorProductPacket.reviewedExportReadiness.reviewRequiredRelationshipIds,
+        reason: "Review-required rows must clear evidence, ledger, freshness, and contradiction gates before paid bundle promotion."
+      },
+      {
+        gate: "no_leak",
+        state: "pass",
+        relationshipIds: readyRelationshipIds,
+        reason: "Marketplace packets include only metadata, IDs, counts, object types, and review states."
+      },
+      {
+        gate: "descriptor_only_taxii",
+        state: "pass",
+        relationshipIds: [],
+        reason: "TAXII is represented as collection descriptors and page contract metadata only; no server route is claimed."
+      },
+      {
+        gate: "held_rows_excluded",
+        state: heldRelationshipIds.length > 0 ? "hold" : "pass",
+        relationshipIds: heldRelationshipIds,
+        reason: "Held rows are visible as exclusions and never enter authoritative reviewed bundle examples."
+      }
+    ],
+    marketplaceDifferentiators: [
+      "reviewed STIX 2.1 object previews backed by graph evidence IDs",
+      "descriptor-only TAXII readiness without premature server claims",
+      "buyer-facing free sample, analyst, and enterprise package boundaries",
+      "explicit held-row exclusions for stale, contradicted, weak, restricted, missing-ledger, and unreviewed facts",
+      "safe Apify and /ti copy hooks tied to the same graph product packet"
+    ],
+    noLeak: {
+      rawUrlsIncluded: false,
+      rawRestrictedMaterialIncluded: false,
+      leakedContentIncluded: false,
+      credentialOrPayloadEvidenceIncluded: false,
+      privateChannelMaterialIncluded: false,
+      actorInteractionIncluded: false,
+      unsafeDarkwebDetailsIncluded: false,
+      objectKeysIncluded: false,
+      taxiiServerClaimed: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphStixTaxiiMonetizationExportContractsDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    query: string;
+    focusNodeId?: string;
+    generatedAt?: string;
+    relationshipIds?: string[];
+    actorProductPacket?: GraphActorProductPacketDto;
+    marketplaceReadiness?: GraphStixTaxiiMarketplaceReadinessDto;
+  }
+): GraphStixTaxiiMonetizationExportContractsDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const actorProductPacket = options.actorProductPacket ?? buildGraphActorProductPacketDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: options.relationshipIds
+  });
+  const marketplaceReadiness = options.marketplaceReadiness ?? buildGraphStixTaxiiMarketplaceReadinessDto(snapshot, {
+    query: options.query,
+    focusNodeId: options.focusNodeId,
+    generatedAt,
+    relationshipIds: options.relationshipIds,
+    actorProductPacket
+  });
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const scopedRelationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const supportByRelationship = new Map(snapshot.evidenceSupport.map((support) => [support.relationshipId, support]));
+  const previewRows = actorProductPacket.stixPreviewReadiness;
+  const readyRelationshipIds = actorProductPacket.reviewedExportReadiness.readyRelationshipIds;
+  const heldRelationshipIds = actorProductPacket.reviewedExportReadiness.heldRelationshipIds;
+  const readyTypes = uniqueSorted(previewRows.filter((row) => row.readiness === "ready").map((row) => row.objectType)) as GraphStixProductObjectType[];
+  const allObjectTypes: GraphStixProductObjectType[] = ["intrusion-set", "campaign", "malware", "tool", "attack-pattern", "identity", "relationship", "sighting", "indicator", "report"];
+  const blockersByRelationship = new Map<string, GraphProductExportBlocker[]>();
+  for (const relationship of scopedRelationships) {
+    blockersByRelationship.set(relationship.id, productExportBlockersForRelationship(relationship, supportByRelationship.get(relationship.id)));
+  }
+  for (const row of previewRows) {
+    if (row.readiness !== "held") continue;
+    const rowBlockers = productExportBlockersForHoldReasons(row.holdReasons);
+    for (const relationshipId of row.relationshipIds) {
+      blockersByRelationship.set(relationshipId, uniqueSorted([...(blockersByRelationship.get(relationshipId) ?? []), ...rowBlockers]) as GraphProductExportBlocker[]);
+    }
+  }
+  const allBlockers = uniqueSorted([...blockersByRelationship.values()].flat()) as GraphProductExportBlocker[];
+  const heldReasons = buildProductHeldReasons(blockersByRelationship);
+  const objectEligibilityMatrix: GraphStixTaxiiMonetizationExportContractsDto["objectEligibilityMatrix"] = allObjectTypes.map((objectType) => {
+    const matchingRows = previewRows.filter((row) => row.objectType === objectType);
+    const eligibleRelationshipIds = uniqueSorted(matchingRows.filter((row) => row.readiness === "ready").flatMap((row) => row.relationshipIds));
+    const heldIds = uniqueSorted([
+      ...matchingRows.filter((row) => row.readiness === "held").flatMap((row) => row.relationshipIds),
+      ...(objectType === "indicator" || objectType === "report" ? heldRelationshipIds : [])
+    ]).slice(0, 25);
+    const blockers = uniqueSorted([
+      ...heldIds.flatMap((relationshipId) => blockersByRelationship.get(relationshipId) ?? ["missing_analyst_review"]),
+      ...(objectType === "indicator" || objectType === "report" ? ["missing_analyst_review" as const] : [])
+    ]) as GraphProductExportBlocker[];
+    return {
+      objectType,
+      eligibleRelationshipIds: eligibleRelationshipIds.slice(0, 25),
+      heldRelationshipIds: heldIds,
+      requiredEvidence: ["ledger_ids", "capture_ids", "source_ids", "analyst_review", "safe_public_or_reviewed_metadata"],
+      confidenceThreshold: objectType === "relationship" || objectType === "sighting" ? 0.7 : 0.75,
+      freshnessWindowDays: objectType === "indicator" ? 14 : objectType === "report" ? 90 : 45,
+      eligibleTiers: productEligibleTiers(objectType, eligibleRelationshipIds.length > 0),
+      blockers
+    };
+  });
+  const apifyReviewedObjectTypes = readyTypes.filter((type) => type !== "relationship" || readyRelationshipIds.length > 0);
+  const apifyExportBlockers = allBlockers.filter((blocker) => blocker !== "taxii_server_not_implemented").slice(0, 8);
+  const exportContracts: GraphStixTaxiiMonetizationExportContractsDto["exportContracts"] = [
+    {
+      tier: "free_sample",
+      implementedSurface: "apify_dataset",
+      rowLimit: 25,
+      reviewedObjectEligibility: "ready_reviewed_only",
+      evidenceRequirements: ["ledger_ids", "capture_ids", "source_ids", "analyst_review", "tenant_policy_allow"],
+      confidenceThreshold: 0.75,
+      freshnessWindowDays: 30,
+      updateCadence: "per_run",
+      pricingReadinessNote: "Implemented as compact safe Apify dataset fields; STIX objects are preview metadata only unless reviewed relationship gates pass.",
+      stixReady: readyRelationshipIds.length > 0,
+      taxiiDescriptorReady: marketplaceReadiness.taxiiDescriptorPricingReadiness.descriptorOnly,
+      reviewedObjectTypes: apifyReviewedObjectTypes,
+      exportBlockers: apifyExportBlockers
+    },
+    {
+      tier: "analyst",
+      implementedSurface: "public_ti_preview",
+      rowLimit: 100,
+      reviewedObjectEligibility: "ready_reviewed_only",
+      evidenceRequirements: ["ledger_ids", "capture_ids", "source_ids", "analyst_review", "freshness_window", "tenant_policy_allow"],
+      confidenceThreshold: 0.7,
+      freshnessWindowDays: 45,
+      updateCadence: "polling_delta",
+      pricingReadinessNote: "Implemented as `/ti` and graph-query preview contracts with held rows surfaced as caveats, not authoritative STIX.",
+      stixReady: readyRelationshipIds.length > 0,
+      taxiiDescriptorReady: marketplaceReadiness.taxiiDescriptorPricingReadiness.descriptorOnly,
+      reviewedObjectTypes: readyTypes,
+      exportBlockers: apifyExportBlockers
+    },
+    {
+      tier: "enterprise",
+      implementedSurface: "taxii_descriptor_only",
+      rowLimit: 500,
+      reviewedObjectEligibility: "descriptor_future_interface",
+      evidenceRequirements: ["ledger_ids", "capture_ids", "source_ids", "analyst_review", "freshness_window", "tenant_policy_allow"],
+      confidenceThreshold: 0.7,
+      freshnessWindowDays: 90,
+      updateCadence: "future_taxii_collection",
+      pricingReadinessNote: "Contract-only enterprise export package; TAXII collection descriptor exists but no server route is mounted or claimed.",
+      stixReady: readyRelationshipIds.length > 0,
+      taxiiDescriptorReady: true,
+      reviewedObjectTypes: allObjectTypes,
+      exportBlockers: uniqueSorted([...apifyExportBlockers, "taxii_server_not_implemented"]) as GraphProductExportBlocker[]
+    }
+  ];
+
+  return {
+    mode: "stix_taxii_monetization_export_contracts",
+    generatedAt,
+    query: options.query,
+    exportContracts,
+    objectEligibilityMatrix,
+    heldExportBlockedReasons: heldReasons,
+    apifyDatasetFields: {
+      stixReady: readyRelationshipIds.length > 0,
+      taxiiDescriptorReady: marketplaceReadiness.taxiiDescriptorPricingReadiness.descriptorOnly,
+      exportTier: readyRelationshipIds.length > 0 ? "free_sample" : "analyst",
+      exportBlockers: apifyExportBlockers,
+      reviewedObjectTypes: apifyReviewedObjectTypes
+    },
+    implementationBoundary: {
+      apifyDatasetImplemented: true,
+      publicTiPreviewImplemented: true,
+      enterprisePackageContractOnly: true,
+      taxiiServerImplemented: false,
+      taxiiDescriptorOnly: true,
+      authoritativeStixRequiresReviewedRelationships: true
+    },
+    noLeak: {
+      rawUrlsIncluded: false,
+      leakedContentIncluded: false,
+      credentialOrPayloadEvidenceIncluded: false,
+      privateChannelMaterialIncluded: false,
+      objectKeysIncluded: false,
+      actorInteractionIncluded: false,
+      unsafeDarkwebDetailsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+export function buildGraphActorComparisonNotebookDto(
+  snapshot: PersistedGraphSnapshot,
+  options: {
+    query: string;
+    focusNodeId?: string;
+    generatedAt?: string;
+    relationshipIds?: string[];
+  }
+): GraphActorComparisonNotebookDto {
+  const generatedAt = options.generatedAt ?? snapshot.generatedAt;
+  const relationshipIdSet = options.relationshipIds ? new Set(options.relationshipIds) : undefined;
+  const relationships = relationshipIdSet
+    ? snapshot.relationships.filter((relationship) => relationshipIdSet.has(relationship.id))
+    : snapshot.relationships;
+  const nodesById = new Map(snapshot.nodes.map((node) => [node.id, node]));
+  const supportByRelationship = new Map(snapshot.evidenceSupport.map((support) => [support.relationshipId, support]));
+  const readiness = checkStixExportReadiness({ ...snapshot, relationships });
+  const readinessById = new Map(readiness.relationships.map((row) => [row.relationshipId, row]));
+  const actorNodeIds = uniqueSorted([
+    ...(options.focusNodeId && nodesById.get(options.focusNodeId)?.type === "actor" ? [options.focusNodeId] : []),
+    ...relationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef]).filter((nodeId) => nodesById.get(nodeId)?.type === "actor")
+  ]).slice(0, 6);
+  const focusActorId = actorNodeIds[0];
+  const focusNeighborIds = new Set(relationships
+    .filter((relationship) => relationship.sourceRef === focusActorId || relationship.targetRef === focusActorId)
+    .flatMap((relationship) => [relationship.sourceRef, relationship.targetRef])
+    .filter((nodeId) => nodeId !== focusActorId));
+  const comparisonRows = actorNodeIds.map((actorNodeId) => {
+    const actor = nodesById.get(actorNodeId) ?? fallbackNode(actorNodeId);
+    const actorRelationships = relationships.filter((relationship) => relationship.sourceRef === actorNodeId || relationship.targetRef === actorNodeId);
+    const reviewedRelationshipIds = actorRelationships.filter((relationship) => readinessById.get(relationship.id)?.ready).map((relationship) => relationship.id);
+    const heldRelationshipIds = actorRelationships.filter((relationship) => !readinessById.get(relationship.id)?.ready).map((relationship) => relationship.id);
+    const blockers = uniqueSorted(actorRelationships.flatMap((relationship) => productExportBlockersForRelationship(relationship, supportByRelationship.get(relationship.id)))) as GraphProductExportBlocker[];
+    const neighborNodes = actorRelationships
+      .flatMap((relationship) => [relationship.sourceRef, relationship.targetRef])
+      .filter((nodeId) => nodeId !== actorNodeId)
+      .map((nodeId) => nodesById.get(nodeId))
+      .filter((node): node is PersistedGraphNode => Boolean(node));
+    const reviewedObjectTypes = uniqueSorted(neighborNodes.map(stixProductObjectTypeForNode).filter((type): type is GraphStixProductObjectType => Boolean(type))) as GraphStixProductObjectType[];
+    const averageConfidence = Number((actorRelationships.reduce((sum, relationship) => sum + relationship.confidence, 0) / Math.max(1, actorRelationships.length)).toFixed(2));
+    const latestSeenAt = actorRelationships.map((relationship) => relationship.lastSeenAt).sort().at(-1);
+    const sharedNeighborIds = neighborNodes.filter((node) => focusNeighborIds.has(node.id));
+    return {
+      actorNodeId,
+      actorName: actor.value,
+      relationshipIds: uniqueSorted(actorRelationships.map((relationship) => relationship.id)).slice(0, 50),
+      reviewedRelationshipCount: reviewedRelationshipIds.length,
+      heldRelationshipCount: heldRelationshipIds.length,
+      averageConfidence,
+      latestSeenAt,
+      reviewedObjectTypes,
+      sourceFamilies: uniqueSorted(actorRelationships.map((relationship) => supportByRelationship.get(relationship.id)?.sourceId).filter((sourceId): sourceId is string => Boolean(sourceId)).map(sourceFamilyForProduct)),
+      exportTierReadiness: {
+        free_sample: reviewedRelationshipIds.length > 0 ? "ready" : "held",
+        analyst: reviewedRelationshipIds.length > 0 && heldRelationshipIds.length > 0 ? "partial" : reviewedRelationshipIds.length > 0 ? "ready" : "held",
+        enterprise: "future_interface"
+      } satisfies GraphActorComparisonNotebookDto["comparisonRows"][number]["exportTierReadiness"],
+      exportBlockers: blockers,
+      differentiators: buyerNotebookDifferentiators(neighborNodes, heldRelationshipIds.length),
+      sharedWithFocus: {
+        ttpNodeIds: sharedNeighborIds.filter((node) => node.type === "attack-pattern").map((node) => node.id),
+        malwareToolNodeIds: sharedNeighborIds.filter((node) => node.type === "malware" || node.type === "tool").map((node) => node.id),
+        victimNodeIds: sharedNeighborIds.filter((node) => node.type === "victim").map((node) => node.id),
+        campaignNodeIds: sharedNeighborIds.filter((node) => node.type === "campaign").map((node) => node.id)
+      }
+    };
+  });
+  const reviewedRelationshipIds = uniqueSorted(comparisonRows.flatMap((row) => row.relationshipIds.filter((relationshipId) => readinessById.get(relationshipId)?.ready)));
+  const heldRelationshipIds = uniqueSorted(comparisonRows.flatMap((row) => row.relationshipIds.filter((relationshipId) => !readinessById.get(relationshipId)?.ready)));
+  const reviewedObjectTypes = uniqueSorted(comparisonRows.flatMap((row) => row.reviewedObjectTypes)) as GraphStixProductObjectType[];
+  const notebooks: GraphActorComparisonNotebookDto["notebooks"] = [
+    {
+      notebookId: stableId("graph-buyer-notebook", `${options.query}:apify:${actorNodeIds.join("|")}`),
+      useCase: "apify_listing_sample",
+      title: "Reviewed actor comparison sample",
+      includedActorNodeIds: actorNodeIds.slice(0, 3),
+      sectionKeys: ["summary", "ttps", "sources", "holds"],
+      reviewedRelationshipIds: reviewedRelationshipIds.slice(0, 25),
+      heldRelationshipIds: heldRelationshipIds.slice(0, 25),
+      reviewedObjectTypes,
+      exportTier: "free_sample",
+      safeForBuyerPreview: reviewedRelationshipIds.length > 0,
+      maxRows: 25,
+      nextActions: heldRelationshipIds.length > 0 ? ["open_ti_preview", "hold_unreviewed_edges", "compare_actor_overlap"] : ["open_ti_preview", "export_reviewed_stix", "compare_actor_overlap"]
+    },
+    {
+      notebookId: stableId("graph-buyer-notebook", `${options.query}:public-ti:${actorNodeIds.join("|")}`),
+      useCase: "public_ti_investigation",
+      title: "Buyer-ready /ti investigation notebook",
+      includedActorNodeIds: actorNodeIds,
+      sectionKeys: ["summary", "timeline", "incident_claims", "ttps", "victims", "sources", "holds"],
+      reviewedRelationshipIds: reviewedRelationshipIds.slice(0, 75),
+      heldRelationshipIds: heldRelationshipIds.slice(0, 75),
+      reviewedObjectTypes,
+      exportTier: "analyst",
+      safeForBuyerPreview: reviewedRelationshipIds.length > 0,
+      maxRows: 100,
+      nextActions: heldRelationshipIds.length > 0 ? ["request_more_evidence", "hold_unreviewed_edges", "compare_actor_overlap"] : ["export_reviewed_stix", "compare_actor_overlap"]
+    },
+    {
+      notebookId: stableId("graph-buyer-notebook", `${options.query}:enterprise:${actorNodeIds.join("|")}`),
+      useCase: "enterprise_export_review",
+      title: "Enterprise reviewed export notebook contract",
+      includedActorNodeIds: actorNodeIds,
+      sectionKeys: ["summary", "timeline", "incident_claims", "ttps", "victims", "sources", "stix_export", "holds"],
+      reviewedRelationshipIds: reviewedRelationshipIds.slice(0, 150),
+      heldRelationshipIds: heldRelationshipIds.slice(0, 150),
+      reviewedObjectTypes,
+      exportTier: "enterprise",
+      safeForBuyerPreview: reviewedRelationshipIds.length > 0,
+      maxRows: 500,
+      nextActions: ["export_reviewed_stix", "request_more_evidence", "hold_unreviewed_edges", "compare_actor_overlap"]
+    }
+  ];
+
+  return {
+    mode: "graph_backed_actor_comparison_buyer_ready_notebooks",
+    generatedAt,
+    query: options.query,
+    comparedActorNodeIds: actorNodeIds,
+    comparisonRows,
+    notebooks,
+    buyerReadiness: {
+      publicPreviewReady: reviewedRelationshipIds.length > 0,
+      apifySampleReady: reviewedRelationshipIds.length > 0,
+      enterpriseNotebookContractReady: true,
+      taxiiStillDescriptorOnly: true
+    },
+    noLeak: {
+      rawUrlsIncluded: false,
+      leakedContentIncluded: false,
+      credentialOrPayloadEvidenceIncluded: false,
+      privateChannelMaterialIncluded: false,
+      objectKeysIncluded: false,
+      actorInteractionIncluded: false,
+      unsafeDarkwebDetailsIncluded: false,
+      metadataOnly: true
+    }
+  };
+}
+
+function productExportBlockersForRelationship(
+  relationship: PersistedGraphRelationship,
+  support?: GraphEvidenceSupportRecord
+): GraphProductExportBlocker[] {
+  const blockers: GraphProductExportBlocker[] = [];
+  const sourceIds = support?.sourceId ? [support.sourceId] : [];
+  if (relationship.confidence < 0.7) blockers.push("weak_evidence");
+  if (relationship.reviewState !== "accepted") blockers.push("missing_analyst_review");
+  if (relationship.properties?.stale === true) blockers.push("stale_activity");
+  if (relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true) blockers.push("contradiction");
+  if ((support?.ledgerIds ?? []).length === 0 || relationship.evidenceSupportIds.length === 0) blockers.push("missing_ledger");
+  if (sourceIds.some((sourceId) => sourceId.includes("restricted") || sourceId.includes("dark") || sourceId.includes("leak"))) blockers.push("restricted_metadata_only");
+  if (sourceIds.some((sourceId) => sourceId.includes("public_channel") || sourceId.includes("telegram"))) blockers.push("public_channel_only");
+  if (relationship.properties?.unsafeSource === true || relationship.properties?.unsupported === true) blockers.push("unsafe_source");
+  if (relationship.properties?.tenantPolicyHold === true) blockers.push("tenant_policy_hold");
+  return uniqueSorted(blockers) as GraphProductExportBlocker[];
+}
+
+function productExportBlockersForHoldReasons(reasons: GraphIntegrityFindingCode[]): GraphProductExportBlocker[] {
+  const blockers = reasons.map((reason): GraphProductExportBlocker => {
+    switch (reason) {
+      case "weak_discovery_only_edge":
+      case "source_bias_cluster":
+        return "weak_evidence";
+      case "stale_accepted_edge":
+      case "deprecated_attack_technique":
+      case "attack_alias_drift":
+        return "stale_activity";
+      case "contradicted_edge":
+        return "contradiction";
+      case "restricted_only_claim":
+      case "unsupported_restricted_metadata":
+        return "restricted_metadata_only";
+      case "missing_ledger_ids":
+      case "missing_provenance":
+      case "orphan_relationship":
+        return "missing_ledger";
+      case "unreviewed_victim_claim":
+      case "unreviewed_cve_exploitation":
+      case "unreviewed_ttp_mapping":
+        return "missing_analyst_review";
+      case "unsupported_edge":
+      case "export_schema_risk":
+      case "export_blocking_issue":
+        return "unsafe_source";
+      default:
+        return "missing_analyst_review";
+    }
+  });
+  return uniqueSorted(blockers) as GraphProductExportBlocker[];
+}
+
+function productEligibleTiers(objectType: GraphStixProductObjectType, hasEligibleRows: boolean): GraphProductExportTier[] {
+  if (!hasEligibleRows) return [];
+  if (objectType === "indicator" || objectType === "report") return ["enterprise"];
+  if (objectType === "intrusion-set" || objectType === "attack-pattern" || objectType === "relationship") return ["free_sample", "analyst", "enterprise"];
+  return ["analyst", "enterprise"];
+}
+
+function buildProductHeldReasons(
+  blockersByRelationship: Map<string, GraphProductExportBlocker[]>
+): GraphStixTaxiiMonetizationExportContractsDto["heldExportBlockedReasons"] {
+  const explanations: Record<GraphProductExportBlocker, string> = {
+    weak_evidence: "The relationship is not strong enough for authoritative STIX or paid export without more corroboration.",
+    stale_activity: "The relationship is stale or lifecycle-drifted and needs fresh evidence before promotion.",
+    contradiction: "Conflicting graph evidence exists; keep the row in analyst review instead of export.",
+    restricted_metadata_only: "Restricted or leak-adjacent material is metadata-only and cannot become authoritative STIX without reviewed public corroboration.",
+    public_channel_only: "Public-channel-only hints remain caveated until corroborated by stronger public sources.",
+    missing_ledger: "Evidence ledger, capture, or provenance references are incomplete.",
+    missing_analyst_review: "The relationship has not cleared analyst review for export.",
+    unsafe_source: "The relationship touches unsupported or unsafe source/export semantics.",
+    tenant_policy_hold: "Tenant policy does not allow export promotion for this row.",
+    taxii_server_not_implemented: "TAXII is descriptor-only; no mounted server route is implemented."
+  };
+  const rows = Object.keys(explanations).map((reason) => {
+    const typedReason = reason as GraphProductExportBlocker;
+    const relationshipIds = uniqueSorted([...blockersByRelationship.entries()]
+      .filter(([, blockers]) => blockers.includes(typedReason))
+      .map(([relationshipId]) => relationshipId));
+    return {
+      reason: typedReason,
+      relationshipIds: relationshipIds.slice(0, 25),
+      publicExplanation: explanations[typedReason]
+    };
+  });
+  return rows.filter((row) => row.relationshipIds.length > 0 || row.reason === "taxii_server_not_implemented");
+}
+
+function stixProductObjectTypeForNode(node: PersistedGraphNode): GraphStixProductObjectType | undefined {
+  if (node.type === "actor") return "intrusion-set";
+  if (node.type === "campaign") return "campaign";
+  if (node.type === "malware") return "malware";
+  if (node.type === "tool") return "tool";
+  if (node.type === "attack-pattern") return "attack-pattern";
+  if (node.type === "victim" || node.type === "sector" || node.type === "country") return "identity";
+  if (node.type === "infrastructure" || node.type === "vulnerability") return "indicator";
+  if (node.type === "incident" || node.type === "source" || node.type === "report") return "report";
+  return undefined;
+}
+
+function sourceFamilyForProduct(sourceId: string): string {
+  if (sourceId.includes("restricted") || sourceId.includes("dark")) return "restricted_metadata";
+  if (sourceId.includes("public_channel") || sourceId.includes("telegram")) return "public_channel";
+  if (sourceId.includes("advisory") || sourceId.includes("cisa")) return "advisory";
+  if (sourceId.includes("rss")) return "rss";
+  if (sourceId.includes("vendor") || sourceId.includes("report")) return "vendor_report";
+  return "public_source";
+}
+
+function buyerNotebookDifferentiators(nodes: PersistedGraphNode[], heldCount: number): string[] {
+  const byType = new Map<IntelligenceNodeType, string[]>();
+  for (const node of nodes) {
+    byType.set(node.type, [...(byType.get(node.type) ?? []), node.value]);
+  }
+  const rows: string[] = [];
+  for (const [type, values] of byType.entries()) {
+    rows.push(`${type}:${uniqueSorted(values).slice(0, 3).join(", ")}`);
+  }
+  if (heldCount > 0) rows.push(`held_edges:${heldCount}`);
+  return rows.slice(0, 8);
+}
+
+function productWhatChanged(
+  actorTimelineChanges: GraphActorTimelineChangeWorkspaceDto,
+  nodesById: Map<string, PersistedGraphNode>
+): string[] {
+  const labels = actorTimelineChanges.campaignChanges.slice(0, 6).map((change) => {
+    const nodeValues = change.nodeIds
+      .map((nodeId) => nodesById.get(nodeId)?.value)
+      .filter((value): value is string => Boolean(value))
+      .slice(0, 3)
+      .join(", ");
+    return `${change.changeKind.replaceAll("_", " ")}${nodeValues ? `: ${nodeValues}` : ""}`;
+  });
+  if (labels.length > 0) return labels;
+  if (actorTimelineChanges.timelineEvents.length > 0) return ["Graph relationships changed, but no campaign-level change is ready for product copy."];
+  return ["No graph-backed actor timeline changes are available yet."];
+}
+
+function productWhyItMatters(
+  actorTimelineChanges: GraphActorTimelineChangeWorkspaceDto,
+  incidentClaims: GraphIncidentClaimWorkspaceDto
+): string[] {
+  const reasons: string[] = [];
+  if (incidentClaims.summary.eligibleClusterCount > 0) reasons.push("Reviewed incident claims can be summarized as public actor context.");
+  if (incidentClaims.summary.heldClusterCount > 0) reasons.push("Some incident claims remain review-held and should be shown as caveated context.");
+  if (actorTimelineChanges.summary.contradictedEventCount > 0) reasons.push("Contradictions require analyst review before public facts or STIX export.");
+  if (actorTimelineChanges.summary.staleEventCount > 0) reasons.push("Stale campaign or TTP edges should not be promoted without fresh corroboration.");
+  if (actorTimelineChanges.summary.exportEligibleEventCount > 0) reasons.push("Reviewed relationships are available for a compact STIX preview subset.");
+  return reasons.length > 0 ? reasons : ["Public source coverage and evidence replay determine whether this actor packet can move beyond searching."];
+}
+
+function productConfidenceDrivers(
+  timelineEvents: GraphActorTimelineChangeWorkspaceDto["timelineEvents"],
+  incidentClaims: GraphIncidentClaimWorkspaceDto
+): string[] {
+  const families = uniqueSorted(timelineEvents.flatMap((event) => event.sourceFamilies));
+  const ledgerCount = uniqueSorted(timelineEvents.flatMap((event) => event.ledgerIds)).length;
+  const evidenceCount = uniqueSorted(timelineEvents.flatMap((event) => event.evidenceIds)).length;
+  const drivers: string[] = [];
+  if (families.length > 0) drivers.push(`source families: ${families.join(", ")}`);
+  if (ledgerCount > 0) drivers.push(`${ledgerCount} ledger-backed graph relationships`);
+  if (evidenceCount > 0) drivers.push(`${evidenceCount} evidence references`);
+  if (incidentClaims.summary.publisherCount > 1) drivers.push(`${incidentClaims.summary.publisherCount} public publishers in incident clusters`);
+  if (incidentClaims.summary.sourceFamilyCount > 1) drivers.push(`${incidentClaims.summary.sourceFamilyCount} source families corroborating claims`);
+  return drivers.length > 0 ? drivers : ["no graph evidence or claim ledger support yet"];
+}
+
+function productReviewRequired(
+  timelineEvents: GraphActorTimelineChangeWorkspaceDto["timelineEvents"],
+  incidentClaims: GraphIncidentClaimWorkspaceDto
+): string[] {
+  const requirements = uniqueSorted([
+    ...timelineEvents
+      .filter((event) => event.publicFactState !== "eligible_reviewed_fact")
+      .map((event) => `${event.relationshipId}:${event.publicFactState}`),
+    ...incidentClaims.clusters
+      .filter((cluster) => cluster.exportState !== "eligible_reviewed_subset")
+      .map((cluster) => `${cluster.claimId}:${cluster.exportState}`)
+  ]);
+  return requirements.slice(0, 12);
+}
+
+function productTtpSourceCorroboration(
+  timelineEvents: GraphActorTimelineChangeWorkspaceDto["timelineEvents"]
+): GraphActorProductPacketDto["ttpSourceCorroboration"] {
+  return timelineEvents
+    .filter((event) => event.ttpNodeIds.length > 0 || event.malwareToolNodeIds.length > 0)
+    .map((event) => {
+      const corroborationState: GraphActorProductPacketDto["ttpSourceCorroboration"][number]["corroborationState"] =
+        event.publicFactState !== "eligible_reviewed_fact"
+          ? "held"
+          : event.ledgerIds.length === 0 || event.evidenceIds.length === 0
+            ? "needs_evidence"
+            : event.sourceFamilies.length > 1
+              ? "well_corroborated"
+              : "single_source";
+      return {
+        ...(event.ttpNodeIds[0] ? { ttpNodeId: event.ttpNodeIds[0] } : {}),
+        ...(event.malwareToolNodeIds[0] ? { malwareToolNodeId: event.malwareToolNodeIds[0] } : {}),
+        relationshipIds: [event.relationshipId],
+        sourceFamilies: event.sourceFamilies,
+        evidenceIds: event.evidenceIds,
+        ledgerIds: event.ledgerIds,
+        confidence: event.confidence,
+        corroborationState
+      };
+    })
+    .sort((left, right) =>
+      Number(right.corroborationState === "well_corroborated") - Number(left.corroborationState === "well_corroborated")
+      || right.confidence - left.confidence
+      || left.relationshipIds[0]!.localeCompare(right.relationshipIds[0]!)
+    )
+    .slice(0, 12);
+}
+
+function buildGraphProductStixPreviewReadiness(input: {
+  timelineEvents: GraphActorTimelineChangeWorkspaceDto["timelineEvents"];
+  incidentClaims: GraphIncidentClaimWorkspaceDto;
+  relationships: PersistedGraphRelationship[];
+  nodesById: Map<string, PersistedGraphNode>;
+  readinessById: Map<string, StixExportReadinessReportDto["relationships"][number]>;
+  blockersByRelationship: Map<string, GraphIntegrityFindingCode[]>;
+}): GraphActorProductPacketDto["stixPreviewReadiness"] {
+  const rows = new Map<GraphActorProductPacketDto["stixPreviewReadiness"][number]["objectType"], GraphActorProductPacketDto["stixPreviewReadiness"][number]>();
+  const add = (
+    objectType: GraphActorProductPacketDto["stixPreviewReadiness"][number]["objectType"],
+    nodeIds: string[],
+    relationshipIds: string[]
+  ) => {
+    const existing = rows.get(objectType);
+    const holdReasons = uniqueFindingCodes(relationshipIds.flatMap((relationshipId) => [
+      ...(input.readinessById.get(relationshipId)?.blockers ?? []),
+      ...(input.blockersByRelationship.get(relationshipId) ?? [])
+    ]));
+    const readiness = relationshipIds.length > 0 && relationshipIds.every((relationshipId) => input.readinessById.get(relationshipId)?.ready === true)
+      ? "ready"
+      : "held";
+    rows.set(objectType, {
+      objectType,
+      nodeIds: uniqueSorted([...(existing?.nodeIds ?? []), ...nodeIds]),
+      relationshipIds: uniqueSorted([...(existing?.relationshipIds ?? []), ...relationshipIds]),
+      readiness: existing?.readiness === "ready" && readiness === "ready" ? "ready" : readiness,
+      holdReasons: uniqueFindingCodes([...(existing?.holdReasons ?? []), ...holdReasons])
+    });
+  };
+
+  for (const event of input.timelineEvents) {
+    add("intrusion-set", event.actorNodeIds, [event.relationshipId]);
+    if (event.campaignNodeIds.length > 0) add("campaign", event.campaignNodeIds, [event.relationshipId]);
+    if (event.ttpNodeIds.length > 0) add("attack-pattern", event.ttpNodeIds, [event.relationshipId]);
+    for (const nodeId of event.malwareToolNodeIds) {
+      const node = input.nodesById.get(nodeId);
+      add(node?.type === "tool" ? "tool" : "malware", [nodeId], [event.relationshipId]);
+    }
+    if (event.victimNodeIds.length > 0) add("identity", event.victimNodeIds, [event.relationshipId]);
+    if (event.relationshipId) add("relationship", [], [event.relationshipId]);
+  }
+  for (const cluster of input.incidentClaims.clusters) {
+    add("sighting", cluster.nodeIds, cluster.relationshipIds);
+  }
+  const actorNodeIds = uniqueSorted(input.relationships.flatMap((relationship) => {
+    const source = input.nodesById.get(relationship.sourceRef);
+    const target = input.nodesById.get(relationship.targetRef);
+    return [
+      source?.type === "actor" ? source.id : undefined,
+      target?.type === "actor" ? target.id : undefined
+    ].filter((nodeId): nodeId is string => Boolean(nodeId));
+  }));
+  if (actorNodeIds.length > 0 && !rows.has("intrusion-set")) {
+    add("intrusion-set", actorNodeIds, input.relationships
+      .filter((relationship) => actorNodeIds.includes(relationship.sourceRef) || actorNodeIds.includes(relationship.targetRef))
+      .map((relationship) => relationship.id));
+  }
+  if (rows.size === 0 && input.relationships.length > 0) {
+    add("relationship", [], input.relationships.map((relationship) => relationship.id));
+  }
+  return [...rows.values()].sort((left, right) =>
+    Number(right.readiness === "ready") - Number(left.readiness === "ready")
+    || left.objectType.localeCompare(right.objectType)
+  );
+}
+
+function sourceFamilyForClaimSupport(sourceId: string): string {
+  const normalized = sourceId.toLowerCase();
+  if (/telegram|public_channel|channel/.test(normalized)) return "public_channel";
+  if (/rss|feed/.test(normalized)) return "rss_feed";
+  if (/advisory|cve|cert|cisa/.test(normalized)) return "public_advisory";
+  if (/vendor|report|blog|clear_web|static/.test(normalized)) return "clear_web_report";
+  if (/restricted|dark|ransom|leak/.test(normalized)) return "restricted_metadata";
+  return normalized.split(/[_:-]/)[0] || "unknown";
+}
+
+function minIsoValues(values: string[]): string | undefined {
+  return values.filter(Boolean).sort((left, right) => Date.parse(left) - Date.parse(right))[0];
+}
+
+function maxIsoValues(values: string[]): string | undefined {
+  return values.filter(Boolean).sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+}
+
+function incidentClaimReviewState(relationships: PersistedGraphRelationship[]): GraphRelationshipReviewState {
+  if (relationships.some((relationship) => relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true)) return "contradicted";
+  if (relationships.some((relationship) => relationship.reviewState === "expired")) return "expired";
+  if (relationships.some((relationship) => relationship.reviewState === "needs_review")) return "needs_review";
+  if (relationships.length > 0 && relationships.every((relationship) => relationship.reviewState === "accepted")) return "accepted";
+  if (relationships.some((relationship) => relationship.reviewState === "rejected")) return "rejected";
+  return "unreviewed";
+}
+
+function nodeIdsByType(nodes: PersistedGraphNode[], types: IntelligenceNodeType[]): string[] {
+  const allowed = new Set<IntelligenceNodeType>(types);
+  return uniqueSorted(nodes.filter((node) => allowed.has(node.type)).map((node) => node.id));
+}
+
+function relatedNodeIdsByType(
+  relationships: PersistedGraphRelationship[],
+  nodesById: Map<string, PersistedGraphNode>,
+  seedNodeIds: string[],
+  types: IntelligenceNodeType[]
+): string[] {
+  const seeds = new Set(seedNodeIds);
+  const allowed = new Set<IntelligenceNodeType>(types);
+  const relatedNodeIds: string[] = [];
+  for (const relationship of relationships) {
+    const pairs: Array<[string, string]> = [
+      [relationship.sourceRef, relationship.targetRef],
+      [relationship.targetRef, relationship.sourceRef]
+    ];
+    for (const [sourceRef, targetRef] of pairs) {
+      if (!seeds.has(sourceRef)) continue;
+      const node = nodesById.get(targetRef);
+      if (!node || !allowed.has(node.type)) continue;
+      relatedNodeIds.push(node.id);
+    }
+  }
+  return uniqueSorted(relatedNodeIds);
+}
+
+function incidentClaimType(
+  incident: PersistedGraphNode,
+  nodes: PersistedGraphNode[],
+  hasContradiction: boolean
+): GraphIncidentClaimWorkspaceDto["clusters"][number]["claimType"] {
+  const nodeTypes = new Set<IntelligenceNodeType>(nodes.map((node) => node.type));
+  const value = `${incident.value} ${String(incident.properties?.claimType ?? "")}`.toLowerCase();
+  if (hasContradiction || /alias|ambiguous/.test(value)) return "ambiguous_alias_claim";
+  if (nodeTypes.has("malware") || /lockbit|akira|ransom/.test(value)) return "ransomware_claim";
+  if (nodeTypes.has("victim") || value.includes("victim") || value.includes("leak")) return "victim_claim";
+  if (nodeTypes.has("vulnerability") || value.includes("cve-")) return "vulnerability_claim";
+  if (nodeTypes.has("campaign")) return "campaign_claim";
+  if (nodeTypes.has("actor")) return "intrusion_activity";
+  return "ambiguous_alias_claim";
+}
+
+function incidentClaimFreshness(
+  lastReportedAt: string,
+  generatedAt: string
+): GraphIncidentClaimWorkspaceDto["clusters"][number]["freshness"] {
+  const days = ageInDays(lastReportedAt, generatedAt);
+  if (days > 30) return "stale";
+  if (days > 7) return "watch";
+  return "fresh";
+}
+
+function uniqueClaimMergeRules(input: {
+  publisherCount: number;
+  sourceFamilyCount: number;
+  actorNodeIds: string[];
+  victimNodeIds: string[];
+  campaignNodeIds: string[];
+  hasContradiction: boolean;
+  incident: PersistedGraphNode;
+}): GraphIncidentClaimWorkspaceDto["clusters"][number]["mergeSemantics"]["rules"] {
+  const rules: GraphIncidentClaimWorkspaceDto["clusters"][number]["mergeSemantics"]["rules"] = ["same_incident_node"];
+  if (input.publisherCount > 1) rules.push("same_day_syndication");
+  if (input.sourceFamilyCount > 1) rules.push("publisher_diversity");
+  if (input.actorNodeIds.length > 0 && (input.victimNodeIds.length > 0 || input.campaignNodeIds.length > 0)) rules.push("actor_victim_campaign_overlap");
+  if (input.hasContradiction || input.incident.properties?.aliasCollision === true || /alias|ambiguous/i.test(input.incident.value)) rules.push("alias_collision_hold");
+  if (input.incident.properties?.oldCampaignReuse === true) rules.push("old_campaign_reuse_hold");
+  if (input.incident.properties?.recurringVictimClaim === true) rules.push("recurring_victim_claim_hold");
+  return [...new Set(rules)];
+}
+
+function incidentClaimSplitRules(input: {
+  hasContradiction: boolean;
+  actorNodeIds: string[];
+  victimNodeIds: string[];
+  campaignNodeIds: string[];
+  incident: PersistedGraphNode;
+}): GraphIncidentClaimWorkspaceDto["clusters"][number]["mergeSemantics"]["splitRequiredWhen"] {
+  const rules: GraphIncidentClaimWorkspaceDto["clusters"][number]["mergeSemantics"]["splitRequiredWhen"] = ["distinct_incident_node"];
+  if (input.hasContradiction) rules.push("contradictory_attribution");
+  if (input.victimNodeIds.length > 1 || input.actorNodeIds.length > 1 && input.victimNodeIds.length > 1) rules.push("different_victim_same_day");
+  if (input.campaignNodeIds.length > 1 || input.incident.properties?.renamedCampaign === true) rules.push("renamed_campaign_without_review");
+  if (input.actorNodeIds.length > 1 || input.incident.properties?.oldCampaignReuse === true) rules.push("old_campaign_reuse_without_fresh_evidence");
+  return [...new Set(rules)];
+}
+
+function actorTimelineConfidenceTrend(
+  relationship: PersistedGraphRelationship,
+  generatedAt: string
+): GraphAttackTechniqueTimelineEventDto["confidenceTrend"] {
+  if (relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true) return "contradicted";
+  if (relationship.reviewState === "expired" || relationship.properties?.stale === true || ageInDays(relationship.lastSeenAt, generatedAt) > 90) return "stale";
+  return attackTechniqueConfidenceTrend(relationship, generatedAt);
+}
+
+function actorTimelineContradictionState(
+  relationship: PersistedGraphRelationship,
+  exportBlockers: GraphIntegrityFindingCode[]
+): GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number]["contradictionState"] {
+  if (relationship.reviewState === "contradicted" || relationship.properties?.contradicted === true || exportBlockers.includes("contradicted_edge")) return "contradicted";
+  if (relationship.properties?.sourceBiasCluster === true || exportBlockers.includes("source_bias_cluster")) return "suspected";
+  return "none";
+}
+
+function actorTimelineEventKind(
+  relationship: PersistedGraphRelationship,
+  source: PersistedGraphNode,
+  target: PersistedGraphNode,
+  incidentClaimIds: string[]
+): GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number]["eventKind"] {
+  if (incidentClaimIds.length > 0 || source.type === "incident" || target.type === "incident") return "incident_claim";
+  if (source.type === "attack-pattern" || target.type === "attack-pattern") return "attack_technique";
+  if (source.type === "campaign" || target.type === "campaign") return "campaign_change";
+  if (source.type === "victim" || target.type === "victim") return "victim_targeting";
+  if (source.type === "malware" || target.type === "malware" || source.type === "tool" || target.type === "tool") return "tooling_change";
+  if (source.type === "vulnerability" || target.type === "vulnerability") return "vulnerability_change";
+  if (source.type === "infrastructure" || target.type === "infrastructure" || source.type === "indicator" || target.type === "indicator") return "infrastructure_change";
+  if (source.type === "source" || target.type === "source" || source.type === "report" || target.type === "report" || relationship.type === "derived-from" || relationship.type === "mentions") return "source_signal";
+  return "relationship";
+}
+
+function actorTimelinePublicFactState(input: {
+  relationship: PersistedGraphRelationship;
+  readinessReady: boolean;
+  exportBlockers: GraphIntegrityFindingCode[];
+  ledgerIds: string[];
+  freshness: GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number]["freshness"];
+  contradictionState: GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number]["contradictionState"];
+}): GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number]["publicFactState"] {
+  if (input.contradictionState === "contradicted" || input.exportBlockers.includes("contradicted_edge")) return "held_contradicted";
+  if (input.ledgerIds.length === 0 || input.exportBlockers.includes("missing_ledger_ids") || input.exportBlockers.includes("missing_provenance")) return "held_missing_ledger";
+  if (input.freshness === "stale" || input.exportBlockers.includes("stale_accepted_edge")) return "held_stale";
+  if (
+    input.relationship.exportEligibility.discoveryOnly
+    || input.exportBlockers.includes("weak_discovery_only_edge")
+    || input.exportBlockers.includes("restricted_only_claim")
+    || input.exportBlockers.includes("unsupported_restricted_metadata")
+  ) return "held_restricted_or_weak";
+  return input.readinessReady && input.relationship.reviewState === "accepted" ? "eligible_reviewed_fact" : "held_for_review";
+}
+
+function actorTimelineChangeKind(
+  event: GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number]
+): GraphActorTimelineChangeWorkspaceDto["campaignChanges"][number]["changeKind"] | undefined {
+  if (event.actorNodeIds.length > 1 || event.eventKind === "relationship" && event.relationshipId.includes("alias")) return "actor_alias_change";
+  if (event.campaignNodeIds.length > 0 || event.eventKind === "campaign_change") return "campaign_membership_change";
+  if (event.ttpNodeIds.length > 0 || event.eventKind === "attack_technique") return "ttp_change";
+  if (event.victimNodeIds.length > 0 || event.eventKind === "victim_targeting") return "targeting_change";
+  if (event.malwareToolNodeIds.length > 0 || event.eventKind === "tooling_change") return "tooling_change";
+  if (event.vulnerabilityNodeIds.length > 0 || event.eventKind === "vulnerability_change") return "vulnerability_change";
+  if (event.infrastructureNodeIds.length > 0 || event.eventKind === "infrastructure_change") return "infrastructure_change";
+  if (event.sourceFamilies.length > 1 || event.eventKind === "source_signal") return "source_family_change";
+  if (event.incidentClaimIds.length > 0 || event.eventKind === "incident_claim") return "incident_claim_change";
+  return undefined;
+}
+
+function actorTimelineRecommendedAction(
+  event: GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number]
+): GraphActorTimelineChangeWorkspaceDto["campaignChanges"][number]["recommendedAction"] {
+  if (event.publicFactState === "eligible_reviewed_fact") return "promote";
+  if (event.publicFactState === "held_missing_ledger") return "request_evidence";
+  if (event.publicFactState === "held_contradicted") return "attach_contradiction";
+  if (event.publicFactState === "held_stale") return "mark_stale";
+  if (event.publicFactState === "held_restricted_or_weak") return "hold_public_fact";
+  return "hold";
+}
+
+function actorTimelineReleaseImpact(
+  event: GraphActorTimelineChangeWorkspaceDto["timelineEvents"][number]
+): GraphActorTimelineChangeWorkspaceDto["campaignChanges"][number]["releaseImpact"] {
+  if (event.publicFactState === "held_contradicted" || event.publicFactState === "held_missing_ledger") return "rollback";
+  if (event.publicFactState === "held_for_review" || event.publicFactState === "held_restricted_or_weak") return "hold";
+  if (event.publicFactState === "held_stale" || event.contradictionState === "suspected") return "watch";
+  return "promote";
+}
+
+function actorTimelineReleaseRank(impact: GraphActorTimelineChangeWorkspaceDto["campaignChanges"][number]["releaseImpact"]): number {
+  if (impact === "rollback") return 4;
+  if (impact === "hold") return 3;
+  if (impact === "watch") return 2;
+  return 1;
 }
 
 function buildGraphCampaignTimelineReviewBoard(input: {
@@ -2605,6 +4228,11 @@ export function buildGraphRuntimeApiDto(
     generatedAt,
     relationshipIds: relationships.map((relationship) => relationship.id)
   });
+  const certification = buildGraphExportCertificationDto(snapshot, {
+    endpoint: options.endpoint,
+    generatedAt,
+    relationshipIds: relationships.map((relationship) => relationship.id)
+  });
 
   return {
     endpoint: options.endpoint,
@@ -2623,11 +4251,7 @@ export function buildGraphRuntimeApiDto(
       generatedAt,
       relationshipIds: relationships.map((relationship) => relationship.id)
     }),
-    certification: buildGraphExportCertificationDto(snapshot, {
-      endpoint: options.endpoint,
-      generatedAt,
-      relationshipIds: relationships.map((relationship) => relationship.id)
-    }),
+    certification,
     liveUpdate: buildGraphLiveSearchUpdateDto(snapshot, {
       endpoint: options.endpoint,
       generatedAt,
@@ -2651,6 +4275,32 @@ export function buildGraphRuntimeApiDto(
     reviewPersistence,
     reviewedExportSubset,
     taxiiStixGovernance,
+    releaseCandidate: certification.rcGate,
+    actorTimelineChanges: buildGraphActorTimelineChangeWorkspaceDto(snapshot, {
+      query: "runtime graph actor timeline",
+      generatedAt,
+      relationshipIds: relationships.map((relationship) => relationship.id)
+    }),
+    actorProductPacket: buildGraphActorProductPacketDto(snapshot, {
+      query: "runtime graph product packet",
+      generatedAt,
+      relationshipIds: relationships.map((relationship) => relationship.id)
+    }),
+    stixTaxiiMarketplaceReadiness: buildGraphStixTaxiiMarketplaceReadinessDto(snapshot, {
+      query: "runtime graph marketplace readiness",
+      generatedAt,
+      relationshipIds: relationships.map((relationship) => relationship.id)
+    }),
+    stixTaxiiMonetizationExportContracts: buildGraphStixTaxiiMonetizationExportContractsDto(snapshot, {
+      query: "runtime graph monetization export contracts",
+      generatedAt,
+      relationshipIds: relationships.map((relationship) => relationship.id)
+    }),
+    actorComparisonNotebook: buildGraphActorComparisonNotebookDto(snapshot, {
+      query: "runtime graph actor comparison notebooks",
+      generatedAt,
+      relationshipIds: relationships.map((relationship) => relationship.id)
+    }),
     relationships: runtimeRelationships,
     reviewQueue
   };
@@ -4981,6 +6631,11 @@ export function buildStixExportReadinessApiDto(
   const exportGovernance = buildReviewedExportSubsetGovernanceDto(snapshot, {
     generatedAt: readiness.generatedAt
   });
+  const certification = buildGraphExportCertificationDto(snapshot, {
+    endpoint: "/v1/exports/stix",
+    generatedAt: readiness.generatedAt
+  });
+  const defaultActorNode = snapshot.nodes.find((node) => node.type === "actor");
   return {
     endpoint: "/v1/exports/stix",
     generatedAt: readiness.generatedAt,
@@ -5002,10 +6657,7 @@ export function buildStixExportReadinessApiDto(
       endpoint: "/v1/exports/stix",
       generatedAt: readiness.generatedAt
     }),
-    certification: buildGraphExportCertificationDto(snapshot, {
-      endpoint: "/v1/exports/stix",
-      generatedAt: readiness.generatedAt
-    }),
+    certification,
     persistence: buildGraphReviewPersistenceLedgerDto(snapshot, {
       generatedAt: readiness.generatedAt
     }),
@@ -5015,11 +6667,37 @@ export function buildStixExportReadinessApiDto(
       exportGovernance,
       readiness
     }),
+    releaseCandidate: certification.rcGate,
     driftMonitor: buildGraphRelationshipDriftMonitorDto(snapshot, {
       generatedAt: readiness.generatedAt,
       workspaceKind: "stix_preview"
     }),
     backendMigrationCertification: buildGraphBackendMigrationCertificationDto(snapshot, {
+      generatedAt: readiness.generatedAt
+    }),
+    actorTimelineChanges: buildGraphActorTimelineChangeWorkspaceDto(snapshot, {
+      query: defaultActorNode?.value ?? "stix export actor timeline",
+      focusNodeId: defaultActorNode?.id,
+      generatedAt: readiness.generatedAt
+    }),
+    actorProductPacket: buildGraphActorProductPacketDto(snapshot, {
+      query: defaultActorNode?.value ?? "stix export product packet",
+      focusNodeId: defaultActorNode?.id,
+      generatedAt: readiness.generatedAt
+    }),
+    stixTaxiiMarketplaceReadiness: buildGraphStixTaxiiMarketplaceReadinessDto(snapshot, {
+      query: defaultActorNode?.value ?? "stix export marketplace readiness",
+      focusNodeId: defaultActorNode?.id,
+      generatedAt: readiness.generatedAt
+    }),
+    stixTaxiiMonetizationExportContracts: buildGraphStixTaxiiMonetizationExportContractsDto(snapshot, {
+      query: defaultActorNode?.value ?? "stix export monetization contracts",
+      focusNodeId: defaultActorNode?.id,
+      generatedAt: readiness.generatedAt
+    }),
+    actorComparisonNotebook: buildGraphActorComparisonNotebookDto(snapshot, {
+      query: defaultActorNode?.value ?? "stix export actor comparison notebooks",
+      focusNodeId: defaultActorNode?.id,
       generatedAt: readiness.generatedAt
     }),
     preview: buildStixExportPreview(snapshot),
@@ -5236,7 +6914,31 @@ export function graphReviewApiExamples(generatedAt = "2026-05-24T00:00:00.000Z")
       taxiiStixGovernance: buildTaxiiDescriptorStixBundleGovernanceDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
         generatedAt
       }),
+      releaseCandidate: buildGraphExportCertificationDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        endpoint: "/v1/exports/stix",
+        generatedAt
+      }).rcGate,
       backendMigrationCertification: buildGraphBackendMigrationCertificationDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        generatedAt
+      }),
+      actorTimelineChanges: buildGraphActorTimelineChangeWorkspaceDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        query: "example stix actor timeline",
+        generatedAt
+      }),
+      actorProductPacket: buildGraphActorProductPacketDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        query: "example stix product packet",
+        generatedAt
+      }),
+      stixTaxiiMarketplaceReadiness: buildGraphStixTaxiiMarketplaceReadinessDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        query: "example stix marketplace readiness",
+        generatedAt
+      }),
+      stixTaxiiMonetizationExportContracts: buildGraphStixTaxiiMonetizationExportContractsDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        query: "example stix monetization contracts",
+        generatedAt
+      }),
+      actorComparisonNotebook: buildGraphActorComparisonNotebookDto({ generatedAt, nodes: [], relationships: [], evidenceSupport: [] }, {
+        query: "example actor comparison notebook",
         generatedAt
       }),
       preview: { generatedAt, includedCount: 1, excludedCount: Object.keys(actionExamples).length - 1, items: [] },

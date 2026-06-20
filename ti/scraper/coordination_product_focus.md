@@ -8,6 +8,9 @@ Current risk: the scraper can look enterprise-ready while still failing to produ
 - STIX/TAXII/export packaging is secondary. Only continue it where it improves current Actor/public dataset rows or creates a concrete reviewed sample.
 - Coordination notes are not progress unless they unblock workers or redirect them to sellable output.
 - The first revenue vehicle is the Apify Actor. Optimize for a buyer opening the dataset and deciding it is worth paying for.
+- Freshness is the commercial value. Live public and metadata-only collection should be made controlled, approved, isolated, observable, and fast; it should not be replaced by static historical notes.
+- When an agent finishes a coherent patch, it must run focused proof, update its coordination file, commit, push, and leave no hanging files. Only leave dirty files when actively working or when a blocker is written clearly in the agent coordination file.
+- Hard exclusions remain: no credential retrieval, stolen-file downloads, payload following, auth/CAPTCHA/private access, raw unsafe URL publication, or threat-actor interaction.
 
 ## Source And Metadata Scale Ladder
 
