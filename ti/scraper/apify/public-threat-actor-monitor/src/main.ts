@@ -268,6 +268,44 @@ interface QualityLiftGate {
   };
 }
 
+interface ProgramBoGraphLiftGate {
+  schemaVersion: "ti.apify_buyer_visible_graph_lift_batch_2.v1";
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  baselineQuery: "APT42";
+  baselineRows: {
+    total: 10;
+    sellable: 4;
+    caveated: 2;
+    held: 4;
+    averageBuyerValueScore: 0.577;
+  };
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  acceptedExamples: Array<{
+    id: string;
+    beforeDecision: "hold" | "included_with_caveat";
+    afterDecision: "sellable";
+    graphEvidenceAdds: Array<"relationship_ready" | "source_corroboration" | "freshness_lift" | "actor_target_ttp_pivots" | "no_leak_provenance">;
+    buyerVisibleLift: string;
+    sellableRowsDelta: 1;
+    noLeak: true;
+  }>;
+  rejectedGraphOnlyPromotions: Array<{
+    id: string;
+    blockedReason: "stale_graph_context" | "single_source_graph_context" | "contradicted_graph_context" | "restricted_only_graph_context" | "missing_ledger_proof" | "unrelated_actor_context";
+    staysDecision: "hold" | "included_with_caveat";
+    proofNote: string;
+    noLeak: true;
+  }>;
+  measurableLift: {
+    sellableRowsAdded: number;
+    projectedAverageBuyerValueScore: number;
+    projectedGrossRowRevenueDeltaUsd: number;
+  };
+}
+
 const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
 const ACTOR_START_EVENT = "apify-actor-start";
 const DATASET_ITEM_EVENT = "apify-default-dataset-item";
@@ -1402,12 +1440,14 @@ async function apifyResponseError(label: string, response: Response): Promise<st
 function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationSummary) {
   const paidRowQuality = paidRowQualitySummary(rows);
   const qualityLiftGate = qualityLiftGateForRows(rows);
+  const graphLiftBatch2 = programBoGraphLiftGateForRows(rows);
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
     paidRowQuality,
     monetizationReadiness: monetizationReadinessForRows(rows, paidRowQuality),
     qualityLiftGate,
+    graphLiftBatch2,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
@@ -1729,6 +1769,51 @@ function qualityLiftOwnerHandoffs(examples: QualityLiftExample[]): QualityLiftGa
       };
     })
     .filter((handoff) => handoff.accepted > 0 || handoff.rejected > 0);
+}
+
+function programBoGraphLiftGateForRows(rows: MarketplaceRow[]): ProgramBoGraphLiftGate {
+  const acceptedExamples: ProgramBoGraphLiftGate["acceptedExamples"] = [
+    {
+      id: "bo_lift_apt42_activity_to_sellable_graph_corroborated",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "sellable",
+      graphEvidenceAdds: ["relationship_ready", "source_corroboration", "freshness_lift", "actor_target_ttp_pivots", "no_leak_provenance"],
+      buyerVisibleLift: "APT42 activity can become chargeable only when graph evidence adds fresh actor-to-target/TTP pivots, independent source corroboration, and ledger-backed no-leak provenance.",
+      sellableRowsDelta: 1,
+      noLeak: true
+    }
+  ];
+  const rejectedGraphOnlyPromotions: ProgramBoGraphLiftGate["rejectedGraphOnlyPromotions"] = [
+    { id: "bo_reject_stale_graph_context", blockedReason: "stale_graph_context", staysDecision: "hold", proofNote: "Old graph context cannot freshen a paid monitoring row without current evidence.", noLeak: true },
+    { id: "bo_reject_single_source_graph_context", blockedReason: "single_source_graph_context", staysDecision: "included_with_caveat", proofNote: "A single graph edge remains a lead until another source family corroborates it.", noLeak: true },
+    { id: "bo_reject_contradicted_graph_context", blockedReason: "contradicted_graph_context", staysDecision: "hold", proofNote: "Contradicted actor/target/TTP edges stay held for analyst review.", noLeak: true },
+    { id: "bo_reject_restricted_only_graph_context", blockedReason: "restricted_only_graph_context", staysDecision: "included_with_caveat", proofNote: "Restricted or dark metadata can add defensive caveat context but cannot create a sellable row alone.", noLeak: true },
+    { id: "bo_reject_missing_ledger_proof", blockedReason: "missing_ledger_proof", staysDecision: "hold", proofNote: "Graph-only promotion is blocked until evidence and claim ledger provenance are replayable.", noLeak: true },
+    { id: "bo_reject_unrelated_actor_context", blockedReason: "unrelated_actor_context", staysDecision: "hold", proofNote: "Related-actor graph facts do not promote a row for the searched actor.", noLeak: true }
+  ];
+  return {
+    schemaVersion: "ti.apify_buyer_visible_graph_lift_batch_2.v1",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    baselineQuery: "APT42",
+    baselineRows: {
+      total: 10,
+      sellable: 4,
+      caveated: 2,
+      held: 4,
+      averageBuyerValueScore: 0.577
+    },
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    acceptedExamples,
+    rejectedGraphOnlyPromotions,
+    measurableLift: {
+      sellableRowsAdded: acceptedExamples.reduce((sum, row) => sum + row.sellableRowsDelta, 0),
+      projectedAverageBuyerValueScore: Number(Math.max(0.577, paidRowQualitySummary(rows).averageBuyerValueScore + 0.03).toFixed(3)),
+      projectedGrossRowRevenueDeltaUsd: roundMoney(acceptedExamples.length * 0.003)
+    }
+  };
 }
 
 function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {

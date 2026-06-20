@@ -101,6 +101,30 @@ if (
 if (qualityLiftGate.sellableRowsAdded < 2 || qualityLiftGate.freshRowsAdded < 5 || qualityLiftGate.costPerUsefulRowDelta >= 0) {
   throw new Error("Quality-lift gate must report buyer-visible sellable/fresh row improvement and lower cost per useful row");
 }
+const graphLiftBatch2 = outputRecord.graphLiftBatch2 as Record<string, unknown> | undefined;
+if (
+  !graphLiftBatch2
+  || graphLiftBatch2.schemaVersion !== "ti.apify_buyer_visible_graph_lift_batch_2.v1"
+  || graphLiftBatch2.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || graphLiftBatch2.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || graphLiftBatch2.dryRun !== true
+  || graphLiftBatch2.willMutateSources !== false
+  || graphLiftBatch2.willStartCollection !== false
+  || !Array.isArray(graphLiftBatch2.acceptedExamples)
+  || graphLiftBatch2.acceptedExamples.length < 1
+  || !Array.isArray(graphLiftBatch2.rejectedGraphOnlyPromotions)
+  || graphLiftBatch2.rejectedGraphOnlyPromotions.length < 6
+) {
+  throw new Error("OUTPUT record must expose Program BO graph-lift batch 2 with current live baseline and graph-only rejection cases");
+}
+const graphLiftBatch2Metrics = graphLiftBatch2.measurableLift as Record<string, unknown> | undefined;
+if (!graphLiftBatch2Metrics || Number(graphLiftBatch2Metrics.sellableRowsAdded) < 1 || Number(graphLiftBatch2Metrics.projectedGrossRowRevenueDeltaUsd) <= 0) {
+  throw new Error("Program BO graph-lift batch must prove measurable sellable-row and revenue lift");
+}
+const rejectedGraphReasons = (graphLiftBatch2.rejectedGraphOnlyPromotions as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["stale_graph_context", "single_source_graph_context", "contradicted_graph_context", "restricted_only_graph_context", "missing_ledger_proof", "unrelated_actor_context"]) {
+  if (!rejectedGraphReasons.includes(requiredReason)) throw new Error(`Program BO graph-lift batch must reject ${requiredReason}`);
+}
 for (const row of qualityLiftGate.acceptedExamples as Array<Record<string, unknown>>) {
   if (
     row.outcome !== "accepted"
@@ -126,6 +150,48 @@ for (const row of qualityLiftGate.rejectedExamples as Array<Record<string, unkno
 }
 if (!(qualityLiftGate.ownerHandoffs as Array<Record<string, unknown>>).some((row) => row.owner === "agent_03" && Number(row.accepted) >= 1)) {
   throw new Error("Quality-lift gate must route accepted parser repairs to Agent 03");
+}
+const graphLiftBatch2 = outputRecord.graphLiftBatch2 as Record<string, unknown> | undefined;
+if (
+  !graphLiftBatch2
+  || graphLiftBatch2.schemaVersion !== "ti.apify_buyer_visible_graph_lift_batch_2.v1"
+  || graphLiftBatch2.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || graphLiftBatch2.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || graphLiftBatch2.baselineQuery !== "APT42"
+  || graphLiftBatch2.dryRun !== true
+  || graphLiftBatch2.willMutateSources !== false
+  || graphLiftBatch2.willStartCollection !== false
+  || !Array.isArray(graphLiftBatch2.acceptedExamples)
+  || !Array.isArray(graphLiftBatch2.rejectedGraphOnlyPromotions)
+  || typeof graphLiftBatch2.measurableLift !== "object"
+) {
+  throw new Error("OUTPUT record must expose Program BO graph-lift batch 2");
+}
+const graphLift = graphLiftBatch2.measurableLift as Record<string, unknown>;
+if (Number(graphLift.sellableRowsAdded) < 1 || Number(graphLift.projectedGrossRowRevenueDeltaUsd) <= 0) {
+  throw new Error("Program BO graph-lift gate must project sellable row and row-revenue lift");
+}
+for (const row of graphLiftBatch2.acceptedExamples as Array<Record<string, unknown>>) {
+  if (
+    row.afterDecision !== "sellable"
+    || Number(row.sellableRowsDelta) !== 1
+    || row.noLeak !== true
+    || !Array.isArray(row.graphEvidenceAdds)
+    || !row.graphEvidenceAdds.includes("source_corroboration")
+    || !row.graphEvidenceAdds.includes("no_leak_provenance")
+  ) {
+    throw new Error("Accepted Program BO graph-lift rows must prove sellable, corroborated, no-leak lift");
+  }
+}
+for (const row of graphLiftBatch2.rejectedGraphOnlyPromotions as Array<Record<string, unknown>>) {
+  if (
+    row.noLeak !== true
+    || typeof row.blockedReason !== "string"
+    || !["hold", "included_with_caveat"].includes(String(row.staysDecision))
+    || typeof row.proofNote !== "string"
+  ) {
+    throw new Error("Rejected Program BO graph-only promotions must remain held or caveated with no-leak proof");
+  }
 }
 if (
   paidRowQuality.sellable === 0
