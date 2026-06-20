@@ -7,4 +7,5 @@
 - Added freshness, corroboration, actionability, and source-family signals.
 - Added Apify output and dataset schemas with an analyst-oriented table view.
 - Removed the user-configurable backend URL to prevent server-side request forgery.
+- Excluded internal run-status records and planned coverage from evidence scoring.
 - Kept all output metadata-only; credentials, stolen files, and private content remain excluded.

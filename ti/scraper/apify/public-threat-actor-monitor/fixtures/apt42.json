@@ -51,6 +51,12 @@
   ],
   "sources": [
     {
+      "id": "fixture:run-status",
+      "name": "Collection run",
+      "type": "system",
+      "provenance": "Internal status only"
+    },
+    {
       "id": "fixture:public-report",
       "name": "Public report fixture",
       "type": "live_clear_web",

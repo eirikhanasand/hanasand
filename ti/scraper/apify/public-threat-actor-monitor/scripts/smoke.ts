@@ -31,5 +31,9 @@ for (const row of output) {
   if (row.rawContentIncluded !== false) throw new Error("rawContentIncluded must be false");
   if (JSON.stringify(row).toLowerCase().includes("password")) throw new Error("Output contains forbidden password text");
 }
+const profile = output.find((row) => row.rowType === "profile");
+if (profile?.sourceCount !== 2 || profile?.sourceFamilyCount !== 1 || profile?.evidenceGrade !== "single_source") {
+  throw new Error("Internal status sources must not increase evidence grade or source-family coverage");
+}
 
 console.log(`Smoke passed with ${output.length} safe metadata rows.`);

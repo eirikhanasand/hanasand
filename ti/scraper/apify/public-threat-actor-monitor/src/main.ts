@@ -228,7 +228,9 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
 
   if (input.includeActivity) {
     for (const item of response.recentActivity) {
-      const source = item.sourceIds.map((id) => sourceById.get(id)).find(Boolean);
+      const itemSources = item.sourceIds.map((id) => sourceById.get(id)).filter(Boolean);
+      const source = itemSources.find((candidate) => sourceType(candidate?.type) !== "system") ?? itemSources[0];
+      const evidenceCount = itemSources.filter((candidate) => sourceType(candidate?.type) !== "system").length;
       rows.push({
         ...baseRow(response, generatedAt, lastSeen),
         rowType: "activity",
@@ -239,7 +241,7 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         sourceUrl: safePublicUrl(item.url ?? source?.url),
         claimedDate: item.date,
         confidence: clampNumber(item.confidence, 0, 1),
-        ...qualityFields(response, item.date, item.confidence, item.sourceIds.length),
+        ...qualityFields(response, item.date, item.confidence, evidenceCount),
         provenanceHash: stableHash([response.query, item.title, item.detail, item.date, item.sourceIds.join(",")].join("|"))
       });
     }
@@ -317,7 +319,13 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
 }
 
 function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: string): MarketplaceRow {
-  const quality = qualityFields(response, lastSeen, response.confidence, response.sources.length);
+  const evidenceCount = response.sources.filter((source) => sourceType(source.type) !== "system").length;
+  const quality = qualityFields(
+    response,
+    evidenceCount > 0 || response.recentActivity.length > 0 ? lastSeen : "",
+    response.confidence,
+    evidenceCount
+  );
   return {
     query: response.query,
     rowType: "profile",
@@ -371,8 +379,7 @@ function qualityFields(response: TiSearchResponse, observedAt: string, confidenc
     isActionable: normalizedConfidence >= 0.6
       && evidenceCount > 0
       && (freshnessStatus === "current" || freshnessStatus === "recent"),
-    hasDarknetMetadata: response.sources.some((source) => sourceType(source.type) === "darknet_metadata")
-      || response.datasets.some((dataset) => sourceType(dataset.type) === "darknet_metadata"),
+    hasDarknetMetadata: response.sources.some((source) => sourceType(source.type) === "darknet_metadata"),
     hasPublicChannelCoverage: response.sources.some((source) => sourceType(source.type) === "public_channel")
   };
 }
