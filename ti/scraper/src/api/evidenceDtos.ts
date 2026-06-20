@@ -26,6 +26,8 @@ import {
   buildEvidenceActorDatasetConsumerAuditReplay,
   buildEvidenceActorDatasetConsumerHandoff,
   buildEvidenceActorDatasetPromotionPreview,
+  buildEvidenceActorDatasetSourceGapConsumerQueue,
+  buildEvidenceActorDatasetSourceGapSuppressionFeedback,
   buildEvidenceActorProductImpactReplay,
   createEvidenceActorDatasetConsumerAuditRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
@@ -40,6 +42,8 @@ import {
   type EvidenceActorDatasetConsumerHandoff,
   type EvidenceActorDatasetConsumerExecutionReceipt,
   type EvidenceActorDatasetPromotionPreview,
+  type EvidenceActorDatasetSourceGapConsumerQueue,
+  type EvidenceActorDatasetSourceGapSuppressionFeedback,
   evidenceSearchReadModelReadiness,
   type EvidencePromotionTransactionAuditReplay,
   type EvidencePromotionTransactionExecutionReceipt,
@@ -209,6 +213,8 @@ export interface EvidenceSearchReadModelCutoverDto {
   promotionAuditReplay: EvidencePromotionTransactionAuditReplay;
   actorProductImpactReplay: EvidenceActorProductImpactReplay;
   actorDatasetPromotionPreview: EvidenceActorDatasetPromotionPreview;
+  actorDatasetSourceGapSuppressionFeedback: EvidenceActorDatasetSourceGapSuppressionFeedback;
+  actorDatasetSourceGapConsumerQueue: EvidenceActorDatasetSourceGapConsumerQueue;
   actorDatasetConsumerHandoff: EvidenceActorDatasetConsumerHandoff;
   actorDatasetConsumerExecution: EvidenceActorDatasetConsumerExecutionReceipt;
   actorDatasetConsumerAuditReplay: EvidenceActorDatasetConsumerAuditReplay;
@@ -442,6 +448,8 @@ function buildEvidenceSearchReadModelCutoverDto(
   const promotionAuditReplay = buildEvidencePromotionTransactionAuditReplay(promotionAuditRows, { generatedAt });
   const actorProductImpactReplay = buildEvidenceActorProductImpactReplay(writeSet, promotionTransaction, promotionAuditReplay, { generatedAt });
   const actorDatasetPromotionPreview = buildEvidenceActorDatasetPromotionPreview(actorProductImpactReplay, promotionTransaction);
+  const actorDatasetSourceGapSuppressionFeedback = buildEvidenceActorDatasetSourceGapSuppressionFeedback(actorDatasetPromotionPreview);
+  const actorDatasetSourceGapConsumerQueue = buildEvidenceActorDatasetSourceGapConsumerQueue(actorDatasetSourceGapSuppressionFeedback);
   const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
   const actorDatasetConsumerExecution = executeEvidenceActorDatasetConsumerHandoff(actorDatasetConsumerHandoff, { generatedAt });
   const actorDatasetConsumerAuditRows = evidenceActorDatasetConsumerExecutionToPostgresRows(actorDatasetConsumerExecution);
@@ -502,6 +510,8 @@ function buildEvidenceSearchReadModelCutoverDto(
     promotionAuditReplay,
     actorProductImpactReplay,
     actorDatasetPromotionPreview,
+    actorDatasetSourceGapSuppressionFeedback,
+    actorDatasetSourceGapConsumerQueue,
     actorDatasetConsumerHandoff,
     actorDatasetConsumerExecution,
     actorDatasetConsumerAuditReplay,

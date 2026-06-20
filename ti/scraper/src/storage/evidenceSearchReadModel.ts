@@ -599,6 +599,127 @@ export interface EvidenceActorDatasetPromotionPreview {
   safeOutput: EvidenceSearchReadModelSafety;
 }
 
+export interface EvidenceActorDatasetSourceGapSuppressionFeedback {
+  schemaVersion: "ti.evidence_actor_dataset_source_gap_suppression_feedback.v1";
+  generatedAt: string;
+  handoffId: string;
+  sourcePreview: EvidenceActorDatasetPromotionPreview["schemaVersion"];
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  dryRun: true;
+  willMutateActorDataset: false;
+  willActivateSources: false;
+  latestProof: EvidenceActorDatasetPromotionPreview["latestProof"];
+  counts: {
+    sourceFamilyGaps: number;
+    staleRowsSuppressed: number;
+    contextRowsHeld: number;
+    billableRowsUnaffected: number;
+  };
+  suppressionPolicy: {
+    coverageGapRowsRemainNonBillable: true;
+    staleRowsRemainSuppressed: true;
+    restrictedRowsRemainContextOnly: true;
+    billableRowsRequireDurableEvidence: true;
+  };
+  sourceFamilyFeedbackRows: Array<{
+    feedbackId: string;
+    sourcePromotionRowId: string;
+    sourceFamily: Exclude<EvidenceActorProductImpactRow["sourceFamily"], "unknown">;
+    currentDatasetDecision: "not_billable_coverage_gap";
+    suppressionReason: "missing_source_family";
+    requiredBeforePromotion: string[];
+    ownerHandoff: "agent_01_source_activation" | "agent_04_public_channel" | "agent_05_restricted_metadata" | "agent_07_extraction_quality";
+    buyerVisibleEffect: string;
+    noLeak: true;
+  }>;
+  staleSuppressionRows: Array<{
+    feedbackId: string;
+    sourcePromotionRowId: string;
+    documentId?: string;
+    sourceFamily?: EvidenceActorProductImpactRow["sourceFamily"];
+    currentDatasetDecision: "not_billable_suppressed";
+    suppressionReason: "stale_row";
+    requiredBeforePromotion: string[];
+    noLeak: true;
+  }>;
+  restrictedContextRows: Array<{
+    feedbackId: string;
+    sourcePromotionRowId: string;
+    documentId?: string;
+    sourceFamily?: "restricted_metadata";
+    currentDatasetDecision: "not_billable_context";
+    suppressionReason: "metadata_only_restricted_context";
+    requiredBeforePromotion: string[];
+    noLeak: true;
+  }>;
+  noLeakGuarantees: EvidenceActorProductImpactReplay["noLeakGuarantees"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetSourceGapConsumerQueue {
+  schemaVersion: "ti.evidence_actor_dataset_source_gap_consumer_queue.v1";
+  generatedAt: string;
+  queueId: string;
+  sourceFeedback: EvidenceActorDatasetSourceGapSuppressionFeedback["schemaVersion"];
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  dryRun: true;
+  willMutateQueues: false;
+  willActivateSources: false;
+  willStartCrawling: false;
+  latestProof: EvidenceActorDatasetPromotionPreview["latestProof"];
+  counts: {
+    totalQueueItems: number;
+    agent01SourceActivationItems: number;
+    agent04PublicChannelItems: number;
+    agent05RestrictedMetadataItems: number;
+    agent07ExtractionQualityItems: number;
+    staleRefreshItems: number;
+    restrictedCorroborationItems: number;
+  };
+  queueRows: EvidenceActorDatasetSourceGapConsumerQueueRow[];
+  guardrails: {
+    explicitOperatorApprovalRequired: true;
+    sourceActivationNotApplied: true;
+    crawlingNotStarted: true;
+    restrictedRowsMetadataOnly: true;
+    rawLeakMaterialNeverQueued: true;
+    credentialsNeverQueued: true;
+    unsafeUrlsNeverQueued: true;
+    embeddingsForRestrictedRowsDisabled: true;
+  };
+  noLeakGuarantees: EvidenceActorProductImpactReplay["noLeakGuarantees"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetSourceGapConsumerQueueRow {
+  queueItemId: string;
+  feedbackId: string;
+  sourcePromotionRowId: string;
+  ownerQueue: "agent01_source_activation" | "agent04_public_channel" | "agent05_restricted_metadata" | "agent07_extraction_quality";
+  sourceFamily?: EvidenceActorProductImpactRow["sourceFamily"];
+  queueAction:
+    | "refresh_public_report_source_packet"
+    | "prepare_public_channel_source_packet"
+    | "prepare_restricted_metadata_corroboration_packet"
+    | "repair_advisory_extraction_corroboration"
+    | "refresh_stale_evidence_capture"
+    | "seek_public_corroboration_for_restricted_context";
+  priority: "high" | "medium";
+  currentDatasetDecision: EvidenceActorDatasetSourceGapSuppressionFeedback["sourceFamilyFeedbackRows"][number]["currentDatasetDecision"]
+    | EvidenceActorDatasetSourceGapSuppressionFeedback["staleSuppressionRows"][number]["currentDatasetDecision"]
+    | EvidenceActorDatasetSourceGapSuppressionFeedback["restrictedContextRows"][number]["currentDatasetDecision"];
+  suppressionReason: EvidenceActorDatasetSourceGapSuppressionFeedback["sourceFamilyFeedbackRows"][number]["suppressionReason"]
+    | EvidenceActorDatasetSourceGapSuppressionFeedback["staleSuppressionRows"][number]["suppressionReason"]
+    | EvidenceActorDatasetSourceGapSuppressionFeedback["restrictedContextRows"][number]["suppressionReason"];
+  requiredBeforePromotion: string[];
+  acceptanceCriteria: string[];
+  buyerVisibleEffect: string;
+  blockedUntil: ["explicit_operator_approval", "durable_evidence_replay"];
+  noLeak: true;
+}
+
 export interface EvidenceActorDatasetPromotionRow {
   rowId: string;
   rowType: "evidence_result" | "metadata_context" | "stale_suppression" | "coverage_gap";
@@ -1695,6 +1816,187 @@ export function buildEvidenceActorDatasetPromotionPreview(
   };
 }
 
+export function buildEvidenceActorDatasetSourceGapSuppressionFeedback(
+  preview: EvidenceActorDatasetPromotionPreview
+): EvidenceActorDatasetSourceGapSuppressionFeedback {
+  const sourceFamilyFeedbackRows = preview.rows
+    .filter((row) => row.paidRowDecision === "not_billable_coverage_gap" && row.sourceFamily && row.sourceFamily !== "unknown")
+    .map((row) => {
+      const sourceFamily = row.sourceFamily as Exclude<EvidenceActorProductImpactRow["sourceFamily"], "unknown">;
+      return {
+        feedbackId: stableId("evidence-actor-source-gap-feedback", `${preview.handoffId}:${row.rowId}:${sourceFamily}`),
+        sourcePromotionRowId: row.rowId,
+        sourceFamily,
+        currentDatasetDecision: "not_billable_coverage_gap" as const,
+        suppressionReason: "missing_source_family" as const,
+        requiredBeforePromotion: sourceFamilyRequiredBeforePromotion(sourceFamily),
+        ownerHandoff: sourceFamilyOwnerHandoff(sourceFamily),
+        buyerVisibleEffect: sourceFamilyBuyerVisibleEffect(sourceFamily),
+        noLeak: true as const
+      };
+    });
+  const staleSuppressionRows = preview.rows
+    .filter((row) => row.paidRowDecision === "not_billable_suppressed")
+    .map((row) => ({
+      feedbackId: stableId("evidence-actor-stale-suppression-feedback", `${preview.handoffId}:${row.rowId}`),
+      sourcePromotionRowId: row.rowId,
+      documentId: row.documentId,
+      sourceFamily: row.sourceFamily,
+      currentDatasetDecision: "not_billable_suppressed" as const,
+      suppressionReason: "stale_row" as const,
+      requiredBeforePromotion: [
+        "fresh observedAt/collectedAt/publishedAt inside Actor freshness window",
+        "current extractorVersion on durable evidence row",
+        "claim-ledger replay confirms no newer contradictory hold"
+      ],
+      noLeak: true as const
+    }));
+  const restrictedContextRows = preview.rows
+    .filter((row) => row.paidRowDecision === "not_billable_context")
+    .map((row) => ({
+      feedbackId: stableId("evidence-actor-restricted-context-feedback", `${preview.handoffId}:${row.rowId}`),
+      sourcePromotionRowId: row.rowId,
+      documentId: row.documentId,
+      sourceFamily: row.sourceFamily === "restricted_metadata" ? "restricted_metadata" as const : undefined,
+      currentDatasetDecision: "not_billable_context" as const,
+      suppressionReason: "metadata_only_restricted_context" as const,
+      requiredBeforePromotion: [
+        "keep row caveated and non-billable unless corroborated by public evidence",
+        "do not embed restricted metadata",
+        "do not expose raw leak body, unsafe URL, credential, private material, or actor interaction"
+      ],
+      noLeak: true as const
+    }));
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_source_gap_suppression_feedback.v1",
+    generatedAt: preview.generatedAt,
+    handoffId: stableId("evidence-actor-source-gap-feedback", `${preview.handoffId}:${preview.latestProof.runId}`),
+    sourcePreview: preview.schemaVersion,
+    productSurface: preview.productSurface,
+    actorBuild: preview.actorBuild,
+    dryRun: true,
+    willMutateActorDataset: false,
+    willActivateSources: false,
+    latestProof: { ...preview.latestProof },
+    counts: {
+      sourceFamilyGaps: sourceFamilyFeedbackRows.length,
+      staleRowsSuppressed: staleSuppressionRows.length,
+      contextRowsHeld: restrictedContextRows.length,
+      billableRowsUnaffected: preview.rows.filter((row) => row.paidRowDecision === "billable_result_candidate").length
+    },
+    suppressionPolicy: {
+      coverageGapRowsRemainNonBillable: true,
+      staleRowsRemainSuppressed: true,
+      restrictedRowsRemainContextOnly: true,
+      billableRowsRequireDurableEvidence: true
+    },
+    sourceFamilyFeedbackRows,
+    staleSuppressionRows,
+    restrictedContextRows,
+    noLeakGuarantees: { ...preview.noLeakGuarantees },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function buildEvidenceActorDatasetSourceGapConsumerQueue(
+  feedback: EvidenceActorDatasetSourceGapSuppressionFeedback
+): EvidenceActorDatasetSourceGapConsumerQueue {
+  const sourceFamilyRows: EvidenceActorDatasetSourceGapConsumerQueueRow[] = feedback.sourceFamilyFeedbackRows.map((row) => ({
+    queueItemId: stableId("evidence-actor-source-gap-consumer-queue", `${feedback.handoffId}:${row.feedbackId}:${row.ownerHandoff}`),
+    feedbackId: row.feedbackId,
+    sourcePromotionRowId: row.sourcePromotionRowId,
+    ownerQueue: sourceFamilyOwnerQueue(row.ownerHandoff),
+    sourceFamily: row.sourceFamily,
+    queueAction: sourceFamilyQueueAction(row.sourceFamily),
+    priority: row.sourceFamily === "public_channel" || row.sourceFamily === "restricted_metadata" ? "high" as const : "medium" as const,
+    currentDatasetDecision: row.currentDatasetDecision,
+    suppressionReason: row.suppressionReason,
+    requiredBeforePromotion: [...row.requiredBeforePromotion],
+    acceptanceCriteria: sourceFamilyAcceptanceCriteria(row.sourceFamily),
+    buyerVisibleEffect: row.buyerVisibleEffect,
+    blockedUntil: ["explicit_operator_approval", "durable_evidence_replay"],
+    noLeak: true
+  }));
+  const staleRows: EvidenceActorDatasetSourceGapConsumerQueueRow[] = feedback.staleSuppressionRows.map((row) => ({
+    queueItemId: stableId("evidence-actor-source-gap-consumer-queue", `${feedback.handoffId}:${row.feedbackId}:stale`),
+    feedbackId: row.feedbackId,
+    sourcePromotionRowId: row.sourcePromotionRowId,
+    ownerQueue: row.sourceFamily === "advisory" ? "agent07_extraction_quality" : "agent01_source_activation",
+    sourceFamily: row.sourceFamily,
+    queueAction: "refresh_stale_evidence_capture",
+    priority: "medium",
+    currentDatasetDecision: row.currentDatasetDecision,
+    suppressionReason: row.suppressionReason,
+    requiredBeforePromotion: [...row.requiredBeforePromotion],
+    acceptanceCriteria: [
+      "fresh capture timestamp is inside the Actor freshness window",
+      "durable read-model replay changes the row out of stale suppression",
+      "public-answer cache proof records the new replay id"
+    ],
+    buyerVisibleEffect: "keeps stale rows suppressed until a fresh durable capture can improve the paid Actor result",
+    blockedUntil: ["explicit_operator_approval", "durable_evidence_replay"],
+    noLeak: true
+  }));
+  const restrictedRows: EvidenceActorDatasetSourceGapConsumerQueueRow[] = feedback.restrictedContextRows.map((row) => ({
+    queueItemId: stableId("evidence-actor-source-gap-consumer-queue", `${feedback.handoffId}:${row.feedbackId}:restricted-context`),
+    feedbackId: row.feedbackId,
+    sourcePromotionRowId: row.sourcePromotionRowId,
+    ownerQueue: "agent05_restricted_metadata",
+    sourceFamily: row.sourceFamily,
+    queueAction: "seek_public_corroboration_for_restricted_context",
+    priority: "high",
+    currentDatasetDecision: row.currentDatasetDecision,
+    suppressionReason: row.suppressionReason,
+    requiredBeforePromotion: [...row.requiredBeforePromotion],
+    acceptanceCriteria: [
+      "restricted descriptor remains metadata-only",
+      "public corroboration exists before any billable Actor row promotion",
+      "raw leak rows, credentials, unsafe URLs, object keys, and embeddings remain absent"
+    ],
+    buyerVisibleEffect: "surfaces defensive leak/victim metadata as context while preventing paid rows without public corroboration",
+    blockedUntil: ["explicit_operator_approval", "durable_evidence_replay"],
+    noLeak: true
+  }));
+  const queueRows = [...sourceFamilyRows, ...staleRows, ...restrictedRows];
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_source_gap_consumer_queue.v1",
+    generatedAt: feedback.generatedAt,
+    queueId: stableId("evidence-actor-source-gap-consumer-queue", `${feedback.handoffId}:${feedback.latestProof.runId}`),
+    sourceFeedback: feedback.schemaVersion,
+    productSurface: feedback.productSurface,
+    actorBuild: feedback.actorBuild,
+    dryRun: true,
+    willMutateQueues: false,
+    willActivateSources: false,
+    willStartCrawling: false,
+    latestProof: { ...feedback.latestProof },
+    counts: {
+      totalQueueItems: queueRows.length,
+      agent01SourceActivationItems: queueRows.filter((row) => row.ownerQueue === "agent01_source_activation").length,
+      agent04PublicChannelItems: queueRows.filter((row) => row.ownerQueue === "agent04_public_channel").length,
+      agent05RestrictedMetadataItems: queueRows.filter((row) => row.ownerQueue === "agent05_restricted_metadata").length,
+      agent07ExtractionQualityItems: queueRows.filter((row) => row.ownerQueue === "agent07_extraction_quality").length,
+      staleRefreshItems: staleRows.length,
+      restrictedCorroborationItems: restrictedRows.length
+    },
+    queueRows,
+    guardrails: {
+      explicitOperatorApprovalRequired: true,
+      sourceActivationNotApplied: true,
+      crawlingNotStarted: true,
+      restrictedRowsMetadataOnly: true,
+      rawLeakMaterialNeverQueued: true,
+      credentialsNeverQueued: true,
+      unsafeUrlsNeverQueued: true,
+      embeddingsForRestrictedRowsDisabled: true
+    },
+    noLeakGuarantees: { ...feedback.noLeakGuarantees },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
 export function buildEvidenceActorDatasetConsumerHandoff(
   preview: EvidenceActorDatasetPromotionPreview
 ): EvidenceActorDatasetConsumerHandoff {
@@ -2337,6 +2639,108 @@ function sourceFamilyNextAction(family: "public_report" | "public_channel" | "ad
   if (family === "advisory") return "replay public advisory/CVE source rows into Actor-supporting evidence";
   if (family === "restricted_metadata") return "import approved Tier 100 dark metadata descriptors as metadata-only rows";
   return "refresh vetted public report captures and suppress stale-only rows";
+}
+
+function sourceFamilyRequiredBeforePromotion(
+  family: Exclude<EvidenceActorProductImpactRow["sourceFamily"], "unknown">
+): string[] {
+  if (family === "public_channel") {
+    return [
+      "approved public-channel source packet",
+      "metadata/feed row replayed into durable read model",
+      "freshness timestamp inside Actor window",
+      "no private channel material or actor interaction"
+    ];
+  }
+  if (family === "advisory") {
+    return [
+      "public advisory/CVE source row replayed",
+      "claim-ledger support for vulnerability or infrastructure fact",
+      "citation span available for public answer",
+      "no private repository or secret-bearing URL"
+    ];
+  }
+  if (family === "restricted_metadata") {
+    return [
+      "approved Tier 100 restricted metadata descriptor",
+      "victim/company/account-count/dataset-size/date/actor-demand fields only",
+      "metadata-only retention and review state",
+      "no raw leak row, credential, unsafe URL, object key, or embedding"
+    ];
+  }
+  return [
+    "fresh vetted public report capture",
+    "durable capture id and replay id",
+    "extractor version present",
+    "claim-ledger citation support"
+  ];
+}
+
+function sourceFamilyOwnerHandoff(
+  family: Exclude<EvidenceActorProductImpactRow["sourceFamily"], "unknown">
+): EvidenceActorDatasetSourceGapSuppressionFeedback["sourceFamilyFeedbackRows"][number]["ownerHandoff"] {
+  if (family === "public_channel") return "agent_04_public_channel";
+  if (family === "restricted_metadata") return "agent_05_restricted_metadata";
+  if (family === "advisory") return "agent_07_extraction_quality";
+  return "agent_01_source_activation";
+}
+
+function sourceFamilyBuyerVisibleEffect(
+  family: Exclude<EvidenceActorProductImpactRow["sourceFamily"], "unknown">
+): string {
+  if (family === "public_channel") return "keeps public-channel freshness gaps visible instead of charging for thin actor rows";
+  if (family === "advisory") return "prevents CVE/infrastructure claims from becoming paid rows without advisory corroboration";
+  if (family === "restricted_metadata") return "keeps leak/victim facts caveated and non-billable until safe public corroboration exists";
+  return "keeps actor summaries from billing on stale or under-corroborated public reporting";
+}
+
+function sourceFamilyOwnerQueue(
+  handoff: EvidenceActorDatasetSourceGapSuppressionFeedback["sourceFamilyFeedbackRows"][number]["ownerHandoff"]
+): EvidenceActorDatasetSourceGapConsumerQueueRow["ownerQueue"] {
+  if (handoff === "agent_04_public_channel") return "agent04_public_channel";
+  if (handoff === "agent_05_restricted_metadata") return "agent05_restricted_metadata";
+  if (handoff === "agent_07_extraction_quality") return "agent07_extraction_quality";
+  return "agent01_source_activation";
+}
+
+function sourceFamilyQueueAction(
+  family: Exclude<EvidenceActorProductImpactRow["sourceFamily"], "unknown">
+): EvidenceActorDatasetSourceGapConsumerQueueRow["queueAction"] {
+  if (family === "public_channel") return "prepare_public_channel_source_packet";
+  if (family === "advisory") return "repair_advisory_extraction_corroboration";
+  if (family === "restricted_metadata") return "prepare_restricted_metadata_corroboration_packet";
+  return "refresh_public_report_source_packet";
+}
+
+function sourceFamilyAcceptanceCriteria(
+  family: Exclude<EvidenceActorProductImpactRow["sourceFamily"], "unknown">
+): string[] {
+  if (family === "public_channel") {
+    return [
+      "approved public-channel source packet exists",
+      "fresh metadata/feed row replays into the read model",
+      "no private channel material, auth, CAPTCHA bypass, or actor interaction is required"
+    ];
+  }
+  if (family === "advisory") {
+    return [
+      "public advisory source row supports the claim ledger entry",
+      "citation spans are present for API answer promotion",
+      "the row remains public and safe for buyer-visible use"
+    ];
+  }
+  if (family === "restricted_metadata") {
+    return [
+      "Tier 100 metadata descriptor is approved and metadata-only",
+      "defensive victim/company/account-count/dataset-size/date/demand fields are present",
+      "public corroboration exists before paid row promotion"
+    ];
+  }
+  return [
+    "fresh public report capture replays into the read model",
+    "dedupe keeps stale-only duplicate rows suppressed",
+    "claim ledger cites the durable evidence hash"
+  ];
 }
 
 function actorDatasetPromotionRow(

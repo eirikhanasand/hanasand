@@ -169,6 +169,20 @@ Progress update 2026-06-20 20:28 CEST:
 - Restricted/leak rows remain metadata-only and caveated; repository status contains only row counts, table names, feature flags, blocker reasons, replay readiness, and no-leak flags.
 - Continue next with source-family gap feedback into Actor row suppression policy or a real repository implementation behind explicit enablement.
 
+Progress update 2026-06-21 00:13 CEST:
+- Continued with source-family gap feedback into Actor row suppression policy.
+- Added `ti.evidence_actor_dataset_source_gap_suppression_feedback.v1` on `/v1/evidence/cutover-report.readModelCutover.actorDatasetSourceGapSuppressionFeedback`, derived from `actorDatasetPromotionPreview`.
+- The packet keeps coverage-gap rows non-billable, stale rows suppressed, and restricted metadata context-only until durable source-family repairs replay into the read model.
+- Feedback rows expose missing source family, current non-billable decision, required promotion conditions, owner handoff, buyer-visible effect, and no-leak proof; they do not mutate datasets, activate sources, crawl, or expose raw restricted material.
+- Continue next with actual source-family feedback consumers for Agent 01/04/05/07 queues or a real repository implementation behind explicit enablement.
+
+Progress update 2026-06-21 00:42 CEST:
+- Continued with source-family feedback consumers for Agent 01/04/05/07 queues.
+- Added `ti.evidence_actor_dataset_source_gap_consumer_queue.v1` on `/v1/evidence/cutover-report.readModelCutover.actorDatasetSourceGapConsumerQueue`, derived from the suppression feedback packet.
+- Queue rows route missing source-family, stale-refresh, and restricted-corroboration work to Agent 01 source activation, Agent 04 public-channel freshness, Agent 05 restricted metadata, and Agent 07 advisory/extraction quality with acceptance criteria and buyer-visible effects.
+- The queue is dry-run and fail-closed: it does not mutate queues, activate sources, crawl, or expose raw leak material, credentials, unsafe URLs, object keys, actor interaction, or restricted embeddings.
+- Continue next with a disabled-by-default repository/audit mapper for these queue rows or direct consumer alignment with Agent 01/04/05/07 source repair packets.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST
