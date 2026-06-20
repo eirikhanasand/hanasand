@@ -61,10 +61,12 @@ import {
   buildEvidenceActorDatasetSourceGapConsumerQueue,
   buildEvidenceActorDatasetSourceGapSuppressionFeedback,
   buildEvidenceActorProductImpactReplay,
+  createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   createEvidenceSearchReadModelRepository,
   evidenceActorDatasetConsumerExecutionToPostgresRows,
+  evidenceActorDatasetSourceGapConsumerQueueToPostgresRows,
   evidencePromotionExecutionFromPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
@@ -2316,6 +2318,90 @@ describe("evidence storage cutover", () => {
     expect(actorDatasetSourceGapQueueSerialized).not.toContain(restrictedRaw);
     expect(actorDatasetSourceGapQueueSerialized).not.toContain("tenant/source/private-key");
     expect(actorDatasetSourceGapQueueSerialized).not.toContain(".onion");
+
+    const actorDatasetSourceGapConsumerQueueRows = evidenceActorDatasetSourceGapConsumerQueueToPostgresRows(actorDatasetSourceGapConsumerQueue);
+    expect(actorDatasetSourceGapConsumerQueueRows.source_gap_queue_runs).toHaveLength(1);
+    expect(actorDatasetSourceGapConsumerQueueRows.source_gap_queue_items).toHaveLength(actorDatasetSourceGapConsumerQueue.counts.totalQueueItems);
+    expect(actorDatasetSourceGapConsumerQueueRows.source_gap_queue_runs[0]).toMatchObject({
+      queue_id: actorDatasetSourceGapConsumerQueue.queueId,
+      source_feedback_schema: "ti.evidence_actor_dataset_source_gap_suppression_feedback.v1",
+      product_surface: "apify_public_threat_actor_monitor",
+      actor_build: "0.6.4",
+      latest_proof_run_id: "iMQGeezZ8bx7WtlhQ",
+      latest_proof_dataset_id: "5PLmkE30luBA5Lbgc",
+      dry_run: true,
+      will_mutate_queues: false,
+      will_activate_sources: false,
+      will_start_crawling: false,
+      no_leak: true
+    });
+    expect(actorDatasetSourceGapConsumerQueueRows.source_gap_queue_items.every((row) =>
+      row.queue_id === actorDatasetSourceGapConsumerQueue.queueId &&
+      row.required_before_promotion_count > 0 &&
+      row.acceptance_criteria_count > 0 &&
+      row.blocked_until.includes("explicit_operator_approval") &&
+      row.blocked_until.includes("durable_evidence_replay") &&
+      row.no_leak === true
+    )).toBe(true);
+    const actorDatasetSourceGapConsumerQueueAuditRepository = createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository();
+    const actorDatasetSourceGapConsumerQueueAuditRepositoryStatus = actorDatasetSourceGapConsumerQueueAuditRepository.persistQueueRows(
+      actorDatasetSourceGapConsumerQueueRows,
+      { generatedAt: "2026-05-24T21:45:00.000Z" }
+    );
+    expect(actorDatasetSourceGapConsumerQueueAuditRepositoryStatus).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_source_gap_consumer_queue_audit_repository.v1",
+      backend: "postgres_actor_source_gap_queue_audit",
+      enabled: false,
+      disabledByDefault: true,
+      liveBackendConnection: false,
+      willPersistRows: false,
+      willMutateQueues: false,
+      willActivateSources: false,
+      willStartCrawling: false,
+      failClosedWithoutExplicitEnable: true,
+      requiredFeatureFlags: ["TI_ACTOR_SOURCE_GAP_QUEUE_AUDIT_REPOSITORY_ENABLED"],
+      requiredTables: ["evidence_actor_source_gap_queue_runs", "evidence_actor_source_gap_queue_items"],
+      acceptedRowCounts: {
+        queueRuns: 1,
+        queueItems: actorDatasetSourceGapConsumerQueue.counts.totalQueueItems
+      },
+      persistedRowCounts: {
+        queueRuns: 0,
+        queueItems: 0
+      },
+      heldRowCounts: {
+        queueRuns: 1,
+        queueItems: actorDatasetSourceGapConsumerQueue.counts.totalQueueItems
+      },
+      blockedReasons: [
+        "actor_source_gap_queue_audit_repository_disabled",
+        "postgres_actor_source_gap_queue_audit_not_configured"
+      ],
+      queueReplayReady: true,
+      canReplayWithoutRawEvidence: true,
+      guardrails: {
+        explicitOperatorApprovalRequired: true,
+        sourceActivationNotApplied: true,
+        crawlingNotStarted: true,
+        restrictedRowsMetadataOnly: true,
+        rawLeakMaterialNeverQueued: true,
+        credentialsNeverQueued: true,
+        unsafeUrlsNeverQueued: true,
+        embeddingsForRestrictedRowsDisabled: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    const actorDatasetSourceGapConsumerQueueAuditSerialized = JSON.stringify(actorDatasetSourceGapConsumerQueueAuditRepositoryStatus);
+    expect(actorDatasetSourceGapConsumerQueueAuditSerialized).not.toContain(restrictedRaw);
+    expect(actorDatasetSourceGapConsumerQueueAuditSerialized).not.toContain("tenant/source/private-key");
+    expect(actorDatasetSourceGapConsumerQueueAuditSerialized).not.toContain(".onion");
 
     const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
     expect(actorDatasetConsumerHandoff).toMatchObject({

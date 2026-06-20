@@ -183,6 +183,13 @@ Progress update 2026-06-21 00:42 CEST:
 - The queue is dry-run and fail-closed: it does not mutate queues, activate sources, crawl, or expose raw leak material, credentials, unsafe URLs, object keys, actor interaction, or restricted embeddings.
 - Continue next with a disabled-by-default repository/audit mapper for these queue rows or direct consumer alignment with Agent 01/04/05/07 source repair packets.
 
+Progress update 2026-06-21 00:58 CEST:
+- Continued with the disabled-by-default repository/audit mapper for source-gap consumer queue rows.
+- Added `ti.evidence_actor_dataset_source_gap_consumer_queue_audit_repository.v1` on `/v1/evidence/cutover-report.readModelCutover.actorDatasetSourceGapConsumerQueueAuditRepository`.
+- Queue runs and queue items now map to Postgres-style audit rows for `evidence_actor_source_gap_queue_runs` and `evidence_actor_source_gap_queue_items`, then stay held behind `TI_ACTOR_SOURCE_GAP_QUEUE_AUDIT_REPOSITORY_ENABLED`.
+- The repository status persists zero rows, mutates zero queues, activates zero sources, starts no crawling, and keeps restricted/leak material metadata-only with no raw bodies, unsafe URLs, credentials, object keys, actor interaction, or restricted embeddings.
+- Continue next with direct consumer alignment to Agent 01/04/05/07 source repair packets or a real repository implementation behind explicit enablement.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

@@ -720,6 +720,87 @@ export interface EvidenceActorDatasetSourceGapConsumerQueueRow {
   noLeak: true;
 }
 
+export interface EvidenceActorDatasetSourceGapConsumerQueuePostgresRows {
+  source_gap_queue_runs: EvidenceActorDatasetSourceGapConsumerQueueRunRow[];
+  source_gap_queue_items: EvidenceActorDatasetSourceGapConsumerQueueItemRow[];
+}
+
+export interface EvidenceActorDatasetSourceGapConsumerQueueRunRow {
+  queue_id: string;
+  generated_at: string;
+  source_feedback_schema: EvidenceActorDatasetSourceGapConsumerQueue["sourceFeedback"];
+  product_surface: EvidenceActorDatasetSourceGapConsumerQueue["productSurface"];
+  actor_build: EvidenceActorDatasetSourceGapConsumerQueue["actorBuild"];
+  latest_proof_run_id: EvidenceActorDatasetSourceGapConsumerQueue["latestProof"]["runId"];
+  latest_proof_dataset_id: EvidenceActorDatasetSourceGapConsumerQueue["latestProof"]["datasetId"];
+  dry_run: true;
+  will_mutate_queues: false;
+  will_activate_sources: false;
+  will_start_crawling: false;
+  counts: EvidenceActorDatasetSourceGapConsumerQueue["counts"];
+  no_leak: true;
+}
+
+export interface EvidenceActorDatasetSourceGapConsumerQueueItemRow {
+  queue_item_id: string;
+  queue_id: string;
+  feedback_id: string;
+  source_promotion_row_id: string;
+  owner_queue: EvidenceActorDatasetSourceGapConsumerQueueRow["ownerQueue"];
+  source_family?: EvidenceActorDatasetSourceGapConsumerQueueRow["sourceFamily"];
+  queue_action: EvidenceActorDatasetSourceGapConsumerQueueRow["queueAction"];
+  priority: EvidenceActorDatasetSourceGapConsumerQueueRow["priority"];
+  current_dataset_decision: EvidenceActorDatasetSourceGapConsumerQueueRow["currentDatasetDecision"];
+  suppression_reason: EvidenceActorDatasetSourceGapConsumerQueueRow["suppressionReason"];
+  blocked_until: EvidenceActorDatasetSourceGapConsumerQueueRow["blockedUntil"];
+  required_before_promotion_count: number;
+  acceptance_criteria_count: number;
+  buyer_visible_effect: string;
+  no_leak: true;
+}
+
+export interface EvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus {
+  schemaVersion: "ti.evidence_actor_dataset_source_gap_consumer_queue_audit_repository.v1";
+  generatedAt: string;
+  backend: "postgres_actor_source_gap_queue_audit";
+  enabled: false;
+  disabledByDefault: true;
+  liveBackendConnection: false;
+  willPersistRows: false;
+  willMutateQueues: false;
+  willActivateSources: false;
+  willStartCrawling: false;
+  failClosedWithoutExplicitEnable: true;
+  requiredFeatureFlags: ["TI_ACTOR_SOURCE_GAP_QUEUE_AUDIT_REPOSITORY_ENABLED"];
+  requiredTables: ["evidence_actor_source_gap_queue_runs", "evidence_actor_source_gap_queue_items"];
+  acceptedRowCounts: {
+    queueRuns: number;
+    queueItems: number;
+  };
+  persistedRowCounts: {
+    queueRuns: 0;
+    queueItems: 0;
+  };
+  heldRowCounts: {
+    queueRuns: number;
+    queueItems: number;
+  };
+  blockedReasons: string[];
+  queueReplayReady: boolean;
+  canReplayWithoutRawEvidence: true;
+  guardrails: EvidenceActorDatasetSourceGapConsumerQueue["guardrails"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetSourceGapConsumerQueueAuditRepository {
+  readonly backend: "postgres_actor_source_gap_queue_audit";
+  readonly enabled: false;
+  persistQueueRows(
+    rows: EvidenceActorDatasetSourceGapConsumerQueuePostgresRows,
+    input?: { generatedAt?: string }
+  ): EvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus;
+}
+
 export interface EvidenceActorDatasetPromotionRow {
   rowId: string;
   rowType: "evidence_result" | "metadata_context" | "stale_suppression" | "coverage_gap";
@@ -1995,6 +2076,122 @@ export function buildEvidenceActorDatasetSourceGapConsumerQueue(
     noLeakGuarantees: { ...feedback.noLeakGuarantees },
     safeOutput: SAFE_OUTPUT
   };
+}
+
+export function evidenceActorDatasetSourceGapConsumerQueueToPostgresRows(
+  queue: EvidenceActorDatasetSourceGapConsumerQueue
+): EvidenceActorDatasetSourceGapConsumerQueuePostgresRows {
+  return {
+    source_gap_queue_runs: [{
+      queue_id: queue.queueId,
+      generated_at: queue.generatedAt,
+      source_feedback_schema: queue.sourceFeedback,
+      product_surface: queue.productSurface,
+      actor_build: queue.actorBuild,
+      latest_proof_run_id: queue.latestProof.runId,
+      latest_proof_dataset_id: queue.latestProof.datasetId,
+      dry_run: true,
+      will_mutate_queues: false,
+      will_activate_sources: false,
+      will_start_crawling: false,
+      counts: { ...queue.counts },
+      no_leak: true
+    }],
+    source_gap_queue_items: queue.queueRows.map((row) => ({
+      queue_item_id: row.queueItemId,
+      queue_id: queue.queueId,
+      feedback_id: row.feedbackId,
+      source_promotion_row_id: row.sourcePromotionRowId,
+      owner_queue: row.ownerQueue,
+      source_family: row.sourceFamily,
+      queue_action: row.queueAction,
+      priority: row.priority,
+      current_dataset_decision: row.currentDatasetDecision,
+      suppression_reason: row.suppressionReason,
+      blocked_until: [...row.blockedUntil],
+      required_before_promotion_count: row.requiredBeforePromotion.length,
+      acceptance_criteria_count: row.acceptanceCriteria.length,
+      buyer_visible_effect: row.buyerVisibleEffect,
+      no_leak: true
+    }))
+  };
+}
+
+export function buildDisabledEvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus(
+  rows: EvidenceActorDatasetSourceGapConsumerQueuePostgresRows,
+  input: { generatedAt?: string } = {}
+): EvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus {
+  const run = rows.source_gap_queue_runs[0];
+  const generatedAt = input.generatedAt ?? run?.generated_at ?? nowIso();
+  const queueReplayBlockers = [
+    !run ? "missing_source_gap_queue_run" : null,
+    run && rows.source_gap_queue_items.length !== run.counts.totalQueueItems ? "source_gap_queue_item_count_mismatch" : null,
+    rows.source_gap_queue_runs.some((row) => row.no_leak !== true) ? "source_gap_queue_run_no_leak_failed" : null,
+    rows.source_gap_queue_items.some((row) => row.no_leak !== true) ? "source_gap_queue_item_no_leak_failed" : null,
+    rows.source_gap_queue_runs.some((row) => row.will_mutate_queues || row.will_activate_sources || row.will_start_crawling) ? "source_gap_queue_run_mutation_flag_failed" : null
+  ].filter((blocker): blocker is string => Boolean(blocker));
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_source_gap_consumer_queue_audit_repository.v1",
+    generatedAt,
+    backend: "postgres_actor_source_gap_queue_audit",
+    enabled: false,
+    disabledByDefault: true,
+    liveBackendConnection: false,
+    willPersistRows: false,
+    willMutateQueues: false,
+    willActivateSources: false,
+    willStartCrawling: false,
+    failClosedWithoutExplicitEnable: true,
+    requiredFeatureFlags: ["TI_ACTOR_SOURCE_GAP_QUEUE_AUDIT_REPOSITORY_ENABLED"],
+    requiredTables: ["evidence_actor_source_gap_queue_runs", "evidence_actor_source_gap_queue_items"],
+    acceptedRowCounts: {
+      queueRuns: rows.source_gap_queue_runs.length,
+      queueItems: rows.source_gap_queue_items.length
+    },
+    persistedRowCounts: {
+      queueRuns: 0,
+      queueItems: 0
+    },
+    heldRowCounts: {
+      queueRuns: rows.source_gap_queue_runs.length,
+      queueItems: rows.source_gap_queue_items.length
+    },
+    blockedReasons: [
+      "actor_source_gap_queue_audit_repository_disabled",
+      "postgres_actor_source_gap_queue_audit_not_configured",
+      ...queueReplayBlockers
+    ],
+    queueReplayReady: queueReplayBlockers.length === 0,
+    canReplayWithoutRawEvidence: true,
+    guardrails: {
+      explicitOperatorApprovalRequired: true,
+      sourceActivationNotApplied: true,
+      crawlingNotStarted: true,
+      restrictedRowsMetadataOnly: true,
+      rawLeakMaterialNeverQueued: true,
+      credentialsNeverQueued: true,
+      unsafeUrlsNeverQueued: true,
+      embeddingsForRestrictedRowsDisabled: true
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+class DisabledEvidenceActorDatasetSourceGapConsumerQueueAuditRepository implements EvidenceActorDatasetSourceGapConsumerQueueAuditRepository {
+  readonly backend = "postgres_actor_source_gap_queue_audit" as const;
+  readonly enabled = false as const;
+
+  persistQueueRows(
+    rows: EvidenceActorDatasetSourceGapConsumerQueuePostgresRows,
+    input: { generatedAt?: string } = {}
+  ): EvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus {
+    return buildDisabledEvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus(rows, input);
+  }
+}
+
+export function createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository(): EvidenceActorDatasetSourceGapConsumerQueueAuditRepository {
+  return new DisabledEvidenceActorDatasetSourceGapConsumerQueueAuditRepository();
 }
 
 export function buildEvidenceActorDatasetConsumerHandoff(
