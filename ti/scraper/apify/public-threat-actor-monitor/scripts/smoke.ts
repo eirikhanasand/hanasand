@@ -227,6 +227,34 @@ const rejectedBloatReasons = (qualityConversionGate.rejectedBloatCases as Array<
 for (const requiredReason of ["alias_only_cleanup", "stale_old_report_reuse", "duplicate_source_expansion", "generic_marketing_summary", "uncorroborated_public_channel_snippet", "unsafe_metadata", "no_actionability"]) {
   if (!rejectedBloatReasons.includes(requiredReason)) throw new Error(`Program BQ conversion gate must reject ${requiredReason}`);
 }
+const liveFreshnessQualityGate = outputRecord.liveFreshnessQualityGate as Record<string, unknown> | undefined;
+if (
+  !liveFreshnessQualityGate
+  || liveFreshnessQualityGate.schemaVersion !== "ti.apify_live_freshness_quality_gate.v1"
+  || liveFreshnessQualityGate.dryRun !== true
+  || liveFreshnessQualityGate.willMutateSources !== false
+  || liveFreshnessQualityGate.willStartCollection !== false
+  || !Array.isArray(liveFreshnessQualityGate.examples)
+  || liveFreshnessQualityGate.examples.length < 12
+  || !Array.isArray(liveFreshnessQualityGate.blockedLatestClaimCases)
+  || liveFreshnessQualityGate.blockedLatestClaimCases.length < 7
+  || Number(liveFreshnessQualityGate.freshRowsPromoted) < 6
+  || Number(liveFreshnessQualityGate.staleLatestClaimsBlocked) < 4
+  || !Array.isArray(liveFreshnessQualityGate.sourceParserHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BR live freshness quality gate");
+}
+const freshnessActors = (liveFreshnessQualityGate.examples as Array<Record<string, unknown>>).map((row) => row.actor);
+for (const requiredActor of ["APT29", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"]) {
+  if (!freshnessActors.includes(requiredActor)) throw new Error(`Program BR freshness gate must include ${requiredActor}`);
+}
+const blockedLatestReasons = (liveFreshnessQualityGate.blockedLatestClaimCases as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["old_evidence", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"]) {
+  if (!blockedLatestReasons.includes(requiredReason)) throw new Error(`Program BR freshness gate must block ${requiredReason}`);
+}
+if (!(liveFreshnessQualityGate.examples as Array<Record<string, unknown>>).some((row) => row.blocksLatestClaim === true && ["held", "suppressed"].includes(String(row.decision)))) {
+  throw new Error("Program BR freshness gate must block stale latest-activity rows from paid promotion");
+}
 if (
   paidRowQuality.sellable === 0
   && (

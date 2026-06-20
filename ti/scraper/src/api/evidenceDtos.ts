@@ -23,15 +23,18 @@ import {
 import {
   buildEvidencePromotionTransactionPlan,
   buildEvidencePromotionTransactionAuditReplay,
+  buildEvidenceActorDatasetConsumerAuditReplay,
   buildEvidenceActorDatasetConsumerHandoff,
   buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorProductImpactReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
+  evidenceActorDatasetConsumerExecutionToPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
   executeEvidencePromotionTransactionPlan,
   type EvidenceActorProductImpactReplay,
+  type EvidenceActorDatasetConsumerAuditReplay,
   type EvidenceActorDatasetConsumerHandoff,
   type EvidenceActorDatasetConsumerExecutionReceipt,
   type EvidenceActorDatasetPromotionPreview,
@@ -206,6 +209,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   actorDatasetPromotionPreview: EvidenceActorDatasetPromotionPreview;
   actorDatasetConsumerHandoff: EvidenceActorDatasetConsumerHandoff;
   actorDatasetConsumerExecution: EvidenceActorDatasetConsumerExecutionReceipt;
+  actorDatasetConsumerAuditReplay: EvidenceActorDatasetConsumerAuditReplay;
   safeOutput: {
     rawBodiesExposed: false;
     objectKeysExposed: false;
@@ -437,6 +441,8 @@ function buildEvidenceSearchReadModelCutoverDto(
   const actorDatasetPromotionPreview = buildEvidenceActorDatasetPromotionPreview(actorProductImpactReplay, promotionTransaction);
   const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
   const actorDatasetConsumerExecution = executeEvidenceActorDatasetConsumerHandoff(actorDatasetConsumerHandoff, { generatedAt });
+  const actorDatasetConsumerAuditRows = evidenceActorDatasetConsumerExecutionToPostgresRows(actorDatasetConsumerExecution);
+  const actorDatasetConsumerAuditReplay = buildEvidenceActorDatasetConsumerAuditReplay(actorDatasetConsumerAuditRows, { generatedAt });
   const restrictedVectorRows = writeSet.pgvectorCandidates.filter((row) => row.restricted_metadata || row.metadata_only).length;
   const embedded = evidenceSearchReadModelReadiness({ backend: "embedded_memory", enabled: true });
   const postgres = evidenceSearchReadModelReadiness({ backend: "postgres_read_model" });
@@ -491,6 +497,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     actorDatasetPromotionPreview,
     actorDatasetConsumerHandoff,
     actorDatasetConsumerExecution,
+    actorDatasetConsumerAuditReplay,
     safeOutput: {
       rawBodiesExposed: false,
       objectKeysExposed: false,

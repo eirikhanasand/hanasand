@@ -712,6 +712,85 @@ export interface EvidenceActorDatasetConsumerExecutionReceipt {
   safeOutput: EvidenceSearchReadModelSafety;
 }
 
+export interface EvidenceActorDatasetConsumerExecutionPostgresRows {
+  consumer_execution_receipts: EvidenceActorDatasetConsumerExecutionReceiptRow[];
+  actor_dataset_receipts: EvidenceActorDatasetConsumerActorDatasetReceiptRow[];
+  public_answer_cache_receipts: EvidenceActorDatasetConsumerPublicAnswerCacheReceiptRow[];
+}
+
+export interface EvidenceActorDatasetConsumerExecutionReceiptRow {
+  execution_id: string;
+  schema_version: EvidenceActorDatasetConsumerExecutionReceipt["schemaVersion"];
+  source_handoff: EvidenceActorDatasetConsumerExecutionReceipt["sourceHandoff"];
+  product_surface: EvidenceActorDatasetConsumerExecutionReceipt["productSurface"];
+  actor_build: EvidenceActorDatasetConsumerExecutionReceipt["actorBuild"];
+  generated_at: string;
+  status: EvidenceActorDatasetConsumerExecutionReceipt["status"];
+  enabled: false;
+  dry_run: true;
+  live_backend_connection: false;
+  will_write_actor_dataset: false;
+  will_write_public_answer_cache: false;
+  repository_boundary: EvidenceActorDatasetConsumerExecutionReceipt["repositoryBoundary"];
+  counts: EvidenceActorDatasetConsumerExecutionReceipt["counts"];
+  blocked_reasons: EvidenceActorDatasetConsumerExecutionReceipt["blockedReasons"];
+  rollback_refs: string[];
+  no_leak_guarantees: EvidenceActorDatasetConsumerExecutionReceipt["noLeakGuarantees"];
+  safe_output: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetConsumerActorDatasetReceiptRow {
+  execution_id: string;
+  receipt_id: string;
+  dataset_row_id: string;
+  source_promotion_row_id: string;
+  state: "held";
+  reason: EvidenceActorDatasetConsumerExecutionReceipt["actorDatasetReceipts"][number]["reason"];
+  intended_action: EvidenceActorDatasetConsumerRow["actorDatasetAction"];
+  no_leak: true;
+}
+
+export interface EvidenceActorDatasetConsumerPublicAnswerCacheReceiptRow {
+  execution_id: string;
+  receipt_id: string;
+  cache_write_id: string;
+  cache_key: string;
+  state: "held";
+  reason: "public_answer_cache_repository_disabled";
+  intended_action: EvidenceActorPublicAnswerCacheWrite["action"];
+  no_leak: true;
+}
+
+export interface EvidenceActorDatasetConsumerAuditReplay {
+  schemaVersion: "ti.evidence_actor_dataset_consumer_audit_replay.v1";
+  generatedAt: string;
+  executionId?: string;
+  repository: {
+    backend: "postgres_actor_dataset_consumer_audit";
+    enabled: false;
+    disabledByDefault: true;
+    liveBackendConnection: false;
+    requiredTables: [
+      "evidence_actor_dataset_consumer_execution_receipts",
+      "evidence_actor_dataset_consumer_dataset_receipts",
+      "evidence_actor_dataset_consumer_cache_receipts"
+    ];
+  };
+  rowCounts: {
+    executionReceipts: number;
+    actorDatasetReceipts: number;
+    publicAnswerCacheReceipts: number;
+  };
+  replayReady: boolean;
+  replayBlockers: string[];
+  actorDatasetRowsWritten: 0;
+  publicAnswerCacheWritesWritten: 0;
+  actorDatasetRowsHeld: number;
+  publicAnswerCacheWritesHeld: number;
+  canReplayWithoutRawEvidence: true;
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
 export interface EvidenceActorDatasetConsumerRow {
   datasetRowId: string;
   sourcePromotionRowId: string;
@@ -1700,6 +1779,100 @@ export function executeEvidenceActorDatasetConsumerHandoff(
     blockedReasons: ["actor_dataset_repository_disabled", "public_answer_cache_repository_disabled"],
     rollbackRefs: [],
     noLeakGuarantees: { ...handoff.noLeakGuarantees },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function evidenceActorDatasetConsumerExecutionToPostgresRows(
+  receipt: EvidenceActorDatasetConsumerExecutionReceipt
+): EvidenceActorDatasetConsumerExecutionPostgresRows {
+  return {
+    consumer_execution_receipts: [{
+      execution_id: receipt.executionId,
+      schema_version: receipt.schemaVersion,
+      source_handoff: receipt.sourceHandoff,
+      product_surface: receipt.productSurface,
+      actor_build: receipt.actorBuild,
+      generated_at: receipt.generatedAt,
+      status: receipt.status,
+      enabled: receipt.enabled,
+      dry_run: receipt.dryRun,
+      live_backend_connection: receipt.liveBackendConnection,
+      will_write_actor_dataset: receipt.willWriteActorDataset,
+      will_write_public_answer_cache: receipt.willWritePublicAnswerCache,
+      repository_boundary: receipt.repositoryBoundary,
+      counts: receipt.counts,
+      blocked_reasons: receipt.blockedReasons,
+      rollback_refs: receipt.rollbackRefs,
+      no_leak_guarantees: receipt.noLeakGuarantees,
+      safe_output: receipt.safeOutput
+    }],
+    actor_dataset_receipts: receipt.actorDatasetReceipts.map((row) => ({
+      execution_id: receipt.executionId,
+      receipt_id: row.receiptId,
+      dataset_row_id: row.datasetRowId,
+      source_promotion_row_id: row.sourcePromotionRowId,
+      state: row.state,
+      reason: row.reason,
+      intended_action: row.intendedAction,
+      no_leak: row.noLeak
+    })),
+    public_answer_cache_receipts: receipt.publicAnswerCacheReceipts.map((row) => ({
+      execution_id: receipt.executionId,
+      receipt_id: row.receiptId,
+      cache_write_id: row.cacheWriteId,
+      cache_key: row.cacheKey,
+      state: row.state,
+      reason: row.reason,
+      intended_action: row.intendedAction,
+      no_leak: row.noLeak
+    }))
+  };
+}
+
+export function buildEvidenceActorDatasetConsumerAuditReplay(
+  rows: EvidenceActorDatasetConsumerExecutionPostgresRows,
+  input: { generatedAt?: string } = {}
+): EvidenceActorDatasetConsumerAuditReplay {
+  const receipt = rows.consumer_execution_receipts[0];
+  const generatedAt = input.generatedAt ?? receipt?.generated_at ?? nowIso();
+  const actorDatasetRowsHeld = receipt?.counts.actorDatasetRowsHeld ?? rows.actor_dataset_receipts.length;
+  const publicAnswerCacheWritesHeld = receipt?.counts.publicAnswerCacheWritesHeld ?? rows.public_answer_cache_receipts.length;
+  const replayBlockers = [
+    !receipt ? "missing_consumer_execution_receipt" : null,
+    receipt && rows.actor_dataset_receipts.length !== receipt.counts.actorDatasetRowsHeld ? "actor_dataset_receipt_count_mismatch" : null,
+    receipt && rows.public_answer_cache_receipts.length !== receipt.counts.publicAnswerCacheWritesHeld ? "public_answer_cache_receipt_count_mismatch" : null,
+    rows.actor_dataset_receipts.some((row) => row.no_leak !== true) ? "actor_dataset_receipt_no_leak_failed" : null,
+    rows.public_answer_cache_receipts.some((row) => row.no_leak !== true) ? "public_answer_cache_receipt_no_leak_failed" : null
+  ].filter((blocker): blocker is string => Boolean(blocker));
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_consumer_audit_replay.v1",
+    generatedAt,
+    executionId: receipt?.execution_id,
+    repository: {
+      backend: "postgres_actor_dataset_consumer_audit",
+      enabled: false,
+      disabledByDefault: true,
+      liveBackendConnection: false,
+      requiredTables: [
+        "evidence_actor_dataset_consumer_execution_receipts",
+        "evidence_actor_dataset_consumer_dataset_receipts",
+        "evidence_actor_dataset_consumer_cache_receipts"
+      ]
+    },
+    rowCounts: {
+      executionReceipts: rows.consumer_execution_receipts.length,
+      actorDatasetReceipts: rows.actor_dataset_receipts.length,
+      publicAnswerCacheReceipts: rows.public_answer_cache_receipts.length
+    },
+    replayReady: replayBlockers.length === 0,
+    replayBlockers,
+    actorDatasetRowsWritten: 0,
+    publicAnswerCacheWritesWritten: 0,
+    actorDatasetRowsHeld,
+    publicAnswerCacheWritesHeld,
+    canReplayWithoutRawEvidence: true,
     safeOutput: SAFE_OUTPUT
   };
 }

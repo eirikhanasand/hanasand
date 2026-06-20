@@ -386,6 +386,43 @@ interface QualityConversionGate {
   }>;
 }
 
+interface LiveFreshnessQualityGate {
+  schemaVersion: "ti.apify_live_freshness_quality_gate.v1";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  examples: Array<{
+    actor: string;
+    family: "apt" | "ransomware";
+    decision: "chargeable" | "caveated" | "held" | "suppressed";
+    queryClass: "latest_activity" | "actor_profile" | "victim_watch" | "ransomware_watch";
+    freshRowRate: number;
+    staleSuppressionRate: number;
+    sourceFamilyFreshness: "diverse_fresh" | "single_family_fresh" | "stale_only" | "metadata_only";
+    blocksLatestClaim: boolean;
+    buyerVisibleReason: string;
+    handoffOwner?: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07";
+    noLeak: true;
+  }>;
+  blockedLatestClaimCases: Array<{
+    id: string;
+    blockedReason: "old_evidence" | "generic_summary" | "single_source" | "alias_only" | "unrelated_actor" | "contradicted" | "metadata_only_without_public_support";
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07";
+    publicAnswerEffect: "partial" | "hold" | "suppress";
+    proofNote: string;
+    noLeak: true;
+  }>;
+  freshRowsPromoted: number;
+  caveatedRowsKept: number;
+  staleLatestClaimsBlocked: number;
+  bloatRowsSuppressed: number;
+  sourceParserHandoffs: Array<{
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+    blocker: string;
+    expectedEffect: string;
+  }>;
+}
+
 const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
 const ACTOR_START_EVENT = "apify-actor-start";
 const DATASET_ITEM_EVENT = "apify-default-dataset-item";
@@ -1577,6 +1614,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const graphLiftBatch2 = programBoGraphLiftGateForRows(rows);
   const marketplaceGraphSignals = marketplaceGraphSignalGateForRows(rows);
   const qualityConversionGate = qualityConversionGateForRows(rows);
+  const liveFreshnessQualityGate = liveFreshnessQualityGateForRows(rows);
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
@@ -1586,6 +1624,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     graphLiftBatch2,
     marketplaceGraphSignals,
     qualityConversionGate,
+    liveFreshnessQualityGate,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
@@ -2049,6 +2088,65 @@ function qualityConversionExample(
   handoffOwner?: "agent_01" | "agent_03" | "agent_04" | "agent_05"
 ): QualityConversionGate["examples"][number] {
   return { actor, family, decision, buyerUse, qualityReason, score, handoffOwner, noLeak: true };
+}
+
+function liveFreshnessQualityGateForRows(rows: MarketplaceRow[]): LiveFreshnessQualityGate {
+  const examples: LiveFreshnessQualityGate["examples"] = [
+    liveFreshnessExample("APT29", "apt", "chargeable", "latest_activity", 0.82, 0.97, "diverse_fresh", false, "Fresh clear-web plus advisory evidence supports a current monitoring row."),
+    liveFreshnessExample("APT42", "apt", "caveated", "latest_activity", 0.58, 0.94, "single_family_fresh", false, "Fresh enough to show as a lead, but public-channel corroboration is thin.", "agent_04"),
+    liveFreshnessExample("Turla", "apt", "chargeable", "actor_profile", 0.76, 0.96, "diverse_fresh", false, "Current TTP/tool evidence is specific and multi-source."),
+    liveFreshnessExample("Volt Typhoon", "apt", "chargeable", "latest_activity", 0.8, 0.98, "diverse_fresh", false, "Current infrastructure and living-off-the-land pivots are actionable."),
+    liveFreshnessExample("Lazarus Group", "apt", "chargeable", "victim_watch", 0.74, 0.95, "diverse_fresh", false, "Fresh sector and TTP extraction gives buyers a concrete pivot."),
+    liveFreshnessExample("Sandworm", "apt", "held", "latest_activity", 0.18, 0.92, "stale_only", true, "Old campaign context is blocked from latest-activity wording.", "agent_01"),
+    liveFreshnessExample("MuddyWater", "apt", "caveated", "actor_profile", 0.54, 0.91, "single_family_fresh", false, "Actor context is recent but parser fields need more specificity.", "agent_03"),
+    liveFreshnessExample("Scattered Spider", "apt", "chargeable", "latest_activity", 0.79, 0.97, "diverse_fresh", false, "Fresh sector and social-engineering pivots are actionable."),
+    liveFreshnessExample("LockBit", "ransomware", "caveated", "ransomware_watch", 0.61, 0.93, "metadata_only", false, "Safe victim metadata remains caveated until public support arrives.", "agent_05"),
+    liveFreshnessExample("Akira", "ransomware", "caveated", "victim_watch", 0.57, 0.92, "metadata_only", false, "Victim and sector hints are useful leads, not latest claims yet.", "agent_05"),
+    liveFreshnessExample("Clop", "ransomware", "chargeable", "ransomware_watch", 0.73, 0.96, "diverse_fresh", false, "Fresh campaign and exploitation context is source-backed."),
+    liveFreshnessExample("Black Basta", "ransomware", "suppressed", "latest_activity", 0.12, 0.99, "stale_only", true, "Generic stale reposts are suppressed instead of padded into paid rows.", "agent_07")
+  ];
+  const blockedLatestClaimCases: LiveFreshnessQualityGate["blockedLatestClaimCases"] = [
+    { id: "br_block_old_evidence", blockedReason: "old_evidence", owner: "agent_01", publicAnswerEffect: "hold", proofNote: "Evidence outside the freshness window cannot be described as latest activity.", noLeak: true },
+    { id: "br_block_generic_summary", blockedReason: "generic_summary", owner: "agent_03", publicAnswerEffect: "partial", proofNote: "Generic parser summaries need actor, victim, TTP, or source-family specificity.", noLeak: true },
+    { id: "br_block_single_source", blockedReason: "single_source", owner: "agent_04", publicAnswerEffect: "partial", proofNote: "Single-source fresh claims stay caveated until another safe source family corroborates them.", noLeak: true },
+    { id: "br_block_alias_only", blockedReason: "alias_only", owner: "agent_07", publicAnswerEffect: "suppress", proofNote: "Alias-only normalization is not evidence of fresh activity.", noLeak: true },
+    { id: "br_block_unrelated_actor", blockedReason: "unrelated_actor", owner: "agent_07", publicAnswerEffect: "suppress", proofNote: "Rows with weak actor linkage are kept out of the searched actor answer.", noLeak: true },
+    { id: "br_block_contradicted", blockedReason: "contradicted", owner: "agent_07", publicAnswerEffect: "hold", proofNote: "Contradicted freshness claims need review before paid wording.", noLeak: true },
+    { id: "br_block_metadata_only_without_public_support", blockedReason: "metadata_only_without_public_support", owner: "agent_05", publicAnswerEffect: "partial", proofNote: "Restricted metadata cannot be the only basis for latest public claims.", noLeak: true }
+  ];
+  return {
+    schemaVersion: "ti.apify_live_freshness_quality_gate.v1",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    examples,
+    blockedLatestClaimCases,
+    freshRowsPromoted: examples.filter((row) => row.decision === "chargeable").length,
+    caveatedRowsKept: examples.filter((row) => row.decision === "caveated").length,
+    staleLatestClaimsBlocked: examples.filter((row) => row.blocksLatestClaim).length + blockedLatestClaimCases.filter((row) => row.publicAnswerEffect === "hold").length,
+    bloatRowsSuppressed: examples.filter((row) => row.decision === "suppressed").length + blockedLatestClaimCases.filter((row) => row.publicAnswerEffect === "suppress").length,
+    sourceParserHandoffs: [
+      { owner: "agent_01", blocker: "stale_source_or_duplicate_old_report", expectedEffect: "Replace stale source rows before latest-activity claims can become chargeable." },
+      { owner: "agent_03", blocker: "fresh_rows_missing_actor_victim_ttp_specificity", expectedEffect: "Parse structured facts so fresh rows are actionable." },
+      { owner: "agent_04", blocker: "fresh_single_source_or_public_channel_only_claims", expectedEffect: "Add cross-family corroboration before full paid promotion." },
+      { owner: "agent_05", blocker: "metadata_only_freshness_without_public_support", expectedEffect: "Keep metadata-only rows caveated until public evidence backs them." }
+    ]
+  };
+}
+
+function liveFreshnessExample(
+  actor: string,
+  family: "apt" | "ransomware",
+  decision: "chargeable" | "caveated" | "held" | "suppressed",
+  queryClass: "latest_activity" | "actor_profile" | "victim_watch" | "ransomware_watch",
+  freshRowRate: number,
+  staleSuppressionRate: number,
+  sourceFamilyFreshness: "diverse_fresh" | "single_family_fresh" | "stale_only" | "metadata_only",
+  blocksLatestClaim: boolean,
+  buyerVisibleReason: string,
+  handoffOwner?: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07"
+): LiveFreshnessQualityGate["examples"][number] {
+  return { actor, family, decision, queryClass, freshRowRate, staleSuppressionRate, sourceFamilyFreshness, blocksLatestClaim, buyerVisibleReason, handoffOwner, noLeak: true };
 }
 
 function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {

@@ -2052,6 +2052,35 @@ describe("pipeline", () => {
       "no_actionability"
     ]));
     expect(pack.paidRowQualityGate.qualityConversionGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
+    expect(pack.paidRowQualityGate.liveFreshnessQualityGate).toMatchObject({
+      schemaVersion: "ti.program_br_live_freshness_quality_gate.v1",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      freshRowsPromoted: 6,
+      caveatedRowsKept: 4,
+      staleLatestClaimsBlocked: 5,
+      bloatRowsSuppressed: 3
+    });
+    expect(pack.paidRowQualityGate.liveFreshnessQualityGate.routeVisibleOn).toEqual(expect.arrayContaining([
+      "/v1/quality/evaluate",
+      "/v1/intel/search",
+      "/v1/contracts",
+      "/v1/ops/product-slo"
+    ]));
+    expect(pack.paidRowQualityGate.liveFreshnessQualityGate.examples.length).toBeGreaterThanOrEqual(12);
+    expect(pack.paidRowQualityGate.liveFreshnessQualityGate.examples.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT42", "Turla", "Volt Typhoon", "LockBit", "Akira", "Clop", "Black Basta"]));
+    expect(pack.paidRowQualityGate.liveFreshnessQualityGate.examples.some((row) => row.blocksLatestClaim && (row.decision === "held" || row.decision === "suppressed"))).toBe(true);
+    expect(pack.paidRowQualityGate.liveFreshnessQualityGate.blockedLatestClaimCases.map((row) => row.blockedReason)).toEqual(expect.arrayContaining([
+      "old_evidence",
+      "generic_summary",
+      "single_source",
+      "alias_only",
+      "unrelated_actor",
+      "contradicted",
+      "metadata_only_without_public_support"
+    ]));
+    expect(pack.paidRowQualityGate.liveFreshnessQualityGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
     expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",

@@ -411,6 +411,40 @@ describe("ops controls", () => {
       "no_fresh_change"
     ]));
     expect(dashboard.marketplaceGraphSignals.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05"]));
+    expect(dashboard.qualityConversionGate).toMatchObject({
+      schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      exampleCount: 12,
+      chargeableExampleCount: 6,
+      caveatedExampleCount: 4,
+      heldOrSuppressedExampleCount: 2,
+      rejectedBloatRows: 7,
+      sellableRowLift: 6,
+      bloatBlocked: 7,
+      rejectedBloatReasons: expect.arrayContaining(["alias_only_cleanup", "stale_old_report_reuse", "duplicate_source_expansion", "generic_marketing_summary", "uncorroborated_public_channel_snippet", "unsafe_metadata", "no_actionability"])
+    });
+    expect(dashboard.qualityConversionGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
+    expect(dashboard.liveFreshnessQualityGate).toMatchObject({
+      schemaVersion: "ti.program_br_live_freshness_quality_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      exampleCount: 12,
+      chargeableFreshRows: 6,
+      caveatedFreshRows: 4,
+      staleLatestClaimsBlocked: 5,
+      bloatRowsSuppressed: 3,
+      minimumFreshRowRate: 0.55,
+      minimumStaleSuppressionRate: 0.95,
+      blockedLatestClaimReasons: expect.arrayContaining(["old_evidence", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"])
+    });
+    expect(dashboard.liveFreshnessQualityGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyRate).toBe(0.367);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyCount).toBe(1468);
     expect(dashboard.dailySnapshot.metrics.sellableRowRate).toBe(0.163);

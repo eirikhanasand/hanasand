@@ -156,6 +156,12 @@ Progress update 2026-06-20 19:40 CEST:
 - Restricted/leak rows remain metadata-only and caveated; execution receipts contain only ids, intended actions, held states, blocker reasons, counts, and no-leak flags.
 - Updated evidence storage docs plus storage/API assertions. Continue next with actual disabled repository interfaces/table mappers for these execution receipts, or source-family gap feedback into Actor row suppression policy.
 
+Progress update 2026-06-20 20:00 CEST:
+- Continued with Postgres-style audit table mappers for the Actor dataset/public-answer consumer execution receipts.
+- Added `ti.evidence_actor_dataset_consumer_audit_replay.v1` on `/v1/evidence/cutover-report.readModelCutover.actorDatasetConsumerAuditReplay`, modeling execution receipt, dataset receipt, and cache receipt tables while the repository remains disabled by default.
+- Audit rows contain only ids, cache keys, intended actions, held states, blocker reasons, counts, and no-leak flags; no raw bodies, object keys, unsafe URLs, credentials, private material, restricted raw content, actor interaction, embeddings, graph export, or STIX export are persisted or exposed.
+- Updated evidence storage docs plus storage/API assertions. Continue next with source-family gap feedback into Actor row suppression policy or a disabled repository factory around these audit rows.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

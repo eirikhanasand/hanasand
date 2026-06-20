@@ -54,12 +54,14 @@ import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/me
 import {
   buildEvidencePromotionTransactionPlan,
   buildEvidencePromotionTransactionAuditReplay,
+  buildEvidenceActorDatasetConsumerAuditReplay,
   buildEvidenceActorDatasetConsumerHandoff,
   buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorProductImpactReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   createEvidenceSearchReadModelRepository,
+  evidenceActorDatasetConsumerExecutionToPostgresRows,
   evidencePromotionExecutionFromPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
@@ -2272,6 +2274,53 @@ describe("evidence storage cutover", () => {
     expect(actorExecutionSerialized).not.toContain(restrictedRaw);
     expect(actorExecutionSerialized).not.toContain("tenant/source/private-key");
     expect(actorExecutionSerialized).not.toContain(".onion");
+
+    const actorDatasetConsumerAuditRows = evidenceActorDatasetConsumerExecutionToPostgresRows(actorDatasetConsumerExecution);
+    const actorDatasetConsumerAuditReplay = buildEvidenceActorDatasetConsumerAuditReplay(actorDatasetConsumerAuditRows, {
+      generatedAt: "2026-05-24T21:45:00.000Z"
+    });
+    expect(actorDatasetConsumerAuditRows.consumer_execution_receipts).toHaveLength(1);
+    expect(actorDatasetConsumerAuditRows.actor_dataset_receipts).toHaveLength(actorDatasetConsumerExecution.actorDatasetReceipts.length);
+    expect(actorDatasetConsumerAuditRows.public_answer_cache_receipts).toHaveLength(actorDatasetConsumerExecution.publicAnswerCacheReceipts.length);
+    expect(actorDatasetConsumerAuditReplay).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_consumer_audit_replay.v1",
+      executionId: actorDatasetConsumerExecution.executionId,
+      repository: {
+        backend: "postgres_actor_dataset_consumer_audit",
+        enabled: false,
+        disabledByDefault: true,
+        liveBackendConnection: false,
+        requiredTables: [
+          "evidence_actor_dataset_consumer_execution_receipts",
+          "evidence_actor_dataset_consumer_dataset_receipts",
+          "evidence_actor_dataset_consumer_cache_receipts"
+        ]
+      },
+      rowCounts: {
+        executionReceipts: 1,
+        actorDatasetReceipts: actorDatasetConsumerExecution.actorDatasetReceipts.length,
+        publicAnswerCacheReceipts: actorDatasetConsumerExecution.publicAnswerCacheReceipts.length
+      },
+      replayReady: true,
+      replayBlockers: [],
+      actorDatasetRowsWritten: 0,
+      publicAnswerCacheWritesWritten: 0,
+      actorDatasetRowsHeld: actorDatasetConsumerExecution.counts.actorDatasetRowsHeld,
+      publicAnswerCacheWritesHeld: actorDatasetConsumerExecution.counts.publicAnswerCacheWritesHeld,
+      canReplayWithoutRawEvidence: true,
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    const actorConsumerAuditSerialized = JSON.stringify(actorDatasetConsumerAuditReplay);
+    expect(actorConsumerAuditSerialized).not.toContain(restrictedRaw);
+    expect(actorConsumerAuditSerialized).not.toContain("tenant/source/private-key");
+    expect(actorConsumerAuditSerialized).not.toContain(".onion");
 
     const publicRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === publicCapture.id);
     const restrictedRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === restrictedCapture.id || row.claim_ledger_entry_id === "claim_read_model_fjord");

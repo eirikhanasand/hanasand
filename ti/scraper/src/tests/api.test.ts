@@ -384,6 +384,37 @@ describe("api v1", () => {
       rejectedBloatReasons: expect.arrayContaining(["alias_only_cleanup", "stale_old_report_reuse", "duplicate_source_expansion", "generic_marketing_summary", "uncorroborated_public_channel_snippet", "unsafe_metadata", "no_actionability"]) as unknown as string[]
     });
     expect((response.qualityConversionGate as { sourceParserHandoffs: Array<{ owner: string }> }).sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
+    expect((response.liveFreshnessQualityGate as {
+      schemaVersion: string;
+      routeVisibleOn: string[];
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      exampleCount: number;
+      chargeableFreshRows: number;
+      caveatedFreshRows: number;
+      staleLatestClaimsBlocked: number;
+      bloatRowsSuppressed: number;
+      minimumFreshRowRate: number;
+      minimumStaleSuppressionRate: number;
+      blockedLatestClaimReasons: string[];
+      sourceParserHandoffs: Array<{ owner: string }>;
+    })).toMatchObject({
+      schemaVersion: "ti.program_br_live_freshness_quality_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]) as unknown as string[],
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      exampleCount: 12,
+      chargeableFreshRows: 6,
+      caveatedFreshRows: 4,
+      staleLatestClaimsBlocked: 5,
+      bloatRowsSuppressed: 3,
+      minimumFreshRowRate: 0.55,
+      minimumStaleSuppressionRate: 0.95,
+      blockedLatestClaimReasons: expect.arrayContaining(["old_evidence", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"]) as unknown as string[]
+    });
+    expect((response.liveFreshnessQualityGate as { sourceParserHandoffs: Array<{ owner: string }> }).sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
     expect((response.deploymentProof as { actorBuildId: string }).actorBuildId).toBe("build_live");
     expect((response.resourceGuardrails as { scraperTargetRamGb: number }).scraperTargetRamGb).toBe(96);
 
@@ -4385,6 +4416,41 @@ describe("api v1", () => {
           actorInteractionExposed: false
         }
       },
+      actorDatasetConsumerAuditReplay: {
+        schemaVersion: "ti.evidence_actor_dataset_consumer_audit_replay.v1",
+        executionId: expect.any(String),
+        repository: {
+          backend: "postgres_actor_dataset_consumer_audit",
+          enabled: false,
+          disabledByDefault: true,
+          liveBackendConnection: false,
+          requiredTables: [
+            "evidence_actor_dataset_consumer_execution_receipts",
+            "evidence_actor_dataset_consumer_dataset_receipts",
+            "evidence_actor_dataset_consumer_cache_receipts"
+          ]
+        },
+        rowCounts: {
+          executionReceipts: 1,
+          actorDatasetReceipts: expect.any(Number),
+          publicAnswerCacheReceipts: expect.any(Number)
+        },
+        replayReady: true,
+        replayBlockers: [],
+        actorDatasetRowsWritten: 0,
+        publicAnswerCacheWritesWritten: 0,
+        actorDatasetRowsHeld: expect.any(Number),
+        publicAnswerCacheWritesHeld: expect.any(Number),
+        canReplayWithoutRawEvidence: true,
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
       safeOutput: {
         rawBodiesExposed: false,
         objectKeysExposed: false,
@@ -6646,6 +6712,48 @@ describe("api v1", () => {
           buyerSearchProof: { sampleSearchRows: Array<{ safeSummary: string; whyItMatters: string; provenanceHash: string; searchBoostTerms: string[] }>; activationDecision: string; blockers: string[] };
           noLeakSerialization: { passed: boolean };
         };
+        tier10000RefreshValue: {
+          schemaVersion: string;
+          tier: string;
+          baselineTier: string;
+          targetRecordCount: number;
+          evaluatedCandidateCount: number;
+          valueQualifiedCount: number;
+          rejectedLowValueCount: number;
+          advancementCriteria: {
+            minProductQualifiedRate: number;
+            maxDuplicateRate: number;
+            maxStaleRate: number;
+            maxBlockedOrReviewRate: number;
+            requireNoLeakProof: boolean;
+          };
+          refreshLanes: Array<{ family: string; cadenceMinutes: number; risk: string; expectedBuyerVisibleRowEffect: string; blockerRules: string[] }>;
+          buyerSearchProof: {
+            actorQueries: string[];
+            victimCompanyQueries: string[];
+            ransomwareGroupQueries: string[];
+            datasetTypeQueries: string[];
+            sectorCountryQueries: string[];
+            newSinceLastRunQueries: string[];
+            usefulQueryCount: number;
+            sampleRows: Array<{ safeSummary: string; whyItMatters: string; provenanceHash: string; searchBoostTerms: string[] }>;
+          };
+          qualityMetrics: {
+            searchHitQualityRate: number;
+            usefulSummaryRate: number;
+            currentEnoughFreshnessRate: number;
+            duplicateSuppressionRate: number;
+            blockedOrReviewRate: number;
+            actorCoverage: number;
+            victimCoverage: number;
+            datasetCoverage: number;
+            averageBuyerValueScore: number;
+            costRiskPerUsefulMetadataRow: string;
+          };
+          activationDecision: string;
+          blockers: string[];
+          noLeakSerialization: { passed: boolean };
+        };
         operatorRunbook: {
           schemaVersion: string;
           mode: string;
@@ -6726,6 +6834,14 @@ describe("api v1", () => {
           targetRecordCount: number;
           routeFields: string[];
           admissionDecisionField: string;
+          requireNoLeakProof: boolean;
+        };
+        tier10000RefreshValue: {
+          schemaVersion: string;
+          tier: string;
+          targetRecordCount: number;
+          routeFields: string[];
+          decisionField: string;
           requireNoLeakProof: boolean;
         };
       };
@@ -7047,6 +7163,41 @@ describe("api v1", () => {
       row.provenanceHash.length > 0
     )).toBe(true);
     expect(statusResponse.status.tier4000Admission.buyerSearchProof.activationDecision).toBe("hold_for_value_density");
+    expect(statusResponse.status.tier10000RefreshValue).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier10000_refresh_value.v1",
+      tier: "tier_10000",
+      baselineTier: "tier_4000",
+      targetRecordCount: 10000,
+      evaluatedCandidateCount: 100,
+      advancementCriteria: {
+        minProductQualifiedRate: 0.72,
+        maxDuplicateRate: 0.16,
+        maxStaleRate: 0.28,
+        maxBlockedOrReviewRate: 0.18,
+        requireNoLeakProof: true
+      },
+      activationDecision: "hold_for_value_density",
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(statusResponse.status.tier10000RefreshValue.refreshLanes.map((lane) => lane.family)).toEqual(expect.arrayContaining([
+      "public_report",
+      "analyst_import",
+      "directory_metadata",
+      "public_tracker_reference",
+      "approved_seed",
+      "safe_search_result"
+    ]));
+    expect(statusResponse.status.tier10000RefreshValue.buyerSearchProof.actorQueries).toEqual(expect.arrayContaining(["akira", "apt29", "apt42", "lockbit"]));
+    expect(statusResponse.status.tier10000RefreshValue.buyerSearchProof.usefulQueryCount).toBeGreaterThan(0);
+    expect(statusResponse.status.tier10000RefreshValue.buyerSearchProof.sampleRows.every((row) =>
+      row.safeSummary.length >= 80 &&
+      row.searchBoostTerms.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.whyItMatters.includes("without exposing raw locations")
+    )).toBe(true);
+    expect(statusResponse.status.tier10000RefreshValue.blockers).toEqual(expect.arrayContaining(["reject_low_value_candidates_before_count_expansion"]));
     expect(statusResponse.status.operatorRunbook).toMatchObject({
       schemaVersion: "ti.darkweb_index_operator_runbook.v1",
       mode: "operator_controls_no_live_collection",
@@ -7180,6 +7331,14 @@ describe("api v1", () => {
       admissionDecisionField: "buyerSearchProof.activationDecision",
       requireNoLeakProof: true
     });
+    expect(statusResponse.contract.tier10000RefreshValue).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier10000_refresh_value.v1",
+      tier: "tier_10000",
+      targetRecordCount: 10000,
+      routeFields: ["status.tier10000RefreshValue", "darkwebIndex.productHandoff.tier10000SearchProof"],
+      decisionField: "activationDecision",
+      requireNoLeakProof: true
+    });
     expect(statusResponse.contract.sourceIngest).toMatchObject({
       runtimeMode: "contract_only_no_network",
       sourceTypes: expect.arrayContaining(["directory", "seed_list", "analyst_import", "public_report"]),
@@ -7226,6 +7385,7 @@ describe("api v1", () => {
         recordIds: string[];
         tier1000ReadyRecordIds: string[];
         buyerSearchRows: Array<{ recordId: string; safeSummary: string; sourceFamily: string; refreshCadenceMinutes: number; buyerValueScore: number; whyItMatters: string; provenanceHash: string }>;
+        tier10000SearchProof: { actorQueries: string[]; usefulQueryCount: number; sampleRows: Array<{ recordId: string; provenanceHash: string; whyItMatters: string }> };
         warnings: string[];
       };
       noLeakSerialization: { passed: boolean };
@@ -7266,6 +7426,14 @@ describe("api v1", () => {
       row.buyerValueScore >= 0 &&
       row.whyItMatters.includes("without exposing raw locations") &&
       row.provenanceHash.length > 0
+    )).toBe(true);
+    expect(darkwebIndex.productHandoff.tier10000SearchProof.actorQueries).toEqual(expect.arrayContaining(["akira", "apt29", "apt42", "lockbit"]));
+    expect(darkwebIndex.productHandoff.tier10000SearchProof.usefulQueryCount).toBeGreaterThan(0);
+    expect(darkwebIndex.productHandoff.tier10000SearchProof.sampleRows.length).toBeGreaterThan(0);
+    expect(darkwebIndex.productHandoff.tier10000SearchProof.sampleRows.every((row) =>
+      row.recordId.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.whyItMatters.includes("without exposing raw locations")
     )).toBe(true);
     expect(darkwebIndex.records.every((record) =>
       record.network === "tor" &&
@@ -10418,6 +10586,17 @@ describe("api v1", () => {
             rejectedBloatCases: Array<{ blockedReason: string }>;
             sourceParserHandoffs: Array<{ owner: string }>;
           };
+          liveFreshnessQualityGate: {
+            schemaVersion: string;
+            routeVisibleOn: string[];
+            freshRowsPromoted: number;
+            caveatedRowsKept: number;
+            staleLatestClaimsBlocked: number;
+            bloatRowsSuppressed: number;
+            examples: Array<{ actor: string; decision: string; blocksLatestClaim: boolean }>;
+            blockedLatestClaimCases: Array<{ blockedReason: string }>;
+            sourceParserHandoffs: Array<{ owner: string }>;
+          };
         };
         watchlistFixtures: Array<{
           actor: string;
@@ -10934,6 +11113,38 @@ describe("api v1", () => {
       "no_actionability"
     ]));
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.qualityConversionGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.liveFreshnessQualityGate).toMatchObject({
+      schemaVersion: "ti.program_br_live_freshness_quality_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo"]),
+      freshRowsPromoted: 6,
+      caveatedRowsKept: 4,
+      staleLatestClaimsBlocked: 5,
+      bloatRowsSuppressed: 3
+    });
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.liveFreshnessQualityGate.examples.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT42",
+      "Turla",
+      "Volt Typhoon",
+      "Lazarus Group",
+      "Sandworm",
+      "Scattered Spider",
+      "LockBit",
+      "Akira",
+      "Clop",
+      "Black Basta"
+    ]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.liveFreshnessQualityGate.examples.some((row) => row.blocksLatestClaim && (row.decision === "held" || row.decision === "suppressed"))).toBe(true);
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.liveFreshnessQualityGate.blockedLatestClaimCases.map((row) => row.blockedReason)).toEqual(expect.arrayContaining([
+      "old_evidence",
+      "generic_summary",
+      "single_source",
+      "alias_only",
+      "unrelated_actor",
+      "contradicted",
+      "metadata_only_without_public_support"
+    ]));
+    expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.liveFreshnessQualityGate.sourceParserHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05"]));
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT42",

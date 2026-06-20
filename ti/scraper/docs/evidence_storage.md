@@ -135,6 +135,8 @@ Execution receipts now have Postgres-style audit row mappers for future durable 
 
 `actorDatasetConsumerExecution` adds the disabled-by-default execution receipt as `ti.evidence_actor_dataset_consumer_execution.v1`. It holds every Actor dataset row and public-answer cache write behind explicit `TI_ACTOR_DATASET_CONSUMER_WRITES_ENABLED` and `TI_PUBLIC_ANSWER_CACHE_WRITES_ENABLED` gates, reports zero production writes, and emits deterministic held receipts for sellable, caveated, suppressed, and coverage-gap rows. This gives operators a replayable audit packet for the future repository cutover without mutating Apify datasets or answer caches.
 
+`actorDatasetConsumerAuditReplay` persists the same execution receipt into Postgres-style audit rows for future repository cutover as `ti.evidence_actor_dataset_consumer_audit_replay.v1`. The modeled tables are `evidence_actor_dataset_consumer_execution_receipts`, `evidence_actor_dataset_consumer_dataset_receipts`, and `evidence_actor_dataset_consumer_cache_receipts`. Rows contain only execution ids, dataset/cache receipt ids, source-promotion row ids, cache keys, intended actions, held states, blocker reasons, counts, and no-leak flags; there are still no live backend connections or production writes.
+
 This is the first implementation slice behind the earlier migration/readiness packets. It does not connect to external services, mutate OpenSearch/pgvector/Postgres, or serialize raw bodies, object keys, unsafe URLs, credentials, restricted raw content, private material, or actor-interaction content.
 
 ## Object Integrity Repair Runtime

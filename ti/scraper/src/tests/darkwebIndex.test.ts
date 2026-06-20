@@ -558,6 +558,53 @@ describe("darkweb metadata index contracts", () => {
     )).toBe(true);
     expect(status.tier4000Admission.buyerSearchProof.activationDecision).toBe("hold_for_value_density");
     expect(status.tier4000Admission.buyerSearchProof.blockers).toEqual(expect.arrayContaining(["reject_low_value_candidates_before_count_expansion"]));
+    expect(status.tier10000RefreshValue).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier10000_refresh_value.v1",
+      owner: "Agent 05",
+      tier: "tier_10000",
+      baselineTier: "tier_4000",
+      targetRecordCount: 10000,
+      evaluatedCandidateCount: 100,
+      advancementCriteria: {
+        minProductQualifiedRate: 0.72,
+        maxDuplicateRate: 0.16,
+        maxStaleRate: 0.28,
+        maxBlockedOrReviewRate: 0.18,
+        minAverageBuyerValueScore: 0.68,
+        requireNoLeakProof: true
+      },
+      activationDecision: "hold_for_value_density",
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.tier10000RefreshValue.refreshLanes.map((lane) => lane.family)).toEqual(expect.arrayContaining([
+      "public_report",
+      "analyst_import",
+      "directory_metadata",
+      "public_tracker_reference",
+      "approved_seed",
+      "safe_search_result"
+    ]));
+    expect(status.tier10000RefreshValue.refreshLanes.every((lane) =>
+      lane.cadenceMinutes > 0 &&
+      lane.blockerRules.includes("reject_raw_unsafe_locations") &&
+      lane.blockerRules.includes("reject_credentials_payloads_private_material")
+    )).toBe(true);
+    const tier10000ActorQueries = JSON.stringify(status.tier10000RefreshValue.buyerSearchProof.actorQueries);
+    for (const query of ["akira", "apt29", "apt42", "lockbit"]) {
+      expect(tier10000ActorQueries).toContain(query);
+    }
+    expect(typeof status.tier10000RefreshValue.buyerSearchProof.usefulQueryCount).toBe("number");
+    expect(status.tier10000RefreshValue.buyerSearchProof.usefulQueryCount).toBeGreaterThan(0);
+    expect(status.tier10000RefreshValue.buyerSearchProof.sampleRows.length).toBeGreaterThan(0);
+    expect(status.tier10000RefreshValue.buyerSearchProof.sampleRows.every((row) =>
+      row.safeSummary.length >= 80 &&
+      row.searchBoostTerms.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.whyItMatters.includes("without exposing raw locations")
+    )).toBe(true);
+    expect(status.tier10000RefreshValue.blockers).toEqual(expect.arrayContaining(["reject_low_value_candidates_before_count_expansion"]));
     expect(contract.tier100Product).toMatchObject({
       schemaVersion: "ti.darkweb_index_tier100_product.v1",
       tier: "tier_100",
@@ -579,6 +626,74 @@ describe("darkweb metadata index contracts", () => {
       targetRecordCount: 4000,
       routeFields: ["status.tier4000Admission", "darkwebIndex.productHandoff.buyerSearchRows"],
       admissionDecisionField: "buyerSearchProof.activationDecision",
+      requireNoLeakProof: true
+    });
+    expect(contract.tier10000RefreshValue).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier10000_refresh_value.v1",
+      tier: "tier_10000",
+      targetRecordCount: 10000,
+      routeFields: ["status.tier10000RefreshValue", "darkwebIndex.productHandoff.tier10000SearchProof"],
+      decisionField: "activationDecision",
+      requireNoLeakProof: true
+    });
+    expect(status.tier10000RefreshValue).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier10000_refresh_value.v1",
+      owner: "Agent 05",
+      tier: "tier_10000",
+      baselineTier: "tier_4000",
+      mode: "refresh_and_buyer_search_value_gate",
+      targetRecordCount: 10000,
+      evaluatedCandidateCount: 100,
+      advancementCriteria: {
+        minProductQualifiedRate: 0.72,
+        maxDuplicateRate: 0.16,
+        maxStaleRate: 0.28,
+        maxBlockedOrReviewRate: 0.18,
+        minAverageBuyerValueScore: 0.68,
+        requireNoLeakProof: true
+      },
+      activationDecision: "hold_for_value_density",
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.tier10000RefreshValue.valueQualifiedCount).toBeGreaterThan(0);
+    expect(status.tier10000RefreshValue.rejectedLowValueCount).toBeGreaterThan(0);
+    expect(status.tier10000RefreshValue.refreshLanes.map((lane) => lane.family)).toEqual(expect.arrayContaining([
+      "public_report",
+      "safe_search_result",
+      "directory_metadata",
+      "analyst_import",
+      "public_tracker_reference",
+      "approved_seed"
+    ]));
+    expect(status.tier10000RefreshValue.refreshLanes.every((lane) =>
+      lane.cadenceMinutes >= 360 &&
+      lane.blockerRules.includes("reject_if_buyer_value_below_threshold")
+    )).toBe(true);
+    expect(status.tier10000RefreshValue.buyerSearchProof.actorQueries).toEqual(expect.arrayContaining(["akira", "apt29", "apt42", "lockbit"]));
+    expect(status.tier10000RefreshValue.buyerSearchProof.datasetTypeQueries.length).toBeGreaterThan(0);
+    expect(status.tier10000RefreshValue.buyerSearchProof.newSinceLastRunQueries.length).toBeGreaterThan(0);
+    expect(status.tier10000RefreshValue.buyerSearchProof.usefulQueryCount).toBeGreaterThan(0);
+    expect(status.tier10000RefreshValue.buyerSearchProof.sampleRows.length).toBeGreaterThan(0);
+    expect(status.tier10000RefreshValue.buyerSearchProof.sampleRows.every((row) =>
+      row.safeSummary.length >= 80 &&
+      row.searchBoostTerms.length > 0 &&
+      row.whyItMatters.includes("without exposing raw locations")
+    )).toBe(true);
+    expect(status.tier10000RefreshValue.qualityMetrics).toMatchObject({
+      costRiskPerUsefulMetadataRow: expect.stringMatching(/low|medium|high/)
+    });
+    expect(status.tier10000RefreshValue.blockers).toEqual(expect.arrayContaining([
+      "refresh_low_value_rows_do_not_count_toward_target",
+      "actor_victim_dataset_coverage_must_clear_buyer_search_thresholds"
+    ]));
+    expect(contract.tier10000RefreshValue).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier10000_refresh_value.v1",
+      tier: "tier_10000",
+      targetRecordCount: 10000,
+      routeFields: ["status.tier10000RefreshValue", "darkwebIndex.productHandoff.tier10000SearchProof"],
+      decisionField: "activationDecision",
       requireNoLeakProof: true
     });
     expect(status.sourceIngestReadiness.sources).toHaveLength(6);
@@ -692,6 +807,13 @@ describe("darkweb metadata index contracts", () => {
     expect(firstPage.productHandoff.recordIds).toEqual(firstPage.records.map((record) => record.id));
     expect(firstPage.productHandoff.tier1000ReadyRecordIds.every((recordId) => firstPage.productHandoff.recordIds.includes(recordId))).toBe(true);
     expect(firstPage.productHandoff.buyerSearchRows).toHaveLength(firstPage.records.length);
+    expect(firstPage.productHandoff.tier10000SearchProof).toMatchObject({
+      usefulQueryCount: expect.any(Number),
+      actorQueries: expect.arrayContaining(["akira", "apt29", "apt42", "lockbit"]),
+      datasetTypeQueries: expect.any(Array),
+      newSinceLastRunQueries: expect.any(Array)
+    });
+    expect(firstPage.productHandoff.tier10000SearchProof.sampleRows.length).toBeGreaterThan(0);
     expect(firstPage.productHandoff.buyerSearchRows.every((row) =>
       row.recordId.length > 0 &&
       row.safeSummary.length >= 80 &&

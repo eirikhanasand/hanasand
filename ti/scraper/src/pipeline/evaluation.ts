@@ -519,6 +519,45 @@ export interface ProgramBdQualityEvaluationPackDto {
         expectedEffect: string;
       }>;
     };
+    liveFreshnessQualityGate: {
+      schemaVersion: "ti.program_br_live_freshness_quality_gate.v1";
+      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo">;
+      dryRun: true;
+      willMutateSources: false;
+      willStartCollection: false;
+      examples: Array<{
+        actor: string;
+        family: "apt" | "ransomware";
+        decision: "chargeable" | "caveated" | "held" | "suppressed";
+        queryClass: "latest_activity" | "actor_profile" | "victim_watch" | "ransomware_watch";
+        freshRowRate: number;
+        staleSuppressionRate: number;
+        dailyExpectation: "met" | "thin" | "missed";
+        weeklyExpectation: "met" | "thin" | "missed";
+        sourceFamilyFreshness: "diverse_fresh" | "single_family_fresh" | "stale_only" | "metadata_only";
+        contradictionState: "none" | "contradicted" | "review_hold";
+        blocksLatestClaim: boolean;
+        buyerVisibleReason: string;
+        nextRepairOwner?: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07";
+        repairReason?: "stale_source" | "generic_parser" | "missing_public_channel_corroboration" | "metadata_only_without_public_support" | "alias_or_unrelated_actor";
+      }>;
+      blockedLatestClaimCases: Array<{
+        id: string;
+        blockedReason: "old_evidence" | "generic_summary" | "single_source" | "alias_only" | "unrelated_actor" | "contradicted" | "metadata_only_without_public_support";
+        owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07";
+        publicAnswerEffect: "partial" | "hold" | "suppress";
+        proofNote: string;
+      }>;
+      freshRowsPromoted: number;
+      caveatedRowsKept: number;
+      staleLatestClaimsBlocked: number;
+      bloatRowsSuppressed: number;
+      sourceParserHandoffs: Array<{
+        owner: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+        blocker: string;
+        expectedEffect: string;
+      }>;
+    };
     releaseDecision: "promote" | "partial" | "hold";
     apifyDatasetFields: string[];
     remediationActions: string[];
@@ -800,6 +839,52 @@ const PROGRAM_BD_ROW_METRICS: ProgramBdRowQualityMetric[] = [
   "no_leak_proof"
 ];
 
+function buildProgramBrLiveFreshnessQualityGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveFreshnessQualityGate"] {
+  const examples: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveFreshnessQualityGate"]["examples"] = [
+    { actor: "APT29", family: "apt", decision: "chargeable", queryClass: "latest_activity", freshRowRate: 0.82, staleSuppressionRate: 0.97, dailyExpectation: "met", weeklyExpectation: "met", sourceFamilyFreshness: "diverse_fresh", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Fresh clear-web plus advisory evidence supports a current activity row." },
+    { actor: "APT42", family: "apt", decision: "caveated", queryClass: "latest_activity", freshRowRate: 0.58, staleSuppressionRate: 0.94, dailyExpectation: "thin", weeklyExpectation: "met", sourceFamilyFreshness: "single_family_fresh", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Fresh enough to show as a lead, but public-channel corroboration is still thin.", nextRepairOwner: "agent_04", repairReason: "missing_public_channel_corroboration" },
+    { actor: "Turla", family: "apt", decision: "chargeable", queryClass: "actor_profile", freshRowRate: 0.76, staleSuppressionRate: 0.96, dailyExpectation: "met", weeklyExpectation: "met", sourceFamilyFreshness: "diverse_fresh", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Current TTP/tool evidence is specific and multi-source." },
+    { actor: "Volt Typhoon", family: "apt", decision: "chargeable", queryClass: "latest_activity", freshRowRate: 0.8, staleSuppressionRate: 0.98, dailyExpectation: "met", weeklyExpectation: "met", sourceFamilyFreshness: "diverse_fresh", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Current infrastructure and LOTL activity can be surfaced as monitoring value." },
+    { actor: "Lazarus Group", family: "apt", decision: "chargeable", queryClass: "victim_watch", freshRowRate: 0.74, staleSuppressionRate: 0.95, dailyExpectation: "met", weeklyExpectation: "met", sourceFamilyFreshness: "diverse_fresh", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Fresh sector and TTP extraction gives buyers a concrete pivot." },
+    { actor: "Sandworm", family: "apt", decision: "held", queryClass: "latest_activity", freshRowRate: 0.18, staleSuppressionRate: 0.92, dailyExpectation: "missed", weeklyExpectation: "thin", sourceFamilyFreshness: "stale_only", contradictionState: "none", blocksLatestClaim: true, buyerVisibleReason: "Old campaign context is blocked from latest-activity wording.", nextRepairOwner: "agent_01", repairReason: "stale_source" },
+    { actor: "MuddyWater", family: "apt", decision: "caveated", queryClass: "actor_profile", freshRowRate: 0.54, staleSuppressionRate: 0.91, dailyExpectation: "thin", weeklyExpectation: "met", sourceFamilyFreshness: "single_family_fresh", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Actor context is recent but parser fields need more specificity.", nextRepairOwner: "agent_03", repairReason: "generic_parser" },
+    { actor: "Scattered Spider", family: "apt", decision: "chargeable", queryClass: "latest_activity", freshRowRate: 0.79, staleSuppressionRate: 0.97, dailyExpectation: "met", weeklyExpectation: "met", sourceFamilyFreshness: "diverse_fresh", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Fresh sector and social-engineering pivots are actionable." },
+    { actor: "LockBit", family: "ransomware", decision: "caveated", queryClass: "ransomware_watch", freshRowRate: 0.61, staleSuppressionRate: 0.93, dailyExpectation: "thin", weeklyExpectation: "met", sourceFamilyFreshness: "metadata_only", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Safe victim metadata remains caveated until public support arrives.", nextRepairOwner: "agent_05", repairReason: "metadata_only_without_public_support" },
+    { actor: "Akira", family: "ransomware", decision: "caveated", queryClass: "victim_watch", freshRowRate: 0.57, staleSuppressionRate: 0.92, dailyExpectation: "thin", weeklyExpectation: "met", sourceFamilyFreshness: "metadata_only", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Victim and sector hints are useful leads, not chargeable latest claims yet.", nextRepairOwner: "agent_05", repairReason: "metadata_only_without_public_support" },
+    { actor: "Clop", family: "ransomware", decision: "chargeable", queryClass: "ransomware_watch", freshRowRate: 0.73, staleSuppressionRate: 0.96, dailyExpectation: "met", weeklyExpectation: "met", sourceFamilyFreshness: "diverse_fresh", contradictionState: "none", blocksLatestClaim: false, buyerVisibleReason: "Fresh campaign and exploitation context is source-backed." },
+    { actor: "Black Basta", family: "ransomware", decision: "suppressed", queryClass: "latest_activity", freshRowRate: 0.12, staleSuppressionRate: 0.99, dailyExpectation: "missed", weeklyExpectation: "missed", sourceFamilyFreshness: "stale_only", contradictionState: "review_hold", blocksLatestClaim: true, buyerVisibleReason: "Generic stale reposts are suppressed instead of padded into paid rows.", nextRepairOwner: "agent_07", repairReason: "alias_or_unrelated_actor" },
+    { actor: "Alias Collision", family: "apt", decision: "suppressed", queryClass: "actor_profile", freshRowRate: 0.33, staleSuppressionRate: 0.4, dailyExpectation: "thin", weeklyExpectation: "thin", sourceFamilyFreshness: "single_family_fresh", contradictionState: "review_hold", blocksLatestClaim: true, buyerVisibleReason: "Alias-only or unrelated actor hits must not become latest-activity claims.", nextRepairOwner: "agent_07", repairReason: "alias_or_unrelated_actor" }
+  ];
+  const blockedLatestClaimCases: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveFreshnessQualityGate"]["blockedLatestClaimCases"] = [
+    { id: "br_block_old_evidence", blockedReason: "old_evidence", owner: "agent_01", publicAnswerEffect: "hold", proofNote: "Evidence outside the freshness window cannot be described as latest activity." },
+    { id: "br_block_generic_summary", blockedReason: "generic_summary", owner: "agent_03", publicAnswerEffect: "partial", proofNote: "Generic parser summaries need actor, victim, TTP, or source-family specificity." },
+    { id: "br_block_single_source", blockedReason: "single_source", owner: "agent_04", publicAnswerEffect: "partial", proofNote: "Single-source fresh claims stay caveated until another safe source family corroborates them." },
+    { id: "br_block_alias_only", blockedReason: "alias_only", owner: "agent_07", publicAnswerEffect: "suppress", proofNote: "Alias-only matches are not evidence of actor activity." },
+    { id: "br_block_unrelated_actor", blockedReason: "unrelated_actor", owner: "agent_07", publicAnswerEffect: "partial", proofNote: "Rows with weak actor linkage are kept out of the searched actor answer." },
+    { id: "br_block_contradicted", blockedReason: "contradicted", owner: "agent_07", publicAnswerEffect: "hold", proofNote: "Contradicted activity requires analyst review before promotion." },
+    { id: "br_block_metadata_only_without_public_support", blockedReason: "metadata_only_without_public_support", owner: "agent_05", publicAnswerEffect: "partial", proofNote: "Restricted metadata can support leads but cannot be the only basis for latest public claims." }
+  ];
+  return {
+    schemaVersion: "ti.program_br_live_freshness_quality_gate.v1",
+    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    examples,
+    blockedLatestClaimCases,
+    freshRowsPromoted: examples.filter((row) => row.decision === "chargeable").length,
+    caveatedRowsKept: examples.filter((row) => row.decision === "caveated").length,
+    staleLatestClaimsBlocked: 5,
+    bloatRowsSuppressed: examples.filter((row) => row.decision === "suppressed").length + blockedLatestClaimCases.filter((row) => row.publicAnswerEffect === "suppress").length,
+    sourceParserHandoffs: [
+      { owner: "agent_01", blocker: "stale_source_or_duplicate_old_report", expectedEffect: "Replace stale source rows before they can satisfy latest-activity freshness." },
+      { owner: "agent_03", blocker: "fresh_rows_missing_actor_victim_ttp_specificity", expectedEffect: "Parse enough structured facts to make fresh rows buyer-actionable." },
+      { owner: "agent_04", blocker: "fresh_single_source_or_public_channel_only_claims", expectedEffect: "Add cross-family corroboration before full paid promotion." },
+      { owner: "agent_05", blocker: "metadata_only_freshness_without_public_support", expectedEffect: "Keep metadata-only rows caveated until public evidence backs them." }
+    ]
+  };
+}
+
 function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"] {
   const baselines: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"] = [
     programBdLiveBaseline({
@@ -849,6 +934,7 @@ function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["
     sourceTierGates: [100, 1000, 4000, 10000, 20000, 60000].map((tier) => paidSourceTierGate(tier as 100 | 1000 | 4000 | 10000 | 20000 | 60000)),
     buyerVisibleQualityLiftGate: buildProgramBgBuyerVisibleQualityLiftGate(),
     qualityConversionGate: buildProgramBqQualityConversionGate(),
+    liveFreshnessQualityGate: buildProgramBrLiveFreshnessQualityGate(),
     releaseDecision: hold ? "hold" : warn ? "partial" : "promote",
     apifyDatasetFields: ["reviewReasons", "analysisFacets", "freshnessExpectation", "topMissingSourceFamily", "nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"],
     remediationActions: [

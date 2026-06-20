@@ -335,6 +335,26 @@ export interface LiveProductSloDashboard {
       expectedEffect: string;
     }>;
   };
+  liveFreshnessQualityGate: {
+    schemaVersion: "ti.program_br_live_freshness_quality_gate.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts">;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    exampleCount: number;
+    chargeableFreshRows: number;
+    caveatedFreshRows: number;
+    staleLatestClaimsBlocked: number;
+    bloatRowsSuppressed: number;
+    minimumFreshRowRate: number;
+    minimumStaleSuppressionRate: number;
+    blockedLatestClaimReasons: string[];
+    sourceParserHandoffs: Array<{
+      owner: "agent_01" | "agent_03" | "agent_04" | "agent_05";
+      blocker: string;
+      expectedEffect: string;
+    }>;
+  };
   slos: Array<{
     name: string;
     state: LiveProductSloState;
@@ -540,6 +560,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const buyerVisibleQualityLiftGate = buildBuyerVisibleQualityLiftGate();
   const marketplaceGraphSignals = buildMarketplaceGraphSignals();
   const qualityConversionGate = buildQualityConversionGate();
+  const liveFreshnessQualityGate = buildLiveFreshnessQualityGate();
   const apiErrorRate = measurements.length
     ? measurements.filter((item) => item.apiError === true || item.status === "error").length / measurements.length
     : null;
@@ -668,6 +689,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     buyerVisibleQualityLiftGate,
     marketplaceGraphSignals,
     qualityConversionGate,
+    liveFreshnessQualityGate,
     slos,
     apifyLaunchExperiment: {
       windowDays: 7,
@@ -957,6 +979,38 @@ function buildQualityConversionGate(): LiveProductSloDashboard["qualityConversio
       { owner: "agent_03", blocker: "generic_rows_missing_actor_victim_ttp_specificity", expectedEffect: "Repair parser output so held rows become specific caveated or chargeable rows." },
       { owner: "agent_04", blocker: "public_channel_snippets_need_cross_family_corroboration", expectedEffect: "Add corroborating public-channel source packs without treating snippets as standalone findings." },
       { owner: "agent_05", blocker: "metadata_only_rows_need_safe_public_corroboration", expectedEffect: "Keep restricted metadata as safe caveated leads until public evidence supports paid promotion." }
+    ]
+  };
+}
+
+function buildLiveFreshnessQualityGate(): LiveProductSloDashboard["liveFreshnessQualityGate"] {
+  return {
+    schemaVersion: "ti.program_br_live_freshness_quality_gate.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    exampleCount: 12,
+    chargeableFreshRows: 6,
+    caveatedFreshRows: 4,
+    staleLatestClaimsBlocked: 5,
+    bloatRowsSuppressed: 3,
+    minimumFreshRowRate: 0.55,
+    minimumStaleSuppressionRate: 0.95,
+    blockedLatestClaimReasons: [
+      "old_evidence",
+      "generic_summary",
+      "single_source",
+      "alias_only",
+      "unrelated_actor",
+      "contradicted",
+      "metadata_only_without_public_support"
+    ],
+    sourceParserHandoffs: [
+      { owner: "agent_01", blocker: "stale_source_or_duplicate_old_report", expectedEffect: "Replace stale source rows before latest-activity claims can become chargeable." },
+      { owner: "agent_03", blocker: "fresh_rows_missing_actor_victim_ttp_specificity", expectedEffect: "Parse structured facts so fresh rows are actionable instead of generic." },
+      { owner: "agent_04", blocker: "fresh_single_source_or_public_channel_only_claims", expectedEffect: "Add cross-family corroboration before full paid promotion." },
+      { owner: "agent_05", blocker: "metadata_only_freshness_without_public_support", expectedEffect: "Keep metadata-only rows caveated until public evidence backs them." }
     ]
   };
 }
