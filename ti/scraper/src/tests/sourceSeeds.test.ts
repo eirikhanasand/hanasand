@@ -1468,6 +1468,63 @@ describe("source seed bundles", () => {
     expect(atlas.sourceEconomics.degradationQueues.every((queue) => queue.willMutate === false && queue.willStartCrawling === false)).toBe(true);
     expect(atlas.sourceEconomics.handoffs.agent09ApiFrontend).toContain("sourceEconomics.rolloutScenarios");
     expect(JSON.stringify(atlas.sourceEconomics)).not.toContain("https://");
+    expect(atlas.sourceLadder).toMatchObject({
+      schemaVersion: "ti.source_atlas.product_source_ladder.v1",
+      routeHint: "/v1/sources/atlas",
+      consumer: "apify_public_threat_actor_monitor",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      guardrails: {
+        publicOnly: true,
+        noRegistryMutation: true,
+        noSourceActivation: true,
+        noCrawling: true,
+        noPrivateInviteAuthCaptcha: true,
+        noRawUnsafeUrls: true,
+        noRawSourcePayloads: true
+      }
+    });
+    expect(atlas.sourceLadder.first100.sourceCount).toBe(100);
+    expect(atlas.sourceLadder.first100.acquisitionStatus).toBe("ready_for_operator_review");
+    expect(atlas.sourceLadder.first100.rows).toHaveLength(100);
+    expect(atlas.sourceLadder.first100.usefulWithin1To3DaysCount).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.first100.apifyRowProducingSourceCount).toBeGreaterThanOrEqual(50);
+    expect(atlas.sourceLadder.first100.actorCoverage.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "LockBit", "Akira"]));
+    expect(atlas.sourceLadder.first100.rows.map((row) => row.sourceName)).toEqual(expect.arrayContaining([
+      "Microsoft Threat Intelligence Blog",
+      "Ransomware.live Victim Tracker",
+      "CISA Known Exploited Vulnerabilities"
+    ]));
+    expect(atlas.sourceLadder.first100.rows.every((row) =>
+      row.buyerValue.length > 40 &&
+      typeof row.canImproveApifyRowsWithin1To3Days === "boolean" &&
+      ["urgent", "high", "normal", "hold"].includes(row.acquisitionPriority) &&
+      row.highestValueMissingFamilyForDefaultGroups.length > 0 &&
+      row.safeLocatorHash.startsWith("ti_source_atlas_locator_")
+    )).toBe(true);
+    expect(atlas.sourceLadder.first100.rows.some((row) =>
+      row.actorsImproved.includes("APT29") &&
+      row.acquisitionPriority === "urgent" &&
+      row.buyerValue.includes("1-3 days")
+    )).toBe(true);
+    expect(atlas.sourceLadder.first100.rows.some((row) =>
+      row.actorsImproved.includes("APT28") &&
+      row.highestValueMissingFamilyForDefaultGroups.some((gap) => gap.actor === "APT28")
+    )).toBe(true);
+    expect(atlas.sourceLadder.first100.rows.some((row) =>
+      row.actorsImproved.includes("LockBit") &&
+      row.expectedRansomwareRowsPerDay > 0
+    )).toBe(true);
+    expect(atlas.sourceLadder.handoffs.agent04SourceAcquisition).toEqual(expect.arrayContaining([
+      "first100.rows.buyerValue",
+      "first100.rows.canImproveApifyRowsWithin1To3Days",
+      "first100.rows.highestValueMissingFamilyForDefaultGroups"
+    ]));
+    expect(atlas.sourceLadder.expectedActorOutputImpact.baselineRows).toBe(98);
+    expect(atlas.sourceLadder.expectedActorOutputImpact.expectedUsefulRowsAfterFirst100).toBeGreaterThan(atlas.sourceLadder.expectedActorOutputImpact.expectedSingleSourceRowsAfterFirst100);
+    expect(JSON.stringify(atlas.sourceLadder)).not.toContain("https://");
     expect(atlas.activationCanary).toMatchObject({
       dryRun: true,
       willMutate: false,

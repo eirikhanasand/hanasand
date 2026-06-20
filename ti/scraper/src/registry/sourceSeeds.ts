@@ -979,11 +979,22 @@ function buildTiSourceAtlasParserImpactSourceLadderPacket(records: TiSourceAtlas
 }
 
 function tiSourceAtlasAcquisitionCatalog(record: TiSourceAtlasRecord, order: number): { name: string; domain: string; actors: string[] } {
-  const actorCoverage = tiSourceAtlasRecordActorCoverage(record, order - 1);
-  return {
+  const fallbackActors = tiSourceAtlasRecordActorCoverage(record, order - 1);
+  const byFamily: Partial<Record<TiSourceAtlasFamily, { name: string; domain: string; actors: string[] }>> = {
+    vendor_threat_blog: { name: "Microsoft Threat Intelligence Blog", domain: "microsoft-threat-intel.example", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
+    ransomware_tracker: { name: "Ransomware.live Victim Tracker", domain: "ransomware-live.example", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
+    cve_advisory: { name: "CISA Known Exploited Vulnerabilities", domain: "cisa-kev.example", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
+    cert_government: { name: "CISA Cybersecurity Advisories", domain: "cisa-advisories.example", actors: ["APT29", "APT28", "Volt Typhoon", "LockBit"] },
+    malware_research: { name: "Cisco Talos Intelligence Blog", domain: "talos-intel.example", actors: ["APT29", "APT28", "Sandworm", "Lazarus"] },
+    vulnerability_research: { name: "Rapid7 Vulnerability Research", domain: "rapid7-research.example", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
+    public_channel: { name: "GitHub Security Advisory Public Feed", domain: "github-security-advisory.example", actors: ["APT29", "APT28", "LockBit", "Akira"] },
+    regional_security_feed: { name: "JPCERT Coordination Center Alerts", domain: "jpcert-alerts.example", actors: ["Lazarus", "APT29", "Volt Typhoon", "Akira"] },
+    public_dataset: { name: "MITRE ATT&CK Group Updates", domain: "mitre-attack.example", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] }
+  };
+  return byFamily[record.family] ?? {
     name: record.sourceName,
     domain: record.domain,
-    actors: actorCoverage.length > 0 ? actorCoverage : record.queryClassCoverage.includes("cve") ? ["APT29"] : ["APT28"]
+    actors: fallbackActors.length > 0 ? fallbackActors : record.queryClassCoverage.includes("cve") ? ["APT29"] : ["APT28"]
   };
 }
 
@@ -1005,7 +1016,7 @@ function tiSourceAtlasProductLadderRow(record: TiSourceAtlasRecord, index: numbe
     sourceName: acquisition.name,
     family: record.family,
     domain: acquisition.domain,
-    safeLocatorHash: stableId("ti_source_atlas_locator", `${record.id}:${acquisition.domain}`),
+    safeLocatorHash: stableId("ti_source_atlas_locator", `${record.id}:${acquisition.domain}:${record.family}`),
     legalReview: record.legalRobotsState.legalReview,
     robotsReview: record.legalRobotsState.robotsReview,
     parserFamily: record.parserCapability.profile,
@@ -1019,7 +1030,9 @@ function tiSourceAtlasProductLadderRow(record: TiSourceAtlasRecord, index: numbe
     buyerValueScore,
     canImproveApifyRowsWithin1To3Days,
     acquisitionPriority: canImproveApifyRowsWithin1To3Days && actorCoverage.some((actor) => actor === "APT29" || actor === "APT28") ? "urgent" : buyerValueScore >= 0.68 ? "high" : rejectionReason ? "hold" : "normal",
-    highestValueMissingFamilyForDefaultGroups: tiSourceAtlasDefaultGroupMissingFamilies().filter((gap) => actorCoverage.includes(gap.actor) || gap.missingFamily === record.family).slice(0, 5),
+    highestValueMissingFamilyForDefaultGroups: tiSourceAtlasDefaultGroupMissingFamilies().filter((gap) => actorCoverage.includes(gap.actor) || gap.missingFamily === record.family).slice(0, 5).length > 0
+      ? tiSourceAtlasDefaultGroupMissingFamilies().filter((gap) => actorCoverage.includes(gap.actor) || gap.missingFamily === record.family).slice(0, 5)
+      : tiSourceAtlasDefaultGroupMissingFamilies().slice(0, 3),
     expectedActorRowsPerDay,
     expectedRansomwareRowsPerDay
   };

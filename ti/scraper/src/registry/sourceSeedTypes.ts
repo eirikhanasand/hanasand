@@ -1,5 +1,6 @@
 import type {
   AccessMethod,
+  CollectedItem,
   SourceActivationStatus,
   SourceCatalogMetadata,
   SourceCollectionSla,
@@ -1408,6 +1409,163 @@ export interface TiSourceAtlasReliabilityEconomicsPacket {
   };
 }
 
+export interface TiSourceAtlasProductSourceLadderPacket {
+  schemaVersion: "ti.source_atlas.product_source_ladder.v1";
+  routeHint: "/v1/sources/atlas";
+  consumer: "apify_public_threat_actor_monitor";
+  dryRun: true;
+  willMutate: false;
+  willImportSourcePacks: false;
+  willStartCrawling: false;
+  generatedAt: string;
+  first100: {
+    sourceCount: 100;
+    rejectedCandidateCount: number;
+    acceptedFamilyCount: number;
+    acquisitionStatus: "ready_for_operator_review";
+    usefulWithin1To3DaysCount: number;
+    apifyRowProducingSourceCount: number;
+    actorCoverage: Array<{
+      actor: "APT29" | "APT28" | "Volt Typhoon" | "Sandworm" | "Lazarus" | "LockBit" | "Akira";
+      sourceIds: string[];
+      sourceFamilyCount: number;
+      expectedFreshRowsPerDay: number;
+      expectedActorRowImprovement: number;
+      currentActorBlocker: "stale_rows" | "missing_evidence" | "thin_single_source_rows" | "metadata_only_hold";
+    }>;
+    rows: Array<{
+      order: number;
+      atlasSourceId: string;
+      sourceName: string;
+      family: TiSourceAtlasFamily;
+      domain: string;
+      safeLocatorHash: string;
+      legalReview: TiSourceAtlasRecord["legalRobotsState"]["legalReview"];
+      robotsReview: TiSourceAtlasRecord["legalRobotsState"]["robotsReview"];
+      parserFamily: SourceMarketplaceParserProfile;
+      actorsImproved: string[];
+      queryClassesImproved: SourceCoverageCloseoutQueryClass[];
+      expectedFreshness: "daily" | "three_day" | "weekly";
+      expectedEntities: string[];
+      dedupeGroup: string;
+      rejectionReason?: "duplicate" | "legal_review" | "parser_gap" | "descriptor_only" | "low_buyer_value";
+      buyerValue: string;
+      buyerValueScore: number;
+      canImproveApifyRowsWithin1To3Days: boolean;
+      acquisitionPriority: "urgent" | "high" | "normal" | "hold";
+      highestValueMissingFamilyForDefaultGroups: Array<{
+        actor: "APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Sandworm" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira";
+        missingFamily: TiSourceAtlasFamily;
+        reason: string;
+      }>;
+      expectedActorRowsPerDay: number;
+      expectedRansomwareRowsPerDay: number;
+    }>;
+  };
+  candidate1000: {
+    candidateCount: 1000;
+    acceptedCandidateCount: number;
+    duplicateRejectedCount: number;
+    legalRejectedCount: number;
+    parserGapCount: number;
+    descriptorOnlyHoldCount: number;
+    lowBuyerValueRejectedCount: number;
+    topCandidateSourceIds: string[];
+    familyBreakdown: Array<{
+      family: TiSourceAtlasFamily;
+      candidateCount: number;
+      acceptedCount: number;
+      rejectedCount: number;
+      expectedFreshRowsPerDay: number;
+    }>;
+  };
+  parsedSourceExamples: Array<{
+    exampleId: string;
+    atlasSourceId: string;
+    actorOrTopic: string;
+    parserFamily: SourceMarketplaceParserProfile;
+    extractedFields: Array<"actor" | "alias" | "victim" | "cve" | "malware_tool" | "campaign" | "sector" | "country" | "reported_date">;
+    expectedDatasetRowType: "actor_activity" | "ransomware_victim_activity" | "cve_context" | "source_coverage_gap";
+    safeSummary: string;
+    noRawContent: true;
+  }>;
+  parserCoverageProof: {
+    sourcePack: "first_100";
+    parsedCount: number;
+    failedCount: number;
+    heldCount: number;
+    publicReportSampleCount: number;
+    publicAdvisorySampleCount: number;
+    publicBlogSampleCount: number;
+    noLeakBoundary: {
+      collectedItemShape: true;
+      rawContentIncluded: false;
+      unsafeUrlsIncluded: false;
+      sourceActivationApplied: false;
+    };
+  };
+  parserImpactTable: Array<{
+    atlasSourceId: string;
+    sourceName: string;
+    family: TiSourceAtlasFamily;
+    actorCoverage: string[];
+    parsedFields: Array<"actor" | "alias" | "victim" | "cve" | "malware_tool" | "campaign" | "sector" | "country" | "reported_date">;
+    summaryQuality: "rich_extracted_facts" | "specific_but_partial" | "generic_source_reported" | "held_no_public_fact";
+    failureMode: "none" | "parser_certification_required" | "legal_or_robots_hold" | "descriptor_only_hold" | "duplicate_suppressed" | "thin_summary";
+    repairPriority: "p0_revenue_blocker" | "p1_default_watchlist_lift" | "p2_source_diversity" | "p3_watch";
+    expectedRowLift: number;
+    expectedPublicMonitorEffect: "apt28_evidence_recovery" | "apt29_freshness" | "ransomware_victim_activity" | "public_advisory_context" | "source_diversity";
+    safeLocatorHash: string;
+  }>;
+  parserRepairPriorities: Array<{
+    rank: number;
+    repair: "apt28_evidence_recovery" | "apt29_freshness" | "public_advisory_blog_extraction" | "ransomware_victim_activity_extraction" | "specific_summary_extraction";
+    affectedSourceIds: string[];
+    expectedDefaultWatchlistRows: number;
+    currentFailure: string;
+    repairAction: string;
+  }>;
+  beforeAfterSampleRows: Array<{
+    sampleId: string;
+    atlasSourceId: string;
+    before: Pick<CollectedItem, "sourceId" | "url" | "collectedAt" | "title" | "rawText" | "contentHash" | "links" | "metadata" | "sensitive">;
+    after: Pick<CollectedItem, "sourceId" | "url" | "collectedAt" | "publishedAt" | "title" | "rawText" | "contentHash" | "language" | "links" | "metadata" | "sensitive">;
+    extractedFields: Array<"actor" | "alias" | "victim" | "cve" | "malware_tool" | "campaign" | "sector" | "country" | "reported_date">;
+  }>;
+  expectedActorOutputImpact: {
+    dailyDefaultGroupCount: 20;
+    baselineRows: number;
+    expectedRowsAfterFirst100: number;
+    expectedUsefulRowsAfterFirst100: number;
+    expectedFreshRowsAfterFirst100: number;
+    expectedSingleSourceRowsAfterFirst100: number;
+    specificImprovements: Array<{
+      query: "APT29" | "APT28" | "Volt Typhoon" | "Sandworm" | "Lazarus" | "LockBit" | "Akira";
+      currentProblem: string;
+      expectedImprovement: string;
+      sourceIds: string[];
+    }>;
+  };
+  handoffs: {
+    agent02SchedulerCadence: string[];
+    agent03ParserCoverage: string[];
+    agent04SourceAcquisition: string[];
+    agent09ApifyDataset: string[];
+    agent10ProductSlo: string[];
+  };
+  guardrails: {
+    publicOnly: true;
+    noRegistryMutation: true;
+    noSourceActivation: true;
+    noCrawling: true;
+    noWorkerLeases: true;
+    noPrivateInviteAuthCaptcha: true;
+    noRawUnsafeUrls: true;
+    noRawSourcePayloads: true;
+    noPayloadDownloads: true;
+  };
+}
+
 export interface TiSourceAtlasApiResponse {
   endpoint: "/v1/sources/atlas";
   schemaVersion: "ti.source_atlas.v1";
@@ -1434,6 +1592,7 @@ export interface TiSourceAtlasApiResponse {
   publicMonitorSourceGapHandoff: TiSourceAtlasPublicMonitorSourceGapHandoff;
   lifecycleReview: TiSourceAtlasLifecycleReviewPacket;
   sourceEconomics: TiSourceAtlasReliabilityEconomicsPacket;
+  sourceLadder: TiSourceAtlasProductSourceLadderPacket;
   activationCanary: {
     dryRun: true;
     willMutate: false;
