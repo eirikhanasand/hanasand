@@ -1385,6 +1385,42 @@ export interface SchedulerDailyActorRunPlanDto {
       metadataOnlyRowsRemainCaveated: true;
     };
   };
+  sourceGapExecutionReadiness: {
+    schemaVersion: "ti.scheduler_source_gap_execution_readiness.v1";
+    routeVisible: true;
+    closureCount: number;
+    executableClosureCount: number;
+    runReuse: {
+      requiredBeforeEnqueue: true;
+      attachBy: "reuseKey";
+      duplicatePolicy: "reattach_active_run_before_new_task";
+      cursorPolicy: "preserve_answer_evidence_and_source_gap_cursors";
+      stormGuard: "one_active_closure_per_tenant_query_source_family";
+    };
+    workerDrain: {
+      pressurePolicy: "interactive_freshness_first";
+      drainOrder: Array<"daily_actor_dataset_emit" | "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_100_source_sweep" | "tier_1000_source_sweep" | "tier_4000_metadata_sweep">;
+      controlledShutdownDeadlineSeconds: number;
+      heartbeatExpiryRecovery: "requeue_with_last_checkpoint";
+      backgroundSweepYield: true;
+    };
+    readinessByClosure: Array<{
+      query: string;
+      missingSourceFamily: "safe_public_sources" | "public_channel" | "approved_dark_metadata";
+      reuseKey: string;
+      queueAction: "reuse_active_run" | "enqueue_gap_probe" | "metadata_review_hold" | "suppress_ready_until_gap_closes";
+      readinessState: "reattach_existing_run" | "ready_to_enqueue" | "ready_for_metadata_review" | "blocked_until_source_activation";
+      executableNow: boolean;
+      enqueueBatch: "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_100_source_sweep" | "tier_1000_source_sweep" | "tier_4000_metadata_sweep";
+      workerPartition: "interactive_actor_search" | "public_channel_window" | "restricted_metadata_approval" | "background_source_sweep";
+      drainPriority: number;
+      maxLeaseSeconds: number;
+      heartbeatSeconds: number;
+      cursorCheckpoint: "answer_delta" | "source_gap_delta" | "metadata_review_delta";
+      blockingReasons: string[];
+      nextOperatorAction: "attach_or_enqueue" | "activate_source_candidate" | "review_metadata_summary" | "suppress_paid_ready";
+    }>;
+  };
   routeContracts: {
     frontierStatusField: "scheduler.dailyActorRunPlan";
     searchSchedulerField: "scheduler.dailyActorRunPlan";

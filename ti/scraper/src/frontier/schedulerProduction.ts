@@ -2050,6 +2050,88 @@ export function buildSchedulerDailyActorRunPlan(input: {
       metadataOnlyRowsRemainCaveated: true
     }
   };
+  const readinessByClosure: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["readinessByClosure"] = sourceGapClosurePlan.gapClosures.map((closure) => {
+    if (closure.missingSourceFamily === "approved_dark_metadata") {
+      return {
+        query: closure.query,
+        missingSourceFamily: closure.missingSourceFamily,
+        reuseKey: closure.reuseKey,
+        queueAction: closure.queueAction,
+        readinessState: "ready_for_metadata_review",
+        executableNow: true,
+        enqueueBatch: "tier_4000_metadata_sweep",
+        workerPartition: "restricted_metadata_approval",
+        drainPriority: 5,
+        maxLeaseSeconds: 600,
+        heartbeatSeconds: 60,
+        cursorCheckpoint: "metadata_review_delta",
+        blockingReasons: ["metadata_only_rows_remain_caveated_until_review"],
+        nextOperatorAction: "review_metadata_summary"
+      };
+    }
+    if (closure.missingSourceFamily === "public_channel") {
+      return {
+        query: closure.query,
+        missingSourceFamily: closure.missingSourceFamily,
+        reuseKey: closure.reuseKey,
+        queueAction: closure.queueAction,
+        readinessState: "ready_to_enqueue",
+        executableNow: true,
+        enqueueBatch: "public_channel_gap_fill",
+        workerPartition: "public_channel_window",
+        drainPriority: 3,
+        maxLeaseSeconds: 180,
+        heartbeatSeconds: 15,
+        cursorCheckpoint: "source_gap_delta",
+        blockingReasons: [],
+        nextOperatorAction: "attach_or_enqueue"
+      };
+    }
+    return {
+      query: closure.query,
+      missingSourceFamily: closure.missingSourceFamily,
+      reuseKey: closure.reuseKey,
+      queueAction: closure.queueAction,
+      readinessState: closure.queueAction === "reuse_active_run" ? "reattach_existing_run" : "ready_to_enqueue",
+      executableNow: true,
+      enqueueBatch: "interactive_commercial_refresh",
+      workerPartition: "interactive_actor_search",
+      drainPriority: 2,
+      maxLeaseSeconds: 120,
+      heartbeatSeconds: 15,
+      cursorCheckpoint: "answer_delta",
+      blockingReasons: closure.queueAction === "suppress_ready_until_gap_closes" ? ["stale_only_rows_remain_blocked_from_ready"] : [],
+      nextOperatorAction: closure.queueAction === "suppress_ready_until_gap_closes" ? "suppress_paid_ready" : "attach_or_enqueue"
+    };
+  });
+  const sourceGapExecutionReadiness: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"] = {
+    schemaVersion: "ti.scheduler_source_gap_execution_readiness.v1",
+    routeVisible: true,
+    closureCount: readinessByClosure.length,
+    executableClosureCount: readinessByClosure.filter((closure) => closure.executableNow).length,
+    runReuse: {
+      requiredBeforeEnqueue: true,
+      attachBy: "reuseKey",
+      duplicatePolicy: "reattach_active_run_before_new_task",
+      cursorPolicy: "preserve_answer_evidence_and_source_gap_cursors",
+      stormGuard: "one_active_closure_per_tenant_query_source_family"
+    },
+    workerDrain: {
+      pressurePolicy: "interactive_freshness_first",
+      drainOrder: [
+        "daily_actor_dataset_emit",
+        "interactive_commercial_refresh",
+        "public_channel_gap_fill",
+        "tier_100_source_sweep",
+        "tier_1000_source_sweep",
+        "tier_4000_metadata_sweep"
+      ],
+      controlledShutdownDeadlineSeconds: 90,
+      heartbeatExpiryRecovery: "requeue_with_last_checkpoint",
+      backgroundSweepYield: true
+    },
+    readinessByClosure
+  };
   const executionQueuePlan: SchedulerDailyActorRunPlanDto["executionQueuePlan"] = {
     enqueueWindow: "source_sweeps_before_actor_run",
     duplicateRunReuseBeforeEnqueue: true,
@@ -2256,6 +2338,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
     },
     executionQueuePlan,
     sourceGapClosurePlan,
+    sourceGapExecutionReadiness,
     routeContracts: {
       frontierStatusField: "scheduler.dailyActorRunPlan",
       searchSchedulerField: "scheduler.dailyActorRunPlan",

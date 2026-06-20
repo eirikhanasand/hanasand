@@ -1590,6 +1590,62 @@ describe("scheduler production readiness", () => {
         paidRowEffect: "metadata_context_only"
       })
     ]));
+    expect(daily.sourceGapExecutionReadiness).toMatchObject({
+      schemaVersion: "ti.scheduler_source_gap_execution_readiness.v1",
+      routeVisible: true,
+      closureCount: daily.sourceGapClosurePlan.gapClosures.length,
+      executableClosureCount: daily.sourceGapClosurePlan.gapClosures.length,
+      runReuse: {
+        requiredBeforeEnqueue: true,
+        attachBy: "reuseKey",
+        duplicatePolicy: "reattach_active_run_before_new_task",
+        cursorPolicy: "preserve_answer_evidence_and_source_gap_cursors"
+      },
+      workerDrain: {
+        pressurePolicy: "interactive_freshness_first",
+        controlledShutdownDeadlineSeconds: 90,
+        heartbeatExpiryRecovery: "requeue_with_last_checkpoint",
+        backgroundSweepYield: true
+      }
+    });
+    expect(daily.sourceGapExecutionReadiness.workerDrain.drainOrder).toEqual([
+      "daily_actor_dataset_emit",
+      "interactive_commercial_refresh",
+      "public_channel_gap_fill",
+      "tier_100_source_sweep",
+      "tier_1000_source_sweep",
+      "tier_4000_metadata_sweep"
+    ]);
+    expect(daily.sourceGapExecutionReadiness.readinessByClosure).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        query: "APT29",
+        missingSourceFamily: "safe_public_sources",
+        readinessState: "ready_to_enqueue",
+        enqueueBatch: "interactive_commercial_refresh",
+        workerPartition: "interactive_actor_search",
+        cursorCheckpoint: "answer_delta",
+        nextOperatorAction: "suppress_paid_ready"
+      }),
+      expect.objectContaining({
+        query: "APT42",
+        missingSourceFamily: "public_channel",
+        reuseKey: "public:APT42:public_channel:daily_actor",
+        readinessState: "ready_to_enqueue",
+        enqueueBatch: "public_channel_gap_fill",
+        workerPartition: "public_channel_window",
+        cursorCheckpoint: "source_gap_delta",
+        nextOperatorAction: "attach_or_enqueue"
+      }),
+      expect.objectContaining({
+        query: "LockBit",
+        missingSourceFamily: "approved_dark_metadata",
+        readinessState: "ready_for_metadata_review",
+        enqueueBatch: "tier_4000_metadata_sweep",
+        workerPartition: "restricted_metadata_approval",
+        cursorCheckpoint: "metadata_review_delta",
+        nextOperatorAction: "review_metadata_summary"
+      })
+    ]));
     expect(daily.staleSuppression.affectedQueries).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42"]));
     expect(daily.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_daily_actor_run_plan");
     expect(daily.releaseGate.proofCommands).toContain("bun run check:apify-publication");

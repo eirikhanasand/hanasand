@@ -13,6 +13,14 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-20 20:52 CEST
+
+- Added `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness` so source-gap closures now expose executable queue readiness, not only desired closure actions.
+- Each closure now states reuse-key attachment before enqueue, executable state, enqueue batch, worker partition, lease/heartbeat bounds, cursor checkpoint, drain priority, blocking reasons, and next operator action for APT29 stale public-source refresh, APT42 public-channel probe, and ransomware metadata review.
+- Added worker-drain semantics for queue pressure and shutdown: daily dataset emission and interactive freshness stay ahead of public-channel fills, broad source sweeps, and approved metadata sweeps while background work yields.
+- Green: `bun run check`, `bun test src/tests/schedulerProduction.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run check:api-regression`.
+- Next: continue turning readiness into concrete source sweep run-reuse behavior and worker drain execution paths, with public freshness and Apify row value ahead of internal queue theory.
+
 ## Progress - 2026-06-20 20:44 CEST
 
 - Added `scheduler.dailyActorRunPlan.sourceGapClosurePlan` so the daily Actor plan now shows per-query source-gap closures, not just batch ordering: `APT29` stale public-source refresh, `APT42` public-channel probe, and ransomware approved-metadata review.
