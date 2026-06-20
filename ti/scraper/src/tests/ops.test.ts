@@ -832,6 +832,39 @@ describe("ops controls", () => {
     expect(dashboard.graphSellableSupportPacket.examples.every((row) => row.relationshipSupport.length > 0 && row.caveat.length > 0 && row.nextBuyerSearch.length > 0 && row.countsTowardProductionSellableRows === false && row.noLeak)).toBe(true);
     expect(dashboard.graphSellableSupportPacket.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.graphSellableSupportPacket.noLeakBoundary).toMatchObject({ rawEvidenceBodies: false, unsafeUrls: false, objectKeys: false, credentials: false, payloadLinks: false, privateMaterial: false, actorInteraction: false });
+    expect(dashboard.releaseDecision.acceptedRepairBuckets.find((bucket) => bucket.source === "graphPublicCorroborationPivotPacket")).toBeUndefined();
+    expect(dashboard.graphPublicCorroborationPivotPacket).toMatchObject({
+      schemaVersion: "ti.program_cs_graph_public_corroboration_pivot_packet.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"]),
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      productionSellableFloor: 100,
+      candidateCount: 30,
+      rowUnlockingCandidateCount: 24,
+      contradictionOrAliasHoldCount: 6,
+      graphOnlyRowsExcludedFromFloor: 30,
+      projectedSellableRowsAfterPublicCorroboration: 42
+    });
+    expect(dashboard.graphPublicCorroborationPivotPacket.candidates.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Qilin", "Sandworm", "NOBELIUM", "Carbanak", "Conti", "8Base"]));
+    expect(dashboard.graphPublicCorroborationPivotPacket.candidates.every((row) =>
+      row.relationshipSupport.length > 0 &&
+      row.nextPublicCorroborationPivot.queryText.length > 0 &&
+      row.nextPublicCorroborationPivot.expectedSourceFamily.length > 0 &&
+      row.nextPublicCorroborationPivot.repairsRowField.length > 0 &&
+      row.graphOnlyCountsTowardSellableRows === false &&
+      row.rowUnlockRequiresNonGraphEvidence === true &&
+      row.noLeak
+    )).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) =>
+      row.expectedSellableRowsUnlockedAfterPublicProof === 0 &&
+      ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) &&
+      ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk)
+    )).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(dashboard.graphPublicCorroborationPivotPacket.noLeakBoundary).toMatchObject({ rawEvidenceBodies: false, unsafeUrls: false, objectKeys: false, credentials: false, payloadLinks: false, privateMaterial: false, actorInteraction: false });
     expect(dashboard.parserToSellableRepairPacket).toMatchObject({
       schemaVersion: "ti.live_product_parser_to_100_sellable_rows_packet.v1",
       owner: "agent_03",

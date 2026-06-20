@@ -1011,6 +1011,65 @@ if (
 ) {
   throw new Error("Program CI graph support packet must keep no-leak boundaries closed");
 }
+const graphPublicCorroborationPivotPacket = outputRecord.graphPublicCorroborationPivotPacket as Record<string, unknown> | undefined;
+if (
+  !graphPublicCorroborationPivotPacket
+  || graphPublicCorroborationPivotPacket.schemaVersion !== "ti.apify_graph_public_corroboration_pivot_packet.v1"
+  || graphPublicCorroborationPivotPacket.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || graphPublicCorroborationPivotPacket.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || graphPublicCorroborationPivotPacket.dryRun !== true
+  || graphPublicCorroborationPivotPacket.willMutateSources !== false
+  || graphPublicCorroborationPivotPacket.willStartCollection !== false
+  || graphPublicCorroborationPivotPacket.productionSellableFloor !== 100
+  || Number(graphPublicCorroborationPivotPacket.candidateCount) !== 30
+  || Number(graphPublicCorroborationPivotPacket.rowUnlockingCandidateCount) !== 24
+  || Number(graphPublicCorroborationPivotPacket.contradictionOrAliasHoldCount) !== 6
+  || Number(graphPublicCorroborationPivotPacket.graphOnlyRowsExcludedFromFloor) !== 30
+  || Number(graphPublicCorroborationPivotPacket.projectedSellableRowsAfterPublicCorroboration) !== 42
+  || !Array.isArray(graphPublicCorroborationPivotPacket.candidates)
+  || graphPublicCorroborationPivotPacket.candidates.length !== 30
+  || !Array.isArray(graphPublicCorroborationPivotPacket.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program CS graph public corroboration pivots");
+}
+const graphPublicPivots = graphPublicCorroborationPivotPacket.candidates as Array<Record<string, unknown>>;
+if (!graphPublicPivots.every((row) => {
+  const pivot = row.nextPublicCorroborationPivot as Record<string, unknown> | undefined;
+  return typeof row.relationshipSupport === "string"
+    && pivot
+    && typeof pivot.queryText === "string"
+    && typeof pivot.expectedSourceFamily === "string"
+    && typeof pivot.repairsRowField === "string"
+    && row.graphOnlyCountsTowardSellableRows === false
+    && row.rowUnlockRequiresNonGraphEvidence === true
+    && row.noLeak === true;
+})) {
+  throw new Error("Program CS graph public pivots must expose public search text, repair field, floor exclusion, and no-leak proof");
+}
+if (!graphPublicPivots
+  .filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold")
+  .every((row) => {
+    const pivot = row.nextPublicCorroborationPivot as Record<string, unknown> | undefined;
+    return row.expectedSellableRowsUnlockedAfterPublicProof === 0
+      && pivot
+      && ["medium", "high"].includes(String(pivot.contradictionRisk))
+      && ["medium", "high"].includes(String(pivot.aliasCollisionRisk));
+  })) {
+  throw new Error("Program CS contradiction and alias pivots must be held with zero sellable projected gain");
+}
+const graphPublicNoLeak = graphPublicCorroborationPivotPacket.noLeakBoundary as Record<string, unknown> | undefined;
+if (
+  !graphPublicNoLeak
+  || graphPublicNoLeak.rawEvidenceBodies !== false
+  || graphPublicNoLeak.unsafeUrls !== false
+  || graphPublicNoLeak.objectKeys !== false
+  || graphPublicNoLeak.credentials !== false
+  || graphPublicNoLeak.payloadLinks !== false
+  || graphPublicNoLeak.privateMaterial !== false
+  || graphPublicNoLeak.actorInteraction !== false
+) {
+  throw new Error("Program CS graph public pivots must keep no-leak boundaries closed");
+}
 const marketplaceConversionRealRowSamplePack = outputRecord.marketplaceConversionRealRowSamplePack as Record<string, unknown> | undefined;
 if (
   !marketplaceConversionRealRowSamplePack

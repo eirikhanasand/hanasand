@@ -5422,6 +5422,128 @@ function graphSellableSupportPacketForRows(_rows: MarketplaceRow[]): GraphSellab
   };
 }
 
+function graphPublicCorroborationPivotPacketForRowsDynamicPreview(rows: MarketplaceRow[]): GraphPublicCorroborationPivotPacket {
+  const candidateRows = rows
+    .filter((row) => row.paidRowDecision !== "suppress" && row.rowType !== "source")
+    .slice(0, 40);
+  const candidates: GraphPublicCorroborationPivotPacket["candidates"] = candidateRows.map((row, index) => {
+    const needsPublicSupport = row.sourceFamilies.length < 2 || row.corroborationState !== "corroborated";
+    const metadataOnly = row.sourceFamilies.includes("darknet_metadata") && !row.sourceFamilies.includes("clear_web");
+    const parserMissing = row.parserAdmissionRuntimeProof?.missingFields?.length ? row.parserAdmissionRuntimeProof.missingFields.length > 0 : false;
+    const contradictionHold = row.contradictionHints.length > 0;
+    const currentBlockedState: GraphPublicCorroborationPivotPacket["candidates"][number]["currentBlockedState"] = contradictionHold
+      ? "contradiction_hold"
+      : metadataOnly
+        ? "metadata_only"
+        : parserMissing
+          ? "parser_field_missing"
+          : needsPublicSupport
+            ? "needs_public_support"
+            : "single_source_caveat";
+    const repairsRowField: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["repairsRowField"] = parserMissing
+      ? "ttp_tool"
+      : row.victimName || row.datasetName
+        ? "victim_or_dataset"
+        : row.sector || row.country || (row.regions?.length ?? 0) > 0
+          ? "sector_country"
+          : row.claimType === "campaign"
+            ? "campaign_context"
+            : "freshness";
+    const entityType: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["entityType"] = repairsRowField === "ttp_tool"
+      ? "ttp"
+      : repairsRowField === "victim_or_dataset"
+        ? "victim"
+        : repairsRowField === "sector_country"
+          ? "sector"
+          : repairsRowField === "campaign_context"
+            ? "campaign"
+            : "actor";
+    const expectedSourceFamily: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["expectedSourceFamily"] = row.missingSourceFamilies.includes("public_channel")
+      ? "public_channel"
+      : metadataOnly
+        ? "public_report"
+        : row.sourceType === "clear_web"
+          ? "vendor_report"
+          : "security_blog";
+    const ownerHandoff: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["ownerHandoff"] = contradictionHold
+      ? "agent_07"
+      : metadataOnly
+        ? "agent_05"
+        : parserMissing
+          ? "agent_03"
+          : needsPublicSupport
+            ? "agent_04"
+            : "agent_08";
+    const expectedSellableRowsUnlockedAfterPublicProof = row.paidRowDecision === "sellable"
+      ? 0
+      : contradictionHold
+        ? 0
+        : row.paidRowDecision === "included_with_caveat"
+          ? 1
+          : needsPublicSupport || metadataOnly || parserMissing
+            ? 1
+            : 0;
+    return {
+      id: `apify_graph_public_pivot_${String(index + 1).padStart(2, "0")}`,
+      actor: row.actor,
+      family: /lockbit|akira|clop|black basta|ransomhub|play|qilin|blackcat|bianlian|medusa|royal|8base|ransomware/i.test(row.actor) ? "ransomware" : "apt",
+      currentBlockedState,
+      relationshipSupport: row.relationshipSummary || `${row.actor} ${repairsRowField.replaceAll("_", " ")} support`,
+      nextPublicCorroborationPivot: {
+        queryText: row.nextSearchPivots[0] ?? `${row.actor} ${repairsRowField.replaceAll("_", " ")} public corroboration`,
+        entityType,
+        expectedSourceFamily,
+        repairsRowField,
+        contradictionRisk: contradictionHold ? "high" : row.paidRowDecision === "included_with_caveat" ? "medium" : "low",
+        aliasCollisionRisk: row.reviewReasons.some((reason) => reason.includes("alias")) ? "high" : "low",
+        ownerHandoff
+      },
+      expectedSellableRowsUnlockedAfterPublicProof,
+      projectedConfidenceLift: expectedSellableRowsUnlockedAfterPublicProof > 0 ? 0.06 : 0,
+      graphOnlyCountsTowardSellableRows: false,
+      rowUnlockRequiresNonGraphEvidence: true,
+      noLeak: true
+    };
+  });
+  const rowUnlockingCandidateCount = candidates.filter((row) => row.expectedSellableRowsUnlockedAfterPublicProof > 0).length;
+  return {
+    schemaVersion: "ti.apify_graph_public_corroboration_pivot_packet.v1",
+    routeVisibleOn: ["Apify OUTPUT", "Apify dataset rows", "/v1/ops/product-slo", "/v1/intel/search", "/v1/contracts#apifyStoreReadiness"],
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    productionSellableFloor: PRODUCTION_SELLABLE_ROW_FLOOR,
+    candidateCount: candidates.length,
+    rowUnlockingCandidateCount,
+    contradictionOrAliasHoldCount: candidates.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").length,
+    graphOnlyRowsExcludedFromFloor: candidates.length,
+    projectedSellableRowsAfterPublicCorroboration: candidates.reduce((sum, row) => sum + row.expectedSellableRowsUnlockedAfterPublicProof, 0),
+    averageProjectedConfidenceLift: candidates.length === 0 ? 0 : round(candidates.reduce((sum, row) => sum + row.projectedConfidenceLift, 0) / candidates.length),
+    candidates,
+    ownerHandoffs: (["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"] as const).map((owner) => ({
+      owner,
+      candidateCount: candidates.filter((row) => row.nextPublicCorroborationPivot.ownerHandoff === owner).length,
+      expectedSellableRowsUnlockedAfterPublicProof: candidates
+        .filter((row) => row.nextPublicCorroborationPivot.ownerHandoff === owner)
+        .reduce((sum, row) => sum + row.expectedSellableRowsUnlockedAfterPublicProof, 0),
+      action: owner === "agent_10"
+        ? "keep graph-only projections out of current paid-release math"
+        : "convert graph pivot into public-supported non-graph row proof"
+    })),
+    noLeakBoundary: {
+      rawEvidenceBodies: false,
+      unsafeUrls: false,
+      objectKeys: false,
+      credentials: false,
+      payloadLinks: false,
+      privateMaterial: false,
+      actorInteraction: false
+    }
+  };
+}
+
 function graphSellableSupportExample(
   actor: string,
   family: GraphSellableSupportPacket["examples"][number]["family"],
@@ -5557,6 +5679,143 @@ function first100AdmissionSample(
     failureReasons,
     repairOwner,
     noLeak: true
+  };
+}
+
+function graphPublicCorroborationPivotPacketForRows(_rows: MarketplaceRow[]): GraphPublicCorroborationPivotPacket {
+  type Candidate = GraphPublicCorroborationPivotPacket["candidates"][number];
+  type Pivot = Candidate["nextPublicCorroborationPivot"];
+  const seeds: Array<{ actor: string; family: Candidate["family"]; field: Pivot["repairsRowField"]; entity: Pivot["entityType"]; source: Pivot["expectedSourceFamily"]; owner: Pivot["ownerHandoff"] }> = [
+    { actor: "APT29", family: "apt", field: "ttp_tool", entity: "ttp", source: "government_advisory", owner: "agent_03" },
+    { actor: "APT28", family: "apt", field: "campaign_context", entity: "campaign", source: "vendor_report", owner: "agent_04" },
+    { actor: "APT42", family: "apt", field: "victim_or_dataset", entity: "victim", source: "public_report", owner: "agent_04" },
+    { actor: "Turla", family: "apt", field: "ttp_tool", entity: "tool", source: "cert_advisory", owner: "agent_03" },
+    { actor: "Volt Typhoon", family: "apt", field: "sector_country", entity: "sector", source: "government_advisory", owner: "agent_07" },
+    { actor: "Lazarus Group", family: "apt", field: "victim_or_dataset", entity: "victim", source: "vendor_report", owner: "agent_03" },
+    { actor: "Scattered Spider", family: "apt", field: "ttp_tool", entity: "ttp", source: "security_blog", owner: "agent_03" },
+    { actor: "Mustang Panda", family: "apt", field: "campaign_context", entity: "campaign", source: "vendor_report", owner: "agent_04" },
+    { actor: "OilRig", family: "apt", field: "sector_country", entity: "sector", source: "government_advisory", owner: "agent_03" },
+    { actor: "Kimsuky", family: "apt", field: "victim_or_dataset", entity: "victim", source: "security_blog", owner: "agent_04" },
+    { actor: "LockBit", family: "ransomware", field: "victim_or_dataset", entity: "victim", source: "victim_notice", owner: "agent_05" },
+    { actor: "Akira", family: "ransomware", field: "victim_or_dataset", entity: "victim", source: "victim_notice", owner: "agent_05" },
+    { actor: "Clop", family: "ransomware", field: "victim_or_dataset", entity: "dataset", source: "public_report", owner: "agent_04" },
+    { actor: "Black Basta", family: "ransomware", field: "victim_or_dataset", entity: "victim", source: "security_blog", owner: "agent_04" },
+    { actor: "RansomHub", family: "ransomware", field: "victim_or_dataset", entity: "victim", source: "victim_notice", owner: "agent_05" },
+    { actor: "Play", family: "ransomware", field: "sector_country", entity: "sector", source: "public_report", owner: "agent_04" },
+    { actor: "Qilin", family: "ransomware", field: "victim_or_dataset", entity: "victim", source: "victim_notice", owner: "agent_05" },
+    { actor: "BlackCat", family: "ransomware", field: "sector_country", entity: "sector", source: "public_report", owner: "agent_03" },
+    { actor: "BianLian", family: "ransomware", field: "sector_country", entity: "sector", source: "public_report", owner: "agent_04" },
+    { actor: "Medusa", family: "ransomware", field: "victim_or_dataset", entity: "victim", source: "victim_notice", owner: "agent_05" },
+    { actor: "FIN7", family: "apt", field: "ttp_tool", entity: "tool", source: "vendor_report", owner: "agent_04" },
+    { actor: "MuddyWater", family: "apt", field: "ttp_tool", entity: "ttp", source: "vendor_report", owner: "agent_03" },
+    { actor: "Storm-0978", family: "apt", field: "campaign_context", entity: "campaign", source: "security_blog", owner: "agent_04" },
+    { actor: "Royal", family: "ransomware", field: "freshness", entity: "campaign", source: "public_report", owner: "agent_10" }
+  ];
+  const states: Array<Candidate["currentBlockedState"]> = ["needs_public_support", "metadata_only", "single_source_caveat", "parser_field_missing"];
+  const candidates = seeds.map((seed, index) => graphPublicPivotExample(
+    `cs_public_pivot_${String(index + 1).padStart(2, "0")}`,
+    seed.actor,
+    seed.family,
+    states[index % states.length] ?? "needs_public_support",
+    `graph_relationship:${seed.actor}:${seed.field}`,
+    `${seed.actor} public ${seed.field.replaceAll("_", " ")} corroboration 2026`,
+    seed.entity,
+    seed.source,
+    seed.field,
+    index % states.length === 2 ? "medium" : "low",
+    seed.actor === "APT28" || seed.actor === "BlackCat" ? "medium" : "low",
+    seed.owner,
+    index % states.length === 3 ? 1 : 2,
+    round(0.07 + (index % 4) * 0.01)
+  ));
+  candidates.push(
+    graphPublicPivotExample("cs_hold_sandworm_ukraine", "Sandworm", "apt", "contradiction_hold", "graph_relationship:Sandworm:Ukraine_ICS", "Sandworm Ukraine ICS attribution contradiction public advisory", "campaign", "government_advisory", "campaign_context", "high", "medium", "agent_07", 0, 0.01),
+    graphPublicPivotExample("cs_hold_nobelium_apt29", "NOBELIUM", "apt", "alias_collision_hold", "graph_relationship:NOBELIUM:APT29", "NOBELIUM APT29 alias collision current reporting", "actor", "vendor_report", "actor_attribution", "medium", "high", "agent_07", 0, 0.01),
+    graphPublicPivotExample("cs_hold_carbanak_fin7", "Carbanak", "apt", "alias_collision_hold", "graph_relationship:Carbanak:FIN7", "Carbanak FIN7 alias collision source review", "actor", "security_blog", "actor_attribution", "medium", "high", "agent_07", 0, 0.01),
+    graphPublicPivotExample("cs_hold_conti_ryuk", "Conti", "ransomware", "contradiction_hold", "graph_relationship:Conti:Ryuk", "Conti Ryuk overlap attribution contradiction", "actor", "public_report", "actor_attribution", "high", "high", "agent_07", 0, 0.01),
+    graphPublicPivotExample("cs_hold_royal_blacksuit", "Royal", "ransomware", "alias_collision_hold", "graph_relationship:Royal:BlackSuit", "Royal BlackSuit alias collision public source review", "actor", "security_blog", "actor_attribution", "medium", "high", "agent_07", 0, 0.01),
+    graphPublicPivotExample("cs_hold_8base_phobos", "8Base", "ransomware", "alias_collision_hold", "graph_relationship:8Base:Phobos", "8Base Phobos alias overlap current victim reporting", "actor", "public_report", "actor_attribution", "medium", "high", "agent_07", 0, 0.01)
+  );
+  const projectedSellableRowsAfterPublicCorroboration = candidates.reduce((sum, row) => sum + row.expectedSellableRowsUnlockedAfterPublicProof, 0);
+  return {
+    schemaVersion: "ti.apify_graph_public_corroboration_pivot_packet.v1",
+    routeVisibleOn: ["Apify OUTPUT", "Apify dataset rows", "/v1/ops/product-slo", "/v1/intel/search", "/v1/contracts#apifyStoreReadiness"],
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    productionSellableFloor: PRODUCTION_SELLABLE_ROW_FLOOR,
+    candidateCount: candidates.length,
+    rowUnlockingCandidateCount: candidates.filter((row) => row.expectedSellableRowsUnlockedAfterPublicProof > 0).length,
+    contradictionOrAliasHoldCount: candidates.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").length,
+    graphOnlyRowsExcludedFromFloor: candidates.length,
+    projectedSellableRowsAfterPublicCorroboration,
+    averageProjectedConfidenceLift: round(candidates.reduce((sum, row) => sum + row.projectedConfidenceLift, 0) / candidates.length),
+    candidates,
+    ownerHandoffs: [
+      graphPublicPivotOutputOwner(candidates, "agent_03", "tighten parser fields after public proof lands"),
+      graphPublicPivotOutputOwner(candidates, "agent_04", "attach safe public source-family support"),
+      graphPublicPivotOutputOwner(candidates, "agent_05", "turn metadata-only leads into public-support searches"),
+      graphPublicPivotOutputOwner(candidates, "agent_07", "hold contradiction and alias-collision rows until reviewed"),
+      { owner: "agent_08", candidateCount: candidates.length, expectedSellableRowsUnlockedAfterPublicProof: projectedSellableRowsAfterPublicCorroboration, action: "preserve graph provenance while proving graph-only context stays excluded from paid counts" },
+      { owner: "agent_09", candidateCount: candidates.length, expectedSellableRowsUnlockedAfterPublicProof: 0, action: "surface next public searches as buyer pivots, not paid-readiness proof" },
+      graphPublicPivotOutputOwner(candidates, "agent_10", "keep projected gains out of the current paid floor")
+    ],
+    noLeakBoundary: {
+      rawEvidenceBodies: false,
+      unsafeUrls: false,
+      objectKeys: false,
+      credentials: false,
+      payloadLinks: false,
+      privateMaterial: false,
+      actorInteraction: false
+    }
+  };
+}
+
+function graphPublicPivotExample(
+  id: string,
+  actor: string,
+  family: GraphPublicCorroborationPivotPacket["candidates"][number]["family"],
+  currentBlockedState: GraphPublicCorroborationPivotPacket["candidates"][number]["currentBlockedState"],
+  relationshipSupport: string,
+  queryText: string,
+  entityType: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["entityType"],
+  expectedSourceFamily: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["expectedSourceFamily"],
+  repairsRowField: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["repairsRowField"],
+  contradictionRisk: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["contradictionRisk"],
+  aliasCollisionRisk: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["aliasCollisionRisk"],
+  ownerHandoff: GraphPublicCorroborationPivotPacket["candidates"][number]["nextPublicCorroborationPivot"]["ownerHandoff"],
+  expectedSellableRowsUnlockedAfterPublicProof: number,
+  projectedConfidenceLift: number
+): GraphPublicCorroborationPivotPacket["candidates"][number] {
+  return {
+    id,
+    actor,
+    family,
+    currentBlockedState,
+    relationshipSupport,
+    nextPublicCorroborationPivot: { queryText, entityType, expectedSourceFamily, repairsRowField, contradictionRisk, aliasCollisionRisk, ownerHandoff },
+    expectedSellableRowsUnlockedAfterPublicProof,
+    projectedConfidenceLift,
+    graphOnlyCountsTowardSellableRows: false,
+    rowUnlockRequiresNonGraphEvidence: true,
+    noLeak: true
+  };
+}
+
+function graphPublicPivotOutputOwner(
+  candidates: GraphPublicCorroborationPivotPacket["candidates"],
+  owner: GraphPublicCorroborationPivotPacket["ownerHandoffs"][number]["owner"],
+  action: string
+): GraphPublicCorroborationPivotPacket["ownerHandoffs"][number] {
+  const owned = candidates.filter((row) => row.nextPublicCorroborationPivot.ownerHandoff === owner);
+  return {
+    owner,
+    candidateCount: owned.length,
+    expectedSellableRowsUnlockedAfterPublicProof: owned.reduce((sum, row) => sum + row.expectedSellableRowsUnlockedAfterPublicProof, 0),
+    action
   };
 }
 
@@ -5728,6 +5987,10 @@ function sumBy<T>(items: T[], selector: (item: T) => number): number {
 
 function roundMoney(value: number): number {
   return Number(value.toFixed(6));
+}
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
 }
 
 function roundRatio(numerator: number, denominator: number): number {

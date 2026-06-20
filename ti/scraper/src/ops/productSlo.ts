@@ -4569,7 +4569,7 @@ function graphSellableSupportSloExample(
   };
 }
 
-function buildGraphPublicCorroborationPivotPacketExpandedUnused(): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"] {
+function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"] {
   type Candidate = LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number];
   type Pivot = Candidate["nextPublicCorroborationPivot"];
   const seeds: Array<{ actor: string; family: Candidate["family"]; field: Pivot["repairsRowField"]; entity: Pivot["entityType"]; source: Pivot["expectedSourceFamily"]; owner: Pivot["ownerHandoff"] }> = [

@@ -1234,6 +1234,30 @@ describe("api v1", () => {
     expect((response.graphSellableSupportPacket as { examples: Array<{ relationshipSupport: string; nextBuyerSearch: string; countsTowardProductionSellableRows: boolean; noLeak: boolean }> }).examples.every((row) => row.relationshipSupport.length > 0 && row.nextBuyerSearch.length > 0 && row.countsTowardProductionSellableRows === false && row.noLeak)).toBe(true);
     expect((response.graphSellableSupportPacket as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect((response.graphSellableSupportPacket as { noLeakBoundary: Record<string, boolean> }).noLeakBoundary).toMatchObject({ rawEvidenceBodies: false, unsafeUrls: false, objectKeys: false, credentials: false, payloadLinks: false, privateMaterial: false, actorInteraction: false });
+    expect((response.releaseDecision as { acceptedRepairBuckets: Array<{ source: string }> }).acceptedRepairBuckets.find((bucket) => bucket.source === "graphPublicCorroborationPivotPacket")).toBeUndefined();
+    expect((response.graphPublicCorroborationPivotPacket as {
+      schemaVersion: string;
+      routeVisibleOn: string[];
+      candidateCount: number;
+      rowUnlockingCandidateCount: number;
+      contradictionOrAliasHoldCount: number;
+      graphOnlyRowsExcludedFromFloor: number;
+      projectedSellableRowsAfterPublicCorroboration: number;
+    })).toMatchObject({
+      schemaVersion: "ti.program_cs_graph_public_corroboration_pivot_packet.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"]) as unknown as string[],
+      candidateCount: 30,
+      rowUnlockingCandidateCount: 24,
+      contradictionOrAliasHoldCount: 6,
+      graphOnlyRowsExcludedFromFloor: 30,
+      projectedSellableRowsAfterPublicCorroboration: 42
+    });
+    const graphPublicPivots = (response.graphPublicCorroborationPivotPacket as { candidates: Array<{ actor: string; currentBlockedState: string; expectedSellableRowsUnlockedAfterPublicProof: number; relationshipSupport: string; graphOnlyCountsTowardSellableRows: boolean; rowUnlockRequiresNonGraphEvidence: boolean; noLeak: boolean; nextPublicCorroborationPivot: { queryText: string; expectedSourceFamily: string; repairsRowField: string; contradictionRisk: string; aliasCollisionRisk: string } }> }).candidates;
+    expect(graphPublicPivots.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Qilin", "Sandworm", "NOBELIUM", "Carbanak", "Conti", "8Base"]));
+    expect(graphPublicPivots.every((row) => row.relationshipSupport.length > 0 && row.nextPublicCorroborationPivot.queryText.length > 0 && row.nextPublicCorroborationPivot.expectedSourceFamily.length > 0 && row.nextPublicCorroborationPivot.repairsRowField.length > 0 && row.graphOnlyCountsTowardSellableRows === false && row.rowUnlockRequiresNonGraphEvidence === true && row.noLeak)).toBe(true);
+    expect(graphPublicPivots.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) => row.expectedSellableRowsUnlockedAfterPublicProof === 0 && ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) && ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk))).toBe(true);
+    expect((response.graphPublicCorroborationPivotPacket as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect((response.graphPublicCorroborationPivotPacket as { noLeakBoundary: Record<string, boolean> }).noLeakBoundary).toMatchObject({ rawEvidenceBodies: false, unsafeUrls: false, objectKeys: false, credentials: false, payloadLinks: false, privateMaterial: false, actorInteraction: false });
     expect((response.qualityConversionGate as {
       schemaVersion: string;
       routeVisibleOn: string[];
