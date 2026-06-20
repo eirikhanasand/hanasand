@@ -13,6 +13,16 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-20 18:55 CEST
+
+- Completed the latest daily Actor freshness/scheduler slice for published Apify build `0.6.4`.
+- Added latest proof-run context to `scheduler.dailyActorRunPlan`: run `iMQGeezZ8bx7WtlhQ`, dataset `5PLmkE30luBA5Lbgc`, query `APT42`, 10 safe rows, 4s runtime, about `$0.001` usage, paid-row decision counts, and current buyer blockers.
+- Added `freshCollectionRetryPlan` with 3-second visible status, 120-second fresh-evidence target, retry backoff `[3, 15, 60]`, per-work-class retry/deadline states, and escalation reasons for stale actors, public-channel gaps, dark-metadata gaps, weak victim extraction, and retry debt.
+- Exposed the new run-plan fields through the scheduler DTO types and `/v1/contracts` semantics so UI/API clients can show proof context, retry state, dead-letter pressure, and freshness targets instead of only a static searching state.
+- Repaired shared source/product SLO drift around paid-row decision counts and source-atlas helper duplication so the repo compiles and route contracts load.
+- Green: `bun run check`, `bun test src/tests/schedulerProduction.test.ts`, `bun run check:route-inventory`, `bun run check:api-regression`, `bun run check:contract-index`, and full `bun test` (527 pass).
+- Next: keep going on execution-facing scheduler behavior for real daily source sweeps, source-family fairness, stale-row suppression, run reuse, worker drain/readiness, and source/dark-metadata scale ladder freshness.
+
 ## Progress - 2026-06-20 17:30 CEST
 
 - Completed the daily Apify Actor run-plan slice for revenue-focused freshness: `scheduler.dailyActorRunPlan` now exposes the 20-query default watchlist, Actor id/build, daily timing, 3-second polling, duplicate-run reuse, useful/fresh row targets, stale-only suppression, and cost-per-useful-row economics.
