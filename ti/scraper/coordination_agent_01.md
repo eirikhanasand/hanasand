@@ -34,6 +34,6 @@ When your patch is coherent, update this file, commit, push, and leave no hangin
 - Updated shared coordination for the additive `/v1/sources/atlas.sourceLadder` contract and restored buyer-visible Program BD paid-row quality gate typing.
 - Verification is green: `bun run check`, focused `bun test src/tests/sourceSeeds.test.ts src/tests/api.test.ts src/tests/pipeline.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (527 pass).
 
-## Next Agent 01 Task Request
+## Continue Without Waiting
 
-- Ready for the next Agent 01 source registry, source lifecycle, governance approval, source health, source scoring, seed ingestion, or Postgres persistence task.
+The active Program BK assignment above supersedes the old task request. Continue until the first 25 and first 100 sources have activation decisions, canary expectations, parser ownership, expected paid-row lift, and a non-mutating apply plan that Agent 02 can schedule and Agent 10 can measure. When that is done, continue into the 1,000-source acquisition/readiness ladder from `coordination_product_focus.md` without waiting for another prompt.

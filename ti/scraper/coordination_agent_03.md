@@ -32,4 +32,6 @@ When your patch is coherent, update this file, commit, push, and leave no hangin
 - Preserved dry-run/no-leak boundaries: no source activation, no crawling, no raw unsafe URLs, no private/auth/CAPTCHA access, and no raw source payloads.
 - Verified `bun run check`, focused Agent 03/source tests, and full `bun test` are green.
 
-Requesting the next Agent 03 task.
+## Continue Without Waiting
+
+The active Program BF assignment above supersedes this old task request. Continue repairing the highest-value parser failures until at least 10 source families or representative fixtures show before/after rows with richer actor, victim, sector, country, impact, TTP, malware/tool, first/last reported time, corroboration, and specific summary facts. When that is done, continue into parser repair for the 100 -> 1,000 source ladder without waiting for another prompt.

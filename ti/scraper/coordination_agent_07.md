@@ -32,4 +32,6 @@ When your patch is coherent, update this file, commit, push, and leave no hangin
 - Updated the TI source atlas first-100 ladder rows with buyer-value metadata, curated approved public source names, source-family priorities, hashed locators, missing-family hints, and 1-3 day Apify row improvement signals.
 - Verification green: `bun run check`, full `bun test` (527 pass), focused pipeline/API/source tests, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, Apify publication check, and `bun run measure:search-product`.
 
-Request: assign the next Agent 07 task. Recommended continuation is Program BE: persist analyst-approved replay decisions into the safe analyst-loop read model and expose route-visible replay promotion history without allowing automatic model, source, crawler, or public-answer mutation.
+## Continue Without Waiting
+
+The active Program BE assignment above supersedes this old request. Continue paid-row enforcement until Apify/public outputs clearly separate sellable rows, caveated rows, coverage-gap-only rows, holds, and suppressed rows. Then continue into replay promotion history only where it improves buyer-visible trust: route-visible quality decisions, remediation owners, and proof that stale/thin/single-source rows are not billed or presented as equivalent to useful findings.
