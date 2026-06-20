@@ -1,0 +1,62 @@
+{
+  "query": "APT42",
+  "generatedAt": "2026-06-20T02:29:22.559Z",
+  "mode": "live_search",
+  "status": "partial",
+  "refreshAfterSeconds": 3,
+  "summary": "APT42 is an Iran-linked espionage actor commonly associated with social engineering, credential theft, account takeover, and targeting of policy, diplomatic, journalist, NGO, and research communities.",
+  "confidence": 0.46,
+  "lastSeen": "2026-06-20T02:29:22.559Z",
+  "aliases": ["Charming Kitten", "Mint Sandstorm", "TA453", "Yellow Garuda"],
+  "recentActivity": [
+    {
+      "date": "2026-06-20",
+      "title": "APT42 public reporting monitor",
+      "detail": "Public reporting links this actor cluster to social-engineering and credential-collection activity.",
+      "confidence": 0.62,
+      "sourceIds": ["fixture:public-report"],
+      "url": "https://example.com/public-report"
+    }
+  ],
+  "targets": [
+    {
+      "sector": "Government, policy, and diplomacy",
+      "regions": ["Middle East", "Europe", "North America"],
+      "rationale": "Public reporting commonly links APT42-style activity to intelligence collection against policy, diplomatic, and regional targets.",
+      "confidence": 0.62
+    }
+  ],
+  "ttps": [
+    {
+      "name": "Phishing",
+      "attackId": "T1566",
+      "tactic": "Initial Access",
+      "detail": "Known public reporting commonly describes social-engineering and credential harvesting.",
+      "confidence": 0.62
+    }
+  ],
+  "datasets": [
+    {
+      "name": "Live clear-web search",
+      "type": "clear_web",
+      "coverage": "Real-time public web discovery plus approved scraper captures",
+      "status": "available"
+    },
+    {
+      "name": "Darknet/leak metadata",
+      "type": "darknet_metadata",
+      "coverage": "Metadata-only actor/victim/date claims; no leaked file downloads",
+      "status": "metadata_only"
+    }
+  ],
+  "sources": [
+    {
+      "id": "fixture:public-report",
+      "name": "Public report fixture",
+      "type": "live_clear_web",
+      "provenance": "https://example.com/public-report",
+      "url": "https://example.com/public-report"
+    }
+  ],
+  "notes": ["Instant actor context is ready while live discovery continues."]
+}

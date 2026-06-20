@@ -1,0 +1,15 @@
+{
+  "name": "public-threat-actor-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "check": "bunx tsc --noEmit",
+    "smoke": "bun run scripts/smoke.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}

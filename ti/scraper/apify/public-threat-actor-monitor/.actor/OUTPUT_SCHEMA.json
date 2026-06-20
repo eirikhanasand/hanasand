@@ -1,0 +1,19 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Threat intelligence output",
+  "description": "Normalized actor profiles, activity, targeting, TTP, source, and dataset coverage rows.",
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "title": "Threat intelligence rows",
+      "description": "The default dataset containing normalized public-intelligence rows.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    },
+    "summary": {
+      "type": "string",
+      "title": "Run summary",
+      "description": "The complete normalized output array stored as the OUTPUT record.",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/OUTPUT"
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "actorSpecification": 1,
+  "fields": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "query": { "type": "string" },
+      "rowType": { "type": "string", "enum": ["profile", "activity", "target", "ttp", "source", "dataset"] },
+      "actor": { "type": "string" },
+      "title": { "type": "string" },
+      "summary": { "type": "string" },
+      "sourceType": { "type": "string" },
+      "sourceName": { "type": "string" },
+      "sourceUrl": { "type": "string" },
+      "claimedDate": { "type": "string" },
+      "sector": { "type": "string" },
+      "regions": { "type": "array", "items": { "type": "string" } },
+      "ttp": { "type": "string" },
+      "attackId": { "type": "string" },
+      "tactic": { "type": "string" },
+      "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+      "generatedAt": { "type": "string", "format": "date-time" },
+      "firstSeen": { "type": "string", "format": "date-time" },
+      "lastSeen": { "type": "string", "format": "date-time" },
+      "collectionMode": { "type": "string" },
+      "sourceCount": { "type": "integer", "minimum": 0 },
+      "sourceFamilyCount": { "type": "integer", "minimum": 0 },
+      "activityCount": { "type": "integer", "minimum": 0 },
+      "freshnessStatus": { "type": "string", "enum": ["current", "recent", "stale", "unknown"] },
+      "evidenceGrade": { "type": "string", "enum": ["corroborated", "single_source", "unverified"] },
+      "isActionable": { "type": "boolean" },
+      "hasDarknetMetadata": { "type": "boolean" },
+      "hasPublicChannelCoverage": { "type": "boolean" },
+      "provenanceHash": { "type": "string" },
+      "rawContentIncluded": { "type": "boolean", "const": false },
+      "warningCodes": { "type": "array", "items": { "type": "string" } }
+    },
+    "required": ["query", "rowType", "actor", "title", "summary", "confidence", "generatedAt", "firstSeen", "lastSeen", "freshnessStatus", "evidenceGrade", "isActionable", "provenanceHash", "rawContentIncluded"]
+  },
+  "views": {
+    "overview": {
+      "title": "Actor intelligence",
+      "transformation": {
+        "fields": ["actor", "rowType", "title", "summary", "freshnessStatus", "evidenceGrade", "isActionable", "sourceType", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "actor": { "label": "Actor", "format": "text" },
+          "rowType": { "label": "Type", "format": "text" },
+          "title": { "label": "Finding", "format": "text" },
+          "summary": { "label": "Summary", "format": "text" },
+          "freshnessStatus": { "label": "Freshness", "format": "text" },
+          "evidenceGrade": { "label": "Evidence", "format": "text" },
+          "isActionable": { "label": "Actionable", "format": "boolean" },
+          "sourceType": { "label": "Source class", "format": "text" },
+          "claimedDate": { "label": "Claimed", "format": "date" },
+          "sector": { "label": "Sector", "format": "text" },
+          "attackId": { "label": "ATT&CK", "format": "text" },
+          "confidence": { "label": "Confidence", "format": "number" },
+          "lastSeen": { "label": "Last seen", "format": "date" },
+          "sourceName": { "label": "Source", "format": "text" },
+          "sourceUrl": { "label": "Source URL", "format": "link" }
+        }
+      }
+    }
+  }
+}

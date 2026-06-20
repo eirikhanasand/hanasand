@@ -1,0 +1,59 @@
+{
+  "title": "Public Threat Actor Monitor input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "queries": {
+      "title": "Actors or groups",
+      "type": "array",
+      "description": "Threat actor, ransomware group, malware, or campaign names to monitor.",
+      "editor": "stringList",
+      "prefill": ["APT29", "APT28", "APT42", "Lazarus Group", "Volt Typhoon", "Salt Typhoon", "Turla", "Sandworm", "Kimsuky", "MuddyWater", "Charming Kitten", "Scattered Spider", "LockBit", "Clop", "Akira", "Black Basta", "Play", "RansomHub", "ALPHV", "Hunters International"]
+    },
+    "query": {
+      "title": "Single actor or group",
+      "type": "string",
+      "description": "Optional single query. Used when queries is empty.",
+      "editor": "textfield"
+    },
+    "maxRowsPerQuery": {
+      "title": "Max rows per query",
+      "type": "integer",
+      "description": "Maximum normalized dataset rows returned per query.",
+      "default": 25,
+      "minimum": 1,
+      "maximum": 100
+    },
+    "includeActivity": {
+      "title": "Include recent activity",
+      "type": "boolean",
+      "description": "Return rows for recent public mentions, claims, and reporting when available.",
+      "default": true
+    },
+    "includeTargets": {
+      "title": "Include targeting",
+      "type": "boolean",
+      "description": "Return rows for likely sectors, countries, or regions associated with the query.",
+      "default": true
+    },
+    "includeTtps": {
+      "title": "Include TTPs",
+      "type": "boolean",
+      "description": "Return rows for observed techniques, tactics, tools, and mapped ATT&CK identifiers when available.",
+      "default": true
+    },
+    "includeSources": {
+      "title": "Include source coverage",
+      "type": "boolean",
+      "description": "Return source provenance rows used to support the result.",
+      "default": true
+    },
+    "includeDatasets": {
+      "title": "Include dataset coverage",
+      "type": "boolean",
+      "description": "Return rows describing available clear-web, public-channel, and darknet-metadata coverage.",
+      "default": true
+    }
+  },
+  "required": []
+}
