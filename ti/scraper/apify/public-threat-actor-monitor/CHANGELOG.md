@@ -5,6 +5,7 @@
 - Disabled service coverage rows by default so normal runs only return intelligence and evidence.
 - Kept coverage metadata available as an explicit input option.
 - Revised the example output to reflect single-source evidence without inflated corroboration claims.
+- Classified dated news sources as clear-web evidence and covered the mapping in the smoke fixture.
 
 ## 0.2.0 - 2026-06-20
 

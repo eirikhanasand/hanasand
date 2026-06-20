@@ -465,7 +465,7 @@ function sourceType(type: string | undefined): MarketplaceRow["sourceType"] {
   if (!type) return "system";
   if (type.includes("telegram") || type.includes("channel")) return "public_channel";
   if (type.includes("dark") || type.includes("leak")) return "darknet_metadata";
-  if (type.includes("web") || type.includes("rss") || type.includes("clear")) return "clear_web";
+  if (type.includes("web") || type.includes("rss") || type.includes("news") || type.includes("clear")) return "clear_web";
   return "system";
 }
 

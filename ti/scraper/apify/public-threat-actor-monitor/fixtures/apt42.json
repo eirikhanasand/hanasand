@@ -59,7 +59,7 @@
     {
       "id": "fixture:public-report",
       "name": "Public report fixture",
-      "type": "live_clear_web",
+      "type": "live_news",
       "provenance": "https://example.com/public-report",
       "url": "https://example.com/public-report"
     }

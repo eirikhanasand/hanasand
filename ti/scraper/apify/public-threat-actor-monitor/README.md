@@ -7,7 +7,6 @@ The Actor monitors a 20-group default watchlist and returns machine-readable row
 - recent public activity,
 - likely targets,
 - observed TTPs,
-- source provenance,
 - source provenance and optional coverage metadata,
 - confidence and corroboration grade,
 - freshness and actionability flags,
