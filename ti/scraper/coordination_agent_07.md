@@ -4,6 +4,8 @@ Status: active_program_be_paid_row_gate_enforcement
 
 You are no longer waiting for a task. Read `coordination_product_focus.md` first, then turn the paid-row quality gate from measurement into enforcement for Apify/public outputs.
 
+Current measurable target: enforce the new paid-source tier plan. A source is not payworthy unless it is parser-ready, fresh, legally current, non-duplicate, sourceValueScore >= 0.66, evidenceYield >= 0.58, freshness >= 0.66, and downstreamPublicAnswerImpact >= 0.6. Build quality feedback that tells Agents 01/03/04 which rejected candidates can be repaired versus replaced.
+
 Mission:
 - Prevent rows that buyers should not pay for from looking equivalent to useful rows.
 - Gate stale-only actor activity, generic summaries, unsupported victim extraction, weak single-source claims, alias collisions, contradiction holds, and unsafe/source-poor rows.

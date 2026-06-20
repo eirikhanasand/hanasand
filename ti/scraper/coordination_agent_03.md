@@ -4,6 +4,8 @@ Status: active_program_bf_parser_repair_execution_for_top_sources
 
 You are no longer waiting for a task. Read `coordination_product_focus.md` first, then turn the parser coverage proof into repair execution for the sources most likely to sell the Actor.
 
+Current measurable target: 2,532 of the evaluated 4,000 source candidates fail the paid-source gate. Prioritize parser repairs that convert existing high-potential sources into payworthy sources: certified parser, non-generic summary, actor/victim/sector/country/TTP/date extraction, and before/after Actor row examples. Report how many sources moved from rejected to payworthy.
+
 Mission:
 - Convert the first-100 parser impact table into concrete parser improvements and canary fixtures.
 - Make paid rows richer than headline/source repetition by extracting actor, victim, sector, country, impact, TTP, malware/tool, first/last reported time, publisher/corroboration, and summary-specific facts.

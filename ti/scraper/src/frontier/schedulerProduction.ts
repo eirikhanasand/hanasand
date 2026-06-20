@@ -1972,7 +1972,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
     schemaVersion: "ti.scheduler_daily_actor_run_plan.v1",
     apifyActor: {
       actorId: "eirikhanasand/public-threat-actor-monitor",
-      publishedBuild: "0.6.3",
+      publishedBuild: "0.6.4",
       defaultQueryCount: 20,
       defaultQueries,
       runCadence: "daily",

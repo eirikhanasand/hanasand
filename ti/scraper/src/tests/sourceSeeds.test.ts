@@ -1524,6 +1524,36 @@ describe("source seed bundles", () => {
     ]));
     expect(atlas.sourceLadder.expectedActorOutputImpact.baselineRows).toBe(98);
     expect(atlas.sourceLadder.expectedActorOutputImpact.expectedUsefulRowsAfterFirst100).toBeGreaterThan(atlas.sourceLadder.expectedActorOutputImpact.expectedSingleSourceRowsAfterFirst100);
+    expect(atlas.sourceLadder.paidSourceTierPlan).toMatchObject({
+      schemaVersion: "ti.source_atlas.paid_source_tier_plan.v1",
+      thesisAlignment: expect.stringContaining("timely APT monitoring"),
+      monetizationAlignment: expect.stringContaining("Blocks marketplace scale claims")
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.tiers.map((tier) => tier.tier)).toEqual([100, 1000, 4000, 10000, 20000, 60000]);
+    expect(atlas.sourceLadder.paidSourceTierPlan.tiers.find((tier) => tier.tier === 100)).toMatchObject({
+      evaluatedCandidateCount: 100,
+      minimumPayworthyRate: 0.72,
+      minimumSourceValueScore: 0.66
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.tiers.find((tier) => tier.tier === 1000)).toMatchObject({
+      evaluatedCandidateCount: 500,
+      state: "hold_until_evaluated"
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.tiers.find((tier) => tier.tier === 60000)).toMatchObject({
+      evaluatedCandidateCount: 500,
+      state: "hold_until_evaluated"
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.tiers.every((tier) =>
+      tier.payworthySourceCount <= tier.evaluatedCandidateCount &&
+      tier.payworthyRate <= 1 &&
+      tier.requiredBeforeAdvance.length > 0 &&
+      tier.measurableRevenueReason.length > 80
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.currentPass).toMatchObject({
+      evaluatedTier: 100,
+      heldTierCount: 6
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.currentPass.payworthySourceCount).toBeGreaterThan(0);
     expect(JSON.stringify(atlas.sourceLadder)).not.toContain("https://");
     expect(atlas.activationCanary).toMatchObject({
       dryRun: true,

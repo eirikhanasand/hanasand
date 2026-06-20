@@ -504,8 +504,8 @@ export interface EvidenceActorProductImpactReplay {
   generatedAt: string;
   handoffId: string;
   productSurface: "apify_public_threat_actor_monitor";
-  actorBuild: "0.6.3";
-  latestProofRunId: "dQzvWhNM2OHrBWVfo";
+  actorBuild: "0.6.4";
+  latestProofRunId: "iMQGeezZ8bx7WtlhQ";
   state: "ready" | "partial" | "hold";
   usefulActorRows: {
     freshRowsImprovingActorResult: EvidenceActorProductImpactRow[];
@@ -530,8 +530,8 @@ export interface EvidenceActorProductImpactReplay {
     handoffId: string;
     promotionTransactionId: string;
     auditReplaySchemaVersion: EvidencePromotionTransactionAuditReplay["schemaVersion"];
-    proofRunId: "dQzvWhNM2OHrBWVfo";
-    proofDatasetId: "aP1dqnK7uEezn5jJv";
+    proofRunId: "iMQGeezZ8bx7WtlhQ";
+    proofDatasetId: "5PLmkE30luBA5Lbgc";
     commands: string[];
   };
   noLeakGuarantees: {
@@ -1307,8 +1307,8 @@ export function buildEvidenceActorProductImpactReplay(
     generatedAt,
     handoffId: writeSet.handoffId,
     productSurface: "apify_public_threat_actor_monitor",
-    actorBuild: "0.6.3",
-    latestProofRunId: "dQzvWhNM2OHrBWVfo",
+    actorBuild: "0.6.4",
+    latestProofRunId: "iMQGeezZ8bx7WtlhQ",
     state,
     usefulActorRows: {
       freshRowsImprovingActorResult: freshPublicRows,
@@ -1329,8 +1329,8 @@ export function buildEvidenceActorProductImpactReplay(
       handoffId: writeSet.handoffId,
       promotionTransactionId: promotionTransaction.transactionId,
       auditReplaySchemaVersion: auditReplay.schemaVersion,
-      proofRunId: "dQzvWhNM2OHrBWVfo",
-      proofDatasetId: "aP1dqnK7uEezn5jJv",
+      proofRunId: "iMQGeezZ8bx7WtlhQ",
+      proofDatasetId: "5PLmkE30luBA5Lbgc",
       commands: [
         "bun run measure:search-product",
         "bun test src/tests/storageCutover.test.ts",

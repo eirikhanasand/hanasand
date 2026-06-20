@@ -711,15 +711,15 @@ const PROGRAM_BD_ROW_METRICS: ProgramBdRowQualityMetric[] = [
 function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"] {
   const baselines: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"] = [
     programBdLiveBaseline({
-      runId: "dQzvWhNM2OHrBWVfo",
-      buildId: "0.6.3",
-      datasetId: "aP1dqnK7uEezn5jJv",
-      rowCount: 15,
-      usefulRowCount: 9,
-      corroboratedRowCount: 4,
-      singleSourceRowCount: 10,
-      thinRowCount: 8,
-      staleOrUnverifiedRowCount: 4,
+      runId: "iMQGeezZ8bx7WtlhQ",
+      buildId: "0.6.4",
+      datasetId: "5PLmkE30luBA5Lbgc",
+      rowCount: 10,
+      usefulRowCount: 5,
+      corroboratedRowCount: 2,
+      singleSourceRowCount: 7,
+      thinRowCount: 5,
+      staleOrUnverifiedRowCount: 3,
       safetyFailureCount: 0
     }),
     programBdLiveBaseline({

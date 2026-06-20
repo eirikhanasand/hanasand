@@ -7,6 +7,7 @@ You are no longer waiting for a task. Read `coordination_product_focus.md` first
 Mission:
 - Safely deploy or prepare a deploy-safe current scraper image/code path so `/v1/ops/product-slo` is available on the deployed stack.
 - Capture daily/run-level economics for Apify Actor build `0.6.4` and later: usage, rows, useful rows, fresh rows, stale penalty, paid-row decision counts, projected gross/net revenue, views/runs/users, payout blocker state, and conversion trend.
+- Add the new source monetization gate to SLO reporting: evaluated source candidates, payworthy source count, payworthy rate, threshold, ready/held tiers, and cost/useful-row impact. Current baseline is 1,468 payworthy of 4,000 evaluated candidates (36.7%), threshold 72%; tiers 10k/20k/60k remain held until evaluated.
 - Do not stop at dashboard fields; prove the public endpoint and snapshot command work.
 
 Build:

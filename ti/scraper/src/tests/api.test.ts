@@ -3998,8 +3998,8 @@ describe("api v1", () => {
       actorProductImpactReplay: {
         schemaVersion: "ti.evidence_actor_product_impact_replay.v1",
         productSurface: "apify_public_threat_actor_monitor",
-        actorBuild: "0.6.3",
-        latestProofRunId: "dQzvWhNM2OHrBWVfo",
+        actorBuild: "0.6.4",
+        latestProofRunId: "iMQGeezZ8bx7WtlhQ",
         state: expect.any(String),
         usefulActorRows: {
           freshRowsImprovingActorResult: expect.any(Array),
@@ -4019,8 +4019,8 @@ describe("api v1", () => {
           handoffId: expect.any(String),
           promotionTransactionId: expect.any(String),
           auditReplaySchemaVersion: "ti.evidence_promotion_transaction_audit_replay.v1",
-          proofRunId: "dQzvWhNM2OHrBWVfo",
-          proofDatasetId: "aP1dqnK7uEezn5jJv",
+          proofRunId: "iMQGeezZ8bx7WtlhQ",
+          proofDatasetId: "5PLmkE30luBA5Lbgc",
           commands: expect.arrayContaining(["bun run measure:search-product"])
         },
         noLeakGuarantees: {
@@ -10301,7 +10301,7 @@ describe("api v1", () => {
       }
     });
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.liveBaselines.map((baseline) => baseline.runId)).toEqual(expect.arrayContaining([
-      "dQzvWhNM2OHrBWVfo",
+      "iMQGeezZ8bx7WtlhQ",
       "rh6D0UInDD6x7GuuD"
     ]));
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.metricThresholds.map((threshold) => threshold.metric)).toEqual(expect.arrayContaining([

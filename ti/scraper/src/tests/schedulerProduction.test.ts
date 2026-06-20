@@ -1449,7 +1449,7 @@ describe("scheduler production readiness", () => {
     expect(daily.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/intel/search.scheduler", "apify_public_threat_actor_monitor"]));
     expect(daily.apifyActor).toMatchObject({
       actorId: "eirikhanasand/public-threat-actor-monitor",
-      publishedBuild: "0.6.3",
+      publishedBuild: "0.6.4",
       defaultQueryCount: 20,
       runCadence: "daily"
     });

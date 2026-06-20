@@ -49,6 +49,14 @@ Every agent should prefer work that improves one or more of:
 - pricing/payout/conversion readiness;
 - cost per useful row.
 
+## Current Source Monetization Gate
+
+- Latest local source-atlas paid tier pass evaluates 4,000 candidates and counts only 1,468 as payworthy for paid Actor/source value, a payworthy rate of 36.7%.
+- Required value density before promoting a tier is 72% payworthy sources with source value score >= 0.66, parser certification, current legal review, freshness >= 0.66, evidence yield >= 0.58, dedupe pass, and downstream public-answer impact >= 0.6.
+- Tier 100, 1,000, and 4,000 are not ready for marketplace scale claims; they need source replacement, parser repair, dedupe, and higher freshness/yield sources.
+- Tier 10,000, 20,000, and 60,000 are held until enough real candidates are evaluated. Do not describe these tiers as ready or complete.
+- Revenue target for every source pass: increase payworthy-source count and payworthy rate, then prove lift with daily Actor rows, useful-row rate, fresh-row rate, source-family diversity, and cost per useful row.
+
 ## Agent Focus
 
 - Agent 01: real source packs and source economics for the 100 -> 60k ladder.

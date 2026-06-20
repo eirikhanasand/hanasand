@@ -1479,6 +1479,31 @@ export interface TiSourceAtlasProductSourceLadderPacket {
       expectedFreshRowsPerDay: number;
     }>;
   };
+  paidSourceTierPlan: {
+    schemaVersion: "ti.source_atlas.paid_source_tier_plan.v1";
+    thesisAlignment: string;
+    monetizationAlignment: string;
+    tiers: Array<{
+      tier: 100 | 1000 | 4000 | 10000 | 20000 | 60000;
+      state: "ready_for_review" | "needs_more_payworthy_sources" | "hold_until_evaluated";
+      evaluatedCandidateCount: number;
+      payworthySourceCount: number;
+      payworthyRate: number;
+      minimumPayworthyRate: number;
+      minimumSourceValueScore: number;
+      rejectedCandidateCount: number;
+      topPayworthySourceIds: string[];
+      measurableRevenueReason: string;
+      requiredBeforeAdvance: string[];
+    }>;
+    currentPass: {
+      evaluatedTier: 100 | 1000 | 4000 | 10000 | 20000 | 60000;
+      readyTierCount: number;
+      heldTierCount: number;
+      payworthySourceCount: number;
+      monetizationValueDelta: string;
+    };
+  };
   parsedSourceExamples: Array<{
     exampleId: string;
     atlasSourceId: string;

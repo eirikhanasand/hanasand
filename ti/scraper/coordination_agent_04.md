@@ -4,6 +4,8 @@ Status: active_program_bl_source_acquisition_to_1000
 
 You are no longer waiting for a task. Read `coordination_product_focus.md` first, then turn source acquisition into buyer-visible live data value for the Apify Actor. This is a long-running program, not a small patch.
 
+Current measurable target: source expansion is value-gated, not count-gated. The 4,000-candidate pass has 1,468 payworthy sources (36.7%); the promotion threshold is 72%. Acquire and rank real public TI sources that increase freshness, evidence yield, and downstream public-answer impact for the default Actor watchlist. Avoid low-value list padding.
+
 Mission:
 - Expand from the first-100 source ladder toward 1,000 ranked, deduped, legally reviewable public TI sources that can improve fresh rows, useful rows, and source-family diversity.
 - Prioritize sources that can produce timely APT/ransomware activity: vendor CTI blogs, CERT/government advisories, malware research, exploit/vulnerability intelligence, ransomware/public extortion trackers, public Telegram/channel mirrors where allowed, public datasets, ICS/cloud/SaaS abuse feeds, phishing/brand abuse, and curated public-report references.

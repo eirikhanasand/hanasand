@@ -2064,8 +2064,8 @@ describe("evidence storage cutover", () => {
     expect(actorProductImpactReplay).toMatchObject({
       schemaVersion: "ti.evidence_actor_product_impact_replay.v1",
       productSurface: "apify_public_threat_actor_monitor",
-      actorBuild: "0.6.3",
-      latestProofRunId: "dQzvWhNM2OHrBWVfo",
+      actorBuild: "0.6.4",
+      latestProofRunId: "iMQGeezZ8bx7WtlhQ",
       state: "partial",
       answerImpact: {
         canImprovePaidActorResult: true,
@@ -2079,8 +2079,8 @@ describe("evidence storage cutover", () => {
         handoffId: backendWriteSet.handoffId,
         promotionTransactionId: promotionTransaction.transactionId,
         auditReplaySchemaVersion: "ti.evidence_promotion_transaction_audit_replay.v1",
-        proofRunId: "dQzvWhNM2OHrBWVfo",
-        proofDatasetId: "aP1dqnK7uEezn5jJv",
+        proofRunId: "iMQGeezZ8bx7WtlhQ",
+        proofDatasetId: "5PLmkE30luBA5Lbgc",
         commands: expect.arrayContaining(["bun run measure:search-product"])
       },
       noLeakGuarantees: {

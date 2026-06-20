@@ -300,7 +300,7 @@ describe("ops controls", () => {
         { query: "APT29", proofMode: "inspur", firstResponseMs: 900, firstFreshEvidenceMs: 7000, pollIntervalMs: 3000, status: "ready", rowCount: 29, usefulRowCount: 12, freshRowCount: 24, activityClaimCount: 4, duplicateArticleRate: 0.05, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false },
         { query: "Made Up Actor", proofMode: "inspur", firstResponseMs: 650, pollIntervalMs: 3000, status: "empty", rowCount: 0, usefulRowCount: 0, freshRowCount: 0, activityClaimCount: 0, duplicateArticleRate: 0, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false }
       ],
-      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.3", buildId: "build_123", runId: "run_actor_123", datasetId: "ds_123", status: "succeeded", queryCount: 20, rowCount: 98, usefulRowCount: 48, freshRowCount: 64, staleRowCount: 3, activityClaimRowCount: 4, defaultWatchlistRun: true },
+      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.4", buildId: "build_123", runId: "run_actor_123", datasetId: "ds_123", status: "succeeded", queryCount: 20, rowCount: 98, usefulRowCount: 48, freshRowCount: 64, staleRowCount: 3, activityClaimRowCount: 4, defaultWatchlistRun: true },
       cost: { computeCostUsd: 0.0023, resultPriceUsdPerThousand: 3, actorStartPriceUsd: 0.00005, apifyMarginRate: 0.2 },
       marketplace: { actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, beneficiaryVerified: false, payoutMethodReady: false, pricingEffectiveAt: "2026-07-04" },
       snapshotStoragePath: "var/ops/live-product-slo/test.jsonl"

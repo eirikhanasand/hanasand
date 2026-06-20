@@ -545,7 +545,7 @@ export function buildSourcePortfolioApiResponse(input: {
 
 export function buildTiSourceAtlasApiResponse(input: { queries?: string[]; tenantId?: string; generatedAt?: string; recordLimit?: number } = {}): TiSourceAtlasApiResponse {
   const generatedAt = input.generatedAt ?? nowIso();
-  const recordLimit = Math.max(500, Math.min(input.recordLimit ?? 560, 1000));
+  const recordLimit = Math.max(500, Math.min(input.recordLimit ?? 560, 4000));
   const records = buildTiSourceAtlasRecords(recordLimit, generatedAt);
   const first100 = records.filter((record) => !record.duplicate.suppressed).slice(0, 100);
   const first1000Ids = buildTiSourceAtlasSourceIds(1000);
@@ -936,6 +936,7 @@ function buildTiSourceAtlasParserImpactSourceLadderPacket(records: TiSourceAtlas
       topCandidateSourceIds: accepted1000.sort((left, right) => right.sourceValueScore - left.sourceValueScore || left.id.localeCompare(right.id)).slice(0, 25).map((record) => record.id),
       familyBreakdown
     },
+    paidSourceTierPlan: buildPaidSourceTierPlan(records),
     parsedSourceExamples,
     parserCoverageProof: {
       sourcePack: "first_100",
@@ -975,6 +976,73 @@ function buildTiSourceAtlasParserImpactSourceLadderPacket(records: TiSourceAtlas
       agent10ProductSlo: ["parserCoverageProof.parsedCount", "expectedActorOutputImpact.expectedUsefulRowsAfterFirst100", "guardrails"]
     },
     guardrails: { publicOnly: true, noRegistryMutation: true, noSourceActivation: true, noCrawling: true, noWorkerLeases: true, noPrivateInviteAuthCaptcha: true, noRawUnsafeUrls: true, noRawSourcePayloads: true, noPayloadDownloads: true }
+  };
+}
+
+function buildPaidSourceTierPlan(records: TiSourceAtlasRecord[]): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"] {
+  const tiers: Array<100 | 1000 | 4000 | 10000 | 20000 | 60000> = [100, 1000, 4000, 10000, 20000, 60000];
+  const minimumSourceValueScore = 0.66;
+  const minimumPayworthyRate = 0.72;
+  const rows = tiers.map((tier) => {
+    const evaluated = records.slice(0, Math.min(records.length, tier));
+    const payworthy = evaluated.filter((record) =>
+      record.activationReadiness.state === "ready_for_dry_run"
+      && !record.duplicate.suppressed
+      && record.parserCapability.certified
+      && record.legalRobotsState.legalReview === "current"
+      && record.sourceValueScore >= minimumSourceValueScore
+      && record.downstreamPublicAnswerImpact >= 0.6
+      && record.evidenceYield >= 0.58
+      && record.freshness >= 0.66
+    );
+    const payworthyRate = evaluated.length > 0 ? roundScore(payworthy.length / evaluated.length) : 0;
+    const evaluatedEnough = records.length >= tier;
+    const state: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["tiers"][number]["state"] =
+      !evaluatedEnough ? "hold_until_evaluated"
+        : payworthyRate >= minimumPayworthyRate ? "ready_for_review"
+          : "needs_more_payworthy_sources";
+    const requiredBeforeAdvance = state === "ready_for_review"
+      ? ["operator_review", "parser_canary", "no_leak_smoke", "daily_actor_run_before_after"]
+      : !evaluatedEnough
+        ? [`evaluate_${tier}_real_candidates`, "dedupe_candidates", "score_freshness_and_yield", "prove_no_leak_contract"]
+        : ["replace_low_value_candidates", "repair_parser_holds", "remove_duplicates", "add_higher_freshness_public_sources"];
+    return {
+      tier,
+      state,
+      evaluatedCandidateCount: evaluated.length,
+      payworthySourceCount: payworthy.length,
+      payworthyRate,
+      minimumPayworthyRate,
+      minimumSourceValueScore,
+      rejectedCandidateCount: evaluated.length - payworthy.length,
+      topPayworthySourceIds: payworthy
+        .sort((left, right) => right.sourceValueScore - left.sourceValueScore || left.id.localeCompare(right.id))
+        .slice(0, 20)
+        .map((record) => record.id),
+      measurableRevenueReason: state === "ready_for_review"
+        ? `Tier ${tier} has enough high-value sources to run a before/after Actor proof and measure useful-row lift.`
+        : state === "hold_until_evaluated"
+          ? `Tier ${tier} is not a revenue claim yet; only ${evaluated.length} candidates are evaluated, so expansion must add real high-value sources before promotion.`
+          : `Tier ${tier} has ${payworthy.length} payworthy sources, below the value density needed for paid data; replace weak candidates before scaling.`,
+      requiredBeforeAdvance
+    };
+  });
+  const readyTierCount = rows.filter((row) => row.state === "ready_for_review").length;
+  const heldTierCount = rows.length - readyTierCount;
+  const largestEvaluated = rows.filter((row) => row.evaluatedCandidateCount >= row.tier).at(-1)?.tier ?? 100;
+  const payworthySourceCount = rows.find((row) => row.tier === largestEvaluated)?.payworthySourceCount ?? rows[0]?.payworthySourceCount ?? 0;
+  return {
+    schemaVersion: "ti.source_atlas.paid_source_tier_plan.v1",
+    thesisAlignment: "Ranks public intelligence sources by expected ability to improve timely APT monitoring, coverage, and actor/victim/TTP extraction.",
+    monetizationAlignment: "Blocks marketplace scale claims until each tier has enough fresh, parser-ready, non-duplicate, high-value sources that can improve paid Actor rows.",
+    tiers: rows,
+    currentPass: {
+      evaluatedTier: largestEvaluated,
+      readyTierCount,
+      heldTierCount,
+      payworthySourceCount,
+      monetizationValueDelta: `This pass converts the source ladder from source-count expansion to payworthy-source expansion; ${payworthySourceCount} evaluated sources now count toward sellable data quality at tier ${largestEvaluated}.`
+    }
   };
 }
 

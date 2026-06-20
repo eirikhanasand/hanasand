@@ -4,6 +4,8 @@ Status: active_program_bk_source_activation_to_live_value
 
 You are no longer waiting for a task. Read `coordination_product_focus.md` first, then turn the first-100 source ladder from a dry-run catalog into activation-ready source registry work that can improve the paid Apify Actor within days.
 
+Current measurable target: the source atlas paid tier gate evaluates 4,000 candidates but only 1,468 are payworthy (36.7%) against a 72% threshold. Your next pass should replace low-value, duplicate, stale, parser-held, or low-yield candidates with higher-value real public TI sources and prove the payworthy count/rate changed. Do not add source volume unless it raises this metric or closes a concrete APT/ransomware coverage gap.
+
 Mission:
 - Move the first-100 source pack toward real, approved, observable source onboarding without mutating production sources silently.
 - Prove which sources can improve fresh rows for APT29/APT28/Volt/Sandworm/Lazarus and ransomware activity/victim claims.
