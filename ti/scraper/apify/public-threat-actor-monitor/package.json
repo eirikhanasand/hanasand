@@ -6,7 +6,8 @@
   "scripts": {
     "start": "bun run src/main.ts",
     "check": "bunx tsc --noEmit",
-    "smoke": "bun run scripts/smoke.ts"
+    "smoke": "bun run scripts/smoke.ts",
+    "check:publication": "bun run scripts/check-publication.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

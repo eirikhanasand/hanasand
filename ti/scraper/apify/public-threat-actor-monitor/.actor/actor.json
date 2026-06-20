@@ -13,6 +13,10 @@
   },
   "readme": "../README.md",
   "categories": ["SECURITY", "MONITORING", "NEWS"],
+  "exampleRunInput": {
+    "body": "{\n  \"queries\": [\"APT29\", \"Volt Typhoon\", \"LockBit\"],\n  \"maxRowsPerQuery\": 25,\n  \"includeActivity\": true,\n  \"includeTargets\": true,\n  \"includeTtps\": true,\n  \"includeSources\": true,\n  \"includeDatasets\": false,\n  \"includeCoverageGaps\": true\n}",
+    "contentType": "application/json; charset=utf-8"
+  },
   "defaultRunOptions": {
     "build": "latest",
     "memoryMbytes": 1024,

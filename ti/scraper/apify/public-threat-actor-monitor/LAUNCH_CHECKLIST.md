@@ -24,11 +24,14 @@
 
 ```json
 {
-  "queries": ["APT29", "APT42", "LockBit"],
+  "queries": ["APT29", "Volt Typhoon", "LockBit"],
   "maxRowsPerQuery": 25,
   "includeActivity": true,
   "includeTargets": true,
-  "includeTtps": true
+  "includeTtps": true,
+  "includeSources": true,
+  "includeDatasets": false,
+  "includeCoverageGaps": true
 }
 ```
 
@@ -41,6 +44,7 @@ Run:
 ```bash
 bun run check
 bun run smoke
+bun run check:publication
 docker build -t public-threat-actor-monitor .
 ```
 
