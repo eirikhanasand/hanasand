@@ -38,3 +38,9 @@ When coherent, update this file, commit, push, and continue into the next measur
 ## Continue Without Waiting
 
 The active Program BG assignment above supersedes old task requests. Continue proving monetization deltas and blocking non-buyer-visible bloat.
+
+## 2026-06-20 Main-Agent Monetization Gate Update
+
+The Apify Actor output now includes `monetizationReadiness` next to `paidRowQuality`. Current local APT42 smoke proof is correctly blocked for paid-traffic confidence: 9 rows, 0 sellable, 6 useful caveated, target 3 sellable, average buyer value 0.40. This is now the conversion metric to track, not raw row count.
+
+Add this gate to the daily proof snapshots and product SLO narrative. A pass only increases monetization value if it moves one of these numbers: sellable rows, useful fresh rows, average buyer value, payworthy source rate, Apify views/runs/conversions, or cost per useful row. Mark contract/export/schema-only changes as non-monetizing unless a proof run shows row-quality lift.

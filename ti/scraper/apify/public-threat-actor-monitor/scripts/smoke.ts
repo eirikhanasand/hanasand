@@ -64,6 +64,28 @@ if (
 ) {
   throw new Error("OUTPUT record must expose paid-row quality counts");
 }
+const monetizationReadiness = outputRecord.monetizationReadiness as Record<string, unknown> | undefined;
+if (
+  !monetizationReadiness
+  || !["ready_for_paid_traffic", "blocked_for_paid_traffic"].includes(String(monetizationReadiness.status))
+  || typeof monetizationReadiness.targetSellableRows !== "number"
+  || typeof monetizationReadiness.sellableRows !== "number"
+  || typeof monetizationReadiness.usefulForBuyerRows !== "number"
+  || typeof monetizationReadiness.averageBuyerValueScore !== "number"
+  || !Array.isArray(monetizationReadiness.blockers)
+  || typeof monetizationReadiness.nextRevenueAction !== "string"
+) {
+  throw new Error("OUTPUT record must expose monetization readiness");
+}
+if (
+  paidRowQuality.sellable === 0
+  && (
+    monetizationReadiness.status !== "blocked_for_paid_traffic"
+    || !monetizationReadiness.blockers.includes("sellable_rows_below_paid_traffic_floor")
+  )
+) {
+  throw new Error("Runs with zero sellable rows must be blocked for paid traffic");
+}
 for (const row of output) {
   if (row.rawContentIncluded !== false) throw new Error("rawContentIncluded must be false");
   const safety = row.safety as Record<string, unknown> | undefined;
@@ -196,4 +218,9 @@ if (!Array.isArray(suppressed.paidRowRemediationActions) || !suppressed.paidRowR
   throw new Error("Suppressed rows must route remediation to the source/metadata owner");
 }
 
-console.log(`Smoke passed with ${output.length} safe metadata rows.`);
+console.log(JSON.stringify({
+  ok: true,
+  rowCount: output.length,
+  paidRowQuality,
+  monetizationReadiness
+}, null, 2));

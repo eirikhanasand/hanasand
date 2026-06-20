@@ -1248,10 +1248,12 @@ async function pushRemoteApifyOutputs(rows: MarketplaceRow[], monetizationSummar
 }
 
 function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationSummary) {
+  const paidRowQuality = paidRowQualitySummary(rows);
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
-    paidRowQuality: paidRowQualitySummary(rows),
+    paidRowQuality,
+    monetizationReadiness: monetizationReadinessForRows(rows, paidRowQuality),
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
@@ -1274,6 +1276,26 @@ function paidRowQualitySummary(rows: MarketplaceRow[]) {
     averageBuyerValueScore: rows.length
       ? Number((rows.reduce((sum, row) => sum + (row.buyerValueScore ?? 0), 0) / rows.length).toFixed(3))
       : 0
+  };
+}
+
+function monetizationReadinessForRows(rows: MarketplaceRow[], quality: ReturnType<typeof paidRowQualitySummary>) {
+  const targetSellableRows = Math.max(1, Math.ceil(rows.length * 0.25));
+  const blockers = [
+    quality.sellable < targetSellableRows ? "sellable_rows_below_paid_traffic_floor" : null,
+    quality.averageBuyerValueScore < 0.55 ? "average_buyer_value_below_listing_floor" : null,
+    quality.usefulForBuyer === 0 ? "no_buyer_useful_rows" : null
+  ].filter((blocker): blocker is string => Boolean(blocker));
+  return {
+    status: blockers.length === 0 ? "ready_for_paid_traffic" : "blocked_for_paid_traffic",
+    targetSellableRows,
+    sellableRows: quality.sellable,
+    usefulForBuyerRows: quality.usefulForBuyer,
+    averageBuyerValueScore: quality.averageBuyerValueScore,
+    blockers,
+    nextRevenueAction: blockers.includes("sellable_rows_below_paid_traffic_floor")
+      ? "add_or_repair live corroborating sources until at least 25 percent of output rows are chargeable findings"
+      : "send paid traffic and measure Apify views, starts, dataset rows, and repeat runs"
   };
 }
 

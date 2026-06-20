@@ -36,3 +36,9 @@ Proof:
 - full `bun test` if shared contracts change
 
 When your patch is coherent, update this file, commit, push, and leave no hanging files. Then continue into the next quality-lift batch without waiting for another prompt.
+
+## 2026-06-20 Main-Agent Monetization Gate Update
+
+The Apify local smoke proof now emits `OUTPUT.monetizationReadiness`. Current APT42 proof baseline is not good enough for paid-traffic confidence: 9 safe rows, 6 useful caveated leads, 0 sellable rows, average buyer value 0.40, target 3 sellable rows, blockers `sellable_rows_below_paid_traffic_floor` and `average_buyer_value_below_listing_floor`.
+
+Your next quality-lift work must prioritize converting proof output from caveated/context rows into chargeable findings. Do not count a fix as monetization progress unless it increases `paidRowQuality.sellable`, `paidRowQuality.averageBuyerValueScore`, fresh corroborated rows, or source-family diversity in an Actor/public API proof. First target: make the APT42 smoke/proof produce at least 3 sellable rows out of 9 without weakening the evidence gate. Second target: apply the same lift to the 20-group default run.
