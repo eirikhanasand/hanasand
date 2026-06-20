@@ -249,6 +249,57 @@ export interface LiveProductSloDashboard {
     };
     blockers: string[];
   };
+  nonMonetizingWorkDetector: {
+    schemaVersion: "ti.non_monetizing_work_detector.v1";
+    status: "active";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/contracts" | "coordination_agent_10.md">;
+    defaultRule: "does_not_count_unless_buyer_visible_metric_moves";
+    buyerVisibleMetrics: string[];
+    examples: Array<{
+      id: string;
+      workType: "contract_only" | "stix_taxii_only" | "schema_only" | "coordination_only" | "buyer_visible_metric_lift";
+      label: "non_monetizing" | "monetizing";
+      buyerVisibleMetricMoved: boolean;
+      reason: string;
+      ownerAction: string;
+    }>;
+    proofFixture: {
+      nonMonetizingExampleCount: number;
+      monetizingExampleCount: number;
+      distinguishesContractOnlyFromBuyerMetricLift: true;
+    };
+  };
+  scaleStepGates: {
+    schemaVersion: "ti.product_scale_step_gates.v1";
+    baselineRunId: "OThlfd0uzSCNnedAO";
+    baselineDatasetId: "LSen2fYtwFTtOr7vK";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "coordination_agent_10.md">;
+    gates: Array<{
+      id: "daily_20_default_groups" | "sources_100" | "sources_1000" | "dark_metadata_4000" | "records_10000" | "records_20000" | "records_60000";
+      label: string;
+      state: "pass" | "hold";
+      buyerValueThreshold: number;
+      observedBuyerValue: number | null;
+      requiredMetric: string;
+      currentEvidence: string;
+      blockerCodes: string[];
+      noLeakRequired: true;
+    }>;
+    nextAllowedStep: string | null;
+    heldStepCount: number;
+  };
+  revenueBlockerBoard: {
+    schemaVersion: "ti.revenue_blocker_board.v1";
+    baselineRunId: "OThlfd0uzSCNnedAO";
+    baselineDatasetId: "LSen2fYtwFTtOr7vK";
+    blockers: Array<{
+      priority: number;
+      blocker: "stale_apt29_evidence" | "thin_apt42_public_channel_coverage" | "source_family_diversity" | "held_caveated_row_count" | "dark_metadata_usefulness" | "apify_store_conversion" | "payout_readiness_gaps";
+      owner: "Agent 01" | "Agent 03" | "Agent 04" | "Agent 05" | "Agent 07" | "Agent 09" | "Agent 10";
+      buyerMetricTarget: string;
+      releaseImpact: string;
+    }>;
+  };
   buyerVisibleQualityLiftGate: {
     schemaVersion: "ti.live_product_buyer_visible_quality_lift_gate.v1";
     baselineRunId: string;
@@ -631,6 +682,13 @@ export interface LiveProductDailySnapshot {
     diskGrowthGbPerDay: number | null;
   };
   monetizationReadiness: LiveProductMonetizationReadiness;
+  nonMonetizingWorkDetector: Pick<LiveProductSloDashboard["nonMonetizingWorkDetector"], "schemaVersion" | "proofFixture">;
+  scaleStepGates: {
+    schemaVersion: LiveProductSloDashboard["scaleStepGates"]["schemaVersion"];
+    passCount: number;
+    holdCount: number;
+    nextAllowedStep: string | null;
+  };
 }
 
 export interface LiveProductMonetizationReadiness {
@@ -779,6 +837,8 @@ const DEFAULT_CURRENT_PROOF_RUN_ID = "iMQGeezZ8bx7WtlhQ";
 const DEFAULT_CURRENT_PROOF_DATASET_ID = "5PLmkE30luBA5Lbgc";
 const DEFAULT_BASELINE_PROOF_RUN_ID = "rh6D0UInDD6x7GuuD";
 const DEFAULT_BASELINE_PROOF_DATASET_ID = "dYbGGA37MRq7pU47O";
+const PROGRAM_BH_BASELINE_RUN_ID = "OThlfd0uzSCNnedAO";
+const PROGRAM_BH_BASELINE_DATASET_ID = "LSen2fYtwFTtOr7vK";
 
 export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboardInput): LiveProductSloDashboard {
   const generatedAt = input.generatedAt ?? nowIso();
@@ -833,6 +893,14 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     marketplaceConversion
   });
   const sourceMonetizationGate = buildSourceMonetizationGate(input.sourceMonetization, costPerUsefulRowUsd);
+  const darkMetadataLiveValueExpansion = buildDarkMetadataLiveValueExpansion();
+  const nonMonetizingWorkDetector = buildNonMonetizingWorkDetector();
+  const scaleStepGates = buildScaleStepGates({
+    averageBuyerValueScore: monetizationReadiness.averageBuyerValueScore,
+    sourcePayworthyRate: sourceMonetizationGate.payworthyRate,
+    darkMetadataAverageBuyerValueScore: darkMetadataLiveValueExpansion.tiers[1]?.averageBuyerValueScore ?? null
+  });
+  const revenueBlockerBoard = buildRevenueBlockerBoard();
   const buyerVisibleQualityLiftGate = buildBuyerVisibleQualityLiftGate();
   const marketplaceGraphSignals = buildMarketplaceGraphSignals();
   const graphPivotLiftGate = buildGraphPivotLiftGate();
@@ -841,7 +909,6 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const liveFreshnessQualityGate = buildLiveFreshnessQualityGate();
   const freshnessRepairLoop = buildFreshnessRepairLoop();
   const entitySpecificityLift = buildEntitySpecificityLift();
-  const darkMetadataLiveValueExpansion = buildDarkMetadataLiveValueExpansion();
   const marketplaceTelemetry = marketplaceTelemetryFor(input.marketplace);
   const payoutReadiness = payoutReadinessFor(input.marketplace);
   const conversionExperiments = buildConversionExperiments();
@@ -956,7 +1023,9 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     metrics,
     paidProductEconomics,
     sourceMonetizationGate,
-    monetizationReadiness
+    monetizationReadiness,
+    nonMonetizingWorkDetector,
+    scaleStepGates
   });
 
   return {
@@ -988,6 +1057,9 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     metrics,
     paidProductEconomics,
     sourceMonetizationGate,
+    nonMonetizingWorkDetector,
+    scaleStepGates,
+    revenueBlockerBoard,
     buyerVisibleQualityLiftGate,
     marketplaceGraphSignals,
     graphPivotLiftGate,
@@ -1074,8 +1146,8 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     integrations: {
       agent02SchedulerTelemetry: ["queueAgeSeconds", "threeSecondPolling", "sourceProviderFailureRate"],
       agent06EvidenceStorage: ["firstFreshEvidenceLatencyMs", "claimClusterYield", "dailySnapshot"],
-      agent07Evaluation: ["emptyResultHonestyRate", "duplicateArticleRate", "actorDatasetUsefulness", "sourcePayworthyRate"],
-      agent09StableApiFields: ["route", "schemaVersion", "deploymentProof", "apifyLaunchExperiment", "apifyLaunchExperiment.marketplaceTelemetry", "apifyLaunchExperiment.conversionExperiments", "paidProductEconomics.marketplace"]
+      agent07Evaluation: ["emptyResultHonestyRate", "duplicateArticleRate", "actorDatasetUsefulness", "sourcePayworthyRate", "nonMonetizingWorkDetector"],
+      agent09StableApiFields: ["route", "schemaVersion", "deploymentProof", "apifyLaunchExperiment", "apifyLaunchExperiment.marketplaceTelemetry", "apifyLaunchExperiment.conversionExperiments", "paidProductEconomics.marketplace", "scaleStepGates", "revenueBlockerBoard"]
     }
   };
 }
@@ -1105,6 +1177,8 @@ function buildDailySnapshot(input: {
   paidProductEconomics: LiveProductSloDashboard["paidProductEconomics"];
   sourceMonetizationGate: LiveProductSloDashboard["sourceMonetizationGate"];
   monetizationReadiness: LiveProductMonetizationReadiness;
+  nonMonetizingWorkDetector: LiveProductSloDashboard["nonMonetizingWorkDetector"];
+  scaleStepGates: LiveProductSloDashboard["scaleStepGates"];
 }): LiveProductDailySnapshot {
   const snapshotDate = input.generatedAt.slice(0, 10);
   return {
@@ -1135,7 +1209,201 @@ function buildDailySnapshot(input: {
       memoryRssGb: input.metrics.memoryRssGb.value,
       diskGrowthGbPerDay: input.metrics.diskGrowthGbPerDay.value
     },
-    monetizationReadiness: input.monetizationReadiness
+    monetizationReadiness: input.monetizationReadiness,
+    nonMonetizingWorkDetector: {
+      schemaVersion: input.nonMonetizingWorkDetector.schemaVersion,
+      proofFixture: input.nonMonetizingWorkDetector.proofFixture
+    },
+    scaleStepGates: {
+      schemaVersion: input.scaleStepGates.schemaVersion,
+      passCount: input.scaleStepGates.gates.filter((gate) => gate.state === "pass").length,
+      holdCount: input.scaleStepGates.heldStepCount,
+      nextAllowedStep: input.scaleStepGates.nextAllowedStep
+    }
+  };
+}
+
+function buildNonMonetizingWorkDetector(): LiveProductSloDashboard["nonMonetizingWorkDetector"] {
+  const examples: LiveProductSloDashboard["nonMonetizingWorkDetector"]["examples"] = [
+    {
+      id: "contract_index_only_route_key",
+      workType: "contract_only",
+      label: "non_monetizing",
+      buyerVisibleMetricMoved: false,
+      reason: "Contract index coverage is useful hygiene, but it does not count as revenue work until sellable/useful rows, buyer value, conversion, or cost improves.",
+      ownerAction: "pair with a route-visible buyer metric before calling the work monetizing"
+    },
+    {
+      id: "stix_taxii_descriptor_only",
+      workType: "stix_taxii_only",
+      label: "non_monetizing",
+      buyerVisibleMetricMoved: false,
+      reason: "STIX/TAXII packaging alone does not improve Apify row quality or paid conversion.",
+      ownerAction: "prove reviewed export raises buyer trust, repeat searches, or sellable-row rate"
+    },
+    {
+      id: "schema_field_without_dataset_lift",
+      workType: "schema_only",
+      label: "non_monetizing",
+      buyerVisibleMetricMoved: false,
+      reason: "A field addition without data quality lift can bloat payloads while paid output stays flat.",
+      ownerAction: "attach fixture rows showing better buyer value, freshness, specificity, or conversion"
+    },
+    {
+      id: "coordination_file_only",
+      workType: "coordination_only",
+      label: "non_monetizing",
+      buyerVisibleMetricMoved: false,
+      reason: "Coordination updates are management work unless they move a measured paid-output blocker.",
+      ownerAction: "write exact target metrics into owner files and verify route-visible movement"
+    },
+    {
+      id: "apt42_public_channel_corroboration_lift",
+      workType: "buyer_visible_metric_lift",
+      label: "monetizing",
+      buyerVisibleMetricMoved: true,
+      reason: "A public-channel repair that increases useful/sellable rows, source-family diversity, or average buyer value can support paid traffic.",
+      ownerAction: "count only after product SLO fixtures or live Actor output show the metric lift"
+    }
+  ];
+  const nonMonetizingExampleCount = examples.filter((example) => example.label === "non_monetizing").length;
+  const monetizingExampleCount = examples.filter((example) => example.label === "monetizing").length;
+  return {
+    schemaVersion: "ti.non_monetizing_work_detector.v1",
+    status: "active",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts", "coordination_agent_10.md"],
+    defaultRule: "does_not_count_unless_buyer_visible_metric_moves",
+    buyerVisibleMetrics: [
+      "sellableRowCount",
+      "usefulForBuyerRows",
+      "averageBuyerValueScore",
+      "rowRevenueEstimateUsd",
+      "usageCostUsd",
+      "costPerUsefulRowUsd",
+      "sourcePayworthyRate",
+      "apifyStoreViewToRunRate",
+      "apifyPaidRuns",
+      "payoutReadiness"
+    ],
+    examples,
+    proofFixture: {
+      nonMonetizingExampleCount,
+      monetizingExampleCount,
+      distinguishesContractOnlyFromBuyerMetricLift: true
+    }
+  };
+}
+
+function buildScaleStepGates(input: {
+  averageBuyerValueScore: number | null;
+  sourcePayworthyRate: number | null;
+  darkMetadataAverageBuyerValueScore: number | null;
+}): LiveProductSloDashboard["scaleStepGates"] {
+  const gates: LiveProductSloDashboard["scaleStepGates"]["gates"] = [
+    {
+      id: "daily_20_default_groups",
+      label: "20 default groups daily",
+      buyerValueThreshold: 0.55,
+      observedBuyerValue: input.averageBuyerValueScore,
+      requiredMetric: "averageBuyerValueScore >= 0.55 and sellable row rate >= 0.25 on the default watchlist",
+      currentEvidence: `${PROGRAM_BH_BASELINE_RUN_ID} / ${PROGRAM_BH_BASELINE_DATASET_ID}: 10 APT42 rows, 4 sellable, 2 caveated, average buyer value 0.577`,
+      blockerCodes: input.averageBuyerValueScore !== null && input.averageBuyerValueScore >= 0.55 ? [] : ["average_buyer_value_below_daily_watchlist_floor"],
+      state: input.averageBuyerValueScore !== null && input.averageBuyerValueScore >= 0.55 ? "pass" : "hold",
+      noLeakRequired: true
+    },
+    {
+      id: "sources_100",
+      label: "100 sources",
+      buyerValueThreshold: 0.66,
+      observedBuyerValue: input.sourcePayworthyRate,
+      requiredMetric: "source payworthy rate >= 0.66 before first source expansion claim",
+      currentEvidence: "sourceMonetizationGate evaluates source value, parser, legal, freshness, evidence yield, dedupe, and downstream answer impact",
+      blockerCodes: input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.66 ? [] : ["source_payworthy_rate_below_100_source_floor"],
+      state: input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.66 ? "pass" : "hold",
+      noLeakRequired: true
+    },
+    {
+      id: "sources_1000",
+      label: "1,000 sources",
+      buyerValueThreshold: 0.7,
+      observedBuyerValue: input.sourcePayworthyRate,
+      requiredMetric: "source payworthy rate >= 0.70 plus parser/legal/dedupe certification",
+      currentEvidence: "1,000-source promotion is held until value density improves beyond the 4,000-candidate baseline",
+      blockerCodes: input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.7 ? [] : ["source_payworthy_rate_below_1000_source_floor"],
+      state: input.sourcePayworthyRate !== null && input.sourcePayworthyRate >= 0.7 ? "pass" : "hold",
+      noLeakRequired: true
+    },
+    {
+      id: "dark_metadata_4000",
+      label: "4,000 dark metadata records",
+      buyerValueThreshold: 0.68,
+      observedBuyerValue: input.darkMetadataAverageBuyerValueScore,
+      requiredMetric: "metadata average buyer value >= 0.68 with stale <= 0.28 and blocked/review <= 0.18",
+      currentEvidence: "darkMetadataLiveValueExpansion currently observes 0.41 average buyer value and holds count growth",
+      blockerCodes: input.darkMetadataAverageBuyerValueScore !== null && input.darkMetadataAverageBuyerValueScore >= 0.68 ? [] : ["dark_metadata_value_density_below_paid_threshold"],
+      state: input.darkMetadataAverageBuyerValueScore !== null && input.darkMetadataAverageBuyerValueScore >= 0.68 ? "pass" : "hold",
+      noLeakRequired: true
+    },
+    {
+      id: "records_10000",
+      label: "10,000 records",
+      buyerValueThreshold: 0.7,
+      observedBuyerValue: null,
+      requiredMetric: "sampled useful-row rate and average buyer value prove 10k adds useful paid output",
+      currentEvidence: "held until real evaluated records prove buyer value instead of row-count padding",
+      blockerCodes: ["10k_records_not_evaluated_for_buyer_value"],
+      state: "hold",
+      noLeakRequired: true
+    },
+    {
+      id: "records_20000",
+      label: "20,000 records",
+      buyerValueThreshold: 0.72,
+      observedBuyerValue: null,
+      requiredMetric: "20k promotion requires conversion or repeat-use lift plus buyer value >= 0.72",
+      currentEvidence: "held until 10k gate passes and marketplace conversion data exists",
+      blockerCodes: ["20k_records_waiting_on_10k_gate_and_conversion"],
+      state: "hold",
+      noLeakRequired: true
+    },
+    {
+      id: "records_60000",
+      label: "60,000 records",
+      buyerValueThreshold: 0.75,
+      observedBuyerValue: null,
+      requiredMetric: "60k scale requires sustained buyer value >= 0.75 and cost/useful row <= $0.01",
+      currentEvidence: "held until useful-row economics and conversion are proven at smaller tiers",
+      blockerCodes: ["60k_records_waiting_on_cost_and_conversion_proof"],
+      state: "hold",
+      noLeakRequired: true
+    }
+  ];
+  const nextAllowedStep = gates.find((gate) => gate.state === "pass")?.id ?? null;
+  return {
+    schemaVersion: "ti.product_scale_step_gates.v1",
+    baselineRunId: PROGRAM_BH_BASELINE_RUN_ID,
+    baselineDatasetId: PROGRAM_BH_BASELINE_DATASET_ID,
+    routeVisibleOn: ["/v1/ops/product-slo", "coordination_agent_10.md"],
+    gates,
+    nextAllowedStep,
+    heldStepCount: gates.filter((gate) => gate.state === "hold").length
+  };
+}
+
+function buildRevenueBlockerBoard(): LiveProductSloDashboard["revenueBlockerBoard"] {
+  return {
+    schemaVersion: "ti.revenue_blocker_board.v1",
+    baselineRunId: PROGRAM_BH_BASELINE_RUN_ID,
+    baselineDatasetId: PROGRAM_BH_BASELINE_DATASET_ID,
+    blockers: [
+      { priority: 1, blocker: "stale_apt29_evidence", owner: "Agent 01", buyerMetricTarget: "freshRowRate >= 0.55 and stale latest-activity holds decrease", releaseImpact: "blocks daily APT monitor credibility" },
+      { priority: 2, blocker: "thin_apt42_public_channel_coverage", owner: "Agent 04", buyerMetricTarget: "APT42 caveated or sellable rows gain cross-family corroboration", releaseImpact: "keeps APT42 rows from looking single-source" },
+      { priority: 3, blocker: "source_family_diversity", owner: "Agent 03", buyerMetricTarget: "sourceFamilyDiversity >= 2 for promoted findings", releaseImpact: "prevents parser/source padding from counting as paid value" },
+      { priority: 4, blocker: "held_caveated_row_count", owner: "Agent 07", buyerMetricTarget: "held rows shrink or carry explicit repair actions; caveated rows stay useful", releaseImpact: "improves buyer scanability and charge guidance" },
+      { priority: 5, blocker: "dark_metadata_usefulness", owner: "Agent 05", buyerMetricTarget: "metadata average buyer value >= 0.68 before 4,000-record growth", releaseImpact: "prevents restricted metadata count inflation" },
+      { priority: 6, blocker: "apify_store_conversion", owner: "Agent 09", buyerMetricTarget: "store views, runs, users, trial-to-paid, refunds, and repeat use copied from Apify", releaseImpact: "keeps conversion claims real" },
+      { priority: 7, blocker: "payout_readiness_gaps", owner: "Agent 10", buyerMetricTarget: "beneficiary, payout method, and withdrawal readiness externally verified", releaseImpact: "blocks paid traffic until revenue can be collected" }
+    ]
   };
 }
 

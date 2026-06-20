@@ -86,6 +86,9 @@ console.log(JSON.stringify({
   apifyUnknowns: dashboard.apifyLaunchExperiment.unknowns,
   paidProductEconomics: dashboard.paidProductEconomics,
   sourceMonetizationGate: dashboard.sourceMonetizationGate,
+  nonMonetizingWorkDetector: snapshot.nonMonetizingWorkDetector,
+  scaleStepGates: snapshot.scaleStepGates,
+  revenueBlockerBoard: dashboard.revenueBlockerBoard,
   deploymentProof: dashboard.deploymentProof,
   resourceGuardrails: dashboard.resourceGuardrails
 }, null, 2));
@@ -262,6 +265,9 @@ function isDashboard(value: unknown): value is LiveProductSloDashboard {
   const record = value as Record<string, unknown>;
   const snapshot = record.dailySnapshot as Record<string, unknown> | undefined;
   const sourceMonetizationGate = record.sourceMonetizationGate as Record<string, unknown> | undefined;
+  const nonMonetizingWorkDetector = record.nonMonetizingWorkDetector as Record<string, unknown> | undefined;
+  const scaleStepGates = record.scaleStepGates as Record<string, unknown> | undefined;
+  const revenueBlockerBoard = record.revenueBlockerBoard as Record<string, unknown> | undefined;
   const monetizationReadiness = record.apifyLaunchExperiment && typeof record.apifyLaunchExperiment === "object"
     ? (record.apifyLaunchExperiment as Record<string, unknown>).monetizationReadiness as Record<string, unknown> | undefined
     : undefined;
@@ -271,6 +277,9 @@ function isDashboard(value: unknown): value is LiveProductSloDashboard {
     && typeof snapshot?.snapshotId === "string"
     && snapshot?.appendOnly === true
     && sourceMonetizationGate?.schemaVersion === "ti.live_product_source_monetization_gate.v1"
+    && nonMonetizingWorkDetector?.schemaVersion === "ti.non_monetizing_work_detector.v1"
+    && scaleStepGates?.schemaVersion === "ti.product_scale_step_gates.v1"
+    && revenueBlockerBoard?.schemaVersion === "ti.revenue_blocker_board.v1"
     && monetizationReadiness?.schemaVersion === "ti.live_product_monetization_readiness.v1";
 }
 

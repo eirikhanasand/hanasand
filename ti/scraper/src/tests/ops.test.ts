@@ -382,6 +382,50 @@ describe("ops controls", () => {
       },
       blockers: expect.arrayContaining(["source_payworthy_rate_below_72_percent", "10k_20k_60k_tiers_held_until_evaluated"]) as unknown as string[]
     });
+    expect(dashboard.nonMonetizingWorkDetector).toMatchObject({
+      schemaVersion: "ti.non_monetizing_work_detector.v1",
+      defaultRule: "does_not_count_unless_buyer_visible_metric_moves",
+      proofFixture: {
+        nonMonetizingExampleCount: 4,
+        monetizingExampleCount: 1,
+        distinguishesContractOnlyFromBuyerMetricLift: true
+      }
+    });
+    expect(dashboard.nonMonetizingWorkDetector.examples.find((row) => row.workType === "contract_only")).toMatchObject({
+      label: "non_monetizing",
+      buyerVisibleMetricMoved: false
+    });
+    expect(dashboard.nonMonetizingWorkDetector.examples.find((row) => row.workType === "buyer_visible_metric_lift")).toMatchObject({
+      label: "monetizing",
+      buyerVisibleMetricMoved: true
+    });
+    expect(dashboard.scaleStepGates).toMatchObject({
+      schemaVersion: "ti.product_scale_step_gates.v1",
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      heldStepCount: 6,
+      nextAllowedStep: "daily_20_default_groups"
+    });
+    expect(dashboard.scaleStepGates.gates.map((gate) => gate.id)).toEqual([
+      "daily_20_default_groups",
+      "sources_100",
+      "sources_1000",
+      "dark_metadata_4000",
+      "records_10000",
+      "records_20000",
+      "records_60000"
+    ]);
+    expect(dashboard.scaleStepGates.gates.find((gate) => gate.id === "daily_20_default_groups")).toMatchObject({ state: "pass", buyerValueThreshold: 0.55, observedBuyerValue: 0.6 });
+    expect(dashboard.scaleStepGates.gates.find((gate) => gate.id === "dark_metadata_4000")).toMatchObject({ state: "hold", buyerValueThreshold: 0.68, observedBuyerValue: 0.41 });
+    expect(dashboard.revenueBlockerBoard.blockers.map((item) => item.blocker)).toEqual([
+      "stale_apt29_evidence",
+      "thin_apt42_public_channel_coverage",
+      "source_family_diversity",
+      "held_caveated_row_count",
+      "dark_metadata_usefulness",
+      "apify_store_conversion",
+      "payout_readiness_gaps"
+    ]);
     expect(dashboard.buyerVisibleQualityLiftGate).toMatchObject({
       schemaVersion: "ti.live_product_buyer_visible_quality_lift_gate.v1",
       baselineRunId: "iMQGeezZ8bx7WtlhQ",
@@ -573,6 +617,8 @@ describe("ops controls", () => {
     expect(dashboard.dailySnapshot.metrics.sellableRowRate).toBe(0.163);
     expect(dashboard.dailySnapshot.metrics.averageBuyerValueScore).toBe(0.6);
     expect(dashboard.dailySnapshot.monetizationReadiness.status).toBe("blocked_for_paid_traffic");
+    expect(dashboard.dailySnapshot.nonMonetizingWorkDetector.proofFixture).toMatchObject({ nonMonetizingExampleCount: 4, monetizingExampleCount: 1 });
+    expect(dashboard.dailySnapshot.scaleStepGates).toMatchObject({ passCount: 1, holdCount: 6, nextAllowedStep: "daily_20_default_groups" });
     expect(dashboard.apifyLaunchExperiment.grossPpeRevenueUsd).toBeNull();
     expect(dashboard.apifyLaunchExperiment.uniqueUsers).toBe(1);
     expect(dashboard.apifyLaunchExperiment.paidRowDecisionCounts).toMatchObject({ sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, suppress: 0, buyerUseful: 48 });

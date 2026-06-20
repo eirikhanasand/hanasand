@@ -320,6 +320,74 @@ describe("api v1", () => {
       },
       blockers: expect.arrayContaining(["source_payworthy_rate_below_72_percent", "replace_low_value_sources_before_marketplace_scale_claim"]) as unknown as string[]
     });
+    expect((response.nonMonetizingWorkDetector as {
+      schemaVersion: string;
+      defaultRule: string;
+      buyerVisibleMetrics: string[];
+      examples: Array<{ workType: string; label: string; buyerVisibleMetricMoved: boolean }>;
+      proofFixture: { nonMonetizingExampleCount: number; monetizingExampleCount: number; distinguishesContractOnlyFromBuyerMetricLift: boolean };
+    })).toMatchObject({
+      schemaVersion: "ti.non_monetizing_work_detector.v1",
+      defaultRule: "does_not_count_unless_buyer_visible_metric_moves",
+      buyerVisibleMetrics: expect.arrayContaining(["sellableRowCount", "averageBuyerValueScore", "apifyPaidRuns", "payoutReadiness"]) as unknown as string[],
+      proofFixture: {
+        nonMonetizingExampleCount: 4,
+        monetizingExampleCount: 1,
+        distinguishesContractOnlyFromBuyerMetricLift: true
+      }
+    });
+    expect((response.nonMonetizingWorkDetector as {
+      examples: Array<{ workType: string; label: string; buyerVisibleMetricMoved: boolean }>;
+    }).examples.find((row) => row.workType === "schema_only")).toMatchObject({ label: "non_monetizing", buyerVisibleMetricMoved: false });
+    expect((response.nonMonetizingWorkDetector as {
+      examples: Array<{ workType: string; label: string; buyerVisibleMetricMoved: boolean }>;
+    }).examples.find((row) => row.workType === "buyer_visible_metric_lift")).toMatchObject({ label: "monetizing", buyerVisibleMetricMoved: true });
+    expect((response.scaleStepGates as {
+      schemaVersion: string;
+      baselineRunId: string;
+      baselineDatasetId: string;
+      gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null; noLeakRequired: boolean }>;
+      nextAllowedStep: string;
+      heldStepCount: number;
+    })).toMatchObject({
+      schemaVersion: "ti.product_scale_step_gates.v1",
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      nextAllowedStep: "daily_20_default_groups",
+      heldStepCount: 6
+    });
+    expect((response.scaleStepGates as {
+      gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null; noLeakRequired: boolean }>;
+    }).gates.map((gate) => gate.id)).toEqual([
+      "daily_20_default_groups",
+      "sources_100",
+      "sources_1000",
+      "dark_metadata_4000",
+      "records_10000",
+      "records_20000",
+      "records_60000"
+    ]);
+    expect((response.scaleStepGates as {
+      gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null; noLeakRequired: boolean }>;
+    }).gates.every((gate) => gate.noLeakRequired)).toBe(true);
+    expect((response.scaleStepGates as {
+      gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null }>;
+    }).gates.find((gate) => gate.id === "daily_20_default_groups")).toMatchObject({ state: "pass", buyerValueThreshold: 0.55, observedBuyerValue: 0.6 });
+    expect((response.revenueBlockerBoard as {
+      schemaVersion: string;
+      blockers: Array<{ priority: number; blocker: string; owner: string; buyerMetricTarget: string }>;
+    })).toMatchObject({ schemaVersion: "ti.revenue_blocker_board.v1" });
+    expect((response.revenueBlockerBoard as {
+      blockers: Array<{ priority: number; blocker: string; owner: string; buyerMetricTarget: string }>;
+    }).blockers.map((item) => item.blocker)).toEqual([
+      "stale_apt29_evidence",
+      "thin_apt42_public_channel_coverage",
+      "source_family_diversity",
+      "held_caveated_row_count",
+      "dark_metadata_usefulness",
+      "apify_store_conversion",
+      "payout_readiness_gaps"
+    ]);
     expect((response.darkMetadataLiveValueExpansion as {
       schemaVersion: string;
       routeVisibleOn: string[];
