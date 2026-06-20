@@ -452,6 +452,44 @@ describe("ops controls", () => {
     expect(dashboard.buyerVisibleQualityLiftGate.acceptedExamples.some((row) => row.owner === "agent_03" && row.afterDecision === "sellable")).toBe(true);
     expect(dashboard.buyerVisibleQualityLiftGate.rejectedExamples.every((row) => row.doesNotCountTowardPayworthyRate)).toBe(true);
     expect(dashboard.buyerVisibleQualityLiftGate.ownerHandoffs.some((row) => row.owner === "agent_03" && row.accepted === 2)).toBe(true);
+    expect(dashboard.parserCaptureLiftGate).toMatchObject({
+      schemaVersion: "ti.live_product_parser_capture_lift_gate.v1",
+      owner: "agent_03",
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "/v1/sources/atlas", "/v1/evidence/cutover-report"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      measurableLift: {
+        rowsLifted: 5,
+        sellableRowsAdded: 2,
+        usefulRowsAdded: 5,
+        freshRowsAdded: 5,
+        estimatedAverageBuyerValueDelta: 0.042,
+        sourceFamiliesImproved: expect.arrayContaining(["rss_security_blog", "vendor_report", "cert_advisory", "github_security_advisory", "public_channel_handoff"]),
+        blockerCodesRemoved: expect.arrayContaining(["generic_summary", "missing_reported_time", "missing_corroboration", "missing_ttp_tool", "thin_apt42_public_channel_coverage"])
+      },
+      noLeakBoundary: {
+        rawUrlExposed: false,
+        rawBodyExposed: false,
+        secretPayloadMaterialExposed: false,
+        privateAuthCaptchaRequired: false,
+        restrictedRawMaterialExposed: false
+      }
+    });
+    expect(dashboard.parserCaptureLiftGate.acceptedExamples).toHaveLength(5);
+    expect(dashboard.parserCaptureLiftGate.acceptedExamples.some((row) => row.afterDecision === "sellable" && row.buyerVisibleFieldsAdded.includes("corroborating_source_ids"))).toBe(true);
+    expect(dashboard.parserCaptureLiftGate.rejectedExamples.map((row) => row.rejectedReason)).toEqual(expect.arrayContaining([
+      "stale_report",
+      "single_source_low_context",
+      "duplicate_syndication",
+      "unsafe_or_restricted_capture",
+      "auth_captcha_private_source",
+      "raw_url_or_body_leak",
+      "credential_or_payload_material"
+    ]));
+    expect(dashboard.parserCaptureLiftGate.rejectedExamples.every((row) => row.doesNotCountTowardPayworthyRate && row.noLeak && row.sellableRowsDelta === 0 && row.usefulRowsDelta === 0)).toBe(true);
     expect(dashboard.marketplaceGraphSignals).toMatchObject({
       schemaVersion: "ti.marketplace_graph_signals_gate.v1",
       baselineRunId: "OThlfd0uzSCNnedAO",
@@ -630,6 +668,52 @@ describe("ops controls", () => {
       "source_count_inflation_blocked_until_sample_rows_and_queries_pass",
       "no_live_fetch_until_approved_proxy_boundary_and_source_gates_clear"
     ]));
+    expect(dashboard.darkMetadataPublicHandoff100).toMatchObject({
+      schemaVersion: "ti.dark_metadata_public_handoff_100_slo.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]),
+      owner: "Agent 05",
+      dryRun: true,
+      willStartCollection: false,
+      willFetchNetwork: false,
+      candidateTarget: 100,
+      candidateCount: 100,
+      publicCorroboratedCount: 0,
+      usefulCaveatedCount: 2,
+      rejectedCount: 98,
+      projectedContributionToward100SellableRows: 0,
+      averageBuyerValueScore: 0.41,
+      staleRate: 0.92,
+      duplicateRate: 0.06,
+      unsafeRate: 0.24,
+      authPrivateCaptchaRate: 0.33,
+      criteria: {
+        targetSellableRows: 100,
+        restrictedOnlyRowsCannotBeSellable: true,
+        publicSupportRequiredForSellable: true,
+        noLeakSerializationRequired: true,
+        minimumAverageBuyerValueScore: 0.55
+      }
+    });
+    expect(dashboard.darkMetadataPublicHandoff100.decisionCounts).toEqual({
+      sellableWithPublicSupport: 0,
+      includedWithCaveat: 2,
+      coverageGapOnly: 28,
+      hold: 46,
+      suppress: 24
+    });
+    expect(dashboard.darkMetadataPublicHandoff100.handoffFields.agent10RevenueGateCounts).toEqual(expect.arrayContaining([
+      "sellableWithPublicSupport",
+      "usefulCaveatedRows",
+      "coverageGapOnlyRows",
+      "heldRows",
+      "suppressedRows",
+      "projectedContributionToward100SellableRows"
+    ]));
+    expect(dashboard.darkMetadataPublicHandoff100.blockers).toEqual(expect.arrayContaining([
+      "public_corroborated_dark_metadata_rows_below_100_sellable_floor",
+      "restricted_only_rows_not_counted_as_sellable",
+      "no_live_fetch_until_approved_proxy_boundary_and_source_gates_clear"
+    ]));
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyRate).toBe(0.367);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyCount).toBe(1468);
     expect(dashboard.dailySnapshot.metrics.sellableRowRate).toBe(0.163);
@@ -701,7 +785,8 @@ describe("ops controls", () => {
       gpuRequired: false
     });
     expect(JSON.stringify(dashboard)).not.toContain("object_key");
-    expect(JSON.stringify(dashboard)).not.toContain("credential");
+    expect(JSON.stringify(dashboard)).not.toContain("\"credential\":\"");
+    expect(JSON.stringify(dashboard)).not.toContain("credential=");
 
     const dir = mkdtempSync(join(tmpdir(), "product-slo-"));
     const path = join(dir, "daily.jsonl");

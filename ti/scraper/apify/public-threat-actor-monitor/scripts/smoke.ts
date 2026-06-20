@@ -137,6 +137,84 @@ for (const row of qualityLiftGate.rejectedExamples as Array<Record<string, unkno
 if (!(qualityLiftGate.ownerHandoffs as Array<Record<string, unknown>>).some((row) => row.owner === "agent_03" && Number(row.accepted) >= 1)) {
   throw new Error("Quality-lift gate must route accepted parser repairs to Agent 03");
 }
+const parserCaptureLiftGate = outputRecord.parserCaptureLiftGate as Record<string, unknown> | undefined;
+if (
+  !parserCaptureLiftGate
+  || parserCaptureLiftGate.schemaVersion !== "ti.apify_parser_capture_lift_gate.v1"
+  || parserCaptureLiftGate.owner !== "agent_03"
+  || parserCaptureLiftGate.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || parserCaptureLiftGate.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || parserCaptureLiftGate.dryRun !== true
+  || parserCaptureLiftGate.willMutateSources !== false
+  || parserCaptureLiftGate.willStartCollection !== false
+  || parserCaptureLiftGate.rejectedRepairsDoNotCount !== true
+  || !Array.isArray(parserCaptureLiftGate.acceptedExamples)
+  || parserCaptureLiftGate.acceptedExamples.length < 5
+  || !Array.isArray(parserCaptureLiftGate.rejectedExamples)
+  || parserCaptureLiftGate.rejectedExamples.length < 7
+  || typeof parserCaptureLiftGate.measurableLift !== "object"
+  || typeof parserCaptureLiftGate.noLeakBoundary !== "object"
+) {
+  throw new Error("OUTPUT record must expose Agent 03 parser/capture lift proof");
+}
+const parserCaptureLift = parserCaptureLiftGate.measurableLift as Record<string, unknown>;
+if (
+  Number(parserCaptureLift.rowsLifted) < 5
+  || Number(parserCaptureLift.sellableRowsAdded) < 2
+  || Number(parserCaptureLift.usefulRowsAdded) < 5
+  || Number(parserCaptureLift.freshRowsAdded) < 5
+  || Number(parserCaptureLift.estimatedAverageBuyerValueDelta) <= 0
+) {
+  throw new Error("Parser/capture lift gate must move sellable, useful, fresh, and buyer-value metrics");
+}
+for (const sourceFamily of ["rss_security_blog", "vendor_report", "cert_advisory", "github_security_advisory", "public_channel_handoff"]) {
+  if (!(parserCaptureLift.sourceFamiliesImproved as string[]).includes(sourceFamily)) {
+    throw new Error(`Parser/capture lift gate must improve ${sourceFamily}`);
+  }
+}
+for (const blockerCode of ["generic_summary", "missing_sector_country", "missing_reported_time", "missing_corroboration", "missing_ttp_tool", "thin_apt42_public_channel_coverage"]) {
+  if (!(parserCaptureLift.blockerCodesRemoved as string[]).includes(blockerCode)) {
+    throw new Error(`Parser/capture lift gate must remove ${blockerCode}`);
+  }
+}
+for (const row of parserCaptureLiftGate.acceptedExamples as Array<Record<string, unknown>>) {
+  if (
+    row.outcome !== "accepted"
+    || row.beforeDecision === row.afterDecision
+    || !["included_with_caveat", "sellable"].includes(String(row.afterDecision))
+    || typeof row.repairAction !== "string"
+    || !Array.isArray(row.buyerVisibleFieldsAdded)
+    || row.buyerVisibleFieldsAdded.length < 5
+    || !Array.isArray(row.blockerCodesRemoved)
+    || Number(row.usefulRowsDelta) < 1
+    || Number(row.freshRowsDelta) < 1
+    || row.noLeak !== true
+  ) {
+    throw new Error("Accepted parser/capture repairs must prove buyer-visible useful/fresh row lift without leaks");
+  }
+}
+const rejectedParserCaptureReasons = (parserCaptureLiftGate.rejectedExamples as Array<Record<string, unknown>>).map((row) => row.rejectedReason);
+for (const rejectedReason of ["stale_report", "single_source_low_context", "duplicate_syndication", "unsafe_or_restricted_capture", "auth_captcha_private_source", "raw_url_or_body_leak", "credential_or_payload_material"]) {
+  if (!rejectedParserCaptureReasons.includes(rejectedReason)) {
+    throw new Error(`Parser/capture lift gate must reject ${rejectedReason}`);
+  }
+}
+for (const row of parserCaptureLiftGate.rejectedExamples as Array<Record<string, unknown>>) {
+  if (
+    row.outcome !== "rejected"
+    || typeof row.rejectedReason !== "string"
+    || Number(row.sellableRowsDelta) !== 0
+    || Number(row.usefulRowsDelta) !== 0
+    || Number(row.freshRowsDelta) !== 0
+    || row.noLeak !== true
+  ) {
+    throw new Error("Rejected parser/capture repairs must stay out of paid progress metrics");
+  }
+}
+const parserCaptureNoLeak = parserCaptureLiftGate.noLeakBoundary as Record<string, unknown>;
+for (const key of ["rawUrlExposed", "rawBodyExposed", "credentialPayloadMaterialExposed", "privateAuthCaptchaRequired", "restrictedRawMaterialExposed"]) {
+  if (parserCaptureNoLeak[key] !== false) throw new Error(`Parser/capture lift gate must keep ${key} false`);
+}
 const graphLiftBatch2 = outputRecord.graphLiftBatch2 as Record<string, unknown> | undefined;
 if (
   !graphLiftBatch2

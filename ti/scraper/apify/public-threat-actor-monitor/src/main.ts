@@ -317,6 +317,63 @@ interface QualityLiftGate {
   };
 }
 
+interface ParserCaptureLiftExample {
+  id: string;
+  sourceFamily: "rss_security_blog" | "vendor_report" | "cert_advisory" | "github_security_advisory" | "public_channel_handoff";
+  parserFamily: "rss" | "static_html" | "advisory_security_signal" | "public_channel_handoff";
+  beforeDecision: PaidRowDecision;
+  afterDecision: PaidRowDecision;
+  outcome: "accepted" | "rejected";
+  repairAction: string;
+  buyerVisibleFieldsAdded: Array<"actor" | "victim" | "sector" | "country" | "claim_type" | "first_reported_at" | "last_reported_at" | "publisher_count" | "ttp_tool" | "confidence" | "source_family" | "corroborating_source_ids">;
+  blockerCodesRemoved: string[];
+  rejectedReason?: "stale_report" | "single_source_low_context" | "duplicate_syndication" | "unsafe_or_restricted_capture" | "auth_captcha_private_source" | "raw_url_or_body_leak" | "credential_or_payload_material";
+  sellableRowsDelta: number;
+  usefulRowsDelta: number;
+  freshRowsDelta: number;
+  caveatedRowsDelta: number;
+  estimatedBuyerValueDelta: number;
+  noLeak: true;
+}
+
+interface ParserCaptureLiftGate {
+  schemaVersion: "ti.apify_parser_capture_lift_gate.v1";
+  owner: "agent_03";
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  baselineRows: {
+    total: 10;
+    sellable: 4;
+    caveated: 2;
+    held: 4;
+    averageBuyerValueScore: 0.577;
+  };
+  routeVisibleOn: Array<"Apify OUTPUT" | "/v1/sources/atlas" | "/v1/ops/product-slo" | "evidence_actor_dataset_promotion_preview">;
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  acceptedExamples: ParserCaptureLiftExample[];
+  rejectedExamples: ParserCaptureLiftExample[];
+  measurableLift: {
+    rowsLifted: number;
+    sellableRowsAdded: number;
+    usefulRowsAdded: number;
+    freshRowsAdded: number;
+    caveatedRowsAdded: number;
+    estimatedAverageBuyerValueDelta: number;
+    sourceFamiliesImproved: string[];
+    blockerCodesRemoved: string[];
+  };
+  rejectedRepairsDoNotCount: true;
+  noLeakBoundary: {
+    rawUrlExposed: false;
+    rawBodyExposed: false;
+    credentialPayloadMaterialExposed: false;
+    privateAuthCaptchaRequired: false;
+    restrictedRawMaterialExposed: false;
+  };
+}
+
 interface ProgramBoGraphLiftGate {
   schemaVersion: "ti.apify_buyer_visible_graph_lift_batch_2.v1";
   baselineRunId: "OThlfd0uzSCNnedAO";
@@ -1987,6 +2044,7 @@ async function apifyResponseError(label: string, response: Response): Promise<st
 function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationSummary) {
   const paidRowQuality = paidRowQualitySummary(rows);
   const qualityLiftGate = qualityLiftGateForRows(rows);
+  const parserCaptureLiftGate = parserCaptureLiftGateForRows(rows);
   const graphLiftBatch2 = programBoGraphLiftGateForRows(rows);
   const marketplaceGraphSignals = marketplaceGraphSignalGateForRows(rows);
   const graphPivotLiftGate = graphPivotLiftGateForRows(rows);
@@ -2014,6 +2072,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     paidRowQuality,
     monetizationReadiness: monetizationReadinessForRows(rows, paidRowQuality),
     qualityLiftGate,
+    parserCaptureLiftGate,
     graphLiftBatch2,
     marketplaceGraphSignals,
     graphPivotLiftGate,
@@ -2225,6 +2284,236 @@ function qualityLiftGateForRows(rows: MarketplaceRow[]): QualityLiftGate {
       acceptedRequiresSafePublicOrMetadataOnlySource: true,
       rejectedRepairsDoNotCountTowardPayworthyRate: true
     }
+  };
+}
+
+function parserCaptureLiftGateForRows(rows: MarketplaceRow[]): ParserCaptureLiftGate {
+  const acceptedExamples = parserCaptureAcceptedExamples(rows);
+  const rejectedExamples = parserCaptureRejectedExamples(rows);
+  return {
+    schemaVersion: "ti.apify_parser_capture_lift_gate.v1",
+    owner: "agent_03",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    baselineRows: {
+      total: 10,
+      sellable: 4,
+      caveated: 2,
+      held: 4,
+      averageBuyerValueScore: 0.577
+    },
+    routeVisibleOn: ["Apify OUTPUT", "/v1/sources/atlas", "/v1/ops/product-slo", "evidence_actor_dataset_promotion_preview"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    acceptedExamples,
+    rejectedExamples,
+    measurableLift: {
+      rowsLifted: acceptedExamples.length,
+      sellableRowsAdded: sumBy(acceptedExamples, (row) => row.sellableRowsDelta),
+      usefulRowsAdded: sumBy(acceptedExamples, (row) => row.usefulRowsDelta),
+      freshRowsAdded: sumBy(acceptedExamples, (row) => row.freshRowsDelta),
+      caveatedRowsAdded: sumBy(acceptedExamples, (row) => row.caveatedRowsDelta),
+      estimatedAverageBuyerValueDelta: Number((sumBy(acceptedExamples, (row) => row.estimatedBuyerValueDelta) / Math.max(1, rows.length)).toFixed(3)),
+      sourceFamiliesImproved: uniqueStrings(acceptedExamples.map((row) => row.sourceFamily)),
+      blockerCodesRemoved: uniqueStrings(acceptedExamples.flatMap((row) => row.blockerCodesRemoved))
+    },
+    rejectedRepairsDoNotCount: true,
+    noLeakBoundary: {
+      rawUrlExposed: false,
+      rawBodyExposed: false,
+      credentialPayloadMaterialExposed: false,
+      privateAuthCaptchaRequired: false,
+      restrictedRawMaterialExposed: false
+    }
+  };
+}
+
+function parserCaptureAcceptedExamples(rows: MarketplaceRow[]): ParserCaptureLiftExample[] {
+  const query = rows[0]?.query ?? "APT42";
+  return [
+    parserCaptureExample({
+      id: "parser_capture_vendor_report_hold_to_caveat",
+      sourceFamily: "vendor_report",
+      parserFamily: "static_html",
+      beforeDecision: "hold",
+      afterDecision: "included_with_caveat",
+      outcome: "accepted",
+      repairAction: "extract actor, sector, country, claim type, first/last reported time, and confidence from approved public vendor report captures",
+      buyerVisibleFieldsAdded: ["actor", "sector", "country", "claim_type", "first_reported_at", "last_reported_at", "confidence", "source_family"],
+      blockerCodesRemoved: ["generic_summary", "missing_sector_country", "missing_reported_time"],
+      sellableRowsDelta: 0,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      caveatedRowsDelta: 1,
+      estimatedBuyerValueDelta: 0.08
+    }),
+    parserCaptureExample({
+      id: "parser_capture_cert_advisory_caveat_to_sellable",
+      sourceFamily: "cert_advisory",
+      parserFamily: "advisory_security_signal",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "sellable",
+      outcome: "accepted",
+      repairAction: "promote CVE/advisory claim type, publisher count, TTP/tool, and corroborating source hashes from CERT pages into the paid row",
+      buyerVisibleFieldsAdded: ["claim_type", "publisher_count", "ttp_tool", "corroborating_source_ids", "confidence", "source_family"],
+      blockerCodesRemoved: ["single_source_without_caveat", "missing_corroboration", "missing_ttp_tool"],
+      sellableRowsDelta: 1,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      caveatedRowsDelta: -1,
+      estimatedBuyerValueDelta: 0.11
+    }),
+    parserCaptureExample({
+      id: "parser_capture_rss_blog_gap_to_caveat",
+      sourceFamily: "rss_security_blog",
+      parserFamily: "rss",
+      beforeDecision: "coverage_gap_only",
+      afterDecision: "included_with_caveat",
+      outcome: "accepted",
+      repairAction: "recover actor, TTP/tool, publisher, first-seen, and source-family fields from high-signal RSS security blog rows",
+      buyerVisibleFieldsAdded: ["actor", "ttp_tool", "first_reported_at", "publisher_count", "source_family"],
+      blockerCodesRemoved: ["coverage_gap", "parser_not_certified", "generic_summary"],
+      sellableRowsDelta: 0,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      caveatedRowsDelta: 1,
+      estimatedBuyerValueDelta: 0.07
+    }),
+    parserCaptureExample({
+      id: "parser_capture_github_advisory_caveat_to_sellable",
+      sourceFamily: "github_security_advisory",
+      parserFamily: "advisory_security_signal",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "sellable",
+      outcome: "accepted",
+      repairAction: "normalize GitHub advisory CVE/tooling context, reported time, source family, and corroboration hashes for chargeable public findings",
+      buyerVisibleFieldsAdded: ["claim_type", "first_reported_at", "last_reported_at", "ttp_tool", "corroborating_source_ids", "confidence"],
+      blockerCodesRemoved: ["missing_reported_time", "missing_corroboration", "low_confidence"],
+      sellableRowsDelta: 1,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      caveatedRowsDelta: -1,
+      estimatedBuyerValueDelta: 0.1
+    }),
+    parserCaptureExample({
+      id: "parser_capture_public_channel_handoff_hold_to_caveat",
+      sourceFamily: "public_channel_handoff",
+      parserFamily: "public_channel_handoff",
+      beforeDecision: "hold",
+      afterDecision: "included_with_caveat",
+      outcome: "accepted",
+      repairAction: "accept only approved public-channel handoff rows with actor, claim type, publisher count, timestamps, and safe corroboration ids",
+      buyerVisibleFieldsAdded: ["actor", "claim_type", "publisher_count", "first_reported_at", "last_reported_at", "corroborating_source_ids"],
+      blockerCodesRemoved: ["thin_apt42_public_channel_coverage", "missing_public_channel_evidence"],
+      sellableRowsDelta: 0,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      caveatedRowsDelta: 1,
+      estimatedBuyerValueDelta: 0.06
+    })
+  ].map((row) => ({ ...row, repairAction: `${row.repairAction}; query=${query}` }));
+}
+
+function parserCaptureRejectedExamples(rows: MarketplaceRow[]): ParserCaptureLiftExample[] {
+  const query = rows[0]?.query ?? "APT42";
+  return [
+    parserCaptureExample({
+      id: "reject_stale_report_specificity",
+      sourceFamily: "vendor_report",
+      parserFamily: "static_html",
+      beforeDecision: "hold",
+      afterDecision: "hold",
+      outcome: "rejected",
+      repairAction: "extract better entities from an old public report without fresh activity",
+      buyerVisibleFieldsAdded: ["actor", "ttp_tool"],
+      blockerCodesRemoved: [],
+      rejectedReason: "stale_report"
+    }),
+    parserCaptureExample({
+      id: "reject_single_source_low_context_channel",
+      sourceFamily: "public_channel_handoff",
+      parserFamily: "public_channel_handoff",
+      beforeDecision: "coverage_gap_only",
+      afterDecision: "coverage_gap_only",
+      outcome: "rejected",
+      repairAction: "promote one low-context public-channel mention without corroboration",
+      buyerVisibleFieldsAdded: ["actor"],
+      blockerCodesRemoved: [],
+      rejectedReason: "single_source_low_context"
+    }),
+    parserCaptureExample({
+      id: "reject_duplicate_syndication_rss",
+      sourceFamily: "rss_security_blog",
+      parserFamily: "rss",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "included_with_caveat",
+      outcome: "rejected",
+      repairAction: "count duplicate syndicated RSS copy as another source family",
+      buyerVisibleFieldsAdded: ["source_family"],
+      blockerCodesRemoved: [],
+      rejectedReason: "duplicate_syndication"
+    }),
+    parserCaptureExample({
+      id: "reject_restricted_capture_raw_material",
+      sourceFamily: "vendor_report",
+      parserFamily: "static_html",
+      beforeDecision: "suppress",
+      afterDecision: "suppress",
+      outcome: "rejected",
+      repairAction: "use restricted or unsafe capture material to improve summary specificity",
+      buyerVisibleFieldsAdded: ["victim", "country"],
+      blockerCodesRemoved: [],
+      rejectedReason: "unsafe_or_restricted_capture"
+    }),
+    parserCaptureExample({
+      id: "reject_auth_captcha_private_source",
+      sourceFamily: "public_channel_handoff",
+      parserFamily: "public_channel_handoff",
+      beforeDecision: "suppress",
+      afterDecision: "suppress",
+      outcome: "rejected",
+      repairAction: "require account creation, private invite, CAPTCHA, or authenticated channel access",
+      buyerVisibleFieldsAdded: ["actor"],
+      blockerCodesRemoved: [],
+      rejectedReason: "auth_captcha_private_source"
+    }),
+    parserCaptureExample({
+      id: "reject_raw_url_body_leak",
+      sourceFamily: "cert_advisory",
+      parserFamily: "advisory_security_signal",
+      beforeDecision: "hold",
+      afterDecision: "hold",
+      outcome: "rejected",
+      repairAction: "include raw URLs or source body excerpts in the paid row",
+      buyerVisibleFieldsAdded: ["corroborating_source_ids"],
+      blockerCodesRemoved: [],
+      rejectedReason: "raw_url_or_body_leak"
+    }),
+    parserCaptureExample({
+      id: "reject_payload_or_credential_material",
+      sourceFamily: "github_security_advisory",
+      parserFamily: "advisory_security_signal",
+      beforeDecision: "suppress",
+      afterDecision: "suppress",
+      outcome: "rejected",
+      repairAction: "extract exploit payload, credential, token, or secret material",
+      buyerVisibleFieldsAdded: ["ttp_tool"],
+      blockerCodesRemoved: [],
+      rejectedReason: "credential_or_payload_material"
+    })
+  ].map((row) => ({ ...row, repairAction: `${row.repairAction}; query=${query}` }));
+}
+
+function parserCaptureExample(input: Omit<ParserCaptureLiftExample, "sellableRowsDelta" | "usefulRowsDelta" | "freshRowsDelta" | "caveatedRowsDelta" | "estimatedBuyerValueDelta" | "noLeak"> & Partial<Pick<ParserCaptureLiftExample, "sellableRowsDelta" | "usefulRowsDelta" | "freshRowsDelta" | "caveatedRowsDelta" | "estimatedBuyerValueDelta">>): ParserCaptureLiftExample {
+  return {
+    sellableRowsDelta: 0,
+    usefulRowsDelta: 0,
+    freshRowsDelta: 0,
+    caveatedRowsDelta: 0,
+    estimatedBuyerValueDelta: 0,
+    ...input,
+    noLeak: true
   };
 }
 

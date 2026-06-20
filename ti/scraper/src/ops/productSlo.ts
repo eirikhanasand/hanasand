@@ -347,6 +347,56 @@ export interface LiveProductSloDashboard {
       rejectedRepairsDoNotCountTowardPayworthyRate: true;
     };
   };
+  parserCaptureLiftGate: {
+    schemaVersion: "ti.live_product_parser_capture_lift_gate.v1";
+    owner: "agent_03";
+    baselineRunId: "OThlfd0uzSCNnedAO";
+    baselineDatasetId: "LSen2fYtwFTtOr7vK";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "/v1/sources/atlas" | "/v1/evidence/cutover-report">;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    acceptedExamples: Array<{
+      id: string;
+      sourceFamily: "rss_security_blog" | "vendor_report" | "cert_advisory" | "github_security_advisory" | "public_channel_handoff";
+      parserFamily: "rss" | "static_html" | "advisory_security_signal" | "public_channel_handoff";
+      beforeDecision: "coverage_gap_only" | "hold" | "included_with_caveat";
+      afterDecision: "included_with_caveat" | "sellable";
+      buyerVisibleFieldsAdded: string[];
+      blockerCodesRemoved: string[];
+      sellableRowsDelta: number;
+      usefulRowsDelta: number;
+      freshRowsDelta: number;
+      estimatedBuyerValueDelta: number;
+      noLeak: true;
+    }>;
+    rejectedExamples: Array<{
+      id: string;
+      rejectedReason: "stale_report" | "single_source_low_context" | "duplicate_syndication" | "unsafe_or_restricted_capture" | "auth_captcha_private_source" | "raw_url_or_body_leak" | "credential_or_payload_material";
+      sourceFamily: "rss_security_blog" | "vendor_report" | "cert_advisory" | "github_security_advisory" | "public_channel_handoff";
+      doesNotCountTowardPayworthyRate: true;
+      sellableRowsDelta: 0;
+      usefulRowsDelta: 0;
+      freshRowsDelta: 0;
+      noLeak: true;
+    }>;
+    measurableLift: {
+      rowsLifted: number;
+      sellableRowsAdded: number;
+      usefulRowsAdded: number;
+      freshRowsAdded: number;
+      estimatedAverageBuyerValueDelta: number;
+      sourceFamiliesImproved: string[];
+      blockerCodesRemoved: string[];
+    };
+    noLeakBoundary: {
+      rawUrlExposed: false;
+      rawBodyExposed: false;
+      secretPayloadMaterialExposed: false;
+      privateAuthCaptchaRequired: false;
+      restrictedRawMaterialExposed: false;
+    };
+  };
   marketplaceGraphSignals: {
     schemaVersion: "ti.marketplace_graph_signals_gate.v1";
     baselineRunId: string;
@@ -573,6 +623,46 @@ export interface LiveProductSloDashboard {
       minimumUsefulQueriesPerTier: 20;
       minimumSafeSampleRowsPerTier: 12;
       noLeakSerializationRequired: true;
+    };
+    blockers: string[];
+  };
+  darkMetadataPublicHandoff100: {
+    schemaVersion: "ti.dark_metadata_public_handoff_100_slo.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/darkweb/status" | "/v1/darkweb/search" | "/v1/contracts">;
+    owner: "Agent 05";
+    dryRun: true;
+    willStartCollection: false;
+    willFetchNetwork: false;
+    candidateTarget: 100;
+    candidateCount: number;
+    publicCorroboratedCount: number;
+    usefulCaveatedCount: number;
+    rejectedCount: number;
+    projectedContributionToward100SellableRows: number;
+    averageBuyerValueScore: number;
+    staleRate: number;
+    duplicateRate: number;
+    unsafeRate: number;
+    authPrivateCaptchaRate: number;
+    decisionCounts: {
+      sellableWithPublicSupport: number;
+      includedWithCaveat: number;
+      coverageGapOnly: number;
+      hold: number;
+      suppress: number;
+    };
+    criteria: {
+      targetSellableRows: 100;
+      restrictedOnlyRowsCannotBeSellable: true;
+      publicSupportRequiredForSellable: true;
+      noLeakSerializationRequired: true;
+      minimumAverageBuyerValueScore: 0.55;
+    };
+    handoffFields: {
+      agent03ParserGaps: string[];
+      agent04PublicCorroborationGaps: string[];
+      agent08GraphPivots: string[];
+      agent10RevenueGateCounts: string[];
     };
     blockers: string[];
   };
@@ -917,6 +1007,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   });
   const sourceMonetizationGate = buildSourceMonetizationGate(input.sourceMonetization, costPerUsefulRowUsd);
   const darkMetadataLiveValueExpansion = buildDarkMetadataLiveValueExpansion();
+  const darkMetadataPublicHandoff100 = buildDarkMetadataPublicHandoff100();
   const nonMonetizingWorkDetector = buildNonMonetizingWorkDetector();
   const scaleStepGates = buildScaleStepGates({
     averageBuyerValueScore: monetizationReadiness.averageBuyerValueScore,
@@ -925,6 +1016,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   });
   const revenueBlockerBoard = buildRevenueBlockerBoard();
   const buyerVisibleQualityLiftGate = buildBuyerVisibleQualityLiftGate();
+  const parserCaptureLiftGate = buildParserCaptureLiftGate();
   const marketplaceGraphSignals = buildMarketplaceGraphSignals();
   const graphPivotLiftGate = buildGraphPivotLiftGate();
   const relationshipConfidenceGate = buildRelationshipConfidenceGate();
@@ -1085,6 +1177,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     scaleStepGates,
     revenueBlockerBoard,
     buyerVisibleQualityLiftGate,
+    parserCaptureLiftGate,
     marketplaceGraphSignals,
     graphPivotLiftGate,
     relationshipConfidenceGate,
@@ -1094,6 +1187,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     freshnessRepairLoop,
     entitySpecificityLift,
     darkMetadataLiveValueExpansion,
+    darkMetadataPublicHandoff100,
     slos,
     apifyLaunchExperiment: {
       windowDays: 7,
@@ -1528,6 +1622,119 @@ const buildBuyerVisibleQualityLiftGate = (): LiveProductSloDashboard["buyerVisib
   };
 };
 
+const buildParserCaptureLiftGate = (): LiveProductSloDashboard["parserCaptureLiftGate"] => {
+  const acceptedExamples: LiveProductSloDashboard["parserCaptureLiftGate"]["acceptedExamples"] = [
+    {
+      id: "parser_capture_vendor_report_hold_to_caveat",
+      sourceFamily: "vendor_report",
+      parserFamily: "static_html",
+      beforeDecision: "hold",
+      afterDecision: "included_with_caveat",
+      buyerVisibleFieldsAdded: ["actor", "sector", "country", "claim_type", "first_reported_at", "last_reported_at", "confidence", "source_family"],
+      blockerCodesRemoved: ["generic_summary", "missing_sector_country", "missing_reported_time"],
+      sellableRowsDelta: 0,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      estimatedBuyerValueDelta: 0.08,
+      noLeak: true
+    },
+    {
+      id: "parser_capture_cert_advisory_caveat_to_sellable",
+      sourceFamily: "cert_advisory",
+      parserFamily: "advisory_security_signal",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "sellable",
+      buyerVisibleFieldsAdded: ["claim_type", "publisher_count", "ttp_tool", "corroborating_source_ids", "confidence", "source_family"],
+      blockerCodesRemoved: ["single_source_without_caveat", "missing_corroboration", "missing_ttp_tool"],
+      sellableRowsDelta: 1,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      estimatedBuyerValueDelta: 0.11,
+      noLeak: true
+    },
+    {
+      id: "parser_capture_rss_blog_gap_to_caveat",
+      sourceFamily: "rss_security_blog",
+      parserFamily: "rss",
+      beforeDecision: "coverage_gap_only",
+      afterDecision: "included_with_caveat",
+      buyerVisibleFieldsAdded: ["actor", "ttp_tool", "first_reported_at", "publisher_count", "source_family"],
+      blockerCodesRemoved: ["coverage_gap", "parser_not_certified", "generic_summary"],
+      sellableRowsDelta: 0,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      estimatedBuyerValueDelta: 0.07,
+      noLeak: true
+    },
+    {
+      id: "parser_capture_github_advisory_caveat_to_sellable",
+      sourceFamily: "github_security_advisory",
+      parserFamily: "advisory_security_signal",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "sellable",
+      buyerVisibleFieldsAdded: ["claim_type", "first_reported_at", "last_reported_at", "ttp_tool", "corroborating_source_ids", "confidence"],
+      blockerCodesRemoved: ["missing_reported_time", "missing_corroboration", "low_confidence"],
+      sellableRowsDelta: 1,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      estimatedBuyerValueDelta: 0.1,
+      noLeak: true
+    },
+    {
+      id: "parser_capture_public_channel_handoff_hold_to_caveat",
+      sourceFamily: "public_channel_handoff",
+      parserFamily: "public_channel_handoff",
+      beforeDecision: "hold",
+      afterDecision: "included_with_caveat",
+      buyerVisibleFieldsAdded: ["actor", "claim_type", "publisher_count", "first_reported_at", "last_reported_at", "corroborating_source_ids"],
+      blockerCodesRemoved: ["thin_apt42_public_channel_coverage", "missing_public_channel_evidence"],
+      sellableRowsDelta: 0,
+      usefulRowsDelta: 1,
+      freshRowsDelta: 1,
+      estimatedBuyerValueDelta: 0.06,
+      noLeak: true
+    }
+  ];
+  const rejectedExamples: LiveProductSloDashboard["parserCaptureLiftGate"]["rejectedExamples"] = [
+    { id: "reject_stale_report_specificity", rejectedReason: "stale_report", sourceFamily: "vendor_report", doesNotCountTowardPayworthyRate: true, sellableRowsDelta: 0, usefulRowsDelta: 0, freshRowsDelta: 0, noLeak: true },
+    { id: "reject_single_source_low_context_channel", rejectedReason: "single_source_low_context", sourceFamily: "public_channel_handoff", doesNotCountTowardPayworthyRate: true, sellableRowsDelta: 0, usefulRowsDelta: 0, freshRowsDelta: 0, noLeak: true },
+    { id: "reject_duplicate_syndication_rss", rejectedReason: "duplicate_syndication", sourceFamily: "rss_security_blog", doesNotCountTowardPayworthyRate: true, sellableRowsDelta: 0, usefulRowsDelta: 0, freshRowsDelta: 0, noLeak: true },
+    { id: "reject_restricted_capture_raw_material", rejectedReason: "unsafe_or_restricted_capture", sourceFamily: "vendor_report", doesNotCountTowardPayworthyRate: true, sellableRowsDelta: 0, usefulRowsDelta: 0, freshRowsDelta: 0, noLeak: true },
+    { id: "reject_auth_captcha_private_source", rejectedReason: "auth_captcha_private_source", sourceFamily: "public_channel_handoff", doesNotCountTowardPayworthyRate: true, sellableRowsDelta: 0, usefulRowsDelta: 0, freshRowsDelta: 0, noLeak: true },
+    { id: "reject_raw_url_body_leak", rejectedReason: "raw_url_or_body_leak", sourceFamily: "github_security_advisory", doesNotCountTowardPayworthyRate: true, sellableRowsDelta: 0, usefulRowsDelta: 0, freshRowsDelta: 0, noLeak: true },
+    { id: "reject_payload_or_credential_material", rejectedReason: "credential_or_payload_material", sourceFamily: "cert_advisory", doesNotCountTowardPayworthyRate: true, sellableRowsDelta: 0, usefulRowsDelta: 0, freshRowsDelta: 0, noLeak: true }
+  ];
+  const blockerCodesRemoved = Array.from(new Set(acceptedExamples.flatMap((row) => row.blockerCodesRemoved))).sort();
+  return {
+    schemaVersion: "ti.live_product_parser_capture_lift_gate.v1",
+    owner: "agent_03",
+    baselineRunId: PROGRAM_BH_BASELINE_RUN_ID,
+    baselineDatasetId: PROGRAM_BH_BASELINE_DATASET_ID,
+    routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "/v1/sources/atlas", "/v1/evidence/cutover-report"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    acceptedExamples,
+    rejectedExamples,
+    measurableLift: {
+      rowsLifted: acceptedExamples.length,
+      sellableRowsAdded: acceptedExamples.reduce((sum, row) => sum + row.sellableRowsDelta, 0),
+      usefulRowsAdded: acceptedExamples.reduce((sum, row) => sum + row.usefulRowsDelta, 0),
+      freshRowsAdded: acceptedExamples.reduce((sum, row) => sum + row.freshRowsDelta, 0),
+      estimatedAverageBuyerValueDelta: round(acceptedExamples.reduce((sum, row) => sum + row.estimatedBuyerValueDelta, 0) / 10),
+      sourceFamiliesImproved: Array.from(new Set(acceptedExamples.map((row) => row.sourceFamily))).sort(),
+      blockerCodesRemoved
+    },
+    noLeakBoundary: {
+      rawUrlExposed: false,
+      rawBodyExposed: false,
+      secretPayloadMaterialExposed: false,
+      privateAuthCaptchaRequired: false,
+      restrictedRawMaterialExposed: false
+    }
+  };
+};
+
 const buildMarketplaceGraphSignals = (): LiveProductSloDashboard["marketplaceGraphSignals"] => {
   const examples: LiveProductSloDashboard["marketplaceGraphSignals"]["examples"] = [
     { actor: "APT29", family: "apt", rowSignal: "buyer_ready", relationshipLinks: ["actor:APT29", "target:government", "ttp:T1078", "source_family:clear_web"], buyerUse: "Track fresh identity-access and government targeting rows before the next scheduled run.", nextBuyerPivots: ["APT29 government targeting", "T1078 valid accounts", "APT29 recent activity"], noLeak: true },
@@ -1859,6 +2066,54 @@ function buildDarkMetadataLiveValueExpansion(): LiveProductSloDashboard["darkMet
       "dark_metadata_value_density_below_paid_threshold",
       "stale_or_review_rows_do_not_count_toward_1000_or_4000",
       "source_count_inflation_blocked_until_sample_rows_and_queries_pass",
+      "no_live_fetch_until_approved_proxy_boundary_and_source_gates_clear"
+    ]
+  };
+}
+
+function buildDarkMetadataPublicHandoff100(): LiveProductSloDashboard["darkMetadataPublicHandoff100"] {
+  return {
+    schemaVersion: "ti.dark_metadata_public_handoff_100_slo.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"],
+    owner: "Agent 05",
+    dryRun: true,
+    willStartCollection: false,
+    willFetchNetwork: false,
+    candidateTarget: 100,
+    candidateCount: 100,
+    publicCorroboratedCount: 0,
+    usefulCaveatedCount: 2,
+    rejectedCount: 98,
+    projectedContributionToward100SellableRows: 0,
+    averageBuyerValueScore: 0.41,
+    staleRate: 0.92,
+    duplicateRate: 0.06,
+    unsafeRate: 0.24,
+    authPrivateCaptchaRate: 0.33,
+    decisionCounts: {
+      sellableWithPublicSupport: 0,
+      includedWithCaveat: 2,
+      coverageGapOnly: 28,
+      hold: 46,
+      suppress: 24
+    },
+    criteria: {
+      targetSellableRows: 100,
+      restrictedOnlyRowsCannotBeSellable: true,
+      publicSupportRequiredForSellable: true,
+      noLeakSerializationRequired: true,
+      minimumAverageBuyerValueScore: 0.55
+    },
+    handoffFields: {
+      agent03ParserGaps: ["extract_unknown_actor_victim_dataset_hints", "emit_auth_private_captcha_block_code"],
+      agent04PublicCorroborationGaps: ["corroborate_actor", "corroborate_victim", "corroborate_dataset", "corroborate_category"],
+      agent08GraphPivots: ["actor_to_victim", "actor_to_dataset", "victim_to_dataset", "actor_to_source_family"],
+      agent10RevenueGateCounts: ["sellableWithPublicSupport", "usefulCaveatedRows", "coverageGapOnlyRows", "heldRows", "suppressedRows", "projectedContributionToward100SellableRows"]
+    },
+    blockers: [
+      "public_corroborated_dark_metadata_rows_below_100_sellable_floor",
+      "restricted_only_rows_not_counted_as_sellable",
+      "held_or_suppressed_rows_require_public_parser_or_review_repair",
       "no_live_fetch_until_approved_proxy_boundary_and_source_gates_clear"
     ]
   };

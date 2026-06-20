@@ -461,6 +461,67 @@ describe("api v1", () => {
     });
     expect((response.buyerVisibleQualityLiftGate as { acceptedExamples: Array<{ owner: string; afterDecision: string }> }).acceptedExamples.some((row) => row.owner === "agent_03" && row.afterDecision === "sellable")).toBe(true);
     expect((response.buyerVisibleQualityLiftGate as { ownerHandoffs: Array<{ owner: string; accepted: number }> }).ownerHandoffs.some((row) => row.owner === "agent_03" && row.accepted === 2)).toBe(true);
+    expect((response.parserCaptureLiftGate as {
+      schemaVersion: string;
+      owner: string;
+      baselineRunId: string;
+      baselineDatasetId: string;
+      routeVisibleOn: string[];
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      acceptedExamples: Array<{ afterDecision: string; buyerVisibleFieldsAdded: string[] }>;
+      rejectedExamples: Array<{ rejectedReason: string; doesNotCountTowardPayworthyRate: boolean; noLeak: boolean; sellableRowsDelta: number; usefulRowsDelta: number }>;
+      measurableLift: {
+        rowsLifted: number;
+        sellableRowsAdded: number;
+        usefulRowsAdded: number;
+        freshRowsAdded: number;
+        estimatedAverageBuyerValueDelta: number;
+        sourceFamiliesImproved: string[];
+        blockerCodesRemoved: string[];
+      };
+      noLeakBoundary: Record<string, boolean>;
+    })).toMatchObject({
+      schemaVersion: "ti.live_product_parser_capture_lift_gate.v1",
+      owner: "agent_03",
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "/v1/sources/atlas", "/v1/evidence/cutover-report"]) as unknown as string[],
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      measurableLift: {
+        rowsLifted: 5,
+        sellableRowsAdded: 2,
+        usefulRowsAdded: 5,
+        freshRowsAdded: 5,
+        estimatedAverageBuyerValueDelta: 0.042,
+        sourceFamiliesImproved: expect.arrayContaining(["rss_security_blog", "vendor_report", "cert_advisory", "github_security_advisory", "public_channel_handoff"]) as unknown as string[],
+        blockerCodesRemoved: expect.arrayContaining(["generic_summary", "missing_reported_time", "missing_corroboration", "missing_ttp_tool", "thin_apt42_public_channel_coverage"]) as unknown as string[]
+      },
+      noLeakBoundary: {
+        rawUrlExposed: false,
+        rawBodyExposed: false,
+        secretPayloadMaterialExposed: false,
+        privateAuthCaptchaRequired: false,
+        restrictedRawMaterialExposed: false
+      }
+    });
+    expect((response.parserCaptureLiftGate as { acceptedExamples: Array<{ afterDecision: string; buyerVisibleFieldsAdded: string[] }> }).acceptedExamples).toHaveLength(5);
+    expect((response.parserCaptureLiftGate as { acceptedExamples: Array<{ afterDecision: string; buyerVisibleFieldsAdded: string[] }> }).acceptedExamples.some((row) => row.afterDecision === "sellable" && row.buyerVisibleFieldsAdded.includes("corroborating_source_ids"))).toBe(true);
+    expect((response.parserCaptureLiftGate as { rejectedExamples: Array<{ rejectedReason: string }> }).rejectedExamples.map((row) => row.rejectedReason)).toEqual(expect.arrayContaining([
+      "stale_report",
+      "single_source_low_context",
+      "duplicate_syndication",
+      "unsafe_or_restricted_capture",
+      "auth_captcha_private_source",
+      "raw_url_or_body_leak",
+      "credential_or_payload_material"
+    ]));
+    expect((response.parserCaptureLiftGate as {
+      rejectedExamples: Array<{ doesNotCountTowardPayworthyRate: boolean; noLeak: boolean; sellableRowsDelta: number; usefulRowsDelta: number }>;
+    }).rejectedExamples.every((row) => row.doesNotCountTowardPayworthyRate && row.noLeak && row.sellableRowsDelta === 0 && row.usefulRowsDelta === 0)).toBe(true);
     expect((response.marketplaceGraphSignals as {
       schemaVersion: string;
       baselineRunId: string;
@@ -7260,6 +7321,40 @@ describe("api v1", () => {
           valueGateRejects: Array<{ reason: string; rejectedCount: number; doesNotCountTowardTier: boolean }>;
           noLeakSerialization: { passed: boolean };
         };
+        publicIntelligenceHandoff100: {
+          schemaVersion: string;
+          candidateTarget: number;
+          candidateCount: number;
+          publicCorroboratedCount: number;
+          usefulCaveatedCount: number;
+          rejectedCount: number;
+          projectedContributionToward100SellableRows: number;
+          averageBuyerValueScore: number;
+          staleRate: number;
+          duplicateRate: number;
+          unsafeRate: number;
+          authPrivateCaptchaRate: number;
+          decisionCounts: Record<string, number>;
+          rows: Array<{
+            safeLocatorHash: string;
+            noLeakProof: string;
+            nextPublicCorroborationPivots: string[];
+            decision: string;
+          }>;
+          handoffs: {
+            agent10RevenueGateCounts: {
+              targetSellableRows: number;
+              sellableWithPublicSupport: number;
+              usefulCaveatedRows: number;
+              coverageGapOnlyRows: number;
+              heldRows: number;
+              suppressedRows: number;
+              projectedContributionToward100SellableRows: number;
+            };
+          };
+          safety: Record<string, boolean>;
+          noLeakSerialization: { passed: boolean };
+        };
         operatorRunbook: {
           schemaVersion: string;
           mode: string;
@@ -7357,6 +7452,14 @@ describe("api v1", () => {
           requiredSampleRowsPerTier: number;
           requiredUsefulQueriesPerTier: number;
           sourceCountInflationBlocked: boolean;
+          requireNoLeakProof: boolean;
+        };
+        publicIntelligenceHandoff100: {
+          schemaVersion: string;
+          candidateTarget: number;
+          routeFields: string[];
+          decisions: string[];
+          requiresPublicSupportForSellable: boolean;
           requireNoLeakProof: boolean;
         };
       };
@@ -7761,6 +7864,56 @@ describe("api v1", () => {
       "low_buyer_value"
     ]));
     expect(statusResponse.status.liveValueExpansion.valueGateRejects.every((row) => row.doesNotCountTowardTier)).toBe(true);
+    expect(statusResponse.status.publicIntelligenceHandoff100).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_intelligence_handoff_100.v1",
+      candidateTarget: 100,
+      candidateCount: 100,
+      publicCorroboratedCount: 0,
+      usefulCaveatedCount: 2,
+      rejectedCount: 98,
+      projectedContributionToward100SellableRows: 0,
+      averageBuyerValueScore: 0.41,
+      staleRate: 0.92,
+      duplicateRate: 0.06,
+      unsafeRate: 0.24,
+      authPrivateCaptchaRate: 0.33,
+      safety: {
+        metadataOnly: true,
+        willFetchNetwork: false,
+        rawUnsafeUrlsExposed: false,
+        stolenFilesDownloaded: false,
+        credentialsRetrieved: false,
+        payloadsFollowed: false,
+        privateAuthCaptchaAccess: false,
+        actorInteraction: false
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(statusResponse.status.publicIntelligenceHandoff100.decisionCounts).toEqual({
+      sellable_with_public_support: 0,
+      included_with_caveat: 2,
+      coverage_gap_only: 28,
+      hold: 46,
+      suppress: 24
+    });
+    expect(statusResponse.status.publicIntelligenceHandoff100.rows).toHaveLength(100);
+    expect(statusResponse.status.publicIntelligenceHandoff100.rows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      row.nextPublicCorroborationPivots.length > 0 &&
+      row.decision !== "sellable_with_public_support"
+    )).toBe(true);
+    expect(statusResponse.status.publicIntelligenceHandoff100.handoffs.agent10RevenueGateCounts).toMatchObject({
+      targetSellableRows: 100,
+      sellableWithPublicSupport: 0,
+      usefulCaveatedRows: 2,
+      coverageGapOnlyRows: 28,
+      heldRows: 46,
+      suppressedRows: 24,
+      projectedContributionToward100SellableRows: 0
+    });
     expect(statusResponse.status.operatorRunbook).toMatchObject({
       schemaVersion: "ti.darkweb_index_operator_runbook.v1",
       mode: "operator_controls_no_live_collection",
@@ -7911,6 +8064,14 @@ describe("api v1", () => {
       sourceCountInflationBlocked: true,
       requireNoLeakProof: true
     });
+    expect(statusResponse.contract.publicIntelligenceHandoff100).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_intelligence_handoff_100.v1",
+      candidateTarget: 100,
+      routeFields: ["status.publicIntelligenceHandoff100", "darkwebIndex.productHandoff.publicIntelligenceHandoff100", "ops.productSlo.darkMetadataPublicHandoff100"],
+      decisions: ["sellable_with_public_support", "included_with_caveat", "coverage_gap_only", "hold", "suppress"],
+      requiresPublicSupportForSellable: true,
+      requireNoLeakProof: true
+    });
     expect(statusResponse.contract.sourceIngest).toMatchObject({
       runtimeMode: "contract_only_no_network",
       sourceTypes: expect.arrayContaining(["directory", "seed_list", "analyst_import", "public_report"]),
@@ -7959,6 +8120,7 @@ describe("api v1", () => {
         buyerSearchRows: Array<{ recordId: string; safeSummary: string; sourceFamily: string; refreshCadenceMinutes: number; buyerValueScore: number; whyItMatters: string; provenanceHash: string }>;
         tier10000SearchProof: { actorQueries: string[]; usefulQueryCount: number; sampleRows: Array<{ recordId: string; provenanceHash: string; whyItMatters: string }> };
         liveValueExpansion: { schemaVersion: string; sourceCountInflationBlocked: boolean; tiers: Array<{ tier: string; candidateRows: unknown[]; buyerSearchProof: { usefulQueryCount: number; sampleRows: unknown[] }; advancementDecision: string }> };
+        publicIntelligenceHandoff100: { schemaVersion: string; candidateCount: number; publicCorroboratedCount: number; usefulCaveatedCount: number; projectedContributionToward100SellableRows: number; decisionCounts: Record<string, number>; sampleRows: Array<{ safeLocatorHash: string; decision: string; noLeakProof: string }>; handoffs: { agent10RevenueGateCounts: { targetSellableRows: number; sellableWithPublicSupport: number; usefulCaveatedRows: number } } };
         warnings: string[];
       };
       noLeakSerialization: { passed: boolean };
@@ -8017,6 +8179,32 @@ describe("api v1", () => {
       tier.buyerSearchProof.usefulQueryCount >= 20 &&
       tier.buyerSearchProof.sampleRows.length === 12 &&
       tier.advancementDecision === "hold_for_value_density"
+    )).toBe(true);
+    expect(darkwebIndex.productHandoff.publicIntelligenceHandoff100).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_intelligence_handoff_100.v1",
+      candidateCount: 100,
+      publicCorroboratedCount: 0,
+      usefulCaveatedCount: 2,
+      projectedContributionToward100SellableRows: 0,
+      decisionCounts: {
+        sellable_with_public_support: 0,
+        included_with_caveat: 2,
+        coverage_gap_only: 28,
+        hold: 46,
+        suppress: 24
+      },
+      handoffs: {
+        agent10RevenueGateCounts: {
+          targetSellableRows: 100,
+          sellableWithPublicSupport: 0,
+          usefulCaveatedRows: 2
+        }
+      }
+    });
+    expect(darkwebIndex.productHandoff.publicIntelligenceHandoff100.sampleRows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      row.decision !== "sellable_with_public_support"
     )).toBe(true);
     expect(darkwebIndex.records.every((record) =>
       record.network === "tor" &&
