@@ -1175,6 +1175,7 @@ export function parseGoogleNewsRss(xml: string): LiveSearchMatch[] {
                 }
             })
             .filter((item): item is LiveSearchMatch => Boolean(item))
+            .sort((left, right) => Date.parse(right.publishedAt ?? '') - Date.parse(left.publishedAt ?? ''))
             .slice(0, 8)
     } catch {
         return []

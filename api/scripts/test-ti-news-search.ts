@@ -19,4 +19,10 @@ if (item.snippet !== 'APT29 campaign details.') throw new Error(`Unexpected snip
 const [undated] = parseGoogleNewsRss('<rss><channel><item><title>Undated</title><link>https://example.com</link></item></channel></rss>')
 if (undated) throw new Error('Undated items must not become activity evidence')
 
+const ordered = parseGoogleNewsRss(`<rss><channel>
+<item><title>Older</title><link>https://example.com/older</link><pubDate>Thu, 01 Jan 2026 00:00:00 GMT</pubDate></item>
+<item><title>Newer</title><link>https://example.com/newer</link><pubDate>Fri, 20 Jun 2026 08:30:00 GMT</pubDate></item>
+</channel></rss>`)
+if (ordered[0]?.title !== 'Newer') throw new Error('News items must be newest first')
+
 console.log('TI news feed parsing passed')
