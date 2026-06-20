@@ -363,6 +363,193 @@ const paidGraphPackRejectionReasons = (paidGraphSearchPackGate.rejectionGates as
 for (const requiredReason of ["stale_only_evidence", "generic_relationship", "missing_provenance", "no_buyer_action", "unsafe_raw_content", "unsupported_alias_expansion", "single_source_without_caveat", "unrelated_pivot"]) {
   if (!paidGraphPackRejectionReasons.includes(requiredReason)) throw new Error(`Program BX paid graph search packs must reject ${requiredReason}`);
 }
+const hundredSellableRowGraphPivotPlan = outputRecord.hundredSellableRowGraphPivotPlan as Record<string, unknown> | undefined;
+if (
+  !hundredSellableRowGraphPivotPlan
+  || hundredSellableRowGraphPivotPlan.schemaVersion !== "ti.apify_100_sellable_row_graph_pivot_plan.v1"
+  || hundredSellableRowGraphPivotPlan.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || hundredSellableRowGraphPivotPlan.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || hundredSellableRowGraphPivotPlan.targetSellableRows !== 100
+  || hundredSellableRowGraphPivotPlan.dryRun !== true
+  || hundredSellableRowGraphPivotPlan.willMutateSources !== false
+  || hundredSellableRowGraphPivotPlan.willStartCollection !== false
+  || Number(hundredSellableRowGraphPivotPlan.projectedSellableRows) < 100
+  || Number(hundredSellableRowGraphPivotPlan.projectedUsefulRows) < 100
+  || Number(hundredSellableRowGraphPivotPlan.projectedFreshRows) < 100
+  || Number(hundredSellableRowGraphPivotPlan.projectedSourceFamilyDiversity) < 5
+  || Number(hundredSellableRowGraphPivotPlan.nextSearchPivotCount) < 60
+  || Number(hundredSellableRowGraphPivotPlan.averageBuyerValueDelta) <= 0
+  || Number(hundredSellableRowGraphPivotPlan.rowsPreventedFromBilling) < 40
+  || !Array.isArray(hundredSellableRowGraphPivotPlan.watchlistPlans)
+  || hundredSellableRowGraphPivotPlan.watchlistPlans.length < 20
+  || !Array.isArray(hundredSellableRowGraphPivotPlan.rejectionGates)
+  || hundredSellableRowGraphPivotPlan.rejectionGates.length < 8
+  || !Array.isArray(hundredSellableRowGraphPivotPlan.repairHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program CA 100-sellable-row graph pivot plan");
+}
+const hundredSellableRejectionReasons = (hundredSellableRowGraphPivotPlan.rejectionGates as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["stale_only", "single_source_without_caveat", "contradicted", "unrelated", "missing_provenance", "unsafe_restricted_only", "alias_only", "not_actionable"]) {
+  if (!hundredSellableRejectionReasons.includes(requiredReason)) throw new Error(`Program CA graph pivot plan must reject ${requiredReason}`);
+}
+for (const row of hundredSellableRowGraphPivotPlan.watchlistPlans as Array<Record<string, unknown>>) {
+  if (
+    typeof row.actor !== "string"
+    || !["apt", "ransomware"].includes(String(row.family))
+    || Number(row.projectedSellableRows) < 1
+    || !Array.isArray(row.sourceFamiliesNeeded)
+    || row.sourceFamiliesNeeded.length < 2
+    || !Array.isArray(row.graphPivots)
+    || row.graphPivots.length < 3
+    || !Array.isArray(row.nextSearches)
+    || row.nextSearches.length < 3
+    || !Array.isArray(row.parserNeeds)
+    || !Array.isArray(row.sourceNeeds)
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program CA watchlist plans must include specific pivots, repairs, and no-leak proof");
+  }
+}
+const hundredSellableNoLeak = hundredSellableRowGraphPivotPlan.noLeakBoundary as Record<string, unknown> | undefined;
+if (
+  !hundredSellableNoLeak
+  || hundredSellableNoLeak.rawEvidenceBodies !== false
+  || hundredSellableNoLeak.unsafeUrls !== false
+  || hundredSellableNoLeak.credentials !== false
+  || hundredSellableNoLeak.leakedFiles !== false
+  || hundredSellableNoLeak.privateMaterial !== false
+  || hundredSellableNoLeak.actorInteraction !== false
+) {
+  throw new Error("Program CA graph pivot plan must preserve the no-leak boundary");
+}
+const parserToSellableRepairPacket = outputRecord.parserToSellableRepairPacket as Record<string, unknown> | undefined;
+if (
+  !parserToSellableRepairPacket
+  || parserToSellableRepairPacket.schemaVersion !== "ti.apify_parser_to_100_sellable_rows_packet.v1"
+  || parserToSellableRepairPacket.owner !== "agent_03"
+  || parserToSellableRepairPacket.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || parserToSellableRepairPacket.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || parserToSellableRepairPacket.targetSellableRows !== 100
+  || parserToSellableRepairPacket.dryRun !== true
+  || parserToSellableRepairPacket.willMutateSources !== false
+  || parserToSellableRepairPacket.willStartCollection !== false
+  || parserToSellableRepairPacket.productionSellableClaimed !== false
+  || parserToSellableRepairPacket.candidateDecision !== "sellable_candidate_after_parser_repair"
+  || Number(parserToSellableRepairPacket.projectedCandidateRows) < 20
+  || Number(parserToSellableRepairPacket.projectedUsefulRows) < 20
+  || Number(parserToSellableRepairPacket.projectedFreshRows) < 20
+  || !Array.isArray(parserToSellableRepairPacket.candidates)
+  || parserToSellableRepairPacket.candidates.length < 12
+  || !Array.isArray(parserToSellableRepairPacket.rejectedRepairs)
+  || parserToSellableRepairPacket.rejectedRepairs.length < 7
+  || !Array.isArray(parserToSellableRepairPacket.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program CD parser-to-100 sellable repair packet");
+}
+for (const row of parserToSellableRepairPacket.candidates as Array<Record<string, unknown>>) {
+  if (
+    row.dryRunDecision !== "sellable_candidate_after_parser_repair"
+    || Number(row.projectedRows) < 1
+    || !Array.isArray(row.parserFieldsUnlocking)
+    || (row.parserFieldsUnlocking as string[]).length < 5
+    || !Array.isArray(row.sourceFamilyGaps)
+    || !Array.isArray(row.graphPivotGaps)
+    || !Array.isArray(row.suppressionChecks)
+    || typeof row.provenanceHash !== "string"
+    || row.provenanceHash.length === 0
+    || !Array.isArray(row.nextBuyerSearches)
+    || row.requiresSourceCorroboration !== true
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program CD parser candidates must stay dry-run, source-backed, graph-linked, and no-leak");
+  }
+}
+const parserSellableRejectedReasons = (parserToSellableRepairPacket.rejectedRepairs as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["stale_report", "alias_collision", "unrelated_actor_co_mention", "generic_marketing_page", "raw_body_or_unsafe_url_request", "payload_request", "private_auth_captcha_dependency"]) {
+  if (!parserSellableRejectedReasons.includes(requiredReason)) throw new Error(`Program CD parser repair packet must reject ${requiredReason}`);
+}
+for (const row of parserToSellableRepairPacket.rejectedRepairs as Array<Record<string, unknown>>) {
+  if (Number(row.projectedRows) !== 0 || row.doesNotCountToward100Floor !== true || row.noLeak !== true) {
+    throw new Error("Program CD rejected parser repairs must not count toward the 100-row floor");
+  }
+}
+const parserSellableNoLeak = parserToSellableRepairPacket.noLeakBoundary as Record<string, unknown> | undefined;
+if (
+  !parserSellableNoLeak
+  || parserSellableNoLeak.rawBodiesExposed !== false
+  || parserSellableNoLeak.unsafeUrlsExposed !== false
+  || parserSellableNoLeak.payloadsRequested !== false
+  || parserSellableNoLeak.privateAuthCaptchaAccess !== false
+  || parserSellableNoLeak.restrictedMaterialExposed !== false
+  || parserSellableNoLeak.productionSellableClaimed !== false
+) {
+  throw new Error("Program CD parser repair packet must preserve no-leak and no-production-claim boundaries");
+}
+const hundredRowConversionProof = outputRecord.hundredRowConversionProof as Record<string, unknown> | undefined;
+if (
+  !hundredRowConversionProof
+  || hundredRowConversionProof.schemaVersion !== "ti.apify_100_row_conversion_proof.v1"
+  || !Array.isArray(hundredRowConversionProof.routeVisibleOn)
+  || !hundredRowConversionProof.routeVisibleOn.includes("/v1/contracts#apifyStoreReadiness")
+) {
+  throw new Error("OUTPUT record must expose Program CF 100-row conversion proof");
+}
+const hundredRowCurrentRun = hundredRowConversionProof.currentRun as Record<string, unknown> | undefined;
+const hundredRowProjection = hundredRowConversionProof.acceptedRepairProjection as Record<string, unknown> | undefined;
+const firstPaidTrafficExperiment = hundredRowConversionProof.firstPaidTrafficExperiment as Record<string, unknown> | undefined;
+const noFakeRevenueClaims = hundredRowConversionProof.noFakeRevenueClaims as Record<string, unknown> | undefined;
+if (
+  !hundredRowCurrentRun
+  || hundredRowCurrentRun.proofRunId !== "OThlfd0uzSCNnedAO"
+  || hundredRowCurrentRun.proofDatasetId !== "LSen2fYtwFTtOr7vK"
+  || hundredRowCurrentRun.proofDecision !== "shape_safety_proof"
+  || hundredRowCurrentRun.productionPaidTrafficReady !== false
+  || Number(hundredRowCurrentRun.currentSellableRows) >= 100
+  || hundredRowCurrentRun.targetSellableRows !== 100
+  || Number(hundredRowCurrentRun.remainingSellableRows) <= 0
+  || !Array.isArray(hundredRowCurrentRun.exactBlockers)
+  || !hundredRowCurrentRun.exactBlockers.includes("sellable_rows_below_100_production_floor")
+) {
+  throw new Error("Program CF current-run proof must keep proof-sized runs blocked below the 100-row floor");
+}
+if (
+  !hundredRowProjection
+  || Number(hundredRowProjection.projectedSellableRowsFromAcceptedRepairs) <= 0
+  || Number(hundredRowProjection.projectedSellableRowsAfterAcceptedRepairs) < 100
+  || Number(hundredRowProjection.oneRepairAwayRows) <= 0
+  || Number(hundredRowProjection.caveatedUsefulRows) < 0
+  || Number(hundredRowProjection.blockedRows) <= 0
+  || hundredRowProjection.graphOnlyRowsCountTowardProductionFloor !== false
+  || hundredRowProjection.proofSizedRunsCountTowardProductionReadiness !== false
+  || hundredRowProjection.caveatOnlyRunsCountTowardProductionReadiness !== false
+) {
+  throw new Error("Program CF accepted-repair projection must distinguish projected progress from production readiness");
+}
+if (
+  !firstPaidTrafficExperiment
+  || firstPaidTrafficExperiment.status !== "blocked_until_100_sellable_rows"
+  || typeof firstPaidTrafficExperiment.targetBuyer !== "string"
+  || typeof firstPaidTrafficExperiment.successMetric !== "string"
+  || typeof firstPaidTrafficExperiment.stopLossMetric !== "string"
+  || !Array.isArray(firstPaidTrafficExperiment.requiredApifyAnalyticsFields)
+  || !firstPaidTrafficExperiment.requiredApifyAnalyticsFields.includes("paidRuns")
+  || !firstPaidTrafficExperiment.requiredApifyAnalyticsFields.includes("runtimeSeconds")
+) {
+  throw new Error("Program CF first paid traffic experiment must stay blocked and name required Apify analytics");
+}
+if (
+  !noFakeRevenueClaims
+  || noFakeRevenueClaims.payout !== null
+  || noFakeRevenueClaims.storeViews !== null
+  || noFakeRevenueClaims.users !== null
+  || noFakeRevenueClaims.paidRuns !== null
+  || noFakeRevenueClaims.revenue !== null
+  || noFakeRevenueClaims.runtime !== null
+  || noFakeRevenueClaims.platformUsage !== null
+  || noFakeRevenueClaims.conversionRate !== null
+) {
+  throw new Error("Program CF proof must keep payout, traffic, revenue, runtime, usage, and conversion claims external");
+}
 const qualityConversionGate = outputRecord.qualityConversionGate as Record<string, unknown> | undefined;
 if (
   !qualityConversionGate
@@ -502,6 +689,49 @@ if (
 const entitySpecificityOwners = (entitySpecificityLift.ownerHandoffs as Array<Record<string, unknown>>).map((row) => row.owner);
 for (const owner of ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
   if (!entitySpecificityOwners.includes(owner)) throw new Error(`Program BV entity specificity lift must include ${owner} handoff`);
+}
+const falsePositiveSuppressionGate = outputRecord.falsePositiveSuppressionGate as Record<string, unknown> | undefined;
+if (
+  !falsePositiveSuppressionGate
+  || falsePositiveSuppressionGate.schemaVersion !== "ti.apify_paid_row_false_positive_suppression_gate.v1"
+  || falsePositiveSuppressionGate.dryRun !== true
+  || falsePositiveSuppressionGate.willMutateSources !== false
+  || falsePositiveSuppressionGate.willStartCollection !== false
+  || !Array.isArray(falsePositiveSuppressionGate.fixtures)
+  || falsePositiveSuppressionGate.fixtures.length < 25
+  || !falsePositiveSuppressionGate.lift
+  || !Array.isArray(falsePositiveSuppressionGate.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BZ paid-row false-positive suppression gate");
+}
+const falsePositiveFixtures = falsePositiveSuppressionGate.fixtures as Array<Record<string, unknown>>;
+const falsePositiveScenarios = falsePositiveFixtures.map((row) => row.scenario);
+for (const scenario of ["alias_collision", "common_victim_name", "unrelated_actor_co_mention", "stale_repost_as_current", "single_source_requires_caveat", "metadata_only_without_public_support", "contradicted_claim", "unknown_search_suppressed", "true_positive_preserved"]) {
+  if (!falsePositiveScenarios.includes(scenario)) throw new Error(`Program BZ false-positive gate must include scenario ${scenario}`);
+}
+const falsePositiveReasonCodes = falsePositiveFixtures.map((row) => row.reasonCode);
+for (const reasonCode of ["alias_collision", "ambiguous_victim_name", "unrelated_actor_co_mention", "stale_repost_as_current", "single_source_without_caveat", "metadata_only_without_public_support", "contradicted_claim", "unknown_query_searching", "true_positive_sellable"]) {
+  if (!falsePositiveReasonCodes.includes(reasonCode)) throw new Error(`Program BZ false-positive gate must include reason ${reasonCode}`);
+}
+if (!falsePositiveFixtures.every((row) => typeof row.buyerVisibleEffect === "string" && typeof row.nextRepairAction === "string" && row.noLeak === true)) {
+  throw new Error("Program BZ fixtures must expose buyer effect, repair action, and no-leak proof");
+}
+const falsePositiveLift = falsePositiveSuppressionGate.lift as Record<string, unknown>;
+if (
+  Number(falsePositiveLift.falsePositivesSuppressed) < 10
+  || Number(falsePositiveLift.contradictedRowsHeld) < 2
+  || Number(falsePositiveLift.staleRepostsBlocked) < 3
+  || Number(falsePositiveLift.singleSourceRowsCaveated) < 3
+  || Number(falsePositiveLift.truePositivesPreserved) < 8
+  || Number(falsePositiveLift.sellableRowsProtected) < 8
+  || Number(falsePositiveLift.rowsPreventedFromBilling) < 10
+  || Number(falsePositiveLift.buyerTrustDelta) < 0.2
+) {
+  throw new Error("Program BZ false-positive gate must expose measurable suppression and buyer-trust lift");
+}
+const falsePositiveOwners = (falsePositiveSuppressionGate.ownerHandoffs as Array<Record<string, unknown>>).map((row) => row.owner);
+for (const owner of ["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
+  if (!falsePositiveOwners.includes(owner)) throw new Error(`Program BZ false-positive gate must include ${owner} handoff`);
 }
 const revenueConversionChecklist = outputRecord.revenueConversionChecklist as Record<string, unknown> | undefined;
 if (

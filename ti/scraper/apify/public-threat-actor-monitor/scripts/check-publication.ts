@@ -206,7 +206,11 @@ const contractMentions: Array<[string, string[]]> = [
   ["scheduler decision", ["schedulerDecision"]],
   ["pay-per-event pricing", ["pay-per-event", "apify-default-dataset-item"]],
   ["actor start charge event", ["apify-actor-start"]],
-  ["synthetic Apify event billing", ["apify_synthetic_events", "default dataset"]]
+  ["synthetic Apify event billing", ["apify_synthetic_events", "default dataset"]],
+  ["100-row conversion proof", ["hundredRowConversionProof", "ti.apify_100_row_conversion_proof.v1"]],
+  ["100 sellable row progress", ["current sellable rows", "projected sellable rows", "one-repair-away rows"]],
+  ["paid-traffic floor blocker", ["blocked_until_100_sellable_rows", "production paid traffic remains blocked until"]],
+  ["external analytics only", ["Store views", "paid runs", "runtime", "platform usage", "conversion rates"]]
 ];
 
 for (const [label, acceptedTerms] of contractMentions) {

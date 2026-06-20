@@ -858,6 +858,82 @@ export interface DarkwebIndexPublicHandoffRow {
   readonly graphPivot?: string;
 }
 
+export interface DarkwebIndexPublicSupportWorklist40 {
+  readonly schemaVersion: "ti.darkweb_index_public_support_worklist_40.v1";
+  readonly owner: "Agent 05";
+  readonly mode: "metadata_only_public_support_worklist";
+  readonly candidateSource: "publicIntelligenceHandoff100";
+  readonly topCandidateTarget: 40;
+  readonly topCandidateCount: number;
+  readonly publicSupportReadyCount: number;
+  readonly stillRestrictedOnlyCount: number;
+  readonly staleDuplicateUnsafeLowValueRejections: {
+    readonly stale: number;
+    readonly duplicate: number;
+    readonly unsafe: number;
+    readonly lowValue: number;
+  };
+  readonly projectedCaveatedRows: number;
+  readonly projectedSellableRowsAfterPublicSupport: number;
+  readonly contributionToward100SellableRows: number;
+  readonly averageBuyerValueScore: number;
+  readonly costPerUsefulRowEffect: {
+    readonly basis: "planning_estimate_no_spend";
+    readonly currentUsefulRows: number;
+    readonly projectedUsefulRows: number;
+    readonly usefulRowDelta: number;
+    readonly estimatedAnalystMinutes: number;
+    readonly costPerUsefulRowTrend: "improves_if_public_support_found" | "held_until_public_support_exists";
+  };
+  readonly rows: readonly DarkwebIndexPublicSupportWorkRow[];
+  readonly handoffs: {
+    readonly agent04PublicSourceTargets: readonly string[];
+    readonly agent03ParserFields: readonly string[];
+    readonly agent08GraphPivots: readonly string[];
+    readonly agent10RevenueGate: {
+      readonly targetSellableRows: 100;
+      readonly projectedSellableRowLift: number;
+      readonly projectedCaveatedRows: number;
+      readonly contributionToward100SellableRows: number;
+      readonly usefulRowDelta: number;
+      readonly costPerUsefulRowEffect: "improves_if_public_support_found" | "held_until_public_support_exists";
+    };
+  };
+  readonly safety: DarkwebIndexPublicIntelligenceHandoff100["safety"];
+  readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
+}
+
+export interface DarkwebIndexPublicSupportWorkRow {
+  readonly rank: number;
+  readonly recordId: string;
+  readonly safeLocatorHash: string;
+  readonly sourceFamily: DarkwebIndexTier1000Readiness["sourceFamilies"][number]["family"];
+  readonly publicSourceFamilyNeeded:
+    | "vendor_cti_or_research_report"
+    | "government_cert_or_advisory"
+    | "news_or_victim_public_statement"
+    | "ransomware_tracker_or_public_dataset"
+    | "malware_research_or_ttp_report"
+    | "public_search_or_directory_context";
+  readonly parserFieldsNeeded: readonly ["actor", "victim", "dataset", "sector_country", "claimed_date", "source_family"];
+  readonly expectedOutcome: "projected_sellable_after_public_support" | "projected_caveated_after_public_support" | "hold_restricted_only" | "reject_stale" | "reject_duplicate" | "reject_unsafe" | "reject_low_value";
+  readonly currentDecision: DarkwebIndexPublicHandoffDecision;
+  readonly publicSupportState: DarkwebIndexPublicHandoffRow["publicSupportState"];
+  readonly actorHints: readonly string[];
+  readonly victimHints: readonly string[];
+  readonly datasetHints: readonly string[];
+  readonly sectorCountry: string;
+  readonly claimedDate: string;
+  readonly freshness: DarkwebIndexBuyerSearchRow["freshness"];
+  readonly buyerValueScore: number;
+  readonly selectionScore: number;
+  readonly whyBuyerWouldPayIfCorroborated: string;
+  readonly noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials";
+  readonly publicSupportTarget: string;
+  readonly graphPivot?: string;
+  readonly rejectionReason?: "stale" | "duplicate" | "unsafe" | "low_value" | "restricted_only";
+}
+
 export interface DarkwebIndexOperatorRunbook {
   readonly schemaVersion: "ti.darkweb_index_operator_runbook.v1";
   readonly owner: "Agent 05";
@@ -969,6 +1045,7 @@ export interface DarkwebIndexStatusDto {
   readonly tier10000RefreshValue: DarkwebIndexTier10000RefreshValue;
   readonly liveValueExpansion: DarkwebIndexLiveValueExpansion;
   readonly publicIntelligenceHandoff100: DarkwebIndexPublicIntelligenceHandoff100;
+  readonly publicSupportWorklist40: DarkwebIndexPublicSupportWorklist40;
   readonly operatorRunbook: DarkwebIndexOperatorRunbook;
   readonly storageReadiness: {
     readonly tables: readonly string[];
@@ -1021,6 +1098,7 @@ export interface DarkwebIndexSearchDto {
     readonly tier10000SearchProof: DarkwebIndexTier10000RefreshValue["buyerSearchProof"];
     readonly liveValueExpansion: Pick<DarkwebIndexLiveValueExpansion, "schemaVersion" | "mode" | "sourceCountInflationBlocked" | "tiers">;
     readonly publicIntelligenceHandoff100: Pick<DarkwebIndexPublicIntelligenceHandoff100, "schemaVersion" | "mode" | "candidateCount" | "publicCorroboratedCount" | "usefulCaveatedCount" | "projectedContributionToward100SellableRows" | "decisionCounts" | "sampleRows" | "handoffs">;
+    readonly publicSupportWorklist40: Pick<DarkwebIndexPublicSupportWorklist40, "schemaVersion" | "mode" | "topCandidateCount" | "publicSupportReadyCount" | "stillRestrictedOnlyCount" | "projectedCaveatedRows" | "projectedSellableRowsAfterPublicSupport" | "contributionToward100SellableRows" | "rows" | "handoffs">;
     readonly warnings: readonly ["metadata_only", "review_required", "no_raw_locations"];
   };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
@@ -1144,6 +1222,14 @@ export interface DarkwebIndexContractDto {
     readonly requiresPublicSupportForSellable: true;
     readonly requireNoLeakProof: true;
   };
+  readonly publicSupportWorklist40: {
+    readonly schemaVersion: "ti.darkweb_index_public_support_worklist_40.v1";
+    readonly candidateSource: "publicIntelligenceHandoff100";
+    readonly topCandidateTarget: 40;
+    readonly routeFields: readonly ["status.publicSupportWorklist40", "darkwebIndex.productHandoff.publicSupportWorklist40"];
+    readonly sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim";
+    readonly requireNoLeakProof: true;
+  };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
 }
 
@@ -1207,6 +1293,7 @@ export function buildDarkwebIndexStatus(records: readonly DarkwebIndexRecord[] =
     tier10000RefreshValue: buildDarkwebIndexTier10000RefreshValue(records),
     liveValueExpansion: buildDarkwebIndexLiveValueExpansion(records),
     publicIntelligenceHandoff100: buildDarkwebIndexPublicIntelligenceHandoff100(records),
+    publicSupportWorklist40: buildDarkwebIndexPublicSupportWorklist40(records),
     operatorRunbook: buildDarkwebIndexOperatorRunbook(),
     storageReadiness: {
       tables: ["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs", "darkweb_index_classification_history", "darkweb_index_liveness_checks", "darkweb_index_review_notes"],
@@ -1282,6 +1369,7 @@ export function searchDarkwebIndex(input: {
       tier10000SearchProof: buildDarkwebIndexTier10000RefreshValue(records).buyerSearchProof,
       liveValueExpansion: liveValueExpansionSearchHandoff(buildDarkwebIndexLiveValueExpansion(records)),
       publicIntelligenceHandoff100: publicIntelligenceHandoffSearchHandoff(buildDarkwebIndexPublicIntelligenceHandoff100(records)),
+      publicSupportWorklist40: publicSupportWorklistSearchHandoff(buildDarkwebIndexPublicSupportWorklist40(records)),
       warnings: ["metadata_only", "review_required", "no_raw_locations"]
     },
     noLeakSerialization: darkwebIndexNoLeakSerialization()
@@ -1405,6 +1493,14 @@ export function darkwebIndexContract(): DarkwebIndexContractDto {
       routeFields: ["status.publicIntelligenceHandoff100", "darkwebIndex.productHandoff.publicIntelligenceHandoff100", "ops.productSlo.darkMetadataPublicHandoff100"],
       decisions: ["sellable_with_public_support", "included_with_caveat", "coverage_gap_only", "hold", "suppress"],
       requiresPublicSupportForSellable: true,
+      requireNoLeakProof: true
+    },
+    publicSupportWorklist40: {
+      schemaVersion: "ti.darkweb_index_public_support_worklist_40.v1",
+      candidateSource: "publicIntelligenceHandoff100",
+      topCandidateTarget: 40,
+      routeFields: ["status.publicSupportWorklist40", "darkwebIndex.productHandoff.publicSupportWorklist40"],
+      sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       requireNoLeakProof: true
     },
     noLeakSerialization: darkwebIndexNoLeakSerialization()
@@ -2408,6 +2504,23 @@ function publicIntelligenceHandoffSearchHandoff(
   };
 }
 
+function publicSupportWorklistSearchHandoff(
+  worklist: DarkwebIndexPublicSupportWorklist40
+): Pick<DarkwebIndexPublicSupportWorklist40, "schemaVersion" | "mode" | "topCandidateCount" | "publicSupportReadyCount" | "stillRestrictedOnlyCount" | "projectedCaveatedRows" | "projectedSellableRowsAfterPublicSupport" | "contributionToward100SellableRows" | "rows" | "handoffs"> {
+  return {
+    schemaVersion: worklist.schemaVersion,
+    mode: worklist.mode,
+    topCandidateCount: worklist.topCandidateCount,
+    publicSupportReadyCount: worklist.publicSupportReadyCount,
+    stillRestrictedOnlyCount: worklist.stillRestrictedOnlyCount,
+    projectedCaveatedRows: worklist.projectedCaveatedRows,
+    projectedSellableRowsAfterPublicSupport: worklist.projectedSellableRowsAfterPublicSupport,
+    contributionToward100SellableRows: worklist.contributionToward100SellableRows,
+    rows: worklist.rows,
+    handoffs: worklist.handoffs
+  };
+}
+
 function buildLiveValueExpansionTier(
   tier: DarkwebIndexLiveValueExpansion["tiers"][number]["tier"],
   targetRecordCount: 1000 | 4000,
@@ -2687,6 +2800,161 @@ function buildDarkwebIndexPublicIntelligenceHandoff100(records: readonly Darkweb
     },
     noLeakSerialization: darkwebIndexNoLeakSerialization()
   };
+}
+
+function buildDarkwebIndexPublicSupportWorklist40(records: readonly DarkwebIndexRecord[]): DarkwebIndexPublicSupportWorklist40 {
+  const publicHandoff = buildDarkwebIndexPublicIntelligenceHandoff100(records);
+  const rankedRows = publicHandoff.rows
+    .map((row) => ({ row, selectionScore: publicSupportSelectionScore(row) }))
+    .sort((left, right) => right.selectionScore - left.selectionScore || right.row.buyerValueScore - left.row.buyerValueScore || left.row.recordId.localeCompare(right.row.recordId))
+    .slice(0, 40)
+    .map(({ row, selectionScore }, index) => publicSupportWorkRowFor(row, selectionScore, index + 1));
+  const projectedSellableRowsAfterPublicSupport = rankedRows.filter((row) => row.expectedOutcome === "projected_sellable_after_public_support").length;
+  const projectedCaveatedRows = rankedRows.filter((row) => row.expectedOutcome === "projected_caveated_after_public_support").length;
+  const usefulRowDelta = projectedSellableRowsAfterPublicSupport + projectedCaveatedRows;
+  const estimatedAnalystMinutes = rankedRows.filter((row) => row.expectedOutcome === "projected_sellable_after_public_support" || row.expectedOutcome === "projected_caveated_after_public_support").length * 12;
+  return {
+    schemaVersion: "ti.darkweb_index_public_support_worklist_40.v1",
+    owner: "Agent 05",
+    mode: "metadata_only_public_support_worklist",
+    candidateSource: "publicIntelligenceHandoff100",
+    topCandidateTarget: 40,
+    topCandidateCount: rankedRows.length,
+    publicSupportReadyCount: rankedRows.filter((row) => row.expectedOutcome === "projected_sellable_after_public_support").length,
+    stillRestrictedOnlyCount: rankedRows.filter((row) => row.expectedOutcome === "hold_restricted_only").length,
+    staleDuplicateUnsafeLowValueRejections: {
+      stale: rankedRows.filter((row) => row.expectedOutcome === "reject_stale").length,
+      duplicate: rankedRows.filter((row) => row.expectedOutcome === "reject_duplicate").length,
+      unsafe: rankedRows.filter((row) => row.expectedOutcome === "reject_unsafe").length,
+      lowValue: rankedRows.filter((row) => row.expectedOutcome === "reject_low_value").length
+    },
+    projectedCaveatedRows,
+    projectedSellableRowsAfterPublicSupport,
+    contributionToward100SellableRows: projectedSellableRowsAfterPublicSupport,
+    averageBuyerValueScore: rankedRows.length === 0 ? 0 : Math.round((rankedRows.reduce((sum, row) => sum + row.buyerValueScore, 0) / rankedRows.length) * 100) / 100,
+    costPerUsefulRowEffect: {
+      basis: "planning_estimate_no_spend",
+      currentUsefulRows: publicHandoff.publicCorroboratedCount + publicHandoff.usefulCaveatedCount,
+      projectedUsefulRows: publicHandoff.publicCorroboratedCount + publicHandoff.usefulCaveatedCount + usefulRowDelta,
+      usefulRowDelta,
+      estimatedAnalystMinutes,
+      costPerUsefulRowTrend: usefulRowDelta > 0 ? "improves_if_public_support_found" : "held_until_public_support_exists"
+    },
+    rows: rankedRows,
+    handoffs: {
+      agent04PublicSourceTargets: uniqueSorted(rankedRows.map((row) => `${row.publicSourceFamilyNeeded}:${row.publicSupportTarget}`)),
+      agent03ParserFields: uniqueSorted(rankedRows.flatMap((row) => row.parserFieldsNeeded.map((field) => `${field}:${row.recordId}`))),
+      agent08GraphPivots: uniqueSorted(rankedRows.flatMap((row) => row.graphPivot ? [row.graphPivot] : [])),
+      agent10RevenueGate: {
+        targetSellableRows: 100,
+        projectedSellableRowLift: projectedSellableRowsAfterPublicSupport,
+        projectedCaveatedRows,
+        contributionToward100SellableRows: projectedSellableRowsAfterPublicSupport,
+        usefulRowDelta,
+        costPerUsefulRowEffect: usefulRowDelta > 0 ? "improves_if_public_support_found" : "held_until_public_support_exists"
+      }
+    },
+    safety: {
+      metadataOnly: true,
+      willFetchNetwork: false,
+      rawUnsafeUrlsExposed: false,
+      stolenFilesDownloaded: false,
+      credentialsRetrieved: false,
+      payloadsFollowed: false,
+      privateAuthCaptchaAccess: false,
+      actorInteraction: false
+    },
+    noLeakSerialization: darkwebIndexNoLeakSerialization()
+  };
+}
+
+function publicSupportWorkRowFor(row: DarkwebIndexPublicHandoffRow, selectionScore: number, rank: number): DarkwebIndexPublicSupportWorkRow {
+  const expectedOutcome = publicSupportExpectedOutcomeFor(row);
+  return {
+    rank,
+    recordId: row.recordId,
+    safeLocatorHash: row.safeLocatorHash,
+    sourceFamily: row.sourceFamily,
+    publicSourceFamilyNeeded: publicSourceFamilyNeededFor(row),
+    parserFieldsNeeded: ["actor", "victim", "dataset", "sector_country", "claimed_date", "source_family"],
+    expectedOutcome,
+    currentDecision: row.decision,
+    publicSupportState: row.publicSupportState,
+    actorHints: row.actorHints,
+    victimHints: row.victimHints,
+    datasetHints: row.datasetHints,
+    sectorCountry: row.sectorCountry,
+    claimedDate: row.claimedDate,
+    freshness: row.freshness,
+    buyerValueScore: row.buyerValueScore,
+    selectionScore,
+    whyBuyerWouldPayIfCorroborated: publicSupportBuyerReasonFor(row, expectedOutcome),
+    noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials",
+    publicSupportTarget: publicSupportTargetFor(row),
+    graphPivot: row.graphPivot,
+    rejectionReason: publicSupportRejectionReasonFor(expectedOutcome)
+  };
+}
+
+function publicSupportSelectionScore(row: DarkwebIndexPublicHandoffRow): number {
+  const freshnessBoost = row.freshness === "current" ? 0.25 : row.freshness === "refresh_due" ? 0.08 : 0;
+  const specificityBoost = Math.min(0.25, (row.actorHints.length + row.victimHints.length + row.datasetHints.length) * 0.06);
+  const corroborationBoost = row.publicSupportState === "public_supported" ? 0.18 : row.publicSupportState === "public_pivot_available" ? 0.12 : row.publicSupportState === "restricted_only" ? 0.04 : 0;
+  const safetyPenalty = row.decision === "suppress" ? 0.45 : row.decision === "hold" ? 0.18 : 0;
+  return Math.max(0, Math.min(1, Math.round((row.buyerValueScore * 0.55 + freshnessBoost + specificityBoost + corroborationBoost - safetyPenalty) * 100) / 100));
+}
+
+function publicSupportExpectedOutcomeFor(row: DarkwebIndexPublicHandoffRow): DarkwebIndexPublicSupportWorkRow["expectedOutcome"] {
+  if (row.decisionReason === "duplicate") return "reject_duplicate";
+  if (row.decisionReason === "unsafe_or_blocked") return "reject_unsafe";
+  if (row.freshness === "stale_or_dead" || row.decisionReason === "stale_or_dead") return "reject_stale";
+  if (row.buyerValueScore < 0.5) return "reject_low_value";
+  if (row.publicSupportState === "restricted_only") return "hold_restricted_only";
+  if (row.publicSupportState === "public_supported" || row.publicSupportState === "public_pivot_available") {
+    if (row.actorHints.length > 0 && (row.victimHints.length > 0 || row.datasetHints.length > 0) && row.buyerValueScore >= 0.55) return "projected_sellable_after_public_support";
+    return "projected_caveated_after_public_support";
+  }
+  return "hold_restricted_only";
+}
+
+function publicSupportRejectionReasonFor(expectedOutcome: DarkwebIndexPublicSupportWorkRow["expectedOutcome"]): DarkwebIndexPublicSupportWorkRow["rejectionReason"] | undefined {
+  if (expectedOutcome === "reject_stale") return "stale";
+  if (expectedOutcome === "reject_duplicate") return "duplicate";
+  if (expectedOutcome === "reject_unsafe") return "unsafe";
+  if (expectedOutcome === "reject_low_value") return "low_value";
+  if (expectedOutcome === "hold_restricted_only") return "restricted_only";
+  return undefined;
+}
+
+function publicSourceFamilyNeededFor(row: DarkwebIndexPublicHandoffRow): DarkwebIndexPublicSupportWorkRow["publicSourceFamilyNeeded"] {
+  if (row.actorHints.some((hint) => hint.startsWith("APT"))) return "vendor_cti_or_research_report";
+  if (row.datasetHints.some((hint) => hint.includes("leak") || hint.includes("extortion"))) return "ransomware_tracker_or_public_dataset";
+  if (row.victimHints.length > 0) return "news_or_victim_public_statement";
+  if (row.datasetHints.some((hint) => hint.includes("payload") || hint.includes("credential"))) return "government_cert_or_advisory";
+  if (row.actorHints.length > 0) return "malware_research_or_ttp_report";
+  return "public_search_or_directory_context";
+}
+
+function publicSupportTargetFor(row: DarkwebIndexPublicHandoffRow): string {
+  if (row.actorHints[0] && row.victimHints[0]) return `${row.actorHints[0]}:${row.victimHints[0]}:${row.claimedDate}`;
+  if (row.actorHints[0] && row.datasetHints[0]) return `${row.actorHints[0]}:${row.datasetHints[0]}:${row.claimedDate}`;
+  if (row.victimHints[0] && row.datasetHints[0]) return `${row.victimHints[0]}:${row.datasetHints[0]}:${row.claimedDate}`;
+  if (row.actorHints[0]) return `${row.actorHints[0]}:${row.sectorCountry}:${row.claimedDate}`;
+  if (row.datasetHints[0]) return `${row.datasetHints[0]}:${row.sectorCountry}:${row.claimedDate}`;
+  return `${row.sourceFamily}:${row.sectorCountry}:${row.claimedDate}`;
+}
+
+function publicSupportBuyerReasonFor(row: DarkwebIndexPublicHandoffRow, expectedOutcome: DarkwebIndexPublicSupportWorkRow["expectedOutcome"]): string {
+  const actor = row.actorHints[0] ? `actor ${row.actorHints[0]}` : "an unattributed actor";
+  const victim = row.victimHints[0] ? `, victim context ${row.victimHints[0]}` : "";
+  const dataset = row.datasetHints[0] ? `, dataset signal ${row.datasetHints[0]}` : "";
+  if (expectedOutcome === "projected_sellable_after_public_support") {
+    return `If a safe public source supports the same ${actor}${victim}${dataset} and date claim, buyers get a chargeable monitoring row without exposing restricted material.`;
+  }
+  if (expectedOutcome === "projected_caveated_after_public_support") {
+    return `Public corroboration would make this useful caveated context for buyer triage while keeping restricted-only claims out of sellable counts.`;
+  }
+  return `This row stays out of paid output until public support resolves ${expectedOutcome.replace("reject_", "").replace("hold_", "").replaceAll("_", " ")} risk.`;
 }
 
 function publicHandoffRowFor(record: DarkwebIndexRecord, duplicateIds: ReadonlySet<string>): DarkwebIndexPublicHandoffRow {

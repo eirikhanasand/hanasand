@@ -342,6 +342,51 @@ describe("api v1", () => {
     expect((response.nonMonetizingWorkDetector as {
       examples: Array<{ workType: string; label: string; buyerVisibleMetricMoved: boolean }>;
     }).examples.find((row) => row.workType === "buyer_visible_metric_lift")).toMatchObject({ label: "monetizing", buyerVisibleMetricMoved: true });
+    expect((response.releaseDecision as {
+      schemaVersion: string;
+      decision: string;
+      currentSellableRows: number;
+      productionSellableRowFloor: number;
+      usefulCaveatedRows: number;
+      rowsBlockedFromBilling: number;
+      oneRepairAwayRows: number;
+      projectedSellableRowsFromAcceptedRepairs: number;
+      projectedSellableRowsAfterAcceptedRepairs: number;
+      topBlocker: string;
+      revenueTruth: { paidTrafficAllowed: boolean; apifyAnalyticsExternal: boolean; payoutEvidenceExternal: boolean; revenueEvidenceExternal: boolean; proofSizedRunsMayCompleteShapeSafetyOnly: boolean };
+      acceptedRepairBuckets: Array<{ owner: string; source: string; projectedSellableRows: number; countsTowardProjectedFloor: boolean }>;
+      exclusionProof: Array<{ class: string; countsAsSellable: boolean; currentRows: number | null }>;
+    })).toMatchObject({
+      schemaVersion: "ti.product_release_decision.v1",
+      decision: "hold_paid_traffic",
+      currentSellableRows: 16,
+      productionSellableRowFloor: 100,
+      usefulCaveatedRows: 32,
+      rowsBlockedFromBilling: 82,
+      oneRepairAwayRows: 103,
+      projectedSellableRowsFromAcceptedRepairs: 103,
+      projectedSellableRowsAfterAcceptedRepairs: 119,
+      topBlocker: "sellable_rows_below_100",
+      revenueTruth: {
+        paidTrafficAllowed: false,
+        apifyAnalyticsExternal: true,
+        payoutEvidenceExternal: true,
+        revenueEvidenceExternal: true,
+        proofSizedRunsMayCompleteShapeSafetyOnly: true
+      },
+      acceptedRepairBuckets: expect.arrayContaining([
+        expect.objectContaining({ source: "parserToSellableRepairPacket.candidates", projectedSellableRows: 87, countsTowardProjectedFloor: true }),
+        expect.objectContaining({ source: "hundredSellableRowGraphPivotPlan", countsTowardProjectedFloor: false }),
+        expect.objectContaining({ source: "darkMetadataPublicHandoff100", projectedSellableRows: 0, countsTowardProjectedFloor: false })
+      ]) as unknown as Array<{ owner: string; source: string; projectedSellableRows: number; countsTowardProjectedFloor: boolean }>,
+      exclusionProof: expect.arrayContaining([
+        expect.objectContaining({ class: "synthetic_rows", countsAsSellable: false }),
+        expect.objectContaining({ class: "graph_only_rows", countsAsSellable: false }),
+        expect.objectContaining({ class: "stale_rows", countsAsSellable: false }),
+        expect.objectContaining({ class: "restricted_only_rows", countsAsSellable: false, currentRows: 100 }),
+        expect.objectContaining({ class: "caveat_only_rows", countsAsSellable: false, currentRows: 32 })
+      ]) as unknown as Array<{ class: string; countsAsSellable: boolean; currentRows: number | null }>
+    });
     expect((response.scaleStepGates as {
       schemaVersion: string;
       baselineRunId: string;
@@ -370,7 +415,7 @@ describe("api v1", () => {
       gates: Array<{ id: string; state: string; buyerValueThreshold: number; observedBuyerValue: number | null; noLeakRequired: boolean }>;
     }).gates.every((gate) => gate.noLeakRequired)).toBe(true);
     expect((response.scaleStepGates as {
-      gates: Array<{ id: string; state: string; targetBuyableRows: number; observedBuyableRows: number | null; buyerValueThreshold: number; observedBuyerValue: number | null; requirements: { usefulRowRateAtLeast: number; freshRowRateAtLeast: number; corroborationOrSourceFamilyDiversityAtLeast: number; costPerUsefulRowUsdAtMost: number }; blockerCodes: string[] }>;
+      gates: Array<{ id: string; state: string; targetBuyableRows: number; observedBuyableRows: number | null; buyerValueThreshold: number; observedBuyerValue: number | null; requirements: { usefulRowRateAtLeast: number; freshRowRateAtLeast: number; corroborationOrSourceFamilyDiversityAtLeast: number; costPerUsefulRowUsdAtMost: number }; tierTruth: { currentCount: number | null; eligibleCount: number | null; rejectedCount: number | null; payworthyDensity: number | null; noLeakProof: string; nextRequiredAction: string }; blockerCodes: string[] }>;
     }).gates.find((gate) => gate.id === "buyable_rows_100")).toMatchObject({
       state: "hold",
       targetBuyableRows: 100,
@@ -382,6 +427,14 @@ describe("api v1", () => {
         freshRowRateAtLeast: 0.55,
         corroborationOrSourceFamilyDiversityAtLeast: 2,
         costPerUsefulRowUsdAtMost: 0.01
+      },
+      tierTruth: {
+        currentCount: 98,
+        eligibleCount: 16,
+        rejectedCount: 82,
+        payworthyDensity: 0.163,
+        noLeakProof: "pass",
+        nextRequiredAction: expect.stringContaining("do not count caveat-only")
       },
       blockerCodes: expect.arrayContaining(["buyable_rows_100_row_count_below_target", "buyable_rows_100_source_family_diversity_unproven"]) as unknown as string[]
     });
@@ -550,6 +603,83 @@ describe("api v1", () => {
     expect((response.parserCaptureLiftGate as {
       rejectedExamples: Array<{ doesNotCountTowardPayworthyRate: boolean; noLeak: boolean; sellableRowsDelta: number; usefulRowsDelta: number }>;
     }).rejectedExamples.every((row) => row.doesNotCountTowardPayworthyRate && row.noLeak && row.sellableRowsDelta === 0 && row.usefulRowsDelta === 0)).toBe(true);
+    expect((response.parserToSellableRepairPacket as {
+      schemaVersion: string;
+      owner: string;
+      routeVisibleOn: string[];
+      baselineRunId: string;
+      baselineDatasetId: string;
+      targetSellableRows: number;
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      productionSellableClaimed: boolean;
+      candidateDecision: string;
+      candidateActorCount: number;
+      projectedCandidateRows: number;
+      projectedUsefulRows: number;
+      projectedFreshRows: number;
+      projectedSellableFloorProgress: number;
+      parserFieldsUnlocking: string[];
+      sourceFamilyGaps: string[];
+      graphPivotGaps: string[];
+      suppressionChecks: string[];
+      candidates: Array<{ dryRunDecision: string; requiresSourceCorroboration: boolean; provenanceHash: string; nextBuyerSearches: string[]; noLeak: boolean }>;
+      rejectedRepairs: Array<{ blockedReason: string; projectedRows: number; doesNotCountToward100Floor: boolean; noLeak: boolean }>;
+      ownerHandoffs: Array<{ owner: string }>;
+      noLeakBoundary: Record<string, boolean>;
+    })).toMatchObject({
+      schemaVersion: "ti.live_product_parser_to_100_sellable_rows_packet.v1",
+      owner: "agent_03",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/contracts"]) as unknown as string[],
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      targetSellableRows: 100,
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      productionSellableClaimed: false,
+      candidateDecision: "sellable_candidate_after_parser_repair",
+      candidateActorCount: 12,
+      projectedCandidateRows: 87,
+      projectedUsefulRows: 87,
+      projectedFreshRows: 79,
+      projectedSellableFloorProgress: 0.87,
+      parserFieldsUnlocking: expect.arrayContaining(["victim", "sector", "country", "dataset_or_impact", "ttp_tool", "first_seen", "last_seen", "confidence", "source_family_support", "provenance_hash", "next_buyer_search"]) as unknown as string[],
+      sourceFamilyGaps: expect.arrayContaining(["public_report", "government_advisory", "vendor_report"]) as unknown as string[],
+      graphPivotGaps: expect.arrayContaining(["claim:victim", "sector:healthcare", "ttp:T1078"]) as unknown as string[],
+      suppressionChecks: expect.arrayContaining(["stale_only", "single_source_without_caveat", "contradicted", "unrelated", "unsafe_restricted_only"]) as unknown as string[]
+    });
+    expect((response.parserToSellableRepairPacket as {
+      candidates: Array<{ dryRunDecision: string; requiresSourceCorroboration: boolean; provenanceHash: string; nextBuyerSearches: string[]; noLeak: boolean }>;
+    }).candidates.every((row) =>
+      row.dryRunDecision === "sellable_candidate_after_parser_repair" &&
+      row.requiresSourceCorroboration &&
+      row.provenanceHash.length > 0 &&
+      row.nextBuyerSearches.length === 3 &&
+      row.noLeak
+    )).toBe(true);
+    expect((response.parserToSellableRepairPacket as { rejectedRepairs: Array<{ blockedReason: string }> }).rejectedRepairs.map((row) => row.blockedReason)).toEqual(expect.arrayContaining([
+      "stale_report",
+      "alias_collision",
+      "unrelated_actor_co_mention",
+      "generic_marketing_page",
+      "raw_body_or_unsafe_url_request",
+      "payload_request",
+      "private_auth_captcha_dependency"
+    ]));
+    expect((response.parserToSellableRepairPacket as {
+      rejectedRepairs: Array<{ projectedRows: number; doesNotCountToward100Floor: boolean; noLeak: boolean }>;
+    }).rejectedRepairs.every((row) => row.projectedRows === 0 && row.doesNotCountToward100Floor && row.noLeak)).toBe(true);
+    expect((response.parserToSellableRepairPacket as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_10"]));
+    expect((response.parserToSellableRepairPacket as { noLeakBoundary: Record<string, boolean> }).noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      payloadsRequested: false,
+      privateAuthCaptchaAccess: false,
+      restrictedMaterialExposed: false,
+      productionSellableClaimed: false
+    });
     expect((response.marketplaceGraphSignals as {
       schemaVersion: string;
       baselineRunId: string;
@@ -2020,6 +2150,46 @@ describe("api v1", () => {
       conversionTracking: { currentStorePageViews: null | number; currentUniqueUsers: null | number; currentTrialRuns: null | number; currentPaidRuns: null | number; currentConversionRate: null | number; metricsToTrack: string[]; handoffRoute: string };
       marketplaceTelemetryInputContract: { schemaVersion: string; routeVisibleOn: string[]; fields: string[]; currentValues: Record<string, null | number>; realDataRequired: boolean; unknownMeansNoClaim: boolean; forbiddenSyntheticClaims: string[] };
       payoutReadiness: { schemaVersion: string; payoutMethodState: string; beneficiaryState: string; withdrawalReadiness: string; externallyVerified: boolean; externalVerificationRequired: string[]; blockers: string[] };
+      hundredRowConversionProgress: {
+        schemaVersion: string;
+        routeVisibleOn: string[];
+        currentRun: {
+          proofRunId: string;
+          proofDatasetId: string;
+          proofDecision: string;
+          productionPaidTrafficReady: boolean;
+          currentSellableRows: number;
+          currentUsefulRows: number;
+          currentCaveatedUsefulRows: number;
+          currentBlockedRows: number;
+          targetSellableRows: number;
+          remainingSellableRows: number;
+          currentFloorProgress: number;
+          exactBlockers: string[];
+        };
+        acceptedRepairProjection: {
+          projectedSellableRowsFromAcceptedRepairs: number;
+          projectedSellableRowsAfterAcceptedRepairs: number;
+          projectedUsefulRowsFromAcceptedRepairs: number;
+          oneRepairAwayRows: number;
+          caveatedUsefulRows: number;
+          blockedRows: number;
+          graphOnlyProjectedRows: number;
+          graphOnlyRowsCountTowardProductionFloor: boolean;
+          proofSizedRunsCountTowardProductionReadiness: boolean;
+          caveatOnlyRunsCountTowardProductionReadiness: boolean;
+        };
+        firstPaidTrafficExperiment: {
+          status: string;
+          targetBuyer: string;
+          inputPreset: string;
+          successMetric: string;
+          stopLossMetric: string;
+          refundRisk: string;
+          requiredApifyAnalyticsFields: string[];
+        };
+        noFakeRevenueClaims: Record<string, null>;
+      };
       conversionExperiments: Array<{ id: string; expectedBuyer: string; successCriteria: string[]; stopLossCriteria: string[]; datasetValueProofField: string; buyerVisibleFields: string[]; noLeakRequired: boolean }>;
       buyerSampleRows: Array<{ id: string; rowClass: string; buyerVisibleFields: { actorSummary: string; freshClaimOrActivity: string; confidence: number; provenanceHash: string; noLeakProof: string; nextAnalystPivots: string[] } }>;
       operatorBlockerBoard: Array<{ owner: string; blocker: string; conversionImpact: string; nextAction: string }>;
@@ -3487,6 +3657,46 @@ describe("api v1", () => {
       externallyVerified: false,
       externalVerificationRequired: expect.arrayContaining(["beneficiary", "payout_method", "withdrawal_readiness"])
     });
+    expect(apifyStoreReadiness.hundredRowConversionProgress).toMatchObject({
+      schemaVersion: "ti.apify_100_row_conversion_proof.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "/v1/ops/product-slo"]),
+      currentRun: {
+        proofRunId: "OThlfd0uzSCNnedAO",
+        proofDatasetId: "LSen2fYtwFTtOr7vK",
+        proofDecision: "shape_safety_proof",
+        productionPaidTrafficReady: false,
+        currentSellableRows: 4,
+        currentUsefulRows: 6,
+        currentCaveatedUsefulRows: 2,
+        currentBlockedRows: 4,
+        targetSellableRows: 100,
+        remainingSellableRows: 96,
+        currentFloorProgress: 0.04,
+        exactBlockers: expect.arrayContaining([
+          "sellable_rows_below_100_production_floor",
+          "caveated_useful_rows_do_not_count_as_sellable",
+          "held_or_coverage_gap_rows_do_not_count_as_sellable",
+          "graph_only_plan_is_projection_not_production_readiness",
+          "external_apify_analytics_required_for_views_users_paid_runs_revenue_runtime_usage_and_conversion"
+        ])
+      },
+      acceptedRepairProjection: {
+        projectedSellableRowsAfterAcceptedRepairs: 136,
+        oneRepairAwayRows: 58,
+        caveatedUsefulRows: 2,
+        blockedRows: 4,
+        graphOnlyRowsCountTowardProductionFloor: false,
+        proofSizedRunsCountTowardProductionReadiness: false,
+        caveatOnlyRunsCountTowardProductionReadiness: false
+      },
+      firstPaidTrafficExperiment: {
+        status: "blocked_until_100_sellable_rows"
+      }
+    });
+    expect(apifyStoreReadiness.hundredRowConversionProgress.acceptedRepairProjection.projectedSellableRowsFromAcceptedRepairs).toBeGreaterThan(0);
+    expect(apifyStoreReadiness.hundredRowConversionProgress.acceptedRepairProjection.projectedUsefulRowsFromAcceptedRepairs).toBeGreaterThan(100);
+    expect(apifyStoreReadiness.hundredRowConversionProgress.firstPaidTrafficExperiment.requiredApifyAnalyticsFields).toEqual(expect.arrayContaining(["storePageViews", "uniqueUsers", "paidRuns", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd", "runtimeSeconds"]));
+    expect(Object.values(apifyStoreReadiness.hundredRowConversionProgress.noFakeRevenueClaims).every((value) => value === null)).toBe(true);
     expect(apifyStoreReadiness.revenueConversionChecklist).toMatchObject({
       schemaVersion: "ti.apify_revenue_conversion_checklist.v1",
       telemetryState: "missing",
@@ -4794,6 +5004,108 @@ describe("api v1", () => {
           restrictedRawContentExposed: false,
           actorInteractionExposed: false,
           vectorEmbeddingsForRestrictedRows: false
+        },
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
+      actorDatasetSourceGapSuppressionFeedback: {
+        schemaVersion: "ti.evidence_actor_dataset_source_gap_suppression_feedback.v1",
+        sourcePreview: "ti.evidence_actor_dataset_promotion_preview.v1",
+        productSurface: "apify_public_threat_actor_monitor",
+        actorBuild: "0.6.4",
+        dryRun: true,
+        willMutateActorDataset: false,
+        willActivateSources: false,
+        latestProof: {
+          runId: "iMQGeezZ8bx7WtlhQ",
+          datasetId: "5PLmkE30luBA5Lbgc"
+        },
+        counts: {
+          sourceFamilyGaps: expect.any(Number),
+          staleRowsSuppressed: expect.any(Number),
+          contextRowsHeld: expect.any(Number),
+          billableRowsUnaffected: expect.any(Number)
+        },
+        suppressionPolicy: {
+          coverageGapRowsRemainNonBillable: true,
+          staleRowsRemainSuppressed: true,
+          restrictedRowsRemainContextOnly: true,
+          billableRowsRequireDurableEvidence: true
+        },
+        sourceFamilyFeedbackRows: expect.arrayContaining([
+          expect.objectContaining({
+            currentDatasetDecision: "not_billable_coverage_gap",
+            suppressionReason: "missing_source_family",
+            requiredBeforePromotion: expect.any(Array),
+            noLeak: true
+          })
+        ]),
+        staleSuppressionRows: expect.any(Array),
+        restrictedContextRows: expect.any(Array),
+        noLeakGuarantees: {
+          restrictedRowsMetadataOnly: true,
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false,
+          vectorEmbeddingsForRestrictedRows: false
+        },
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
+      actorDatasetSourceGapConsumerQueue: {
+        schemaVersion: "ti.evidence_actor_dataset_source_gap_consumer_queue.v1",
+        sourceFeedback: "ti.evidence_actor_dataset_source_gap_suppression_feedback.v1",
+        productSurface: "apify_public_threat_actor_monitor",
+        actorBuild: "0.6.4",
+        dryRun: true,
+        willMutateQueues: false,
+        willActivateSources: false,
+        willStartCrawling: false,
+        latestProof: {
+          runId: "iMQGeezZ8bx7WtlhQ",
+          datasetId: "5PLmkE30luBA5Lbgc"
+        },
+        counts: {
+          totalQueueItems: expect.any(Number),
+          agent01SourceActivationItems: expect.any(Number),
+          agent04PublicChannelItems: expect.any(Number),
+          agent05RestrictedMetadataItems: expect.any(Number),
+          agent07ExtractionQualityItems: expect.any(Number),
+          staleRefreshItems: expect.any(Number),
+          restrictedCorroborationItems: expect.any(Number)
+        },
+        queueRows: expect.arrayContaining([
+          expect.objectContaining({
+            ownerQueue: expect.any(String),
+            queueAction: expect.any(String),
+            blockedUntil: ["explicit_operator_approval", "durable_evidence_replay"],
+            noLeak: true
+          })
+        ]),
+        guardrails: {
+          explicitOperatorApprovalRequired: true,
+          sourceActivationNotApplied: true,
+          crawlingNotStarted: true,
+          restrictedRowsMetadataOnly: true,
+          rawLeakMaterialNeverQueued: true,
+          credentialsNeverQueued: true,
+          unsafeUrlsNeverQueued: true,
+          embeddingsForRestrictedRowsDisabled: true
         },
         safeOutput: {
           rawBodiesExposed: false,

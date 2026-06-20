@@ -269,6 +269,41 @@ export interface LiveProductSloDashboard {
       distinguishesContractOnlyFromBuyerMetricLift: true;
     };
   };
+  releaseDecision: {
+    schemaVersion: "ti.product_release_decision.v1";
+    decision: "promote_paid_traffic" | "hold_paid_traffic";
+    currentSellableRows: number | null;
+    productionSellableRowFloor: 100;
+    usefulCaveatedRows: number | null;
+    rowsBlockedFromBilling: number | null;
+    oneRepairAwayRows: number;
+    projectedSellableRowsFromAcceptedRepairs: number;
+    projectedSellableRowsAfterAcceptedRepairs: number | null;
+    costPerUsefulRowUsd: number | null;
+    topBlocker: "sellable_rows_below_100" | "none";
+    revenueTruth: {
+      paidTrafficAllowed: boolean;
+      apifyAnalyticsExternal: true;
+      payoutEvidenceExternal: true;
+      revenueEvidenceExternal: true;
+      proofSizedRunsMayCompleteShapeSafetyOnly: true;
+    };
+    acceptedRepairBuckets: Array<{
+      owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_10";
+      source: string;
+      projectedSellableRows: number;
+      projectedUsefulRows: number;
+      projectedFreshRows: number;
+      countsTowardProjectedFloor: boolean;
+    }>;
+    exclusionProof: Array<{
+      class: "synthetic_rows" | "graph_only_rows" | "stale_rows" | "restricted_only_rows" | "caveat_only_rows";
+      countsAsSellable: false;
+      currentRows: number | null;
+      reason: string;
+    }>;
+    nextRequiredAction: string;
+  };
   scaleStepGates: {
     schemaVersion: "ti.product_scale_step_gates.v1";
     baselineRunId: "OThlfd0uzSCNnedAO";
@@ -296,6 +331,16 @@ export interface LiveProductSloDashboard {
         sourceFamilyDiversity: number | null;
         staleDuplicateGenericRejection: "pass" | "unknown";
         costPerUsefulRowUsd: number | null;
+      };
+      tierTruth: {
+        currentCount: number | null;
+        eligibleCount: number | null;
+        rejectedCount: number | null;
+        payworthyDensity: number | null;
+        sourceFamilyDiversity: number | null;
+        freshness: number | null;
+        noLeakProof: "pass";
+        nextRequiredAction: string;
       };
       currentEvidence: string;
       blockerCodes: string[];
@@ -514,6 +559,90 @@ export interface LiveProductSloDashboard {
       expectedEffect: string;
     }>;
   };
+  hundredSellableRowGraphPivotPlan: {
+    schemaVersion: "ti.apify_100_sellable_row_graph_pivot_plan.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows" | "/v1/contracts">;
+    baselineRunId: string;
+    baselineDatasetId: string;
+    targetSellableRows: 100;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    watchlistActorCount: number;
+    projectedSellableRows: number;
+    projectedUsefulRows: number;
+    projectedFreshRows: number;
+    projectedSourceFamilyDiversity: number;
+    nextSearchPivotCount: number;
+    averageBuyerValueDelta: number;
+    rowsPreventedFromBilling: number;
+    rejectionReasons: Array<"stale_only" | "single_source_without_caveat" | "contradicted" | "unrelated" | "missing_provenance" | "unsafe_restricted_only" | "alias_only" | "not_actionable">;
+    repairHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_10";
+      expectedSellableRowsUnlocked: number;
+      expectedEffect: string;
+    }>;
+  };
+  parserToSellableRepairPacket: {
+    schemaVersion: "ti.live_product_parser_to_100_sellable_rows_packet.v1";
+    owner: "agent_03";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows" | "/v1/contracts">;
+    baselineRunId: "OThlfd0uzSCNnedAO";
+    baselineDatasetId: "LSen2fYtwFTtOr7vK";
+    targetSellableRows: 100;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    productionSellableClaimed: false;
+    candidateDecision: "sellable_candidate_after_parser_repair";
+    candidateActorCount: number;
+    projectedCandidateRows: number;
+    projectedUsefulRows: number;
+    projectedFreshRows: number;
+    projectedSellableFloorProgress: number;
+    parserFieldsUnlocking: string[];
+    sourceFamilyGaps: string[];
+    graphPivotGaps: string[];
+    suppressionChecks: string[];
+    candidates: Array<{
+      id: string;
+      actor: string;
+      family: "apt" | "ransomware";
+      sourceFamily: "vendor_report" | "cert_advisory" | "rss_security_blog" | "github_security_advisory" | "public_channel_handoff" | "dark_metadata_public_support";
+      currentDecision: "hold" | "coverage_gap_only" | "included_with_caveat";
+      dryRunDecision: "sellable_candidate_after_parser_repair";
+      projectedRows: number;
+      parserFieldsUnlocking: string[];
+      sourceFamilyGaps: string[];
+      graphPivotGaps: string[];
+      suppressionChecks: string[];
+      provenanceHash: string;
+      nextBuyerSearches: string[];
+      requiresSourceCorroboration: true;
+      noLeak: true;
+    }>;
+    rejectedRepairs: Array<{
+      id: string;
+      blockedReason: "stale_report" | "alias_collision" | "unrelated_actor_co_mention" | "generic_marketing_page" | "raw_body_or_unsafe_url_request" | "payload_request" | "private_auth_captcha_dependency";
+      currentDecision: "hold" | "coverage_gap_only" | "included_with_caveat" | "suppress";
+      projectedRows: 0;
+      doesNotCountToward100Floor: true;
+      noLeak: true;
+    }>;
+    ownerHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_10";
+      handoff: string;
+      expectedCandidateRows: number;
+    }>;
+    noLeakBoundary: {
+      rawBodiesExposed: false;
+      unsafeUrlsExposed: false;
+      payloadsRequested: false;
+      privateAuthCaptchaAccess: false;
+      restrictedMaterialExposed: false;
+      productionSellableClaimed: false;
+    };
+  };
   qualityConversionGate: {
     schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1";
     routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts">;
@@ -611,6 +740,40 @@ export interface LiveProductSloDashboard {
       unsafeUrlsExposed: false;
       restrictedPayloadsExposed: false;
       objectKeysExposed: false;
+    };
+  };
+  falsePositiveSuppressionGate: {
+    schemaVersion: "ti.program_bz_paid_row_false_positive_suppression_gate.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "Apify OUTPUT">;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    fixtureCount: number;
+    actorCoverage: string[];
+    scenarioCoverage: string[];
+    reasonCodes: string[];
+    falsePositivesSuppressed: number;
+    contradictedRowsHeld: number;
+    staleRepostsBlocked: number;
+    singleSourceRowsCaveated: number;
+    truePositivesPreserved: number;
+    sellableRowsProtected: number;
+    buyerTrustDelta: number;
+    rowsPreventedFromBilling: number;
+    ownerHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      fixtureCount: number;
+      blockerFocus: string;
+      expectedEffect: string;
+    }>;
+    noLeakProof: {
+      rawEvidenceExposed: false;
+      unsafeUrlsExposed: false;
+      restrictedPayloadsExposed: false;
+      objectKeysExposed: false;
+      privateMaterialExposed: false;
+      accountMaterialExposed: false;
+      actorInteractionContentExposed: false;
     };
   };
   darkMetadataLiveValueExpansion: {
@@ -1027,8 +1190,13 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const darkMetadataPublicHandoff100 = buildDarkMetadataPublicHandoff100();
   const nonMonetizingWorkDetector = buildNonMonetizingWorkDetector();
   const scaleStepGates = buildScaleStepGates({
+    rowCount: paidRowCount,
     sellableRows: monetizationReadiness.sellableRows,
     usefulForBuyerRows: monetizationReadiness.usefulForBuyerRows,
+    includedWithCaveatRows: paidRowDecisionCounts.includedWithCaveat,
+    coverageGapOnlyRows: paidRowDecisionCounts.coverageGapOnly,
+    holdRows: paidRowDecisionCounts.hold,
+    suppressRows: paidRowDecisionCounts.suppress,
     usefulRowRate,
     freshRowRate,
     averageBuyerValueScore: monetizationReadiness.averageBuyerValueScore,
@@ -1043,10 +1211,29 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const graphPivotLiftGate = buildGraphPivotLiftGate();
   const relationshipConfidenceGate = buildRelationshipConfidenceGate();
   const paidGraphSearchPackGate = buildPaidGraphSearchPackGate();
+  const hundredSellableRowGraphPivotPlan = buildHundredSellableRowGraphPivotPlan();
+  const parserToSellableRepairPacket = buildParserToSellableRepairPacket();
   const qualityConversionGate = buildQualityConversionGate();
   const liveFreshnessQualityGate = buildLiveFreshnessQualityGate();
   const freshnessRepairLoop = buildFreshnessRepairLoop();
   const entitySpecificityLift = buildEntitySpecificityLift();
+  const falsePositiveSuppressionGate = buildFalsePositiveSuppressionGate();
+  const releaseDecision = buildReleaseDecision({
+    monetizationReadiness,
+    paidRowDecisionCounts,
+    rowCount: paidRowCount,
+    costPerUsefulRowUsd,
+    buyerVisibleQualityLiftGate,
+    parserCaptureLiftGate,
+    graphPivotLiftGate,
+    relationshipConfidenceGate,
+    paidGraphSearchPackGate,
+    hundredSellableRowGraphPivotPlan,
+    parserToSellableRepairPacket,
+    qualityConversionGate,
+    liveFreshnessQualityGate,
+    darkMetadataPublicHandoff100
+  });
   const marketplaceTelemetry = marketplaceTelemetryFor(input.marketplace);
   const payoutReadiness = payoutReadinessFor(input.marketplace);
   const conversionExperiments = buildConversionExperiments();
@@ -1196,6 +1383,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     paidProductEconomics,
     sourceMonetizationGate,
     nonMonetizingWorkDetector,
+    releaseDecision,
     scaleStepGates,
     revenueBlockerBoard,
     buyerVisibleQualityLiftGate,
@@ -1204,10 +1392,13 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     graphPivotLiftGate,
     relationshipConfidenceGate,
     paidGraphSearchPackGate,
+    hundredSellableRowGraphPivotPlan,
+    parserToSellableRepairPacket,
     qualityConversionGate,
     liveFreshnessQualityGate,
     freshnessRepairLoop,
     entitySpecificityLift,
+    falsePositiveSuppressionGate,
     darkMetadataLiveValueExpansion,
     darkMetadataPublicHandoff100,
     slos,
@@ -1436,8 +1627,13 @@ function buildNonMonetizingWorkDetector(): LiveProductSloDashboard["nonMonetizin
 }
 
 function buildScaleStepGates(input: {
+  rowCount: number | null;
   sellableRows: number | null;
   usefulForBuyerRows: number | null;
+  includedWithCaveatRows: number | null;
+  coverageGapOnlyRows: number | null;
+  holdRows: number | null;
+  suppressRows: number | null;
   usefulRowRate: number | null;
   freshRowRate: number | null;
   averageBuyerValueScore: number | null;
@@ -1459,6 +1655,11 @@ function buildScaleStepGates(input: {
     freshRowRateAtLeast: number;
     sourceFamilyDiversityAtLeast: number;
     costPerUsefulRowUsdAtMost: number;
+    currentCount: number | null;
+    eligibleCount: number | null;
+    rejectedCount: number | null;
+    payworthyDensity: number | null;
+    nextRequiredAction: string;
     currentEvidence: string;
     extraBlockers?: string[];
   }): LiveProductSloDashboard["scaleStepGates"]["gates"][number] => {
@@ -1495,11 +1696,27 @@ function buildScaleStepGates(input: {
         staleDuplicateGenericRejection,
         costPerUsefulRowUsd: input.costPerUsefulRowUsd
       },
+      tierTruth: {
+        currentCount: gate.currentCount,
+        eligibleCount: gate.eligibleCount,
+        rejectedCount: gate.rejectedCount,
+        payworthyDensity: gate.payworthyDensity,
+        sourceFamilyDiversity,
+        freshness: input.freshRowRate,
+        noLeakProof: "pass",
+        nextRequiredAction: gate.nextRequiredAction
+      },
       currentEvidence: gate.currentEvidence,
       blockerCodes: blockers,
       noLeakRequired: true
     };
   };
+  const blockedFromBillingRows = sumNullable([
+    input.includedWithCaveatRows,
+    input.coverageGapOnlyRows,
+    input.holdRows,
+    input.suppressRows
+  ]);
   const gates: LiveProductSloDashboard["scaleStepGates"]["gates"] = [
     makeGate({
       id: "buyable_rows_100",
@@ -1512,6 +1729,11 @@ function buildScaleStepGates(input: {
       freshRowRateAtLeast: 0.55,
       sourceFamilyDiversityAtLeast: 2,
       costPerUsefulRowUsdAtMost: 0.01,
+      currentCount: input.rowCount,
+      eligibleCount: input.sellableRows,
+      rejectedCount: blockedFromBillingRows,
+      payworthyDensity: rateFromCounts(input.sellableRows, input.rowCount),
+      nextRequiredAction: "convert caveated/held/coverage-gap rows into corroborated fresh sellable rows; do not count caveat-only, stale, graph-only, restricted-only, or synthetic rows",
       currentEvidence: `${PROGRAM_BH_BASELINE_RUN_ID} / ${PROGRAM_BH_BASELINE_DATASET_ID}: shape/safety proof only; 10 APT42 rows, 4 sellable, 2 caveated, average buyer value 0.577`
     }),
     makeGate({
@@ -1525,6 +1747,11 @@ function buildScaleStepGates(input: {
       freshRowRateAtLeast: 0.58,
       sourceFamilyDiversityAtLeast: 2,
       costPerUsefulRowUsdAtMost: 0.01,
+      currentCount: input.rowCount,
+      eligibleCount: input.usefulForBuyerRows,
+      rejectedCount: input.rowCount !== null && input.usefulForBuyerRows !== null ? Math.max(0, input.rowCount - input.usefulForBuyerRows) : null,
+      payworthyDensity: rateFromCounts(input.usefulForBuyerRows, input.rowCount),
+      nextRequiredAction: "measure 1,000 buyer-useful safe rows only after the 100 sellable-row production floor passes",
       currentEvidence: "held until 100 sellable Actor rows pass and 1,000 useful safe rows are measured"
     }),
     makeGate({
@@ -1538,6 +1765,11 @@ function buildScaleStepGates(input: {
       freshRowRateAtLeast: 0.6,
       sourceFamilyDiversityAtLeast: 3,
       costPerUsefulRowUsdAtMost: 0.01,
+      currentCount: 100,
+      eligibleCount: 2,
+      rejectedCount: 98,
+      payworthyDensity: 0.02,
+      nextRequiredAction: "raise dark metadata value density and public corroboration before counting tier-4,000 metadata rows",
       currentEvidence: "darkMetadataLiveValueExpansion currently observes 0.41 average buyer value and holds count growth",
       extraBlockers: ["dark_metadata_value_density_below_paid_threshold"]
     }),
@@ -1552,6 +1784,11 @@ function buildScaleStepGates(input: {
       freshRowRateAtLeast: 0.62,
       sourceFamilyDiversityAtLeast: 4,
       costPerUsefulRowUsdAtMost: 0.01,
+      currentCount: null,
+      eligibleCount: null,
+      rejectedCount: null,
+      payworthyDensity: null,
+      nextRequiredAction: "evaluate real tier-10,000 rows for buyer value, freshness, source diversity, cost, and no-leak proof",
       currentEvidence: "held until real evaluated records prove buyer value instead of row-count padding",
       extraBlockers: ["10k_records_not_evaluated_for_buyer_value"]
     }),
@@ -1566,6 +1803,11 @@ function buildScaleStepGates(input: {
       freshRowRateAtLeast: 0.65,
       sourceFamilyDiversityAtLeast: 4,
       costPerUsefulRowUsdAtMost: 0.009,
+      currentCount: null,
+      eligibleCount: null,
+      rejectedCount: null,
+      payworthyDensity: null,
+      nextRequiredAction: "prove tier-10,000 conversion and cost before expanding to 20,000 rows",
       currentEvidence: "held until 10k gate passes and marketplace conversion data exists",
       extraBlockers: ["20k_records_waiting_on_10k_gate_and_conversion"]
     }),
@@ -1580,6 +1822,11 @@ function buildScaleStepGates(input: {
       freshRowRateAtLeast: 0.68,
       sourceFamilyDiversityAtLeast: 5,
       costPerUsefulRowUsdAtMost: 0.008,
+      currentCount: null,
+      eligibleCount: null,
+      rejectedCount: null,
+      payworthyDensity: null,
+      nextRequiredAction: "prove sustained payworthy density, marketplace conversion, and cost/useful-row at smaller tiers before 60,000",
       currentEvidence: "held until useful-row economics and conversion are proven at smaller tiers",
       extraBlockers: ["60k_records_waiting_on_cost_and_conversion_proof"]
     })
@@ -1675,6 +1922,182 @@ function buildRevenueBlockerBoard(): LiveProductSloDashboard["revenueBlockerBoar
         nextActions: ["verify Apify billing state externally before any revenue-complete claim"]
       }
     ]
+  };
+}
+
+function buildReleaseDecision(input: {
+  monetizationReadiness: LiveProductMonetizationReadiness;
+  paidRowDecisionCounts: LiveProductSloDashboard["apifyLaunchExperiment"]["paidRowDecisionCounts"];
+  rowCount: number | null;
+  costPerUsefulRowUsd: number | null;
+  buyerVisibleQualityLiftGate: LiveProductSloDashboard["buyerVisibleQualityLiftGate"];
+  parserCaptureLiftGate: LiveProductSloDashboard["parserCaptureLiftGate"];
+  graphPivotLiftGate: LiveProductSloDashboard["graphPivotLiftGate"];
+  relationshipConfidenceGate: LiveProductSloDashboard["relationshipConfidenceGate"];
+  paidGraphSearchPackGate: LiveProductSloDashboard["paidGraphSearchPackGate"];
+  hundredSellableRowGraphPivotPlan: LiveProductSloDashboard["hundredSellableRowGraphPivotPlan"];
+  parserToSellableRepairPacket: LiveProductSloDashboard["parserToSellableRepairPacket"];
+  qualityConversionGate: LiveProductSloDashboard["qualityConversionGate"];
+  liveFreshnessQualityGate: LiveProductSloDashboard["liveFreshnessQualityGate"];
+  darkMetadataPublicHandoff100: LiveProductSloDashboard["darkMetadataPublicHandoff100"];
+}): LiveProductSloDashboard["releaseDecision"] {
+  const currentSellableRows = input.monetizationReadiness.sellableRows;
+  const usefulCaveatedRows = input.paidRowDecisionCounts.includedWithCaveat;
+  const rowsBlockedFromBilling = sumNullable([
+    input.paidRowDecisionCounts.includedWithCaveat,
+    input.paidRowDecisionCounts.coverageGapOnly,
+    input.paidRowDecisionCounts.hold,
+    input.paidRowDecisionCounts.suppress
+  ]);
+  const acceptedRepairBuckets: LiveProductSloDashboard["releaseDecision"]["acceptedRepairBuckets"] = [
+    {
+      owner: "agent_01",
+      source: "buyerVisibleQualityLiftGate.acceptedExamples",
+      projectedSellableRows: input.buyerVisibleQualityLiftGate.sellableRowsAdded,
+      projectedUsefulRows: input.buyerVisibleQualityLiftGate.usefulRowsAdded,
+      projectedFreshRows: input.buyerVisibleQualityLiftGate.freshRowsAdded,
+      countsTowardProjectedFloor: true
+    },
+    {
+      owner: "agent_03",
+      source: "parserCaptureLiftGate.measurableLift",
+      projectedSellableRows: input.parserCaptureLiftGate.measurableLift.sellableRowsAdded,
+      projectedUsefulRows: input.parserCaptureLiftGate.measurableLift.usefulRowsAdded,
+      projectedFreshRows: input.parserCaptureLiftGate.measurableLift.freshRowsAdded,
+      countsTowardProjectedFloor: true
+    },
+    {
+      owner: "agent_08",
+      source: "graphPivotLiftGate",
+      projectedSellableRows: input.graphPivotLiftGate.sellableRowsAdded,
+      projectedUsefulRows: input.graphPivotLiftGate.usefulRowsAdded,
+      projectedFreshRows: 0,
+      countsTowardProjectedFloor: false
+    },
+    {
+      owner: "agent_08",
+      source: "relationshipConfidenceGate",
+      projectedSellableRows: input.relationshipConfidenceGate.sellableRowsAdded,
+      projectedUsefulRows: input.relationshipConfidenceGate.usefulRowsAdded,
+      projectedFreshRows: 0,
+      countsTowardProjectedFloor: false
+    },
+    {
+      owner: "agent_08",
+      source: "paidGraphSearchPackGate",
+      projectedSellableRows: 0,
+      projectedUsefulRows: input.paidGraphSearchPackGate.rowsPromotedFromGenericToUseful,
+      projectedFreshRows: 0,
+      countsTowardProjectedFloor: false
+    },
+    {
+      owner: "agent_08",
+      source: "hundredSellableRowGraphPivotPlan",
+      projectedSellableRows: input.hundredSellableRowGraphPivotPlan.projectedSellableRows,
+      projectedUsefulRows: input.hundredSellableRowGraphPivotPlan.projectedUsefulRows,
+      projectedFreshRows: input.hundredSellableRowGraphPivotPlan.projectedFreshRows,
+      countsTowardProjectedFloor: false
+    },
+    {
+      owner: "agent_03",
+      source: "parserToSellableRepairPacket.candidates",
+      projectedSellableRows: input.parserToSellableRepairPacket.projectedCandidateRows,
+      projectedUsefulRows: input.parserToSellableRepairPacket.projectedUsefulRows,
+      projectedFreshRows: input.parserToSellableRepairPacket.projectedFreshRows,
+      countsTowardProjectedFloor: true
+    },
+    {
+      owner: "agent_07",
+      source: "qualityConversionGate",
+      projectedSellableRows: input.qualityConversionGate.sellableRowLift,
+      projectedUsefulRows: input.qualityConversionGate.chargeableExampleCount + input.qualityConversionGate.caveatedExampleCount,
+      projectedFreshRows: 0,
+      countsTowardProjectedFloor: true
+    },
+    {
+      owner: "agent_07",
+      source: "liveFreshnessQualityGate",
+      projectedSellableRows: input.liveFreshnessQualityGate.chargeableFreshRows,
+      projectedUsefulRows: input.liveFreshnessQualityGate.chargeableFreshRows + input.liveFreshnessQualityGate.caveatedFreshRows,
+      projectedFreshRows: input.liveFreshnessQualityGate.chargeableFreshRows,
+      countsTowardProjectedFloor: true
+    },
+    {
+      owner: "agent_05",
+      source: "darkMetadataPublicHandoff100",
+      projectedSellableRows: 0,
+      projectedUsefulRows: 2,
+      projectedFreshRows: 0,
+      countsTowardProjectedFloor: false
+    }
+  ];
+  const projectedSellableRowsFromAcceptedRepairs = acceptedRepairBuckets
+    .filter((bucket) => bucket.countsTowardProjectedFloor)
+    .reduce((sum, bucket) => sum + bucket.projectedSellableRows, 0);
+  const projectedSellableRowsAfterAcceptedRepairs = currentSellableRows === null
+    ? null
+    : currentSellableRows + projectedSellableRowsFromAcceptedRepairs;
+  const oneRepairAwayRows = acceptedRepairBuckets
+    .filter((bucket) => bucket.countsTowardProjectedFloor && bucket.projectedSellableRows > 0)
+    .reduce((sum, bucket) => sum + bucket.projectedSellableRows, 0);
+  const decision = input.monetizationReadiness.status === "ready_for_paid_traffic"
+    ? "promote_paid_traffic"
+    : "hold_paid_traffic";
+  return {
+    schemaVersion: "ti.product_release_decision.v1",
+    decision,
+    currentSellableRows,
+    productionSellableRowFloor: 100,
+    usefulCaveatedRows,
+    rowsBlockedFromBilling,
+    oneRepairAwayRows,
+    projectedSellableRowsFromAcceptedRepairs,
+    projectedSellableRowsAfterAcceptedRepairs,
+    costPerUsefulRowUsd: input.costPerUsefulRowUsd,
+    topBlocker: currentSellableRows !== null && currentSellableRows >= 100 ? "none" : "sellable_rows_below_100",
+    revenueTruth: {
+      paidTrafficAllowed: decision === "promote_paid_traffic",
+      apifyAnalyticsExternal: true,
+      payoutEvidenceExternal: true,
+      revenueEvidenceExternal: true,
+      proofSizedRunsMayCompleteShapeSafetyOnly: true
+    },
+    acceptedRepairBuckets,
+    exclusionProof: [
+      {
+        class: "synthetic_rows",
+        countsAsSellable: false,
+        currentRows: null,
+        reason: "synthetic fixtures, contract rows, and coordination-only work never count toward the paid-traffic floor"
+      },
+      {
+        class: "graph_only_rows",
+        countsAsSellable: false,
+        currentRows: input.paidGraphSearchPackGate.marketplaceSampleRowsImproved,
+        reason: "graph search packs can project buyer-useful lift, but relationship context alone is not a chargeable finding"
+      },
+      {
+        class: "stale_rows",
+        countsAsSellable: false,
+        currentRows: input.liveFreshnessQualityGate.staleLatestClaimsBlocked,
+        reason: "stale latest-activity claims remain blocked from billing until fresh public evidence exists"
+      },
+      {
+        class: "restricted_only_rows",
+        countsAsSellable: false,
+        currentRows: 100,
+        reason: "restricted/dark metadata candidates are metadata-only and need safe public corroboration before paid promotion"
+      },
+      {
+        class: "caveat_only_rows",
+        countsAsSellable: false,
+        currentRows: usefulCaveatedRows,
+        reason: "included-with-caveat rows can be useful to buyers but are not sellable rows for the production paid-traffic floor"
+      }
+    ],
+    nextRequiredAction: currentSellableRows !== null && currentSellableRows >= 100
+      ? "verify Apify payout, marketplace analytics, and cost evidence before increasing traffic"
+      : "convert the highest-value caveated/held/coverage-gap rows into fresh corroborated sellable rows; keep proof-sized runs shape/safety-only until current sellable rows reach 100"
   };
 }
 
@@ -2033,6 +2456,147 @@ const buildPaidGraphSearchPackGate = (): LiveProductSloDashboard["paidGraphSearc
   ]
 });
 
+const buildHundredSellableRowGraphPivotPlan = (): LiveProductSloDashboard["hundredSellableRowGraphPivotPlan"] => ({
+  schemaVersion: "ti.apify_100_sellable_row_graph_pivot_plan.v1",
+  routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/contracts"],
+  baselineRunId: "OThlfd0uzSCNnedAO",
+  baselineDatasetId: "LSen2fYtwFTtOr7vK",
+  targetSellableRows: 100,
+  dryRun: true,
+  willMutateSources: false,
+  willStartCollection: false,
+  watchlistActorCount: 20,
+  projectedSellableRows: 100,
+  projectedUsefulRows: 140,
+  projectedFreshRows: 110,
+  projectedSourceFamilyDiversity: 8,
+  nextSearchPivotCount: 60,
+  averageBuyerValueDelta: 0.118,
+  rowsPreventedFromBilling: 60,
+  rejectionReasons: [
+    "stale_only",
+    "single_source_without_caveat",
+    "contradicted",
+    "unrelated",
+    "missing_provenance",
+    "unsafe_restricted_only",
+    "alias_only",
+    "not_actionable"
+  ],
+  repairHandoffs: [
+    { owner: "agent_03", expectedSellableRowsUnlocked: 38, expectedEffect: "Extract victim, sector, country, TTP/tool, first/last seen, and corroborating source IDs." },
+    { owner: "agent_04", expectedSellableRowsUnlocked: 31, expectedEffect: "Add safe public-channel, advisory, and public-report corroboration for one-repair-away rows." },
+    { owner: "agent_05", expectedSellableRowsUnlocked: 16, expectedEffect: "Keep metadata-only leads no-leak and promote only when public support exists." },
+    { owner: "agent_07", expectedSellableRowsUnlocked: 9, expectedEffect: "Suppress stale, alias-only, contradicted, unrelated, and not-actionable pivots before billing." },
+    { owner: "agent_10", expectedSellableRowsUnlocked: 100, expectedEffect: "Keep paid traffic blocked until 100 sellable rows, sellable-row rate, freshness, and cost gates pass." }
+  ]
+});
+
+const buildParserToSellableRepairPacket = (): LiveProductSloDashboard["parserToSellableRepairPacket"] => {
+  const candidates: LiveProductSloDashboard["parserToSellableRepairPacket"]["candidates"] = [
+    parserSellableCandidate("parser_apt29_ttp_tool", "APT29", "apt", "vendor_report", "included_with_caveat", 8, ["ttp_tool", "first_seen", "last_seen", "source_family_support", "provenance_hash", "next_buyer_search"], ["government_advisory"], ["ttp:T1078", "target:government"]),
+    parserSellableCandidate("parser_apt42_public_channel", "APT42", "apt", "public_channel_handoff", "coverage_gap_only", 7, ["victim", "sector", "country", "ttp_tool", "confidence", "source_family_support", "provenance_hash"], ["government_advisory", "public_report"], ["target:ngo", "ttp:phishing"]),
+    parserSellableCandidate("parser_volt_sector_country", "Volt Typhoon", "apt", "cert_advisory", "included_with_caveat", 8, ["sector", "country", "ttp_tool", "first_seen", "last_seen", "next_buyer_search"], ["vendor_report"], ["sector:critical_infrastructure", "ttp:living_off_the_land"]),
+    parserSellableCandidate("parser_lazarus_crypto", "Lazarus Group", "apt", "vendor_report", "hold", 7, ["sector", "country", "ttp_tool", "dataset_or_impact", "confidence", "source_family_support"], ["government_advisory"], ["sector:cryptocurrency", "ttp:social_engineering"]),
+    parserSellableCandidate("parser_scattered_spider_victim", "Scattered Spider", "apt", "rss_security_blog", "included_with_caveat", 7, ["victim", "sector", "ttp_tool", "first_seen", "last_seen", "provenance_hash"], ["incident_report"], ["sector:telecom", "ttp:social_engineering"]),
+    parserSellableCandidate("parser_clop_campaign", "Clop", "ransomware", "cert_advisory", "included_with_caveat", 8, ["victim", "sector", "country", "dataset_or_impact", "ttp_tool", "source_family_support"], ["public_report"], ["campaign:MOVEit", "claim:victim"]),
+    parserSellableCandidate("parser_lockbit_public_support", "LockBit", "ransomware", "dark_metadata_public_support", "hold", 7, ["victim", "sector", "country", "first_seen", "last_seen", "source_family_support"], ["public_report"], ["claim:victim", "sector:manufacturing"]),
+    parserSellableCandidate("parser_akira_sector_country", "Akira", "ransomware", "dark_metadata_public_support", "coverage_gap_only", 7, ["victim", "sector", "country", "dataset_or_impact", "provenance_hash"], ["public_report"], ["claim:victim", "sector:healthcare"]),
+    parserSellableCandidate("parser_black_basta_dedupe", "Black Basta", "ransomware", "rss_security_blog", "hold", 7, ["victim", "sector", "first_seen", "last_seen", "confidence", "next_buyer_search"], ["public_report"], ["claim:victim", "sector:industrial"]),
+    parserSellableCandidate("parser_ransomhub_services", "RansomHub", "ransomware", "dark_metadata_public_support", "coverage_gap_only", 7, ["victim", "sector", "country", "source_family_support", "provenance_hash"], ["public_report"], ["claim:victim", "sector:services"]),
+    parserSellableCandidate("parser_play_healthcare", "Play", "ransomware", "public_channel_handoff", "included_with_caveat", 7, ["victim", "sector", "country", "first_seen", "last_seen", "next_buyer_search"], ["vendor_report"], ["sector:healthcare", "claim:victim"]),
+    parserSellableCandidate("parser_qilin_public_support", "Qilin", "ransomware", "dark_metadata_public_support", "hold", 7, ["victim", "sector", "country", "confidence", "source_family_support", "provenance_hash"], ["public_report"], ["claim:victim", "sector:professional_services"])
+  ];
+  const rejectedRepairs: LiveProductSloDashboard["parserToSellableRepairPacket"]["rejectedRepairs"] = [
+    parserSellableRejection("parser_reject_stale_report", "stale_report", "hold"),
+    parserSellableRejection("parser_reject_alias_collision", "alias_collision", "included_with_caveat"),
+    parserSellableRejection("parser_reject_unrelated_co_mention", "unrelated_actor_co_mention", "hold"),
+    parserSellableRejection("parser_reject_generic_marketing", "generic_marketing_page", "suppress"),
+    parserSellableRejection("parser_reject_raw_body", "raw_body_or_unsafe_url_request", "suppress"),
+    parserSellableRejection("parser_reject_payload", "payload_request", "suppress"),
+    parserSellableRejection("parser_reject_private_auth", "private_auth_captcha_dependency", "suppress")
+  ];
+  const projectedCandidateRows = candidates.reduce((sum, row) => sum + row.projectedRows, 0);
+  return {
+    schemaVersion: "ti.live_product_parser_to_100_sellable_rows_packet.v1",
+    owner: "agent_03",
+    routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/contracts"],
+    baselineRunId: PROGRAM_BH_BASELINE_RUN_ID,
+    baselineDatasetId: PROGRAM_BH_BASELINE_DATASET_ID,
+    targetSellableRows: 100,
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    productionSellableClaimed: false,
+    candidateDecision: "sellable_candidate_after_parser_repair",
+    candidateActorCount: candidates.length,
+    projectedCandidateRows,
+    projectedUsefulRows: projectedCandidateRows,
+    projectedFreshRows: Math.max(0, projectedCandidateRows - 8),
+    projectedSellableFloorProgress: round(projectedCandidateRows / 100),
+    parserFieldsUnlocking: Array.from(new Set(candidates.flatMap((row) => row.parserFieldsUnlocking))).sort(),
+    sourceFamilyGaps: Array.from(new Set(candidates.flatMap((row) => row.sourceFamilyGaps))).sort(),
+    graphPivotGaps: Array.from(new Set(candidates.flatMap((row) => row.graphPivotGaps))).sort(),
+    suppressionChecks: Array.from(new Set(candidates.flatMap((row) => row.suppressionChecks))).sort(),
+    candidates,
+    rejectedRepairs,
+    ownerHandoffs: [
+      { owner: "agent_03", handoff: "extract missing buyer-visible entities and provenance hashes", expectedCandidateRows: 85 },
+      { owner: "agent_04", handoff: "add public corroboration for single-source public-channel rows", expectedCandidateRows: 28 },
+      { owner: "agent_05", handoff: "keep dark metadata metadata-only until public support exists", expectedCandidateRows: 35 },
+      { owner: "agent_07", handoff: "suppress stale, alias, unrelated, and generic parser rows", expectedCandidateRows: 0 },
+      { owner: "agent_08", handoff: "preserve graph pivots and relationship provenance for candidate rows", expectedCandidateRows: 85 },
+      { owner: "agent_10", handoff: "keep production paid traffic blocked until candidates become real sellable rows", expectedCandidateRows: 100 }
+    ],
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      payloadsRequested: false,
+      privateAuthCaptchaAccess: false,
+      restrictedMaterialExposed: false,
+      productionSellableClaimed: false
+    }
+  };
+};
+
+function parserSellableCandidate(
+  id: string,
+  actor: string,
+  family: LiveProductSloDashboard["parserToSellableRepairPacket"]["candidates"][number]["family"],
+  sourceFamily: LiveProductSloDashboard["parserToSellableRepairPacket"]["candidates"][number]["sourceFamily"],
+  currentDecision: LiveProductSloDashboard["parserToSellableRepairPacket"]["candidates"][number]["currentDecision"],
+  projectedRows: number,
+  parserFieldsUnlocking: string[],
+  sourceFamilyGaps: string[],
+  graphPivotGaps: string[]
+): LiveProductSloDashboard["parserToSellableRepairPacket"]["candidates"][number] {
+  return {
+    id,
+    actor,
+    family,
+    sourceFamily,
+    currentDecision,
+    dryRunDecision: "sellable_candidate_after_parser_repair",
+    projectedRows,
+    parserFieldsUnlocking,
+    sourceFamilyGaps,
+    graphPivotGaps,
+    suppressionChecks: ["stale_only", "single_source_without_caveat", "contradicted", "unrelated", "unsafe_restricted_only"],
+    provenanceHash: stableId("parser_sellable", id),
+    nextBuyerSearches: [`${actor} fresh public evidence`, `${actor} victim sector TTP`, `${actor} corroborating source family`],
+    requiresSourceCorroboration: true,
+    noLeak: true
+  };
+}
+
+function parserSellableRejection(
+  id: string,
+  blockedReason: LiveProductSloDashboard["parserToSellableRepairPacket"]["rejectedRepairs"][number]["blockedReason"],
+  currentDecision: LiveProductSloDashboard["parserToSellableRepairPacket"]["rejectedRepairs"][number]["currentDecision"]
+): LiveProductSloDashboard["parserToSellableRepairPacket"]["rejectedRepairs"][number] {
+  return { id, blockedReason, currentDecision, projectedRows: 0, doesNotCountToward100Floor: true, noLeak: true };
+}
+
 function buildQualityConversionGate(): LiveProductSloDashboard["qualityConversionGate"] {
   return {
     schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
@@ -2168,6 +2732,46 @@ function buildEntitySpecificityLift(): LiveProductSloDashboard["entitySpecificit
       unsafeUrlsExposed: false,
       restrictedPayloadsExposed: false,
       objectKeysExposed: false
+    }
+  };
+}
+
+function buildFalsePositiveSuppressionGate(): LiveProductSloDashboard["falsePositiveSuppressionGate"] {
+  return {
+    schemaVersion: "ti.program_bz_paid_row_false_positive_suppression_gate.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    fixtureCount: 32,
+    actorCoverage: ["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "Random Actor", "Made Up Actor", "Unknown Actor Query"],
+    scenarioCoverage: ["alias_collision", "common_victim_name", "unrelated_actor_co_mention", "stale_repost_as_current", "single_source_requires_caveat", "metadata_only_without_public_support", "contradicted_claim", "unknown_search_suppressed", "true_positive_preserved"],
+    reasonCodes: ["alias_collision", "ambiguous_victim_name", "unrelated_actor_co_mention", "stale_repost_as_current", "single_source_without_caveat", "metadata_only_without_public_support", "contradicted_claim", "unknown_query_searching", "true_positive_sellable"],
+    falsePositivesSuppressed: 12,
+    contradictedRowsHeld: 2,
+    staleRepostsBlocked: 3,
+    singleSourceRowsCaveated: 3,
+    truePositivesPreserved: 8,
+    sellableRowsProtected: 8,
+    buyerTrustDelta: 0.363,
+    rowsPreventedFromBilling: 21,
+    ownerHandoffs: [
+      { owner: "agent_03", fixtureCount: 6, blockerFocus: "primary actor, victim identity, and roundup parsing", expectedEffect: "Suppress co-mentions and ambiguous victims before they reach paid rows." },
+      { owner: "agent_04", fixtureCount: 5, blockerFocus: "stale repost and single-source corroboration", expectedEffect: "Replace old/latest claims or downgrade them with buyer-visible caveats." },
+      { owner: "agent_05", fixtureCount: 7, blockerFocus: "metadata-only victim support", expectedEffect: "Keep restricted metadata as held or caveated leads until public support exists." },
+      { owner: "agent_07", fixtureCount: 8, blockerFocus: "alias collisions and unknown-query suppression", expectedEffect: "Prevent wrong-actor and invented rows from billing." },
+      { owner: "agent_08", fixtureCount: 3, blockerFocus: "contradicted claim and relationship ledger review", expectedEffect: "Hold claims where evidence and graph relationships disagree." },
+      { owner: "agent_09", fixtureCount: 2, blockerFocus: "conversion impact for preserved/caveated rows", expectedEffect: "Measure buyer trust and conversion without leaking unsafe details." },
+      { owner: "agent_10", fixtureCount: 6, blockerFocus: "release economics and protected sellable rows", expectedEffect: "Keep high-confidence rows billable while noisy rows are removed." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      privateMaterialExposed: false,
+      accountMaterialExposed: false,
+      actorInteractionContentExposed: false
     }
   };
 }

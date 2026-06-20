@@ -7818,7 +7818,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "nonMonetizingWorkDetector", "scaleStepGates", "revenueBlockerBoard", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "paidGraphSearchPackGate", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "nonMonetizingWorkDetector", "releaseDecision", "scaleStepGates", "revenueBlockerBoard", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "paidGraphSearchPackGate", "hundredSellableRowGraphPivotPlan", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "falsePositiveSuppressionGate", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
@@ -8462,6 +8462,9 @@ function buildEnterpriseApiContractIndex() {
     publishedBuildVersion: apifyStoreReadiness.actor.publishedBuildVersion,
     latestProofRunId: apifyStoreReadiness.storeReadiness.latestProofRun.runId,
     latestProofDatasetId: apifyStoreReadiness.storeReadiness.latestProofRun.datasetId,
+    hundredRowProgressStatus: apifyStoreReadiness.hundredRowConversionProgress.firstPaidTrafficExperiment.status,
+    hundredRowCurrentSellableRows: apifyStoreReadiness.hundredRowConversionProgress.currentRun.currentSellableRows,
+    hundredRowProjectedSellableRowsAfterAcceptedRepairs: apifyStoreReadiness.hundredRowConversionProgress.acceptedRepairProjection.projectedSellableRowsAfterAcceptedRepairs,
     pricingEffectiveDate: apifyStoreReadiness.pricingHooks.effectiveDate,
     defaultQueries: apifyStoreReadiness.defaultSampleInput.queries,
     sampleQueries: apifyStoreReadiness.publicProofDtos.map((proof) => proof.query),
@@ -10061,6 +10064,63 @@ function buildApifyStoreReadinessContract(input: {
       noLeakRequired: true
     }
   ];
+  const hundredRowConversionProgress = {
+    schemaVersion: "ti.apify_100_row_conversion_proof.v1",
+    routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "/v1/ops/product-slo"],
+    currentRun: {
+      proofRunId: "OThlfd0uzSCNnedAO",
+      proofDatasetId: "LSen2fYtwFTtOr7vK",
+      proofDecision: "shape_safety_proof",
+      productionPaidTrafficReady: false,
+      currentSellableRows: 4,
+      currentUsefulRows: 6,
+      currentCaveatedUsefulRows: 2,
+      currentBlockedRows: 4,
+      currentSuppressedRows: 0,
+      targetSellableRows: 100,
+      remainingSellableRows: 96,
+      currentFloorProgress: 0.04,
+      exactBlockers: [
+        "sellable_rows_below_100_production_floor",
+        "sellable_rows_below_paid_traffic_floor",
+        "caveated_useful_rows_do_not_count_as_sellable",
+        "held_or_coverage_gap_rows_do_not_count_as_sellable",
+        "graph_only_plan_is_projection_not_production_readiness",
+        "external_apify_analytics_required_for_views_users_paid_runs_revenue_runtime_usage_and_conversion"
+      ]
+    },
+    acceptedRepairProjection: {
+      projectedSellableRowsFromAcceptedRepairs: 132,
+      projectedSellableRowsAfterAcceptedRepairs: 136,
+      projectedUsefulRowsFromAcceptedRepairs: 246,
+      oneRepairAwayRows: 58,
+      caveatedUsefulRows: 2,
+      blockedRows: 4,
+      graphOnlyProjectedRows: 110,
+      graphOnlyRowsCountTowardProductionFloor: false,
+      proofSizedRunsCountTowardProductionReadiness: false,
+      caveatOnlyRunsCountTowardProductionReadiness: false
+    },
+    firstPaidTrafficExperiment: {
+      status: "blocked_until_100_sellable_rows",
+      targetBuyer: "CTI analyst evaluating daily APT and ransomware monitoring for actor, victim, CVE, sector, and country pivots",
+      inputPreset: "20 default queries, maxRowsPerQuery=25, includeCoverageGaps=true, includeDatasets=false",
+      successMetric: "after the 100-row floor passes, paid traffic succeeds only if trialToPaidRate >= 0.15, repeatUsers >= 1, usefulRowsPerQuery >= 2, and refunds = 0",
+      stopLossMetric: "stop if 100 verified store views produce no paid runs, sellable rows fall below 100, average buyer value drops below 0.55, or any no-leak failure appears",
+      refundRisk: "medium until first paid cohort proves useful rows and no-leak guarantees; refunds are external Apify analytics and remain null here",
+      requiredApifyAnalyticsFields: ["storePageViews", "uniqueUsers", "trialRuns", "paidRuns", "actorStarts", "actorRuns", "datasetRows", "failedRuns", "repeatUsers", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd", "runtimeSeconds"]
+    },
+    noFakeRevenueClaims: {
+      payout: null,
+      storeViews: null,
+      users: null,
+      paidRuns: null,
+      revenue: null,
+      runtime: null,
+      platformUsage: null,
+      conversionRate: null
+    }
+  };
 
   return {
     schemaVersion: "ti.apify_store_readiness.v1",
@@ -10243,6 +10303,7 @@ function buildApifyStoreReadinessContract(input: {
         "apify_beneficiary_and_payout_withdrawal_readiness_requires_external_billing_verification"
       ]
     },
+    hundredRowConversionProgress,
     conversionExperiments,
     buyerSampleRows,
     operatorBlockerBoard: [
@@ -10326,7 +10387,8 @@ function buildApifyStoreReadinessContract(input: {
         currentSellableRows: 4,
         minimumAverageBuyerValueScore: 0.55,
         currentAverageBuyerValueScore: 0.577,
-        nextAction: "Use Apify analytics and /v1/ops/product-slo together: store conversion stays unknown until external analytics are copied, while paid traffic stays blocked until at least 100 sellable rows are present."
+        nextAction: "Use Apify analytics and /v1/ops/product-slo together: store conversion stays unknown until external analytics are copied, while paid traffic stays blocked until at least 100 sellable rows are present.",
+        progressField: "apifyStoreReadiness.hundredRowConversionProgress"
       },
       noLeakGuarantee: "Buyer-facing proof exposes row decisions, counts, source families, hashes, caveats, and quality gates only; it does not expose raw evidence bodies, unsafe URLs, credentials, private content, object keys, payloads, or actor interaction."
     },
