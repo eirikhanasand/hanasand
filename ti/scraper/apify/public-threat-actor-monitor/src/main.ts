@@ -1253,6 +1253,59 @@ interface GraphSellableSupportPacket {
   };
 }
 
+interface GraphPublicCorroborationPivotPacket {
+  schemaVersion: "ti.apify_graph_public_corroboration_pivot_packet.v1";
+  routeVisibleOn: Array<"Apify OUTPUT" | "Apify dataset rows" | "/v1/ops/product-slo" | "/v1/intel/search" | "/v1/contracts#apifyStoreReadiness">;
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  productionSellableFloor: 100;
+  candidateCount: number;
+  rowUnlockingCandidateCount: number;
+  contradictionOrAliasHoldCount: number;
+  graphOnlyRowsExcludedFromFloor: number;
+  projectedSellableRowsAfterPublicCorroboration: number;
+  averageProjectedConfidenceLift: number;
+  candidates: Array<{
+    id: string;
+    actor: string;
+    family: "apt" | "ransomware";
+    currentBlockedState: "needs_public_support" | "metadata_only" | "single_source_caveat" | "parser_field_missing" | "contradiction_hold" | "alias_collision_hold";
+    relationshipSupport: string;
+    nextPublicCorroborationPivot: {
+      queryText: string;
+      entityType: "actor" | "victim" | "dataset" | "sector" | "country" | "ttp" | "tool" | "campaign";
+      expectedSourceFamily: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice";
+      repairsRowField: "actor_attribution" | "victim_or_dataset" | "sector_country" | "ttp_tool" | "campaign_context" | "freshness";
+      contradictionRisk: "none" | "low" | "medium" | "high";
+      aliasCollisionRisk: "none" | "low" | "medium" | "high";
+      ownerHandoff: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    };
+    expectedSellableRowsUnlockedAfterPublicProof: number;
+    projectedConfidenceLift: number;
+    graphOnlyCountsTowardSellableRows: false;
+    rowUnlockRequiresNonGraphEvidence: true;
+    noLeak: true;
+  }>;
+  ownerHandoffs: Array<{
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    candidateCount: number;
+    expectedSellableRowsUnlockedAfterPublicProof: number;
+    action: string;
+  }>;
+  noLeakBoundary: {
+    rawEvidenceBodies: false;
+    unsafeUrls: false;
+    objectKeys: false;
+    credentials: false;
+    payloadLinks: false;
+    privateMaterial: false;
+    actorInteraction: false;
+  };
+}
+
 interface MarketplaceConversionRealRowSamplePack {
   schemaVersion: "ti.apify_marketplace_conversion_real_row_sample_pack.v1";
   routeVisibleOn: Array<"Apify OUTPUT" | "Apify dataset rows" | "/v1/contracts#apifyStoreReadiness" | "/v1/ops/product-slo">;
@@ -2976,6 +3029,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const first100AdmissionQuality = first100AdmissionQualityForRows(rows);
   const marketplaceConversionRealRowSamplePack = marketplaceConversionRealRowSamplePackForRows(rows, paidRowQuality);
   const graphSellableSupportPacket = graphSellableSupportPacketForRows(rows);
+  const graphPublicCorroborationPivotPacket = graphPublicCorroborationPivotPacketForRows(rows);
   const paidReleaseTruthBoard = paidReleaseTruthBoardForRows(rows, paidRowQuality);
   const revenueConversionChecklist = revenueConversionChecklistForRows(rows, paidRowQuality);
   const pricingProof = pricingProofForOutput();
@@ -3014,6 +3068,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     first100AdmissionQuality,
     marketplaceConversionRealRowSamplePack,
     graphSellableSupportPacket,
+    graphPublicCorroborationPivotPacket,
     paidReleaseTruthBoard,
     revenueConversionChecklist,
     pricingProof,

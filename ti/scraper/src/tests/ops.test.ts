@@ -963,6 +963,42 @@ describe("ops controls", () => {
     expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "useful_caveated")).toHaveLength(6);
     expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "suppress")).toHaveLength(4);
     expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.suppressedClasses.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_actor_summary", "stale_repost_as_current", "alias_collision", "restricted_only_without_public_support"]));
+    expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay).toMatchObject({
+      schemaVersion: "ti.program_cv_parser_runtime_admission_replay.v1",
+      owner: "agent_03",
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      proofFixture: "apify/public-threat-actor-monitor/fixtures/apt42.json",
+      beforeSellableRows: 3,
+      afterSellableRows: 4,
+      chargeableRowsAdded: 1,
+      beforeAverageBuyerValueScore: 0.558,
+      afterAverageBuyerValueScore: 0.575
+    });
+    const runtimeActivity = dashboard.parserRealSellableLift.runtimeAdmissionReplay.runtimeProofRows.find((row) => row.id === "cv_apt42_campaign_runtime_admission");
+    expect(runtimeActivity).toMatchObject({
+      actor: "APT42",
+      rowType: "activity",
+      admissionDecision: "sellable",
+      countsTowardCurrentSellableRows: true,
+      sourceEvidenceCount: 4,
+      ttpToolOrCve: "Phishing / T1566",
+      contradictionState: "none",
+      noLeak: true
+    });
+    expect(runtimeActivity?.requiredFieldsPresent).toEqual(expect.arrayContaining(["actor", "victim_or_target", "sector", "country_or_region", "dataset_or_impact", "ttp_tool_or_cve", "source_family_support", "provenance_hash", "next_buyer_search"]));
+    expect(runtimeActivity?.missingFields).toHaveLength(0);
+    expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay.runtimeProofRows.filter((row) => !row.countsTowardCurrentSellableRows).map((row) => row.blockedReason)).toEqual(expect.arrayContaining(["generic_source_page", "coverage_gap_only", "restricted_only_without_public_support"]));
+    expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay.suppressionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_source_page", "coverage_gap_only", "restricted_only_without_public_support", "single_source_without_caveat"]));
+    expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay.suppressionProof.every((row) => row.countsTowardCurrentSellableRows === false && row.proof.length > 0)).toBe(true);
+    expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    });
     expect(dashboard.qualityConversionGate).toMatchObject({
       schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
@@ -1239,6 +1275,27 @@ describe("ops controls", () => {
     expect(dashboard.darkMetadataPublicSupportLift4000.tierSummaries).toEqual(expect.arrayContaining([
       expect.objectContaining({ tier: "tier_4000", evaluatedCandidateCount: 4000, acceptedForPublicSupportCount: 134, sellableAfterPublicSupport: 80, usefulWithCaveat: 54, restrictedOnlyHold: 556, rejectedCount: 3310, currentlyChargeableCount: 0, countsTowardSellableFloorNow: false })
     ]));
+    expect(dashboard.darkMetadataPublicSupportLift4000.first100RepairQueue).toHaveLength(3);
+    expect(dashboard.darkMetadataPublicSupportLift4000.first100RepairQueue.every((row) => row.countsTowardSellableFloorNow === false && row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials")).toBe(true);
+    expect(dashboard.darkMetadataPublicSupportLift4000.tier10000Preview).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",
+      evaluatedCandidateCount: 10000,
+      valueQualifiedCandidateCount: 340,
+      projectedSellableAfterPublicSupport: 198,
+      usefulWithCaveat: 142,
+      restrictedOnlyHold: 1386,
+      acceptedValueDensity: 0.034,
+      expansionDecision: "hold_for_value_density",
+      countsTowardSellableFloorNow: false
+    });
+    expect(dashboard.darkMetadataPublicSupportLift4000.metricMovement).toMatchObject({
+      repairCandidatesAdded: 100,
+      likelySellableRowsAfterPublicSupport: 80,
+      usefulCaveatedRows: 20,
+      suppressedRows: 3866,
+      remainingRowsToFirst100FloorAfterPublicSupport: 20,
+      countsTowardSellableFloorNow: false
+    });
     expect(dashboard.darkMetadataPublicSupportLift4000.criteria).toMatchObject({
       targetPaidRows: 100,
       publicSupportRequiredForSellable: true,
