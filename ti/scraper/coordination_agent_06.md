@@ -190,6 +190,13 @@ Progress update 2026-06-21 00:58 CEST:
 - The repository status persists zero rows, mutates zero queues, activates zero sources, starts no crawling, and keeps restricted/leak material metadata-only with no raw bodies, unsafe URLs, credentials, object keys, actor interaction, or restricted embeddings.
 - Continue next with direct consumer alignment to Agent 01/04/05/07 source repair packets or a real repository implementation behind explicit enablement.
 
+Progress update 2026-06-21 01:31 CEST:
+- Continued with direct consumer alignment to Agent 01/04/05/07 source repair packets.
+- Added `ti.evidence_actor_dataset_source_gap_repair_handoff.v1` on `/v1/evidence/cutover-report.readModelCutover.actorDatasetSourceGapRepairHandoff`.
+- The handoff groups queue rows into Agent 01 source-atlas, Agent 04 public-channel, Agent 05 dark-metadata, and Agent 07 quality/extraction repair packets with route hints, queue actions, source families, acceptance criteria, buyer-visible effects, and explicit blockers.
+- It remains dry-run and fail-closed: no queue mutation, source activation, crawling, unsafe URL, credential, raw leak material, object key, actor interaction, or restricted embedding is serialized or requested.
+- Continue next with a real repository implementation behind explicit enablement or richer replay linkage from completed repair packets back into Actor row promotion.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

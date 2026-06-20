@@ -59,6 +59,7 @@ import {
   buildEvidenceActorDatasetConsumerHandoff,
   buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorDatasetSourceGapConsumerQueue,
+  buildEvidenceActorDatasetSourceGapRepairHandoff,
   buildEvidenceActorDatasetSourceGapSuppressionFeedback,
   buildEvidenceActorProductImpactReplay,
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
@@ -2402,6 +2403,65 @@ describe("evidence storage cutover", () => {
     expect(actorDatasetSourceGapConsumerQueueAuditSerialized).not.toContain(restrictedRaw);
     expect(actorDatasetSourceGapConsumerQueueAuditSerialized).not.toContain("tenant/source/private-key");
     expect(actorDatasetSourceGapConsumerQueueAuditSerialized).not.toContain(".onion");
+
+    const actorDatasetSourceGapRepairHandoff = buildEvidenceActorDatasetSourceGapRepairHandoff(actorDatasetSourceGapConsumerQueue);
+    expect(actorDatasetSourceGapRepairHandoff).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_handoff.v1",
+      sourceQueue: "ti.evidence_actor_dataset_source_gap_consumer_queue.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      actorBuild: "0.6.4",
+      dryRun: true,
+      willMutateQueues: false,
+      willActivateSources: false,
+      willStartCrawling: false,
+      latestProof: {
+        runId: "iMQGeezZ8bx7WtlhQ",
+        datasetId: "5PLmkE30luBA5Lbgc"
+      },
+      counts: {
+        repairPackets: expect.any(Number),
+        queueItemsCovered: actorDatasetSourceGapConsumerQueue.counts.totalQueueItems,
+        agent01Packets: expect.any(Number),
+        agent04Packets: expect.any(Number),
+        agent05Packets: expect.any(Number),
+        agent07Packets: expect.any(Number)
+      },
+      guardrails: {
+        explicitOperatorApprovalRequired: true,
+        sourceActivationNotApplied: true,
+        crawlingNotStarted: true,
+        restrictedRowsMetadataOnly: true,
+        rawLeakMaterialNeverQueued: true,
+        credentialsNeverQueued: true,
+        unsafeUrlsNeverQueued: true,
+        embeddingsForRestrictedRowsDisabled: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(actorDatasetSourceGapRepairHandoff.repairPackets.map((packet) => packet.targetRoute)).toEqual(expect.arrayContaining([
+      "/v1/public-channels/status",
+      "/v1/darkweb/status",
+      "/v1/quality/evaluate"
+    ]));
+    expect(actorDatasetSourceGapRepairHandoff.repairPackets.every((packet) =>
+      packet.queueItemIds.length > 0 &&
+      packet.acceptanceCriteria.length > 0 &&
+      packet.buyerVisibleEffects.length > 0 &&
+      packet.blockedUntil.includes("explicit_operator_approval") &&
+      packet.blockedUntil.includes("durable_evidence_replay") &&
+      packet.noLeak === true
+    )).toBe(true);
+    const actorDatasetSourceGapRepairHandoffSerialized = JSON.stringify(actorDatasetSourceGapRepairHandoff);
+    expect(actorDatasetSourceGapRepairHandoffSerialized).not.toContain(restrictedRaw);
+    expect(actorDatasetSourceGapRepairHandoffSerialized).not.toContain("tenant/source/private-key");
+    expect(actorDatasetSourceGapRepairHandoffSerialized).not.toContain(".onion");
 
     const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
     expect(actorDatasetConsumerHandoff).toMatchObject({

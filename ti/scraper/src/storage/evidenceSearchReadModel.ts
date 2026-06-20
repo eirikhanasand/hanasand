@@ -3,7 +3,7 @@ import type {
   EvidenceSearchIndexHandoff
 } from "./evidenceStore.ts";
 import type { RetentionClass } from "../types.ts";
-import { nowIso, stableId } from "../utils.ts";
+import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 
 export type EvidenceSearchReadModelBackend =
   | "embedded_memory"
@@ -799,6 +799,49 @@ export interface EvidenceActorDatasetSourceGapConsumerQueueAuditRepository {
     rows: EvidenceActorDatasetSourceGapConsumerQueuePostgresRows,
     input?: { generatedAt?: string }
   ): EvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus;
+}
+
+export interface EvidenceActorDatasetSourceGapRepairHandoff {
+  schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_handoff.v1";
+  generatedAt: string;
+  handoffId: string;
+  sourceQueue: EvidenceActorDatasetSourceGapConsumerQueue["schemaVersion"];
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  dryRun: true;
+  willMutateQueues: false;
+  willActivateSources: false;
+  willStartCrawling: false;
+  latestProof: EvidenceActorDatasetPromotionPreview["latestProof"];
+  counts: {
+    repairPackets: number;
+    queueItemsCovered: number;
+    agent01Packets: number;
+    agent04Packets: number;
+    agent05Packets: number;
+    agent07Packets: number;
+  };
+  repairPackets: EvidenceActorDatasetSourceGapRepairPacket[];
+  guardrails: EvidenceActorDatasetSourceGapConsumerQueue["guardrails"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetSourceGapRepairPacket {
+  packetId: string;
+  ownerQueue: EvidenceActorDatasetSourceGapConsumerQueueRow["ownerQueue"];
+  ownerAgent: "agent_01" | "agent_04" | "agent_05" | "agent_07";
+  targetRoute:
+    | "/v1/sources/atlas"
+    | "/v1/public-channels/status"
+    | "/v1/darkweb/status"
+    | "/v1/quality/evaluate";
+  sourceFamilies: EvidenceActorProductImpactRow["sourceFamily"][];
+  queueActions: EvidenceActorDatasetSourceGapConsumerQueueRow["queueAction"][];
+  queueItemIds: string[];
+  acceptanceCriteria: string[];
+  buyerVisibleEffects: string[];
+  blockedUntil: ["explicit_operator_approval", "durable_evidence_replay"];
+  noLeak: true;
 }
 
 export interface EvidenceActorDatasetPromotionRow {
@@ -2194,6 +2237,61 @@ export function createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository(
   return new DisabledEvidenceActorDatasetSourceGapConsumerQueueAuditRepository();
 }
 
+export function buildEvidenceActorDatasetSourceGapRepairHandoff(
+  queue: EvidenceActorDatasetSourceGapConsumerQueue
+): EvidenceActorDatasetSourceGapRepairHandoff {
+  const ownerQueues: EvidenceActorDatasetSourceGapConsumerQueueRow["ownerQueue"][] = [
+    "agent01_source_activation",
+    "agent04_public_channel",
+    "agent05_restricted_metadata",
+    "agent07_extraction_quality"
+  ];
+  const repairPackets = ownerQueues
+    .map((ownerQueue) => {
+      const rows = queue.queueRows.filter((row) => row.ownerQueue === ownerQueue);
+      if (rows.length === 0) return undefined;
+      return {
+        packetId: stableId("evidence-actor-source-gap-repair-handoff", `${queue.queueId}:${ownerQueue}`),
+        ownerQueue,
+        ownerAgent: sourceGapRepairOwnerAgent(ownerQueue),
+        targetRoute: sourceGapRepairTargetRoute(ownerQueue),
+        sourceFamilies: uniqueStrings(rows.flatMap((row) => row.sourceFamily ? [row.sourceFamily] : [])) as EvidenceActorProductImpactRow["sourceFamily"][],
+        queueActions: uniqueStrings(rows.map((row) => row.queueAction)) as EvidenceActorDatasetSourceGapConsumerQueueRow["queueAction"][],
+        queueItemIds: rows.map((row) => row.queueItemId),
+        acceptanceCriteria: uniqueStrings(rows.flatMap((row) => row.acceptanceCriteria)),
+        buyerVisibleEffects: uniqueStrings(rows.map((row) => row.buyerVisibleEffect)),
+        blockedUntil: ["explicit_operator_approval", "durable_evidence_replay"] as ["explicit_operator_approval", "durable_evidence_replay"],
+        noLeak: true as const
+      };
+    })
+    .filter((packet): packet is EvidenceActorDatasetSourceGapRepairPacket => Boolean(packet));
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_handoff.v1",
+    generatedAt: queue.generatedAt,
+    handoffId: stableId("evidence-actor-source-gap-repair-handoff", `${queue.queueId}:${queue.latestProof.runId}`),
+    sourceQueue: queue.schemaVersion,
+    productSurface: queue.productSurface,
+    actorBuild: queue.actorBuild,
+    dryRun: true,
+    willMutateQueues: false,
+    willActivateSources: false,
+    willStartCrawling: false,
+    latestProof: { ...queue.latestProof },
+    counts: {
+      repairPackets: repairPackets.length,
+      queueItemsCovered: repairPackets.reduce((sum, packet) => sum + packet.queueItemIds.length, 0),
+      agent01Packets: repairPackets.filter((packet) => packet.ownerAgent === "agent_01").length,
+      agent04Packets: repairPackets.filter((packet) => packet.ownerAgent === "agent_04").length,
+      agent05Packets: repairPackets.filter((packet) => packet.ownerAgent === "agent_05").length,
+      agent07Packets: repairPackets.filter((packet) => packet.ownerAgent === "agent_07").length
+    },
+    repairPackets,
+    guardrails: { ...queue.guardrails },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
 export function buildEvidenceActorDatasetConsumerHandoff(
   preview: EvidenceActorDatasetPromotionPreview
 ): EvidenceActorDatasetConsumerHandoff {
@@ -2907,6 +3005,24 @@ function sourceFamilyQueueAction(
   if (family === "advisory") return "repair_advisory_extraction_corroboration";
   if (family === "restricted_metadata") return "prepare_restricted_metadata_corroboration_packet";
   return "refresh_public_report_source_packet";
+}
+
+function sourceGapRepairOwnerAgent(
+  ownerQueue: EvidenceActorDatasetSourceGapConsumerQueueRow["ownerQueue"]
+): EvidenceActorDatasetSourceGapRepairPacket["ownerAgent"] {
+  if (ownerQueue === "agent01_source_activation") return "agent_01";
+  if (ownerQueue === "agent04_public_channel") return "agent_04";
+  if (ownerQueue === "agent05_restricted_metadata") return "agent_05";
+  return "agent_07";
+}
+
+function sourceGapRepairTargetRoute(
+  ownerQueue: EvidenceActorDatasetSourceGapConsumerQueueRow["ownerQueue"]
+): EvidenceActorDatasetSourceGapRepairPacket["targetRoute"] {
+  if (ownerQueue === "agent01_source_activation") return "/v1/sources/atlas";
+  if (ownerQueue === "agent04_public_channel") return "/v1/public-channels/status";
+  if (ownerQueue === "agent05_restricted_metadata") return "/v1/darkweb/status";
+  return "/v1/quality/evaluate";
 }
 
 function sourceFamilyAcceptanceCriteria(
