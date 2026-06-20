@@ -13,6 +13,13 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-21 01:13 CEST
+
+- Added a disabled-by-default source-gap enqueue adapter preview under `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness.enqueueAdapterPreview`.
+- The preview derives exact dry-run `findOrRegisterRun` and `enqueueTasks` calls from queue task specs, including run payloads, reuse keys, visible state after dry run, feature/Postgres/source-policy/paid-row gates, rollback, and stale/metadata paid-row impact.
+- Documented the preview in operations docs so UI/API operators can see how daily Actor source-gap tasks become queue operations before mutation is enabled.
+- Next: keep moving toward a guarded source-gap enqueue flag and repository adapter handoff once shared API/ops/Apify edits settle.
+
 ## Progress - 2026-06-21 00:35 CEST
 
 - Added queue-compatible dry-run task specs to `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness`.

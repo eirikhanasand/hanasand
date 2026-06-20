@@ -2211,6 +2211,74 @@ export function buildSchedulerDailyActorRunPlan(input: {
       forbiddenMutations: ["network_fetch", "raw_url_output", "payload_download", "credential_access", "actor_interaction"]
     };
   });
+  const visibleStateByReuseKey = new Map(readinessByClosure.map((readiness) => [readiness.reuseKey, readiness.visibleStateAfterDecision]));
+  const enqueueAdapterPreview: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["enqueueAdapterPreview"] = {
+    disabledByDefault: true,
+    willMutate: false,
+    adapterMode: "dry_run_embedded_repository_preview",
+    promotionRequired: "enable_source_gap_enqueue_flag_and_postgres_scheduler_executor",
+    preflight: {
+      requiredFlags: ["SCHEDULER_SOURCE_GAP_ENQUEUE_ENABLED", "SCHEDULER_POSTGRES_QUEUE_ENABLED"],
+      requiredRuntimeState: ["postgres_dsn_configured", "executor_available", "source_policy_current", "paid_row_gate_open"],
+      rollback: "disable_source_gap_enqueue_flag_and_replay_cursor_events"
+    },
+    repositoryCalls: queueTaskSpecs.flatMap((spec, index) => {
+      const run: CollectionRun = {
+        id: `dryrun_run_${spec.task.id}`,
+        tenantId: spec.task.tenantId,
+        planId: "scheduler_daily_actor_source_gap",
+        requestId: spec.task.intelRequestId ?? spec.task.id,
+        status: "queued",
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        idempotencyKey: spec.task.planning?.idempotencyKey ?? spec.task.intelRequestId,
+        requestHash: spec.task.runId,
+        taskCount: 1,
+        reviewTaskCount: spec.task.sourceType === "tor_metadata" ? 1 : 0,
+        rejectedSourceCount: 0,
+        captureCount: 0,
+        incidentCount: 0
+      };
+      const blockedUntil: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["enqueueAdapterPreview"]["repositoryCalls"][number]["blockedUntil"] = [
+        "feature_flag_enabled",
+        "postgres_adapter_promoted",
+        "source_policy_verified",
+        "paid_row_gate_open"
+      ];
+      if (spec.enqueuePreconditions.includes("metadata_only_review_current")) {
+        blockedUntil.push("metadata_review_current");
+      }
+      return [
+        {
+          callOrder: (index * 2) + 1,
+          reuseKey: spec.task.runId ?? spec.task.id,
+          run,
+          taskId: spec.task.id,
+          dryRunOperation: "findOrRegisterRun",
+          expectedResult: "reattach_active_run_or_register_queued_run",
+          blockedUntil,
+          visibleStateAfterDryRun: visibleStateByReuseKey.get(spec.task.runId ?? "") ?? "searching"
+        },
+        {
+          callOrder: (index * 2) + 2,
+          reuseKey: spec.task.runId ?? spec.task.id,
+          run,
+          taskId: spec.task.id,
+          dryRunOperation: "enqueueTasks",
+          expectedResult: "enqueue_task_after_reuse_check",
+          blockedUntil,
+          visibleStateAfterDryRun: visibleStateByReuseKey.get(spec.task.runId ?? "") ?? "searching"
+        }
+      ];
+    }),
+    impactSummary: {
+      candidateTaskCount: queueTaskSpecs.length,
+      publicFetchTaskCount: queueTaskSpecs.filter((spec) => spec.task.sourceType !== "tor_metadata").length,
+      metadataOnlyTaskCount: queueTaskSpecs.filter((spec) => spec.task.sourceType === "tor_metadata").length,
+      stalePaidRowsRemainSuppressed: true,
+      metadataRowsRemainCaveated: true
+    }
+  };
   const drainExecution: SchedulerDailyActorRunPlanDto["sourceGapExecutionReadiness"]["drainExecution"] = [
     {
       step: "finish_active_dataset_emit",
@@ -2322,6 +2390,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
     ],
     materializedTasks,
     queueTaskSpecs,
+    enqueueAdapterPreview,
     drainExecution
   };
   const executionQueuePlan: SchedulerDailyActorRunPlanDto["executionQueuePlan"] = {

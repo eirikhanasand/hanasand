@@ -1746,6 +1746,54 @@ describe("scheduler production readiness", () => {
         enqueuePreconditions: expect.arrayContaining(["metadata_only_review_current"])
       })
     ]));
+    const queueTaskSpecs = daily.sourceGapExecutionReadiness.queueTaskSpecs;
+    const metadataOnlyTaskCount = queueTaskSpecs.filter((spec) => spec.task.sourceType === "tor_metadata").length;
+    expect(daily.sourceGapExecutionReadiness.enqueueAdapterPreview).toMatchObject({
+      disabledByDefault: true,
+      willMutate: false,
+      adapterMode: "dry_run_embedded_repository_preview",
+      promotionRequired: "enable_source_gap_enqueue_flag_and_postgres_scheduler_executor",
+      preflight: {
+        requiredFlags: ["SCHEDULER_SOURCE_GAP_ENQUEUE_ENABLED", "SCHEDULER_POSTGRES_QUEUE_ENABLED"],
+        rollback: "disable_source_gap_enqueue_flag_and_replay_cursor_events"
+      },
+      impactSummary: {
+        candidateTaskCount: queueTaskSpecs.length,
+        publicFetchTaskCount: queueTaskSpecs.length - metadataOnlyTaskCount,
+        metadataOnlyTaskCount,
+        stalePaidRowsRemainSuppressed: true,
+        metadataRowsRemainCaveated: true
+      }
+    });
+    expect(daily.sourceGapExecutionReadiness.enqueueAdapterPreview.repositoryCalls).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        callOrder: 1,
+        reuseKey: "public:APT29:safe_public_sources:daily_actor",
+        dryRunOperation: "findOrRegisterRun",
+        expectedResult: "reattach_active_run_or_register_queued_run",
+        visibleStateAfterDryRun: "searching",
+        run: expect.objectContaining({
+          id: "dryrun_run_dryrun_interactive_live_search_tier_100_apt29_safe_public_sources",
+          status: "queued",
+          requestHash: "public:APT29:safe_public_sources:daily_actor",
+          taskCount: 1,
+          reviewTaskCount: 0
+        }),
+        blockedUntil: expect.arrayContaining(["feature_flag_enabled", "postgres_adapter_promoted", "paid_row_gate_open"])
+      }),
+      expect.objectContaining({
+        reuseKey: "public:APT42:public_channel:daily_actor",
+        dryRunOperation: "enqueueTasks",
+        visibleStateAfterDryRun: "partial"
+      }),
+      expect.objectContaining({
+        reuseKey: "public:LockBit:approved_dark_metadata:daily_actor",
+        dryRunOperation: "findOrRegisterRun",
+        visibleStateAfterDryRun: "metadata_review",
+        run: expect.objectContaining({ reviewTaskCount: 1 }),
+        blockedUntil: expect.arrayContaining(["metadata_review_current"])
+      })
+    ]));
     expect(daily.sourceGapExecutionReadiness.drainExecution).toEqual(expect.arrayContaining([
       expect.objectContaining({
         step: "finish_active_dataset_emit",

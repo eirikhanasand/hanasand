@@ -1460,6 +1460,34 @@ export interface SchedulerDailyActorRunPlanDto {
       expectedRepositoryOperation: "findOrRegisterRun_then_enqueueTasks";
       forbiddenMutations: Array<"network_fetch" | "raw_url_output" | "payload_download" | "credential_access" | "actor_interaction">;
     }>;
+    enqueueAdapterPreview: {
+      disabledByDefault: true;
+      willMutate: false;
+      adapterMode: "dry_run_embedded_repository_preview";
+      promotionRequired: "enable_source_gap_enqueue_flag_and_postgres_scheduler_executor";
+      preflight: {
+        requiredFlags: Array<"SCHEDULER_SOURCE_GAP_ENQUEUE_ENABLED" | "SCHEDULER_POSTGRES_QUEUE_ENABLED">;
+        requiredRuntimeState: Array<"postgres_dsn_configured" | "executor_available" | "source_policy_current" | "paid_row_gate_open">;
+        rollback: "disable_source_gap_enqueue_flag_and_replay_cursor_events";
+      };
+      repositoryCalls: Array<{
+        callOrder: number;
+        reuseKey: string;
+        run: CollectionRun;
+        taskId: string;
+        dryRunOperation: "findOrRegisterRun" | "enqueueTasks";
+        expectedResult: "reattach_active_run_or_register_queued_run" | "enqueue_task_after_reuse_check";
+        blockedUntil: Array<"feature_flag_enabled" | "postgres_adapter_promoted" | "source_policy_verified" | "paid_row_gate_open" | "metadata_review_current">;
+        visibleStateAfterDryRun: "searching" | "partial" | "metadata_review";
+      }>;
+      impactSummary: {
+        candidateTaskCount: number;
+        publicFetchTaskCount: number;
+        metadataOnlyTaskCount: number;
+        stalePaidRowsRemainSuppressed: true;
+        metadataRowsRemainCaveated: true;
+      };
+    };
     drainExecution: Array<{
       step: "finish_active_dataset_emit" | "checkpoint_interactive_refresh" | "checkpoint_public_gap_fill" | "checkpoint_source_sweeps" | "checkpoint_metadata_review";
       appliesToBatch: "daily_actor_dataset_emit" | "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_100_source_sweep" | "tier_1000_source_sweep" | "tier_4000_metadata_sweep";
