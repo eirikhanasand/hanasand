@@ -357,6 +357,10 @@ export interface LiveProductSloDashboard {
       priority: number;
       blocker: "sellable_rows_below_100" | "stale_apt29_evidence" | "thin_apt42_public_channel_coverage" | "source_family_diversity" | "held_caveated_row_count" | "dark_metadata_usefulness" | "apify_store_conversion" | "payout_readiness_gaps";
       owner: "Agent 01" | "Agent 03" | "Agent 04" | "Agent 05" | "Agent 07" | "Agent 08" | "Agent 09" | "Agent 10";
+      monetizationImpactRank: number;
+      impactCategory: "missing_real_rows" | "parser_field_gaps" | "source_support_gaps" | "freshness_gaps" | "evidence_provenance_gaps" | "apify_listing_payout_analytics_gaps" | "cost_risk";
+      secondaryImpactCategories: Array<"missing_real_rows" | "parser_field_gaps" | "source_support_gaps" | "freshness_gaps" | "evidence_provenance_gaps" | "apify_listing_payout_analytics_gaps" | "cost_risk">;
+      blockedSellableRowsEstimate: number | null;
       buyerMetricTarget: string;
       releaseImpact: string;
       nextActions: string[];
@@ -883,6 +887,71 @@ export interface LiveProductSloDashboard {
       actorInteractionContentExposed: false;
     };
   };
+  first100AdmissionQuality: {
+    schemaVersion: "ti.program_cn_first_100_paid_row_admission_quality.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "Apify OUTPUT">;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    productionSellableFloor: 100;
+    fixtureCount: number;
+    admissionRules: {
+      requireFreshEnough: true;
+      requireActorSpecific: true;
+      requireSourceBacked: true;
+      requireSourceFamilySupport: true;
+      requireBuyerAction: true;
+      requireProvenanceHash: true;
+      requireNoContradictions: true;
+      forbidUnsafeRestrictedOnlyDependency: true;
+      forbidDefaultDemoOldSummary: true;
+    };
+    classificationCounts: Record<"accepted_sellable" | "caveated_useful" | "needs_public_support" | "stale_duplicate" | "alias_collision" | "wrong_actor" | "restricted_only" | "graph_only" | "synthetic_proof_only" | "generic_market_source_page" | "low_buyer_value", number>;
+    metrics: {
+      rowsAdmittedToProductionFloor: number;
+      rowsDowngradedToCaveatedContext: number;
+      rowsSuppressed: number;
+      rowsNeedingParserRepair: number;
+      rowsNeedingSourceSupport: number;
+      rowsNeedingDarkMetadataPublicSupport: number;
+      estimatedBuyerValueDelta: number;
+      rowCountInflationBlocked: number;
+    };
+    actorCoverage: string[];
+    sampleRows: Array<{
+      id: string;
+      actor: string;
+      rowClass: "accepted_sellable" | "caveated_useful" | "needs_public_support" | "stale_duplicate" | "alias_collision" | "wrong_actor" | "restricted_only" | "graph_only" | "synthetic_proof_only" | "generic_market_source_page" | "low_buyer_value";
+      admissionDecision: "admit_sellable" | "downgrade_caveated" | "repair_required" | "suppress";
+      countsTowardProductionSellableRows: boolean;
+      buyerValueScore: number;
+      whyBuyerShouldCare: string;
+      nextSearchOrPivot: string;
+      provenanceHash: string;
+      failureReasons: string[];
+      repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      noLeak: true;
+    }>;
+    nonSellableExclusionProof: Array<{
+      class: "graph_only" | "synthetic_proof_only" | "stale_duplicate" | "restricted_only" | "caveated_useful" | "generic_market_source_page" | "low_buyer_value" | "alias_or_wrong_actor";
+      countsAsSellable: false;
+      reason: string;
+    }>;
+    ownerHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      rowCount: number;
+      action: string;
+    }>;
+    noLeakProof: {
+      rawEvidenceExposed: false;
+      unsafeUrlsExposed: false;
+      restrictedPayloadsExposed: false;
+      objectKeysExposed: false;
+      privateMaterialExposed: false;
+      accountMaterialExposed: false;
+      actorInteractionContentExposed: false;
+    };
+  };
   darkMetadataLiveValueExpansion: {
     schemaVersion: "ti.dark_metadata_live_value_expansion_slo.v1";
     routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/darkweb/status" | "/v1/darkweb/search" | "/v1/contracts">;
@@ -1327,6 +1396,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const entitySpecificityLift = buildEntitySpecificityLift();
   const falsePositiveSuppressionGate = buildFalsePositiveSuppressionGate();
   const paidRowAudit100 = buildPaidRowAudit100();
+  const first100AdmissionQuality = buildFirst100AdmissionQuality();
   const releaseDecision = buildReleaseDecision({
     monetizationReadiness,
     paidRowDecisionCounts,
@@ -1511,6 +1581,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     entitySpecificityLift,
     falsePositiveSuppressionGate,
     paidRowAudit100,
+    first100AdmissionQuality,
     darkMetadataLiveValueExpansion,
     darkMetadataPublicHandoff100,
     slos,
@@ -1956,84 +2027,118 @@ function buildScaleStepGates(input: {
 }
 
 function buildRevenueBlockerBoard(): LiveProductSloDashboard["revenueBlockerBoard"] {
+  const blockers: LiveProductSloDashboard["revenueBlockerBoard"]["blockers"] = [
+    {
+      priority: 1,
+      blocker: "sellable_rows_below_100",
+      owner: "Agent 10",
+      monetizationImpactRank: 1,
+      impactCategory: "missing_real_rows",
+      secondaryImpactCategories: ["cost_risk"],
+      blockedSellableRowsEstimate: 84,
+      buyerMetricTarget: "production paid traffic requires >=100 sellable rows, >=25% sellable row rate, buyer value >=0.55, and cost/useful row <= $0.01",
+      releaseImpact: "shape/safety proof cannot be treated as production monetization completion",
+      nextActions: [
+        "Agent 01: prioritize source activation packets that add fresh high-value public sources for APT29/APT42/ransomware rows",
+        "Agent 03: extract victim/sector/country/TTP/tool/date fields so generic rows become sellable or useful caveated rows",
+        "Agent 04: add public-channel/source-family corroboration for APT42 and ransomware rows without counting single-source snippets as sellable",
+        "Agent 05: keep dark metadata metadata-only and promote it only when safe public corroboration makes rows useful",
+        "Agent 07: suppress stale, duplicate, generic, alias-only, contradicted, and unrelated rows before the ladder counts them",
+        "Agent 08: add buyer-useful graph search packs/pivots that increase sellable row actionability without STIX/TAXII-only bloat",
+        "Agent 09: keep API/Apify contracts honest by reporting shape_safety_proof until the 100-row production floor passes"
+      ]
+    },
+    {
+      priority: 4,
+      blocker: "stale_apt29_evidence",
+      owner: "Agent 01",
+      monetizationImpactRank: 4,
+      impactCategory: "freshness_gaps",
+      secondaryImpactCategories: ["source_support_gaps"],
+      blockedSellableRowsEstimate: 5,
+      buyerMetricTarget: "freshRowRate >= 0.55 and stale latest-activity holds decrease",
+      releaseImpact: "blocks daily APT monitor credibility",
+      nextActions: ["replace stale APT29 source rows with fresh public corroboration before they count toward sellable rows"]
+    },
+    {
+      priority: 3,
+      blocker: "thin_apt42_public_channel_coverage",
+      owner: "Agent 04",
+      monetizationImpactRank: 3,
+      impactCategory: "source_support_gaps",
+      secondaryImpactCategories: ["freshness_gaps"],
+      blockedSellableRowsEstimate: 28,
+      buyerMetricTarget: "APT42 caveated or sellable rows gain cross-family corroboration",
+      releaseImpact: "keeps APT42 rows from looking single-source",
+      nextActions: ["add safe public-channel corroboration and keep unsupported snippets caveated or held"]
+    },
+    {
+      priority: 2,
+      blocker: "source_family_diversity",
+      owner: "Agent 03",
+      monetizationImpactRank: 2,
+      impactCategory: "parser_field_gaps",
+      secondaryImpactCategories: ["evidence_provenance_gaps"],
+      blockedSellableRowsEstimate: 58,
+      buyerMetricTarget: "sourceFamilyDiversity >= 2 for promoted findings",
+      releaseImpact: "prevents parser/source padding from counting as paid value",
+      nextActions: ["emit source-family fields and row-specific extraction evidence for promoted findings"]
+    },
+    {
+      priority: 5,
+      blocker: "held_caveated_row_count",
+      owner: "Agent 07",
+      monetizationImpactRank: 5,
+      impactCategory: "evidence_provenance_gaps",
+      secondaryImpactCategories: ["parser_field_gaps"],
+      blockedSellableRowsEstimate: 32,
+      buyerMetricTarget: "held rows shrink or carry explicit repair actions; caveated rows stay useful",
+      releaseImpact: "improves buyer scanability and charge guidance",
+      nextActions: ["separate sellable, useful caveated, held, suppressed, stale, duplicate, and generic rows before ladder counting"]
+    },
+    {
+      priority: 6,
+      blocker: "dark_metadata_usefulness",
+      owner: "Agent 05",
+      monetizationImpactRank: 6,
+      impactCategory: "source_support_gaps",
+      secondaryImpactCategories: ["evidence_provenance_gaps", "cost_risk"],
+      blockedSellableRowsEstimate: 98,
+      buyerMetricTarget: "metadata average buyer value >= 0.68 before 4,000-record growth",
+      releaseImpact: "prevents restricted metadata count inflation",
+      nextActions: ["prove metadata-only rows have safe public corroboration, useful buyer pivots, and no-leak serialization"]
+    },
+    {
+      priority: 7,
+      blocker: "apify_store_conversion",
+      owner: "Agent 09",
+      monetizationImpactRank: 7,
+      impactCategory: "apify_listing_payout_analytics_gaps",
+      secondaryImpactCategories: ["cost_risk"],
+      blockedSellableRowsEstimate: null,
+      buyerMetricTarget: "store views, runs, users, trial-to-paid, refunds, and repeat use copied from Apify",
+      releaseImpact: "keeps conversion claims real",
+      nextActions: ["surface unknown Apify analytics as unknown and keep proof-sized runs labeled shape/safety proof"]
+    },
+    {
+      priority: 8,
+      blocker: "payout_readiness_gaps",
+      owner: "Agent 10",
+      monetizationImpactRank: 8,
+      impactCategory: "apify_listing_payout_analytics_gaps",
+      secondaryImpactCategories: ["cost_risk"],
+      blockedSellableRowsEstimate: null,
+      buyerMetricTarget: "beneficiary, payout method, and withdrawal readiness externally verified",
+      releaseImpact: "blocks paid traffic until revenue can be collected",
+      nextActions: ["verify Apify billing state externally before any revenue-complete claim"]
+    }
+  ];
+
   return {
     schemaVersion: "ti.revenue_blocker_board.v1",
     baselineRunId: PROGRAM_BH_BASELINE_RUN_ID,
     baselineDatasetId: PROGRAM_BH_BASELINE_DATASET_ID,
-    blockers: [
-      {
-        priority: 1,
-        blocker: "sellable_rows_below_100",
-        owner: "Agent 10",
-        buyerMetricTarget: "production paid traffic requires >=100 sellable rows, >=25% sellable row rate, buyer value >=0.55, and cost/useful row <= $0.01",
-        releaseImpact: "shape/safety proof cannot be treated as production monetization completion",
-        nextActions: [
-          "Agent 01: prioritize source activation packets that add fresh high-value public sources for APT29/APT42/ransomware rows",
-          "Agent 03: extract victim/sector/country/TTP/tool/date fields so generic rows become sellable or useful caveated rows",
-          "Agent 04: add public-channel/source-family corroboration for APT42 and ransomware rows without counting single-source snippets as sellable",
-          "Agent 05: keep dark metadata metadata-only and promote it only when safe public corroboration makes rows useful",
-          "Agent 07: suppress stale, duplicate, generic, alias-only, contradicted, and unrelated rows before the ladder counts them",
-          "Agent 08: add buyer-useful graph search packs/pivots that increase sellable row actionability without STIX/TAXII-only bloat",
-          "Agent 09: keep API/Apify contracts honest by reporting shape_safety_proof until the 100-row production floor passes"
-        ]
-      },
-      {
-        priority: 2,
-        blocker: "stale_apt29_evidence",
-        owner: "Agent 01",
-        buyerMetricTarget: "freshRowRate >= 0.55 and stale latest-activity holds decrease",
-        releaseImpact: "blocks daily APT monitor credibility",
-        nextActions: ["replace stale APT29 source rows with fresh public corroboration before they count toward sellable rows"]
-      },
-      {
-        priority: 3,
-        blocker: "thin_apt42_public_channel_coverage",
-        owner: "Agent 04",
-        buyerMetricTarget: "APT42 caveated or sellable rows gain cross-family corroboration",
-        releaseImpact: "keeps APT42 rows from looking single-source",
-        nextActions: ["add safe public-channel corroboration and keep unsupported snippets caveated or held"]
-      },
-      {
-        priority: 4,
-        blocker: "source_family_diversity",
-        owner: "Agent 03",
-        buyerMetricTarget: "sourceFamilyDiversity >= 2 for promoted findings",
-        releaseImpact: "prevents parser/source padding from counting as paid value",
-        nextActions: ["emit source-family fields and row-specific extraction evidence for promoted findings"]
-      },
-      {
-        priority: 5,
-        blocker: "held_caveated_row_count",
-        owner: "Agent 07",
-        buyerMetricTarget: "held rows shrink or carry explicit repair actions; caveated rows stay useful",
-        releaseImpact: "improves buyer scanability and charge guidance",
-        nextActions: ["separate sellable, useful caveated, held, suppressed, stale, duplicate, and generic rows before ladder counting"]
-      },
-      {
-        priority: 6,
-        blocker: "dark_metadata_usefulness",
-        owner: "Agent 05",
-        buyerMetricTarget: "metadata average buyer value >= 0.68 before 4,000-record growth",
-        releaseImpact: "prevents restricted metadata count inflation",
-        nextActions: ["prove metadata-only rows have safe public corroboration, useful buyer pivots, and no-leak serialization"]
-      },
-      {
-        priority: 7,
-        blocker: "apify_store_conversion",
-        owner: "Agent 09",
-        buyerMetricTarget: "store views, runs, users, trial-to-paid, refunds, and repeat use copied from Apify",
-        releaseImpact: "keeps conversion claims real",
-        nextActions: ["surface unknown Apify analytics as unknown and keep proof-sized runs labeled shape/safety proof"]
-      },
-      {
-        priority: 8,
-        blocker: "payout_readiness_gaps",
-        owner: "Agent 10",
-        buyerMetricTarget: "beneficiary, payout method, and withdrawal readiness externally verified",
-        releaseImpact: "blocks paid traffic until revenue can be collected",
-        nextActions: ["verify Apify billing state externally before any revenue-complete claim"]
-      }
-    ]
+    blockers: [...blockers].sort((left, right) => left.monetizationImpactRank - right.monetizationImpactRank)
   };
 }
 
@@ -3074,6 +3179,92 @@ function buildPaidRowAudit100(): LiveProductSloDashboard["paidRowAudit100"] {
       { owner: "agent_07", rowCount: classificationCounts.stale_or_duplicate + classificationCounts.wrong_actor_or_alias_collision + classificationCounts.not_payworthy, expectedSellableRowsUnlocked: 0, action: "keep stale, alias, unrelated, and not-payworthy rows suppressed" },
       { owner: "agent_08", rowCount: classificationCounts.needs_public_support + classificationCounts.useful_caveated, expectedSellableRowsUnlocked: 10, action: "attach graph pivots only after parser fields and source support exist" },
       { owner: "agent_10", rowCount: 100, expectedSellableRowsUnlocked: expectedSellableLiftAfterParserSourceRepairs, action: "keep paid traffic blocked until current sellable rows reach 100" }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      privateMaterialExposed: false,
+      accountMaterialExposed: false,
+      actorInteractionContentExposed: false
+    }
+  };
+}
+
+function buildFirst100AdmissionQuality(): LiveProductSloDashboard["first100AdmissionQuality"] {
+  type Row = LiveProductSloDashboard["first100AdmissionQuality"]["sampleRows"][number];
+  const classificationCounts: LiveProductSloDashboard["first100AdmissionQuality"]["classificationCounts"] = {
+    accepted_sellable: 16,
+    caveated_useful: 7,
+    needs_public_support: 28,
+    stale_duplicate: 18,
+    alias_collision: 4,
+    wrong_actor: 5,
+    restricted_only: 11,
+    graph_only: 4,
+    synthetic_proof_only: 3,
+    generic_market_source_page: 3,
+    low_buyer_value: 1
+  };
+  const sampleRows: Row[] = [
+    { id: "cn_sample_apt29_sellable", actor: "APT29", rowClass: "accepted_sellable", admissionDecision: "admit_sellable", countsTowardProductionSellableRows: true, buyerValueScore: 0.86, whyBuyerShouldCare: "Fresh actor/victim/TTP row gives a concrete monitoring pivot.", nextSearchOrPivot: "APT29 government tenant Valid Accounts", provenanceHash: "cn_admit_apt29_86", failureReasons: [], repairOwner: "agent_10", noLeak: true },
+    { id: "cn_sample_turla_caveated", actor: "Turla", rowClass: "caveated_useful", admissionDecision: "downgrade_caveated", countsTowardProductionSellableRows: false, buyerValueScore: 0.66, whyBuyerShouldCare: "Useful tool context is preserved but excluded from the paid floor until corroborated.", nextSearchOrPivot: "Turla tooling second source", provenanceHash: "cn_caveat_turla_66", failureReasons: ["single_source_or_caveat_only"], repairOwner: "agent_04", noLeak: true },
+    { id: "cn_sample_akira_restricted", actor: "Akira", rowClass: "restricted_only", admissionDecision: "repair_required", countsTowardProductionSellableRows: false, buyerValueScore: 0.48, whyBuyerShouldCare: "Metadata lead can become valuable only with safe public support.", nextSearchOrPivot: "Akira victim public notice", provenanceHash: "cn_restricted_akira_48", failureReasons: ["restricted_only_without_public_support"], repairOwner: "agent_05", noLeak: true },
+    { id: "cn_sample_black_basta_graph", actor: "Black Basta", rowClass: "graph_only", admissionDecision: "suppress", countsTowardProductionSellableRows: false, buyerValueScore: 0.48, whyBuyerShouldCare: "Graph context cannot pad the paid floor without fresh evidence.", nextSearchOrPivot: "Black Basta evidence-backed victim", provenanceHash: "cn_graph_blackbasta_48", failureReasons: ["graph_only_projection"], repairOwner: "agent_08", noLeak: true },
+    { id: "cn_sample_clop_generic", actor: "Clop", rowClass: "generic_market_source_page", admissionDecision: "suppress", countsTowardProductionSellableRows: false, buyerValueScore: 0.48, whyBuyerShouldCare: "Generic source pages protect trust by staying out of billing.", nextSearchOrPivot: "Clop campaign victim sector", provenanceHash: "cn_generic_clop_48", failureReasons: ["generic_source_summary"], repairOwner: "agent_03", noLeak: true }
+  ];
+
+  return {
+    schemaVersion: "ti.program_cn_first_100_paid_row_admission_quality.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    productionSellableFloor: 100,
+    fixtureCount: Object.values(classificationCounts).reduce((sum, count) => sum + count, 0),
+    admissionRules: {
+      requireFreshEnough: true,
+      requireActorSpecific: true,
+      requireSourceBacked: true,
+      requireSourceFamilySupport: true,
+      requireBuyerAction: true,
+      requireProvenanceHash: true,
+      requireNoContradictions: true,
+      forbidUnsafeRestrictedOnlyDependency: true,
+      forbidDefaultDemoOldSummary: true
+    },
+    classificationCounts,
+    metrics: {
+      rowsAdmittedToProductionFloor: classificationCounts.accepted_sellable,
+      rowsDowngradedToCaveatedContext: classificationCounts.caveated_useful,
+      rowsSuppressed: classificationCounts.stale_duplicate + classificationCounts.alias_collision + classificationCounts.wrong_actor + classificationCounts.graph_only + classificationCounts.synthetic_proof_only + classificationCounts.generic_market_source_page + classificationCounts.low_buyer_value,
+      rowsNeedingParserRepair: classificationCounts.alias_collision + classificationCounts.wrong_actor + classificationCounts.generic_market_source_page,
+      rowsNeedingSourceSupport: classificationCounts.needs_public_support,
+      rowsNeedingDarkMetadataPublicSupport: classificationCounts.restricted_only,
+      estimatedBuyerValueDelta: 0.073,
+      rowCountInflationBlocked: 84
+    },
+    actorCoverage: ["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"],
+    sampleRows,
+    nonSellableExclusionProof: [
+      { class: "graph_only", countsAsSellable: false, reason: "Graph-only context must wait for evidence-backed paid-row claims." },
+      { class: "synthetic_proof_only", countsAsSellable: false, reason: "Proof rows are shape/safety only." },
+      { class: "stale_duplicate", countsAsSellable: false, reason: "Stale or duplicate source rows do not create buyer monitoring value." },
+      { class: "restricted_only", countsAsSellable: false, reason: "Restricted metadata needs public support before admission." },
+      { class: "caveated_useful", countsAsSellable: false, reason: "Caveated rows can help analysts but do not count toward the first 100." },
+      { class: "generic_market_source_page", countsAsSellable: false, reason: "Generic source/marketing pages lack buyer actionability." },
+      { class: "low_buyer_value", countsAsSellable: false, reason: "Low buyer-value rows cannot inflate the floor." },
+      { class: "alias_or_wrong_actor", countsAsSellable: false, reason: "Alias collision and wrong-actor rows need repair or suppression." }
+    ],
+    ownerHandoffs: [
+      { owner: "agent_03", rowCount: classificationCounts.generic_market_source_page, action: "Repair parser fields so generic source summaries become actor-specific rows or stay suppressed." },
+      { owner: "agent_04", rowCount: classificationCounts.caveated_useful + classificationCounts.needs_public_support, action: "Add fresh public source support and source-family diversity." },
+      { owner: "agent_05", rowCount: classificationCounts.restricted_only, action: "Find public support for metadata-only leads without raw restricted material." },
+      { owner: "agent_07", rowCount: classificationCounts.stale_duplicate + classificationCounts.alias_collision + classificationCounts.wrong_actor, action: "Suppress stale, duplicate, alias-collided, and wrong-actor rows." },
+      { owner: "agent_08", rowCount: classificationCounts.graph_only, action: "Keep graph-only context out of sellable counts until backed by capture evidence." },
+      { owner: "agent_09", rowCount: classificationCounts.synthetic_proof_only, action: "Keep marketplace samples/proof rows out of billable production output." },
+      { owner: "agent_10", rowCount: classificationCounts.accepted_sellable + classificationCounts.low_buyer_value, action: "Use admitted, downgraded, and suppressed counts in release decisions." }
     ],
     noLeakProof: {
       rawEvidenceExposed: false,

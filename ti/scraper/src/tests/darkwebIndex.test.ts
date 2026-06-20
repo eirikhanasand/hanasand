@@ -289,6 +289,93 @@ describe("darkweb metadata index contracts", () => {
       usefulRowDelta: 2,
       costPerUsefulRowEffect: "improves_if_public_support_found"
     });
+    expect(status.publicSupportLift1000).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
+      owner: "Agent 05",
+      mode: "metadata_only_public_support_lift_100_to_1000",
+      candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
+      sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
+      strictNoInflation: true,
+      currentContributionToward100SellableRows: 2,
+      first1000CandidateCount: 1000,
+      first1000SellableAfterPublicSupport: 19,
+      first1000UsefulWithCaveat: 12,
+      first1000RestrictedOnlyHold: 141,
+      first1000RejectedCounts: {
+        stale: 285,
+        duplicate: 6,
+        unsafe: 333,
+        lowValue: 204
+      },
+      safety: {
+        metadataOnly: true,
+        willFetchNetwork: false,
+        rawUnsafeUrlsExposed: false,
+        stolenFilesDownloaded: false,
+        credentialsRetrieved: false,
+        payloadsFollowed: false,
+        privateAuthCaptchaAccess: false,
+        actorInteraction: false
+      }
+    });
+    expect(status.publicSupportLift1000.tiers).toHaveLength(2);
+    expect(status.publicSupportLift1000.tiers[0]).toMatchObject({
+      tier: "top_100",
+      targetCandidateCount: 100,
+      evaluatedCandidateCount: 100,
+      acceptedForPublicSupportCount: 31,
+      contributionToward100SellableRows: 19,
+      averageBuyerValueScore: 0.91,
+      outcomeCounts: {
+        sellable_after_public_support: 19,
+        useful_with_caveat: 12,
+        restricted_only_hold: 2,
+        stale_reject: 65,
+        duplicate_reject: 2,
+        unsafe_reject: 0,
+        low_value_reject: 0
+      }
+    });
+    expect(status.publicSupportLift1000.tiers[1]).toMatchObject({
+      tier: "tier_1000",
+      targetCandidateCount: 1000,
+      evaluatedCandidateCount: 1000,
+      acceptedForPublicSupportCount: 31,
+      contributionToward100SellableRows: 19,
+      averageBuyerValueScore: 0.42,
+      outcomeCounts: {
+        sellable_after_public_support: 19,
+        useful_with_caveat: 12,
+        restricted_only_hold: 141,
+        stale_reject: 285,
+        duplicate_reject: 6,
+        unsafe_reject: 333,
+        low_value_reject: 204
+      }
+    });
+    expect(status.publicSupportLift1000.tiers[1].rows).toHaveLength(1000);
+    expect(status.publicSupportLift1000.tiers[1].rows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.requiredPublicSupportSources.length > 0 &&
+      row.parserFieldsNeeded.join(",") === "actor,victim,dataset,sector_country,claimed_date,source_family,public_support_family,provenance_hash" &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      !row.countsTowardSellableFloorNow
+    )).toBe(true);
+    expect(status.publicSupportLift1000.tiers[1].rows.filter((row) => row.outcome !== "sellable_after_public_support").every((row) =>
+      !row.countsTowardSellableFloorAfterPublicSupport
+    )).toBe(true);
+    expect(status.publicSupportLift1000.tiers[1].rows.filter((row) => row.outcome === "sellable_after_public_support").every((row) =>
+      row.actorHints.length > 0 &&
+      (row.victimHints.length > 0 || row.datasetHints.length > 0) &&
+      row.countsTowardSellableFloorAfterPublicSupport
+    )).toBe(true);
+    expect(status.publicSupportLift1000.handoffs.agent10ReleaseMetrics).toMatchObject({
+      productionSellableRowFloor: 100,
+      currentContributionToward100SellableRows: 2,
+      projectedTier1000SellableAfterPublicSupport: 19,
+      projectedTier1000UsefulWithCaveat: 12,
+      countedOnlyAfterSafePublicSupport: true
+    });
     expect(contract.storageHandoff).toMatchObject({
       schemaVersion: "ti.darkweb_index_storage_handoff.v1",
       tables: expect.arrayContaining(["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs"]),
@@ -899,6 +986,15 @@ describe("darkweb metadata index contracts", () => {
       sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       requireNoLeakProof: true
     });
+    expect(contract.publicSupportLift1000).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
+      candidateSource: "publicSupportWorklist40_and_darkweb_index_records",
+      tierTargets: [100, 1000],
+      routeFields: ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000"],
+      sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
+      strictNoInflation: true,
+      requireNoLeakProof: true
+    });
     expect(status.sourceIngestReadiness.sources).toHaveLength(6);
     expect(status.sourceIngestReadiness.sources.every((source) =>
       source.sourceHash.length > 0 &&
@@ -1052,6 +1148,24 @@ describe("darkweb metadata index contracts", () => {
       row.publicSourceFamilyNeeded.length > 0 &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials"
     )).toBe(true);
+    expect(firstPage.productHandoff.publicSupportLift1000).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_lift_1000.v1",
+      mode: "metadata_only_public_support_lift_100_to_1000",
+      strictNoInflation: true,
+      currentContributionToward100SellableRows: 2,
+      first1000CandidateCount: 1000,
+      first1000SellableAfterPublicSupport: 19,
+      first1000UsefulWithCaveat: 12,
+      first1000RestrictedOnlyHold: 141,
+      first1000RejectedCounts: {
+        stale: 285,
+        duplicate: 6,
+        unsafe: 333,
+        lowValue: 204
+      }
+    });
+    expect(firstPage.productHandoff.publicSupportLift1000.tiers[1]?.rows).toHaveLength(1000);
+    expect(firstPage.productHandoff.publicSupportLift1000.handoffs.agent04PublicSourceTargets.length).toBeGreaterThan(0);
     expect(firstPage.productHandoff.buyerSearchRows.every((row) =>
       row.recordId.length > 0 &&
       row.safeSummary.length >= 80 &&

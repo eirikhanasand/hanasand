@@ -505,17 +505,27 @@ describe("ops controls", () => {
     });
     expect(dashboard.revenueBlockerBoard.blockers.map((item) => item.blocker)).toEqual([
       "sellable_rows_below_100",
-      "stale_apt29_evidence",
-      "thin_apt42_public_channel_coverage",
       "source_family_diversity",
+      "thin_apt42_public_channel_coverage",
+      "stale_apt29_evidence",
       "held_caveated_row_count",
       "dark_metadata_usefulness",
       "apify_store_conversion",
       "payout_readiness_gaps"
     ]);
+    expect(dashboard.revenueBlockerBoard.blockers.map((item) => item.monetizationImpactRank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(dashboard.revenueBlockerBoard.blockers[0]).toMatchObject({
       blocker: "sellable_rows_below_100",
+      monetizationImpactRank: 1,
+      impactCategory: "missing_real_rows",
+      secondaryImpactCategories: expect.arrayContaining(["cost_risk"]),
+      blockedSellableRowsEstimate: 84,
       buyerMetricTarget: expect.stringContaining(">=100 sellable rows")
+    });
+    expect(dashboard.revenueBlockerBoard.blockers[1]).toMatchObject({
+      blocker: "source_family_diversity",
+      impactCategory: "parser_field_gaps",
+      blockedSellableRowsEstimate: 58
     });
     expect(dashboard.revenueBlockerBoard.blockers[0].nextActions).toEqual(expect.arrayContaining([
       expect.stringContaining("Agent 01:"),
@@ -526,6 +536,25 @@ describe("ops controls", () => {
       expect.stringContaining("Agent 08:"),
       expect.stringContaining("Agent 09:")
     ]));
+    expect(dashboard.first100AdmissionQuality).toMatchObject({
+      schemaVersion: "ti.program_cn_first_100_paid_row_admission_quality.v1",
+      productionSellableFloor: 100,
+      metrics: {
+        rowsAdmittedToProductionFloor: 16,
+        rowCountInflationBlocked: 84
+      }
+    });
+    expect(dashboard.first100AdmissionQuality.nonSellableExclusionProof).toEqual(expect.arrayContaining([
+      expect.objectContaining({ class: "graph_only", countsAsSellable: false }),
+      expect.objectContaining({ class: "synthetic_proof_only", countsAsSellable: false }),
+      expect.objectContaining({ class: "stale_duplicate", countsAsSellable: false }),
+      expect.objectContaining({ class: "restricted_only", countsAsSellable: false }),
+      expect.objectContaining({ class: "caveated_useful", countsAsSellable: false }),
+      expect.objectContaining({ class: "generic_market_source_page", countsAsSellable: false }),
+      expect.objectContaining({ class: "low_buyer_value", countsAsSellable: false }),
+      expect.objectContaining({ class: "alias_or_wrong_actor", countsAsSellable: false })
+    ]));
+    expect(dashboard.first100AdmissionQuality.sampleRows.filter((row) => row.rowClass !== "accepted_sellable").every((row) => row.countsTowardProductionSellableRows === false)).toBe(true);
     expect(dashboard.buyerVisibleQualityLiftGate).toMatchObject({
       schemaVersion: "ti.live_product_buyer_visible_quality_lift_gate.v1",
       baselineRunId: "iMQGeezZ8bx7WtlhQ",
@@ -907,6 +936,43 @@ describe("ops controls", () => {
     expect(dashboard.paidRowAudit100.exclusionProof.every((row) => row.countsAsSellable === false && row.reason.length > 0)).toBe(true);
     expect(dashboard.paidRowAudit100.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_10"]));
     expect(dashboard.paidRowAudit100.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
+    expect(dashboard.first100AdmissionQuality).toMatchObject({
+      schemaVersion: "ti.program_cn_first_100_paid_row_admission_quality.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      productionSellableFloor: 100,
+      fixtureCount: 100,
+      metrics: {
+        rowsAdmittedToProductionFloor: 16,
+        rowsDowngradedToCaveatedContext: 7,
+        rowsSuppressed: 38,
+        rowsNeedingParserRepair: 12,
+        rowsNeedingSourceSupport: 28,
+        rowsNeedingDarkMetadataPublicSupport: 11,
+        estimatedBuyerValueDelta: 0.073,
+        rowCountInflationBlocked: 84
+      }
+    });
+    expect(dashboard.first100AdmissionQuality.classificationCounts).toMatchObject({
+      accepted_sellable: 16,
+      caveated_useful: 7,
+      needs_public_support: 28,
+      stale_duplicate: 18,
+      alias_collision: 4,
+      wrong_actor: 5,
+      restricted_only: 11,
+      graph_only: 4,
+      synthetic_proof_only: 3,
+      generic_market_source_page: 3,
+      low_buyer_value: 1
+    });
+    expect(dashboard.first100AdmissionQuality.sampleRows.every((row) => row.whyBuyerShouldCare.length > 0 && row.nextSearchOrPivot.length > 0 && row.provenanceHash.length > 0 && row.noLeak)).toBe(true);
+    expect(dashboard.first100AdmissionQuality.sampleRows.filter((row) => !row.countsTowardProductionSellableRows).every((row) => row.admissionDecision !== "admit_sellable" && row.failureReasons.length > 0)).toBe(true);
+    expect(dashboard.first100AdmissionQuality.nonSellableExclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["graph_only", "synthetic_proof_only", "stale_duplicate", "restricted_only", "caveated_useful", "generic_market_source_page", "low_buyer_value", "alias_or_wrong_actor"]));
+    expect(dashboard.first100AdmissionQuality.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(dashboard.first100AdmissionQuality.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(dashboard.darkMetadataLiveValueExpansion).toMatchObject({
       schemaVersion: "ti.dark_metadata_live_value_expansion_slo.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]),

@@ -747,6 +747,74 @@ export interface ProgramBdQualityEvaluationPackDto {
 	        actorInteractionContentExposed: false;
 	      };
 	    };
+	    first100AdmissionQuality: {
+	      schemaVersion: "ti.program_cn_first_100_paid_row_admission_quality.v1";
+	      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo" | "Apify OUTPUT">;
+	      dryRun: true;
+	      willMutateSources: false;
+	      willStartCollection: false;
+	      productionSellableFloor: 100;
+	      admissionRules: {
+	        requireFreshEnough: true;
+	        requireActorSpecific: true;
+	        requireSourceBacked: true;
+	        requireSourceFamilySupport: true;
+	        requireBuyerAction: true;
+	        requireProvenanceHash: true;
+	        requireNoContradictions: true;
+	        forbidUnsafeRestrictedOnlyDependency: true;
+	        forbidDefaultDemoOldSummary: true;
+	      };
+	      fixtures: Array<{
+	        id: string;
+	        actor: string;
+	        family: "apt" | "ransomware";
+	        rowClass: "accepted_sellable" | "caveated_useful" | "needs_public_support" | "stale_duplicate" | "alias_collision" | "wrong_actor" | "restricted_only" | "graph_only" | "synthetic_proof_only" | "generic_market_source_page" | "low_buyer_value";
+	        admissionDecision: "admit_sellable" | "downgrade_caveated" | "repair_required" | "suppress";
+	        countsTowardProductionSellableRows: boolean;
+	        buyerValueScore: number;
+	        freshnessDays: number;
+	        sourceFamilySupport: string[];
+	        buyerAction: string;
+	        whyBuyerShouldCare: string;
+	        nextSearchOrPivot: string;
+	        provenanceHash: string;
+	        failureReasons: string[];
+	        repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+	        repairAction: string;
+	        noLeak: true;
+	      }>;
+	      metrics: {
+	        fixtureCount: number;
+	        rowsAdmittedToProductionFloor: number;
+	        rowsDowngradedToCaveatedContext: number;
+	        rowsSuppressed: number;
+	        rowsNeedingParserRepair: number;
+	        rowsNeedingSourceSupport: number;
+	        rowsNeedingDarkMetadataPublicSupport: number;
+	        estimatedBuyerValueDelta: number;
+	        rowCountInflationBlocked: number;
+	      };
+	      nonSellableExclusionProof: Array<{
+	        class: "graph_only" | "synthetic_proof_only" | "stale_duplicate" | "restricted_only" | "caveated_useful" | "generic_market_source_page" | "low_buyer_value" | "alias_or_wrong_actor";
+	        countsAsSellable: false;
+	        reason: string;
+	      }>;
+	      ownerHandoffs: Array<{
+	        owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+	        rowCount: number;
+	        action: string;
+	      }>;
+	      noLeakProof: {
+	        rawEvidenceExposed: false;
+	        unsafeUrlsExposed: false;
+	        restrictedPayloadsExposed: false;
+	        objectKeysExposed: false;
+	        privateMaterialExposed: false;
+	        accountMaterialExposed: false;
+	        actorInteractionContentExposed: false;
+	      };
+	    };
 	    releaseDecision: "promote" | "partial" | "hold";
     apifyDatasetFields: string[];
     remediationActions: string[];
@@ -1436,6 +1504,135 @@ function programChAuditFixture(
   return { id, actor, family, rowClass, currentDecision, countsTowardProductionSellableRows, repairOwner, repairAction, releaseGateEffect, blockerCodes, expectedSellableLiftAfterRepair, rowsPreventedFromBilling, buyerVisibleFinding, noLeak: true };
 }
 
+function buildProgramCnFirst100AdmissionQuality(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["first100AdmissionQuality"] {
+  type AdmissionFixture = ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["first100AdmissionQuality"]["fixtures"][number];
+  const actors: Array<{ actor: string; family: AdmissionFixture["family"] }> = [
+    { actor: "APT29", family: "apt" },
+    { actor: "APT28", family: "apt" },
+    { actor: "APT42", family: "apt" },
+    { actor: "Turla", family: "apt" },
+    { actor: "Volt Typhoon", family: "apt" },
+    { actor: "Lazarus Group", family: "apt" },
+    { actor: "Sandworm", family: "apt" },
+    { actor: "Scattered Spider", family: "apt" },
+    { actor: "LockBit", family: "ransomware" },
+    { actor: "Akira", family: "ransomware" },
+    { actor: "Clop", family: "ransomware" },
+    { actor: "Black Basta", family: "ransomware" },
+    { actor: "RansomHub", family: "ransomware" },
+    { actor: "Play", family: "ransomware" },
+    { actor: "Qilin", family: "ransomware" }
+  ];
+  const plan: Array<Pick<AdmissionFixture, "rowClass" | "admissionDecision" | "countsTowardProductionSellableRows" | "repairOwner" | "failureReasons">> = [
+    { rowClass: "accepted_sellable", admissionDecision: "admit_sellable", countsTowardProductionSellableRows: true, repairOwner: "agent_10", failureReasons: [] },
+    { rowClass: "accepted_sellable", admissionDecision: "admit_sellable", countsTowardProductionSellableRows: true, repairOwner: "agent_10", failureReasons: [] },
+    { rowClass: "caveated_useful", admissionDecision: "downgrade_caveated", countsTowardProductionSellableRows: false, repairOwner: "agent_04", failureReasons: ["single_source_or_caveat_only"] },
+    { rowClass: "needs_public_support", admissionDecision: "repair_required", countsTowardProductionSellableRows: false, repairOwner: "agent_04", failureReasons: ["missing_public_source_family_support"] },
+    { rowClass: "stale_duplicate", admissionDecision: "suppress", countsTowardProductionSellableRows: false, repairOwner: "agent_07", failureReasons: ["stale_or_duplicate"] },
+    { rowClass: "alias_collision", admissionDecision: "suppress", countsTowardProductionSellableRows: false, repairOwner: "agent_07", failureReasons: ["alias_collision"] },
+    { rowClass: "wrong_actor", admissionDecision: "suppress", countsTowardProductionSellableRows: false, repairOwner: "agent_07", failureReasons: ["wrong_actor"] },
+    { rowClass: "restricted_only", admissionDecision: "repair_required", countsTowardProductionSellableRows: false, repairOwner: "agent_05", failureReasons: ["restricted_only_without_public_support"] },
+    { rowClass: "graph_only", admissionDecision: "suppress", countsTowardProductionSellableRows: false, repairOwner: "agent_08", failureReasons: ["graph_only_projection"] },
+    { rowClass: "synthetic_proof_only", admissionDecision: "suppress", countsTowardProductionSellableRows: false, repairOwner: "agent_09", failureReasons: ["synthetic_or_proof_only"] },
+    { rowClass: "generic_market_source_page", admissionDecision: "suppress", countsTowardProductionSellableRows: false, repairOwner: "agent_03", failureReasons: ["generic_source_summary"] },
+    { rowClass: "low_buyer_value", admissionDecision: "downgrade_caveated", countsTowardProductionSellableRows: false, repairOwner: "agent_10", failureReasons: ["low_buyer_value"] }
+  ];
+  const fixtures = Array.from({ length: 48 }, (_, index): AdmissionFixture => {
+    const actor = actors[index % actors.length]!;
+    const row = plan[index % plan.length]!;
+    const sourceFamilySupport = row.countsTowardProductionSellableRows
+      ? ["vendor_report", "cert_advisory"]
+      : row.rowClass === "restricted_only"
+        ? ["restricted_metadata"]
+        : row.rowClass === "graph_only"
+          ? ["graph_context"]
+          : row.rowClass === "synthetic_proof_only"
+            ? ["fixture"]
+            : ["vendor_report"];
+    const buyerValueScore = row.countsTowardProductionSellableRows ? 0.82 + (index % 3) * 0.02 : row.rowClass === "caveated_useful" ? 0.66 : row.rowClass === "low_buyer_value" ? 0.31 : 0.48;
+    return {
+      id: `cn_${String(index + 1).padStart(2, "0")}_${row.rowClass}`,
+      actor: actor.actor,
+      family: actor.family,
+      rowClass: row.rowClass,
+      admissionDecision: row.admissionDecision,
+      countsTowardProductionSellableRows: row.countsTowardProductionSellableRows,
+      buyerValueScore: programBdRound(buyerValueScore),
+      freshnessDays: row.rowClass === "stale_duplicate" ? 120 : 6 + (index % 9),
+      sourceFamilySupport,
+      buyerAction: row.countsTowardProductionSellableRows ? "pivot on actor/victim/sector/TTP and prioritize monitoring" : "repair, caveat, or suppress before paid billing",
+      whyBuyerShouldCare: row.countsTowardProductionSellableRows ? `${actor.actor} row has fresh source-backed actionability for monitoring.` : `${actor.actor} row protects buyer trust by refusing weak paid-row admission.`,
+      nextSearchOrPivot: `${actor.actor} ${row.rowClass} public source support`,
+      provenanceHash: `cn_${String(index + 1).padStart(2, "0")}_${programBdRound(buyerValueScore).toString().replace(".", "")}`,
+      failureReasons: row.failureReasons,
+      repairOwner: row.repairOwner,
+      repairAction: row.countsTowardProductionSellableRows ? "Keep admitted row protected by provenance, freshness, source-family, and buyer-action checks." : "Repair required signals or keep row out of production sellable counts.",
+      noLeak: true
+    };
+  });
+  const count = (predicate: (row: AdmissionFixture) => boolean) => fixtures.filter(predicate).length;
+  const ownerRows = (owner: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["first100AdmissionQuality"]["ownerHandoffs"][number]["owner"]) => fixtures.filter((row) => row.repairOwner === owner);
+  return {
+    schemaVersion: "ti.program_cn_first_100_paid_row_admission_quality.v1",
+    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    productionSellableFloor: 100,
+    admissionRules: {
+      requireFreshEnough: true,
+      requireActorSpecific: true,
+      requireSourceBacked: true,
+      requireSourceFamilySupport: true,
+      requireBuyerAction: true,
+      requireProvenanceHash: true,
+      requireNoContradictions: true,
+      forbidUnsafeRestrictedOnlyDependency: true,
+      forbidDefaultDemoOldSummary: true
+    },
+    fixtures,
+    metrics: {
+      fixtureCount: fixtures.length,
+      rowsAdmittedToProductionFloor: count((row) => row.countsTowardProductionSellableRows),
+      rowsDowngradedToCaveatedContext: count((row) => row.admissionDecision === "downgrade_caveated"),
+      rowsSuppressed: count((row) => row.admissionDecision === "suppress"),
+      rowsNeedingParserRepair: count((row) => row.repairOwner === "agent_03"),
+      rowsNeedingSourceSupport: count((row) => row.repairOwner === "agent_04"),
+      rowsNeedingDarkMetadataPublicSupport: count((row) => row.repairOwner === "agent_05"),
+      estimatedBuyerValueDelta: 0.27,
+      rowCountInflationBlocked: count((row) => !row.countsTowardProductionSellableRows)
+    },
+    nonSellableExclusionProof: [
+      { class: "graph_only", countsAsSellable: false, reason: "Graph/context rows need fresh evidence-backed claims before billing." },
+      { class: "synthetic_proof_only", countsAsSellable: false, reason: "Proof fixtures verify safety and shape only." },
+      { class: "stale_duplicate", countsAsSellable: false, reason: "Old or duplicate source rows do not create monitoring value." },
+      { class: "restricted_only", countsAsSellable: false, reason: "Restricted metadata needs safe public support before paid admission." },
+      { class: "caveated_useful", countsAsSellable: false, reason: "Useful caveats help analysts but stay outside the production floor." },
+      { class: "generic_market_source_page", countsAsSellable: false, reason: "Generic source or marketing pages lack buyer actionability." },
+      { class: "low_buyer_value", countsAsSellable: false, reason: "Rows below buyer-value threshold cannot pad the first 100." },
+      { class: "alias_or_wrong_actor", countsAsSellable: false, reason: "Alias collision and wrong-actor rows must be suppressed or repaired." }
+    ],
+    ownerHandoffs: [
+      { owner: "agent_03", rowCount: ownerRows("agent_03").length, action: "Repair generic source/parser summaries into actor-specific fields before admission." },
+      { owner: "agent_04", rowCount: ownerRows("agent_04").length, action: "Add fresh safe public source-family support for caveated and one-repair-away rows." },
+      { owner: "agent_05", rowCount: ownerRows("agent_05").length, action: "Attach public support to metadata-only leads without exposing restricted material." },
+      { owner: "agent_07", rowCount: ownerRows("agent_07").length, action: "Suppress stale, duplicate, alias-collided, and wrong-actor rows." },
+      { owner: "agent_08", rowCount: ownerRows("agent_08").length, action: "Hold graph-only projections until evidence-backed row claims exist." },
+      { owner: "agent_09", rowCount: ownerRows("agent_09").length, action: "Keep marketplace samples and proof rows outside billable production rows." },
+      { owner: "agent_10", rowCount: ownerRows("agent_10").length, action: "Use admitted-row metrics in release decisions and block low-value inflation." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      privateMaterialExposed: false,
+      accountMaterialExposed: false,
+      actorInteractionContentExposed: false
+    }
+  };
+}
+
 function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"] {
   const baselines: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"] = [
     programBdLiveBaseline({
@@ -1490,6 +1687,7 @@ function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["
 	    entitySpecificityLift: buildProgramBvEntitySpecificityLift(),
 	    falsePositiveSuppressionGate: buildProgramBzFalsePositiveSuppressionGate(),
 	    paidRowAudit100: buildProgramChPaidRowAudit100(),
+	    first100AdmissionQuality: buildProgramCnFirst100AdmissionQuality(),
 	    releaseDecision: hold ? "hold" : warn ? "partial" : "promote",
     apifyDatasetFields: ["reviewReasons", "analysisFacets", "freshnessExpectation", "topMissingSourceFamily", "nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"],
     remediationActions: [

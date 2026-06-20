@@ -2172,6 +2172,31 @@ describe("pipeline", () => {
     expect(pack.paidRowQualityGate.paidRowAudit100.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["graph_only_projection", "synthetic_row", "stale_or_duplicate", "restricted_only", "caveat_only"]));
     expect(pack.paidRowQualityGate.paidRowAudit100.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_10"]));
     expect(pack.paidRowQualityGate.paidRowAudit100.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
+    expect(pack.paidRowQualityGate.first100AdmissionQuality).toMatchObject({
+      schemaVersion: "ti.program_cn_first_100_paid_row_admission_quality.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      productionSellableFloor: 100,
+      metrics: {
+        fixtureCount: 48,
+        rowsAdmittedToProductionFloor: 8,
+        rowsDowngradedToCaveatedContext: 8,
+        rowsSuppressed: 24,
+        rowsNeedingParserRepair: 4,
+        rowsNeedingSourceSupport: 8,
+        rowsNeedingDarkMetadataPublicSupport: 4,
+        estimatedBuyerValueDelta: 0.27,
+        rowCountInflationBlocked: 40
+      }
+    });
+    expect(pack.paidRowQualityGate.first100AdmissionQuality.fixtures.length).toBeGreaterThanOrEqual(40);
+    expect(pack.paidRowQualityGate.first100AdmissionQuality.fixtures.map((row) => row.rowClass)).toEqual(expect.arrayContaining(["accepted_sellable", "caveated_useful", "needs_public_support", "stale_duplicate", "alias_collision", "wrong_actor", "restricted_only", "graph_only", "synthetic_proof_only", "generic_market_source_page", "low_buyer_value"]));
+    expect(pack.paidRowQualityGate.first100AdmissionQuality.fixtures.filter((row) => row.countsTowardProductionSellableRows).every((row) => row.admissionDecision === "admit_sellable" && row.buyerValueScore >= 0.8 && row.sourceFamilySupport.length >= 2 && row.buyerAction.length > 0 && row.provenanceHash.length > 0 && row.noLeak)).toBe(true);
+    expect(pack.paidRowQualityGate.first100AdmissionQuality.fixtures.filter((row) => !row.countsTowardProductionSellableRows).every((row) => row.admissionDecision !== "admit_sellable" && row.failureReasons.length > 0 && row.repairAction.length > 0 && row.noLeak)).toBe(true);
+    expect(pack.paidRowQualityGate.first100AdmissionQuality.nonSellableExclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["graph_only", "synthetic_proof_only", "stale_duplicate", "restricted_only", "caveated_useful", "generic_market_source_page", "low_buyer_value", "alias_or_wrong_actor"]));
+    expect(pack.paidRowQualityGate.first100AdmissionQuality.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",

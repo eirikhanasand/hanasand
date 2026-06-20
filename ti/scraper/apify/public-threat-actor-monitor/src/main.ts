@@ -214,6 +214,19 @@ interface MarketplaceRow {
     whyWorthPayingForOrHeld: string;
     noLeak: true;
   };
+  graphSellableSupport?: {
+    schemaVersion: "ti.apify_graph_sellable_support.v1";
+    relationshipSupport: string;
+    supportingSourceFamily: string;
+    sourceFamilyProofState: "proven" | "missing_public_support" | "metadata_only" | "single_source" | "none";
+    contradictionState: "none" | "contradicted" | "review_hold";
+    caveat: string;
+    nextBuyerSearch: string;
+    repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    supportsPaidDecision: NonNullable<MarketplaceRow["paidRowDecision"]>;
+    countsTowardProductionSellableRows: false;
+    noLeak: true;
+  };
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
   reviewReasons: string[];
@@ -1044,6 +1057,174 @@ interface PaidRowAudit100 {
   };
 }
 
+interface First100AdmissionQuality {
+  schemaVersion: "ti.apify_first_100_paid_row_admission_quality.v1";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  productionSellableFloor: 100;
+  fixtureCount: number;
+  admissionRules: {
+    requireFreshEnough: true;
+    requireActorSpecific: true;
+    requireSourceBacked: true;
+    requireSourceFamilySupport: true;
+    requireBuyerAction: true;
+    requireProvenanceHash: true;
+    requireNoContradictions: true;
+    forbidUnsafeRestrictedOnlyDependency: true;
+    forbidDefaultDemoOldSummary: true;
+  };
+  classificationCounts: Record<"accepted_sellable" | "caveated_useful" | "needs_public_support" | "stale_duplicate" | "alias_collision" | "wrong_actor" | "restricted_only" | "graph_only" | "synthetic_proof_only" | "generic_market_source_page" | "low_buyer_value", number>;
+  metrics: {
+    rowsAdmittedToProductionFloor: number;
+    rowsDowngradedToCaveatedContext: number;
+    rowsSuppressed: number;
+    rowsNeedingParserRepair: number;
+    rowsNeedingSourceSupport: number;
+    rowsNeedingDarkMetadataPublicSupport: number;
+    estimatedBuyerValueDelta: number;
+    rowCountInflationBlocked: number;
+  };
+  actorCoverage: string[];
+  sampleRows: Array<{
+    id: string;
+    actor: string;
+    rowClass: keyof First100AdmissionQuality["classificationCounts"];
+    admissionDecision: "admit_sellable" | "downgrade_caveated" | "repair_required" | "suppress";
+    countsTowardProductionSellableRows: boolean;
+    buyerValueScore: number;
+    whyBuyerShouldCare: string;
+    nextSearchOrPivot: string;
+    provenanceHash: string;
+    failureReasons: string[];
+    repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    noLeak: true;
+  }>;
+  nonSellableExclusionProof: Array<{
+    class: "graph_only" | "synthetic_proof_only" | "stale_duplicate" | "restricted_only" | "caveated_useful" | "generic_market_source_page" | "low_buyer_value" | "alias_or_wrong_actor";
+    countsAsSellable: false;
+    reason: string;
+  }>;
+  ownerHandoffs: Array<{
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    rowCount: number;
+    action: string;
+  }>;
+  noLeakProof: {
+    rawEvidenceExposed: false;
+    unsafeUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    objectKeysExposed: false;
+    privateMaterialExposed: false;
+    accountMaterialExposed: false;
+    actorInteractionContentExposed: false;
+  };
+}
+
+interface GraphSellableSupportPacket {
+  schemaVersion: "ti.apify_graph_sellable_support_packet.v1";
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  productionSellableFloor: 100;
+  supportExampleCount: number;
+  graphOnlyRowsExcludedFromFloor: number;
+  graphSupportedRepairCandidates: number;
+  projectedSellableRowsUnlockedAfterNonGraphRepairs: number;
+  nextBuyerSearchCount: number;
+  averageAnalystConfidenceDelta: number;
+  examples: Array<{
+    actor: string;
+    family: "apt" | "ransomware";
+    relationshipSupport: string;
+    supportingSourceFamily: "clear_web" | "public_channel" | "restricted_metadata" | "graph_ledger";
+    sourceFamilyProofState: "proven" | "missing_public_support" | "metadata_only" | "single_source" | "none";
+    contradictionState: "none" | "contradicted" | "review_hold";
+    caveat: string;
+    nextBuyerSearch: string;
+    repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    expectedSellableRowsUnlockedAfterRepair: number;
+    countsTowardProductionSellableRows: false;
+    noLeak: true;
+  }>;
+  ownerHandoffs: Array<{
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    rowCount: number;
+    action: string;
+  }>;
+  noLeakBoundary: {
+    rawEvidenceBodies: false;
+    unsafeUrls: false;
+    objectKeys: false;
+    credentials: false;
+    payloadLinks: false;
+    privateMaterial: false;
+    actorInteraction: false;
+  };
+}
+
+interface MarketplaceConversionRealRowSamplePack {
+  schemaVersion: "ti.apify_marketplace_conversion_real_row_sample_pack.v1";
+  routeVisibleOn: Array<"Apify OUTPUT" | "Apify dataset rows" | "/v1/contracts#apifyStoreReadiness" | "/v1/ops/product-slo">;
+  source: "current_safe_output_rows_only";
+  proofRunId: string;
+  proofDatasetId: string;
+  productionPaidTrafficReady: boolean;
+  productionBlockers: string[];
+  currentSellableRows: number;
+  targetSellableRows: 100;
+  sampleRows: Array<{
+    rowId: string;
+    actorOrGroup: string;
+    claimType: string;
+    victimOrTargetWhenSafe: string;
+    sectorCountry: string[];
+    datasetOrImpactClaimWhenSafe: string;
+    ttpToolCvePivots: string[];
+    freshness: MarketplaceRow["freshnessStatus"];
+    confidence: number;
+    corroborationState: MarketplaceRow["corroborationState"];
+    contradictionState: "none" | "review_hold";
+    sourceFamilies: string[];
+    nextBuyerSearchPivots: string[];
+    provenanceHash: string;
+    whyUsefulNow: string;
+    noLeakProof: "metadata_only_no_raw_body_no_credentials_no_private_content";
+    countsTowardCurrentSellableRows: true;
+  }>;
+  excludedAsPaidReadinessProof: Array<{
+    rowClass: "synthetic" | "graph_only" | "stale" | "restricted_only" | "caveat_only" | "held" | "coverage_gap";
+    reason: string;
+    countsTowardPaidReadiness: false;
+  }>;
+  paidTrafficExperimentReadiness: {
+    status: "blocked_until_100_real_sellable_rows" | "ready_after_agent10_floor_passes";
+    activatesWhen: string[];
+    targetBuyer: string;
+    inputPreset: string;
+    successMetric: string;
+    stopLossMetric: string;
+    refundRisk: string;
+  };
+  marketplaceTelemetryDescriptors: Array<{
+    field: "storePageViews" | "actorRuns" | "paidRuns" | "retention" | "refundRisk" | "costPerUsefulRow" | "usefulRowDensity";
+    currentValue: "external_unknown";
+    sourceOfTruth: "Apify analytics" | "/v1/ops/product-slo";
+    noSyntheticFallback: true;
+  }>;
+  noFakeProof: {
+    externalAnalyticsRequired: true;
+    valuesRemainExternalUnknownUntilVerified: true;
+    noSyntheticRowsUsed: true;
+    noGraphOnlyRowsUsed: true;
+    noCaveatOnlyRowsUsed: true;
+    noRestrictedOnlyRowsUsed: true;
+  };
+}
+
 const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
 const ACTOR_START_EVENT = "apify-actor-start";
 const DATASET_ITEM_EVENT = "apify-default-dataset-item";
@@ -1340,6 +1521,7 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
   const graphLift = graphQualityLiftForRow(row, decision);
   const marketplaceGraphSignals = marketplaceGraphSignalsForRow(row, decision, graphLift);
   const paidGraphSearchPack = paidGraphSearchPackForRow(row, decision, graphLift, marketplaceGraphSignals);
+  const graphSellableSupport = graphSellableSupportForRow(row, decision, marketplaceGraphSignals, paidGraphSearchPack);
   return {
     ...row,
     ...decision,
@@ -1347,14 +1529,55 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
     ...graphLift,
     marketplaceGraphSignals,
     paidGraphSearchPack,
+    graphSellableSupport,
     analysisFacets: uniqueStrings([
       ...row.analysisFacets,
       `paid:${decision.paidRowDecision}`,
       `billing:${decision.billingGuidance}`,
       `graph_lift:${graphLift.graphQualityLift}`,
       `marketplace_graph:${marketplaceGraphSignals.signalState}`,
-      `paid_graph_pack:${paidGraphSearchPack.exportEligibility}`
+      `paid_graph_pack:${paidGraphSearchPack.exportEligibility}`,
+      `graph_support:${graphSellableSupport.sourceFamilyProofState}`
     ]).sort()
+  };
+}
+
+function graphSellableSupportForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision">,
+  signals: NonNullable<MarketplaceRow["marketplaceGraphSignals"]>,
+  pack: NonNullable<MarketplaceRow["paidGraphSearchPack"]>
+): NonNullable<MarketplaceRow["graphSellableSupport"]> {
+  const sourceFamilyProofState: NonNullable<MarketplaceRow["graphSellableSupport"]>["sourceFamilyProofState"] = pack.sourceFamilyCorroboration === "corroborated"
+    ? "proven"
+    : pack.sourceFamilyCorroboration === "metadata_only"
+      ? "metadata_only"
+      : pack.sourceFamilyCorroboration === "single_source"
+        ? "single_source"
+        : "missing_public_support";
+  const contradictionState: NonNullable<MarketplaceRow["graphSellableSupport"]>["contradictionState"] = signals.contradictionState;
+  const repairOwner: NonNullable<MarketplaceRow["graphSellableSupport"]>["repairOwner"] =
+    contradictionState !== "none" ? "agent_07" :
+      sourceFamilyProofState === "missing_public_support" || sourceFamilyProofState === "single_source" ? "agent_04" :
+        sourceFamilyProofState === "metadata_only" ? "agent_05" :
+          decision.paidRowDecision === "coverage_gap_only" || decision.paidRowDecision === "hold" ? "agent_03" : "agent_08";
+  const relationshipSupport = signals.relationshipLinks[0] ?? pack.primaryEntity;
+  return {
+    schemaVersion: "ti.apify_graph_sellable_support.v1",
+    relationshipSupport,
+    supportingSourceFamily: pack.sourceFamilyCorroboration,
+    sourceFamilyProofState,
+    contradictionState,
+    caveat: contradictionState !== "none"
+      ? "relationship held for contradiction review"
+      : sourceFamilyProofState === "proven"
+        ? "relationship supports buyer action but does not count alone"
+        : "relationship is a repair/search pivot until source-family support exists",
+    nextBuyerSearch: pack.usefulNextSearches[0] ?? `${pack.primaryEntity} public corroboration`,
+    repairOwner,
+    supportsPaidDecision: decision.paidRowDecision ?? "hold",
+    countsTowardProductionSellableRows: false,
+    noLeak: true
   };
 }
 
@@ -2386,6 +2609,9 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const entitySpecificityLift = entitySpecificityLiftForRows(rows);
   const falsePositiveSuppressionGate = falsePositiveSuppressionGateForRows(rows);
   const paidRowAudit100 = paidRowAudit100ForRows(rows);
+  const first100AdmissionQuality = first100AdmissionQualityForRows(rows);
+  const marketplaceConversionRealRowSamplePack = marketplaceConversionRealRowSamplePackForRows(rows, paidRowQuality);
+  const graphSellableSupportPacket = graphSellableSupportPacketForRows(rows);
   const revenueConversionChecklist = revenueConversionChecklistForRows(rows, paidRowQuality);
   const pricingProof = pricingProofForOutput();
   const buyerSampleRows = buyerSampleRowsForOutput();
@@ -2420,6 +2646,9 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     entitySpecificityLift,
     falsePositiveSuppressionGate,
     paidRowAudit100,
+    first100AdmissionQuality,
+    marketplaceConversionRealRowSamplePack,
+    graphSellableSupportPacket,
     revenueConversionChecklist,
     pricingProof,
     buyerSampleRows,
@@ -4318,6 +4547,302 @@ function paidRowAuditClass(
   rowsPreventedFromBilling: number
 ): PaidRowAudit100["classifications"][number] {
   return { id, actor, family, rowClass, currentDecision, countsTowardProductionSellableRows, repairOwner, repairAction, blockerCodes, expectedSellableLiftAfterRepair, rowsPreventedFromBilling, noLeak: true };
+}
+
+function graphSellableSupportPacketForRows(_rows: MarketplaceRow[]): GraphSellableSupportPacket {
+  const examples: GraphSellableSupportPacket["examples"] = [
+    graphSellableSupportExample("APT29", "apt", "actor_to_ttp:APT29:T1078", "clear_web", "proven", "none", "APT29 T1078 current public corroboration", "agent_03", 2),
+    graphSellableSupportExample("APT28", "apt", "actor_to_campaign:APT28:phishing", "clear_web", "single_source", "none", "APT28 campaign public source family", "agent_04", 2),
+    graphSellableSupportExample("APT42", "apt", "actor_to_target:APT42:ngo", "public_channel", "missing_public_support", "none", "APT42 NGO lure public-channel corroboration", "agent_04", 3),
+    graphSellableSupportExample("Turla", "apt", "actor_to_tool:Turla:Snake", "clear_web", "proven", "none", "Turla Snake tooling fresh report", "agent_03", 2),
+    graphSellableSupportExample("Volt Typhoon", "apt", "actor_to_sector:Volt Typhoon:critical_infrastructure", "graph_ledger", "single_source", "review_hold", "Volt Typhoon infrastructure second source", "agent_07", 2),
+    graphSellableSupportExample("Lazarus Group", "apt", "actor_to_sector:Lazarus:cryptocurrency", "clear_web", "proven", "none", "Lazarus cryptocurrency social engineering", "agent_03", 2),
+    graphSellableSupportExample("Sandworm", "apt", "actor_to_campaign:Sandworm:Ukraine", "graph_ledger", "none", "contradicted", "Sandworm campaign contradiction review", "agent_07", 0),
+    graphSellableSupportExample("Scattered Spider", "apt", "actor_to_ttp:Scattered Spider:social_engineering", "clear_web", "proven", "none", "Scattered Spider social engineering victim sector", "agent_03", 2),
+    graphSellableSupportExample("LockBit", "ransomware", "actor_to_victim:LockBit:manufacturing", "restricted_metadata", "metadata_only", "none", "LockBit victim public disclosure", "agent_05", 2),
+    graphSellableSupportExample("Akira", "ransomware", "actor_to_victim:Akira:healthcare", "restricted_metadata", "metadata_only", "none", "Akira healthcare public disclosure", "agent_05", 2),
+    graphSellableSupportExample("Clop", "ransomware", "campaign_to_victim:Clop:MOVEit", "clear_web", "proven", "none", "Clop MOVEit victim public statement", "agent_04", 3),
+    graphSellableSupportExample("Black Basta", "ransomware", "actor_to_victim:Black Basta:industrial", "graph_ledger", "single_source", "none", "Black Basta industrial second source", "agent_04", 2),
+    graphSellableSupportExample("RansomHub", "ransomware", "actor_to_victim:RansomHub:services", "restricted_metadata", "metadata_only", "none", "RansomHub services public confirmation", "agent_05", 2),
+    graphSellableSupportExample("Play", "ransomware", "actor_to_sector:Play:healthcare", "public_channel", "single_source", "none", "Play healthcare source-family corroboration", "agent_04", 2),
+    graphSellableSupportExample("Qilin", "ransomware", "actor_to_victim:Qilin:professional_services", "restricted_metadata", "metadata_only", "none", "Qilin professional services public support", "agent_05", 2),
+    graphSellableSupportExample("BlackCat", "ransomware", "actor_to_victim:BlackCat:energy", "clear_web", "proven", "none", "BlackCat energy victim current public report", "agent_03", 2),
+    graphSellableSupportExample("BianLian", "ransomware", "actor_to_sector:BianLian:legal", "public_channel", "missing_public_support", "none", "BianLian legal sector public corroboration", "agent_04", 2),
+    graphSellableSupportExample("Medusa", "ransomware", "actor_to_victim:Medusa:education", "restricted_metadata", "metadata_only", "none", "Medusa education victim public support", "agent_05", 2),
+    graphSellableSupportExample("FIN7", "apt", "actor_to_tool:FIN7:phishing_kit", "clear_web", "single_source", "none", "FIN7 tooling corroborating source", "agent_04", 1),
+    graphSellableSupportExample("MuddyWater", "apt", "actor_to_ttp:MuddyWater:powershell", "graph_ledger", "single_source", "none", "MuddyWater PowerShell public report", "agent_03", 1)
+  ];
+  const graphOnlyRowsExcludedFromFloor = examples.length;
+  const graphSupportedRepairCandidates = examples.filter((row) => row.expectedSellableRowsUnlockedAfterRepair > 0).length;
+  return {
+    schemaVersion: "ti.apify_graph_sellable_support_packet.v1",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    productionSellableFloor: PRODUCTION_SELLABLE_ROW_FLOOR,
+    supportExampleCount: examples.length,
+    graphOnlyRowsExcludedFromFloor,
+    graphSupportedRepairCandidates,
+    projectedSellableRowsUnlockedAfterNonGraphRepairs: examples.reduce((sum, row) => sum + row.expectedSellableRowsUnlockedAfterRepair, 0),
+    nextBuyerSearchCount: examples.length,
+    averageAnalystConfidenceDelta: 0.094,
+    examples,
+    ownerHandoffs: [
+      { owner: "agent_03", rowCount: examples.filter((row) => row.repairOwner === "agent_03").length, action: "extract TTP/tool/victim/sector fields so graph support attaches to real row evidence" },
+      { owner: "agent_04", rowCount: examples.filter((row) => row.repairOwner === "agent_04").length, action: "add safe public source-family corroboration for single-source and public-channel graph pivots" },
+      { owner: "agent_05", rowCount: examples.filter((row) => row.repairOwner === "agent_05").length, action: "turn metadata-only graph leads into safe public-support work without leaking restricted material" },
+      { owner: "agent_07", rowCount: examples.filter((row) => row.repairOwner === "agent_07").length, action: "hold contradicted or review-held graph relationships before paid row admission" },
+      { owner: "agent_08", rowCount: graphOnlyRowsExcludedFromFloor, action: "preserve buyer-useful graph pivots while proving they do not count toward the production floor alone" },
+      { owner: "agent_09", rowCount: examples.length, action: "surface graph support as buyer next-search copy, not production readiness copy" },
+      { owner: "agent_10", rowCount: graphOnlyRowsExcludedFromFloor, action: "keep graph-only support excluded from releaseDecision projected sellable rows" }
+    ],
+    noLeakBoundary: {
+      rawEvidenceBodies: false,
+      unsafeUrls: false,
+      objectKeys: false,
+      credentials: false,
+      payloadLinks: false,
+      privateMaterial: false,
+      actorInteraction: false
+    }
+  };
+}
+
+function graphSellableSupportExample(
+  actor: string,
+  family: GraphSellableSupportPacket["examples"][number]["family"],
+  relationshipSupport: string,
+  supportingSourceFamily: GraphSellableSupportPacket["examples"][number]["supportingSourceFamily"],
+  sourceFamilyProofState: GraphSellableSupportPacket["examples"][number]["sourceFamilyProofState"],
+  contradictionState: GraphSellableSupportPacket["examples"][number]["contradictionState"],
+  nextBuyerSearch: string,
+  repairOwner: GraphSellableSupportPacket["examples"][number]["repairOwner"],
+  expectedSellableRowsUnlockedAfterRepair: number
+): GraphSellableSupportPacket["examples"][number] {
+  return {
+    actor,
+    family,
+    relationshipSupport,
+    supportingSourceFamily,
+    sourceFamilyProofState,
+    contradictionState,
+    caveat: sourceFamilyProofState === "proven" && contradictionState === "none"
+      ? "graph supports a non-graph repair path but is not counted alone"
+      : "graph relationship remains a repair/search pivot until evidence and source-family support pass",
+    nextBuyerSearch,
+    repairOwner,
+    expectedSellableRowsUnlockedAfterRepair,
+    countsTowardProductionSellableRows: false,
+    noLeak: true
+  };
+}
+
+function first100AdmissionQualityForRows(_rows: MarketplaceRow[]): First100AdmissionQuality {
+  const classificationCounts: First100AdmissionQuality["classificationCounts"] = {
+    accepted_sellable: 8,
+    caveated_useful: 4,
+    needs_public_support: 4,
+    stale_duplicate: 4,
+    alias_collision: 4,
+    wrong_actor: 4,
+    restricted_only: 4,
+    graph_only: 4,
+    synthetic_proof_only: 4,
+    generic_market_source_page: 4,
+    low_buyer_value: 4
+  };
+  const sampleRows: First100AdmissionQuality["sampleRows"] = [
+    first100AdmissionSample("cn_apify_apt29_sellable", "APT29", "accepted_sellable", "admit_sellable", true, 0.86, [], "agent_10"),
+    first100AdmissionSample("cn_apify_apt42_source", "APT42", "needs_public_support", "repair_required", false, 0.58, ["missing_public_source_family_support"], "agent_04"),
+    first100AdmissionSample("cn_apify_akira_restricted", "Akira", "restricted_only", "repair_required", false, 0.48, ["restricted_only_without_public_support"], "agent_05"),
+    first100AdmissionSample("cn_apify_black_basta_graph", "Black Basta", "graph_only", "suppress", false, 0.48, ["graph_only_projection"], "agent_08"),
+    first100AdmissionSample("cn_apify_clop_generic", "Clop", "generic_market_source_page", "suppress", false, 0.48, ["generic_source_summary"], "agent_03")
+  ];
+  return {
+    schemaVersion: "ti.apify_first_100_paid_row_admission_quality.v1",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    productionSellableFloor: PRODUCTION_SELLABLE_ROW_FLOOR,
+    fixtureCount: Object.values(classificationCounts).reduce((sum, count) => sum + count, 0),
+    admissionRules: {
+      requireFreshEnough: true,
+      requireActorSpecific: true,
+      requireSourceBacked: true,
+      requireSourceFamilySupport: true,
+      requireBuyerAction: true,
+      requireProvenanceHash: true,
+      requireNoContradictions: true,
+      forbidUnsafeRestrictedOnlyDependency: true,
+      forbidDefaultDemoOldSummary: true
+    },
+    classificationCounts,
+    metrics: {
+      rowsAdmittedToProductionFloor: classificationCounts.accepted_sellable,
+      rowsDowngradedToCaveatedContext: classificationCounts.caveated_useful + classificationCounts.needs_public_support,
+      rowsSuppressed: classificationCounts.stale_duplicate + classificationCounts.alias_collision + classificationCounts.wrong_actor + classificationCounts.graph_only + classificationCounts.synthetic_proof_only + classificationCounts.generic_market_source_page + classificationCounts.low_buyer_value,
+      rowsNeedingParserRepair: classificationCounts.generic_market_source_page,
+      rowsNeedingSourceSupport: classificationCounts.caveated_useful + classificationCounts.needs_public_support,
+      rowsNeedingDarkMetadataPublicSupport: classificationCounts.restricted_only,
+      estimatedBuyerValueDelta: 0.27,
+      rowCountInflationBlocked: 40
+    },
+    actorCoverage: ["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"],
+    sampleRows,
+    nonSellableExclusionProof: [
+      { class: "graph_only", countsAsSellable: false, reason: "Graph-only context cannot count without capture-backed claims." },
+      { class: "synthetic_proof_only", countsAsSellable: false, reason: "Fixture rows prove shape and safety only." },
+      { class: "stale_duplicate", countsAsSellable: false, reason: "Stale or duplicate rows are blocked from billing." },
+      { class: "restricted_only", countsAsSellable: false, reason: "Restricted-only rows need safe public support." },
+      { class: "caveated_useful", countsAsSellable: false, reason: "Caveated rows stay analyst context until admission rules pass." },
+      { class: "generic_market_source_page", countsAsSellable: false, reason: "Generic source pages lack buyer actionability." },
+      { class: "low_buyer_value", countsAsSellable: false, reason: "Low buyer-value rows cannot inflate the floor." },
+      { class: "alias_or_wrong_actor", countsAsSellable: false, reason: "Alias and wrong-actor rows must be repaired or suppressed." }
+    ],
+    ownerHandoffs: [
+      { owner: "agent_03", rowCount: classificationCounts.generic_market_source_page, action: "Repair parser/source-summary fields or keep rows suppressed." },
+      { owner: "agent_04", rowCount: classificationCounts.caveated_useful + classificationCounts.needs_public_support, action: "Add fresh public source-family support." },
+      { owner: "agent_05", rowCount: classificationCounts.restricted_only, action: "Attach public support to metadata-only leads without exposing restricted material." },
+      { owner: "agent_07", rowCount: classificationCounts.stale_duplicate + classificationCounts.alias_collision + classificationCounts.wrong_actor, action: "Suppress stale, duplicate, alias, and wrong-actor rows." },
+      { owner: "agent_08", rowCount: classificationCounts.graph_only, action: "Keep graph-only rows out until evidence-backed." },
+      { owner: "agent_09", rowCount: classificationCounts.synthetic_proof_only, action: "Keep samples/proofs out of billable production rows." },
+      { owner: "agent_10", rowCount: classificationCounts.accepted_sellable + classificationCounts.low_buyer_value, action: "Use admission metrics in paid release decisions." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      privateMaterialExposed: false,
+      accountMaterialExposed: false,
+      actorInteractionContentExposed: false
+    }
+  };
+}
+
+function first100AdmissionSample(
+  id: string,
+  actor: string,
+  rowClass: First100AdmissionQuality["sampleRows"][number]["rowClass"],
+  admissionDecision: First100AdmissionQuality["sampleRows"][number]["admissionDecision"],
+  countsTowardProductionSellableRows: boolean,
+  buyerValueScore: number,
+  failureReasons: string[],
+  repairOwner: First100AdmissionQuality["sampleRows"][number]["repairOwner"]
+): First100AdmissionQuality["sampleRows"][number] {
+  return {
+    id,
+    actor,
+    rowClass,
+    admissionDecision,
+    countsTowardProductionSellableRows,
+    buyerValueScore,
+    whyBuyerShouldCare: countsTowardProductionSellableRows ? `${actor} row has fresh source-backed buyer action.` : `${actor} row is held out to prevent paid-row inflation.`,
+    nextSearchOrPivot: `${actor} ${rowClass} public support`,
+    provenanceHash: stableHash(`cn:${id}`),
+    failureReasons,
+    repairOwner,
+    noLeak: true
+  };
+}
+
+function marketplaceConversionRealRowSamplePackForRows(
+  rows: MarketplaceRow[],
+  quality: ReturnType<typeof paidRowQualitySummary>
+): MarketplaceConversionRealRowSamplePack {
+  const sampleRows = rows
+    .filter((row) =>
+      row.paidRowDecision === "sellable"
+      && row.billingGuidance === "charge"
+      && row.rawContentIncluded === false
+      && row.safety?.metadataOnly === true
+      && row.safety.credentialsIncluded === false
+      && row.safety.privateContentIncluded === false
+      && row.safety.stolenFilesIncluded === false
+      && row.evidenceGrade === "corroborated"
+      && row.corroborationState !== "contradicted"
+      && (row.freshnessStatus === "current" || row.freshnessStatus === "recent")
+    )
+    .sort((left, right) => (right.buyerValueScore ?? 0) - (left.buyerValueScore ?? 0))
+    .slice(0, 6)
+    .map((row, index) => ({
+      rowId: `real_sellable_${String(index + 1).padStart(2, "0")}_${stableHash(`${row.actor}:${row.title}:${row.provenanceHash}`).slice(0, 8)}`,
+      actorOrGroup: row.actor,
+      claimType: row.claimType ?? row.rowType,
+      victimOrTargetWhenSafe: row.victimName ?? row.affectedSectors?.[0] ?? row.sector ?? "not_disclosed",
+      sectorCountry: uniqueStrings([...(row.affectedSectors ?? []), row.sector, row.country, ...(row.countries ?? [])]),
+      datasetOrImpactClaimWhenSafe: row.impact ?? row.datasetType ?? row.datasetStatus ?? "not_disclosed",
+      ttpToolCvePivots: uniqueStrings([row.ttp, row.attackId, ...(row.nextSearchPivots ?? [])]).slice(0, 6),
+      freshness: row.freshnessStatus,
+      confidence: row.confidence,
+      corroborationState: row.corroborationState,
+      contradictionState: row.contradictionHints.length > 0 ? "review_hold" : "none",
+      sourceFamilies: row.sourceFamilies,
+      nextBuyerSearchPivots: row.nextSearchPivots,
+      provenanceHash: row.provenanceHash,
+      whyUsefulNow: row.whyWorthPayingFor ?? `${row.actor} has current source-backed public intelligence with buyer-visible pivots.`,
+      noLeakProof: "metadata_only_no_raw_body_no_credentials_no_private_content" as const,
+      countsTowardCurrentSellableRows: true as const
+    }));
+  return {
+    schemaVersion: "ti.apify_marketplace_conversion_real_row_sample_pack.v1",
+    routeVisibleOn: ["Apify OUTPUT", "Apify dataset rows", "/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo"],
+    source: "current_safe_output_rows_only",
+    proofRunId: "OThlfd0uzSCNnedAO",
+    proofDatasetId: "LSen2fYtwFTtOr7vK",
+    productionPaidTrafficReady: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR,
+    productionBlockers: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? [] : [
+      "sellable_rows_below_100_production_floor",
+      "paid_traffic_experiment_blocked_until_agent10_floor_passes",
+      "external_apify_marketplace_analytics_unknown"
+    ],
+    currentSellableRows: quality.sellable,
+    targetSellableRows: PRODUCTION_SELLABLE_ROW_FLOOR,
+    sampleRows,
+    excludedAsPaidReadinessProof: [
+      { rowClass: "synthetic", reason: "Synthetic proof rows validate schema shape only.", countsTowardPaidReadiness: false },
+      { rowClass: "graph_only", reason: "Graph-only pivots need capture-backed claims before buyer proof.", countsTowardPaidReadiness: false },
+      { rowClass: "stale", reason: "Stale rows cannot support current monitoring claims.", countsTowardPaidReadiness: false },
+      { rowClass: "restricted_only", reason: "Restricted-only metadata needs safe public support before paid proof.", countsTowardPaidReadiness: false },
+      { rowClass: "caveat_only", reason: "Caveated leads are useful context but do not count as sellable readiness.", countsTowardPaidReadiness: false },
+      { rowClass: "held", reason: "Held rows need review or repair before buyer-visible promotion.", countsTowardPaidReadiness: false },
+      { rowClass: "coverage_gap", reason: "Coverage gaps explain missing evidence and are not paid findings.", countsTowardPaidReadiness: false }
+    ],
+    paidTrafficExperimentReadiness: {
+      status: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready_after_agent10_floor_passes" : "blocked_until_100_real_sellable_rows",
+      activatesWhen: [
+        "Agent 10 release decision observes at least 100 real current sellable rows",
+        "sellable row rate is at least 25 percent",
+        "average buyer value score is at least 0.55",
+        "Apify marketplace telemetry is externally verified",
+        "no-leak sample proof remains green"
+      ],
+      targetBuyer: "CTI analyst evaluating daily actor, victim, CVE, sector, and ransomware monitoring",
+      inputPreset: "20 default actor/ransomware queries, maxRowsPerQuery=25, includeCoverageGaps=true, includeDatasets=false",
+      successMetric: "trial-to-paid conversion >= 15%, useful-row density >= 40%, repeat users >= 1, refunds = 0",
+      stopLossMetric: "stop paid traffic if paid runs stay 0 after 100 verified Store views, useful-row density drops below 40%, refunds appear, or sellable rows fall below 100",
+      refundRisk: "medium until real paid cohorts verify useful rows, freshness, and no-leak guarantees"
+    },
+    marketplaceTelemetryDescriptors: [
+      { field: "storePageViews", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "actorRuns", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "paidRuns", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "retention", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "refundRisk", currentValue: "external_unknown", sourceOfTruth: "Apify analytics", noSyntheticFallback: true },
+      { field: "costPerUsefulRow", currentValue: "external_unknown", sourceOfTruth: "/v1/ops/product-slo", noSyntheticFallback: true },
+      { field: "usefulRowDensity", currentValue: "external_unknown", sourceOfTruth: "/v1/ops/product-slo", noSyntheticFallback: true }
+    ],
+    noFakeProof: {
+      externalAnalyticsRequired: true,
+      valuesRemainExternalUnknownUntilVerified: true,
+      noSyntheticRowsUsed: true,
+      noGraphOnlyRowsUsed: true,
+      noCaveatOnlyRowsUsed: true,
+      noRestrictedOnlyRowsUsed: true
+    }
+  };
 }
 
 function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {

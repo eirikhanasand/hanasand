@@ -848,6 +848,54 @@ const paidRowAuditExclusions = (paidRowAudit100.exclusionProof as Array<Record<s
 for (const excludedClass of ["graph_only_projection", "synthetic_row", "stale_or_duplicate", "restricted_only", "caveat_only"]) {
   if (!paidRowAuditExclusions.includes(excludedClass)) throw new Error(`Program CH audit must exclude ${excludedClass}`);
 }
+const first100AdmissionQuality = outputRecord.first100AdmissionQuality as Record<string, unknown> | undefined;
+if (
+  !first100AdmissionQuality
+  || first100AdmissionQuality.schemaVersion !== "ti.apify_first_100_paid_row_admission_quality.v1"
+  || first100AdmissionQuality.dryRun !== true
+  || first100AdmissionQuality.willMutateSources !== false
+  || first100AdmissionQuality.willStartCollection !== false
+  || first100AdmissionQuality.productionSellableFloor !== 100
+  || Number(first100AdmissionQuality.fixtureCount) < 40
+  || !first100AdmissionQuality.admissionRules
+  || !first100AdmissionQuality.classificationCounts
+  || !first100AdmissionQuality.metrics
+  || !Array.isArray(first100AdmissionQuality.sampleRows)
+  || !Array.isArray(first100AdmissionQuality.nonSellableExclusionProof)
+  || !Array.isArray(first100AdmissionQuality.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program CN first-100 paid-row admission quality");
+}
+const first100Counts = first100AdmissionQuality.classificationCounts as Record<string, unknown>;
+for (const rowClass of ["accepted_sellable", "caveated_useful", "needs_public_support", "stale_duplicate", "alias_collision", "wrong_actor", "restricted_only", "graph_only", "synthetic_proof_only", "generic_market_source_page", "low_buyer_value"]) {
+  if (Number(first100Counts[rowClass]) <= 0) throw new Error(`Program CN admission quality must cover ${rowClass}`);
+}
+const first100Metrics = first100AdmissionQuality.metrics as Record<string, unknown>;
+if (
+  Number(first100Metrics.rowsAdmittedToProductionFloor) !== 8
+  || Number(first100Metrics.rowsDowngradedToCaveatedContext) < 8
+  || Number(first100Metrics.rowsSuppressed) < 20
+  || Number(first100Metrics.rowsNeedingParserRepair) < 4
+  || Number(first100Metrics.rowsNeedingSourceSupport) < 8
+  || Number(first100Metrics.rowsNeedingDarkMetadataPublicSupport) < 4
+  || Number(first100Metrics.estimatedBuyerValueDelta) <= 0
+  || Number(first100Metrics.rowCountInflationBlocked) < 40
+) {
+  throw new Error("Program CN admission metrics must protect the first 100 paid rows");
+}
+if (!(first100AdmissionQuality.sampleRows as Array<Record<string, unknown>>).every((row) =>
+  typeof row.whyBuyerShouldCare === "string"
+  && typeof row.nextSearchOrPivot === "string"
+  && typeof row.provenanceHash === "string"
+  && row.noLeak === true
+  && (row.countsTowardProductionSellableRows === true || row.admissionDecision !== "admit_sellable")
+)) {
+  throw new Error("Program CN sample rows must explain buyer value, pivots, provenance, and non-sellable exclusion");
+}
+const first100Exclusions = (first100AdmissionQuality.nonSellableExclusionProof as Array<Record<string, unknown>>).map((row) => row.class);
+for (const excludedClass of ["graph_only", "synthetic_proof_only", "stale_duplicate", "restricted_only", "caveated_useful", "generic_market_source_page", "low_buyer_value", "alias_or_wrong_actor"]) {
+  if (!first100Exclusions.includes(excludedClass)) throw new Error(`Program CN admission quality must exclude ${excludedClass}`);
+}
 const revenueConversionChecklist = outputRecord.revenueConversionChecklist as Record<string, unknown> | undefined;
 if (
   !revenueConversionChecklist
