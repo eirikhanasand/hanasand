@@ -558,6 +558,64 @@ if (
 ) {
   throw new Error("Program CJ real parser lift must preserve no-leak and no-production-claim boundaries");
 }
+const liveSourceAdmissionPacket = parserRealSellableLift.liveSourceAdmissionPacket as Record<string, unknown> | undefined;
+if (
+  !liveSourceAdmissionPacket
+  || liveSourceAdmissionPacket.schemaVersion !== "ti.apify_live_source_parser_admission.v1"
+  || liveSourceAdmissionPacket.owner !== "agent_03"
+  || liveSourceAdmissionPacket.candidateRowCount !== 40
+  || liveSourceAdmissionPacket.movedToSellableRows !== 36
+  || liveSourceAdmissionPacket.usefulCaveatedRows !== 8
+  || liveSourceAdmissionPacket.suppressedRows !== 10
+  || liveSourceAdmissionPacket.rowsStillOneRepairAway !== 18
+  || !Array.isArray(liveSourceAdmissionPacket.candidateRows)
+  || !Array.isArray(liveSourceAdmissionPacket.suppressedClasses)
+  || !Array.isArray(liveSourceAdmissionPacket.ownerHandoffs)
+) {
+  throw new Error("Program CO live source parser admission packet must expose 40 rich candidate rows");
+}
+const liveSourceProgress = liveSourceAdmissionPacket.estimatedProgressToward100 as Record<string, unknown> | undefined;
+if (
+  !liveSourceProgress
+  || liveSourceProgress.projectedSellableRowsAfterAdmission !== 52
+  || liveSourceProgress.remainingRowsTo100 !== 48
+  || liveSourceProgress.progressRatio !== 0.52
+  || liveSourceProgress.countsAsProductionClaim !== false
+) {
+  throw new Error("Program CO admission progress must show honest progress toward 100 without a production claim");
+}
+const liveSourceRows = liveSourceAdmissionPacket.candidateRows as Array<Record<string, unknown>>;
+for (const row of liveSourceRows) {
+  const noLeakProof = row.noLeakProof as Record<string, unknown> | undefined;
+  if (
+    typeof row.actor !== "string"
+    || typeof row.actorFamily !== "string"
+    || typeof row.victimOrTarget !== "string"
+    || typeof row.sector !== "string"
+    || typeof row.countryOrRegion !== "string"
+    || typeof row.datasetOrImpact !== "string"
+    || typeof row.ttpToolOrCve !== "string"
+    || typeof row.firstSeen !== "string"
+    || typeof row.lastSeen !== "string"
+    || typeof row.sourceFamily !== "string"
+    || Number(row.confidence) <= 0
+    || typeof row.caveat !== "string"
+    || typeof row.provenanceHash !== "string"
+    || String(row.provenanceHash).length === 0
+    || typeof row.nextBuyerSearch !== "string"
+    || String(row.nextBuyerSearch).length === 0
+    || !noLeakProof
+    || Object.values(noLeakProof).some((value) => value !== false)
+  ) {
+    throw new Error("Program CO admission rows must keep parser fields, provenance, buyer search, and no-leak proof");
+  }
+}
+for (const requiredActor of ["APT29", "APT28", "APT42", "Volt Typhoon", "Lazarus Group", "Turla", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"]) {
+  if (!liveSourceRows.some((row) => row.actor === requiredActor)) throw new Error(`Program CO admission packet must include ${requiredActor}`);
+}
+if (liveSourceRows.filter((row) => row.admissionDecision === "sellable").length !== 30) throw new Error("Program CO admission packet must include 30 sellable candidate rows");
+if (liveSourceRows.filter((row) => row.admissionDecision === "useful_caveated").length !== 6) throw new Error("Program CO admission packet must include 6 useful caveated rows");
+if (liveSourceRows.filter((row) => row.admissionDecision === "suppress").length !== 4) throw new Error("Program CO admission packet must include 4 suppression rows");
 const hundredRowConversionProof = outputRecord.hundredRowConversionProof as Record<string, unknown> | undefined;
 if (
   !hundredRowConversionProof

@@ -890,6 +890,41 @@ describe("ops controls", () => {
       actorInteractionTextUsed: false,
       productionSellableClaimed: false
     });
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.schemaVersion).toBe("ti.program_co_live_source_parser_admission.v1");
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRowCount).toBe(40);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.movedToSellableRows).toBe(36);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.usefulCaveatedRows).toBe(8);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.suppressedRows).toBe(10);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.rowsStillOneRepairAway).toBe(18);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.estimatedProgressToward100).toMatchObject({
+      observedCurrentSellableRows: 16,
+      newSellableRows: 36,
+      projectedSellableRowsAfterAdmission: 52,
+      remainingRowsTo100: 48,
+      progressRatio: 0.52,
+      countsAsProductionClaim: false
+    });
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29", "APT28", "APT42", "Volt Typhoon", "Lazarus Group", "Turla", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"
+    ]));
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.every((row) =>
+      row.victimOrTarget.length > 0 &&
+      row.sector.length > 0 &&
+      row.countryOrRegion.length > 0 &&
+      row.datasetOrImpact.length > 0 &&
+      row.ttpToolOrCve.length > 0 &&
+      row.firstSeen.length > 0 &&
+      row.lastSeen.length > 0 &&
+      row.sourceFamily.length > 0 &&
+      row.confidence > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.nextBuyerSearch.length > 0 &&
+      Object.values(row.noLeakProof).every((value) => value === false)
+    )).toBe(true);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "sellable")).toHaveLength(30);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "useful_caveated")).toHaveLength(6);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "suppress")).toHaveLength(4);
+    expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.suppressedClasses.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_actor_summary", "stale_repost_as_current", "alias_collision", "restricted_only_without_public_support"]));
     expect(dashboard.qualityConversionGate).toMatchObject({
       schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),

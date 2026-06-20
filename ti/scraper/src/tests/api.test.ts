@@ -859,6 +859,72 @@ describe("api v1", () => {
       actorInteractionTextUsed: false,
       productionSellableClaimed: false
     });
+    const liveSourceAdmissionPacket = (response.parserRealSellableLift as {
+      liveSourceAdmissionPacket: {
+        schemaVersion: string;
+        candidateRowCount: number;
+        movedToSellableRows: number;
+        usefulCaveatedRows: number;
+        suppressedRows: number;
+        rowsStillOneRepairAway: number;
+        estimatedProgressToward100: { projectedSellableRowsAfterAdmission: number; remainingRowsTo100: number; progressRatio: number; countsAsProductionClaim: boolean };
+        candidateRows: Array<{
+          actor: string;
+          actorFamily: string;
+          victimOrTarget: string;
+          sector: string;
+          countryOrRegion: string;
+          datasetOrImpact: string;
+          ttpToolOrCve: string;
+          firstSeen: string;
+          lastSeen: string;
+          sourceFamily: string;
+          confidence: number;
+          caveat: string;
+          contradictionState: string;
+          provenanceHash: string;
+          noLeakProof: Record<string, boolean>;
+          nextBuyerSearch: string;
+          admissionDecision: string;
+        }>;
+        suppressedClasses: Array<{ class: string; rowCount: number }>;
+      };
+    }).liveSourceAdmissionPacket;
+    expect(liveSourceAdmissionPacket.schemaVersion).toBe("ti.program_co_live_source_parser_admission.v1");
+    expect(liveSourceAdmissionPacket.candidateRowCount).toBe(40);
+    expect(liveSourceAdmissionPacket.movedToSellableRows).toBe(36);
+    expect(liveSourceAdmissionPacket.usefulCaveatedRows).toBe(8);
+    expect(liveSourceAdmissionPacket.suppressedRows).toBe(10);
+    expect(liveSourceAdmissionPacket.rowsStillOneRepairAway).toBe(18);
+    expect(liveSourceAdmissionPacket.estimatedProgressToward100).toMatchObject({
+      observedCurrentSellableRows: 16,
+      newSellableRows: 36,
+      projectedSellableRowsAfterAdmission: 52,
+      remainingRowsTo100: 48,
+      progressRatio: 0.52,
+      countsAsProductionClaim: false
+    });
+    expect(liveSourceAdmissionPacket.candidateRows.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Volt Typhoon", "Lazarus Group", "Turla", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"]));
+    expect(liveSourceAdmissionPacket.candidateRows.every((row) =>
+      row.actorFamily.length > 0 &&
+      row.victimOrTarget.length > 0 &&
+      row.sector.length > 0 &&
+      row.countryOrRegion.length > 0 &&
+      row.datasetOrImpact.length > 0 &&
+      row.ttpToolOrCve.length > 0 &&
+      row.firstSeen.length > 0 &&
+      row.lastSeen.length > 0 &&
+      row.sourceFamily.length > 0 &&
+      row.confidence > 0 &&
+      row.caveat.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.nextBuyerSearch.length > 0 &&
+      Object.values(row.noLeakProof).every((value) => value === false)
+    )).toBe(true);
+    expect(liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "sellable")).toHaveLength(30);
+    expect(liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "useful_caveated")).toHaveLength(6);
+    expect(liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "suppress")).toHaveLength(4);
+    expect(liveSourceAdmissionPacket.suppressedClasses.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_actor_summary", "stale_repost_as_current", "alias_collision", "restricted_only_without_public_support"]));
     expect((response.first100AdmissionQuality as {
       schemaVersion: string;
       routeVisibleOn: string[];

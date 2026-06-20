@@ -3450,35 +3450,7 @@ const buildParserRealSellableLift = (): LiveProductSloDashboard["parserRealSella
     parserFieldsRequired: ["actor", "victim", "sector", "country", "dataset_or_impact", "ttp_tool", "first_seen", "last_seen", "source_family_support", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_buyer_search"],
     repairedRows,
     rejectionRows,
-    liveSourceAdmissionPacket: {
-      schemaVersion: "ti.program_co_live_source_parser_admission.v1",
-      owner: "agent_03",
-      candidateRowCount: 30,
-      movedToSellableRows: 12,
-      usefulCaveatedRows: 7,
-      suppressedRows: 11,
-      rowsStillOneRepairAway: 31,
-      estimatedProgressToward100: {
-        observedCurrentSellableRows: 16,
-        newSellableRows: 12,
-        projectedSellableRowsAfterAdmission: 28,
-        remainingRowsTo100: 72,
-        progressRatio: 0.28,
-        countsAsProductionClaim: false
-      },
-      candidateRows: [],
-      suppressedClasses: [
-        { class: "stale_repost_as_current", rowCount: 4, owner: "agent_07", reason: "latest-activity wording would overstate old reports" },
-        { class: "alias_collision", rowCount: 3, owner: "agent_07", reason: "actor alias collision unresolved" },
-        { class: "restricted_only_without_public_support", rowCount: 4, owner: "agent_05", reason: "metadata-only rows stay held until public corroboration exists" }
-      ],
-      ownerHandoffs: [
-        { owner: "agent_04", rowCount: 7, handoff: "attach safe public source family support to caveated rows" },
-        { owner: "agent_05", rowCount: 4, handoff: "keep dark metadata hash-only and public-support gated" },
-        { owner: "agent_07", rowCount: 11, handoff: "suppress stale alias and unsupported rows before billing" },
-        { owner: "agent_10", rowCount: 12, handoff: "treat admitted rows as projected until production proof run confirms them" }
-      ]
-    },
+    liveSourceAdmissionPacket: buildProgramCoLiveSourceAdmissionPacket(),
     ownerHandoffs: [
       { owner: "agent_04", handoff: "add missing public report/advisory support for caveated public-channel rows", rowCount: 6 },
       { owner: "agent_05", handoff: "find public support for metadata-only ransomware rows without raw leak access", rowCount: 4 },

@@ -2237,6 +2237,28 @@ export function createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository(
   return new DisabledEvidenceActorDatasetSourceGapConsumerQueueAuditRepository();
 }
 
+function evidenceUniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.filter((value) => value.length > 0))];
+}
+
+function evidenceSourceGapRepairOwnerAgent(
+  ownerQueue: EvidenceActorDatasetSourceGapConsumerQueueRow["ownerQueue"]
+): EvidenceActorDatasetSourceGapRepairPacket["ownerAgent"] {
+  if (ownerQueue === "agent01_source_activation") return "agent_01";
+  if (ownerQueue === "agent04_public_channel") return "agent_04";
+  if (ownerQueue === "agent05_restricted_metadata") return "agent_05";
+  return "agent_07";
+}
+
+function evidenceSourceGapRepairTargetRoute(
+  ownerQueue: EvidenceActorDatasetSourceGapConsumerQueueRow["ownerQueue"]
+): EvidenceActorDatasetSourceGapRepairPacket["targetRoute"] {
+  if (ownerQueue === "agent01_source_activation") return "/v1/sources/atlas";
+  if (ownerQueue === "agent04_public_channel") return "/v1/public-channels/status";
+  if (ownerQueue === "agent05_restricted_metadata") return "/v1/darkweb/status";
+  return "/v1/quality/evaluate";
+}
+
 export function buildEvidenceActorDatasetSourceGapRepairHandoff(
   queue: EvidenceActorDatasetSourceGapConsumerQueue
 ): EvidenceActorDatasetSourceGapRepairHandoff {
@@ -2253,13 +2275,13 @@ export function buildEvidenceActorDatasetSourceGapRepairHandoff(
       return {
         packetId: stableId("evidence-actor-source-gap-repair-handoff", `${queue.queueId}:${ownerQueue}`),
         ownerQueue,
-        ownerAgent: sourceGapRepairOwnerAgent(ownerQueue),
-        targetRoute: sourceGapRepairTargetRoute(ownerQueue),
-        sourceFamilies: uniqueStrings(rows.flatMap((row) => row.sourceFamily ? [row.sourceFamily] : [])) as EvidenceActorProductImpactRow["sourceFamily"][],
-        queueActions: uniqueStrings(rows.map((row) => row.queueAction)) as EvidenceActorDatasetSourceGapConsumerQueueRow["queueAction"][],
+        ownerAgent: evidenceSourceGapRepairOwnerAgent(ownerQueue),
+        targetRoute: evidenceSourceGapRepairTargetRoute(ownerQueue),
+        sourceFamilies: evidenceUniqueStrings(rows.flatMap((row) => row.sourceFamily ? [row.sourceFamily] : [])) as EvidenceActorProductImpactRow["sourceFamily"][],
+        queueActions: evidenceUniqueStrings(rows.map((row) => row.queueAction)) as EvidenceActorDatasetSourceGapConsumerQueueRow["queueAction"][],
         queueItemIds: rows.map((row) => row.queueItemId),
-        acceptanceCriteria: uniqueStrings(rows.flatMap((row) => row.acceptanceCriteria)),
-        buyerVisibleEffects: uniqueStrings(rows.map((row) => row.buyerVisibleEffect)),
+        acceptanceCriteria: evidenceUniqueStrings(rows.flatMap((row) => row.acceptanceCriteria)),
+        buyerVisibleEffects: evidenceUniqueStrings(rows.map((row) => row.buyerVisibleEffect)),
         blockedUntil: ["explicit_operator_approval", "durable_evidence_replay"] as ["explicit_operator_approval", "durable_evidence_replay"],
         noLeak: true as const
       };
