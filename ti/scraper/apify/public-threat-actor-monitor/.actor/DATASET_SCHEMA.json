@@ -80,6 +80,10 @@
       "buyerCaveat": { "type": "string" },
       "expectedTimeToUsefulSignal": { "type": "string" },
       "pollingHint": { "type": "string" },
+      "paidRowDecision": { "type": "string", "enum": ["sellable", "included_with_caveat", "coverage_gap_only", "hold"] },
+      "paidRowReason": { "type": "string" },
+      "buyerValueScore": { "type": "number", "minimum": 0, "maximum": 1 },
+      "billingGuidance": { "type": "string", "enum": ["charge", "include_as_context", "do_not_charge_if_metered"] },
       "evidenceGrade": { "type": "string", "enum": ["corroborated", "single_source", "unverified"] },
       "isActionable": { "type": "boolean" },
       "reviewReasons": { "type": "array", "items": { "type": "string" } },
@@ -153,6 +157,10 @@
       "buyerCaveat",
       "expectedTimeToUsefulSignal",
       "pollingHint",
+      "paidRowDecision",
+      "paidRowReason",
+      "buyerValueScore",
+      "billingGuidance",
       "evidenceGrade",
       "isActionable",
       "reviewReasons",
@@ -167,13 +175,16 @@
     "overview": {
       "title": "Actor intelligence",
       "transformation": {
-        "fields": ["actor", "rowType", "title", "summary", "relationshipSummary", "relationshipPivotTypes", "relationshipPivots", "whyActionable", "freshnessDelta", "confidenceDelta", "contradictionHints", "corroborationState", "nextSearchPivots", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "freshnessExpectation", "highestValueMissingFamily", "nextBestSourceAction", "expectedTimeToUsefulSignal", "buyerCaveat", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
+        "fields": ["actor", "rowType", "paidRowDecision", "billingGuidance", "buyerValueScore", "title", "summary", "relationshipSummary", "relationshipPivotTypes", "relationshipPivots", "whyActionable", "freshnessDelta", "confidenceDelta", "contradictionHints", "corroborationState", "nextSearchPivots", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "freshnessExpectation", "highestValueMissingFamily", "nextBestSourceAction", "expectedTimeToUsefulSignal", "buyerCaveat", "paidRowReason", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
       },
       "display": {
         "component": "table",
         "properties": {
           "actor": { "label": "Actor", "format": "text" },
           "rowType": { "label": "Type", "format": "text" },
+          "paidRowDecision": { "label": "Paid row decision", "format": "text" },
+          "billingGuidance": { "label": "Billing guidance", "format": "text" },
+          "buyerValueScore": { "label": "Buyer value", "format": "number" },
           "title": { "label": "Finding", "format": "text" },
           "summary": { "label": "Summary", "format": "text" },
           "relationshipSummary": { "label": "Relationship insight", "format": "text" },
@@ -201,6 +212,7 @@
           "nextBestSourceAction": { "label": "Best source action", "format": "text" },
           "expectedTimeToUsefulSignal": { "label": "Signal ETA", "format": "text" },
           "buyerCaveat": { "label": "Buyer caveat", "format": "text" },
+          "paidRowReason": { "label": "Paid row reason", "format": "text" },
           "evidenceGrade": { "label": "Evidence", "format": "text" },
           "coverageStatus": { "label": "Coverage", "format": "text" },
           "collectionPriority": { "label": "Priority", "format": "text" },

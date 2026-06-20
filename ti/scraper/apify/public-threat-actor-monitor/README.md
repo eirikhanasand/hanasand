@@ -27,7 +27,7 @@ The Actor is configured for Apify pay-per-event pricing, effective July 4, 2026.
 - `apify-actor-start`
 - `apify-default-dataset-item`
 
-Rows are priced at `$3.00 / 1,000`; Actor starts are `$0.00005`; platform usage is included for customers; Apify margin is 20%. This keeps customer cost tied to useful output volume rather than wall-clock runtime. The default dataset remains one row per normalized finding; the `OUTPUT` key-value-store record includes a compact monetization summary with expected event names and row count.
+Rows are priced at `$3.00 / 1,000`; Actor starts are `$0.00005`; platform usage is included for customers; Apify margin is 20%. This keeps customer cost tied to output volume rather than wall-clock runtime. The default dataset remains one row per normalized finding, and every row carries `paidRowDecision`, `buyerValueScore`, and `billingGuidance` so buyers can separate sellable findings from caveated leads, held rows, and coverage-gap remediation. The `OUTPUT` key-value-store record includes compact monetization and paid-row quality summaries.
 
 Latest public proof: run `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 safe rows for APT29/APT42/LockBit, 3.1s runtime, about `$0.00075` platform usage, and about `$0.045` gross row revenue after pricing starts.
 
@@ -163,6 +163,8 @@ The Actor emits public metadata and summaries only. These fields are excluded:
 ## Using the results
 
 Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `relationshipSummary`, `relationshipPivots`, `whyActionable`, `corroborationState`, and `nextSearchPivots` to see the actor-to-victim/sector/country/TTP/source-family pivots that make a row worth investigating. Use `reviewReasons`, `analysisFacets`, `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish actionable rows from stale, partial, single-source, contradicted, or metadata-only claims. Use `schedulerDecision`, `pollingHint`, `nextPollSeconds`, `retryAfterSeconds`, `duplicateRunReuse`, and `sourceCoverageGaps` to decide whether downstream monitoring should poll again, wait for backoff, or treat the row as a source-coverage follow-up. Retain `provenanceHash` when merging repeated runs.
+
+For paid monitoring workflows, start with `paidRowDecision=sellable`, then inspect `included_with_caveat` rows as leads. Treat `coverage_gap_only` rows as source-expansion work and `hold` rows as not ready for promotion. The run-level `paidRowQuality` object gives the same counts without scanning the whole dataset.
 
 The default watchlist contains 20 long-running state-linked and financially motivated groups. Custom queries can monitor up to 25 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Dataset coverage rows are disabled by default so ordinary runs contain intelligence rows rather than product-roadmap rows. Coverage-gap rows remain enabled by default because they explain why an answer may still be partial.
 

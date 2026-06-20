@@ -90,6 +90,10 @@ const requiredDatasetFields = [
   "buyerCaveat",
   "expectedTimeToUsefulSignal",
   "pollingHint",
+  "paidRowDecision",
+  "paidRowReason",
+  "buyerValueScore",
+  "billingGuidance",
   "reviewReasons",
   "analysisFacets",
   "rawContentIncluded",
@@ -111,6 +115,10 @@ const visibleDatasetFields = [
   "corroborationState",
   "nextSearchPivots",
   "buyerCaveat",
+  "paidRowDecision",
+  "paidRowReason",
+  "buyerValueScore",
+  "billingGuidance",
   "expectedTimeToUsefulSignal",
   "coverageStatus",
   "collectionPriority",
@@ -178,6 +186,7 @@ const contractMentions: Array<[string, string[]]> = [
   ["coverage status", ["coverageStatus"]],
   ["source coverage gaps", ["sourceCoverageGaps"]],
   ["source coverage action fields", ["nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"]],
+  ["paid row decision fields", ["paidRowDecision", "billingGuidance", "buyerValueScore"]],
   ["relationship insight fields", ["relationshipSummary", "relationshipPivots", "whyActionable", "nextSearchPivots"]],
   ["scheduler decision", ["schedulerDecision"]],
   ["pay-per-event pricing", ["pay-per-event", "apify-default-dataset-item"]],
@@ -208,6 +217,14 @@ for (const field of visibleDatasetFields) {
 
 const rowTypeEnum = enumValues(datasetProperties.rowType);
 if (!rowTypeEnum.includes("coverage_gap")) failures.push("Dataset rowType enum must include coverage_gap");
+const paidRowDecisionEnum = enumValues(datasetProperties.paidRowDecision);
+for (const decision of ["sellable", "included_with_caveat", "coverage_gap_only", "hold"]) {
+  if (!paidRowDecisionEnum.includes(decision)) failures.push(`Dataset paidRowDecision enum must include ${decision}`);
+}
+const billingGuidanceEnum = enumValues(datasetProperties.billingGuidance);
+for (const guidance of ["charge", "include_as_context", "do_not_charge_if_metered"]) {
+  if (!billingGuidanceEnum.includes(guidance)) failures.push(`Dataset billingGuidance enum must include ${guidance}`);
+}
 const sourceTypeEnum = enumValues(datasetProperties.sourceType);
 if (!sourceTypeEnum.includes("system")) failures.push("Dataset sourceType enum must include system for coverage-gap rows");
 

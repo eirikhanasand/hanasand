@@ -3,6 +3,7 @@
 ## 0.6.3 - 2026-06-20
 
 - Recorded published build `0.6.3`, proof run `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, July 4 pricing, Apify margin, platform-usage inclusion, and conversion metric handoff in the public readiness contract and launch checklist.
+- Added paid-row decisions to every dataset row: `sellable`, `included_with_caveat`, `coverage_gap_only`, or `hold`, with buyer value score and billing guidance. `OUTPUT.paidRowQuality` and monetization counts now separate useful findings from context-only and remediation rows.
 
 ## 0.6.0 - 2026-06-20
 

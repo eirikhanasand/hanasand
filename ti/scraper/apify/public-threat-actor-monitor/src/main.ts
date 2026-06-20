@@ -145,6 +145,10 @@ interface MarketplaceRow {
   buyerCaveat: string;
   expectedTimeToUsefulSignal: string;
   pollingHint: string;
+  paidRowDecision?: "sellable" | "included_with_caveat" | "coverage_gap_only" | "hold";
+  paidRowReason?: string;
+  buyerValueScore?: number;
+  billingGuidance?: "charge" | "include_as_context" | "do_not_charge_if_metered";
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
   reviewReasons: string[];
@@ -177,6 +181,11 @@ interface MonetizationSummary {
   actorStartEvent: string;
   datasetItemEvent: string;
   datasetItemCount: number;
+  sellableRowCount: number;
+  caveatedRowCount: number;
+  coverageGapOnlyRowCount: number;
+  holdRowCount: number;
+  chargeRecommendedRowCount: number;
   skippedReason?: string;
 }
 
@@ -202,7 +211,7 @@ async function main() {
     }
   }
 
-  const monetizationSummary = monetizationForRows(rows.length);
+  const monetizationSummary = monetizationForRows(rows);
   await writeOutputs(rows, monetizationSummary);
   console.log(JSON.stringify({
     ok: true,
@@ -468,7 +477,70 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
     rows.push(...coverageGapRows(response, generatedAt, lastSeen));
   }
 
-  return rows;
+  return rows.map(withPaidRowDecision);
+}
+
+function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
+  const decision = paidRowDecisionFor(row);
+  return {
+    ...row,
+    ...decision,
+    analysisFacets: uniqueStrings([
+      ...row.analysisFacets,
+      `paid:${decision.paidRowDecision}`,
+      `billing:${decision.billingGuidance}`
+    ]).sort()
+  };
+}
+
+function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowDecision" | "paidRowReason" | "buyerValueScore" | "billingGuidance"> {
+  if (row.rowType === "coverage_gap") {
+    return {
+      paidRowDecision: "coverage_gap_only",
+      paidRowReason: "Coverage-gap rows explain what is missing and should be treated as remediation context, not a complete intelligence finding.",
+      buyerValueScore: 0.2,
+      billingGuidance: "do_not_charge_if_metered"
+    };
+  }
+  if (
+    row.contradictionHints.length > 0
+    || row.reviewReasons.some((reason) => reason.startsWith("hold:"))
+    || row.coverageStatus === "no_evidence"
+  ) {
+    return {
+      paidRowDecision: "hold",
+      paidRowReason: "This row has a hold condition such as contradictory reporting, stale or missing evidence, low confidence, or no public evidence.",
+      buyerValueScore: row.evidenceGrade === "corroborated" ? 0.45 : 0.3,
+      billingGuidance: "do_not_charge_if_metered"
+    };
+  }
+  if (
+    row.isActionable
+    && row.evidenceGrade === "corroborated"
+    && row.sourceFamilyCount >= 2
+    && (row.freshnessStatus === "current" || row.freshnessStatus === "recent")
+  ) {
+    return {
+      paidRowDecision: "sellable",
+      paidRowReason: "Fresh or recent corroborated public evidence supports this row enough for paid monitoring output.",
+      buyerValueScore: 0.9,
+      billingGuidance: "charge"
+    };
+  }
+  if (row.isActionable || row.evidenceGrade === "single_source" || row.coverageStatus === "thin") {
+    return {
+      paidRowDecision: "included_with_caveat",
+      paidRowReason: "This row is useful as a lead but needs corroboration, source-family diversity, or fresher supporting evidence before promotion.",
+      buyerValueScore: row.isActionable ? 0.65 : 0.5,
+      billingGuidance: "include_as_context"
+    };
+  }
+  return {
+    paidRowDecision: "hold",
+    paidRowReason: "This row is retained for context but is not ready as paid intelligence output.",
+    buyerValueScore: 0.25,
+    billingGuidance: "do_not_charge_if_metered"
+  };
 }
 
 function baseRow(response: TiSearchResponse, generatedAt: string, lastSeen: string): MarketplaceRow {
@@ -1129,13 +1201,33 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
+    paidRowQuality: paidRowQualitySummary(rows),
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
   };
 }
 
-function monetizationForRows(rowCount: number): MonetizationSummary {
+function paidRowQualitySummary(rows: MarketplaceRow[]) {
+  const byDecision = {
+    sellable: rows.filter((row) => row.paidRowDecision === "sellable").length,
+    included_with_caveat: rows.filter((row) => row.paidRowDecision === "included_with_caveat").length,
+    coverage_gap_only: rows.filter((row) => row.paidRowDecision === "coverage_gap_only").length,
+    hold: rows.filter((row) => row.paidRowDecision === "hold").length
+  };
+  return {
+    ...byDecision,
+    chargeRecommended: rows.filter((row) => row.billingGuidance === "charge").length,
+    contextOnly: rows.filter((row) => row.billingGuidance !== "charge").length,
+    usefulForBuyer: rows.filter((row) => row.paidRowDecision === "sellable" || row.paidRowDecision === "included_with_caveat").length,
+    averageBuyerValueScore: rows.length
+      ? Number((rows.reduce((sum, row) => sum + (row.buyerValueScore ?? 0), 0) / rows.length).toFixed(3))
+      : 0
+  };
+}
+
+function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {
+  const quality = paidRowQualitySummary(rows);
   const enabled = Boolean(process.env.APIFY_ACTOR_RUN_ID && process.env.APIFY_TOKEN);
   const summary: MonetizationSummary = {
     enabled,
@@ -1144,7 +1236,12 @@ function monetizationForRows(rowCount: number): MonetizationSummary {
     billingMode: "apify_synthetic_events",
     actorStartEvent: ACTOR_START_EVENT,
     datasetItemEvent: DATASET_ITEM_EVENT,
-    datasetItemCount: rowCount
+    datasetItemCount: rows.length,
+    sellableRowCount: quality.sellable,
+    caveatedRowCount: quality.included_with_caveat,
+    coverageGapOnlyRowCount: quality.coverage_gap_only,
+    holdRowCount: quality.hold,
+    chargeRecommendedRowCount: quality.chargeRecommended
   };
   if (!summary.enabled) {
     summary.skippedReason = apifyEventSkipReason();

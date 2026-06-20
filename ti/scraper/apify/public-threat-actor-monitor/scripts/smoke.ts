@@ -39,11 +39,27 @@ if (
   || monetization.pricingModel !== "pay_per_event"
   || monetization.billingMode !== "apify_synthetic_events"
   || monetization.datasetItemCount !== output.length
+  || typeof monetization.sellableRowCount !== "number"
+  || typeof monetization.caveatedRowCount !== "number"
+  || typeof monetization.coverageGapOnlyRowCount !== "number"
+  || typeof monetization.holdRowCount !== "number"
+  || typeof monetization.chargeRecommendedRowCount !== "number"
   || !Array.isArray(monetization.eventNames)
   || !monetization.eventNames.includes("apify-actor-start")
   || !monetization.eventNames.includes("apify-default-dataset-item")
 ) {
   throw new Error("OUTPUT record must expose Apify synthetic-event monetization readiness");
+}
+const paidRowQuality = outputRecord.paidRowQuality as Record<string, unknown> | undefined;
+if (
+  !paidRowQuality
+  || typeof paidRowQuality.sellable !== "number"
+  || typeof paidRowQuality.included_with_caveat !== "number"
+  || typeof paidRowQuality.coverage_gap_only !== "number"
+  || typeof paidRowQuality.hold !== "number"
+  || typeof paidRowQuality.averageBuyerValueScore !== "number"
+) {
+  throw new Error("OUTPUT record must expose paid-row quality counts");
 }
 for (const row of output) {
   if (row.rawContentIncluded !== false) throw new Error("rawContentIncluded must be false");
@@ -83,6 +99,14 @@ for (const row of output) {
   if (typeof row.coverageStatus !== "string" || typeof row.recommendedCollectionAction !== "string") {
     throw new Error("Every row must expose coverage status and recommended collection action");
   }
+  if (
+    !["sellable", "included_with_caveat", "coverage_gap_only", "hold"].includes(String(row.paidRowDecision))
+    || typeof row.paidRowReason !== "string"
+    || typeof row.buyerValueScore !== "number"
+    || !["charge", "include_as_context", "do_not_charge_if_metered"].includes(String(row.billingGuidance))
+  ) {
+    throw new Error("Every row must expose paid-row decision, reason, score, and billing guidance");
+  }
   if (row.nextPollSeconds !== 3 || row.retryAfterSeconds !== 3 || row.duplicateRunReuse !== true) {
     throw new Error("Every row must expose scheduler polling and duplicate-run reuse state");
   }
@@ -120,8 +144,14 @@ if (activity?.claimType !== "campaign" || activity?.publisherCount !== 1) {
 if (!Array.isArray(activity?.reviewReasons) || !activity.reviewReasons.includes("review:single_source")) {
   throw new Error("Activity rows must explain single-source review state");
 }
+if (activity?.paidRowDecision !== "included_with_caveat" || activity?.billingGuidance !== "include_as_context") {
+  throw new Error("Single-source activity rows must be caveated instead of treated as fully sellable");
+}
 if (!Array.isArray(activity?.analysisFacets) || !activity.analysisFacets.includes("claim:campaign") || !activity.analysisFacets.includes("evidence:single_source")) {
   throw new Error("Activity rows must expose claim and evidence analysis facets");
+}
+if (!activity.analysisFacets.includes("paid:included_with_caveat") || !activity.analysisFacets.includes("billing:include_as_context")) {
+  throw new Error("Activity rows must expose paid-row analysis facets");
 }
 if (
   typeof activity.relationshipSummary !== "string"
@@ -142,6 +172,9 @@ if (activity?.firstReportedAt !== "2026-06-20T01:00:00.000Z" || activity?.lastRe
 const coverageGap = output.find((row) => row.rowType === "coverage_gap");
 if (coverageGap?.recommendedCollectionAction !== "add_public_channel_sources" || coverageGap?.collectionPriority !== "medium") {
   throw new Error("Coverage gap rows must guide scheduler/source follow-up");
+}
+if (coverageGap?.paidRowDecision !== "coverage_gap_only" || coverageGap?.billingGuidance !== "do_not_charge_if_metered") {
+  throw new Error("Coverage gap rows must be marked as remediation context rather than sellable findings");
 }
 
 console.log(`Smoke passed with ${output.length} safe metadata rows.`);
