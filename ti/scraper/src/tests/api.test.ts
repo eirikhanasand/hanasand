@@ -363,9 +363,9 @@ describe("api v1", () => {
       productionSellableRowFloor: 100,
       usefulCaveatedRows: 32,
       rowsBlockedFromBilling: 82,
-      oneRepairAwayRows: 125,
-      projectedSellableRowsFromAcceptedRepairs: 125,
-      projectedSellableRowsAfterAcceptedRepairs: 141,
+      oneRepairAwayRows: 123,
+      projectedSellableRowsFromAcceptedRepairs: 123,
+      projectedSellableRowsAfterAcceptedRepairs: 139,
       topBlocker: "sellable_rows_below_100",
       revenueTruth: {
         paidTrafficAllowed: false,
@@ -376,7 +376,7 @@ describe("api v1", () => {
       },
       acceptedRepairBuckets: expect.arrayContaining([
         expect.objectContaining({ source: "parserToSellableRepairPacket.candidates", projectedSellableRows: 87, countsTowardProjectedFloor: true }),
-        expect.objectContaining({ source: "parserRealSellableLift.promotedRows", projectedSellableRows: 22, countsTowardProjectedFloor: true }),
+        expect.objectContaining({ source: "parserRealSellableLift.promotedRows", projectedSellableRows: 20, countsTowardProjectedFloor: true }),
         expect.objectContaining({ source: "hundredSellableRowGraphPivotPlan", countsTowardProjectedFloor: false }),
         expect.objectContaining({ source: "darkMetadataPublicHandoff100", projectedSellableRows: 0, countsTowardProjectedFloor: false })
       ]) as unknown as Array<{ owner: string; source: string; projectedSellableRows: number; countsTowardProjectedFloor: boolean }>,
@@ -679,6 +679,79 @@ describe("api v1", () => {
       payloadsRequested: false,
       privateAuthCaptchaAccess: false,
       restrictedMaterialExposed: false,
+      productionSellableClaimed: false
+    });
+    expect((response.parserRealSellableLift as {
+      schemaVersion: string;
+      owner: string;
+      routeVisibleOn: string[];
+      baselineRunId: string;
+      baselineDatasetId: string;
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      productionSellableClaimed: boolean;
+      repairedRowCount: number;
+      promotedSellableRows: number;
+      movedToUsefulCaveatedRows: number;
+      staleRowsSuppressed: number;
+      aliasOrUnrelatedRowsSuppressed: number;
+      rowsStillOneRepairAway: number;
+      parserFieldsRequired: string[];
+      repairedRows: Array<{ actor: string; provenanceHash: string; replayRef: string; nextBuyerSearch: string; sourceFamilySupport: string[]; graphPivots: string[]; noLeak: boolean }>;
+      rejectionRows: Array<{ blockedReason: string; countsTowardSellableLift: boolean; noLeak: boolean }>;
+      ownerHandoffs: Array<{ owner: string }>;
+      noLeakBoundary: Record<string, boolean>;
+    })).toMatchObject({
+      schemaVersion: "ti.program_cj_parser_real_sellable_lift.v1",
+      owner: "agent_03",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"]) as unknown as string[],
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: false,
+      willMutateSources: false,
+      willStartCollection: false,
+      productionSellableClaimed: false,
+      repairedRowCount: 15,
+      promotedSellableRows: 20,
+      movedToUsefulCaveatedRows: 9,
+      staleRowsSuppressed: 2,
+      aliasOrUnrelatedRowsSuppressed: 2,
+      rowsStillOneRepairAway: 54,
+      parserFieldsRequired: expect.arrayContaining(["actor", "victim", "sector", "country", "dataset_or_impact", "ttp_tool", "first_seen", "last_seen", "source_family_support", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_buyer_search"]) as unknown as string[]
+    });
+    expect((response.parserRealSellableLift as {
+      repairedRows: Array<{ actor: string; provenanceHash: string; replayRef: string; nextBuyerSearch: string; sourceFamilySupport: string[]; graphPivots: string[]; noLeak: boolean }>;
+    }).repairedRows.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin"
+    ]));
+    expect((response.parserRealSellableLift as {
+      repairedRows: Array<{ provenanceHash: string; replayRef: string; nextBuyerSearch: string; sourceFamilySupport: string[]; graphPivots: string[]; noLeak: boolean }>;
+    }).repairedRows.every((row) =>
+      row.provenanceHash.length > 0 &&
+      row.replayRef.startsWith("replay:") &&
+      row.nextBuyerSearch.length > 0 &&
+      row.sourceFamilySupport.length > 0 &&
+      row.graphPivots.length >= 5 &&
+      row.noLeak
+    )).toBe(true);
+    expect((response.parserRealSellableLift as { rejectionRows: Array<{ blockedReason: string; countsTowardSellableLift: boolean; noLeak: boolean }> }).rejectionRows.map((row) => row.blockedReason)).toEqual(expect.arrayContaining([
+      "stale_report",
+      "alias_collision",
+      "unrelated_actor_co_mention",
+      "generic_marketing_page",
+      "unsafe_source_request"
+    ]));
+    expect((response.parserRealSellableLift as { rejectionRows: Array<{ countsTowardSellableLift: boolean; noLeak: boolean }> }).rejectionRows.every((row) => row.countsTowardSellableLift === false && row.noLeak)).toBe(true);
+    expect((response.parserRealSellableLift as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_04", "agent_05", "agent_07", "agent_08", "agent_10"]));
+    expect((response.parserRealSellableLift as { noLeakBoundary: Record<string, boolean> }).noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      objectKeysExposed: false,
+      credentialsExposed: false,
+      payloadsRequested: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
       productionSellableClaimed: false
     });
     expect((response.marketplaceGraphSignals as {

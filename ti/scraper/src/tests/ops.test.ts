@@ -407,9 +407,9 @@ describe("ops controls", () => {
       productionSellableRowFloor: 100,
       usefulCaveatedRows: 32,
       rowsBlockedFromBilling: 82,
-      oneRepairAwayRows: 125,
-      projectedSellableRowsFromAcceptedRepairs: 125,
-      projectedSellableRowsAfterAcceptedRepairs: 141,
+      oneRepairAwayRows: 123,
+      projectedSellableRowsFromAcceptedRepairs: 123,
+      projectedSellableRowsAfterAcceptedRepairs: 139,
       costPerUsefulRowUsd: 0,
       topBlocker: "sellable_rows_below_100",
       revenueTruth: {
@@ -427,7 +427,7 @@ describe("ops controls", () => {
     });
     expect(dashboard.releaseDecision.acceptedRepairBuckets.find((bucket) => bucket.source === "parserRealSellableLift.promotedRows")).toMatchObject({
       owner: "agent_03",
-      projectedSellableRows: 22,
+      projectedSellableRows: 20,
       countsTowardProjectedFloor: true
     });
     expect(dashboard.releaseDecision.acceptedRepairBuckets.find((bucket) => bucket.source === "hundredSellableRowGraphPivotPlan")).toMatchObject({
@@ -748,8 +748,8 @@ describe("ops controls", () => {
       willStartCollection: false,
       productionSellableClaimed: false,
       repairedRowCount: 15,
-      promotedSellableRows: 22,
-      movedToUsefulCaveatedRows: 11,
+      promotedSellableRows: 20,
+      movedToUsefulCaveatedRows: 9,
       staleRowsSuppressed: 2,
       aliasOrUnrelatedRowsSuppressed: 2,
       rowsStillOneRepairAway: 54,

@@ -3769,7 +3769,7 @@ function parserRealSellableLiftForRows(_rows: MarketplaceRow[]): ParserRealSella
       { owner: "agent_05", handoff: "find public support for metadata-only ransomware rows without raw leak access", rowCount: 4 },
       { owner: "agent_07", handoff: "review stale, alias, unrelated, and marketing suppressions", rowCount: suppressedRows },
       { owner: "agent_08", handoff: "attach graph pivots from repaired victim/sector/TTP fields", rowCount: repairedRows.length },
-      { owner: "agent_10", handoff: "count 22 real promoted sellable rows separately from projected parser candidates", rowCount: promotedSellableRows }
+      { owner: "agent_10", handoff: "count 20 real promoted sellable rows separately from projected parser candidates", rowCount: promotedSellableRows }
     ],
     noLeakBoundary: {
       rawBodiesExposed: false,

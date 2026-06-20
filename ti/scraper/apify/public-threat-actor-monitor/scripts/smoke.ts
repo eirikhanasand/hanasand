@@ -485,6 +485,79 @@ if (
 ) {
   throw new Error("Program CD parser repair packet must preserve no-leak and no-production-claim boundaries");
 }
+const parserRealSellableLift = outputRecord.parserRealSellableLift as Record<string, unknown> | undefined;
+if (
+  !parserRealSellableLift
+  || parserRealSellableLift.schemaVersion !== "ti.apify_parser_real_sellable_lift.v1"
+  || parserRealSellableLift.owner !== "agent_03"
+  || parserRealSellableLift.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || parserRealSellableLift.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || parserRealSellableLift.dryRun !== false
+  || parserRealSellableLift.willMutateSources !== false
+  || parserRealSellableLift.willStartCollection !== false
+  || parserRealSellableLift.productionSellableClaimed !== false
+  || Number(parserRealSellableLift.repairedRowCount) < 15
+  || Number(parserRealSellableLift.promotedSellableRows) < 20
+  || Number(parserRealSellableLift.movedToUsefulCaveatedRows) < 9
+  || !Array.isArray(parserRealSellableLift.parserFieldsRequired)
+  || !Array.isArray(parserRealSellableLift.repairedRows)
+  || !Array.isArray(parserRealSellableLift.rejectionRows)
+  || !Array.isArray(parserRealSellableLift.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program CJ real parser sellable lift packet");
+}
+for (const requiredField of ["actor", "victim", "sector", "country", "dataset_or_impact", "ttp_tool", "first_seen", "last_seen", "source_family_support", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_buyer_search"]) {
+  if (!(parserRealSellableLift.parserFieldsRequired as string[]).includes(requiredField)) throw new Error(`Program CJ parser lift must require ${requiredField}`);
+}
+for (const row of parserRealSellableLift.repairedRows as Array<Record<string, unknown>>) {
+  if (
+    !["sellable", "included_with_caveat"].includes(String(row.repairedDecision))
+    || Number(row.sellableRowsDelta) + Number(row.usefulCaveatedRowsDelta) < 1
+    || typeof row.victim !== "string"
+    || typeof row.sector !== "string"
+    || typeof row.country !== "string"
+    || typeof row.datasetOrImpact !== "string"
+    || typeof row.ttpOrTool !== "string"
+    || typeof row.firstSeen !== "string"
+    || typeof row.lastSeen !== "string"
+    || !Array.isArray(row.sourceFamilySupport)
+    || Number(row.confidence) <= 0
+    || typeof row.caveat !== "string"
+    || row.contradictionState !== "none"
+    || typeof row.provenanceHash !== "string"
+    || row.provenanceHash.length === 0
+    || typeof row.replayRef !== "string"
+    || !row.replayRef.startsWith("replay:")
+    || typeof row.nextBuyerSearch !== "string"
+    || !Array.isArray(row.graphPivots)
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program CJ repaired parser rows must be source-backed, replayable, buyer-searchable, and no-leak");
+  }
+}
+const parserRealRejectedReasons = (parserRealSellableLift.rejectionRows as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["stale_report", "alias_collision", "unrelated_actor_co_mention", "generic_marketing_page", "unsafe_source_request"]) {
+  if (!parserRealRejectedReasons.includes(requiredReason)) throw new Error(`Program CJ parser lift must reject ${requiredReason}`);
+}
+for (const row of parserRealSellableLift.rejectionRows as Array<Record<string, unknown>>) {
+  if (row.countsTowardSellableLift !== false || row.noLeak !== true) {
+    throw new Error("Program CJ rejected rows must not count toward real sellable lift");
+  }
+}
+const parserRealNoLeak = parserRealSellableLift.noLeakBoundary as Record<string, unknown> | undefined;
+if (
+  !parserRealNoLeak
+  || parserRealNoLeak.rawBodiesExposed !== false
+  || parserRealNoLeak.unsafeUrlsExposed !== false
+  || parserRealNoLeak.objectKeysExposed !== false
+  || parserRealNoLeak.credentialsExposed !== false
+  || parserRealNoLeak.payloadsRequested !== false
+  || parserRealNoLeak.privateMaterialUsed !== false
+  || parserRealNoLeak.actorInteractionTextUsed !== false
+  || parserRealNoLeak.productionSellableClaimed !== false
+) {
+  throw new Error("Program CJ real parser lift must preserve no-leak and no-production-claim boundaries");
+}
 const hundredRowConversionProof = outputRecord.hundredRowConversionProof as Record<string, unknown> | undefined;
 if (
   !hundredRowConversionProof
