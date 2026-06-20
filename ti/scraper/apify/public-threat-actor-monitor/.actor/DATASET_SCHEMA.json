@@ -96,6 +96,7 @@
           "additionalProperties": false
         }
       },
+      "whyWorthPayingFor": { "type": "string" },
       "buyerValueScore": { "type": "number", "minimum": 0, "maximum": 1 },
       "billingGuidance": { "type": "string", "enum": ["charge", "include_as_context", "do_not_charge_if_metered"] },
       "graphQualityLift": { "type": "string", "enum": ["accepted_sellable_lift", "rejected_hold", "rejected_caveat", "not_applicable"] },
@@ -190,6 +191,7 @@
       "paidRowReason",
       "paidRowReasonCodes",
       "paidRowRemediationActions",
+      "whyWorthPayingFor",
       "buyerValueScore",
       "billingGuidance",
       "graphQualityLift",
@@ -209,7 +211,7 @@
     "overview": {
       "title": "Actor intelligence",
       "transformation": {
-        "fields": ["actor", "rowType", "paidRowDecision", "billingGuidance", "buyerValueScore", "graphQualityLift", "graphQualityLiftReasonCodes", "graphQualityLiftEvidence", "title", "summary", "relationshipSummary", "relationshipPivotTypes", "relationshipPivots", "whyActionable", "freshnessDelta", "confidenceDelta", "contradictionHints", "corroborationState", "nextSearchPivots", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "freshnessExpectation", "highestValueMissingFamily", "nextBestSourceAction", "expectedTimeToUsefulSignal", "buyerCaveat", "paidRowReason", "paidRowReasonCodes", "paidRowRemediationActions", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
+        "fields": ["actor", "rowType", "paidRowDecision", "billingGuidance", "whyWorthPayingFor", "buyerValueScore", "graphQualityLift", "graphQualityLiftReasonCodes", "graphQualityLiftEvidence", "title", "summary", "relationshipSummary", "relationshipPivotTypes", "relationshipPivots", "whyActionable", "freshnessDelta", "confidenceDelta", "contradictionHints", "corroborationState", "nextSearchPivots", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "freshnessExpectation", "highestValueMissingFamily", "nextBestSourceAction", "expectedTimeToUsefulSignal", "buyerCaveat", "paidRowReason", "paidRowReasonCodes", "paidRowRemediationActions", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
       },
       "display": {
         "component": "table",
@@ -218,6 +220,7 @@
           "rowType": { "label": "Type", "format": "text" },
           "paidRowDecision": { "label": "Paid row decision", "format": "text" },
           "billingGuidance": { "label": "Billing guidance", "format": "text" },
+          "whyWorthPayingFor": { "label": "Why worth paying for", "format": "text" },
           "buyerValueScore": { "label": "Buyer value", "format": "number" },
           "graphQualityLift": { "label": "Graph lift", "format": "text" },
           "graphQualityLiftReasonCodes": { "label": "Graph lift reasons", "format": "array" },

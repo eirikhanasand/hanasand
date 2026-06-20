@@ -153,6 +153,7 @@ interface MarketplaceRow {
     action: string;
     expectedEffect: string;
   }>;
+  whyWorthPayingFor?: string;
   buyerValueScore?: number;
   billingGuidance?: "charge" | "include_as_context" | "do_not_charge_if_metered";
   graphQualityLift?: "accepted_sellable_lift" | "rejected_hold" | "rejected_caveat" | "not_applicable";
@@ -908,6 +909,7 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
   return {
     ...row,
     ...decision,
+    whyWorthPayingFor: whyWorthPayingFor(row, decision),
     ...graphLift,
     marketplaceGraphSignals,
     analysisFacets: uniqueStrings([
@@ -918,6 +920,27 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
       `marketplace_graph:${marketplaceGraphSignals.signalState}`
     ]).sort()
   };
+}
+
+function whyWorthPayingFor(row: MarketplaceRow, decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">): string {
+  if (decision.billingGuidance === "charge") {
+    if (row.sourceFamilyCount >= 2) return "fresh corroborated public signal with source-family diversity";
+    return "specific public intelligence row ready for analyst triage";
+  }
+  if (decision.paidRowDecision === "included_with_caveat") {
+    if (row.evidenceGrade === "single_source") return "fresh single-source lead with caveat and next collection pivots";
+    if (row.sourceFamilyCount < 2) return "useful lead that shows the missing source family to close";
+    return "actionable context that needs more corroboration before paid promotion";
+  }
+  if (decision.paidRowDecision === "coverage_gap_only") {
+    return "source gap explains what to collect next before trusting the answer";
+  }
+  if (decision.paidRowDecision === "suppress") {
+    return "not payworthy yet because no safe matching evidence exists";
+  }
+  if (row.contradictionHints.length > 0) return "held because public reporting is contradictory";
+  if (row.freshnessStatus === "stale") return "held because support is stale for monitoring use";
+  return "held until evidence, freshness, or specificity improves";
 }
 
 function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowDecision" | "paidRowReason" | "paidRowReasonCodes" | "paidRowRemediationActions" | "buyerValueScore" | "billingGuidance"> {

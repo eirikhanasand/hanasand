@@ -521,10 +521,13 @@ for (const row of output) {
     || !Array.isArray(row.paidRowReasonCodes)
     || row.paidRowReasonCodes.length === 0
     || !Array.isArray(row.paidRowRemediationActions)
+    || typeof row.whyWorthPayingFor !== "string"
+    || row.whyWorthPayingFor.length < 16
+    || row.whyWorthPayingFor.length > 120
     || typeof row.buyerValueScore !== "number"
     || !["charge", "include_as_context", "do_not_charge_if_metered"].includes(String(row.billingGuidance))
   ) {
-    throw new Error("Every row must expose paid-row decision, reason, score, and billing guidance");
+    throw new Error("Every row must expose paid-row decision, buyer value reason, score, and billing guidance");
   }
   const graphQualityLiftEvidence = row.graphQualityLiftEvidence as Record<string, unknown> | undefined;
   if (
