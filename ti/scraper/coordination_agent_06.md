@@ -123,7 +123,7 @@ Progress update 2026-06-20 16:11 CEST:
 
 Progress update 2026-06-20 17:28 CEST:
 - Continued the product-focused evidence backbone with `ti.evidence_actor_product_impact_replay.v1` on `/v1/evidence/cutover-report.readModelCutover.actorProductImpactReplay`.
-- The packet answers the Apify Actor questions directly from durable read-model rows: which fresh public rows improve paid Actor results, which restricted/dark metadata rows can be searched as caveated defensive context, which stale rows are suppressed, which source families are missing, and how to replay proof run `dQzvWhNM2OHrBWVfo`.
+- The packet answers the Apify Actor questions directly from durable read-model rows: which fresh public rows improve paid Actor results, which restricted/dark metadata rows can be searched as caveated defensive context, which stale rows are suppressed, which source families are missing, and how to replay proof run `iMQGeezZ8bx7WtlhQ`.
 - Restricted/leak rows remain metadata-only and caveated: victim/company/account-count/dataset-size/actor-statement/timestamp/hash/review/retention facts can be searched, while raw bodies, object keys, unsafe URLs, credentials, restricted raw content, actor interaction, and restricted vector embeddings remain excluded.
 - Updated evidence storage docs plus storage/API assertions. Also repaired narrow shared TypeScript drift in the product SLO/source-atlas/API helper surfaces that was blocking `bun run check` without reverting other agents' dirty work.
 - Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, `bun test src/tests/api.test.ts -t evidence`, focused source-atlas/API checks, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run measure:search-product`, and full `bun test` passed with 527 tests.
@@ -134,7 +134,7 @@ You completed retention/search consistency pieces. Now own the complete evidence
 
 ## Main Agent Update - 2026-06-20 17:05 CEST
 
-The first revenue vehicle is now the Apify Actor, build `0.6.3`, with pay-per-event pricing scheduled for July 4. Latest proof run `dQzvWhNM2OHrBWVfo` produced 15 safe rows but still shows stale APT29 and missing public-channel/dark metadata coverage. Your evidence/search work should now make real source and Tier 100 dark metadata rows searchable, replayable, and promotable into Actor rows, rather than adding new backend theory.
+The first revenue vehicle is now the Apify Actor, published build `0.6.4`, with pay-per-event pricing scheduled for July 4. Latest proof run `iMQGeezZ8bx7WtlhQ` produced 10 safe APT42 rows with paid-row decisions, but still shows caveated output, stale/held rows, weak victim extraction, and missing public-channel/dark metadata coverage. Your evidence/search work should now make real source and Tier 100 dark metadata rows searchable, replayable, and promotable into Actor rows, rather than adding new backend theory.
 
 Prioritize a read-model path that can answer: which fresh source/metadata rows improved a paid Actor result, which stale rows were suppressed, which source families are missing, and how to replay the proof. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
 

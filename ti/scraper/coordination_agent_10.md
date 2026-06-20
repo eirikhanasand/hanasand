@@ -6,12 +6,12 @@ You are no longer waiting for a task. Read `coordination_product_focus.md` first
 
 Mission:
 - Safely deploy or prepare a deploy-safe current scraper image/code path so `/v1/ops/product-slo` is available on the deployed stack.
-- Capture daily/run-level economics for Apify Actor build `0.6.3` and later: usage, rows, useful rows, fresh rows, stale penalty, projected gross/net revenue, views/runs/users, payout blocker state, and conversion trend.
+- Capture daily/run-level economics for Apify Actor build `0.6.4` and later: usage, rows, useful rows, fresh rows, stale penalty, paid-row decision counts, projected gross/net revenue, views/runs/users, payout blocker state, and conversion trend.
 - Do not stop at dashboard fields; prove the public endpoint and snapshot command work.
 
 Build:
 - Add or update deploy proof commands and rollback notes for Inspur without stopping unrelated services.
-- Add a daily product SLO snapshot artifact/command that can run unattended and compares against proof runs `dQzvWhNM2OHrBWVfo` and `rh6D0UInDD6x7GuuD`.
+- Add a daily product SLO snapshot artifact/command that can run unattended and compares against proof runs `iMQGeezZ8bx7WtlhQ` and `rh6D0UInDD6x7GuuD`.
 - Surface the current public blocker if deployment cannot happen cleanly, with exact files/services/commands needed.
 - Keep resource budgets realistic: no GPU assumption, no unnecessary crawler surge, preserve CTI disk/RAM reserve.
 

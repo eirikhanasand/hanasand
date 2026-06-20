@@ -12,7 +12,7 @@ Mission:
 Build:
 - Add route-visible and Apify-compatible quality decisions: `sellable`, `included_with_caveat`, `coverage_gap_only`, `hold`, and `suppress`.
 - Add row-level reason fields and remediation actions that Agents 01/03/04/05 can act on.
-- Prove enforcement against latest baselines: `dQzvWhNM2OHrBWVfo` and the 20-group daily run shape.
+- Prove enforcement against latest baselines: `iMQGeezZ8bx7WtlhQ` and the 20-group daily run shape.
 - Update smoke/schema/docs only if needed to make the paid row decision visible and compact.
 
 Proof:
@@ -25,7 +25,7 @@ Proof:
 
 When your patch is coherent, update this file, commit, push, and leave no hanging files.
 
-- Added `ti.program_bd_paid_row_quality_gate.v1` to the Program BD quality evaluation packet, anchored to Apify proof runs `dQzvWhNM2OHrBWVfo` and `rh6D0UInDD6x7GuuD`.
+- Added `ti.program_bd_paid_row_quality_gate.v1` to the Program BD quality evaluation packet, anchored to Apify proof runs `iMQGeezZ8bx7WtlhQ` and `rh6D0UInDD6x7GuuD`.
 - Added paid-row usefulness metrics for useful/fresh rows, stale suppression, summary specificity, source-family diversity, corroboration, buyer caveats, and no-leak proof.
 - Added 100 -> 60k source-tier gates so daily 20-group runs and expansion tiers can be judged for buyer-visible freshness, specificity, support, safety, and sellability.
 - Extended route/API fixtures and docs for the paid quality gate, Apify pricing fields, live baselines, source-tier thresholds, dataset fields, and remediation actions.
