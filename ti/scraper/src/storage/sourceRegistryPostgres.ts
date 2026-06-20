@@ -10,6 +10,7 @@ import type {
 import type {
   TiSourceAtlasExportManifestApiResponse,
   TiSourceAtlasExportManifestRow,
+  TiSourceAtlasProductSourceLadderPacket,
   TiSourceAtlasRecord,
   TiSourceAtlasReviewQueueRow
 } from "../registry/sourceSeedTypes.ts";
@@ -199,6 +200,35 @@ export interface SourceAtlasExportManifestPostgresRow {
   generated_at: string;
 }
 
+export interface SourceAtlasActivationPacketAuditRow {
+  packet_id: string;
+  tenant_id?: string;
+  priority: TiSourceAtlasPayworthyRepairActivationPacket["priority"];
+  approval_mode: TiSourceAtlasPayworthyRepairActivationPacket["approvalMode"];
+  action: TiSourceAtlasPayworthyRepairActivationPacket["action"];
+  repair_decision: TiSourceAtlasPayworthyRepairActivationPacket["repairDecision"];
+  blocker: TiSourceAtlasPayworthyRepairActivationPacket["blocker"];
+  atlas_source_ids: string[];
+  replacement_candidate_ids: string[];
+  source_families: TiSourceAtlasPayworthyRepairActivationPacket["sourceFamilies"];
+  expected_payworthy_lift: number;
+  expected_fresh_rows_per_day: number;
+  expected_row_lift: number;
+  buyer_visible_reason: string;
+  prerequisites: TiSourceAtlasPayworthyRepairActivationPacket["prerequisites"];
+  route_hints: string[];
+  forbidden_actions: TiSourceAtlasPayworthyRepairActivationPacket["forbiddenActions"];
+  dry_run: true;
+  will_mutate: false;
+  will_start_crawling: false;
+  raw_url_exposed: false;
+  raw_payload_exposed: false;
+  private_auth_captcha_required: false;
+  crawl_started: false;
+  source_activation_applied: false;
+  generated_at: string;
+}
+
 export interface SourceRegistryPostgresRows {
   sources: SourceRegistrySourceRow[];
   source_governance: SourceRegistryGovernanceRow[];
@@ -213,7 +243,11 @@ export interface SourceAtlasPostgresRows {
   source_atlas_records: SourceAtlasRecordRow[];
   source_atlas_review_queue: SourceAtlasReviewQueuePostgresRow[];
   source_atlas_export_manifest: SourceAtlasExportManifestPostgresRow[];
+  source_atlas_activation_packet_audit: SourceAtlasActivationPacketAuditRow[];
 }
+
+type TiSourceAtlasPayworthyRepairActivationPacket =
+  TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"]["packets"][number];
 
 export function sourceRecordToPostgresRows(source: SourceRecord): SourceRegistryPostgresRows {
   return {
@@ -285,7 +319,8 @@ export function buildSourceRegistryPersistenceReadinessPacket(generatedAt: strin
       { table: "source_lifecycle_events", mapper: "sourceLifecycleEventToRow", requiredForCutover: true },
       { table: "source_atlas_records", mapper: "tiSourceAtlasRecordToPostgresRow", requiredForCutover: false },
       { table: "source_atlas_review_queue", mapper: "tiSourceAtlasReviewQueueRowToPostgresRow", requiredForCutover: false },
-      { table: "source_atlas_export_manifest", mapper: "tiSourceAtlasExportManifestRowToPostgresRow", requiredForCutover: false }
+      { table: "source_atlas_export_manifest", mapper: "tiSourceAtlasExportManifestRowToPostgresRow", requiredForCutover: false },
+      { table: "source_atlas_activation_packet_audit", mapper: "tiSourceAtlasRepairActivationPacketInputsToPostgresRows", requiredForCutover: false }
     ],
     replayOrder: [
       "sources",
@@ -297,7 +332,8 @@ export function buildSourceRegistryPersistenceReadinessPacket(generatedAt: strin
       "source_lifecycle_events",
       "source_atlas_records",
       "source_atlas_review_queue",
-      "source_atlas_export_manifest"
+      "source_atlas_export_manifest",
+      "source_atlas_activation_packet_audit"
     ],
     guardrails: [
       "source registry persistence does not lease work or start crawling",
@@ -305,7 +341,8 @@ export function buildSourceRegistryPersistenceReadinessPacket(generatedAt: strin
       "medium high and restricted active sources require approved governance rows",
       "legal notes and lifecycle events remain audit-visible after restart",
       "source atlas rows are staged dry-run records and do not become active sources without explicit approval",
-      "source atlas export manifest rows are audit records only and do not import source packs"
+      "source atlas export manifest rows are audit records only and do not import source packs",
+      "source atlas activation packet audit rows are operator/legal inputs only and cannot apply source activation"
     ]
   };
 }
@@ -423,8 +460,43 @@ export function tiSourceAtlasExportManifestToPostgresRows(packet: TiSourceAtlasE
   return {
     source_atlas_records: [],
     source_atlas_review_queue: packet.reviewQueue.map((row) => tiSourceAtlasReviewQueueRowToPostgresRow(row, packet)),
-    source_atlas_export_manifest: packet.exportManifest.rows.map((row) => tiSourceAtlasExportManifestRowToPostgresRow(row, packet))
+    source_atlas_export_manifest: packet.exportManifest.rows.map((row) => tiSourceAtlasExportManifestRowToPostgresRow(row, packet)),
+    source_atlas_activation_packet_audit: []
   };
+}
+
+export function tiSourceAtlasRepairActivationPacketInputsToPostgresRows(
+  packetInputs: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["sourceActivationPacketInputs"],
+  input: { tenantId?: string; generatedAt: string }
+): SourceAtlasActivationPacketAuditRow[] {
+  return packetInputs.packets.map((packet) => ({
+    packet_id: packet.packetId,
+    tenant_id: input.tenantId,
+    priority: packet.priority,
+    approval_mode: packet.approvalMode,
+    action: packet.action,
+    repair_decision: packet.repairDecision,
+    blocker: packet.blocker,
+    atlas_source_ids: [...packet.atlasSourceIds],
+    replacement_candidate_ids: [...packet.replacementCandidateIds],
+    source_families: [...packet.sourceFamilies],
+    expected_payworthy_lift: packet.expectedPayworthyLift,
+    expected_fresh_rows_per_day: packet.expectedFreshRowsPerDay,
+    expected_row_lift: packet.expectedRowLift,
+    buyer_visible_reason: packet.buyerVisibleReason,
+    prerequisites: [...packet.prerequisites],
+    route_hints: [...packet.routeHints],
+    forbidden_actions: [...packet.forbiddenActions],
+    dry_run: true,
+    will_mutate: false,
+    will_start_crawling: false,
+    raw_url_exposed: false,
+    raw_payload_exposed: false,
+    private_auth_captcha_required: false,
+    crawl_started: false,
+    source_activation_applied: false,
+    generated_at: input.generatedAt
+  }));
 }
 
 export function tiSourceAtlasReviewQueueRowToPostgresRow(row: TiSourceAtlasReviewQueueRow, packet: Pick<TiSourceAtlasExportManifestApiResponse, "tenantId" | "generatedAt">): SourceAtlasReviewQueuePostgresRow {

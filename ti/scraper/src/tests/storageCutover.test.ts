@@ -78,6 +78,7 @@ import {
   tiSourceAtlasExportManifestToPostgresRows,
   tiSourceAtlasRecordFromPostgresRow,
   tiSourceAtlasRecordToPostgresRow,
+  tiSourceAtlasRepairActivationPacketInputsToPostgresRows,
   sourceRecordFromPostgresRows,
   sourceRecordToPostgresRows
 } from "../storage/sourceRegistryPostgres.ts";
@@ -149,14 +150,17 @@ describe("evidence storage cutover", () => {
     expect(sql).toContain("CREATE TABLE source_atlas_records");
     expect(sql).toContain("CREATE TABLE source_atlas_review_queue");
     expect(sql).toContain("CREATE TABLE source_atlas_export_manifest");
+    expect(sql).toContain("CREATE TABLE source_atlas_activation_packet_audit");
     expect(sql).toContain("reject_unapproved_active_sources");
     expect(sql).toContain("metadata source % must be governed as metadata-only");
     expect(sql).toContain("approval_required boolean NOT NULL DEFAULT true CHECK (approval_required = true)");
     expect(sql).toContain("auto_activation_allowed boolean NOT NULL DEFAULT false CHECK (auto_activation_allowed = false)");
     expect(sql).toContain("will_start_crawling boolean NOT NULL DEFAULT false CHECK (will_start_crawling = false)");
+    expect(sql).toContain("source_activation_applied boolean NOT NULL DEFAULT false CHECK (source_activation_applied = false)");
     expect(sql).toContain("source_atlas_records_tenant_family_idx");
     expect(sql).toContain("source_atlas_review_queue_tenant_decision_idx");
     expect(sql).toContain("source_atlas_export_manifest_tenant_plan_idx");
+    expect(sql).toContain("source_atlas_activation_packet_tenant_action_idx");
 
     const source: SourceRecord = {
       id: "src_registry_tor_metadata",
@@ -324,13 +328,15 @@ describe("evidence storage cutover", () => {
       "source_lifecycle_events",
       "source_atlas_records",
       "source_atlas_review_queue",
-      "source_atlas_export_manifest"
+      "source_atlas_export_manifest",
+      "source_atlas_activation_packet_audit"
     ]));
     expect(readiness.guardrails).toEqual(expect.arrayContaining([
       "source registry persistence does not lease work or start crawling",
       "restricted and darknet metadata sources keep governance.metadataOnly=true",
       "source atlas rows are staged dry-run records and do not become active sources without explicit approval",
-      "source atlas export manifest rows are audit records only and do not import source packs"
+      "source atlas export manifest rows are audit records only and do not import source packs",
+      "source atlas activation packet audit rows are operator/legal inputs only and cannot apply source activation"
     ]));
   });
 
@@ -392,15 +398,46 @@ describe("evidence storage cutover", () => {
     expect(rows.source_atlas_records).toEqual([]);
     expect(rows.source_atlas_review_queue).toHaveLength(100);
     expect(rows.source_atlas_export_manifest).toHaveLength(100);
+    expect(rows.source_atlas_activation_packet_audit).toEqual([]);
     expect(rows.source_atlas_review_queue.every((row) => row.dry_run && !row.will_mutate && !row.will_start_crawling)).toBe(true);
     expect(rows.source_atlas_export_manifest.every((row) => row.approval_required && !row.auto_activation_allowed && row.manifest_schema_version === "ti.source_atlas_export.v1")).toBe(true);
     expect(rows.source_atlas_review_queue.map((row) => row.decision)).toContain("stage_for_canary");
     expect(rows.source_atlas_review_queue.map((row) => row.decision)).toContain("hold_descriptor_only");
 
-    const serialized = JSON.stringify(rows);
+    const repairPacketInputs = atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.sourceActivationPacketInputs;
+    const activationAuditRows = tiSourceAtlasRepairActivationPacketInputsToPostgresRows(repairPacketInputs, {
+      tenantId,
+      generatedAt
+    });
+    expect(activationAuditRows).toHaveLength(repairPacketInputs.packetCount);
+    expect(activationAuditRows.length).toBeGreaterThan(0);
+    expect(activationAuditRows.every((row) =>
+      row.tenant_id === tenantId &&
+      row.packet_id.startsWith("ti_source_atlas_repair_activation_packet_") &&
+      row.approval_mode === "operator_legal_required" &&
+      row.atlas_source_ids.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.expected_payworthy_lift > 0 &&
+      row.expected_fresh_rows_per_day >= 0 &&
+      row.expected_row_lift >= 0 &&
+      row.prerequisites.includes("operator_approval") &&
+      row.route_hints.includes("/v1/analyst/source-activation-packets") &&
+      row.forbidden_actions.includes("auto_activate") &&
+      row.forbidden_actions.includes("start_crawl") &&
+      row.dry_run === true &&
+      row.will_mutate === false &&
+      row.will_start_crawling === false &&
+      row.raw_url_exposed === false &&
+      row.raw_payload_exposed === false &&
+      row.private_auth_captcha_required === false &&
+      row.crawl_started === false &&
+      row.source_activation_applied === false
+    )).toBe(true);
+
+    const serialized = JSON.stringify({ rows, activationAuditRows });
     expect(serialized).not.toContain('"auto_activation_allowed":true');
     expect(serialized).not.toContain('"will_mutate":true');
     expect(serialized).not.toContain('"will_start_crawling":true');
+    expect(serialized).not.toContain('"source_activation_applied":true');
   });
 
   test("analyst loop migration persists review workflow without raw leak material", async () => {

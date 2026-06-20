@@ -248,6 +248,35 @@ CREATE TABLE source_atlas_export_manifest (
   generated_at timestamptz NOT NULL
 );
 
+CREATE TABLE source_atlas_activation_packet_audit (
+  packet_id text PRIMARY KEY,
+  tenant_id text,
+  priority text NOT NULL,
+  approval_mode text NOT NULL DEFAULT 'operator_legal_required' CHECK (approval_mode = 'operator_legal_required'),
+  action text NOT NULL,
+  repair_decision text NOT NULL,
+  blocker text NOT NULL,
+  atlas_source_ids text[] NOT NULL DEFAULT '{}',
+  replacement_candidate_ids text[] NOT NULL DEFAULT '{}',
+  source_families text[] NOT NULL DEFAULT '{}',
+  expected_payworthy_lift integer NOT NULL CHECK (expected_payworthy_lift >= 0),
+  expected_fresh_rows_per_day double precision NOT NULL CHECK (expected_fresh_rows_per_day >= 0),
+  expected_row_lift double precision NOT NULL CHECK (expected_row_lift >= 0),
+  buyer_visible_reason text NOT NULL CHECK (length(btrim(buyer_visible_reason)) >= 40),
+  prerequisites text[] NOT NULL DEFAULT '{}',
+  route_hints text[] NOT NULL DEFAULT '{}',
+  forbidden_actions text[] NOT NULL DEFAULT '{}',
+  dry_run boolean NOT NULL DEFAULT true CHECK (dry_run = true),
+  will_mutate boolean NOT NULL DEFAULT false CHECK (will_mutate = false),
+  will_start_crawling boolean NOT NULL DEFAULT false CHECK (will_start_crawling = false),
+  raw_url_exposed boolean NOT NULL DEFAULT false CHECK (raw_url_exposed = false),
+  raw_payload_exposed boolean NOT NULL DEFAULT false CHECK (raw_payload_exposed = false),
+  private_auth_captcha_required boolean NOT NULL DEFAULT false CHECK (private_auth_captcha_required = false),
+  crawl_started boolean NOT NULL DEFAULT false CHECK (crawl_started = false),
+  source_activation_applied boolean NOT NULL DEFAULT false CHECK (source_activation_applied = false),
+  generated_at timestamptz NOT NULL
+);
+
 CREATE INDEX sources_tenant_status_idx ON sources (tenant_id, status);
 CREATE INDEX sources_type_status_idx ON sources (type, status);
 CREATE INDEX sources_risk_status_idx ON sources (risk, status);
@@ -257,6 +286,7 @@ CREATE INDEX source_atlas_records_tenant_family_idx ON source_atlas_records (ten
 CREATE INDEX source_atlas_records_activation_idx ON source_atlas_records (activation_state, source_value_score DESC);
 CREATE INDEX source_atlas_review_queue_tenant_decision_idx ON source_atlas_review_queue (tenant_id, decision, generated_at DESC);
 CREATE INDEX source_atlas_export_manifest_tenant_plan_idx ON source_atlas_export_manifest (tenant_id, requested_plan, generated_at DESC);
+CREATE INDEX source_atlas_activation_packet_tenant_action_idx ON source_atlas_activation_packet_audit (tenant_id, action, generated_at DESC);
 
 CREATE OR REPLACE FUNCTION reject_unapproved_active_sources()
 RETURNS trigger
