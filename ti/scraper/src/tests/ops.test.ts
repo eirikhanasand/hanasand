@@ -356,12 +356,13 @@ describe("ops controls", () => {
     expect(dashboard.paidProductEconomics.latestRun.paidRowDecisionCounts).toMatchObject({ sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, suppress: 0, buyerUseful: 48 });
     expect(dashboard.paidProductEconomics.latestRun.monetizationReadiness).toMatchObject({
       status: "blocked_for_paid_traffic",
-      targetSellableRows: 25,
+      minimumProductionSellableRows: 100,
+      targetSellableRows: 100,
       sellableRows: 16,
       usefulForBuyerRows: 48,
       averageBuyerValueScore: 0.6,
       sellableRowRate: 0.163,
-      blockers: ["sellable_rows_below_paid_traffic_floor"]
+      blockers: ["sellable_rows_below_100_production_floor", "sellable_rows_below_paid_traffic_floor"]
     });
     expect(dashboard.paidProductEconomics.projectedRevenue).toMatchObject({ grossRowsUsd: 0.294, grossActorStartUsd: 0.00005, grossTotalUsd: 0.294, apifyMarginUsd: 0.059, netAfterApifyUsd: 0.235, internalUsageCostUsd: 0.002, projectedNetAfterUsageUsd: 0.233, costPerRunUsd: 0.002, costPerRowUsd: 0, costPerUsefulRowUsd: 0 });
     expect(dashboard.paidProductEconomics.marketplace).toMatchObject({ actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, trialRunCount: 2, paidRunCount: 1, actorStartCount: 2, datasetRowCount: 98, failedRunCount: 0, repeatUserCount: 0, refundCount: 0, platformUsageCostUsd: 0.0023, estimatedCreatorRevenueUsd: 0.235, storeViewToRunRate: 0.333, storeViewToUserRate: 0.167, runsPerUser: 2, trialToPaidRate: 0.5, withdrawalStatus: "blocked" });
@@ -641,7 +642,9 @@ describe("ops controls", () => {
     expect(dashboard.apifyLaunchExperiment.paidRowDecisionCounts).toMatchObject({ sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, suppress: 0, buyerUseful: 48 });
     expect(dashboard.apifyLaunchExperiment.monetizationReadiness).toMatchObject({
       status: "blocked_for_paid_traffic",
-      nextRevenueAction: "add_or_repair live corroborating sources until at least 25 percent of output rows are chargeable findings"
+      minimumProductionSellableRows: 100,
+      targetSellableRows: 100,
+      nextRevenueAction: "add_or_repair live corroborating sources until at least 100 output rows are chargeable findings and at least 25 percent of rows are sellable"
     });
     expect(dashboard.apifyLaunchExperiment.marketplaceTelemetry).toMatchObject({
       schemaVersion: "ti.apify_marketplace_telemetry_input.v1",
@@ -726,9 +729,9 @@ describe("ops controls", () => {
       queryMeasurements: [
         { query: "APT29", proofMode: "local", firstResponseMs: 700, pollIntervalMs: 3000, status: "ready", rowCount: 20, usefulRowCount: 12, freshRowCount: 16, activityClaimCount: 4, duplicateArticleRate: 0, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false }
       ],
-      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.4", buildId: "build_paid", runId: "run_paid", datasetId: "ds_paid", status: "succeeded", queryCount: 20, rowCount: 40, usefulRowCount: 24, freshRowCount: 28, staleRowCount: 1, activityClaimRowCount: 8, sellableRowCount: 12, includedWithCaveatRowCount: 12, coverageGapOnlyRowCount: 8, holdRowCount: 8, suppressRowCount: 0, targetSellableRows: 10, averageBuyerValueScore: 0.72, defaultWatchlistRun: false },
+      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.4", buildId: "build_paid", runId: "run_paid", datasetId: "ds_paid", status: "succeeded", queryCount: 20, rowCount: 400, usefulRowCount: 240, freshRowCount: 280, staleRowCount: 1, activityClaimRowCount: 80, sellableRowCount: 120, includedWithCaveatRowCount: 120, coverageGapOnlyRowCount: 80, holdRowCount: 80, suppressRowCount: 0, targetSellableRows: 100, averageBuyerValueScore: 0.72, defaultWatchlistRun: false },
       cost: { grossPpeRevenueUsd: 0.12, apifyCommissionUsd: 0.024, computeCostUsd: 0.004, backendCostAllocationUsd: 0.002, refundsFailuresUsd: 0, actorStartCostUsd: 0.00005, resultPriceUsdPerThousand: 3, actorStartPriceUsd: 0.00005, apifyMarginRate: 0.2 },
-      marketplace: { actorViewCount: 120, actorRunCount: 24, uniqueUserCount: 12, trialRunCount: 10, paidRunCount: 3, actorStartCount: 24, datasetRowCount: 40, failedRunCount: 0, repeatUserCount: 3, refundCount: 0, platformUsageCostUsd: 0.006, estimatedCreatorRevenueUsd: 0.096, beneficiaryVerified: true, payoutMethodReady: true, withdrawalReady: true, pricingEffectiveAt: "2026-07-04" },
+      marketplace: { actorViewCount: 120, actorRunCount: 24, uniqueUserCount: 12, trialRunCount: 10, paidRunCount: 3, actorStartCount: 24, datasetRowCount: 400, failedRunCount: 0, repeatUserCount: 3, refundCount: 0, platformUsageCostUsd: 0.006, estimatedCreatorRevenueUsd: 0.96, beneficiaryVerified: true, payoutMethodReady: true, withdrawalReady: true, pricingEffectiveAt: "2026-07-04" },
       sourceMonetization: { evaluatedSourceCandidateCount: 4000, payworthySourceCount: 3200, payworthyThresholdRate: 0.72 }
     });
 
@@ -739,12 +742,12 @@ describe("ops controls", () => {
       paidRuns: 3,
       actorStarts: 24,
       actorRuns: 24,
-      datasetRows: 40,
+      datasetRows: 400,
       failedRuns: 0,
       repeatUsers: 3,
       refunds: 0,
       platformUsageCostUsd: 0.006,
-      estimatedCreatorRevenueUsd: 0.096,
+      estimatedCreatorRevenueUsd: 0.96,
       realDataRequired: true,
       unknownMeansNoClaim: true
     });
@@ -769,14 +772,14 @@ describe("ops controls", () => {
     });
     expect(dashboard.apifyLaunchExperiment.pricingProof.usageCostGuard).toMatchObject({
       platformUsageCostUsd: 0.006,
-      estimatedCreatorRevenueUsd: 0.096,
+      estimatedCreatorRevenueUsd: 0.96,
       maxCostPerUsefulRowUsd: 0.01
     });
     expect(dashboard.apifyLaunchExperiment.pricingProof.payoutRevenueSeparation).toMatchObject({
       paymentMethodState: "ready",
       beneficiaryState: "verified",
       withdrawalReadiness: "ready",
-      externallyVerifiedRevenueUsd: 0.096
+      externallyVerifiedRevenueUsd: 0.96
     });
     expect(dashboard.apifyLaunchExperiment.fakeTractionGuards.join(" ")).toContain("local sample runs and owner proof runs never count");
     expect(dashboard.apifyLaunchExperiment.fakeTractionGuards.join(" ")).toContain("synthetic proof rows never count");

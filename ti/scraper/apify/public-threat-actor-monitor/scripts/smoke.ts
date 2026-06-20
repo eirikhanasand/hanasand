@@ -68,6 +68,7 @@ const monetizationReadiness = outputRecord.monetizationReadiness as Record<strin
 if (
   !monetizationReadiness
   || !["ready_for_paid_traffic", "blocked_for_paid_traffic"].includes(String(monetizationReadiness.status))
+  || monetizationReadiness.minimumProductionSellableRows !== 100
   || typeof monetizationReadiness.targetSellableRows !== "number"
   || typeof monetizationReadiness.sellableRows !== "number"
   || typeof monetizationReadiness.usefulForBuyerRows !== "number"
@@ -76,6 +77,15 @@ if (
   || typeof monetizationReadiness.nextRevenueAction !== "string"
 ) {
   throw new Error("OUTPUT record must expose monetization readiness");
+}
+if (
+  (monetizationReadiness.sellableRows as number) < 100
+  && (
+    monetizationReadiness.status !== "blocked_for_paid_traffic"
+    || !(monetizationReadiness.blockers as string[]).includes("sellable_rows_below_100_production_floor")
+  )
+) {
+  throw new Error("Runs below 100 sellable rows must be blocked for paid traffic");
 }
 const qualityLiftGate = outputRecord.qualityLiftGate as Record<string, unknown> | undefined;
 if (

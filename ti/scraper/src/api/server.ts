@@ -10044,8 +10044,8 @@ function buildApifyStoreReadinessContract(input: {
       id: "high_freshness_apt_monitoring_pack",
       expectedBuyer: "CTI analyst monitoring daily APT activity",
       pricingTest: "high-freshness actor-monitoring pack",
-      successCriteria: ["freshRowRate >= 0.55", "sellableRowRate >= 0.25", "repeatUsers >= 1"],
-      stopLossCriteria: ["stale latest-activity claims increase", "averageBuyerValueScore < 0.55", "single-source rows dominate"],
+      successCriteria: ["sellableRows >= 100", "freshRowRate >= 0.55", "sellableRowRate >= 0.25", "repeatUsers >= 1"],
+      stopLossCriteria: ["sellableRows < 100", "stale latest-activity claims increase", "averageBuyerValueScore < 0.55", "single-source rows dominate"],
       datasetValueProofField: "freshnessStatus",
       buyerVisibleFields,
       noLeakRequired: true
@@ -10109,11 +10109,14 @@ function buildApifyStoreReadinessContract(input: {
         runtimeSeconds: null,
         usageUsd: null,
         projectedGrossRowRevenueUsdAfterPricing: 0.03,
+        proofDecision: "shape_safety_proof",
+        minimumProductionSellableRows: 100,
         sellableRows: 4,
         includedWithCaveatRows: 2,
         heldRows: 4,
         averageBuyerValueScore: 0.577,
-        monetizationDecision: "ready_for_paid_traffic"
+        monetizationDecision: "blocked_for_paid_traffic",
+        productionBlockers: ["sellable_rows_below_100_production_floor", "sellable_rows_below_paid_traffic_floor"]
       },
       dailyRunBaseline: {
         source: "Apify run",
@@ -10164,9 +10167,9 @@ function buildApifyStoreReadinessContract(input: {
     revenueConversionChecklist: {
       schemaVersion: "ti.apify_revenue_conversion_checklist.v1",
       routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT"],
-      paidTrafficState: "ready",
+      paidTrafficState: "blocked",
       listingCopyState: "ready",
-      sampleDataQualityState: "ready",
+      sampleDataQualityState: "blocked",
       pricingState: "ready",
       telemetryState: "missing",
       payoutState: "unknown",
@@ -10174,6 +10177,7 @@ function buildApifyStoreReadinessContract(input: {
       checks: [
         { id: "listing_copy", state: "ready", proofField: "README pricing and Public Proof Contract" },
         { id: "sample_rows", state: "ready", proofField: "apifyStoreReadiness.buyerSampleRows" },
+        { id: "production_sellable_rows", state: "blocked", proofField: "apifyStoreReadiness.storeReadiness.latestProofRun.sellableRows", blocker: "production paid traffic requires at least 100 sellable rows" },
         { id: "pricing_shape", state: "ready", proofField: "apifyStoreReadiness.pricingProof" },
         { id: "marketplace_telemetry", state: "missing", proofField: "apifyStoreReadiness.marketplaceTelemetryInputContract", blocker: "Apify analytics not externally copied yet" },
         { id: "payout_setup", state: "missing", proofField: "apifyStoreReadiness.payoutReadiness", blocker: "beneficiary, payout method, and withdrawal readiness require external billing verification" },
@@ -10194,10 +10198,11 @@ function buildApifyStoreReadinessContract(input: {
       paidDailyMonitoringShape: {
         name: "high_freshness_apt_monitoring_pack",
         defaultQueryCount: 20,
+        minimumSellableRows: 100,
         minimumSellableRowRate: 0.25,
         minimumFreshRowRate: 0.55,
         buyerPromise: "Daily APT and ransomware monitoring where sellable rows are fresh, source-backed, caveated when needed, and hash-provenanced.",
-        stopLoss: "Pause paid daily traffic if stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
+        stopLoss: "Pause paid daily traffic if sellable rows fall below 100, stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
       },
       usageCostGuard: {
         rowPriceUsdPerThousand: 3,
@@ -10277,11 +10282,14 @@ function buildApifyStoreReadinessContract(input: {
         datasetId: "LSen2fYtwFTtOr7vK",
         query: "APT42",
         rowCount: 10,
+        proofDecision: "shape_safety_proof",
+        minimumProductionSellableRows: 100,
         sellableRows: 4,
         includedWithCaveatRows: 2,
         heldRows: 4,
         averageBuyerValueScore: 0.577,
-        monetizationDecision: "ready_for_paid_traffic"
+        monetizationDecision: "blocked_for_paid_traffic",
+        productionBlockers: ["sellable_rows_below_100_production_floor", "sellable_rows_below_paid_traffic_floor"]
       },
       buyerReadableExamples: [
         {
@@ -10314,14 +10322,16 @@ function buildApifyStoreReadinessContract(input: {
       conversionReadinessSummary: {
         minimumSellableRowRate: 0.25,
         currentSellableRowRate: 0.4,
+        minimumProductionSellableRows: 100,
+        currentSellableRows: 4,
         minimumAverageBuyerValueScore: 0.55,
         currentAverageBuyerValueScore: 0.577,
-        nextAction: "Use Apify analytics and /v1/ops/product-slo together: store conversion stays unknown until external analytics are copied, while row quality is proven by the latest ready run."
+        nextAction: "Use Apify analytics and /v1/ops/product-slo together: store conversion stays unknown until external analytics are copied, while paid traffic stays blocked until at least 100 sellable rows are present."
       },
       noLeakGuarantee: "Buyer-facing proof exposes row decisions, counts, source families, hashes, caveats, and quality gates only; it does not expose raw evidence bodies, unsafe URLs, credentials, private content, object keys, payloads, or actor interaction."
     },
     sampleOutputSummaries: [
-      { query: "APT42", runId: "OThlfd0uzSCNnedAO", datasetId: "LSen2fYtwFTtOr7vK", summary: "Hosted build 0.6.7 emits safe metadata rows with paid-row decisions, sellable findings, caveated leads, held rows, and ready-for-paid-traffic proof visible in the dataset.", rowSafety: "metadata_only" }
+      { query: "APT42", runId: "OThlfd0uzSCNnedAO", datasetId: "LSen2fYtwFTtOr7vK", summary: "Hosted build 0.6.7 emits safe metadata rows with paid-row decisions, sellable findings, caveated leads, held rows, and shape/safety proof visible in the dataset; production paid traffic is blocked until 100 sellable rows exist.", rowSafety: "metadata_only" }
     ],
     marketplaceGuardrails: {
       noPlaceholderDefaults: true,

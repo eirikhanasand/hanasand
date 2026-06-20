@@ -2052,22 +2052,29 @@ function paidRowQualitySummary(rows: MarketplaceRow[]) {
   };
 }
 
+const PRODUCTION_SELLABLE_ROW_FLOOR = 100;
+
 function monetizationReadinessForRows(rows: MarketplaceRow[], quality: ReturnType<typeof paidRowQualitySummary>) {
-  const targetSellableRows = Math.max(1, Math.ceil(rows.length * 0.25));
+  const rateTargetSellableRows = Math.ceil(rows.length * 0.25);
+  const targetSellableRows = Math.max(PRODUCTION_SELLABLE_ROW_FLOOR, rateTargetSellableRows);
   const blockers = [
+    quality.sellable < PRODUCTION_SELLABLE_ROW_FLOOR ? "sellable_rows_below_100_production_floor" : null,
     quality.sellable < targetSellableRows ? "sellable_rows_below_paid_traffic_floor" : null,
     quality.averageBuyerValueScore < 0.55 ? "average_buyer_value_below_listing_floor" : null,
     quality.usefulForBuyer === 0 ? "no_buyer_useful_rows" : null
   ].filter((blocker): blocker is string => Boolean(blocker));
   return {
     status: blockers.length === 0 ? "ready_for_paid_traffic" : "blocked_for_paid_traffic",
+    minimumProductionSellableRows: PRODUCTION_SELLABLE_ROW_FLOOR,
     targetSellableRows,
+    rateTargetSellableRows,
     sellableRows: quality.sellable,
     usefulForBuyerRows: quality.usefulForBuyer,
     averageBuyerValueScore: quality.averageBuyerValueScore,
     blockers,
+    currentProductionFloorProgress: Number((quality.sellable / PRODUCTION_SELLABLE_ROW_FLOOR).toFixed(3)),
     nextRevenueAction: blockers.includes("sellable_rows_below_paid_traffic_floor")
-      ? "add_or_repair live corroborating sources until at least 25 percent of output rows are chargeable findings"
+      ? "add_or_repair live corroborating sources until at least 100 output rows are chargeable findings and at least 25 percent of rows are sellable"
       : "send paid traffic and measure Apify views, starts, dataset rows, and repeat runs"
   };
 }
@@ -2075,7 +2082,7 @@ function monetizationReadinessForRows(rows: MarketplaceRow[], quality: ReturnTyp
 function revenueConversionChecklistForRows(rows: MarketplaceRow[], quality: ReturnType<typeof paidRowQualitySummary>) {
   const usefulRate = rows.length ? quality.usefulForBuyer / rows.length : 0;
   const sellableRate = rows.length ? quality.sellable / rows.length : 0;
-  const readyForPaidTraffic = sellableRate >= 0.25 && quality.averageBuyerValueScore >= 0.55;
+  const readyForPaidTraffic = quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR && sellableRate >= 0.25 && quality.averageBuyerValueScore >= 0.55;
   return {
     schemaVersion: "ti.apify_revenue_conversion_checklist.v1",
     routeVisibleOn: ["Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo"],
@@ -2089,6 +2096,7 @@ function revenueConversionChecklistForRows(rows: MarketplaceRow[], quality: Retu
     checks: [
       { id: "listing_copy", state: "ready", proofField: "README pricing and Public Proof Contract" },
       { id: "sample_rows", state: rows.length >= 12 ? "ready" : "blocked", proofField: "OUTPUT.buyerSampleRows", blocker: rows.length >= 12 ? undefined : "smoke/default run should expose at least 12 safe buyer examples" },
+      { id: "production_sellable_rows", state: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready" : "blocked", proofField: "OUTPUT.monetizationReadiness.sellableRows", blocker: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? undefined : "production paid traffic requires at least 100 sellable rows" },
       { id: "pricing_shape", state: "ready", proofField: "OUTPUT.pricingProof" },
       { id: "marketplace_telemetry", state: "missing", proofField: "OUTPUT.monetization", blocker: "Apify analytics not externally copied into this run" },
       { id: "payout_setup", state: "missing", proofField: "OUTPUT.pricingProof.payoutRevenueSeparation", blocker: "beneficiary, payout method, and withdrawal readiness require external billing verification" },
@@ -2112,10 +2120,11 @@ function pricingProofForOutput() {
     paidDailyMonitoringShape: {
       name: "high_freshness_apt_monitoring_pack",
       defaultQueryCount: 20,
+      minimumSellableRows: PRODUCTION_SELLABLE_ROW_FLOOR,
       minimumSellableRowRate: 0.25,
       minimumFreshRowRate: 0.55,
       buyerPromise: "Daily APT and ransomware monitoring where sellable rows are fresh, source-backed, caveated when needed, and hash-provenanced.",
-      stopLoss: "Pause paid daily traffic if stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
+      stopLoss: "Pause paid daily traffic if sellable rows fall below 100, stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
     },
     usageCostGuard: {
       rowPriceUsdPerThousand: 3,

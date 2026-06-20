@@ -144,11 +144,12 @@ const inputSchema = await Bun.file(".actor/INPUT_SCHEMA.json").text();
 const fixture = await Bun.file("fixtures/apt42.json").json() as Record<string, unknown>;
 
 const failures: string[] = [];
-const latestPaidTrafficProof = {
+const latestShapeSafetyProof = {
   buildVersion: "0.6.7",
   runId: "OThlfd0uzSCNnedAO",
   datasetId: "LSen2fYtwFTtOr7vK",
-  monetizationDecision: "ready_for_paid_traffic"
+  proofDecision: "shape_safety_proof",
+  productionFloor: "100 sellable rows"
 };
 
 for (const field of ["title", "description"] as const) {
@@ -219,9 +220,9 @@ for (const [surface, text] of [
   ["launch checklist", launchChecklist],
   ["changelog", changelog]
 ] as const) {
-  for (const term of Object.values(latestPaidTrafficProof)) {
-    if (!text.includes(term)) failures.push(`${surface} must mention latest paid-traffic proof ${term}`);
-  }
+for (const term of Object.values(latestShapeSafetyProof)) {
+  if (!text.includes(term)) failures.push(`${surface} must mention latest shape/safety proof ${term}`);
+}
 }
 
 const datasetProperties = datasetSchema.fields?.properties ?? {};

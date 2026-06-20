@@ -1,4 +1,26 @@
-Status: ready_requesting_next_agent_08_task
+Status: active_program_ca_100_sellable_row_graph_pivots
+
+## Current Assignment - Program CA: 100 Sellable Row Graph Pivots
+
+You are not idle. The next product floor is 100 sellable Actor rows, not a 10-row proof. Continue the graph lane only where it directly increases or protects buyer-visible sellable rows.
+
+Deliverables:
+
+1. Build a 100-sellable-row graph/search pack plan for the default Actor watchlist. It must identify enough actor/victim/sector/country/TTP/tool/source-family pivots to support at least 100 sellable or near-sellable rows without duplicating generic graph facts.
+2. Add gates that reject pivots if they are stale-only, single-source without caveat, contradicted, unrelated, missing provenance, unsafe/restricted-only, alias-only, or not actionable.
+3. Expose measurable lift: projected sellable rows, useful rows, fresh rows, source-family diversity, next-search pivots, buyer-value delta, and rows prevented from billing.
+4. Feed Agent 03 parser needs and Agent 04/05 source needs with exact missing fields/families for rows that are one repair away from sellable.
+5. Keep STIX/TAXII descriptor work secondary. Do not add export layers unless the same work improves Actor/public rows.
+
+Verification before stopping:
+
+- `bun run check`
+- focused graph/API/ops tests touched by your change
+- `bun run check:apify-threat-actor-monitor`
+- `bun run smoke:apify-threat-actor-monitor`
+- `bun run check:contract-index`
+
+Commit and push a coherent green patch before marking ready. Do not leave dirty files hanging.
 
 # Agent 08 Coordination
 

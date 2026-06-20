@@ -715,6 +715,7 @@ export interface LiveProductDailySnapshot {
 export interface LiveProductMonetizationReadiness {
   schemaVersion: "ti.live_product_monetization_readiness.v1";
   status: "ready_for_paid_traffic" | "blocked_for_paid_traffic";
+  minimumProductionSellableRows: number;
   targetSellableRows: number | null;
   sellableRows: number | null;
   usefulForBuyerRows: number | null;
@@ -774,6 +775,7 @@ export interface LiveProductPricingProof {
   paidDailyMonitoringShape: {
     name: "high_freshness_apt_monitoring_pack";
     defaultQueryCount: number;
+    minimumSellableRows: number;
     minimumSellableRowRate: number;
     minimumFreshRowRate: number;
     buyerPromise: string;
@@ -2136,13 +2138,21 @@ function buildMonetizationReadiness(
   paidRowDecisionCounts: LiveProductSloDashboard["apifyLaunchExperiment"]["paidRowDecisionCounts"],
   rowCount: number | null
 ): LiveProductMonetizationReadiness {
-  const targetSellableRows = nullableInteger(actorRun?.targetSellableRows) ?? (rowCount !== null ? Math.max(1, Math.ceil(rowCount * 0.25)) : null);
+  const minimumProductionSellableRows = 100;
+  const providedTargetSellableRows = nullableInteger(actorRun?.targetSellableRows);
+  const rateTargetSellableRows = rowCount !== null ? Math.ceil(rowCount * 0.25) : null;
+  const targetSellableRows = rowCount !== null
+    ? Math.max(minimumProductionSellableRows, rateTargetSellableRows ?? 0, providedTargetSellableRows ?? 0)
+    : providedTargetSellableRows !== null
+      ? Math.max(minimumProductionSellableRows, providedTargetSellableRows)
+      : null;
   const sellableRows = paidRowDecisionCounts.sellable;
   const usefulForBuyerRows = paidRowDecisionCounts.buyerUseful;
   const averageBuyerValueScore = isFiniteNumber(actorRun?.averageBuyerValueScore) ? round(actorRun.averageBuyerValueScore) : null;
   const sellableRowRate = rateFromCounts(sellableRows, rowCount);
   const blockers = [
     sellableRows === null ? "paid_row_decision_counts_missing" : null,
+    sellableRows !== null && sellableRows < minimumProductionSellableRows ? "sellable_rows_below_100_production_floor" : null,
     targetSellableRows !== null && sellableRows !== null && sellableRows < targetSellableRows ? "sellable_rows_below_paid_traffic_floor" : null,
     averageBuyerValueScore === null ? "average_buyer_value_missing" : null,
     averageBuyerValueScore !== null && averageBuyerValueScore < 0.55 ? "average_buyer_value_below_listing_floor" : null,
@@ -2151,6 +2161,7 @@ function buildMonetizationReadiness(
   return {
     schemaVersion: "ti.live_product_monetization_readiness.v1",
     status: blockers.length === 0 ? "ready_for_paid_traffic" : "blocked_for_paid_traffic",
+    minimumProductionSellableRows,
     targetSellableRows,
     sellableRows,
     usefulForBuyerRows,
@@ -2158,7 +2169,7 @@ function buildMonetizationReadiness(
     sellableRowRate,
     blockers,
     nextRevenueAction: blockers.includes("sellable_rows_below_paid_traffic_floor")
-      ? "add_or_repair live corroborating sources until at least 25 percent of output rows are chargeable findings"
+      ? "add_or_repair live corroborating sources until at least 100 output rows are chargeable findings and at least 25 percent of rows are sellable"
       : blockers.includes("average_buyer_value_below_listing_floor") || blockers.includes("average_buyer_value_missing")
         ? "improve row specificity, corroboration, freshness, and buyer-value extraction before paid traffic"
         : "send paid traffic and measure Apify views, starts, dataset rows, and repeat runs"
@@ -2268,8 +2279,8 @@ function buildConversionExperiments(): LiveProductConversionExperiment[] {
       id: "high_freshness_apt_monitoring_pack",
       expectedBuyer: "CTI analyst monitoring daily APT activity",
       pricingTest: "higher-price freshness pack for current actor activity",
-      successCriteria: ["freshRowRate >= 0.55", "sellableRowRate >= 0.25", "repeatUsers >= 1"],
-      stopLossCriteria: ["staleLatestClaimsBlocked rises without fresh replacements", "single-source rate blocks sellable rows", "averageBuyerValueScore < 0.55"],
+      successCriteria: ["sellableRows >= 100", "freshRowRate >= 0.55", "sellableRowRate >= 0.25", "repeatUsers >= 1"],
+      stopLossCriteria: ["sellableRows < 100", "staleLatestClaimsBlocked rises without fresh replacements", "single-source rate blocks sellable rows", "averageBuyerValueScore < 0.55"],
       usefulRowRequirement: "fresh chargeable or useful caveated rows with source-family diversity",
       datasetValueProofField: "freshnessStatus",
       buyerVisibleFields,
@@ -2319,6 +2330,7 @@ function buildRevenueConversionChecklist(input: {
   marketplaceConversion: ReturnType<typeof marketplaceConversionFor>;
   unknowns: string[];
 }): LiveProductRevenueConversionChecklist {
+  const productionSellableRowsReady = (input.monetizationReadiness.sellableRows ?? 0) >= input.monetizationReadiness.minimumProductionSellableRows;
   const sampleDataQualityState = input.monetizationReadiness.status === "ready_for_paid_traffic" ? "ready" : "blocked";
   const payoutState = input.payoutReadiness.externallyVerified
     ? "ready"
@@ -2341,6 +2353,7 @@ function buildRevenueConversionChecklist(input: {
     checks: [
       { id: "listing_copy", state: "ready", proofField: "README pricing and Public Proof Contract" },
       { id: "sample_rows", state: sampleDataQualityState, proofField: "apifyLaunchExperiment.buyerSampleRows", blocker: sampleDataQualityState === "blocked" ? "repair sellable/useful row density before traffic" : undefined },
+      { id: "production_sellable_rows", state: productionSellableRowsReady ? "ready" : "blocked", proofField: "apifyLaunchExperiment.monetizationReadiness.sellableRows", blocker: productionSellableRowsReady ? undefined : "production paid traffic requires at least 100 sellable rows" },
       { id: "pricing_shape", state: "ready", proofField: "apifyLaunchExperiment.pricingProof" },
       { id: "marketplace_telemetry", state: telemetryMissing ? "missing" : "ready", proofField: "apifyLaunchExperiment.marketplaceTelemetry", blocker: telemetryMissing ? "Apify analytics not externally copied yet" : undefined },
       { id: "payout_setup", state: payoutState === "ready" ? "ready" : payoutState === "blocked" ? "blocked" : "missing", proofField: "apifyLaunchExperiment.payoutReadiness", blocker: payoutState === "ready" ? undefined : "Apify billing beneficiary, payout method, or withdrawal readiness not externally verified" },
@@ -2364,10 +2377,11 @@ function buildPricingProof(input: LiveProductMarketplaceInput | undefined): Live
     paidDailyMonitoringShape: {
       name: "high_freshness_apt_monitoring_pack",
       defaultQueryCount: 20,
+      minimumSellableRows: 100,
       minimumSellableRowRate: 0.25,
       minimumFreshRowRate: 0.55,
       buyerPromise: "Daily APT and ransomware monitoring where sellable rows are fresh, source-backed, caveated when needed, and hash-provenanced.",
-      stopLoss: "Pause paid daily traffic if stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
+      stopLoss: "Pause paid daily traffic if sellable rows fall below 100, stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
     },
     usageCostGuard: {
       rowPriceUsdPerThousand: DEFAULT_RESULT_PRICE_USD_PER_THOUSAND,

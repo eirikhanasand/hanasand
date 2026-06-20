@@ -242,14 +242,14 @@ describe("api v1", () => {
       trialToPaidRate: number;
     })).toMatchObject({
       paidRowDecisionCounts: { sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, buyerUseful: 48 },
-      monetizationReadiness: { status: "blocked_for_paid_traffic", targetSellableRows: 25, sellableRows: 16, averageBuyerValueScore: 0.6, sellableRowRate: 0.163, blockers: ["sellable_rows_below_paid_traffic_floor"] },
+      monetizationReadiness: { status: "blocked_for_paid_traffic", targetSellableRows: 100, sellableRows: 16, averageBuyerValueScore: 0.6, sellableRowRate: 0.163, blockers: ["sellable_rows_below_100_production_floor", "sellable_rows_below_paid_traffic_floor"] },
       marketplaceTelemetry: { schemaVersion: "ti.apify_marketplace_telemetry_input.v1", storePageViews: 6, actorStarts: 2, datasetRows: 98, failedRuns: 0, refunds: 0, platformUsageCostUsd: 0.0023, estimatedCreatorRevenueUsd: 0.235, realDataRequired: true, unknownMeansNoClaim: true },
       payoutReadiness: { schemaVersion: "ti.apify_payout_readiness.v1", payoutMethodState: "blocked", beneficiaryState: "blocked", withdrawalReadiness: "blocked", externallyVerified: false, blockers: expect.arrayContaining(["apify_withdrawal_readiness_not_confirmed"]) as unknown as string[] },
       revenueConversionChecklist: { schemaVersion: "ti.apify_revenue_conversion_checklist.v1", telemetryState: "ready", payoutState: "blocked" },
       pricingProof: {
         schemaVersion: "ti.apify_pricing_proof.v1",
         starterTrialShape: { name: "starter_actor_query_pack", queryLimit: 3 },
-        paidDailyMonitoringShape: { name: "high_freshness_apt_monitoring_pack", minimumSellableRowRate: 0.25, minimumFreshRowRate: 0.55 },
+        paidDailyMonitoringShape: { name: "high_freshness_apt_monitoring_pack", minimumSellableRows: 100, minimumSellableRowRate: 0.25, minimumFreshRowRate: 0.55 },
         usageCostGuard: { rowPriceUsdPerThousand: 3, platformUsageCostUsd: 0.0023, estimatedCreatorRevenueUsd: 0.235, maxCostPerUsefulRowUsd: 0.01 },
         payoutRevenueSeparation: { paymentMethodState: "blocked", beneficiaryState: "blocked", withdrawalReadiness: "blocked", externallyVerifiedRevenueUsd: 0.235 },
         noLeakRequired: true
@@ -3286,11 +3286,14 @@ describe("api v1", () => {
       runtimeSeconds: null,
       usageUsd: null,
       projectedGrossRowRevenueUsdAfterPricing: 0.03,
+      proofDecision: "shape_safety_proof",
+      minimumProductionSellableRows: 100,
       sellableRows: 4,
       includedWithCaveatRows: 2,
       heldRows: 4,
       averageBuyerValueScore: 0.577,
-      monetizationDecision: "ready_for_paid_traffic"
+      monetizationDecision: "blocked_for_paid_traffic",
+      productionBlockers: ["sellable_rows_below_100_production_floor", "sellable_rows_below_paid_traffic_floor"]
     });
     expect(apifyStoreReadiness.storeReadiness.dailyRunBaseline).toMatchObject({
       runId: "rh6D0UInDD6x7GuuD",
@@ -3405,7 +3408,7 @@ describe("api v1", () => {
     expect(apifyStoreReadiness.pricingProof).toMatchObject({
       schemaVersion: "ti.apify_pricing_proof.v1",
       starterTrialShape: { name: "starter_actor_query_pack", queryLimit: 3 },
-      paidDailyMonitoringShape: { name: "high_freshness_apt_monitoring_pack", defaultQueryCount: 20, minimumSellableRowRate: 0.25, minimumFreshRowRate: 0.55 },
+      paidDailyMonitoringShape: { name: "high_freshness_apt_monitoring_pack", defaultQueryCount: 20, minimumSellableRows: 100, minimumSellableRowRate: 0.25, minimumFreshRowRate: 0.55 },
       usageCostGuard: { rowPriceUsdPerThousand: 3, platformUsageCostUsd: null, estimatedCreatorRevenueUsd: null, maxCostPerUsefulRowUsd: 0.01 },
       payoutRevenueSeparation: { paymentMethodState: "unknown", beneficiaryState: "unknown", withdrawalReadiness: "unknown", externallyVerifiedRevenueUsd: null },
       noLeakRequired: true
@@ -3430,9 +3433,12 @@ describe("api v1", () => {
         runId: "OThlfd0uzSCNnedAO",
         datasetId: "LSen2fYtwFTtOr7vK",
         rowCount: 10,
+        proofDecision: "shape_safety_proof",
+        minimumProductionSellableRows: 100,
         sellableRows: 4,
         averageBuyerValueScore: 0.577,
-        monetizationDecision: "ready_for_paid_traffic"
+        monetizationDecision: "blocked_for_paid_traffic",
+        productionBlockers: ["sellable_rows_below_100_production_floor", "sellable_rows_below_paid_traffic_floor"]
       },
       qualityLiftHandoff: {
         productSloField: "buyerVisibleQualityLiftGate",
@@ -3443,6 +3449,8 @@ describe("api v1", () => {
       },
       conversionReadinessSummary: {
         minimumSellableRowRate: 0.25,
+        minimumProductionSellableRows: 100,
+        currentSellableRows: 4,
         currentSellableRowRate: 0.4,
         minimumAverageBuyerValueScore: 0.55,
         currentAverageBuyerValueScore: 0.577

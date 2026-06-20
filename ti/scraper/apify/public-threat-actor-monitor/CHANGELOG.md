@@ -2,8 +2,8 @@
 
 ## 0.6.7 - 2026-06-20
 
-- Recorded hosted build `0.6.7` as the current paid-traffic-ready proof surface. Remote proof run `OThlfd0uzSCNnedAO` produced dataset `LSen2fYtwFTtOr7vK` with 10 safe APT42 rows: 4 sellable, 2 caveated, 4 held, average buyer value `0.577`, and `ready_for_paid_traffic`.
-- Updated buyer-visible README and launch-checklist proof copy so the Store-facing surface points at the latest ready proof while runtime and platform usage stay external analytics fields until copied from Apify.
+- Recorded hosted build `0.6.7` as the current shape/safety proof surface. Remote proof run `OThlfd0uzSCNnedAO` produced dataset `LSen2fYtwFTtOr7vK` with 10 safe APT42 rows: 4 sellable, 2 caveated, 4 held, average buyer value `0.577`, and `shape_safety_proof`.
+- Updated buyer-visible README and launch-checklist proof copy so the Store-facing surface points at the latest hosted proof while production paid traffic stays blocked until at least `100 sellable rows` are present and runtime/platform usage stay external analytics fields until copied from Apify.
 
 ## 0.6.4 - 2026-06-20
 
