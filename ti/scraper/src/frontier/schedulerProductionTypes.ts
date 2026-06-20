@@ -5,6 +5,7 @@ export type SchedulerBackend = "embedded_memory" | "postgres_queue" | "external_
 
 export type SchedulerWorkClass =
   | PlanningBudgetClass
+  | "public_channel_probe"
   | "replay_retention";
 
 export interface SchedulerCutoverDesign {
@@ -1234,6 +1235,22 @@ export interface SchedulerDailyActorRunPlanDto {
       apifyMarginPercent: 20;
     };
   };
+  latestProofRun: {
+    runId: "iMQGeezZ8bx7WtlhQ";
+    datasetId: "5PLmkE30luBA5Lbgc";
+    query: "APT42";
+    runtimeSeconds: 4;
+    safeRowCount: 10;
+    usageUsdApprox: 0.001;
+    paidRowDecisionCounts: {
+      sellable: number;
+      includedWithCaveat: number;
+      coverageGapOnly: number;
+      hold: number;
+      buyerUseful: number;
+    };
+    blockers: Array<"caveated_rows" | "stale_or_held_rows" | "weak_victim_extraction" | "missing_public_channel_coverage" | "missing_dark_metadata_coverage">;
+  };
   runTargets: {
     expectedRows: number;
     usefulRowTarget: number;
@@ -1280,6 +1297,23 @@ export interface SchedulerDailyActorRunPlanDto {
     maxStaleRowsPerActor: number;
     actions: Array<"raise_source_cadence" | "request_source_family_expansion" | "caveat_old_context" | "suppress_ready_state">;
     affectedQueries: string[];
+  };
+  freshCollectionRetryPlan: {
+    visibleWithinSeconds: number;
+    targetFreshEvidenceWithinSeconds: number;
+    maxRetryAttemptsBeforeDeadLetter: number;
+    retryBackoffSeconds: number[];
+    retryAfterSecondsByWorkClass: Array<{
+      workClass: SchedulerWorkClass;
+      retryAfterSeconds: number;
+      deadlineSeconds: number;
+      visibleState: "searching" | "partial" | "metadata_review" | "queued";
+    }>;
+    escalation: Array<{
+      condition: "stale_commercial_actor" | "public_channel_gap" | "dark_metadata_gap" | "weak_victim_extraction" | "retry_debt";
+      action: "raise_priority" | "reserve_worker_slot" | "request_source_activation" | "hold_paid_row" | "dead_letter_review";
+      visibleToClient: true;
+    }>;
   };
   routeContracts: {
     frontierStatusField: "scheduler.dailyActorRunPlan";

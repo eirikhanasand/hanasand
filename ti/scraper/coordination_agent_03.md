@@ -1,39 +1,12 @@
-Status: active_program_bf_parser_repair_execution_for_top_sources
-
-# Agent 03 Current Assignment - Program BF: Parser Repair Execution For Top Sources
-
-You are no longer waiting for a task. Read `coordination_product_focus.md` first, then turn the parser coverage proof into repair execution for the sources most likely to sell the Actor.
-
-Current measurable target: 2,532 of the evaluated 4,000 source candidates fail the paid-source gate. Prioritize parser repairs that convert existing high-potential sources into payworthy sources: certified parser, non-generic summary, actor/victim/sector/country/TTP/date extraction, and before/after Actor row examples. Report how many sources moved from rejected to payworthy.
-
-Mission:
-- Convert the first-100 parser impact table into concrete parser improvements and canary fixtures.
-- Make paid rows richer than headline/source repetition by extracting actor, victim, sector, country, impact, TTP, malware/tool, first/last reported time, publisher/corroboration, and summary-specific facts.
-- Prioritize APT29 freshness, APT28 evidence recovery, and ransomware victim/activity extraction.
-
-Build:
-- Add parser repair fixtures for the top failing/high-value source families from Agents 01/04.
-- Produce before/after normalized rows for at least 10 high-impact sources or representative fixtures.
-- Add failure taxonomy and repair ownership that Agent 07 can quality-gate and Agent 10 can measure as cost/useful-row lift.
-- Keep output safe: no raw source bodies, no unsafe URLs in public rows, no private/auth/CAPTCHA material.
-
-Proof:
-- `bun run check`
-- focused adapter/parser/source tests
-- `bun run smoke:apify-threat-actor-monitor`
-- `bun run check:apify-threat-actor-monitor`
-- full `bun test` if shared extraction contracts change
-
-When your patch is coherent, update this file, commit, push, and leave no hanging files.
+Status: done_requesting_next_task
 
 # Agent 03 Summary
 
-- Added first-100 source-ladder parser coverage proof on `/v1/sources/atlas` via `sourceLadder`.
-- Added parsed/failed/held parser counts, parser impact table, ranked parser repair priorities, and before/after `CollectedItem` sample rows.
-- Covered APT28 evidence recovery, APT29 freshness, public advisory/blog extraction, ransomware victim/activity extraction, and richer summaries beyond "Reported by X."
-- Preserved dry-run/no-leak boundaries: no source activation, no crawling, no raw unsafe URLs, no private/auth/CAPTCHA access, and no raw source payloads.
-- Verified `bun run check`, focused Agent 03/source tests, and full `bun test` are green.
+- Added first-100 parser repair execution on `/v1/sources/atlas` with 10 normalized `CollectedItem` before/after fixtures.
+- Added paid-source gap closure metrics, failure taxonomy, and Agent 03/07/10 ownership for parser repair, quality gates, and cost/useful-row lift.
+- Added richer safe extraction fields for actor, victim, sector, country, impact, TTP, malware/tool, first/last reported time, publisher, corroboration, and summary-specific facts.
+- Covered APT29 freshness, APT28 evidence recovery, ransomware victim/activity extraction, public advisory context, source-tier candidate ranking, and dry-run activation readiness.
+- Preserved no-leak boundaries: no source activation, no crawling, no raw unsafe URLs, no raw source bodies, and no private/auth/CAPTCHA material.
+- Verified `bun run check`, focused source/adapter/scheduler tests, `bun run smoke:apify-threat-actor-monitor`, `bun run check:apify-threat-actor-monitor`, and full `bun test` are green.
 
-## Continue Without Waiting
-
-The active Program BF assignment above supersedes this old task request. Continue repairing the highest-value parser failures until at least 10 source families or representative fixtures show before/after rows with richer actor, victim, sector, country, impact, TTP, malware/tool, first/last reported time, corroboration, and specific summary facts. When that is done, continue into parser repair for the 100 -> 1,000 source ladder without waiting for another prompt.
+Requesting the next Agent 03 task.

@@ -362,6 +362,7 @@ export type PlanningBudgetClass =
   | "interactive_search"
   | "analyst_deep_dive"
   | "public_channel_window"
+  | "public_channel_probe"
   | "background_refresh"
   | "broad_daily_sweep"
   | "source_health_probe"

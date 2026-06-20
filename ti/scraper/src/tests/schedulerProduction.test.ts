@@ -1454,6 +1454,20 @@ describe("scheduler production readiness", () => {
       runCadence: "daily"
     });
     expect(daily.apifyActor.defaultQueries).toEqual(expect.arrayContaining(["APT29", "APT42", "LockBit", "Hunters International"]));
+    expect(daily.latestProofRun).toMatchObject({
+      runId: "iMQGeezZ8bx7WtlhQ",
+      datasetId: "5PLmkE30luBA5Lbgc",
+      query: "APT42",
+      runtimeSeconds: 4,
+      safeRowCount: 10,
+      paidRowDecisionCounts: {
+        includedWithCaveat: 7,
+        coverageGapOnly: 2,
+        hold: 1,
+        buyerUseful: 7
+      }
+    });
+    expect(daily.latestProofRun.blockers).toEqual(expect.arrayContaining(["weak_victim_extraction", "missing_public_channel_coverage", "missing_dark_metadata_coverage"]));
     expect(daily.runTargets).toMatchObject({
       duplicateRunReuseRequired: true,
       nextPollSeconds: 3,
@@ -1483,6 +1497,16 @@ describe("scheduler production readiness", () => {
       staleOnlyRowsExcludedFromReady: true,
       maxStaleRowsPerActor: 1
     });
+    expect(daily.freshCollectionRetryPlan).toMatchObject({
+      visibleWithinSeconds: 3,
+      targetFreshEvidenceWithinSeconds: 120,
+      maxRetryAttemptsBeforeDeadLetter: 3,
+      retryBackoffSeconds: [3, 15, 60]
+    });
+    expect(daily.freshCollectionRetryPlan.retryAfterSecondsByWorkClass.find((row) => row.workClass === "interactive_live_search")).toMatchObject({ retryAfterSeconds: 3, visibleState: "searching" });
+    expect(daily.freshCollectionRetryPlan.retryAfterSecondsByWorkClass.find((row) => row.workClass === "public_channel_probe")).toMatchObject({ retryAfterSeconds: 15, visibleState: "partial" });
+    expect(daily.freshCollectionRetryPlan.retryAfterSecondsByWorkClass.find((row) => row.workClass === "restricted_darknet_metadata_sweep")).toMatchObject({ retryAfterSeconds: 60, visibleState: "metadata_review" });
+    expect(daily.freshCollectionRetryPlan.escalation.map((row) => row.condition)).toEqual(expect.arrayContaining(["stale_commercial_actor", "public_channel_gap", "dark_metadata_gap", "weak_victim_extraction", "retry_debt"]));
     expect(daily.staleSuppression.affectedQueries).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42"]));
     expect(daily.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_daily_actor_run_plan");
     expect(daily.releaseGate.proofCommands).toContain("bun run check:apify-publication");

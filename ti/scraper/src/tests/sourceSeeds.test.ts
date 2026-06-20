@@ -1524,6 +1524,51 @@ describe("source seed bundles", () => {
     ]));
     expect(atlas.sourceLadder.expectedActorOutputImpact.baselineRows).toBe(98);
     expect(atlas.sourceLadder.expectedActorOutputImpact.expectedUsefulRowsAfterFirst100).toBeGreaterThan(atlas.sourceLadder.expectedActorOutputImpact.expectedSingleSourceRowsAfterFirst100);
+    expect(atlas.sourceLadder.activationReadinessPlan).toMatchObject({
+      schemaVersion: "ti.source_atlas.activation_readiness_plan.v1",
+      routeHint: "/v1/sources/atlas",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      nonMutatingApplyPlan: {
+        routeHint: "/v1/analyst/source-activation-packets",
+        allowedActions: ["approve", "canary", "hold", "reject", "retire_duplicate"],
+        forbiddenActions: ["auto_activate", "start_crawl", "import_without_review", "download_payload", "bypass_auth_or_captcha", "contact_actor"]
+      }
+    });
+    expect(atlas.sourceLadder.activationReadinessPlan.first25.sourceCount).toBe(25);
+    expect(atlas.sourceLadder.activationReadinessPlan.first25.decisions).toHaveLength(25);
+    expect(atlas.sourceLadder.activationReadinessPlan.first100.sourceCount).toBe(100);
+    expect(atlas.sourceLadder.activationReadinessPlan.first100.decisions).toHaveLength(100);
+    expect(atlas.sourceLadder.activationReadinessPlan.decisionRows).toHaveLength(100);
+    expect(atlas.sourceLadder.activationReadinessPlan.decisionRows.map((row) => row.decision)).toEqual(expect.arrayContaining([
+      "approve",
+      "canary",
+      "hold",
+      "reject",
+      "retire_duplicate"
+    ]));
+    expect(atlas.sourceLadder.activationReadinessPlan.decisionRows.every((row) =>
+      row.proposedSourceId.startsWith("src_atlas_") &&
+      row.safeLocatorHash.startsWith("ti_source_atlas_locator_") &&
+      row.decisionReason.length > 30 &&
+      row.governance.approvalRequired &&
+      row.governance.autoActivationAllowed === false &&
+      row.governance.legalNotes.length > 20 &&
+      row.parser.owner === "agent_03" &&
+      row.parser.expectedEntities.length > 0 &&
+      row.coverage.actorsImproved.length > 0 &&
+      row.coverage.queryClassesImproved.length > 0 &&
+      row.coverage.canarySampleExpectation.length > 50 &&
+      row.paidActorImpact.whyThisImprovesPaidActor.length > 80 &&
+      row.applyPlan.rollbackPlanId.startsWith("ti_source_atlas_activation_rollback_")
+    )).toBe(true);
+    expect(atlas.sourceLadder.activationReadinessPlan.aggregateImpact.expectedUsefulRowsPerDay).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.activationReadinessPlan.aggregateImpact.estimatedGrossRevenueUsdPerDay).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.activationReadinessPlan.aggregateImpact.payworthyRate).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.activationReadinessPlan.aggregateImpact.whyThisImprovesPaidActor).toContain("paid output");
+    expect(JSON.stringify(atlas.sourceLadder.activationReadinessPlan)).not.toContain("https://");
     expect(atlas.sourceLadder.paidSourceTierPlan).toMatchObject({
       schemaVersion: "ti.source_atlas.paid_source_tier_plan.v1",
       thesisAlignment: expect.stringContaining("timely APT monitoring"),
@@ -1554,6 +1599,146 @@ describe("source seed bundles", () => {
       heldTierCount: 6
     });
     expect(atlas.sourceLadder.paidSourceTierPlan.currentPass.payworthySourceCount).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.paidSourceTierPlan.gapClosure).toMatchObject({
+      schemaVersion: "ti.source_atlas.paid_source_gap_closure.v1",
+      evaluatedCandidateCount: 100,
+      targetPayworthySourceCount: 72
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.gapClosure.additionalPayworthySourcesNeeded).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.paidSourceTierPlan.gapClosure.failureBreakdown.map((row) => row.reason)).toEqual(expect.arrayContaining([
+      "low_source_value",
+      "low_freshness",
+      "low_evidence_yield",
+      "low_public_answer_impact",
+      "parser_not_certified"
+    ]));
+    expect(atlas.sourceLadder.paidSourceTierPlan.gapClosure.failureBreakdown.every((row) =>
+      row.candidateCount > 0 &&
+      ["agent_01", "agent_03", "agent_04", "agent_07"].includes(row.owner) &&
+      row.revenueAction.length > 40
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.gapClosure.topRepairableCandidateIds.every((sourceId) => sourceId.startsWith("atlas_src_"))).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.gapClosure.nextMeasuredPass).toContain("Actor daily proof");
+    expect(atlas.sourceLadder.candidate1000).toMatchObject({
+      candidateCount: 1000,
+      evaluatedCandidateCount: 500,
+      unevaluatedCandidateCount: 500
+    });
+    expect(atlas.sourceLadder.candidate1000.rankedRows.length).toBe(500);
+    expect(atlas.sourceLadder.candidate1000.rankedRows[0]).toMatchObject({
+      rank: 1,
+      decision: "activate_canary",
+      canImproveApifyRowsWithin1To3Days: true
+    });
+    expect(atlas.sourceLadder.candidate1000.decisionCounts.activateCanary).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.candidate1000.decisionCounts.parserNeeded).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.candidate1000.decisionCounts.reviewNeeded).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.candidate1000.rankedRows.every((row) =>
+      row.safeLocatorHash.startsWith("ti_source_atlas_locator_") &&
+      row.buyerValue.length > 40 &&
+      row.rowLiftEstimate >= 0 &&
+      ["activate_canary", "parser_needed", "review_needed", "duplicate", "low_value", "reject"].includes(row.decision) &&
+      ["agent_01_source_review", "agent_03_parser_repair", "agent_04_source_acquisition", "agent_07_paid_row_gate"].includes(row.ownerHandoff)
+    )).toBe(true);
+    expect(atlas.sourceLadder.candidate1000.transitionSummary.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "Volt Typhoon", "Sandworm", "Lazarus", "LockBit", "Clop", "Akira", "Black Basta", "Play", "Scattered Spider"]));
+    expect(atlas.sourceLadder.candidate1000.transitionSummary.every((row) =>
+      row.highestValueMissingFamilies.length > 0 &&
+      row.topCandidateSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      ["activate_canary", "repair_parser", "request_review", "replace_low_value_sources"].includes(row.nextAction)
+    )).toBe(true);
+    expect(atlas.sourceLadder.beforeAfterSampleRows).toHaveLength(10);
+    expect(atlas.sourceLadder.parserRepairExecution).toMatchObject({
+      schemaVersion: "ti.source_atlas.parser_repair_execution.v1",
+      sourcePack: "first_100",
+      repairedFixtureCount: 10,
+      baseline: {
+        evaluatedCandidateCount: 100,
+        targetPayworthyRate: 0.72
+      }
+    });
+    expect(atlas.sourceLadder.parserRepairExecution.movedRejectedToPayworthySourceCount).toBeGreaterThanOrEqual(1);
+    expect(atlas.sourceLadder.parserRepairExecution.payworthySourceCountAfterFixtures).toBeGreaterThan(
+      atlas.sourceLadder.parserRepairExecution.baseline.payworthySourceCountBefore
+    );
+    expect(atlas.sourceLadder.parserRepairExecution.failureTaxonomy.map((row) => row.code)).toEqual(expect.arrayContaining([
+      "generic_summary",
+      "missing_actor",
+      "missing_victim",
+      "missing_sector_country",
+      "missing_ttp_tool",
+      "missing_reported_time",
+      "missing_corroboration",
+      "parser_not_certified"
+    ]));
+    expect(atlas.sourceLadder.parserRepairExecution.fixtures).toHaveLength(10);
+    expect(atlas.sourceLadder.parserRepairExecution.fixtures.every((fixture) =>
+      fixture.before.rawText.startsWith("Reported by ") &&
+      fixture.after.rawText.includes("actor=") &&
+      fixture.after.rawText.includes("victim=") &&
+      fixture.after.rawText.includes("sector=") &&
+      fixture.after.rawText.includes("country=") &&
+      fixture.after.rawText.includes("ttp=") &&
+      fixture.after.rawText.includes("malware_tool=") &&
+      fixture.after.rawText.includes("first_reported_at=") &&
+      fixture.after.rawText.includes("publisher=") &&
+      fixture.after.metadata.normalizedTo === "CollectedItem" &&
+      fixture.extractedFacts.summarySpecificFacts.length >= 6 &&
+      fixture.extractedFacts.corroboratingSourceIds.length >= 2 &&
+      fixture.ownership.parserRepair === "agent_03" &&
+      fixture.ownership.qualityGate === "agent_07" &&
+      fixture.ownership.costUsefulRowLift === "agent_10" &&
+      fixture.safety.provenancePreserved === true &&
+      fixture.safety.rawSourceBodyIncluded === false &&
+      fixture.safety.unsafeUrlIncluded === false
+    )).toBe(true);
+    expect(atlas.sourceLadder.parserRepairExecution.fixtures.some((fixture) => fixture.repairApplied === "apt29_freshness")).toBe(true);
+    expect(atlas.sourceLadder.parserRepairExecution.fixtures.some((fixture) => fixture.repairApplied === "apt28_evidence_recovery")).toBe(true);
+    expect(atlas.sourceLadder.parserRepairExecution.fixtures.some((fixture) => fixture.repairApplied === "ransomware_victim_activity")).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality).toMatchObject({
+      schemaVersion: "ti.source_atlas.graph_relationship_tier_quality.v1",
+      evaluatedCandidateCount: 100,
+      minimumRelationshipReadyRate: 0.64,
+      decision: "needs_more_relationship_ready_sources",
+      noLeakBoundary: {
+        rawUrlsExposed: false,
+        rawPayloadsExposed: false,
+        restrictedContentExposed: false,
+        actorInteractionRequired: false
+      }
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.relationshipReadySourceCount).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.relationshipReadyRate).toBeLessThan(0.64);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.metricRows.map((row) => row.metric)).toEqual([
+      "actor_pivot_coverage",
+      "victim_ttp_pivot_coverage",
+      "source_family_diversity",
+      "freshness_corroboration",
+      "contradiction_hold_readiness",
+      "no_leak_provenance"
+    ]);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.metricRows.every((row) =>
+      row.relationshipEffect.length > 50 &&
+      ["pass", "warn", "hold"].includes(row.state)
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.actorRows.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "LockBit", "Akira"]));
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.actorRows.every((row) =>
+      row.sourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.nextAction.length > 60 &&
+      (row.sourceIds.length === 0 || row.expectedRelationshipPivots.includes("source_family"))
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.actorRows.filter((row) => row.sourceIds.length === 0).every((row) =>
+      row.blocker === "insufficient_sources" &&
+      row.expectedRelationshipPivots.every((pivot) => pivot === "source_family")
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.actorRows.some((row) =>
+      row.actor === "LockBit" &&
+      row.expectedRelationshipPivots.includes("victim")
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.topRelationshipReadySourceIds.every((sourceId) => sourceId.startsWith("atlas_src_"))).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality.advancementCriteria).toEqual(expect.arrayContaining([
+      expect.stringContaining("relationshipReadyRate"),
+      expect.stringContaining("daily Actor proof")
+    ]));
     expect(JSON.stringify(atlas.sourceLadder)).not.toContain("https://");
     expect(atlas.activationCanary).toMatchObject({
       dryRun: true,

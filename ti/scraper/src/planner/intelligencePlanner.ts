@@ -61,6 +61,14 @@ const BUDGETS: Record<PlanningBudgetClass, BudgetProfile> = {
     deadlineMs: 3 * 60_000,
     backgroundDelayMs: 45_000
   },
+  public_channel_probe: {
+    class: "public_channel_probe",
+    maxTasks: 20,
+    immediateTaskLimit: 6,
+    maxBytesPerTask: 192_000,
+    deadlineMs: 2 * 60_000,
+    backgroundDelayMs: 30_000
+  },
   background_refresh: {
     class: "background_refresh",
     maxTasks: 40,

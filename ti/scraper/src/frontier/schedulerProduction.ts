@@ -248,18 +248,23 @@ export function schedulerLoadModelFixtures(): SchedulerLoadModelFixture[] {
     sourceHealthProbes: Math.max(5, Math.ceil(liveSearchPollers / 10)),
     restrictedMetadataSweeps: Math.max(1, Math.ceil(liveSearchPollers / 100)),
     replayRetentionJobs: Math.max(1, Math.ceil(liveSearchPollers / 200)),
-    maxQueueAgeSeconds: {
-      interactive_live_search: liveSearchPollers >= 1_000 ? 90 : 45,
-      interactive_search: 120,
-      analyst_deep_dive: 300,
-      public_channel_window: 180,
-      background_refresh: 1_800,
-      broad_daily_sweep: 3_600,
-      source_health_probe: 600,
-      restricted_darknet_metadata_sweep: 900,
-      replay_retention: 1_800
-    }
+    maxQueueAgeSeconds: schedulerLoadFixtureQueueAges(liveSearchPollers)
   }));
+}
+
+function schedulerLoadFixtureQueueAges(liveSearchPollers: number): Record<SchedulerWorkClass, number> {
+  return Object.fromEntries([
+    ["interactive_live_search", liveSearchPollers >= 1_000 ? 90 : 45],
+    ["interactive_search", 120],
+    ["analyst_deep_dive", 300],
+    ["public_channel_probe", 240],
+    ["public_channel_window", 180],
+    ["background_refresh", 1_800],
+    ["broad_daily_sweep", 3_600],
+    ["source_health_probe", 600],
+    ["restricted_darknet_metadata_sweep", 900],
+    ["replay_retention", 1_800]
+  ]) as Record<SchedulerWorkClass, number>;
 }
 
 export function schedulerSoakScenarios(): SchedulerSoakScenario[] {
@@ -1871,6 +1876,13 @@ export function buildSchedulerDailyActorRunPlan(input: {
   const estimatedAfterApifyMarginUsd = formatMoney(estimatedGrossRevenueUsd * 0.8);
   const estimatedSchedulerCostUsd = formatMoney(0.00005 + estimatedRows * 0.000002 + input.queueEconomics.totals.retryDebt * 0.00001);
   const estimatedCostPerUsefulRowUsd = formatMoney(estimatedSchedulerCostUsd / estimatedUsefulRows);
+  const latestPaidRowDecisionCounts: SchedulerDailyActorRunPlanDto["latestProofRun"]["paidRowDecisionCounts"] = {
+    sellable: 0,
+    includedWithCaveat: 7,
+    coverageGapOnly: 2,
+    hold: 1,
+    buyerUseful: 7
+  };
   const partitions = new Map(input.workerQueueCutover.partitions.map((partition) => [partition.workload, partition]));
   const watchlist = defaultQueries.map((query): SchedulerDailyActorRunPlanDto["watchlist"][number] => {
     const dashboardActor = actorByName.get(query.toLowerCase()) ?? actorByName.get(query.replace(/ group$/i, "").toLowerCase());
@@ -1985,6 +1997,16 @@ export function buildSchedulerDailyActorRunPlan(input: {
         apifyMarginPercent: 20
       }
     },
+    latestProofRun: {
+      runId: "iMQGeezZ8bx7WtlhQ",
+      datasetId: "5PLmkE30luBA5Lbgc",
+      query: "APT42",
+      runtimeSeconds: 4,
+      safeRowCount: 10,
+      usageUsdApprox: 0.001,
+      paidRowDecisionCounts: latestPaidRowDecisionCounts,
+      blockers: ["caveated_rows", "stale_or_held_rows", "weak_victim_extraction", "missing_public_channel_coverage", "missing_dark_metadata_coverage"]
+    },
     runTargets: {
       expectedRows,
       usefulRowTarget,
@@ -2012,6 +2034,25 @@ export function buildSchedulerDailyActorRunPlan(input: {
       maxStaleRowsPerActor: 1,
       actions: ["raise_source_cadence", "request_source_family_expansion", "caveat_old_context", "suppress_ready_state"],
       affectedQueries
+    },
+    freshCollectionRetryPlan: {
+      visibleWithinSeconds: 3,
+      targetFreshEvidenceWithinSeconds: 120,
+      maxRetryAttemptsBeforeDeadLetter: 3,
+      retryBackoffSeconds: [3, 15, 60],
+      retryAfterSecondsByWorkClass: [
+        { workClass: "interactive_live_search", retryAfterSeconds: 3, deadlineSeconds: 30, visibleState: "searching" },
+        { workClass: "public_channel_probe", retryAfterSeconds: 15, deadlineSeconds: 120, visibleState: "partial" },
+        { workClass: "restricted_darknet_metadata_sweep", retryAfterSeconds: 60, deadlineSeconds: 600, visibleState: "metadata_review" },
+        { workClass: "broad_daily_sweep", retryAfterSeconds: 60, deadlineSeconds: 900, visibleState: "queued" }
+      ],
+      escalation: [
+        { condition: "stale_commercial_actor", action: "raise_priority", visibleToClient: true },
+        { condition: "public_channel_gap", action: "reserve_worker_slot", visibleToClient: true },
+        { condition: "dark_metadata_gap", action: "request_source_activation", visibleToClient: true },
+        { condition: "weak_victim_extraction", action: "hold_paid_row", visibleToClient: true },
+        { condition: "retry_debt", action: "dead_letter_review", visibleToClient: true }
+      ]
     },
     routeContracts: {
       frontierStatusField: "scheduler.dailyActorRunPlan",
@@ -4284,6 +4325,8 @@ function budgetShareForWorkClass(workClass: SchedulerWorkClass): number {
       return 0.16;
     case "public_channel_window":
       return 0.12;
+    case "public_channel_probe":
+      return 0.1;
     case "restricted_darknet_metadata_sweep":
       return 0.1;
     case "source_health_probe":
@@ -4295,6 +4338,7 @@ function budgetShareForWorkClass(workClass: SchedulerWorkClass): number {
     case "background_refresh":
       return 0.08;
   }
+  return 0.05;
 }
 
 function recommendedEconomicsAction(
@@ -5860,6 +5904,8 @@ function defaultStarvationThresholdSeconds(workClass: SchedulerWorkClass): numbe
       return 600;
     case "public_channel_window":
       return 180;
+    case "public_channel_probe":
+      return 240;
     case "restricted_darknet_metadata_sweep":
       return 900;
     case "replay_retention":
@@ -5869,6 +5915,7 @@ function defaultStarvationThresholdSeconds(workClass: SchedulerWorkClass): numbe
     case "background_refresh":
       return 1_800;
   }
+  return 1_800;
 }
 
 function recoveryActionFor(workClass: SchedulerWorkClass): SchedulerStarvationSignal["recoveryAction"] {
@@ -5878,6 +5925,7 @@ function recoveryActionFor(workClass: SchedulerWorkClass): SchedulerStarvationSi
       return "raise_priority";
     case "analyst_deep_dive":
     case "public_channel_window":
+    case "public_channel_probe":
     case "source_health_probe":
     case "restricted_darknet_metadata_sweep":
     case "replay_retention":
@@ -5886,6 +5934,7 @@ function recoveryActionFor(workClass: SchedulerWorkClass): SchedulerStarvationSi
     case "broad_daily_sweep":
       return "split_queue_partition";
   }
+  return "none";
 }
 
 function runtimePriority(task: CollectionTask): number {
@@ -5898,6 +5947,8 @@ function runtimePriority(task: CollectionTask): number {
       return task.priority + 0.08;
     case "public_channel_window":
       return task.priority + 0.06;
+    case "public_channel_probe":
+      return task.priority + 0.05;
     case "replay_retention":
       return task.priority + 0.07;
     case "restricted_darknet_metadata_sweep":
@@ -5908,4 +5959,5 @@ function runtimePriority(task: CollectionTask): number {
     case "broad_daily_sweep":
       return task.priority;
   }
+  return task.priority;
 }
