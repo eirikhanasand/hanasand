@@ -22,12 +22,14 @@ It does not return stolen data, credential values, private messages, payloads, r
 
 ## Pricing
 
-The Actor is configured for Apify pay-per-event pricing, effective July 4, 2026. Apify bills the built-in start event and default dataset item event automatically:
+The Actor is configured for Apify pay-per-event pricing, effective July 4, 2026. Published build `0.6.3` bills the built-in start event and default dataset item event automatically:
 
 - `apify-actor-start`
 - `apify-default-dataset-item`
 
-This keeps customer cost tied to useful output volume rather than wall-clock runtime. Platform usage is included for customers, so the row price is set to cover normal runtime cost and margin. The default dataset remains one row per normalized finding; the `OUTPUT` key-value-store record includes a compact monetization summary with expected event names and row count.
+Rows are priced at `$3.00 / 1,000`; Actor starts are `$0.00005`; platform usage is included for customers; Apify margin is 20%. This keeps customer cost tied to useful output volume rather than wall-clock runtime. The default dataset remains one row per normalized finding; the `OUTPUT` key-value-store record includes a compact monetization summary with expected event names and row count.
+
+Latest public proof: run `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 safe rows for APT29/APT42/LockBit, 3.1s runtime, about `$0.00075` platform usage, and about `$0.045` gross row revenue after pricing starts.
 
 ## Input
 
@@ -123,7 +125,7 @@ This keeps customer cost tied to useful output volume rather than wall-clock run
 
 ## Public Proof Contract
 
-`GET /v1/contracts` exposes `apifyStoreReadiness`, which mirrors the Actor default input and safe sample output DTOs for `APT29`, `Volt Typhoon`, `Scattered Spider`, and `LockBit`.
+`GET /v1/contracts` exposes `apifyStoreReadiness`, which mirrors the Actor default input, published build `0.6.3`, public proof run/dataset, pricing hooks, conversion metric handoff, and safe sample output DTOs for `APT29`, `Volt Typhoon`, `Scattered Spider`, and `LockBit`.
 
 Each public proof DTO includes:
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 - 2026-06-20
+
+- Recorded published build `0.6.3`, proof run `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, July 4 pricing, Apify margin, platform-usage inclusion, and conversion metric handoff in the public readiness contract and launch checklist.
+
 ## 0.6.0 - 2026-06-20
 
 - Added compact relationship insight fields to every marketplace dataset row: `relationshipSummary`, `relationshipPivots`, `whyActionable`, `freshnessDelta`, `confidenceDelta`, `contradictionHints`, `corroborationState`, and `nextSearchPivots`.

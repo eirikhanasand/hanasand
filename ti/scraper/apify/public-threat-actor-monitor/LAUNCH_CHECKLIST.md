@@ -99,7 +99,7 @@ TI_SEARCH_READINESS_QUERY='Random Actor' bun run check:scraper-native-search
 TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search
 ```
 
-`GET /v1/contracts` returns the `apifyStoreReadiness` field. It is the source of truth for the exact default input, verified sample output DTOs, frontend partial/ready/queued/searching/empty-delta states, pricing hooks, safety contract, proof commands, and known blockers.
+`GET /v1/contracts` returns the `apifyStoreReadiness` field. It is the source of truth for the exact default input, verified sample output DTOs, frontend partial/ready/queued/searching/empty-delta states, pricing hooks, conversion metric handoff, safety contract, proof commands, and known blockers.
 
 ## Launch Pricing
 
@@ -112,12 +112,16 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 | Silver | $2.40 |
 | Gold | $2.10 |
 
-- Dataset item event: `apify-default-dataset-item`.
+- Published build: `0.6.3`.
+- Latest proof run: `dQzvWhNM2OHrBWVfo`, dataset `aP1dqnK7uEezn5jJv`, 15 safe rows for APT29/APT42/LockBit, 3.1s runtime, about `$0.00075` usage, about `$0.045` gross row revenue after pricing starts.
+- Daily 20-group baseline: run `rh6D0UInDD6x7GuuD`, dataset `dYbGGA37MRq7pU47O`, 98 safe rows, about `$0.0023` usage, zero no-leak failures, with stale/thin-row gaps still tracked.
+- Dataset item event: `apify-default-dataset-item` at $3.00 / 1,000 rows.
 - Actor start event: `apify-actor-start` at $0.00005.
-- Platform usage is included for customers under the configured Apify model, so row pricing must cover normal runtime cost and margin.
+- Platform usage is included for customers under the configured Apify model, and Apify margin is 20%, so row pricing must cover normal runtime cost and margin.
 - Apify bills the synthetic start/default-dataset-item events automatically. The Actor writes one normalized finding per default dataset row and records the expected event names plus row count in `RUN_SUMMARY` / `OUTPUT`.
 - Do not add a monthly rental at launch; usage is too early to justify one.
 - Review pricing after 30 paid runs using actual rows per run, repeat usage, platform costs, and support load.
+- Track store page views, unique users, trial runs, paid runs, repeat users, conversion rate, useful-row rate, fresh-row rate, no-leak failures, and cost per useful row in `/v1/ops/product-slo.apifyLaunchExperiment`; leave unknown Apify analytics as `null` until copied from the account.
 - Actor pricing is scheduled to switch to pay-per-event on July 4, 2026. Payout/beneficiary readiness still needs to be verified in Apify billing before assuming cash can be withdrawn.
 - Do not store beneficiary, payout, token, or account identifiers in this repository.
 
