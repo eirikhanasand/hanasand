@@ -23,14 +23,14 @@ It does not return stolen data, credential values, private messages, payloads, r
 
 ## Pricing
 
-The Actor is configured for Apify pay-per-event pricing, effective July 4, 2026. Published build `0.6.4` on Actor version `0.6` bills the built-in start event and default dataset item event automatically:
+The Actor is configured for Apify pay-per-event pricing, effective July 4, 2026. Hosted build `0.6.7` on Actor version `0.6` bills the built-in start event and default dataset item event automatically:
 
 - `apify-actor-start`
 - `apify-default-dataset-item`
 
 Rows are priced at `$3.00 / 1,000`; Actor starts are `$0.00005`; platform usage is included for customers; Apify margin is 20%. This keeps customer cost tied to output volume rather than wall-clock runtime. The default dataset remains one row per normalized finding, and every row carries `paidRowDecision`, `paidRowReasonCodes`, `paidRowRemediationActions`, `whyWorthPayingFor`, `buyerValueScore`, `billingGuidance`, `graphQualityLift`, `graphQualityLiftReasonCodes`, `graphQualityLiftEvidence`, and `marketplaceGraphSignals` so buyers can separate sellable findings from caveated leads, held rows, suppressed low-evidence rows, and coverage-gap remediation. The `OUTPUT` key-value-store record includes compact monetization, paid-row quality, `monetizationReadiness`, dry-run `qualityLiftGate`, Program BO `graphLiftBatch2`, Program BP `marketplaceGraphSignals`, Program BT `revenueConversionChecklist`, `pricingProof`, and 12 `buyerSampleRows`. A run is blocked for paid-traffic confidence until at least 25% of rows are chargeable findings and average buyer value is at least 0.55.
 
-Latest public proof: run `iMQGeezZ8bx7WtlhQ`, dataset `5PLmkE30luBA5Lbgc`, 10 safe APT42 rows, 4s runtime, about `$0.001` platform usage, and about `$0.03` gross row revenue after pricing starts.
+Latest public proof: run `OThlfd0uzSCNnedAO`, dataset `LSen2fYtwFTtOr7vK`, 10 safe APT42 rows, 4 sellable rows, 2 caveated rows, 4 held rows, average buyer value `0.577`, and `ready_for_paid_traffic`. Runtime and platform usage for this ready proof must be copied from Apify run analytics before being used in revenue math; projected gross row revenue after pricing starts is about `$0.03`.
 
 Marketplace demand and payout state are not inferred from sample rows. Store views, unique users, starts, paid runs, refunds, platform usage cost, creator revenue, beneficiary state, payout method, and withdrawal readiness stay `null` or `unknown` until copied from Apify analytics or billing. The next manual verification step is recorded in `OUTPUT.revenueConversionChecklist.nextManualVerificationStep`.
 
@@ -132,7 +132,7 @@ Marketplace demand and payout state are not inferred from sample rows. Store vie
 
 ## Public Proof Contract
 
-`GET /v1/contracts` exposes `apifyStoreReadiness`, which mirrors the Actor default input, published build `0.6.4`, public proof run/dataset, pricing hooks, conversion metric handoff, buyer-facing conversion proof, and safe sample output DTOs for `APT29`, `Volt Typhoon`, `Scattered Spider`, and `LockBit`.
+`GET /v1/contracts` exposes `apifyStoreReadiness`, which mirrors the Actor default input, hosted build `0.6.7`, public proof run/dataset, pricing hooks, conversion metric handoff, buyer-facing conversion proof, and safe sample output DTOs for `APT29`, `Volt Typhoon`, `Scattered Spider`, and `LockBit`.
 
 Each public proof DTO includes:
 

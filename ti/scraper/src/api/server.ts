@@ -9015,7 +9015,7 @@ function buildEnterpriseApiContractIndex() {
         schemaVersion: "ti.scheduler_daily_actor_run_plan.v1",
         actor: "eirikhanasand/public-threat-actor-monitor",
         fields: ["apifyActor", "latestProofRun", "runTargets", "watchlist", "sourceTierCadence", "economics", "staleSuppression", "freshCollectionRetryPlan", "executionQueuePlan", "sourceGapClosurePlan", "sourceGapExecutionReadiness", "routeContracts", "releaseGate"],
-        guarantee: "daily Actor scheduling is dry-run and buyer-visible: the 20-query Apify default watchlist, latest build 0.6.4 proof run, paid-row decision counts, source/dark-metadata 100->1000->4000 sweep cadence, execution enqueue batches, per-actor source gap closure actions, source gap execution readiness, useful-row targets, fresh-row targets, stale-only suppression, duplicate-run reuse, 3-second polling, retry-after/dead-letter visibility, and cost per useful row are exposed without mutating scheduler state"
+        guarantee: "daily Actor scheduling is dry-run and buyer-visible: the 20-query Apify default watchlist, latest build 0.6.7 proof run, paid-row decision counts, source/dark-metadata 100->1000->4000 sweep cadence, execution enqueue batches, per-actor source gap closure actions, source gap execution readiness, useful-row targets, fresh-row targets, stale-only suppression, duplicate-run reuse, 3-second polling, retry-after/dead-letter visibility, and cost per useful row are exposed without mutating scheduler state"
       },
       schedulerProductionLeaseSemantics: {
         routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/contracts"],
@@ -10071,7 +10071,7 @@ function buildApifyStoreReadinessContract(input: {
       name: "public-threat-actor-monitor",
       title: "Public Threat Actor & Ransomware Activity Monitor",
       version: "0.6",
-      publishedBuildVersion: "0.6.4",
+      publishedBuildVersion: "0.6.7",
       buildTag: "latest",
       actorRoot: "apify/public-threat-actor-monitor",
       defaultApiBase: "https://api.hanasand.com/api/ti/search",
@@ -10099,16 +10099,21 @@ function buildApifyStoreReadinessContract(input: {
         "remote_public_proof_requires_network_approval_when_run_outside_deployed_host"
       ],
       readinessDecision: "buyer_ready_after_external_payout_verification",
-      latestBuild: { source: "Apify Store", buildTag: "latest", buildVersion: "0.6.4", actorId: "eirikhanasand/public-threat-actor-monitor" },
+      latestBuild: { source: "Apify Store", buildTag: "latest", buildVersion: "0.6.7", actorId: "eirikhanasand/public-threat-actor-monitor" },
       latestProofRun: {
         source: "Apify run",
-        runId: "iMQGeezZ8bx7WtlhQ",
-        datasetId: "5PLmkE30luBA5Lbgc",
+        runId: "OThlfd0uzSCNnedAO",
+        datasetId: "LSen2fYtwFTtOr7vK",
         querySet: ["APT42"],
         rowCount: 10,
-        runtimeSeconds: 4,
-        usageUsd: 0.001,
-        projectedGrossRowRevenueUsdAfterPricing: 0.03
+        runtimeSeconds: null,
+        usageUsd: null,
+        projectedGrossRowRevenueUsdAfterPricing: 0.03,
+        sellableRows: 4,
+        includedWithCaveatRows: 2,
+        heldRows: 4,
+        averageBuyerValueScore: 0.577,
+        monetizationDecision: "ready_for_paid_traffic"
       },
       dailyRunBaseline: {
         source: "Apify run",
@@ -10316,7 +10321,7 @@ function buildApifyStoreReadinessContract(input: {
       noLeakGuarantee: "Buyer-facing proof exposes row decisions, counts, source families, hashes, caveats, and quality gates only; it does not expose raw evidence bodies, unsafe URLs, credentials, private content, object keys, payloads, or actor interaction."
     },
     sampleOutputSummaries: [
-      { query: "APT42", runId: "iMQGeezZ8bx7WtlhQ", datasetId: "5PLmkE30luBA5Lbgc", summary: "Published build 0.6.4 emits safe metadata rows with paid-row decisions, caveated leads, and held stale rows visible in the dataset.", rowSafety: "metadata_only" }
+      { query: "APT42", runId: "OThlfd0uzSCNnedAO", datasetId: "LSen2fYtwFTtOr7vK", summary: "Hosted build 0.6.7 emits safe metadata rows with paid-row decisions, sellable findings, caveated leads, held rows, and ready-for-paid-traffic proof visible in the dataset.", rowSafety: "metadata_only" }
     ],
     marketplaceGuardrails: {
       noPlaceholderDefaults: true,
@@ -10365,9 +10370,9 @@ function apifyPublicProofDto(
   return {
     schemaVersion: "ti.public_proof_dto.v1",
     runId: `apify_sample_run_${slug}`,
-    sourceRunId: "iMQGeezZ8bx7WtlhQ",
-    sourceDatasetId: "5PLmkE30luBA5Lbgc",
-    buildVersion: "0.6.4",
+    sourceRunId: "OThlfd0uzSCNnedAO",
+    sourceDatasetId: "LSen2fYtwFTtOr7vK",
+    buildVersion: "0.6.7",
     datasetId: `apify_sample_dataset_${slug}`,
     query,
     queryClass,

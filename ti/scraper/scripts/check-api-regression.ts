@@ -194,9 +194,9 @@ check(apifyStoreReadiness.schemaVersion === "ti.apify_store_readiness.v1", "Apif
 check(apifyStoreReadiness.status === "buyer_ready_with_external_payout_blocker", "Apify store readiness status drifted");
 check(apifyStoreReadinessInvariant.schemaVersion === "ti.apify_store_readiness.v1", "sentinel Apify store readiness invariant schema drifted");
 check(apifyStoreReadinessInvariant.actorName === "public-threat-actor-monitor", "Apify actor name drifted");
-check(apifyStoreReadinessInvariant.publishedBuildVersion === "0.6.4", "Apify published build version drifted");
-check(apifyStoreReadinessInvariant.latestProofRunId === "iMQGeezZ8bx7WtlhQ", "Apify proof run id drifted");
-check(apifyStoreReadinessInvariant.latestProofDatasetId === "5PLmkE30luBA5Lbgc", "Apify proof dataset id drifted");
+check(apifyStoreReadinessInvariant.publishedBuildVersion === "0.6.7", "Apify published build version drifted");
+check(apifyStoreReadinessInvariant.latestProofRunId === "OThlfd0uzSCNnedAO", "Apify proof run id drifted");
+check(apifyStoreReadinessInvariant.latestProofDatasetId === "LSen2fYtwFTtOr7vK", "Apify proof dataset id drifted");
 check(apifyStoreReadinessInvariant.pricingEffectiveDate === "2026-07-04", "Apify pricing effective date drifted");
 for (const query of ["APT29", "Volt Typhoon", "Scattered Spider", "LockBit"]) {
   check(stringArray(apifyStoreReadinessInvariant.sampleQueries).includes(query), `Apify sample proof missing ${query}`);

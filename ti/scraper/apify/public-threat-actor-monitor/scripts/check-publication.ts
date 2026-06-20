@@ -137,12 +137,19 @@ const visibleDatasetFields = [
 const manifest = await Bun.file(".actor/actor.json").json() as ActorManifest;
 const readme = await Bun.file("README.md").text();
 const changelog = await Bun.file("CHANGELOG.md").text();
+const launchChecklist = await Bun.file("LAUNCH_CHECKLIST.md").text();
 const mainSource = await Bun.file("src/main.ts").text();
 const datasetSchema = await Bun.file(".actor/DATASET_SCHEMA.json").json() as DatasetSchema;
 const inputSchema = await Bun.file(".actor/INPUT_SCHEMA.json").text();
 const fixture = await Bun.file("fixtures/apt42.json").json() as Record<string, unknown>;
 
 const failures: string[] = [];
+const latestPaidTrafficProof = {
+  buildVersion: "0.6.7",
+  runId: "OThlfd0uzSCNnedAO",
+  datasetId: "LSen2fYtwFTtOr7vK",
+  monetizationDecision: "ready_for_paid_traffic"
+};
 
 for (const field of ["title", "description"] as const) {
   if (!manifest[field]?.trim()) failures.push(`Missing actor manifest ${field}`);
@@ -173,6 +180,7 @@ const combinedText = [
   JSON.stringify(manifest, null, 2),
   readme,
   changelog,
+  launchChecklist,
   mainSource,
   JSON.stringify(datasetSchema, null, 2),
   inputSchema
@@ -203,6 +211,16 @@ const contractMentions: Array<[string, string[]]> = [
 for (const [label, acceptedTerms] of contractMentions) {
   if (!acceptedTerms.some((term) => combinedText.includes(term))) {
     failures.push(`Publication contract must mention ${label}`);
+  }
+}
+
+for (const [surface, text] of [
+  ["README", readme],
+  ["launch checklist", launchChecklist],
+  ["changelog", changelog]
+] as const) {
+  for (const term of Object.values(latestPaidTrafficProof)) {
+    if (!text.includes(term)) failures.push(`${surface} must mention latest paid-traffic proof ${term}`);
   }
 }
 

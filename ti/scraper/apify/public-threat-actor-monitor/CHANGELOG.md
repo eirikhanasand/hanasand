@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.7 - 2026-06-20
+
+- Recorded hosted build `0.6.7` as the current paid-traffic-ready proof surface. Remote proof run `OThlfd0uzSCNnedAO` produced dataset `LSen2fYtwFTtOr7vK` with 10 safe APT42 rows: 4 sellable, 2 caveated, 4 held, average buyer value `0.577`, and `ready_for_paid_traffic`.
+- Updated buyer-visible README and launch-checklist proof copy so the Store-facing surface points at the latest ready proof while runtime and platform usage stay external analytics fields until copied from Apify.
+
 ## 0.6.4 - 2026-06-20
 
 - Published Apify build `0.6.4` on Actor version `0.6`. Proof run `iMQGeezZ8bx7WtlhQ` produced dataset `5PLmkE30luBA5Lbgc` with 10 safe APT42 rows and visible paid-row decisions, caveated lead rows, held stale rows, and metadata-only safety fields.

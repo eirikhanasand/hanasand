@@ -1873,7 +1873,19 @@ describe("api v1", () => {
         knownBlockers: string[];
         readinessDecision: string;
         latestBuild: { buildVersion: string };
-        latestProofRun: { runId: string; datasetId: string; rowCount: number; runtimeSeconds: number; usageUsd: number; projectedGrossRowRevenueUsdAfterPricing: number };
+        latestProofRun: {
+          runId: string;
+          datasetId: string;
+          rowCount: number;
+          runtimeSeconds: number | null;
+          usageUsd: number | null;
+          projectedGrossRowRevenueUsdAfterPricing: number;
+          sellableRows?: number;
+          includedWithCaveatRows?: number;
+          heldRows?: number;
+          averageBuyerValueScore?: number;
+          monetizationDecision?: string;
+        };
         dailyRunBaseline: { runId: string; datasetId: string; defaultQueryCount: number; rowCount: number; noLeakFailures: number; thinRowCount: number; singleSourceRowCount: number; knownQualityGaps: string[] };
       };
       defaultSampleInput: { queries: string[]; maxRowsPerQuery: number; includeActivity: boolean; includeTargets: boolean; includeTtps: boolean; includeSources: boolean; includeDatasets: boolean; includeCoverageGaps: boolean };
@@ -3183,7 +3195,7 @@ describe("api v1", () => {
     expect(apifyStoreReadiness.actor).toMatchObject({
       name: "public-threat-actor-monitor",
       version: "0.6",
-      publishedBuildVersion: "0.6.4",
+      publishedBuildVersion: "0.6.7",
       outputContract: "safe_metadata_only.v1"
     });
     expect(apifyStoreReadiness.actor.categories).toEqual(["SECURITY", "MONITORING"]);
@@ -3232,15 +3244,20 @@ describe("api v1", () => {
     ]));
     expect(apifyStoreReadiness.storeReadiness.readinessDecision).toBe("buyer_ready_after_external_payout_verification");
     expect(apifyStoreReadiness.storeReadiness.latestBuild).toMatchObject({
-      buildVersion: "0.6.4"
+      buildVersion: "0.6.7"
     });
     expect(apifyStoreReadiness.storeReadiness.latestProofRun).toMatchObject({
-      runId: "iMQGeezZ8bx7WtlhQ",
-      datasetId: "5PLmkE30luBA5Lbgc",
+      runId: "OThlfd0uzSCNnedAO",
+      datasetId: "LSen2fYtwFTtOr7vK",
       rowCount: 10,
-      runtimeSeconds: 4,
-      usageUsd: 0.001,
-      projectedGrossRowRevenueUsdAfterPricing: 0.03
+      runtimeSeconds: null,
+      usageUsd: null,
+      projectedGrossRowRevenueUsdAfterPricing: 0.03,
+      sellableRows: 4,
+      includedWithCaveatRows: 2,
+      heldRows: 4,
+      averageBuyerValueScore: 0.577,
+      monetizationDecision: "ready_for_paid_traffic"
     });
     expect(apifyStoreReadiness.storeReadiness.dailyRunBaseline).toMatchObject({
       runId: "rh6D0UInDD6x7GuuD",
@@ -3265,9 +3282,9 @@ describe("api v1", () => {
     for (const proof of apifyStoreReadiness.publicProofDtos) {
       expect(proof.schemaVersion).toBe("ti.public_proof_dto.v1");
       expect(proof.runId).toMatch(/^apify_sample_run_/);
-      expect(proof.sourceRunId).toBe("iMQGeezZ8bx7WtlhQ");
-      expect(proof.sourceDatasetId).toBe("5PLmkE30luBA5Lbgc");
-      expect(proof.buildVersion).toBe("0.6.4");
+      expect(proof.sourceRunId).toBe("OThlfd0uzSCNnedAO");
+      expect(proof.sourceDatasetId).toBe("LSen2fYtwFTtOr7vK");
+      expect(proof.buildVersion).toBe("0.6.7");
       expect(proof.datasetId).toMatch(/^apify_sample_dataset_/);
       expect(proof.rowCount).toBeGreaterThan(0);
       expect(proof.safetyContract).toBe("safe_metadata_only.v1");
@@ -3402,7 +3419,7 @@ describe("api v1", () => {
     expect(apifyStoreReadiness.buyerFacingConversionProof.buyerReadableExamples.every((row) => row.requiredVisibleFields.length > 0)).toBe(true);
     expect(apifyStoreReadiness.buyerFacingConversionProof.noLeakGuarantee).toContain("does not expose raw evidence bodies");
     expect(apifyStoreReadiness.sampleOutputSummaries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ query: "APT42", runId: "iMQGeezZ8bx7WtlhQ", datasetId: "5PLmkE30luBA5Lbgc", rowSafety: "metadata_only" })
+      expect.objectContaining({ query: "APT42", runId: "OThlfd0uzSCNnedAO", datasetId: "LSen2fYtwFTtOr7vK", rowSafety: "metadata_only" })
     ]));
     expect(apifyStoreReadiness.marketplaceGuardrails).toMatchObject({
       noPlaceholderDefaults: true,
