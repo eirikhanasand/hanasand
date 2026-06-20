@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 - 2026-06-20
+
+- Disabled service coverage rows by default so normal runs only return intelligence and evidence.
+- Kept coverage metadata available as an explicit input option.
+- Revised the example output to reflect single-source evidence without inflated corroboration claims.
+
 ## 0.2.0 - 2026-06-20
 
 - Added a 20-group default watchlist and bounded five-query concurrency.

@@ -51,8 +51,8 @@
     "includeDatasets": {
       "title": "Include dataset coverage",
       "type": "boolean",
-      "description": "Return rows describing available clear-web, public-channel, and darknet-metadata coverage.",
-      "default": true
+      "description": "Add service coverage rows. Leave disabled when you only need actor intelligence and evidence.",
+      "default": false
     }
   },
   "required": []

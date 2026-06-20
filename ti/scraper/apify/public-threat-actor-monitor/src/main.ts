@@ -154,7 +154,7 @@ function normalizeInput(input: ActorInput): NormalizedInput {
     includeTargets: input.includeTargets ?? true,
     includeTtps: input.includeTtps ?? true,
     includeSources: input.includeSources ?? true,
-    includeDatasets: input.includeDatasets ?? true,
+    includeDatasets: input.includeDatasets ?? false,
     apiBaseUrl: (process.env.TI_PUBLIC_API_BASE ?? DEFAULT_API_BASE).replace(/\/$/, "")
   };
 }
