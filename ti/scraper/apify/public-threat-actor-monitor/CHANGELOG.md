@@ -2,6 +2,7 @@
 
 ## 0.6.0 - 2026-06-20
 
+- Added compact relationship insight fields to every marketplace dataset row: `relationshipSummary`, `relationshipPivots`, `whyActionable`, `freshnessDelta`, `confidenceDelta`, `contradictionHints`, `corroborationState`, and `nextSearchPivots`.
 - Added the `GET /v1/contracts` `apifyStoreReadiness` publication contract as the source of truth for the exact default input, sample output DTOs, public proof DTOs, frontend polling states, pricing hooks, safety contract, and known Apify payout blockers.
 - Expanded the manifest example input to the full 20-query default watchlist and kept `includeCoverageGaps` enabled by default.
 - Tightened publication guardrails to reject draft listing copy, hello-world input, generic local categories, and unsafe output claims.

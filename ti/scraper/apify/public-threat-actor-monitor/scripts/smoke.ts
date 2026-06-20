@@ -65,6 +65,21 @@ for (const row of output) {
   if (!Array.isArray(row.analysisFacets) || !row.analysisFacets.includes(`row:${row.rowType}`) || !row.analysisFacets.includes("safety:metadata_only")) {
     throw new Error("Every row must expose stable analysisFacets for marketplace filtering");
   }
+  if (
+    typeof row.relationshipSummary !== "string"
+    || row.relationshipSummary.length === 0
+    || !Array.isArray(row.relationshipPivotTypes)
+    || !Array.isArray(row.relationshipPivots)
+    || !Array.isArray(row.whyActionable)
+    || row.whyActionable.length === 0
+    || !Array.isArray(row.nextSearchPivots)
+    || typeof row.freshnessDelta !== "string"
+    || typeof row.confidenceDelta !== "string"
+    || !Array.isArray(row.contradictionHints)
+    || typeof row.corroborationState !== "string"
+  ) {
+    throw new Error("Every row must expose compact buyer-visible relationship insight fields");
+  }
   if (typeof row.coverageStatus !== "string" || typeof row.recommendedCollectionAction !== "string") {
     throw new Error("Every row must expose coverage status and recommended collection action");
   }
@@ -107,6 +122,16 @@ if (!Array.isArray(activity?.reviewReasons) || !activity.reviewReasons.includes(
 }
 if (!Array.isArray(activity?.analysisFacets) || !activity.analysisFacets.includes("claim:campaign") || !activity.analysisFacets.includes("evidence:single_source")) {
   throw new Error("Activity rows must expose claim and evidence analysis facets");
+}
+if (
+  typeof activity.relationshipSummary !== "string"
+  || !activity.relationshipSummary.includes("campaign")
+  || !Array.isArray(activity.relationshipPivots)
+  || !activity.relationshipPivots.includes("claim:campaign")
+  || !Array.isArray(activity.nextSearchPivots)
+  || !activity.nextSearchPivots.includes("APT42 public channel")
+) {
+  throw new Error("Activity rows must expose graph-style relationship pivots and next searches");
 }
 if (activity?.pollingHint !== "source_gap_review" || activity?.schedulerDecision !== "reuse_active_run") {
   throw new Error("Activity rows must expose scheduler decision and polling hint");

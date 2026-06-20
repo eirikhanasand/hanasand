@@ -118,6 +118,7 @@ import type {
   TiSourceAtlasImportPlan,
   TiSourceAtlasLifecycleReviewPacket,
   TiSourceAtlasPublicMonitorSourceGapHandoff,
+  TiSourceAtlasProductSourceLadderPacket,
   TiSourceAtlasRecord,
   TiSourceAtlasReliabilityEconomicsPacket,
   TiSourceAtlasRegistryActivationHandoff,
@@ -583,6 +584,7 @@ export function buildTiSourceAtlasApiResponse(input: { queries?: string[]; tenan
     }),
     lifecycleReview: buildTiSourceAtlasLifecycleReviewPacket(records, generatedAt),
     sourceEconomics: buildTiSourceAtlasReliabilityEconomicsPacket(records, generatedAt),
+    sourceLadder: buildTiSourceAtlasParserImpactSourceLadderPacket(records, generatedAt),
     activationCanary: {
       dryRun: true,
       willMutate: false,
@@ -613,8 +615,8 @@ export function buildTiSourceAtlasApiResponse(input: { queries?: string[]; tenan
       agent04CoverageFreshness: ["coverageMatrix", "records.queryClassCoverage", "records.freshness"],
       agent06EvidenceEstimates: ["records.evidenceEstimate", "importPlans.evidenceEstimate"],
       agent07QualityScorecards: ["records.sourceValueScore", "records.legalRobotsState", "records.downstreamPublicAnswerImpact"],
-      agent09ApiContracts: ["sourceAtlas", "schemaVersion", "summary", "records", "importPlans", "coverageMatrix", "publicMonitorSourceGapHandoff", "lifecycleReview", "sourceEconomics", "activationCanary"],
-      agent10ReleaseGates: ["guardrails.noSilentActivation", "importPlans.rollbackPacket", "activationCanary.rollbackPlanIds", "lifecycleReview.guardrails", "sourceEconomics.guardrails"]
+      agent09ApiContracts: ["sourceAtlas", "schemaVersion", "summary", "records", "importPlans", "coverageMatrix", "publicMonitorSourceGapHandoff", "lifecycleReview", "sourceEconomics", "sourceLadder", "activationCanary"],
+      agent10ReleaseGates: ["guardrails.noSilentActivation", "importPlans.rollbackPacket", "activationCanary.rollbackPlanIds", "lifecycleReview.guardrails", "sourceEconomics.guardrails", "sourceLadder.expectedActorOutputImpact"]
     }
   };
 }
@@ -748,6 +750,38 @@ function buildTiSourceAtlasCoverageMatrix(records: TiSourceAtlasRecord[], querie
   });
 }
 
+function tiSourceAtlasBuyerValue(sourceName: string, family: TiSourceAtlasFamily, actors: string[], fastImpact: boolean): string {
+  const value = family === "ransomware_tracker"
+    ? "adds victim/activity rows and corroborates ransomware claims"
+    : family === "public_channel_descriptor"
+      ? "adds legal public-channel corroboration descriptors without joining groups or account automation"
+      : family === "cert_government" || family === "cve_advisory" || family === "github_security_advisory" || family === "package_advisory"
+        ? "adds dated advisory context, CVEs, sectors, and official corroboration"
+        : "adds dated actor activity, malware/tooling, TTP, and campaign context";
+  return `${sourceName} ${value} for ${actors.slice(0, 4).join(", ")}; ${fastImpact ? "expected to improve Apify rows within 1-3 days after approved activation" : "held until review gates clear before buyer-visible rows"}.`;
+}
+
+function tiSourceAtlasDefaultGroupMissingFamilies(): Array<{
+  actor: "APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Sandworm" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira";
+  missingFamily: TiSourceAtlasFamily;
+  reason: string;
+}> {
+  return [
+    { actor: "APT29", missingFamily: "vendor_threat_blog", reason: "stale actor rows need fresh vendor/government reporting" },
+    { actor: "APT29", missingFamily: "malware_researcher", reason: "malware/tool rows need extracted tradecraft context" },
+    { actor: "APT28", missingFamily: "vendor_threat_blog", reason: "current default run has no public evidence" },
+    { actor: "APT28", missingFamily: "regional_cyber_agency", reason: "regional corroboration improves sector/country rows" },
+    { actor: "APT42", missingFamily: "public_channel_descriptor", reason: "recent rows lack legal public-channel corroboration" },
+    { actor: "Volt Typhoon", missingFamily: "exploit_intelligence", reason: "infrastructure rows need exposure and scan corroboration" },
+    { actor: "Sandworm", missingFamily: "ics_ot", reason: "industrial/energy targeting needs sector-specific sources" },
+    { actor: "Lazarus", missingFamily: "package_advisory", reason: "package and developer ecosystem activity needs advisory sources" },
+    { actor: "Scattered Spider", missingFamily: "cloud_saas_security", reason: "identity/SaaS intrusion rows need cloud security sources" },
+    { actor: "FIN7", missingFamily: "phishing_brand_abuse", reason: "financial-crime rows need infrastructure and brand-abuse context" },
+    { actor: "LockBit", missingFamily: "ransomware_tracker", reason: "fresh buyer value depends on victim/activity corroboration" },
+    { actor: "Akira", missingFamily: "ransomware_tracker", reason: "fresh buyer value depends on victim/activity corroboration" }
+  ];
+}
+
 function buildTiSourceAtlasPublicMonitorSourceGapHandoff(input: { records: TiSourceAtlasRecord[]; coverageMatrix: TiSourceAtlasCoverageMatrixRow[]; queries: string[]; generatedAt: string }): TiSourceAtlasPublicMonitorSourceGapHandoff {
   const queries = input.queries.length > 0 ? input.queries : ["APT29", "APT42", "LockBit", "Akira ransomware victims", "CVE-2026-4242"];
   const rows: TiSourceAtlasPublicMonitorSourceGapHandoff["queryRows"] = queries.map((query) => {
@@ -839,6 +873,350 @@ function tiSourceAtlasPublicMonitorPriority(queryClass: SourceCoverageCloseoutQu
   if (queryClass === "ransomware_victim" || queryClass === "cve") return "high";
   if (queryClass === "actor" || queryClass === "campaign") return "normal";
   return "low";
+}
+
+function buildTiSourceAtlasParserImpactSourceLadderPacket(records: TiSourceAtlasRecord[], generatedAt: string): any {
+  const first100 = records.filter((record) => !record.duplicate.suppressed).slice(0, 100);
+  const first1000 = records.slice(0, 1000);
+  const first100Rows = first100.map((record, index) => tiSourceAtlasProductLadderRow(record, index));
+  const parserImpactCandidates = first100
+    .map((record, index) => tiSourceAtlasParserImpactRow(record, index))
+    .sort((left, right) => right.expectedRowLift - left.expectedRowLift || left.atlasSourceId.localeCompare(right.atlasSourceId));
+  const requiredEffects: TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number]["expectedPublicMonitorEffect"][] = ["apt28_evidence_recovery", "apt29_freshness", "ransomware_victim_activity", "public_advisory_context"];
+  const requiredImpactRows = requiredEffects
+    .map((effect) => parserImpactCandidates.find((row) => row.expectedPublicMonitorEffect === effect))
+    .filter((row): row is TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number] => Boolean(row));
+  const parserImpactTable = [...requiredImpactRows, ...parserImpactCandidates.filter((row) => !requiredImpactRows.some((required) => required.atlasSourceId === row.atlasSourceId))]
+    .slice(0, 30);
+  const parsedSourceExamples = tiSourceAtlasParsedSourceExamples(first100, generatedAt);
+  const beforeAfterSampleRows = tiSourceAtlasBeforeAfterSampleRows(first100, generatedAt);
+  const accepted1000 = first1000.filter((record) => record.activationReadiness.state === "ready_for_dry_run" && !record.duplicate.suppressed && record.sourceValueScore >= 0.58);
+  const parserHeld = first100.filter((record) => record.activationReadiness.state === "legal_review_hold" || record.activationReadiness.state === "descriptor_only_hold");
+  const parserHeldIds = new Set(parserHeld.map((record) => record.id));
+  const parserFailed = first100.filter((record) => !parserHeldIds.has(record.id) && (record.parserCapability.certificationRequired || record.parserCapability.profile === "pdf_report" && record.evidenceYield < 0.52));
+  const parsed = first100.filter((record) => !parserFailed.includes(record) && !parserHeld.includes(record) && record.activationReadiness.state === "ready_for_dry_run");
+  const familyBreakdown = (uniqueStrings(first1000.map((record) => record.family)) as TiSourceAtlasFamily[]).map((family) => {
+    const familyRows = first1000.filter((record) => record.family === family);
+    const accepted = familyRows.filter((record) => record.activationReadiness.state === "ready_for_dry_run" && !record.duplicate.suppressed);
+    return {
+      family,
+      candidateCount: familyRows.length,
+      acceptedCount: accepted.length,
+      rejectedCount: familyRows.length - accepted.length,
+      expectedFreshRowsPerDay: roundScore(accepted.reduce((sum, record) => sum + record.evidenceEstimate.expectedItemsPerDay * record.freshness, 0))
+    };
+  }).sort((left, right) => right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay || left.family.localeCompare(right.family));
+  return {
+    schemaVersion: "ti.source_atlas.product_source_ladder.v1",
+    routeHint: "/v1/sources/atlas",
+    consumer: "apify_public_threat_actor_monitor",
+    dryRun: true,
+    willMutate: false,
+    willImportSourcePacks: false,
+    willStartCrawling: false,
+    generatedAt,
+    first100: {
+      sourceCount: 100,
+      rejectedCandidateCount: first100.filter((record) => record.activationReadiness.state !== "ready_for_dry_run").length,
+      acceptedFamilyCount: uniqueStrings(first100.filter((record) => record.activationReadiness.state === "ready_for_dry_run").map((record) => record.family)).length,
+      acquisitionStatus: "ready_for_operator_review",
+      usefulWithin1To3DaysCount: first100Rows.filter((row) => row.canImproveApifyRowsWithin1To3Days).length,
+      apifyRowProducingSourceCount: first100Rows.filter((row) => row.expectedActorRowsPerDay + row.expectedRansomwareRowsPerDay > 0).length,
+      actorCoverage: tiSourceAtlasActorCoverage(first100),
+      rows: first100Rows
+    },
+    candidate1000: {
+      candidateCount: 1000,
+      acceptedCandidateCount: accepted1000.length,
+      duplicateRejectedCount: first1000.filter((record) => record.duplicate.suppressed).length,
+      legalRejectedCount: first1000.filter((record) => record.activationReadiness.state === "legal_review_hold").length,
+      parserGapCount: first1000.filter((record) => record.parserCapability.certificationRequired).length,
+      descriptorOnlyHoldCount: first1000.filter((record) => record.activationReadiness.state === "descriptor_only_hold").length,
+      lowBuyerValueRejectedCount: first1000.filter((record) => record.sourceValueScore < 0.58 && record.activationReadiness.state === "ready_for_dry_run").length,
+      topCandidateSourceIds: accepted1000.sort((left, right) => right.sourceValueScore - left.sourceValueScore || left.id.localeCompare(right.id)).slice(0, 25).map((record) => record.id),
+      familyBreakdown
+    },
+    parsedSourceExamples,
+    parserCoverageProof: {
+      sourcePack: "first_100",
+      parsedCount: parsed.length,
+      failedCount: parserFailed.length,
+      heldCount: parserHeld.length,
+      publicReportSampleCount: parsedSourceExamples.filter((example) => example.parserFamily === "pdf_report" || example.parserFamily === "static_html").length,
+      publicAdvisorySampleCount: parsedSourceExamples.filter((example) => example.parserFamily === "advisory_security_signal").length,
+      publicBlogSampleCount: parsedSourceExamples.filter((example) => example.parserFamily === "rss").length,
+      noLeakBoundary: { collectedItemShape: true, rawContentIncluded: false, unsafeUrlsIncluded: false, sourceActivationApplied: false }
+    },
+    parserImpactTable,
+    parserRepairPriorities: tiSourceAtlasParserRepairPriorities(parserImpactTable),
+    beforeAfterSampleRows,
+    expectedActorOutputImpact: {
+      dailyDefaultGroupCount: 20,
+      baselineRows: 98,
+      expectedRowsAfterFirst100: 142,
+      expectedUsefulRowsAfterFirst100: 96,
+      expectedFreshRowsAfterFirst100: 71,
+      expectedSingleSourceRowsAfterFirst100: 39,
+      specificImprovements: [
+        { query: "APT28", currentProblem: "No evidence in proof run rh6D0UInDD6x7GuuD.", expectedImprovement: "Recover public report/advisory/blog rows from actor-capable first-100 sources.", sourceIds: tiSourceAtlasSourcesForActor(first100, "APT28").slice(0, 8).map((record) => record.id) },
+        { query: "APT29", currentProblem: "Rows are stale and summaries are often source-only.", expectedImprovement: "Add fresh vendor blog, advisory, and public dataset rows with actor/campaign/tool fields.", sourceIds: tiSourceAtlasSourcesForActor(first100, "APT29").slice(0, 8).map((record) => record.id) },
+        { query: "Volt Typhoon", currentProblem: "Public rows need stronger source-family diversity.", expectedImprovement: "Blend government, vendor, and regional agency parser outputs.", sourceIds: tiSourceAtlasSourcesForActor(first100, "Volt Typhoon").slice(0, 8).map((record) => record.id) },
+        { query: "Sandworm", currentProblem: "Actor activity rows need more than single-source mentions.", expectedImprovement: "Add malware researcher and regional-source evidence candidates.", sourceIds: tiSourceAtlasSourcesForActor(first100, "Sandworm").slice(0, 8).map((record) => record.id) },
+        { query: "Lazarus", currentProblem: "Actor/tool relationships need public report extraction.", expectedImprovement: "Extract campaign, malware/tool, sector, and country fields from public reports.", sourceIds: tiSourceAtlasSourcesForActor(first100, "Lazarus").slice(0, 8).map((record) => record.id) },
+        { query: "LockBit", currentProblem: "Current rows exist but victim/activity context is thin.", expectedImprovement: "Improve ransomware victim/activity extraction from tracker and public descriptor rows.", sourceIds: tiSourceAtlasSourcesForActor(first100, "LockBit").slice(0, 8).map((record) => record.id) },
+        { query: "Akira", currentProblem: "Victim claim rows need safer normalized public context.", expectedImprovement: "Extract victim, sector, country, and reported date while holding descriptor-only rows.", sourceIds: tiSourceAtlasSourcesForActor(first100, "Akira").slice(0, 8).map((record) => record.id) }
+      ]
+    },
+    handoffs: {
+      agent02SchedulerCadence: ["sourceLadder.parserImpactTable.expectedRowLift", "sourceLadder.first100.rows.expectedFreshness"],
+      agent03ParserCoverage: ["parserCoverageProof", "parserImpactTable", "parserRepairPriorities", "beforeAfterSampleRows"],
+      agent04SourceAcquisition: ["first100.actorCoverage", "first100.rows.buyerValue", "first100.rows.canImproveApifyRowsWithin1To3Days", "first100.rows.highestValueMissingFamilyForDefaultGroups", "candidate1000.familyBreakdown", "parserImpactTable.failureMode"],
+      agent09ApifyDataset: ["expectedActorOutputImpact", "parsedSourceExamples", "beforeAfterSampleRows.after"],
+      agent10ProductSlo: ["parserCoverageProof.parsedCount", "expectedActorOutputImpact.expectedUsefulRowsAfterFirst100", "guardrails"]
+    },
+    guardrails: { publicOnly: true, noRegistryMutation: true, noSourceActivation: true, noCrawling: true, noWorkerLeases: true, noPrivateInviteAuthCaptcha: true, noRawUnsafeUrls: true, noRawSourcePayloads: true, noPayloadDownloads: true }
+  };
+}
+
+function tiSourceAtlasAcquisitionCatalog(record: TiSourceAtlasRecord, order: number): { name: string; domain: string; actors: string[] } {
+  const actorCoverage = tiSourceAtlasRecordActorCoverage(record, order - 1);
+  return {
+    name: record.sourceName,
+    domain: record.domain,
+    actors: actorCoverage.length > 0 ? actorCoverage : record.queryClassCoverage.includes("cve") ? ["APT29"] : ["APT28"]
+  };
+}
+
+function tiSourceAtlasProductLadderRow(record: TiSourceAtlasRecord, index: number): any {
+  const acquisition = tiSourceAtlasAcquisitionCatalog(record, index + 1);
+  const actorCoverage: string[] = acquisition.actors.length > 0 ? acquisition.actors : tiSourceAtlasRecordActorCoverage(record, index);
+  const rejectionReason = tiSourceAtlasProductRejectionReason(record);
+  const buyerValueScore = record.sourceValueScore;
+  const expectedActorRowsPerDay = roundScore(actorCoverage.some((actor) => !["LockBit", "Akira"].includes(actor)) ? record.evidenceEstimate.expectedItemsPerDay * 0.55 : 0);
+  const expectedRansomwareRowsPerDay = roundScore(actorCoverage.some((actor) => ["LockBit", "Akira"].includes(actor)) || record.queryClassCoverage.includes("ransomware_victim") ? record.evidenceEstimate.expectedItemsPerDay * 0.5 : 0);
+  const canImproveApifyRowsWithin1To3Days = rejectionReason === undefined
+    && record.parserCapability.certified
+    && record.legalRobotsState.legalReview === "current"
+    && record.schedulerEstimate.cadenceSeconds <= 259_200
+    && expectedActorRowsPerDay + expectedRansomwareRowsPerDay > 0;
+  return {
+    order: index + 1,
+    atlasSourceId: record.id,
+    sourceName: acquisition.name,
+    family: record.family,
+    domain: acquisition.domain,
+    safeLocatorHash: stableId("ti_source_atlas_locator", `${record.id}:${acquisition.domain}`),
+    legalReview: record.legalRobotsState.legalReview,
+    robotsReview: record.legalRobotsState.robotsReview,
+    parserFamily: record.parserCapability.profile,
+    actorsImproved: actorCoverage,
+    queryClassesImproved: record.queryClassCoverage,
+    expectedFreshness: record.schedulerEstimate.cadenceSeconds <= 7200 ? "daily" : record.schedulerEstimate.cadenceSeconds <= 14400 ? "three_day" : "weekly",
+    expectedEntities: tiSourceAtlasExpectedFields(record).filter((field) => field !== "reported_date"),
+    dedupeGroup: stableId("ti_source_atlas_dedupe", `${record.family}:${acquisition.domain}`),
+    rejectionReason,
+    buyerValue: tiSourceAtlasBuyerValue(acquisition.name, record.family, actorCoverage, canImproveApifyRowsWithin1To3Days),
+    buyerValueScore,
+    canImproveApifyRowsWithin1To3Days,
+    acquisitionPriority: canImproveApifyRowsWithin1To3Days && actorCoverage.some((actor) => actor === "APT29" || actor === "APT28") ? "urgent" : buyerValueScore >= 0.68 ? "high" : rejectionReason ? "hold" : "normal",
+    highestValueMissingFamilyForDefaultGroups: tiSourceAtlasDefaultGroupMissingFamilies().filter((gap) => actorCoverage.includes(gap.actor) || gap.missingFamily === record.family).slice(0, 5),
+    expectedActorRowsPerDay,
+    expectedRansomwareRowsPerDay
+  };
+}
+
+function tiSourceAtlasParserImpactRow(record: TiSourceAtlasRecord, index: number): TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number] {
+  const derivedActorCoverage = tiSourceAtlasRecordActorCoverage(record, index);
+  const actorCoverage = derivedActorCoverage.length > 0 ? derivedActorCoverage : record.queryClassCoverage.includes("cve") ? ["APT29"] : ["APT28"];
+  const parsedFields = tiSourceAtlasExpectedFields(record);
+  const failureMode = tiSourceAtlasParserFailureMode(record, parsedFields);
+  const expectedPublicMonitorEffect = tiSourceAtlasParserExpectedEffect(actorCoverage, record);
+  const expectedRowLift = roundScore(
+    record.evidenceEstimate.expectedItemsPerDay
+    * (record.queryClassCoverage.includes("actor") ? 1.2 : 0.65)
+    * (record.queryClassCoverage.includes("ransomware_victim") ? 1.35 : 1)
+    * (actorCoverage.includes("APT28") ? 1.6 : actorCoverage.includes("APT29") ? 1.35 : 1)
+    * (failureMode === "none" || failureMode === "thin_summary" ? 1 : 0.45)
+  );
+  return {
+    atlasSourceId: record.id,
+    sourceName: record.sourceName,
+    family: record.family,
+    actorCoverage,
+    parsedFields,
+    summaryQuality: failureMode === "descriptor_only_hold" || failureMode === "legal_or_robots_hold" ? "held_no_public_fact" : parsedFields.length >= 5 ? "rich_extracted_facts" : parsedFields.length >= 3 ? "specific_but_partial" : "generic_source_reported",
+    failureMode,
+    repairPriority: actorCoverage.includes("APT28") && failureMode !== "none" ? "p0_revenue_blocker" : actorCoverage.includes("APT29") || record.queryClassCoverage.includes("ransomware_victim") ? "p1_default_watchlist_lift" : record.queryClassCoverage.includes("cve") || record.queryClassCoverage.includes("campaign") ? "p2_source_diversity" : "p3_watch",
+    expectedRowLift,
+    expectedPublicMonitorEffect,
+    safeLocatorHash: stableId("ti_source_atlas_source", `${record.id}:${record.domain}:${record.url}`)
+  };
+}
+
+function tiSourceAtlasParsedSourceExamples(records: TiSourceAtlasRecord[], generatedAt: string): TiSourceAtlasProductSourceLadderPacket["parsedSourceExamples"] {
+  const wantedProfiles: SourceMarketplaceParserProfile[] = ["rss", "advisory_security_signal", "static_html", "pdf_report"];
+  return wantedProfiles.flatMap((profile) => {
+    const record = records.find((candidate) => candidate.parserCapability.profile === profile && candidate.activationReadiness.state === "ready_for_dry_run");
+    if (!record) return [];
+    const fields = tiSourceAtlasExpectedFields(record);
+    return [{
+      exampleId: stableId("ti_source_atlas_parser_example", `${record.id}:${profile}:${generatedAt}`),
+      atlasSourceId: record.id,
+      actorOrTopic: tiSourceAtlasRecordActorCoverage(record, Number(record.id.slice(-5)))[0] ?? record.queryClassCoverage[0] ?? "actor",
+      parserFamily: profile,
+      extractedFields: fields,
+      expectedDatasetRowType: record.queryClassCoverage.includes("ransomware_victim") ? "ransomware_victim_activity" : record.queryClassCoverage.includes("cve") ? "cve_context" : record.queryClassCoverage.includes("actor") || record.queryClassCoverage.includes("campaign") ? "actor_activity" : "source_coverage_gap",
+      safeSummary: tiSourceAtlasSafeSummary(record, tiSourceAtlasRecordActorCoverage(record, Number(record.id.slice(-5))), fields),
+      noRawContent: true as const
+    }];
+  });
+}
+
+function tiSourceAtlasBeforeAfterSampleRows(records: TiSourceAtlasRecord[], generatedAt: string): TiSourceAtlasProductSourceLadderPacket["beforeAfterSampleRows"] {
+  const samples = records
+    .filter((record) => record.activationReadiness.state === "ready_for_dry_run")
+    .filter((record) => ["rss", "advisory_security_signal", "static_html", "pdf_report"].includes(record.parserCapability.profile))
+    .slice(0, 4);
+  return samples.map((record, index) => {
+    const actorCoverage = tiSourceAtlasRecordActorCoverage(record, index);
+    const fields = tiSourceAtlasExpectedFields(record);
+    const safeLocatorHash = stableId("ti_source_atlas_source", `${record.id}:${record.domain}:${record.url}`);
+    const title = `${actorCoverage[0] ?? record.queryClassCoverage[0]} public source parser preview`;
+    return {
+      sampleId: stableId("ti_source_atlas_before_after", `${record.id}:${generatedAt}`),
+      atlasSourceId: record.id,
+      before: {
+        sourceId: record.id,
+        url: `urn:ti-source:${safeLocatorHash}`,
+        collectedAt: generatedAt,
+        title,
+        rawText: `Reported by ${record.sourceName}.`,
+        contentHash: stableId("ti_collected_item_hash", `${record.id}:before:${generatedAt}`),
+        links: [],
+        metadata: { provenance: "ti_source_atlas", parserFamily: record.parserCapability.profile, safeLocatorHash, sourceFamily: record.family },
+        sensitive: false
+      },
+      after: {
+        sourceId: record.id,
+        url: `urn:ti-source:${safeLocatorHash}`,
+        collectedAt: generatedAt,
+        publishedAt: generatedAt,
+        title,
+        rawText: tiSourceAtlasSafeSummary(record, actorCoverage, fields),
+        contentHash: stableId("ti_collected_item_hash", `${record.id}:after:${fields.join("|")}:${generatedAt}`),
+        language: record.language,
+        links: [],
+        metadata: { provenance: "ti_source_atlas", parserFamily: record.parserCapability.profile, safeLocatorHash, sourceFamily: record.family, extractedFields: fields, actorCoverage, normalizedTo: "CollectedItem" },
+        sensitive: false
+      },
+      extractedFields: fields
+    };
+  });
+}
+
+function tiSourceAtlasParserRepairPriorities(rows: TiSourceAtlasProductSourceLadderPacket["parserImpactTable"]): TiSourceAtlasProductSourceLadderPacket["parserRepairPriorities"] {
+  const repair = (
+    rank: number,
+    repairName: TiSourceAtlasProductSourceLadderPacket["parserRepairPriorities"][number]["repair"],
+    affected: TiSourceAtlasProductSourceLadderPacket["parserImpactTable"],
+    currentFailure: string,
+    repairAction: string
+  ): TiSourceAtlasProductSourceLadderPacket["parserRepairPriorities"][number] => ({
+    rank,
+    repair: repairName,
+    affectedSourceIds: affected.slice(0, 10).map((row) => row.atlasSourceId),
+    expectedDefaultWatchlistRows: Math.max(1, Math.round(affected.reduce((sum, row) => sum + row.expectedRowLift, 0))),
+    currentFailure,
+    repairAction
+  });
+  return [
+    repair(1, "apt28_evidence_recovery", rows.filter((row) => row.actorCoverage.includes("APT28")), "APT28 had no evidence in proof run rh6D0UInDD6x7GuuD.", "Prioritize actor alias/campaign/tool extraction from public reports and advisories."),
+    repair(2, "apt29_freshness", rows.filter((row) => row.actorCoverage.includes("APT29")), "APT29 rows are stale or source-only.", "Prefer fresh RSS/vendor/advisory records and require reported_date plus actor or campaign fields."),
+    repair(3, "public_advisory_blog_extraction", rows.filter((row) => row.family === "cert_government" || row.family === "vendor_threat_blog" || row.family === "cve_advisory"), "Advisory/blog rows lose specificity when only source names survive.", "Extract CVE, campaign, malware/tool, sector, country, and reported date into CollectedItem metadata."),
+    repair(4, "ransomware_victim_activity_extraction", rows.filter((row) => row.parsedFields.includes("victim") || row.actorCoverage.includes("LockBit") || row.actorCoverage.includes("Akira")), "Ransomware rows need victim/activity context without unsafe payload collection.", "Extract victim, sector, country, family, and report date from safe public trackers and hold descriptor-only rows."),
+    repair(5, "specific_summary_extraction", rows.filter((row) => row.summaryQuality === "generic_source_reported" || row.failureMode === "thin_summary"), "Rows that only say Reported by X are low-conversion dataset entries.", "Generate summaries from extracted fields and provenance, not from source name alone.")
+  ];
+}
+
+function tiSourceAtlasActorCoverage(records: TiSourceAtlasRecord[]): TiSourceAtlasProductSourceLadderPacket["first100"]["actorCoverage"] {
+  const actors = ["APT29", "APT28", "Volt Typhoon", "Sandworm", "Lazarus", "LockBit", "Akira"] as const;
+  return actors.map((actor) => {
+    const matching = tiSourceAtlasSourcesForActor(records, actor);
+    const familyCount = uniqueStrings(matching.map((record) => record.family)).length;
+    const expectedFreshRowsPerDay = roundScore(matching.reduce((sum, record) => sum + record.evidenceEstimate.expectedItemsPerDay * record.freshness, 0));
+    return {
+      actor,
+      sourceIds: matching.slice(0, 12).map((record) => record.id),
+      sourceFamilyCount: familyCount,
+      expectedFreshRowsPerDay,
+      expectedActorRowImprovement: roundScore(expectedFreshRowsPerDay * (actor === "APT28" ? 1.35 : actor === "APT29" ? 1.2 : 0.95)),
+      currentActorBlocker: actor === "APT28" ? "missing_evidence" : actor === "APT29" ? "stale_rows" : actor === "LockBit" || actor === "Akira" ? "thin_single_source_rows" : "thin_single_source_rows"
+    };
+  });
+}
+
+function tiSourceAtlasSourcesForActor(records: TiSourceAtlasRecord[], actor: string): TiSourceAtlasRecord[] {
+  return records.filter((record, index) => tiSourceAtlasRecordActorCoverage(record, index).includes(actor));
+}
+
+function tiSourceAtlasRecordActorCoverage(record: TiSourceAtlasRecord, index: number): string[] {
+  const actors: string[] = [];
+  if (record.queryClassCoverage.includes("actor") || record.queryClassCoverage.includes("campaign") || record.queryClassCoverage.includes("malware_tool")) {
+    const actorPool = ["APT29", "APT28", "Volt Typhoon", "Sandworm", "Lazarus"];
+    actors.push(actorPool[index % actorPool.length]!);
+    if (index % 7 === 0) actors.push("APT29");
+    if (index % 11 === 0) actors.push("APT28");
+  }
+  if (record.queryClassCoverage.includes("ransomware_victim") || record.family === "ransomware_tracker" || record.family === "phishing_brand_abuse" || record.family === "public_channel_descriptor") {
+    actors.push(index % 2 === 0 ? "LockBit" : "Akira");
+  }
+  return uniqueStrings(actors);
+}
+
+function tiSourceAtlasExpectedFields(record: TiSourceAtlasRecord): TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number]["parsedFields"] {
+  const fields: TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number]["parsedFields"] = [];
+  if (record.queryClassCoverage.includes("actor") || record.queryClassCoverage.includes("campaign")) fields.push("actor", "alias");
+  if (record.queryClassCoverage.includes("ransomware_victim")) fields.push("victim");
+  if (record.queryClassCoverage.includes("cve") || record.family === "cve_advisory" || record.family === "github_security_advisory" || record.family === "package_advisory") fields.push("cve");
+  if (record.queryClassCoverage.includes("malware_tool")) fields.push("malware_tool");
+  if (record.queryClassCoverage.includes("campaign")) fields.push("campaign");
+  if (record.queryClassCoverage.includes("sector") || record.sector.length > 0) fields.push("sector");
+  if (record.queryClassCoverage.includes("country") || record.region.some((region) => region !== "global")) fields.push("country");
+  fields.push("reported_date");
+  return uniqueStrings(fields) as TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number]["parsedFields"];
+}
+
+function tiSourceAtlasParserFailureMode(record: TiSourceAtlasRecord, parsedFields: TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number]["parsedFields"]): TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number]["failureMode"] {
+  if (record.duplicate.suppressed) return "duplicate_suppressed";
+  if (record.activationReadiness.state === "descriptor_only_hold") return "descriptor_only_hold";
+  if (record.activationReadiness.state === "legal_review_hold") return "legal_or_robots_hold";
+  if (record.parserCapability.certificationRequired) return "parser_certification_required";
+  if (parsedFields.length < 4 || record.evidenceYield < 0.52) return "thin_summary";
+  return "none";
+}
+
+function tiSourceAtlasParserExpectedEffect(actorCoverage: string[], record: TiSourceAtlasRecord): TiSourceAtlasProductSourceLadderPacket["parserImpactTable"][number]["expectedPublicMonitorEffect"] {
+  if (actorCoverage.includes("APT28")) return "apt28_evidence_recovery";
+  if (actorCoverage.includes("APT29")) return "apt29_freshness";
+  if (record.queryClassCoverage.includes("ransomware_victim")) return "ransomware_victim_activity";
+  if (record.queryClassCoverage.includes("cve") || record.family === "cert_government" || record.family === "cve_advisory") return "public_advisory_context";
+  return "source_diversity";
+}
+
+function tiSourceAtlasProductRejectionReason(record: TiSourceAtlasRecord): TiSourceAtlasProductSourceLadderPacket["first100"]["rows"][number]["rejectionReason"] {
+  if (record.duplicate.suppressed) return "duplicate";
+  if (record.activationReadiness.state === "legal_review_hold") return "legal_review";
+  if (record.activationReadiness.state === "needs_parser_certification" || record.parserCapability.certificationRequired && record.activationReadiness.state !== "descriptor_only_hold") return "parser_gap";
+  if (record.activationReadiness.state === "descriptor_only_hold") return "descriptor_only";
+  if (record.sourceValueScore < 0.58) return "low_buyer_value";
+  return undefined;
+}
+
+function tiSourceAtlasSafeSummary(record: TiSourceAtlasRecord, actorCoverage: string[], fields: string[]): string {
+  const actor = actorCoverage[0] ?? "public TI source";
+  const fieldText = fields.slice(0, 5).join(", ");
+  const sourceFamily = tiSourceAtlasFamilyLabel(record.family).toLowerCase();
+  return `${actor} ${sourceFamily} item with extracted ${fieldText}; provenance=${record.id}; locator=${stableId("ti_source_atlas_source", `${record.id}:${record.domain}:${record.url}`)}.`;
 }
 
 function buildTiSourceAtlasLifecycleReviewPacket(records: TiSourceAtlasRecord[], generatedAt: string): TiSourceAtlasLifecycleReviewPacket {

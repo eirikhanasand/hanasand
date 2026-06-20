@@ -16,6 +16,7 @@ export interface LiveProductQueryMeasurement {
   status?: "searching" | "partial" | "ready" | "metadata_review" | "blocked" | "error" | "empty";
   rowCount?: number | null;
   usefulRowCount?: number | null;
+  freshRowCount?: number | null;
   activityClaimCount?: number | null;
   duplicateArticleRate?: number | null;
   sourceProviderFailures?: number | null;
@@ -37,7 +38,10 @@ export interface LiveProductActorRunMeasurement {
   queryCount?: number | null;
   rowCount?: number | null;
   usefulRowCount?: number | null;
+  freshRowCount?: number | null;
+  staleRowCount?: number | null;
   activityClaimRowCount?: number | null;
+  defaultWatchlistRun?: boolean | null;
 }
 
 export interface LiveProductCostInput {
@@ -46,6 +50,19 @@ export interface LiveProductCostInput {
   computeCostUsd?: number | null;
   backendCostAllocationUsd?: number | null;
   refundsFailuresUsd?: number | null;
+  actorStartCostUsd?: number | null;
+  resultPriceUsdPerThousand?: number | null;
+  actorStartPriceUsd?: number | null;
+  apifyMarginRate?: number | null;
+}
+
+export interface LiveProductMarketplaceInput {
+  actorViewCount?: number | null;
+  actorRunCount?: number | null;
+  uniqueUserCount?: number | null;
+  beneficiaryVerified?: boolean | null;
+  payoutMethodReady?: boolean | null;
+  pricingEffectiveAt?: string | null;
 }
 
 export interface BuildLiveProductSloDashboardInput {
@@ -65,6 +82,7 @@ export interface BuildLiveProductSloDashboardInput {
   queryMeasurements?: readonly LiveProductQueryMeasurement[];
   actorRun?: LiveProductActorRunMeasurement;
   cost?: LiveProductCostInput;
+  marketplace?: LiveProductMarketplaceInput;
   snapshotStoragePath?: string;
 }
 
@@ -103,6 +121,48 @@ export interface LiveProductSloDashboard {
     queueAgeSeconds: NullableMetric;
     memoryRssGb: NullableMetric;
     diskGrowthGbPerDay: NullableMetric;
+  };
+  paidProductEconomics: {
+    pricing: {
+      resultPriceUsdPerThousand: number;
+      actorStartPriceUsd: number;
+      apifyMarginRate: number;
+      effectiveAt: string;
+    };
+    latestRun: {
+      runId: string | null;
+      datasetId: string | null;
+      buildId: string | null;
+      status: LiveProductActorRunMeasurement["status"] | null;
+      defaultWatchlistRun: boolean | null;
+      queryCount: number | null;
+      rowCount: number | null;
+      usefulRowCount: number | null;
+      freshRowCount: number | null;
+      staleRowPenaltyRows: number | null;
+      usefulRowRate: number | null;
+      freshRowRate: number | null;
+    };
+    projectedRevenue: {
+      grossRowsUsd: number | null;
+      grossActorStartUsd: number | null;
+      grossTotalUsd: number | null;
+      apifyMarginUsd: number | null;
+      netAfterApifyUsd: number | null;
+      internalUsageCostUsd: number | null;
+      projectedNetAfterUsageUsd: number | null;
+      costPerRunUsd: number | null;
+      costPerRowUsd: number | null;
+      costPerUsefulRowUsd: number | null;
+    };
+    marketplace: {
+      actorViewCount: number | null;
+      actorRunCount: number | null;
+      uniqueUserCount: number | null;
+      beneficiaryStatus: "verified" | "blocked" | "unknown";
+      payoutMethodStatus: "ready" | "blocked" | "unknown";
+      blockers: string[];
+    };
   };
   slos: Array<{
     name: string;
@@ -170,7 +230,10 @@ export interface LiveProductDailySnapshot {
     actorRunSuccessRate: number | null;
     rowsPerQuery: number | null;
     usefulRowsPerQuery: number | null;
+    usefulRowRate: number | null;
+    freshRowRate: number | null;
     costPerUsefulRowUsd: number | null;
+    projectedNetAfterUsageUsd: number | null;
     queueAgeP95Seconds: number | null;
     memoryRssGb: number | null;
     diskGrowthGbPerDay: number | null;
@@ -204,6 +267,10 @@ interface CountRateMetric {
 }
 
 const DEFAULT_SNAPSHOT_PATH = "var/ops/live-product-slo/daily.jsonl";
+const DEFAULT_RESULT_PRICE_USD_PER_THOUSAND = 3;
+const DEFAULT_ACTOR_START_PRICE_USD = 0.00005;
+const DEFAULT_APIFY_MARGIN_RATE = 0.2;
+const DEFAULT_PRICING_EFFECTIVE_AT = "2026-07-04";
 
 export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboardInput): LiveProductSloDashboard {
   const generatedAt = input.generatedAt ?? nowIso();
@@ -232,7 +299,25 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     ...measurements.map((item) => item.usefulRowCount),
     input.actorRun?.usefulRowCount
   ]);
-  const costPerUsefulRowUsd = costPerUsefulRow(input.cost, usefulRows);
+  const paidRowCount = input.actorRun?.rowCount ?? sumNullable(measurements.map((item) => item.rowCount));
+  const paidUsefulRows = input.actorRun?.usefulRowCount ?? sumNullable(measurements.map((item) => item.usefulRowCount));
+  const paidFreshRows = input.actorRun?.freshRowCount ?? sumNullable(measurements.map((item) => item.freshRowCount));
+  const usefulRowRate = rateFromCounts(paidUsefulRows, paidRowCount);
+  const freshRowRate = rateFromCounts(paidFreshRows, paidRowCount);
+  const staleRowPenaltyRows = stalePenaltyRows(paidRowCount, paidFreshRows, input.actorRun?.staleRowCount);
+  const costPerUsefulRowUsd = costPerUsefulRow(input.cost, paidUsefulRows);
+  const paidProductEconomics = buildPaidProductEconomics({
+    actorRun: input.actorRun,
+    cost: input.cost,
+    marketplace: input.marketplace,
+    rowCount: paidRowCount,
+    usefulRows: paidUsefulRows,
+    freshRows: paidFreshRows,
+    staleRowPenaltyRows,
+    usefulRowRate,
+    freshRowRate,
+    costPerUsefulRowUsd
+  });
   const apiErrorRate = measurements.length
     ? measurements.filter((item) => item.apiError === true || item.status === "error").length / measurements.length
     : null;
@@ -268,6 +353,9 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     slo("source_provider_failure_rate", sourceProviderFailureRate, 0.05, 0.15, "rate", "Agent 02", true),
     slo("duplicate_article_rate", duplicateArticleRate, 0.15, 0.3, "rate", "Agent 07", true),
     slo("actor_dataset_usefulness", metrics.usefulRowsPerQuery.value, 3, 1, "rows/query", "Agent 10"),
+    slo("actor_useful_row_rate", usefulRowRate, 0.4, 0.25, "rate", "Agent 10"),
+    slo("actor_fresh_row_rate", freshRowRate, 0.5, 0.25, "rate", "Agent 10"),
+    slo("actor_stale_row_penalty", staleRowPenaltyRows, 5, 20, "rows", "Agent 10", true),
     slo("api_error_rate", metrics.apiErrorRate.value, 0.01, 0.05, "rate", "Agent 09", true),
     slo("queue_age", metrics.queueAgeSeconds.value, 30, 120, "seconds", "Agent 02", true),
     slo("memory_rss", metrics.memoryRssGb.value, 96, 160, "GB", "Agent 10", true),
@@ -285,7 +373,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   );
   const launchUnknowns = unknownLaunchMetrics({
     runs: input.actorRun?.status ? 1 : null,
-    uniqueUsers: null,
+    uniqueUsers: input.marketplace?.uniqueUserCount ?? null,
     successfulQueries: successfulQueries(measurements, input.actorRun),
     usefulActivityClaimRows: input.actorRun?.activityClaimRowCount ?? sumNullable(measurements.map((item) => item.activityClaimCount)),
     rowsPerQuery,
@@ -294,14 +382,19 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     computeCostUsd: cost.computeCostUsd ?? null,
     backendCostAllocationUsd: cost.backendCostAllocationUsd ?? null,
     refundsFailuresUsd: cost.refundsFailuresUsd ?? null,
-    netContributionUsd
+    netContributionUsd,
+    actorViewCount: input.marketplace?.actorViewCount ?? null,
+    actorRunCount: input.marketplace?.actorRunCount ?? null,
+    beneficiaryVerified: input.marketplace?.beneficiaryVerified === undefined ? null : Number(input.marketplace.beneficiaryVerified),
+    payoutMethodReady: input.marketplace?.payoutMethodReady === undefined ? null : Number(input.marketplace.payoutMethodReady)
   });
   const dailySnapshot = buildDailySnapshot({
     generatedAt,
     proofMode,
     state,
     storagePath: input.snapshotStoragePath ?? DEFAULT_SNAPSHOT_PATH,
-    metrics
+    metrics,
+    paidProductEconomics
   });
 
   return {
@@ -331,12 +424,13 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
       costPerUsefulRow: "divide observed revenue/cost allocation by useful safe rows only when all cost inputs exist"
     },
     metrics,
+    paidProductEconomics,
     slos,
     apifyLaunchExperiment: {
       windowDays: 7,
       actor: input.actorRun ?? {},
       runs: input.actorRun?.status ? 1 : null,
-      uniqueUsers: null,
+      uniqueUsers: input.marketplace?.uniqueUserCount ?? null,
       successfulQueries: successfulQueries(measurements, input.actorRun),
       usefulActivityClaimRows: input.actorRun?.activityClaimRowCount ?? sumNullable(measurements.map((item) => item.activityClaimCount)),
       rowsPerQuery,
@@ -405,6 +499,7 @@ function buildDailySnapshot(input: {
   state: LiveProductSloState;
   storagePath: string;
   metrics: LiveProductSloDashboard["metrics"];
+  paidProductEconomics: LiveProductSloDashboard["paidProductEconomics"];
 }): LiveProductDailySnapshot {
   const snapshotDate = input.generatedAt.slice(0, 10);
   return {
@@ -423,10 +518,89 @@ function buildDailySnapshot(input: {
       actorRunSuccessRate: input.metrics.actorRunSuccessRate.value,
       rowsPerQuery: input.metrics.rowsPerQuery.value,
       usefulRowsPerQuery: input.metrics.usefulRowsPerQuery.value,
+      usefulRowRate: input.paidProductEconomics.latestRun.usefulRowRate,
+      freshRowRate: input.paidProductEconomics.latestRun.freshRowRate,
       costPerUsefulRowUsd: input.metrics.costPerUsefulRowUsd.value,
+      projectedNetAfterUsageUsd: input.paidProductEconomics.projectedRevenue.projectedNetAfterUsageUsd,
       queueAgeP95Seconds: input.metrics.queueAgeSeconds.value,
       memoryRssGb: input.metrics.memoryRssGb.value,
       diskGrowthGbPerDay: input.metrics.diskGrowthGbPerDay.value
+    }
+  };
+}
+
+function buildPaidProductEconomics(input: {
+  actorRun?: LiveProductActorRunMeasurement;
+  cost?: LiveProductCostInput;
+  marketplace?: LiveProductMarketplaceInput;
+  rowCount: number | null;
+  usefulRows: number | null;
+  freshRows: number | null;
+  staleRowPenaltyRows: number | null;
+  usefulRowRate: number | null;
+  freshRowRate: number | null;
+  costPerUsefulRowUsd: number | null;
+}): LiveProductSloDashboard["paidProductEconomics"] {
+  const resultPriceUsdPerThousand = input.cost?.resultPriceUsdPerThousand ?? DEFAULT_RESULT_PRICE_USD_PER_THOUSAND;
+  const actorStartPriceUsd = input.cost?.actorStartPriceUsd ?? DEFAULT_ACTOR_START_PRICE_USD;
+  const apifyMarginRate = input.cost?.apifyMarginRate ?? DEFAULT_APIFY_MARGIN_RATE;
+  const marketplace = input.marketplace ?? {};
+  const runSucceeded = input.actorRun?.status === "succeeded";
+  const grossRowsUsd = input.rowCount === null ? null : round(input.rowCount * resultPriceUsdPerThousand / 1000);
+  const grossActorStartUsd = input.actorRun?.status ? actorStartPriceUsd : null;
+  const grossTotalUsd = sumNullable([grossRowsUsd, grossActorStartUsd]);
+  const apifyMarginUsd = grossTotalUsd === null ? null : round(grossTotalUsd * apifyMarginRate);
+  const netAfterApifyUsd = grossTotalUsd === null || apifyMarginUsd === null ? null : round(grossTotalUsd - apifyMarginUsd);
+  const internalUsageCostUsd = sumNullable([
+    input.cost?.actorStartCostUsd,
+    input.cost?.computeCostUsd,
+    input.cost?.backendCostAllocationUsd,
+    input.cost?.refundsFailuresUsd
+  ]);
+  const projectedNetAfterUsageUsd = netAfterApifyUsd === null || internalUsageCostUsd === null ? null : round(netAfterApifyUsd - internalUsageCostUsd);
+  const costPerRunUsd = internalUsageCostUsd === null || !input.actorRun?.status ? null : internalUsageCostUsd;
+  const costPerRowUsd = input.rowCount && input.rowCount > 0 && internalUsageCostUsd !== null ? round(internalUsageCostUsd / input.rowCount) : null;
+  const blockers = marketplaceBlockers(marketplace);
+  return {
+    pricing: {
+      resultPriceUsdPerThousand,
+      actorStartPriceUsd,
+      apifyMarginRate,
+      effectiveAt: marketplace.pricingEffectiveAt ?? DEFAULT_PRICING_EFFECTIVE_AT
+    },
+    latestRun: {
+      runId: input.actorRun?.runId ?? null,
+      datasetId: input.actorRun?.datasetId ?? null,
+      buildId: input.actorRun?.buildId ?? null,
+      status: input.actorRun?.status ?? null,
+      defaultWatchlistRun: input.actorRun?.defaultWatchlistRun ?? null,
+      queryCount: input.actorRun?.queryCount ?? null,
+      rowCount: input.rowCount,
+      usefulRowCount: input.usefulRows,
+      freshRowCount: input.freshRows,
+      staleRowPenaltyRows: input.staleRowPenaltyRows,
+      usefulRowRate: input.usefulRowRate,
+      freshRowRate: input.freshRowRate
+    },
+    projectedRevenue: {
+      grossRowsUsd,
+      grossActorStartUsd,
+      grossTotalUsd,
+      apifyMarginUsd,
+      netAfterApifyUsd,
+      internalUsageCostUsd,
+      projectedNetAfterUsageUsd: runSucceeded ? projectedNetAfterUsageUsd : null,
+      costPerRunUsd,
+      costPerRowUsd,
+      costPerUsefulRowUsd: input.costPerUsefulRowUsd
+    },
+    marketplace: {
+      actorViewCount: marketplace.actorViewCount ?? null,
+      actorRunCount: marketplace.actorRunCount ?? null,
+      uniqueUserCount: marketplace.uniqueUserCount ?? null,
+      beneficiaryStatus: marketplace.beneficiaryVerified === true ? "verified" : marketplace.beneficiaryVerified === false ? "blocked" : "unknown",
+      payoutMethodStatus: marketplace.payoutMethodReady === true ? "ready" : marketplace.payoutMethodReady === false ? "blocked" : "unknown",
+      blockers
     }
   };
 }
@@ -515,12 +689,34 @@ function successfulQueries(measurements: readonly LiveProductQueryMeasurement[],
 function costPerUsefulRow(cost: LiveProductCostInput | undefined, usefulRows: number | null): number | null {
   if (!cost || !usefulRows || usefulRows <= 0) return null;
   const netCost = sumNullable([
+    cost.actorStartCostUsd,
     cost.apifyCommissionUsd,
     cost.computeCostUsd,
     cost.backendCostAllocationUsd,
     cost.refundsFailuresUsd
   ]);
   return netCost === null ? null : round(netCost / usefulRows);
+}
+
+function rateFromCounts(numerator: number | null, denominator: number | null): number | null {
+  if (numerator === null || denominator === null || denominator <= 0) return null;
+  return round(numerator / denominator);
+}
+
+function stalePenaltyRows(rowCount: number | null, freshRows: number | null, explicitStaleRows: number | null | undefined): number | null {
+  if (isFiniteNumber(explicitStaleRows)) return Math.max(0, Math.round(explicitStaleRows));
+  if (rowCount === null || freshRows === null) return null;
+  return Math.max(0, Math.round(rowCount - freshRows));
+}
+
+function marketplaceBlockers(input: LiveProductMarketplaceInput): string[] {
+  const blockers: string[] = [];
+  if (input.beneficiaryVerified !== true) blockers.push("apify_beneficiary_verification_not_confirmed");
+  if (input.payoutMethodReady !== true) blockers.push("apify_payout_method_not_confirmed");
+  if (input.actorViewCount === undefined || input.actorViewCount === null) blockers.push("apify_store_view_count_missing");
+  if (input.actorRunCount === undefined || input.actorRunCount === null) blockers.push("apify_actor_run_count_missing");
+  if (input.uniqueUserCount === undefined || input.uniqueUserCount === null) blockers.push("apify_unique_user_count_missing");
+  return blockers;
 }
 
 function nullableSubtract(...values: Array<number | null | undefined>): number | null {

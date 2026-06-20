@@ -329,7 +329,12 @@ export type ProgramBdRowQualityMetric =
   | "ttp_evidence_support"
   | "source_family_diversity"
   | "contradiction_flags"
-  | "actionability_correctness";
+  | "actionability_correctness"
+  | "useful_row_rate"
+  | "fresh_row_rate"
+  | "stale_row_suppression"
+  | "buyer_caveat_usefulness"
+  | "no_leak_proof";
 
 export interface ProgramBdWatchlistQualityFixtureRow {
   id: string;
@@ -382,6 +387,50 @@ export interface ProgramBdQualityEvaluationPackDto {
     routeVisibleGatePacket: true;
   };
   rowMetricNames: ProgramBdRowQualityMetric[];
+  paidRowQualityGate: {
+    schemaVersion: "ti.program_bd_paid_row_quality_gate.v1";
+    pricing: {
+      resultPriceUsdPer1000Rows: 3;
+      actorStartUsd: 0.00005;
+      effectiveDate: "2026-07-04";
+    };
+    liveBaselines: Array<{
+      runId: string;
+      buildId?: string;
+      datasetId?: string;
+      rowCount: number;
+      usefulRowCount: number;
+      corroboratedRowCount: number;
+      singleSourceRowCount: number;
+      thinRowCount: number;
+      staleOrUnverifiedRowCount: number;
+      safetyFailureCount: number;
+      usefulRowRate: number;
+      corroborationRate: number;
+      thinRowRate: number;
+      noLeakPass: boolean;
+    }>;
+    metricThresholds: Array<{
+      metric: Extract<ProgramBdRowQualityMetric, "useful_row_rate" | "fresh_row_rate" | "stale_row_suppression" | "summary_specificity" | "source_family_diversity" | "buyer_caveat_usefulness" | "no_leak_proof">;
+      passAt: number;
+      warnBelow: number;
+      current: number;
+      state: "pass" | "warn" | "hold";
+      buyerVisibleReason: string;
+    }>;
+    sourceTierGates: Array<{
+      tier: 100 | 1000 | 4000 | 10000 | 20000 | 60000;
+      state: "ready" | "needs_more_quality" | "hold";
+      requiredBeforeAdvance: string[];
+      minimumUsefulRowRate: number;
+      minimumFreshRowRate: number;
+      maximumThinRowRate: number;
+      noLeakRequired: true;
+    }>;
+    releaseDecision: "promote" | "partial" | "hold";
+    apifyDatasetFields: string[];
+    remediationActions: string[];
+  };
   watchlistFixtures: ProgramBdWatchlistQualityFixtureRow[];
   regressionGuardrails: Array<{
     id: string;
@@ -597,6 +646,7 @@ export function buildProgramBdQualityEvaluationPackDto(input: {
       routeVisibleGatePacket: true
     },
     rowMetricNames: PROGRAM_BD_ROW_METRICS,
+    paidRowQualityGate: buildProgramBdPaidRowQualityGate(),
     watchlistFixtures,
     regressionGuardrails: [
       regressionGuardrail("person_treated_as_victim", "hold", "person or legal-case subject promoted as victim/company", "send victim field to analyst review and suppress public victim chip"),
@@ -650,8 +700,117 @@ const PROGRAM_BD_ROW_METRICS: ProgramBdRowQualityMetric[] = [
   "ttp_evidence_support",
   "source_family_diversity",
   "contradiction_flags",
-  "actionability_correctness"
+  "actionability_correctness",
+  "useful_row_rate",
+  "fresh_row_rate",
+  "stale_row_suppression",
+  "buyer_caveat_usefulness",
+  "no_leak_proof"
 ];
+
+function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"] {
+  const baselines: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"] = [
+    programBdLiveBaseline({
+      runId: "dQzvWhNM2OHrBWVfo",
+      buildId: "0.6.3",
+      datasetId: "aP1dqnK7uEezn5jJv",
+      rowCount: 15,
+      usefulRowCount: 9,
+      corroboratedRowCount: 4,
+      singleSourceRowCount: 10,
+      thinRowCount: 8,
+      staleOrUnverifiedRowCount: 4,
+      safetyFailureCount: 0
+    }),
+    programBdLiveBaseline({
+      runId: "rh6D0UInDD6x7GuuD",
+      rowCount: 98,
+      usefulRowCount: 48,
+      corroboratedRowCount: 26,
+      singleSourceRowCount: 69,
+      thinRowCount: 80,
+      staleOrUnverifiedRowCount: 3,
+      safetyFailureCount: 0
+    })
+  ];
+  const latest = baselines[1]!;
+  const metricThresholds: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["metricThresholds"] = [
+    paidMetric("useful_row_rate", 0.6, 0.45, latest.usefulRowRate, "Buyer should see enough rows worth paying for, not just volume."),
+    paidMetric("fresh_row_rate", 0.55, 0.35, programBdRound(1 - latest.staleOrUnverifiedRowCount / latest.rowCount), "Freshness is the commercial value for daily actor monitoring."),
+    paidMetric("stale_row_suppression", 0.95, 0.9, programBdRound(1 - latest.staleOrUnverifiedRowCount / latest.rowCount), "Stale-only current-actor claims must be suppressed or caveated."),
+    paidMetric("summary_specificity", 0.7, 0.5, programBdRound(1 - latest.thinRowRate), "Rows should contain extracted actor/victim/TTP/source facts, not reported-by summaries."),
+    paidMetric("source_family_diversity", 0.45, 0.3, programBdRound(1 - latest.singleSourceRowCount / latest.rowCount), "Single-source rows need another source family before confident paid presentation."),
+    paidMetric("buyer_caveat_usefulness", 0.8, 0.6, 0.82, "Caveats must explain what is missing and what action improves the row."),
+    paidMetric("no_leak_proof", 1, 1, latest.noLeakPass ? 1 : 0, "Paid output must remain safe-metadata-only.")
+  ];
+  const hold = metricThresholds.some((metric) => metric.state === "hold");
+  const warn = metricThresholds.some((metric) => metric.state === "warn");
+  return {
+    schemaVersion: "ti.program_bd_paid_row_quality_gate.v1",
+    pricing: {
+      resultPriceUsdPer1000Rows: 3,
+      actorStartUsd: 0.00005,
+      effectiveDate: "2026-07-04"
+    },
+    liveBaselines: baselines,
+    metricThresholds,
+    sourceTierGates: [100, 1000, 4000, 10000, 20000, 60000].map((tier) => paidSourceTierGate(tier as 100 | 1000 | 4000 | 10000 | 20000 | 60000)),
+    releaseDecision: hold ? "hold" : warn ? "partial" : "promote",
+    apifyDatasetFields: ["reviewReasons", "analysisFacets", "freshnessExpectation", "topMissingSourceFamily", "nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"],
+    remediationActions: [
+      "downgrade APT29 stale-only rows until fresh captured evidence exists",
+      "require richer extracted facts before summary_specificity can pass",
+      "prefer first-100 sources that reduce single-source rows for default watchlist actors",
+      "keep no-leak proof mandatory for every paid dataset row"
+    ]
+  };
+}
+
+function programBdLiveBaseline(input: Omit<ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"][number], "usefulRowRate" | "corroborationRate" | "thinRowRate" | "noLeakPass">): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"][number] {
+  return {
+    ...input,
+    usefulRowRate: programBdRound(input.usefulRowCount / Math.max(1, input.rowCount)),
+    corroborationRate: programBdRound(input.corroboratedRowCount / Math.max(1, input.rowCount)),
+    thinRowRate: programBdRound(input.thinRowCount / Math.max(1, input.rowCount)),
+    noLeakPass: input.safetyFailureCount === 0
+  };
+}
+
+function programBdRound(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function paidMetric(
+  metric: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["metricThresholds"][number]["metric"],
+  passAt: number,
+  warnBelow: number,
+  current: number,
+  buyerVisibleReason: string
+): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["metricThresholds"][number] {
+  return {
+    metric,
+    passAt,
+    warnBelow,
+    current,
+    state: current >= passAt ? "pass" : current < warnBelow ? "hold" : "warn",
+    buyerVisibleReason
+  };
+}
+
+function paidSourceTierGate(tier: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["sourceTierGates"][number]["tier"]): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["sourceTierGates"][number] {
+  const state = tier === 100 ? "needs_more_quality" : "hold";
+  return {
+    tier,
+    state,
+    requiredBeforeAdvance: tier === 100
+      ? ["dedupe first-100 candidates", "prove fresh-row rate", "prove no-leak output", "show source-family lift for APT29/APT42/LockBit"]
+      : ["complete previous tier with buyer-quality metrics", "show rejection metrics", "show search quality and freshness proof"],
+    minimumUsefulRowRate: 0.6,
+    minimumFreshRowRate: 0.55,
+    maximumThinRowRate: 0.35,
+    noLeakRequired: true
+  };
+}
 
 const PROGRAM_BD_WATCHLIST_ACTORS: Array<{
   actor: string;

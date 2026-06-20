@@ -96,6 +96,11 @@ This keeps customer cost tied to useful output volume rather than wall-clock run
   "duplicateRunReuse": true,
   "sourceCoverageState": "thin",
   "sourceCoverageGaps": ["missing_public_channel_evidence"],
+  "relationshipSummary": "APT42 has a campaign row with single_source public support.",
+  "relationshipPivots": ["claim:campaign", "source_family:clear_web"],
+  "whyActionable": ["Single-source row: useful as a lead, not a confirmed fact.", "Run is still polling; keep the row attached to the active run."],
+  "corroborationState": "single_source",
+  "nextSearchPivots": ["APT42 public channel", "APT42 clear_web"],
   "evidenceGrade": "corroborated",
   "isActionable": true,
   "reviewReasons": ["freshness:current", "evidence:corroborated", "actionable:monitor_or_triage"],
@@ -155,7 +160,7 @@ The Actor emits public metadata and summaries only. These fields are excluded:
 
 ## Using the results
 
-Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `reviewReasons`, `analysisFacets`, `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish actionable rows from stale, partial, single-source, contradicted, or metadata-only claims. Use `schedulerDecision`, `pollingHint`, `nextPollSeconds`, `retryAfterSeconds`, `duplicateRunReuse`, and `sourceCoverageGaps` to decide whether downstream monitoring should poll again, wait for backoff, or treat the row as a source-coverage follow-up. Retain `provenanceHash` when merging repeated runs.
+Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `relationshipSummary`, `relationshipPivots`, `whyActionable`, `corroborationState`, and `nextSearchPivots` to see the actor-to-victim/sector/country/TTP/source-family pivots that make a row worth investigating. Use `reviewReasons`, `analysisFacets`, `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish actionable rows from stale, partial, single-source, contradicted, or metadata-only claims. Use `schedulerDecision`, `pollingHint`, `nextPollSeconds`, `retryAfterSeconds`, `duplicateRunReuse`, and `sourceCoverageGaps` to decide whether downstream monitoring should poll again, wait for backoff, or treat the row as a source-coverage follow-up. Retain `provenanceHash` when merging repeated runs.
 
 The default watchlist contains 20 long-running state-linked and financially motivated groups. Custom queries can monitor up to 25 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Dataset coverage rows are disabled by default so ordinary runs contain intelligence rows rather than product-roadmap rows. Coverage-gap rows remain enabled by default because they explain why an answer may still be partial.
 

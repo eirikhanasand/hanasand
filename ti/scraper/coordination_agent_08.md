@@ -1,10 +1,4 @@
-Status: active_product_focus_actor_row_relationship_insights
-
-## Main Agent Update - 2026-06-20 17:05 CEST
-
-The paid product is now build `0.6.3` with Apify pricing scheduled for July 4. Latest proof run `dQzvWhNM2OHrBWVfo` shows row-level relationship fields must earn their keep: APT29 rows are stale, APT42 lacks public-channel coverage, and LockBit has current rows where victim/activity relationship pivots would be valuable. Do not add more STIX/TAXII theory unless it directly enriches current Actor/public rows.
-
-Continue Program BL by adding compact relationship insights that make a dataset row more sellable: actor-to-victim/sector/country/TTP/source-family pivots, why-actionable bullets, freshness delta, contradiction hints, and next-search pivots. Prove them on Apify sample rows. When your patch is coherent, run focused tests, commit, push, and leave no hanging files.
+Status: active_program_bm_graph_backed_tier_quality_scoring
 
 # Agent 08 Coordination
 
@@ -12,21 +6,9 @@ Read `coordination_product_focus.md` first. Continue the graph ownership lane on
 
 ## Current Assignment
 
-Program BL: Actor Row Relationship Insights For Marketplace Datasets.
+Program BM: Graph-backed tier-quality scoring for the 100 -> 1,000 -> 60k source/dark-metadata ladder.
 
-Make each Apify/public result row more useful to a CTI analyst without adding speculative platform layers. Focus on compact, evidence-backed relationship insight fields that help a buyer understand why a row matters:
-
-- actor-to-victim, actor-to-sector, actor-to-country, actor-to-malware/tool, actor-to-TTP, actor-to-campaign, and actor-to-source-family relationship summaries;
-- relationship freshness and confidence deltas compared with previous observations;
-- "why this is actionable" bullets based on concrete evidence, not generic text;
-- contradiction and uncertainty hints that fit in a dataset row;
-- source-family diversity and corroboration state;
-- graph-backed next pivots a user can search next;
-- no-leak public output that does not reveal raw unsafe URLs, stolen content, credentials, payloads, private-channel content, or actor interaction.
-
-Your deliverable should update graph/public packaging only where those fields are consumed by the Apify Actor, public search API, `/ti`, or a concrete sample dataset. Avoid starting new TAXII server work, export tier theory, or large DTO families unless directly needed for the row-level buyer experience.
-
-When Program BL is complete, continue into Program BM: graph-backed tier-quality scoring for the 100 -> 1,000 -> 60k source/dark-metadata ladder, using only fields that improve product-data quality gates.
+Use only fields that improve product-data quality gates for Apify/public marketplace rows: useful/fresh row lift, corroboration, source-family diversity, stale/thin-row suppression, relationship pivot coverage, contradiction holds, no-leak proof, and advancement criteria for the source/dark-metadata ladder.
 
 ## Continuation Directive
 
@@ -83,7 +65,12 @@ Keep all graph relationships replayable to evidence, claim ledger state, review 
 - Repaired source-atlas display row selection so required decision rows such as `retire_duplicate` remain visible in route/API proof without mutating source activation semantics.
 - Updated `docs/export/relationship_model.md` with Program BJ/BK export-contract and notebook boundaries.
 - Verification is green for `bun run check`, `bun test src/tests/graphViews.test.ts src/tests/api.test.ts src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (526 pass).
+- Completed Program BL actor row relationship insights for marketplace datasets.
+- Added compact Apify/public row fields for relationship summaries, actor-to-victim/sector/country/TTP/campaign/source-family pivots, why-actionable bullets, freshness/confidence deltas, contradiction hints, corroboration state, and graph-backed next search pivots.
+- Updated the Apify dataset schema, publication gate, smoke gate, README, and changelog so buyer-visible rows must expose the new relationship insight contract.
+- Repaired adjacent green-build/runtime drift in Product SLO helpers, API boolean query parsing, source-atlas ladder helpers, and Program BD quality evaluation rounding.
+- Verification is green for `bun run check`, full `bun test` (527 pass), Apify publication/smoke/check scripts, focused API/source tests, route inventory, contract index, and API regression.
 
 ## Active Next Work
 
-Program BL is active. Do not mark ready until the relationship-insight fields are route-visible, tested, documented, and demonstrably useful in Apify/public result samples.
+Program BM is active. Start with a narrow tier-quality scoring packet that uses the new relationship insight fields to decide whether current 100-source/dark-metadata rows are useful enough to advance toward 1,000 without lowering no-leak or provenance standards.

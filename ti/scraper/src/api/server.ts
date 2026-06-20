@@ -15,6 +15,7 @@ import {
   buildSchedulerDurableBackendReadiness,
   buildSchedulerFreshnessSloEngine,
   buildSchedulerFreshnessSloDashboard,
+  buildSchedulerDailyActorRunPlan,
   buildSchedulerInteractiveSearchFreshness,
   buildSchedulerProductionLeaseSemantics,
   buildSchedulerFairnessGovernance,
@@ -3751,6 +3752,12 @@ function schedulerSummaryForPlan(input: {
     workerLeaseSoakHarness,
     now
   });
+  const dailyActorRunPlan = buildSchedulerDailyActorRunPlan({
+    freshnessSloDashboard,
+    queueEconomics,
+    workerQueueCutover,
+    now
+  });
   const productionLeaseSemantics = buildSchedulerProductionLeaseSemantics({
     queueEconomics,
     runtimeExecution,
@@ -3870,6 +3877,7 @@ function schedulerSummaryForPlan(input: {
     durableBackendReadiness,
     freshnessSloEngine,
     freshnessSloDashboard,
+    dailyActorRunPlan,
     interactiveSearchFreshness,
     productionLeaseSemantics,
     fairnessGovernance,
@@ -7729,14 +7737,29 @@ function buildOpsProductSloDashboard(options: ApiServerOptions, url: URL): Recor
       queryCount: numberQuery(url.searchParams.get("actorQueryCount")) ?? null,
       rowCount: numberQuery(url.searchParams.get("actorRowCount")) ?? null,
       usefulRowCount: numberQuery(url.searchParams.get("actorUsefulRowCount")) ?? null,
-      activityClaimRowCount: numberQuery(url.searchParams.get("actorActivityClaimRows")) ?? null
+      freshRowCount: numberQuery(url.searchParams.get("actorFreshRowCount")) ?? null,
+      staleRowCount: numberQuery(url.searchParams.get("actorStaleRowCount")) ?? null,
+      activityClaimRowCount: numberQuery(url.searchParams.get("actorActivityClaimRows")) ?? null,
+      defaultWatchlistRun: booleanQuery(url.searchParams.get("actorDefaultWatchlistRun"))
     },
     cost: {
       grossPpeRevenueUsd: numberQuery(url.searchParams.get("grossPpeRevenueUsd")) ?? null,
       apifyCommissionUsd: numberQuery(url.searchParams.get("apifyCommissionUsd")) ?? null,
       computeCostUsd: numberQuery(url.searchParams.get("computeCostUsd")) ?? null,
       backendCostAllocationUsd: numberQuery(url.searchParams.get("backendCostAllocationUsd")) ?? null,
-      refundsFailuresUsd: numberQuery(url.searchParams.get("refundsFailuresUsd")) ?? null
+      refundsFailuresUsd: numberQuery(url.searchParams.get("refundsFailuresUsd")) ?? null,
+      actorStartCostUsd: numberQuery(url.searchParams.get("actorStartCostUsd")) ?? null,
+      resultPriceUsdPerThousand: numberQuery(url.searchParams.get("resultPriceUsdPerThousand")) ?? null,
+      actorStartPriceUsd: numberQuery(url.searchParams.get("actorStartPriceUsd")) ?? null,
+      apifyMarginRate: numberQuery(url.searchParams.get("apifyMarginRate")) ?? null
+    },
+    marketplace: {
+      actorViewCount: numberQuery(url.searchParams.get("apifyActorViewCount")) ?? null,
+      actorRunCount: numberQuery(url.searchParams.get("apifyActorRunCount")) ?? null,
+      uniqueUserCount: numberQuery(url.searchParams.get("apifyUniqueUserCount")) ?? null,
+      beneficiaryVerified: booleanQuery(url.searchParams.get("apifyBeneficiaryVerified")),
+      payoutMethodReady: booleanQuery(url.searchParams.get("apifyPayoutMethodReady")),
+      pricingEffectiveAt: url.searchParams.get("apifyPricingEffectiveAt") ?? null
     },
     snapshotStoragePath: url.searchParams.get("snapshotStoragePath") ?? undefined
   }) as unknown as Record<string, unknown>;
@@ -7745,6 +7768,13 @@ function buildOpsProductSloDashboard(options: ApiServerOptions, url: URL): Recor
 function liveProductProofMode(value: string | null): LiveProductProofMode {
   if (value === "fixture" || value === "local" || value === "inspur" || value === "public_live") return value;
   return "local";
+}
+
+function booleanQuery(value: string | null): boolean | null {
+  if (value === null) return null;
+  if (value === "true" || value === "1" || value === "yes") return true;
+  if (value === "false" || value === "0" || value === "no") return false;
+  return null;
 }
 
 function actorRunStatus(value: string | null): "succeeded" | "failed" | "timed_out" | "aborted" | "unknown" | undefined {
@@ -7757,7 +7787,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
@@ -8943,6 +8973,14 @@ function buildEnterpriseApiContractIndex() {
         fields: ["currentQuery", "queueDecision", "actorTargets", "fairnessGuards", "uiSignals", "handoffs", "routeContracts", "releaseGate"],
         decisions: ["reuse_active_run", "enqueue_interactive_refresh", "raise_priority", "serve_partial_and_poll", "metadata_review_hold", "emergency_hold"],
         guarantee: "interactive search freshness scheduling is dry-run and UI-visible; known actor searches expose freshness state, queue decision, 3-second polling, duplicate-run reuse, retry-after, deferred background workloads, metadata-review holds, and actor targets without starving background work or mutating queues"
+      },
+      schedulerDailyActorRunPlan: {
+        routes: ["/v1/frontier/status", "/v1/intel/search.scheduler", "/v1/intel/runs/{id}", "/v1/contracts"],
+        field: "scheduler.dailyActorRunPlan",
+        schemaVersion: "ti.scheduler_daily_actor_run_plan.v1",
+        actor: "eirikhanasand/public-threat-actor-monitor",
+        fields: ["apifyActor", "runTargets", "watchlist", "sourceTierCadence", "economics", "staleSuppression", "routeContracts", "releaseGate"],
+        guarantee: "daily Actor scheduling is dry-run and buyer-visible: the 20-query Apify default watchlist, source/dark-metadata 100->1000->4000 sweep cadence, useful-row targets, fresh-row targets, stale-only suppression, duplicate-run reuse, 3-second polling, and cost per useful row are exposed without mutating scheduler state"
       },
       schedulerProductionLeaseSemantics: {
         routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/contracts"],
