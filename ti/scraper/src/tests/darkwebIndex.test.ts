@@ -149,6 +149,75 @@ describe("darkweb metadata index contracts", () => {
       "low_buyer_value"
     ]));
     expect(status.liveValueExpansion.valueGateRejects.every((row) => row.doesNotCountTowardTier)).toBe(true);
+    expect(status.publicIntelligenceHandoff100).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_intelligence_handoff_100.v1",
+      owner: "Agent 05",
+      mode: "metadata_only_public_intelligence_handoff",
+      candidateTarget: 100,
+      candidateCount: 100,
+      publicCorroboratedCount: 0,
+      usefulCaveatedCount: 2,
+      projectedContributionToward100SellableRows: 0,
+      averageBuyerValueScore: 0.41,
+      staleRate: 0.92,
+      duplicateRate: 0.06,
+      unsafeRate: 0.24,
+      authPrivateCaptchaRate: 0.33,
+      safety: {
+        metadataOnly: true,
+        willFetchNetwork: false,
+        rawUnsafeUrlsExposed: false,
+        stolenFilesDownloaded: false,
+        credentialsRetrieved: false,
+        payloadsFollowed: false,
+        privateAuthCaptchaAccess: false,
+        actorInteraction: false
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.publicIntelligenceHandoff100.decisionCounts).toEqual({
+      sellable_with_public_support: 0,
+      included_with_caveat: 2,
+      coverage_gap_only: 28,
+      hold: 46,
+      suppress: 24
+    });
+    expect(status.publicIntelligenceHandoff100.rows).toHaveLength(100);
+    expect(status.publicIntelligenceHandoff100.rows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      row.nextPublicCorroborationPivots.length > 0 &&
+      row.firstSeen.length > 0 &&
+      row.lastSeen.length > 0
+    )).toBe(true);
+    expect(status.publicIntelligenceHandoff100.rows.filter((row) => row.decision === "sellable_with_public_support").every((row) =>
+      row.publicSupportState === "public_supported"
+    )).toBe(true);
+    expect(status.publicIntelligenceHandoff100.rejectionReasons.map((row) => row.reason)).toEqual(expect.arrayContaining([
+      "duplicate",
+      "stale_or_dead",
+      "missing_useful_hint",
+      "restricted_only_without_public_support",
+      "unsafe_or_blocked",
+      "auth_private_captcha_dependency",
+      "legal_or_review_hold",
+      "low_buyer_value"
+    ]));
+    expect(status.publicIntelligenceHandoff100.rejectionReasons.every((row) => row.doesNotCountTowardSellableRows)).toBe(true);
+    expect(status.publicIntelligenceHandoff100.handoffs.agent03ParserGaps.length).toBeGreaterThan(0);
+    expect(status.publicIntelligenceHandoff100.handoffs.agent04PublicCorroborationGaps.length).toBeGreaterThan(0);
+    expect(status.publicIntelligenceHandoff100.handoffs.agent08GraphPivots.length).toBeGreaterThan(0);
+    expect(status.publicIntelligenceHandoff100.handoffs.agent10RevenueGateCounts).toMatchObject({
+      targetSellableRows: 100,
+      sellableWithPublicSupport: 0,
+      usefulCaveatedRows: 2,
+      coverageGapOnlyRows: 28,
+      heldRows: 46,
+      suppressedRows: 24,
+      projectedContributionToward100SellableRows: 0
+    });
     expect(contract.storageHandoff).toMatchObject({
       schemaVersion: "ti.darkweb_index_storage_handoff.v1",
       tables: expect.arrayContaining(["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs"]),
