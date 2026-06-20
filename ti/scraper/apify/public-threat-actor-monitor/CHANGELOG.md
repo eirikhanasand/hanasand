@@ -3,6 +3,7 @@
 ## 0.6.4 - 2026-06-20
 
 - Published Apify build `0.6.4` on Actor version `0.6`. Proof run `iMQGeezZ8bx7WtlhQ` produced dataset `5PLmkE30luBA5Lbgc` with 10 safe APT42 rows and visible paid-row decisions, caveated lead rows, held stale rows, and metadata-only safety fields.
+- Added paid-row enforcement fields for `suppress`, stable reason codes, and owner-specific remediation actions so low-evidence capability rows are not presented or counted like sellable findings.
 
 ## 0.6.3 - 2026-06-20
 

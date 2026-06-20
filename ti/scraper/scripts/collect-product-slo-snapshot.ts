@@ -70,6 +70,7 @@ console.log(JSON.stringify({
   metrics: snapshot.metrics,
   apifyUnknowns: dashboard.apifyLaunchExperiment.unknowns,
   paidProductEconomics: dashboard.paidProductEconomics,
+  sourceMonetizationGate: dashboard.sourceMonetizationGate,
   deploymentProof: dashboard.deploymentProof,
   resourceGuardrails: dashboard.resourceGuardrails
 }, null, 2));
@@ -93,6 +94,10 @@ function buildEndpoint(baseUrl: string, proofMode: LiveProductProofMode, generat
   copyEnvParam(url, "actorFreshRowCount", "TI_PRODUCT_SLO_ACTOR_FRESH_ROW_COUNT");
   copyEnvParam(url, "actorStaleRowCount", "TI_PRODUCT_SLO_ACTOR_STALE_ROW_COUNT");
   copyEnvParam(url, "actorActivityClaimRows", "TI_PRODUCT_SLO_ACTOR_ACTIVITY_CLAIM_ROWS");
+  copyEnvParam(url, "actorSellableRows", "TI_PRODUCT_SLO_ACTOR_SELLABLE_ROWS");
+  copyEnvParam(url, "actorIncludedWithCaveatRows", "TI_PRODUCT_SLO_ACTOR_INCLUDED_WITH_CAVEAT_ROWS");
+  copyEnvParam(url, "actorCoverageGapOnlyRows", "TI_PRODUCT_SLO_ACTOR_COVERAGE_GAP_ONLY_ROWS");
+  copyEnvParam(url, "actorHoldRows", "TI_PRODUCT_SLO_ACTOR_HOLD_ROWS");
   copyEnvParam(url, "actorDefaultWatchlistRun", "TI_PRODUCT_SLO_ACTOR_DEFAULT_WATCHLIST_RUN");
   copyEnvParam(url, "grossPpeRevenueUsd", "TI_PRODUCT_SLO_GROSS_PPE_REVENUE_USD");
   copyEnvParam(url, "apifyCommissionUsd", "TI_PRODUCT_SLO_APIFY_COMMISSION_USD");
@@ -106,9 +111,24 @@ function buildEndpoint(baseUrl: string, proofMode: LiveProductProofMode, generat
   copyEnvParam(url, "apifyActorViewCount", "TI_PRODUCT_SLO_APIFY_ACTOR_VIEW_COUNT");
   copyEnvParam(url, "apifyActorRunCount", "TI_PRODUCT_SLO_APIFY_ACTOR_RUN_COUNT");
   copyEnvParam(url, "apifyUniqueUserCount", "TI_PRODUCT_SLO_APIFY_UNIQUE_USER_COUNT");
+  copyEnvParam(url, "apifyTrialRunCount", "TI_PRODUCT_SLO_APIFY_TRIAL_RUN_COUNT");
+  copyEnvParam(url, "apifyPaidRunCount", "TI_PRODUCT_SLO_APIFY_PAID_RUN_COUNT");
+  copyEnvParam(url, "apifyRepeatUserCount", "TI_PRODUCT_SLO_APIFY_REPEAT_USER_COUNT");
   copyEnvParam(url, "apifyBeneficiaryVerified", "TI_PRODUCT_SLO_APIFY_BENEFICIARY_VERIFIED");
   copyEnvParam(url, "apifyPayoutMethodReady", "TI_PRODUCT_SLO_APIFY_PAYOUT_METHOD_READY");
   copyEnvParam(url, "apifyPricingEffectiveAt", "TI_PRODUCT_SLO_APIFY_PRICING_EFFECTIVE_AT");
+  copyEnvParam(url, "sourceEvaluatedCandidateCount", "TI_PRODUCT_SLO_SOURCE_EVALUATED_CANDIDATE_COUNT");
+  copyEnvParam(url, "sourcePayworthyCount", "TI_PRODUCT_SLO_SOURCE_PAYWORTHY_COUNT");
+  copyEnvParam(url, "sourcePayworthyThresholdRate", "TI_PRODUCT_SLO_SOURCE_PAYWORTHY_THRESHOLD_RATE");
+  copyEnvParam(url, "sourceValueScoreThreshold", "TI_PRODUCT_SLO_SOURCE_VALUE_SCORE_THRESHOLD");
+  copyEnvParam(url, "sourceFreshnessThreshold", "TI_PRODUCT_SLO_SOURCE_FRESHNESS_THRESHOLD");
+  copyEnvParam(url, "sourceEvidenceYieldThreshold", "TI_PRODUCT_SLO_SOURCE_EVIDENCE_YIELD_THRESHOLD");
+  copyEnvParam(url, "sourceDownstreamImpactThreshold", "TI_PRODUCT_SLO_SOURCE_DOWNSTREAM_IMPACT_THRESHOLD");
+  copyEnvParam(url, "sourceCostPerUsefulRowImpactUsd", "TI_PRODUCT_SLO_SOURCE_COST_PER_USEFUL_ROW_IMPACT_USD");
+  copyEnvParam(url, "sourceCurrentProofRunId", "TI_PRODUCT_SLO_SOURCE_CURRENT_PROOF_RUN_ID");
+  copyEnvParam(url, "sourceCurrentProofDatasetId", "TI_PRODUCT_SLO_SOURCE_CURRENT_PROOF_DATASET_ID");
+  copyEnvParam(url, "sourceBaselineProofRunId", "TI_PRODUCT_SLO_SOURCE_BASELINE_PROOF_RUN_ID");
+  copyEnvParam(url, "sourceBaselineProofDatasetId", "TI_PRODUCT_SLO_SOURCE_BASELINE_PROOF_DATASET_ID");
   copyEnvParam(url, "diskGrowthGbPerDay", "TI_PRODUCT_SLO_DISK_GROWTH_GB_PER_DAY");
   copyEnvParam(url, "diskFreeGb", "TI_PRODUCT_SLO_DISK_FREE_GB");
   copyEnvParam(url, "diskUsedGb", "TI_PRODUCT_SLO_DISK_USED_GB");
@@ -216,11 +236,13 @@ function isDashboard(value: unknown): value is LiveProductSloDashboard {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   const snapshot = record.dailySnapshot as Record<string, unknown> | undefined;
+  const sourceMonetizationGate = record.sourceMonetizationGate as Record<string, unknown> | undefined;
   return record.schemaVersion === "ti.live_product_slo_dashboard.v1"
     && record.route === "/v1/ops/product-slo"
     && Boolean(snapshot)
     && typeof snapshot?.snapshotId === "string"
-    && snapshot?.appendOnly === true;
+    && snapshot?.appendOnly === true
+    && sourceMonetizationGate?.schemaVersion === "ti.live_product_source_monetization_gate.v1";
 }
 
 function proofModeFromEnv(value: string): LiveProductProofMode {

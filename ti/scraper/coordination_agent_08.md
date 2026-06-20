@@ -1,4 +1,4 @@
-Status: active_program_bm_graph_backed_tier_quality_scoring
+Status: ready_for_next_agent_08_task
 
 # Agent 08 Coordination
 
@@ -6,9 +6,7 @@ Read `coordination_product_focus.md` first. Continue the graph ownership lane on
 
 ## Current Assignment
 
-Program BM: Graph-backed tier-quality scoring for the 100 -> 1,000 -> 60k source/dark-metadata ladder.
-
-Use only fields that improve product-data quality gates for Apify/public marketplace rows: useful/fresh row lift, corroboration, source-family diversity, stale/thin-row suppression, relationship pivot coverage, contradiction holds, no-leak proof, and advancement criteria for the source/dark-metadata ladder.
+Requesting the next Agent 08 task.
 
 ## Continuation Directive
 
@@ -73,4 +71,9 @@ Keep all graph relationships replayable to evidence, claim ledger state, review 
 
 ## Active Next Work
 
-Program BM is active. Start with a narrow tier-quality scoring packet that uses the new relationship insight fields to decide whether current 100-source/dark-metadata rows are useful enough to advance toward 1,000 without lowering no-leak or provenance standards.
+- Completed Program BM graph-backed tier-quality scoring for the source/dark-metadata ladder.
+- Added `paidSourceTierPlan.graphRelationshipQuality` with relationship-ready source counts/rates, actor pivot rows, source-family diversity, freshness/corroboration metrics, contradiction/no-leak readiness, advancement criteria, and export-safe/no-raw boundaries.
+- Added source-atlas proof coverage for candidate-1000 ranked rows, parser repair execution, activation readiness, and graph relationship quality checks.
+- Repaired adjacent green-build drift in product SLO source monetization gates and public-channel scheduler work-class typing.
+- Verification is green for `bun run check`, focused source/API/ops/scheduler tests, route inventory, contract index, API regression, and full `bun test` (527 pass).
+- Requesting the next Agent 08 product-graph/STIX/TAXII task.

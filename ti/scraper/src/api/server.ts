@@ -7740,6 +7740,10 @@ function buildOpsProductSloDashboard(options: ApiServerOptions, url: URL): Recor
       freshRowCount: numberQuery(url.searchParams.get("actorFreshRowCount")) ?? null,
       staleRowCount: numberQuery(url.searchParams.get("actorStaleRowCount")) ?? null,
       activityClaimRowCount: numberQuery(url.searchParams.get("actorActivityClaimRows")) ?? null,
+      sellableRowCount: numberQuery(url.searchParams.get("actorSellableRows")) ?? null,
+      includedWithCaveatRowCount: numberQuery(url.searchParams.get("actorIncludedWithCaveatRows")) ?? null,
+      coverageGapOnlyRowCount: numberQuery(url.searchParams.get("actorCoverageGapOnlyRows")) ?? null,
+      holdRowCount: numberQuery(url.searchParams.get("actorHoldRows")) ?? null,
       defaultWatchlistRun: booleanQuery(url.searchParams.get("actorDefaultWatchlistRun"))
     },
     cost: {
@@ -7757,9 +7761,26 @@ function buildOpsProductSloDashboard(options: ApiServerOptions, url: URL): Recor
       actorViewCount: numberQuery(url.searchParams.get("apifyActorViewCount")) ?? null,
       actorRunCount: numberQuery(url.searchParams.get("apifyActorRunCount")) ?? null,
       uniqueUserCount: numberQuery(url.searchParams.get("apifyUniqueUserCount")) ?? null,
+      trialRunCount: numberQuery(url.searchParams.get("apifyTrialRunCount")) ?? null,
+      paidRunCount: numberQuery(url.searchParams.get("apifyPaidRunCount")) ?? null,
+      repeatUserCount: numberQuery(url.searchParams.get("apifyRepeatUserCount")) ?? null,
       beneficiaryVerified: booleanQuery(url.searchParams.get("apifyBeneficiaryVerified")),
       payoutMethodReady: booleanQuery(url.searchParams.get("apifyPayoutMethodReady")),
       pricingEffectiveAt: url.searchParams.get("apifyPricingEffectiveAt") ?? null
+    },
+    sourceMonetization: {
+      evaluatedSourceCandidateCount: numberQuery(url.searchParams.get("sourceEvaluatedCandidateCount")) ?? null,
+      payworthySourceCount: numberQuery(url.searchParams.get("sourcePayworthyCount")) ?? null,
+      payworthyThresholdRate: numberQuery(url.searchParams.get("sourcePayworthyThresholdRate")) ?? null,
+      sourceValueScoreThreshold: numberQuery(url.searchParams.get("sourceValueScoreThreshold")) ?? null,
+      freshnessThreshold: numberQuery(url.searchParams.get("sourceFreshnessThreshold")) ?? null,
+      evidenceYieldThreshold: numberQuery(url.searchParams.get("sourceEvidenceYieldThreshold")) ?? null,
+      downstreamImpactThreshold: numberQuery(url.searchParams.get("sourceDownstreamImpactThreshold")) ?? null,
+      costPerUsefulRowImpactUsd: numberQuery(url.searchParams.get("sourceCostPerUsefulRowImpactUsd")) ?? null,
+      currentProofRunId: url.searchParams.get("sourceCurrentProofRunId") ?? null,
+      currentProofDatasetId: url.searchParams.get("sourceCurrentProofDatasetId") ?? null,
+      baselineProofRunId: url.searchParams.get("sourceBaselineProofRunId") ?? null,
+      baselineProofDatasetId: url.searchParams.get("sourceBaselineProofDatasetId") ?? null
     },
     snapshotStoragePath: url.searchParams.get("snapshotStoragePath") ?? undefined
   }) as unknown as Record<string, unknown>;
@@ -7787,7 +7808,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
@@ -8983,8 +9004,8 @@ function buildEnterpriseApiContractIndex() {
         field: "scheduler.dailyActorRunPlan",
         schemaVersion: "ti.scheduler_daily_actor_run_plan.v1",
         actor: "eirikhanasand/public-threat-actor-monitor",
-        fields: ["apifyActor", "runTargets", "watchlist", "sourceTierCadence", "economics", "staleSuppression", "routeContracts", "releaseGate"],
-        guarantee: "daily Actor scheduling is dry-run and buyer-visible: the 20-query Apify default watchlist, source/dark-metadata 100->1000->4000 sweep cadence, useful-row targets, fresh-row targets, stale-only suppression, duplicate-run reuse, 3-second polling, and cost per useful row are exposed without mutating scheduler state"
+        fields: ["apifyActor", "latestProofRun", "runTargets", "watchlist", "sourceTierCadence", "economics", "staleSuppression", "freshCollectionRetryPlan", "routeContracts", "releaseGate"],
+        guarantee: "daily Actor scheduling is dry-run and buyer-visible: the 20-query Apify default watchlist, latest build 0.6.4 proof run, paid-row decision counts, source/dark-metadata 100->1000->4000 sweep cadence, useful-row targets, fresh-row targets, stale-only suppression, duplicate-run reuse, 3-second polling, retry-after/dead-letter visibility, and cost per useful row are exposed without mutating scheduler state"
       },
       schedulerProductionLeaseSemantics: {
         routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/contracts"],
@@ -10194,6 +10215,21 @@ function apifyPublicProofDto(
       paidRowReason: evidenceGrade === "corroborated" && sourceFamilies.length > 1
         ? "Fresh or recent corroborated public evidence supports this sample enough for paid monitoring output."
         : "This sample is useful as a lead but needs corroboration or source-family diversity before promotion.",
+      paidRowReasonCodes: evidenceGrade === "corroborated" && sourceFamilies.length > 1
+        ? ["fresh_or_recent", "corroborated", "source_family_diverse", "actionable"]
+        : ["single_source", "source_family_thin", "lead_only"],
+      paidRowRemediationActions: evidenceGrade === "corroborated" && sourceFamilies.length > 1 ? [] : [
+        {
+          owner: "agent_01",
+          action: "add_corroborating_clear_web_source",
+          expectedEffect: "Increase source count and source-family diversity before sellable promotion."
+        },
+        {
+          owner: "agent_03",
+          action: "extract_specific_actor_victim_ttp_fields",
+          expectedEffect: "Move generic leads toward sellable rows after parser repair."
+        }
+      ],
       buyerValueScore: evidenceGrade === "corroborated" && sourceFamilies.length > 1 ? 0.9 : 0.65,
       billingGuidance: evidenceGrade === "corroborated" && sourceFamilies.length > 1 ? "charge" : "include_as_context",
       evidenceGrade,

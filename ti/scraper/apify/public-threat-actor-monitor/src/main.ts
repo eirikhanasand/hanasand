@@ -145,8 +145,14 @@ interface MarketplaceRow {
   buyerCaveat: string;
   expectedTimeToUsefulSignal: string;
   pollingHint: string;
-  paidRowDecision?: "sellable" | "included_with_caveat" | "coverage_gap_only" | "hold";
+  paidRowDecision?: "sellable" | "included_with_caveat" | "coverage_gap_only" | "hold" | "suppress";
   paidRowReason?: string;
+  paidRowReasonCodes?: string[];
+  paidRowRemediationActions?: Array<{
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07";
+    action: string;
+    expectedEffect: string;
+  }>;
   buyerValueScore?: number;
   billingGuidance?: "charge" | "include_as_context" | "do_not_charge_if_metered";
   evidenceGrade: "corroborated" | "single_source" | "unverified";
@@ -185,6 +191,7 @@ interface MonetizationSummary {
   caveatedRowCount: number;
   coverageGapOnlyRowCount: number;
   holdRowCount: number;
+  suppressedRowCount: number;
   chargeRecommendedRowCount: number;
   skippedReason?: string;
 }
@@ -493,11 +500,29 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
   };
 }
 
-function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowDecision" | "paidRowReason" | "buyerValueScore" | "billingGuidance"> {
+function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowDecision" | "paidRowReason" | "paidRowReasonCodes" | "paidRowRemediationActions" | "buyerValueScore" | "billingGuidance"> {
+  if (row.rowType === "dataset" && row.sourceType === "darknet_metadata" && !row.hasDarknetMetadata) {
+    return {
+      paidRowDecision: "suppress",
+      paidRowReason: "This row advertises metadata capability but has no matching safe metadata evidence for the query; keep it out of paid findings.",
+      paidRowReasonCodes: ["capability_without_evidence", "source_poor_row"],
+      paidRowRemediationActions: [
+        { owner: "agent_05", action: "add_searchable_safe_metadata_for_query", expectedEffect: "Move future rows to included_with_caveat when safe metadata corroborates the actor or victim context." },
+        { owner: "agent_07", action: "keep_suppressed_until_evidence_exists", expectedEffect: "Prevent metadata capability rows from being counted as useful paid intelligence." }
+      ],
+      buyerValueScore: 0.05,
+      billingGuidance: "do_not_charge_if_metered"
+    };
+  }
   if (row.rowType === "coverage_gap") {
     return {
       paidRowDecision: "coverage_gap_only",
       paidRowReason: "Coverage-gap rows explain what is missing and should be treated as remediation context, not a complete intelligence finding.",
+      paidRowReasonCodes: ["coverage_gap", "missing_source_family"],
+      paidRowRemediationActions: [
+        { owner: "agent_01", action: "replace_or_add_payworthy_public_sources", expectedEffect: "Improve source-family diversity before paid promotion." },
+        { owner: "agent_04", action: "activate_highest_value_missing_family", expectedEffect: "Close the visible source gap within the expected 1-3 day signal window." }
+      ],
       buyerValueScore: 0.2,
       billingGuidance: "do_not_charge_if_metered"
     };
@@ -510,6 +535,15 @@ function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowD
     return {
       paidRowDecision: "hold",
       paidRowReason: "This row has a hold condition such as contradictory reporting, stale or missing evidence, low confidence, or no public evidence.",
+      paidRowReasonCodes: [
+        ...(row.contradictionHints.length > 0 ? ["contradiction_hold"] : []),
+        ...(row.coverageStatus === "no_evidence" ? ["no_public_evidence"] : []),
+        ...row.reviewReasons.filter((reason) => reason.startsWith("hold:"))
+      ],
+      paidRowRemediationActions: [
+        { owner: "agent_03", action: "repair_parser_or_summary_specificity", expectedEffect: "Recover supported extracted facts before row promotion." },
+        { owner: "agent_07", action: "rerun_quality_gate_after_repair", expectedEffect: "Keep held rows out of paid findings until evidence support is measurable." }
+      ],
       buyerValueScore: row.evidenceGrade === "corroborated" ? 0.45 : 0.3,
       billingGuidance: "do_not_charge_if_metered"
     };
@@ -523,6 +557,8 @@ function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowD
     return {
       paidRowDecision: "sellable",
       paidRowReason: "Fresh or recent corroborated public evidence supports this row enough for paid monitoring output.",
+      paidRowReasonCodes: ["fresh_or_recent", "corroborated", "source_family_diverse", "actionable"],
+      paidRowRemediationActions: [],
       buyerValueScore: 0.9,
       billingGuidance: "charge"
     };
@@ -531,6 +567,16 @@ function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowD
     return {
       paidRowDecision: "included_with_caveat",
       paidRowReason: "This row is useful as a lead but needs corroboration, source-family diversity, or fresher supporting evidence before promotion.",
+      paidRowReasonCodes: [
+        ...(row.evidenceGrade === "single_source" ? ["single_source"] : []),
+        ...(row.sourceFamilyCount < 2 ? ["source_family_thin"] : []),
+        ...(row.freshnessStatus === "stale" ? ["stale_support"] : []),
+        ...(row.isActionable ? ["lead_is_actionable"] : ["lead_only"])
+      ],
+      paidRowRemediationActions: [
+        { owner: "agent_01", action: "add_corroborating_clear_web_source", expectedEffect: "Increase source count and source-family diversity." },
+        { owner: "agent_03", action: "extract_specific_actor_victim_ttp_fields", expectedEffect: "Move generic leads toward sellable rows after parser repair." }
+      ],
       buyerValueScore: row.isActionable ? 0.65 : 0.5,
       billingGuidance: "include_as_context"
     };
@@ -538,6 +584,10 @@ function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowD
   return {
     paidRowDecision: "hold",
     paidRowReason: "This row is retained for context but is not ready as paid intelligence output.",
+    paidRowReasonCodes: ["not_actionable", "low_support"],
+    paidRowRemediationActions: [
+      { owner: "agent_07", action: "keep_out_of_paid_findings", expectedEffect: "Avoid presenting unsupported context as a buyer-payworthy row." }
+    ],
     buyerValueScore: 0.25,
     billingGuidance: "do_not_charge_if_metered"
   };
@@ -1213,7 +1263,8 @@ function paidRowQualitySummary(rows: MarketplaceRow[]) {
     sellable: rows.filter((row) => row.paidRowDecision === "sellable").length,
     included_with_caveat: rows.filter((row) => row.paidRowDecision === "included_with_caveat").length,
     coverage_gap_only: rows.filter((row) => row.paidRowDecision === "coverage_gap_only").length,
-    hold: rows.filter((row) => row.paidRowDecision === "hold").length
+    hold: rows.filter((row) => row.paidRowDecision === "hold").length,
+    suppress: rows.filter((row) => row.paidRowDecision === "suppress").length
   };
   return {
     ...byDecision,
@@ -1241,6 +1292,7 @@ function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {
     caveatedRowCount: quality.included_with_caveat,
     coverageGapOnlyRowCount: quality.coverage_gap_only,
     holdRowCount: quality.hold,
+    suppressedRowCount: quality.suppress,
     chargeRecommendedRowCount: quality.chargeRecommended
   };
   if (!summary.enabled) {

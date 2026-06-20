@@ -568,6 +568,63 @@ export interface EvidenceActorProductImpactRow {
   embeddingEligible: boolean;
 }
 
+export interface EvidenceActorDatasetPromotionPreview {
+  schemaVersion: "ti.evidence_actor_dataset_promotion_preview.v1";
+  generatedAt: string;
+  handoffId: string;
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  sourceImpactReplay: "ti.evidence_actor_product_impact_replay.v1";
+  dryRun: true;
+  willMutateActorDataset: false;
+  latestProof: {
+    runId: "iMQGeezZ8bx7WtlhQ";
+    datasetId: "5PLmkE30luBA5Lbgc";
+  };
+  counts: {
+    billableResultCandidates: number;
+    caveatedContextRows: number;
+    staleRowsSuppressed: number;
+    coverageGapRows: number;
+  };
+  rows: EvidenceActorDatasetPromotionRow[];
+  publicAnswerConsumer: {
+    targetReadModel: "api_intel_search_answer_cache";
+    inputDocumentIds: string[];
+    readyDocumentIds: string[];
+    heldDocumentIds: string[];
+    staleSuppressedDocumentIds: string[];
+  };
+  noLeakGuarantees: EvidenceActorProductImpactReplay["noLeakGuarantees"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetPromotionRow {
+  rowId: string;
+  rowType: "evidence_result" | "metadata_context" | "stale_suppression" | "coverage_gap";
+  paidRowDecision: "billable_result_candidate" | "not_billable_context" | "not_billable_suppressed" | "not_billable_coverage_gap";
+  paidRowReason: string;
+  billingGuidance: "eligible_after_actor_row_render" | "context_only_do_not_bill" | "suppress_do_not_bill" | "gap_row_do_not_bill";
+  buyerValueScore: number;
+  sourceFamily?: EvidenceActorProductImpactRow["sourceFamily"];
+  documentId?: string;
+  sourceId?: string;
+  captureId?: string;
+  claimLedgerEntryId?: string;
+  relationshipId?: string;
+  title: string;
+  summary: string;
+  replayId?: string;
+  freshness?: {
+    observedAt?: string;
+    collectedAt?: string;
+    publishedAt?: string;
+  };
+  confidence?: number;
+  retentionClass?: RetentionClass;
+  noLeak: true;
+}
+
 export interface EvidenceSearchReadModelRepository {
   readonly backend: EvidenceSearchReadModelBackend;
   readiness(): EvidenceSearchReadModelReadiness;
@@ -1351,6 +1408,60 @@ export function buildEvidenceActorProductImpactReplay(
   };
 }
 
+export function buildEvidenceActorDatasetPromotionPreview(
+  impact: EvidenceActorProductImpactReplay,
+  transaction: EvidencePromotionTransactionPlan
+): EvidenceActorDatasetPromotionPreview {
+  const billableRows = impact.usefulActorRows.freshRowsImprovingActorResult.map((row) =>
+    actorDatasetPromotionRow(row, "evidence_result")
+  );
+  const contextRows = impact.usefulActorRows.restrictedMetadataRows.map((row) =>
+    actorDatasetPromotionRow(row, "metadata_context")
+  );
+  const staleRows = impact.usefulActorRows.staleRowsSuppressed.map((row) =>
+    actorDatasetPromotionRow(row, "stale_suppression", row.staleReason)
+  );
+  const gapRows = impact.usefulActorRows.missingSourceFamilies.map((gap) =>
+    actorDatasetGapRow(impact.handoffId, gap)
+  );
+  const rows = [...billableRows, ...contextRows, ...staleRows, ...gapRows];
+  const inputDocumentIds = uniqueDefined(rows.map((row) => row.documentId));
+  const readyDocumentIds = uniqueDefined(billableRows.map((row) => row.documentId));
+  const heldDocumentIds = uniqueDefined(contextRows.map((row) => row.documentId));
+  const staleSuppressedDocumentIds = uniqueDefined(staleRows.map((row) => row.documentId));
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_promotion_preview.v1",
+    generatedAt: impact.generatedAt,
+    handoffId: impact.handoffId,
+    productSurface: "apify_public_threat_actor_monitor",
+    actorBuild: "0.6.4",
+    sourceImpactReplay: impact.schemaVersion,
+    dryRun: true,
+    willMutateActorDataset: false,
+    latestProof: {
+      runId: "iMQGeezZ8bx7WtlhQ",
+      datasetId: "5PLmkE30luBA5Lbgc"
+    },
+    counts: {
+      billableResultCandidates: billableRows.length,
+      caveatedContextRows: contextRows.length,
+      staleRowsSuppressed: staleRows.length,
+      coverageGapRows: gapRows.length
+    },
+    rows,
+    publicAnswerConsumer: {
+      targetReadModel: "api_intel_search_answer_cache",
+      inputDocumentIds,
+      readyDocumentIds,
+      heldDocumentIds,
+      staleSuppressedDocumentIds
+    },
+    noLeakGuarantees: { ...impact.noLeakGuarantees },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
 class InMemoryEvidenceSearchReadModelRepository implements EvidenceSearchReadModelRepository {
   readonly backend: EvidenceSearchReadModelBackend = "embedded_memory";
   private readonly records = new Map<string, EvidenceSearchReadModelRecord>();
@@ -1731,6 +1842,80 @@ function sourceFamilyNextAction(family: "public_report" | "public_channel" | "ad
   if (family === "advisory") return "replay public advisory/CVE source rows into Actor-supporting evidence";
   if (family === "restricted_metadata") return "import approved Tier 100 dark metadata descriptors as metadata-only rows";
   return "refresh vetted public report captures and suppress stale-only rows";
+}
+
+function actorDatasetPromotionRow(
+  row: EvidenceActorProductImpactRow,
+  rowType: "evidence_result" | "metadata_context" | "stale_suppression",
+  staleReason?: string
+): EvidenceActorDatasetPromotionRow {
+  const contextOnly = rowType === "metadata_context";
+  const stale = rowType === "stale_suppression";
+  return {
+    rowId: stableId("evidence-actor-dataset-row", `${row.documentId}:${rowType}:${staleReason ?? "fresh"}`),
+    rowType,
+    paidRowDecision: stale
+      ? "not_billable_suppressed"
+      : contextOnly
+        ? "not_billable_context"
+        : "billable_result_candidate",
+    paidRowReason: stale
+      ? `suppressed because ${staleReason ?? "stale_row"}`
+      : contextOnly
+        ? "restricted metadata may appear only as caveated defensive context"
+        : "fresh public evidence can render as a paid Actor result row after row formatting",
+    billingGuidance: stale
+      ? "suppress_do_not_bill"
+      : contextOnly
+        ? "context_only_do_not_bill"
+        : "eligible_after_actor_row_render",
+    buyerValueScore: actorDatasetBuyerValue(row, rowType),
+    sourceFamily: row.sourceFamily,
+    documentId: row.documentId,
+    sourceId: row.sourceId,
+    captureId: row.captureId,
+    claimLedgerEntryId: row.claimLedgerEntryId,
+    relationshipId: row.relationshipId,
+    title: row.title,
+    summary: row.evidenceEffect,
+    replayId: row.replayId,
+    freshness: {
+      observedAt: row.observedAt,
+      collectedAt: row.collectedAt,
+      publishedAt: row.publishedAt
+    },
+    confidence: row.confidence,
+    retentionClass: row.retentionClass,
+    noLeak: true
+  };
+}
+
+function actorDatasetGapRow(
+  handoffId: string,
+  gap: EvidenceActorProductImpactReplay["usefulActorRows"]["missingSourceFamilies"][number]
+): EvidenceActorDatasetPromotionRow {
+  return {
+    rowId: stableId("evidence-actor-dataset-gap", `${handoffId}:${gap.family}`),
+    rowType: "coverage_gap",
+    paidRowDecision: "not_billable_coverage_gap",
+    paidRowReason: gap.impact,
+    billingGuidance: "gap_row_do_not_bill",
+    buyerValueScore: 0,
+    sourceFamily: gap.family,
+    title: `Missing ${gap.family.replaceAll("_", " ")} coverage`,
+    summary: gap.nextAction,
+    noLeak: true
+  };
+}
+
+function actorDatasetBuyerValue(row: EvidenceActorProductImpactRow, rowType: "evidence_result" | "metadata_context" | "stale_suppression"): number {
+  if (rowType === "stale_suppression") return 0;
+  const confidence = row.confidence ?? 0.5;
+  const sourceFamilyWeight = row.sourceFamily === "public_report" || row.sourceFamily === "advisory" ? 0.18 : row.sourceFamily === "public_channel" ? 0.12 : 0.08;
+  const publicWeight = rowType === "evidence_result" ? 0.24 : 0;
+  const metadataContextWeight = rowType === "metadata_context" ? 0.14 : 0;
+  const replayWeight = row.replayId ? 0.12 : 0;
+  return Math.round(Math.min(1, confidence * 0.46 + sourceFamilyWeight + publicWeight + metadataContextWeight + replayWeight) * 1000) / 1000;
 }
 
 function tokenize(query: string): string[] {

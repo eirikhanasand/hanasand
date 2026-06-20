@@ -54,6 +54,7 @@ import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/me
 import {
   buildEvidencePromotionTransactionPlan,
   buildEvidencePromotionTransactionAuditReplay,
+  buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorProductImpactReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
@@ -2111,6 +2112,63 @@ describe("evidence storage cutover", () => {
     expect(actorProductSerialized).not.toContain(restrictedRaw);
     expect(actorProductSerialized).not.toContain("tenant/source/private-key");
     expect(actorProductSerialized).not.toContain(".onion");
+    const actorDatasetPromotionPreview = buildEvidenceActorDatasetPromotionPreview(actorProductImpactReplay, promotionTransaction);
+    expect(actorDatasetPromotionPreview).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_promotion_preview.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      actorBuild: "0.6.4",
+      sourceImpactReplay: "ti.evidence_actor_product_impact_replay.v1",
+      dryRun: true,
+      willMutateActorDataset: false,
+      latestProof: {
+        runId: "iMQGeezZ8bx7WtlhQ",
+        datasetId: "5PLmkE30luBA5Lbgc"
+      },
+      publicAnswerConsumer: {
+        targetReadModel: "api_intel_search_answer_cache",
+        inputDocumentIds: actorDatasetPromotionPreview.publicAnswerConsumer.inputDocumentIds,
+        readyDocumentIds: actorDatasetPromotionPreview.publicAnswerConsumer.readyDocumentIds,
+        heldDocumentIds: actorDatasetPromotionPreview.publicAnswerConsumer.heldDocumentIds,
+        staleSuppressedDocumentIds: actorDatasetPromotionPreview.publicAnswerConsumer.staleSuppressedDocumentIds
+      },
+      noLeakGuarantees: {
+        restrictedRowsMetadataOnly: true,
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false,
+        vectorEmbeddingsForRestrictedRows: false
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(typeof actorDatasetPromotionPreview.counts.billableResultCandidates).toBe("number");
+    expect(typeof actorDatasetPromotionPreview.counts.caveatedContextRows).toBe("number");
+    expect(typeof actorDatasetPromotionPreview.counts.staleRowsSuppressed).toBe("number");
+    expect(typeof actorDatasetPromotionPreview.counts.coverageGapRows).toBe("number");
+    expect(actorDatasetPromotionPreview.rows.some((row) => row.paidRowDecision === "billable_result_candidate" && row.billingGuidance === "eligible_after_actor_row_render")).toBe(true);
+    expect(actorDatasetPromotionPreview.rows.some((row) => row.paidRowDecision === "not_billable_context" && row.billingGuidance === "context_only_do_not_bill")).toBe(true);
+    expect(actorDatasetPromotionPreview.rows.some((row) => row.paidRowDecision === "not_billable_suppressed" && row.billingGuidance === "suppress_do_not_bill")).toBe(true);
+    expect(actorDatasetPromotionPreview.rows.some((row) => row.paidRowDecision === "not_billable_coverage_gap" && row.billingGuidance === "gap_row_do_not_bill")).toBe(true);
+    expect(actorDatasetPromotionPreview.counts.billableResultCandidates).toBe(actorDatasetPromotionPreview.rows.filter((row) => row.paidRowDecision === "billable_result_candidate").length);
+    expect(actorDatasetPromotionPreview.counts.caveatedContextRows).toBe(actorDatasetPromotionPreview.rows.filter((row) => row.paidRowDecision === "not_billable_context").length);
+    expect(actorDatasetPromotionPreview.counts.staleRowsSuppressed).toBe(actorDatasetPromotionPreview.rows.filter((row) => row.paidRowDecision === "not_billable_suppressed").length);
+    expect(actorDatasetPromotionPreview.counts.coverageGapRows).toBe(actorDatasetPromotionPreview.rows.filter((row) => row.paidRowDecision === "not_billable_coverage_gap").length);
+    expect(actorDatasetPromotionPreview.counts.caveatedContextRows).toBeGreaterThan(0);
+    expect(actorDatasetPromotionPreview.counts.staleRowsSuppressed).toBeGreaterThan(0);
+    expect(actorDatasetPromotionPreview.counts.coverageGapRows).toBeGreaterThan(0);
+    const actorDatasetSerialized = JSON.stringify(actorDatasetPromotionPreview);
+    expect(actorDatasetSerialized).not.toContain(restrictedRaw);
+    expect(actorDatasetSerialized).not.toContain("tenant/source/private-key");
+    expect(actorDatasetSerialized).not.toContain(".onion");
 
     const publicRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === publicCapture.id);
     const restrictedRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === restrictedCapture.id || row.claim_ledger_entry_id === "claim_read_model_fjord");

@@ -56,6 +56,7 @@ Every agent should prefer work that improves one or more of:
 - Tier 100, 1,000, and 4,000 are not ready for marketplace scale claims; they need source replacement, parser repair, dedupe, and higher freshness/yield sources.
 - Tier 10,000, 20,000, and 60,000 are held until enough real candidates are evaluated. Do not describe these tiers as ready or complete.
 - Revenue target for every source pass: increase payworthy-source count and payworthy rate, then prove lift with daily Actor rows, useful-row rate, fresh-row rate, source-family diversity, and cost per useful row.
+- To promote the current 4,000 evaluated tier, target payworthy-source count is 2,880. Current shortfall is 1,412 additional payworthy sources. The gap closure packet identifies 1,527 repairable candidates, meaning the next measurable pass can theoretically reach 72% by repairing/replacing existing candidates before adding more volume.
 
 ## Agent Focus
 

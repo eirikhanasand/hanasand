@@ -5,6 +5,7 @@ await Bun.spawn(["rm", "-rf", storage], { stdout: "inherit", stderr: "inherit" }
 await Bun.spawn(["mkdir", "-p", `${storage}/key_value_stores/default`], { stdout: "inherit", stderr: "inherit" }).exited;
 await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify({
   queries: ["APT42"],
+  includeDatasets: true,
   maxRowsPerQuery: 10
 }, null, 2));
 
@@ -43,6 +44,7 @@ if (
   || typeof monetization.caveatedRowCount !== "number"
   || typeof monetization.coverageGapOnlyRowCount !== "number"
   || typeof monetization.holdRowCount !== "number"
+  || typeof monetization.suppressedRowCount !== "number"
   || typeof monetization.chargeRecommendedRowCount !== "number"
   || !Array.isArray(monetization.eventNames)
   || !monetization.eventNames.includes("apify-actor-start")
@@ -57,6 +59,7 @@ if (
   || typeof paidRowQuality.included_with_caveat !== "number"
   || typeof paidRowQuality.coverage_gap_only !== "number"
   || typeof paidRowQuality.hold !== "number"
+  || typeof paidRowQuality.suppress !== "number"
   || typeof paidRowQuality.averageBuyerValueScore !== "number"
 ) {
   throw new Error("OUTPUT record must expose paid-row quality counts");
@@ -100,8 +103,11 @@ for (const row of output) {
     throw new Error("Every row must expose coverage status and recommended collection action");
   }
   if (
-    !["sellable", "included_with_caveat", "coverage_gap_only", "hold"].includes(String(row.paidRowDecision))
+    !["sellable", "included_with_caveat", "coverage_gap_only", "hold", "suppress"].includes(String(row.paidRowDecision))
     || typeof row.paidRowReason !== "string"
+    || !Array.isArray(row.paidRowReasonCodes)
+    || row.paidRowReasonCodes.length === 0
+    || !Array.isArray(row.paidRowRemediationActions)
     || typeof row.buyerValueScore !== "number"
     || !["charge", "include_as_context", "do_not_charge_if_metered"].includes(String(row.billingGuidance))
   ) {
@@ -175,6 +181,19 @@ if (coverageGap?.recommendedCollectionAction !== "add_public_channel_sources" ||
 }
 if (coverageGap?.paidRowDecision !== "coverage_gap_only" || coverageGap?.billingGuidance !== "do_not_charge_if_metered") {
   throw new Error("Coverage gap rows must be marked as remediation context rather than sellable findings");
+}
+if (!Array.isArray(coverageGap?.paidRowRemediationActions) || !coverageGap.paidRowRemediationActions.some((action) => action.owner === "agent_04")) {
+  throw new Error("Coverage gap rows must expose owner-specific remediation actions");
+}
+const suppressed = output.find((row) => row.paidRowDecision === "suppress");
+if (!suppressed || suppressed.billingGuidance !== "do_not_charge_if_metered" || suppressed.buyerValueScore !== 0.05) {
+  throw new Error("Capability-only rows must be suppressed and excluded from metered paid findings");
+}
+if (!Array.isArray(suppressed.paidRowReasonCodes) || !suppressed.paidRowReasonCodes.includes("capability_without_evidence")) {
+  throw new Error("Suppressed rows must explain the evidence gap with stable reason codes");
+}
+if (!Array.isArray(suppressed.paidRowRemediationActions) || !suppressed.paidRowRemediationActions.some((action) => action.owner === "agent_05")) {
+  throw new Error("Suppressed rows must route remediation to the source/metadata owner");
 }
 
 console.log(`Smoke passed with ${output.length} safe metadata rows.`);

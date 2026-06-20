@@ -1,13 +1,8 @@
-Status: active_program_bf_pricing_usage_experiment
+Status: ready_for_next_program_bf_task
 
 # Agent 09 Coordination
 
-- Completed Program BE Apify Store and public API conversion: `/v1/contracts.apifyStoreReadiness` now exposes the exact 20-query default input, safe sample output DTOs, public proof DTOs, frontend polling states, no-leak guardrails, and the external payout blocker.
-- Recorded the live marketplace facts in the API contract and docs: published build `0.6.4`, proof run `iMQGeezZ8bx7WtlhQ`, dataset `5PLmkE30luBA5Lbgc`, 10 safe APT42 rows, 4s runtime, about `$0.001` usage, July 4 pricing, `$3.00 / 1,000` result rows, `$0.00005` Actor Start, platform usage included for users, 20% Apify margin, and paid-row decisions in the dataset.
-- Added conversion tracking hooks for store page views, unique users, trial runs, paid runs, repeat users, conversion rate, useful/fresh row rates, no-leak failures, and cost per useful row; unknown Apify analytics stay `null` until copied from the account.
-- Captured the daily 20-group baseline run `rh6D0UInDD6x7GuuD` / dataset `dYbGGA37MRq7pU47O`: 98 safe rows, zero no-leak failures, with thin-row, single-source, stale APT29, no-evidence APT28, and APT42 public-channel coverage gaps still visible.
-- Updated the Apify Actor package metadata, README, changelog, launch checklist, publication gate, contract index, API regression sentinel, and focused API tests.
-- Verification is green for `bun run check`, `bun test`, `bun run check:api-regression`, `bun run check:contract-index`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, `bun run check:apify-publication`, and focused `bun test src/tests/api.test.ts`.
-- Public scraper-native proofs are green for `APT29`, `Random Actor`, and `Made Up Actor`; earlier proof set also covered `Volt Typhoon`, `Scattered Spider`, and `LockBit`.
-- Next Agent 09 lane: continue Program BF pricing/usage experiment telemetry and weekly marketplace optimization. Ingest real Apify views/runs/users/conversion metrics, refresh the daily 20-group proof on build `0.6.4`, track paid-row decision counts, and reduce stale/thin/single-source rows before adding broader product surface.
-- New source monetization metric to expose in public/API readiness: 4,000 evaluated source candidates, 1,468 payworthy, 36.7% payworthy rate, 72% threshold. Store/listing claims must avoid saying 60k or 4k is ready until the value gate passes and live Actor output proves useful/fresh row lift.
+- Added Program BF product-surface telemetry to `/v1/ops/product-slo`: paid-row decision counts, store view/run/user conversion rates, trial-to-paid rate, repeat users, and collector/API ingestion hooks.
+- Kept source monetization readiness visible in API-facing telemetry: 4,000 evaluated source candidates, 1,468 payworthy, 36.7% payworthy rate, 72% threshold, and scale claims held until useful/fresh Actor row lift is proven.
+- Verified current tree with `bun run check`, `bun run check:api-regression`, `bun run check:contract-index`, focused Agent 09 API/ops tests, and full `bun test`.
+- Requesting the next Agent 09 task in the longer Program BF product/API readiness lane.

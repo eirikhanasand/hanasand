@@ -92,6 +92,8 @@ const requiredDatasetFields = [
   "pollingHint",
   "paidRowDecision",
   "paidRowReason",
+  "paidRowReasonCodes",
+  "paidRowRemediationActions",
   "buyerValueScore",
   "billingGuidance",
   "reviewReasons",
@@ -117,6 +119,8 @@ const visibleDatasetFields = [
   "buyerCaveat",
   "paidRowDecision",
   "paidRowReason",
+  "paidRowReasonCodes",
+  "paidRowRemediationActions",
   "buyerValueScore",
   "billingGuidance",
   "expectedTimeToUsefulSignal",
@@ -218,7 +222,7 @@ for (const field of visibleDatasetFields) {
 const rowTypeEnum = enumValues(datasetProperties.rowType);
 if (!rowTypeEnum.includes("coverage_gap")) failures.push("Dataset rowType enum must include coverage_gap");
 const paidRowDecisionEnum = enumValues(datasetProperties.paidRowDecision);
-for (const decision of ["sellable", "included_with_caveat", "coverage_gap_only", "hold"]) {
+for (const decision of ["sellable", "included_with_caveat", "coverage_gap_only", "hold", "suppress"]) {
   if (!paidRowDecisionEnum.includes(decision)) failures.push(`Dataset paidRowDecision enum must include ${decision}`);
 }
 const billingGuidanceEnum = enumValues(datasetProperties.billingGuidance);

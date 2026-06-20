@@ -216,7 +216,7 @@ describe("api v1", () => {
       metadata: { claimClusterId: "claim_product_slo" }
     }));
 
-    const response = await body(await handleApiRequest(api("/v1/ops/product-slo?generatedAt=2026-06-20T12:00:00.000Z&proofMode=inspur&actorBuildId=build_live&actorRunId=run_live&actorDatasetId=ds_live&actorStatus=succeeded&actorQueryCount=20&actorRowCount=98&actorUsefulRowCount=48&actorFreshRowCount=64&actorStaleRowCount=3&actorDefaultWatchlistRun=true&computeCostUsd=0.0023&resultPriceUsdPerThousand=3&actorStartPriceUsd=0.00005&apifyMarginRate=0.2&apifyActorViewCount=6&apifyActorRunCount=2&apifyUniqueUserCount=1&apifyBeneficiaryVerified=false&apifyPayoutMethodReady=false&apifyPricingEffectiveAt=2026-07-04"), { store, frontier }));
+    const response = await body(await handleApiRequest(api("/v1/ops/product-slo?generatedAt=2026-06-20T12:00:00.000Z&proofMode=inspur&actorBuildId=build_live&actorRunId=run_live&actorDatasetId=ds_live&actorStatus=succeeded&actorQueryCount=20&actorRowCount=98&actorUsefulRowCount=48&actorFreshRowCount=64&actorStaleRowCount=3&actorSellableRows=16&actorIncludedWithCaveatRows=32&actorCoverageGapOnlyRows=30&actorHoldRows=20&actorDefaultWatchlistRun=true&computeCostUsd=0.0023&resultPriceUsdPerThousand=3&actorStartPriceUsd=0.00005&apifyMarginRate=0.2&apifyActorViewCount=6&apifyActorRunCount=2&apifyUniqueUserCount=1&apifyTrialRunCount=2&apifyPaidRunCount=1&apifyRepeatUserCount=0&apifyBeneficiaryVerified=false&apifyPayoutMethodReady=false&apifyPricingEffectiveAt=2026-07-04"), { store, frontier }));
 
     expect(response.schemaVersion).toBe("ti.live_product_slo_dashboard.v1");
     expect(response.route).toBe("/v1/ops/product-slo");
@@ -224,21 +224,57 @@ describe("api v1", () => {
     expect((response.metrics as { apiFirstResponseLatencyMs: { p95: number } }).apiFirstResponseLatencyMs.p95).toBe(1000);
     expect((response.metrics as { actorRunSuccessRate: { value: number } }).actorRunSuccessRate.value).toBe(1);
     expect((response.apifyLaunchExperiment as { uniqueUsers: number }).uniqueUsers).toBe(1);
+    expect((response.apifyLaunchExperiment as {
+      paidRowDecisionCounts: { sellable: number; includedWithCaveat: number; coverageGapOnly: number; hold: number; buyerUseful: number };
+      storeViewToRunRate: number;
+      storeViewToUserRate: number;
+      runsPerUser: number;
+      trialToPaidRate: number;
+    })).toMatchObject({
+      paidRowDecisionCounts: { sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, buyerUseful: 48 },
+      storeViewToRunRate: 0.333,
+      storeViewToUserRate: 0.167,
+      runsPerUser: 2,
+      trialToPaidRate: 0.5
+    });
     expect((response.apifyLaunchExperiment as { unknowns: string[] }).unknowns).toContain("grossPpeRevenueUsd");
     expect((response.paidProductEconomics as {
       pricing: { resultPriceUsdPerThousand: number; effectiveAt: string };
-      latestRun: { rowCount: number; usefulRowRate: number; freshRowRate: number; defaultWatchlistRun: boolean };
+      latestRun: { rowCount: number; usefulRowRate: number; freshRowRate: number; defaultWatchlistRun: boolean; paidRowDecisionCounts: { buyerUseful: number } };
       projectedRevenue: { grossRowsUsd: number; netAfterApifyUsd: number; projectedNetAfterUsageUsd: number };
-      marketplace: { beneficiaryStatus: string; payoutMethodStatus: string; blockers: string[] };
+      marketplace: { storeViewToRunRate: number; trialToPaidRate: number; beneficiaryStatus: string; payoutMethodStatus: string; blockers: string[] };
     })).toMatchObject({
       pricing: { resultPriceUsdPerThousand: 3, effectiveAt: "2026-07-04" },
-      latestRun: { rowCount: 98, usefulRowRate: 0.49, freshRowRate: 0.653, defaultWatchlistRun: true },
+      latestRun: { rowCount: 98, usefulRowRate: 0.49, freshRowRate: 0.653, defaultWatchlistRun: true, paidRowDecisionCounts: { buyerUseful: 48 } },
       projectedRevenue: { grossRowsUsd: 0.294, netAfterApifyUsd: 0.235, projectedNetAfterUsageUsd: 0.233 },
       marketplace: {
+        storeViewToRunRate: 0.333,
+        trialToPaidRate: 0.5,
         beneficiaryStatus: "blocked",
         payoutMethodStatus: "blocked",
         blockers: expect.arrayContaining(["apify_beneficiary_verification_not_confirmed", "apify_payout_method_not_confirmed"]) as unknown as string[]
       }
+    });
+    expect((response.sourceMonetizationGate as {
+      evaluatedSourceCandidateCount: number;
+      payworthySourceCount: number;
+      payworthyRate: number;
+      thresholdRate: number;
+      state: string;
+      heldTiers: Array<{ tier: number; reason: string }>;
+      proofRunComparison: { currentProofRunId: string; baselineProofRunId: string };
+      blockers: string[];
+    })).toMatchObject({
+      evaluatedSourceCandidateCount: 4000,
+      payworthySourceCount: 1468,
+      payworthyRate: 0.367,
+      thresholdRate: 0.72,
+      state: "alert",
+      proofRunComparison: {
+        currentProofRunId: "iMQGeezZ8bx7WtlhQ",
+        baselineProofRunId: "rh6D0UInDD6x7GuuD"
+      },
+      blockers: expect.arrayContaining(["source_payworthy_rate_below_72_percent", "replace_low_value_sources_before_marketplace_scale_claim"]) as unknown as string[]
     });
     expect((response.deploymentProof as { actorBuildId: string }).actorBuildId).toBe("build_live");
     expect((response.resourceGuardrails as { scraperTargetRamGb: number }).scraperTargetRamGb).toBe(96);
@@ -4022,6 +4058,57 @@ describe("api v1", () => {
           proofRunId: "iMQGeezZ8bx7WtlhQ",
           proofDatasetId: "5PLmkE30luBA5Lbgc",
           commands: expect.arrayContaining(["bun run measure:search-product"])
+        },
+        noLeakGuarantees: {
+          restrictedRowsMetadataOnly: true,
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false,
+          vectorEmbeddingsForRestrictedRows: false
+        },
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
+      actorDatasetPromotionPreview: {
+        schemaVersion: "ti.evidence_actor_dataset_promotion_preview.v1",
+        productSurface: "apify_public_threat_actor_monitor",
+        actorBuild: "0.6.4",
+        sourceImpactReplay: "ti.evidence_actor_product_impact_replay.v1",
+        dryRun: true,
+        willMutateActorDataset: false,
+        latestProof: {
+          runId: "iMQGeezZ8bx7WtlhQ",
+          datasetId: "5PLmkE30luBA5Lbgc"
+        },
+        counts: {
+          billableResultCandidates: expect.any(Number),
+          caveatedContextRows: expect.any(Number),
+          staleRowsSuppressed: expect.any(Number),
+          coverageGapRows: expect.any(Number)
+        },
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            rowType: expect.any(String),
+            paidRowDecision: expect.any(String),
+            billingGuidance: expect.any(String),
+            noLeak: true
+          })
+        ]),
+        publicAnswerConsumer: {
+          targetReadModel: "api_intel_search_answer_cache",
+          inputDocumentIds: expect.any(Array),
+          readyDocumentIds: expect.any(Array),
+          heldDocumentIds: expect.any(Array),
+          staleSuppressedDocumentIds: expect.any(Array)
         },
         noLeakGuarantees: {
           restrictedRowsMetadataOnly: true,

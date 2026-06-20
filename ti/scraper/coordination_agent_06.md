@@ -130,6 +130,15 @@ Progress update 2026-06-20 17:28 CEST:
 - Product measurement remains green: empty/on-demand source-pack, captured clear-web evidence, and restricted metadata-only leak-claim scenarios all report useful-answer rate 1.0 and expected fact recall 1.0 with no cross-talk.
 - Continue Agent 06 evidence backbone work next with disabled-by-default execution receipt repository interfaces or direct Actor/public-answer consumers for `actorProductImpactReplay` so stale suppression and source-family gaps can drive actual dataset rows.
 
+Progress update 2026-06-20 18:54 CEST:
+- Continued the direct Actor/public-answer consumer path with `ti.evidence_actor_dataset_promotion_preview.v1` on `/v1/evidence/cutover-report.readModelCutover.actorDatasetPromotionPreview`.
+- The preview converts actor product impact replay into explicit dataset/public-answer row decisions: billable result candidates, restricted metadata context-only rows, stale suppressions, coverage-gap rows, buyer-value scores, billing guidance, and proof run/dataset lineage for build `0.6.4`.
+- Restricted/leak rows remain metadata-only and caveated: defensive victim/company/account-count/dataset-size/timestamp/actor-demand facts can support context, while raw bodies, object keys, unsafe URLs, credentials, private material, restricted raw content, actor interaction, embeddings, graph export, and STIX export remain excluded or held.
+- Updated evidence storage docs plus storage/API assertions. Also absorbed shared scheduler/source-atlas/planner drift around `public_channel_probe`, source atlas graph empty rows, and stale duplicate source-atlas helpers so the product proof path stays green.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts src/tests/api.test.ts -t evidence`, `bun test src/tests/sourceSeeds.test.ts src/tests/schedulerProduction.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run measure:search-product`, and full `bun test` passed with 527 tests.
+- Product measurement remains green and now reports useful-answer rate 1.0 and expected fact recall 1.0 for empty/on-demand source-pack, captured clear-web evidence, and restricted metadata-only leak-claim scenarios, with no cross-talk.
+- Continue Agent 06 evidence backbone work next with real Actor dataset row rendering or public-answer cache consumption from `actorDatasetPromotionPreview`, keeping stale suppressions and source-family coverage gaps buyer-visible.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST
