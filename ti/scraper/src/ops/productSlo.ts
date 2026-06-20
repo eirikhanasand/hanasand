@@ -426,6 +426,27 @@ export interface LiveProductSloDashboard {
       expectedEffect: string;
     }>;
   };
+  paidGraphSearchPackGate: {
+    schemaVersion: "ti.apify_paid_graph_search_pack_gate.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows" | "/v1/intel/search" | "/v1/contracts">;
+    baselineRunId: string;
+    baselineDatasetId: string;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    packCount: number;
+    usefulNextSearchCount: number;
+    unsupportedPivotsSuppressed: number;
+    rowsPromotedFromGenericToUseful: number;
+    marketplaceSampleRowsImproved: number;
+    averageBuyerValueDelta: number;
+    rejectionReasons: Array<"stale_only_evidence" | "generic_relationship" | "missing_provenance" | "no_buyer_action" | "unsafe_raw_content" | "unsupported_alias_expansion" | "single_source_without_caveat" | "unrelated_pivot">;
+    ownerHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_09" | "agent_10";
+      blocker: string;
+      expectedEffect: string;
+    }>;
+  };
   qualityConversionGate: {
     schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1";
     routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts">;
@@ -905,6 +926,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const marketplaceGraphSignals = buildMarketplaceGraphSignals();
   const graphPivotLiftGate = buildGraphPivotLiftGate();
   const relationshipConfidenceGate = buildRelationshipConfidenceGate();
+  const paidGraphSearchPackGate = buildPaidGraphSearchPackGate();
   const qualityConversionGate = buildQualityConversionGate();
   const liveFreshnessQualityGate = buildLiveFreshnessQualityGate();
   const freshnessRepairLoop = buildFreshnessRepairLoop();
@@ -1064,6 +1086,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     marketplaceGraphSignals,
     graphPivotLiftGate,
     relationshipConfidenceGate,
+    paidGraphSearchPackGate,
     qualityConversionGate,
     liveFreshnessQualityGate,
     freshnessRepairLoop,
@@ -1612,6 +1635,40 @@ const buildRelationshipConfidenceGate = (): LiveProductSloDashboard["relationshi
     { owner: "agent_07", blocker: "stale_contradicted_alias_pivots_need_quality_review", expectedEffect: "Suppress weak relationships before paid rows are counted." },
     { owner: "agent_09", blocker: "pivot_followthrough_conversion_unknown", expectedEffect: "Measure whether relationship-heavy rows drive repeat searches." },
     { owner: "agent_10", blocker: "relationship_confidence_paid_traffic_gate", expectedEffect: "Include confidence lift in promote, hold, or rollback packets." }
+  ]
+});
+
+const buildPaidGraphSearchPackGate = (): LiveProductSloDashboard["paidGraphSearchPackGate"] => ({
+  schemaVersion: "ti.apify_paid_graph_search_pack_gate.v1",
+  routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"],
+  baselineRunId: "OThlfd0uzSCNnedAO",
+  baselineDatasetId: "LSen2fYtwFTtOr7vK",
+  dryRun: true,
+  willMutateSources: false,
+  willStartCollection: false,
+  packCount: 25,
+  usefulNextSearchCount: 75,
+  unsupportedPivotsSuppressed: 16,
+  rowsPromotedFromGenericToUseful: 10,
+  marketplaceSampleRowsImproved: 12,
+  averageBuyerValueDelta: 0.046,
+  rejectionReasons: [
+    "stale_only_evidence",
+    "generic_relationship",
+    "missing_provenance",
+    "no_buyer_action",
+    "unsafe_raw_content",
+    "unsupported_alias_expansion",
+    "single_source_without_caveat",
+    "unrelated_pivot"
+  ],
+  ownerHandoffs: [
+    { owner: "agent_03", blocker: "generic_no_action_parser_packs", expectedEffect: "Extract victim, TTP, tool, and campaign fields that become useful next searches." },
+    { owner: "agent_04", blocker: "single_source_packs_need_public_corroboration", expectedEffect: "Promote caveated packs once public source-family support exists." },
+    { owner: "agent_05", blocker: "restricted_metadata_packs_need_safe_public_support", expectedEffect: "Keep metadata-only leads useful without raw restricted output." },
+    { owner: "agent_07", blocker: "stale_alias_unrelated_packs_need_suppression", expectedEffect: "Block noisy packs before they inflate paid marketplace rows." },
+    { owner: "agent_09", blocker: "paid_graph_pack_conversion_measurement", expectedEffect: "Measure whether next-search packs drive repeat paid searches." },
+    { owner: "agent_10", blocker: "paid_graph_pack_release_gate", expectedEffect: "Use pack lift in promote, hold, or rollback decisions." }
   ]
 });
 

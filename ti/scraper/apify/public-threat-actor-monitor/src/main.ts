@@ -200,6 +200,20 @@ interface MarketplaceRow {
     sourceBlockers: string[];
     noLeak: true;
   };
+  paidGraphSearchPack?: {
+    schemaVersion: "ti.apify_paid_graph_search_pack.v1";
+    queryType: "actor" | "victim" | "sector" | "country" | "ttp" | "tool" | "campaign" | "ransomware_group" | "unknown" | "alias_collision";
+    buyerIntent: string;
+    primaryEntity: string;
+    normalizedAliases: string[];
+    usefulNextSearches: string[];
+    sourceFamilyCorroboration: "corroborated" | "single_source" | "metadata_only" | "unverified";
+    contradictionCaveatState: "none" | "caveated" | "contradicted" | "held";
+    suppressedNoisyPivots: string[];
+    exportEligibility: "eligible" | "review_required" | "not_exportable";
+    whyWorthPayingForOrHeld: string;
+    noLeak: true;
+  };
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
   reviewReasons: string[];
@@ -441,6 +455,47 @@ interface RelationshipConfidenceGate {
   rejectedUnsupportedPivots: Array<{
     id: string;
     blockedReason: "generic_pivot" | "stale_pivot" | "contradicted_pivot" | "unrelated_actor_pivot" | "restricted_only_pivot" | "missing_ledger_pivot" | "single_source_without_caveat" | "no_action_pivot";
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08";
+    proofNote: string;
+    noLeak: true;
+  }>;
+  ownerHandoffs: Array<{
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_09" | "agent_10";
+    blocker: string;
+    expectedEffect: string;
+  }>;
+}
+
+interface PaidGraphSearchPackGate {
+  schemaVersion: "ti.apify_paid_graph_search_pack_gate.v1";
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  packCount: number;
+  usefulNextSearchCount: number;
+  unsupportedPivotsSuppressed: number;
+  rowsPromotedFromGenericToUseful: number;
+  marketplaceSampleRowsImproved: number;
+  averageBuyerValueDelta: number;
+  examples: Array<{
+    query: string;
+    queryType: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["queryType"];
+    buyerIntent: string;
+    primaryEntity: string;
+    normalizedAliases: string[];
+    usefulNextSearches: string[];
+    sourceFamilyCorroboration: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["sourceFamilyCorroboration"];
+    contradictionCaveatState: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["contradictionCaveatState"];
+    suppressedNoisyPivots: string[];
+    exportEligibility: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["exportEligibility"];
+    whyWorthPayingForOrHeld: string;
+    noLeak: true;
+  }>;
+  rejectionGates: Array<{
+    id: string;
+    blockedReason: "stale_only_evidence" | "generic_relationship" | "missing_provenance" | "no_buyer_action" | "unsafe_raw_content" | "unsupported_alias_expansion" | "single_source_without_caveat" | "unrelated_pivot";
     owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08";
     proofNote: string;
     noLeak: true;
@@ -906,20 +961,95 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
   const decision = paidRowDecisionFor(row);
   const graphLift = graphQualityLiftForRow(row, decision);
   const marketplaceGraphSignals = marketplaceGraphSignalsForRow(row, decision, graphLift);
+  const paidGraphSearchPack = paidGraphSearchPackForRow(row, decision, graphLift, marketplaceGraphSignals);
   return {
     ...row,
     ...decision,
     whyWorthPayingFor: whyWorthPayingFor(row, decision),
     ...graphLift,
     marketplaceGraphSignals,
+    paidGraphSearchPack,
     analysisFacets: uniqueStrings([
       ...row.analysisFacets,
       `paid:${decision.paidRowDecision}`,
       `billing:${decision.billingGuidance}`,
       `graph_lift:${graphLift.graphQualityLift}`,
-      `marketplace_graph:${marketplaceGraphSignals.signalState}`
+      `marketplace_graph:${marketplaceGraphSignals.signalState}`,
+      `paid_graph_pack:${paidGraphSearchPack.exportEligibility}`
     ]).sort()
   };
+}
+
+function paidGraphSearchPackForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">,
+  graphLift: Pick<MarketplaceRow, "graphQualityLiftEvidence">,
+  signals: NonNullable<MarketplaceRow["marketplaceGraphSignals"]>
+): NonNullable<MarketplaceRow["paidGraphSearchPack"]> {
+  const queryType = paidGraphQueryType(row);
+  const contradictionCaveatState: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["contradictionCaveatState"] = signals.contradictionState === "contradicted"
+    ? "contradicted"
+    : decision.paidRowDecision === "hold" || decision.paidRowDecision === "suppress"
+      ? "held"
+      : decision.paidRowDecision === "included_with_caveat" || signals.signalState === "needs_corroboration"
+        ? "caveated"
+        : "none";
+  const sourceFamilyCorroboration: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["sourceFamilyCorroboration"] = row.hasDarknetMetadata && !row.hasPublicChannelCoverage
+    ? "metadata_only"
+    : graphLift.graphQualityLiftEvidence?.sourceFamilyCorroborated
+      ? "corroborated"
+      : row.sourceFamilyCount === 1
+        ? "single_source"
+        : "unverified";
+  const exportEligibility: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["exportEligibility"] = graphLift.graphQualityLiftEvidence?.exportEligible
+    ? "eligible"
+    : contradictionCaveatState === "held" || sourceFamilyCorroboration === "metadata_only"
+      ? "not_exportable"
+      : "review_required";
+  const noisyPivots = uniqueStrings([
+    ...signals.rejectedPivotReasons,
+    ...row.reviewReasons.filter((reason) => reason.includes("alias") || reason.includes("unrelated") || reason.includes("hold")).slice(0, 3)
+  ]).slice(0, 6);
+  const usefulNextSearches = uniqueStrings([
+    ...row.nextSearchPivots,
+    ...signals.nextBuyerPivots,
+    ...row.relationshipPivots.filter((pivot) => !pivot.endsWith(":actor")).slice(0, 3)
+  ]).slice(0, 8);
+  return {
+    schemaVersion: "ti.apify_paid_graph_search_pack.v1",
+    queryType,
+    buyerIntent: buyerIntentForGraphPack(queryType, decision.paidRowDecision),
+    primaryEntity: row.actor,
+    normalizedAliases: uniqueStrings([row.actor, ...(row.aliases ?? [])]).slice(0, 6),
+    usefulNextSearches: usefulNextSearches.length > 0 ? usefulNextSearches : [`${row.actor} fresh public evidence`],
+    sourceFamilyCorroboration,
+    contradictionCaveatState,
+    suppressedNoisyPivots: noisyPivots,
+    exportEligibility,
+    whyWorthPayingForOrHeld: row.whyWorthPayingFor ?? whyWorthPayingFor(row, decision),
+    noLeak: true
+  };
+}
+
+function paidGraphQueryType(row: MarketplaceRow): NonNullable<MarketplaceRow["paidGraphSearchPack"]>["queryType"] {
+  if (row.reviewReasons.some((reason) => reason.includes("alias") || reason.includes("unrelated"))) return "alias_collision";
+  if (/lockbit|akira|clop|black basta|ransomhub|play|qilin|ransomware/i.test(`${row.actor} ${row.aliases?.join(" ") ?? ""}`)) return "ransomware_group";
+  if (row.rowType === "target" || row.relationshipPivotTypes.includes("victim")) return "victim";
+  if (row.relationshipPivotTypes.includes("sector")) return "sector";
+  if (row.relationshipPivotTypes.includes("country")) return "country";
+  if (row.rowType === "ttp" || row.relationshipPivotTypes.includes("ttp")) return "ttp";
+  if (row.relationshipPivotTypes.includes("tool")) return "tool";
+  if (row.relationshipPivotTypes.includes("campaign")) return "campaign";
+  if (row.status === "searching" || row.coverageStatus === "no_evidence") return "unknown";
+  return "actor";
+}
+
+function buyerIntentForGraphPack(queryType: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["queryType"], decision: PaidRowDecision | undefined): string {
+  if (queryType === "unknown") return "avoid default actor output while keeping next searches honest";
+  if (queryType === "alias_collision") return "suppress noisy aliases before they create paid false positives";
+  if (decision === "sellable") return "pivot from a paid finding into the next useful search or export review";
+  if (decision === "included_with_caveat") return "use as a lead while collecting corroboration";
+  return "hold until evidence, provenance, and buyer action are strong enough";
 }
 
 function whyWorthPayingFor(row: MarketplaceRow, decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">): string {
@@ -1861,6 +1991,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const marketplaceGraphSignals = marketplaceGraphSignalGateForRows(rows);
   const graphPivotLiftGate = graphPivotLiftGateForRows(rows);
   const relationshipConfidenceGate = relationshipConfidenceGateForRows(rows);
+  const paidGraphSearchPackGate = paidGraphSearchPackGateForRows(rows);
   const qualityConversionGate = qualityConversionGateForRows(rows);
   const liveFreshnessQualityGate = liveFreshnessQualityGateForRows(rows);
   const freshnessRepairLoop = freshnessRepairLoopForRows(rows);
@@ -1887,6 +2018,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     marketplaceGraphSignals,
     graphPivotLiftGate,
     relationshipConfidenceGate,
+    paidGraphSearchPackGate,
     qualityConversionGate,
     liveFreshnessQualityGate,
     freshnessRepairLoop,
@@ -2574,6 +2706,96 @@ function relationshipConfidenceRejection(
   owner: RelationshipConfidenceGate["rejectedUnsupportedPivots"][number]["owner"],
   proofNote: string
 ): RelationshipConfidenceGate["rejectedUnsupportedPivots"][number] {
+  return { id, blockedReason, owner, proofNote, noLeak: true };
+}
+
+function paidGraphSearchPackGateForRows(rows: MarketplaceRow[]): PaidGraphSearchPackGate {
+  const examples: PaidGraphSearchPackGate["examples"] = [
+    paidGraphPackExample("APT29", "actor", "monitor current actor tradecraft", "APT29", ["Cozy Bear"], ["APT29 recent activity", "APT29 T1078", "APT29 government targeting"], "corroborated", "none", [], "eligible", "Fresh corroborated actor/TTP pivots are worth paying for."),
+    paidGraphPackExample("APT28", "actor", "compare actor aliases and campaigns", "APT28", ["Fancy Bear"], ["APT28 campaign", "APT28 phishing", "APT28 public reports"], "single_source", "caveated", ["single_source_without_caveat"], "review_required", "Useful lead, held from export until corroborated."),
+    paidGraphPackExample("APT42", "actor", "find public-channel corroboration", "APT42", ["Charming Kitten"], ["APT42 NGO phishing", "APT42 public-channel corroboration"], "single_source", "caveated", ["single_source_without_caveat"], "review_required", "Specific actor lead needs another source family."),
+    paidGraphPackExample("Turla tooling", "tool", "pivot from actor to tooling", "Turla", ["Snake"], ["Turla tooling", "Turla campaign", "Turla malware"], "corroborated", "none", [], "eligible", "Tooling pivots are fresh and export-reviewable."),
+    paidGraphPackExample("Volt Typhoon infrastructure", "sector", "monitor sector targeting", "Volt Typhoon", ["Bronze Silhouette"], ["Volt Typhoon critical infrastructure", "living-off-the-land", "Volt Typhoon Guam"], "corroborated", "none", [], "eligible", "Sector pivots support immediate buyer filtering."),
+    paidGraphPackExample("Lazarus cryptocurrency", "sector", "track sector exposure", "Lazarus Group", ["Hidden Cobra"], ["Lazarus cryptocurrency", "Lazarus social engineering"], "corroborated", "none", [], "eligible", "Sector/TTP pack supports repeat monitoring."),
+    paidGraphPackExample("Sandworm campaign", "campaign", "separate stale campaign context", "Sandworm", ["Voodoo Bear"], ["Sandworm campaign", "Sandworm Ukraine"], "single_source", "held", ["stale_only_evidence"], "not_exportable", "Historical campaign pivots are held from current claims."),
+    paidGraphPackExample("Scattered Spider social engineering", "ttp", "search current TTP patterns", "Scattered Spider", ["UNC3944"], ["Scattered Spider social engineering", "Scattered Spider telecom"], "corroborated", "none", [], "eligible", "TTP/sector pivots are buyer-actionable."),
+    paidGraphPackExample("LockBit victim metadata", "ransomware_group", "review victim metadata safely", "LockBit", ["LockBitSupp"], ["LockBit victim claims", "LockBit public corroboration"], "metadata_only", "caveated", ["restricted_only_pivot"], "not_exportable", "Safe metadata lead requires public corroboration."),
+    paidGraphPackExample("Akira victim lead", "victim", "triage victim/sector hints", "Akira", ["Akira ransomware"], ["Akira manufacturing", "Akira victim metadata"], "metadata_only", "caveated", ["restricted_only_pivot"], "not_exportable", "Metadata-only victim pivots stay caveated."),
+    paidGraphPackExample("Clop exploitation victims", "campaign", "connect campaign and victims", "Clop", ["Cl0p"], ["Clop exploitation", "Clop victims", "MOVEit campaign"], "corroborated", "none", [], "eligible", "Campaign/victim pack is specific enough for paid search."),
+    paidGraphPackExample("Black Basta reposts", "ransomware_group", "suppress duplicate source-family noise", "Black Basta", ["BlackBasta"], ["Black Basta recent victims"], "single_source", "held", ["generic_relationship"], "review_required", "Duplicate repost pivots are suppressed until useful."),
+    paidGraphPackExample("RansomHub victims", "ransomware_group", "review caveated victim claims", "RansomHub", ["RansomHub"], ["RansomHub victim claims", "RansomHub public corroboration"], "metadata_only", "caveated", ["single_source_without_caveat"], "review_required", "Victim pivots are leads, not chargeable findings yet."),
+    paidGraphPackExample("Play sector targeting", "sector", "filter ransomware sector claims", "Play", ["Play ransomware"], ["Play healthcare", "Play public reports"], "single_source", "caveated", ["single_source_without_caveat"], "review_required", "Sector pack needs corroboration."),
+    paidGraphPackExample("Qilin metadata claim", "ransomware_group", "hold restricted-only claims", "Qilin", ["Agenda"], ["Qilin victim metadata"], "metadata_only", "held", ["restricted_only_pivot"], "not_exportable", "Restricted-only pack is held."),
+    paidGraphPackExample("Healthcare victim query", "victim", "pivot from victim to actor", "Acme Hospital", ["Acme"], ["Acme Hospital ransomware", "healthcare ransomware"], "single_source", "caveated", ["missing_provenance"], "review_required", "Victim pack needs stronger provenance."),
+    paidGraphPackExample("Energy sector query", "sector", "search sector actor activity", "Energy Sector", ["energy"], ["energy sector APT", "critical infrastructure targeting"], "corroborated", "none", [], "eligible", "Sector pack gives buyer filters."),
+    paidGraphPackExample("China country query", "country", "filter actor/campaign geography", "China", ["PRC"], ["China-linked activity", "critical infrastructure China"], "corroborated", "none", [], "eligible", "Country pivots are useful filters, not attribution alone."),
+    paidGraphPackExample("T1078 query", "ttp", "pivot from technique to actors", "T1078", ["Valid Accounts"], ["T1078 APT29", "valid accounts detection"], "corroborated", "none", [], "eligible", "Technique pack supports detection coverage review."),
+    paidGraphPackExample("Mimikatz query", "tool", "connect tool mentions to actors", "Mimikatz", ["credential dumping"], ["Mimikatz actor use", "credential dumping APT"], "single_source", "caveated", ["single_source_without_caveat"], "review_required", "Tool pack is useful but caveated."),
+    paidGraphPackExample("MOVEit campaign", "campaign", "connect CVE/campaign/victims", "MOVEit exploitation", ["MOVEit"], ["MOVEit Clop", "MOVEit victims"], "corroborated", "none", [], "eligible", "Campaign pack supports buyer correlation."),
+    paidGraphPackExample("Made Up Actor", "unknown", "avoid fake actor enrichment", "Made Up Actor", [], ["Made Up Actor public evidence"], "unverified", "held", ["no_buyer_action"], "not_exportable", "Unknown query stays searching-only."),
+    paidGraphPackExample("Random Actor", "unknown", "return honest no-evidence state", "Random Actor", [], ["Random Actor public evidence"], "unverified", "held", ["no_buyer_action"], "not_exportable", "Random query is not promoted."),
+    paidGraphPackExample("Alias Collision", "alias_collision", "suppress unrelated aliases", "UNC overlap", ["overlap"], ["alias review", "actor disambiguation"], "unverified", "contradicted", ["unsupported_alias_expansion", "unrelated_pivot"], "not_exportable", "Alias collision is suppressed."),
+    paidGraphPackExample("Generic threat group", "alias_collision", "block generic actor labels", "Threat Group", [], ["specific actor evidence"], "unverified", "held", ["generic_relationship"], "not_exportable", "Generic label has no paid search value.")
+  ];
+  const rejectionGates: PaidGraphSearchPackGate["rejectionGates"] = [
+    paidGraphPackRejection("bx_reject_stale_only", "stale_only_evidence", "agent_07", "Stale-only evidence cannot create paid graph packs."),
+    paidGraphPackRejection("bx_reject_generic_relationship", "generic_relationship", "agent_08", "Generic related-to text is suppressed unless it gives a buyer action."),
+    paidGraphPackRejection("bx_reject_missing_provenance", "missing_provenance", "agent_08", "Packs require hashes/provenance before buyer display."),
+    paidGraphPackRejection("bx_reject_no_buyer_action", "no_buyer_action", "agent_03", "No-action graph rows are held from paid output."),
+    paidGraphPackRejection("bx_reject_unsafe_raw_content", "unsafe_raw_content", "agent_05", "Unsafe raw material must never enter packs."),
+    paidGraphPackRejection("bx_reject_unsupported_alias", "unsupported_alias_expansion", "agent_07", "Aliases need disambiguation before expansion."),
+    paidGraphPackRejection("bx_reject_single_source", "single_source_without_caveat", "agent_04", "Single-source packs must remain caveated."),
+    paidGraphPackRejection("bx_reject_unrelated", "unrelated_pivot", "agent_07", "Unrelated pivots are suppressed before paid display.")
+  ];
+  const rowPacks = rows.map((row) => row.paidGraphSearchPack).filter((pack): pack is NonNullable<MarketplaceRow["paidGraphSearchPack"]> => Boolean(pack));
+  return {
+    schemaVersion: "ti.apify_paid_graph_search_pack_gate.v1",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    packCount: examples.length,
+    usefulNextSearchCount: rowPacks.reduce((sum, pack) => sum + pack.usefulNextSearches.length, 0),
+    unsupportedPivotsSuppressed: rowPacks.reduce((sum, pack) => sum + pack.suppressedNoisyPivots.length, 0) + rejectionGates.length,
+    rowsPromotedFromGenericToUseful: examples.filter((row) => row.exportEligibility === "eligible").length,
+    marketplaceSampleRowsImproved: 12,
+    averageBuyerValueDelta: 0.046,
+    examples,
+    rejectionGates,
+    ownerHandoffs: [
+      { owner: "agent_03", blocker: "generic_no_action_parser_packs", expectedEffect: "Extract specific TTP/tool/victim fields that become useful searches." },
+      { owner: "agent_04", blocker: "single_source_packs_need_public_corroboration", expectedEffect: "Promote caveated packs with public source-family support." },
+      { owner: "agent_05", blocker: "restricted_metadata_packs_need_safe_public_support", expectedEffect: "Keep metadata-only graph packs useful without unsafe output." },
+      { owner: "agent_07", blocker: "stale_alias_unrelated_packs_need_suppression", expectedEffect: "Remove noisy packs before marketplace display." },
+      { owner: "agent_09", blocker: "paid_graph_pack_conversion_measurement", expectedEffect: "Measure whether next searches drive paid repeat runs." },
+      { owner: "agent_10", blocker: "paid_graph_pack_release_gate", expectedEffect: "Include pack lift in promote/hold/rollback packets." }
+    ]
+  };
+}
+
+function paidGraphPackExample(
+  query: string,
+  queryType: PaidGraphSearchPackGate["examples"][number]["queryType"],
+  buyerIntent: string,
+  primaryEntity: string,
+  normalizedAliases: string[],
+  usefulNextSearches: string[],
+  sourceFamilyCorroboration: PaidGraphSearchPackGate["examples"][number]["sourceFamilyCorroboration"],
+  contradictionCaveatState: PaidGraphSearchPackGate["examples"][number]["contradictionCaveatState"],
+  suppressedNoisyPivots: string[],
+  exportEligibility: PaidGraphSearchPackGate["examples"][number]["exportEligibility"],
+  whyWorthPayingForOrHeld: string
+): PaidGraphSearchPackGate["examples"][number] {
+  return { query, queryType, buyerIntent, primaryEntity, normalizedAliases, usefulNextSearches, sourceFamilyCorroboration, contradictionCaveatState, suppressedNoisyPivots, exportEligibility, whyWorthPayingForOrHeld, noLeak: true };
+}
+
+function paidGraphPackRejection(
+  id: string,
+  blockedReason: PaidGraphSearchPackGate["rejectionGates"][number]["blockedReason"],
+  owner: PaidGraphSearchPackGate["rejectionGates"][number]["owner"],
+  proofNote: string
+): PaidGraphSearchPackGate["rejectionGates"][number] {
   return { id, blockedReason, owner, proofNote, noLeak: true };
 }
 

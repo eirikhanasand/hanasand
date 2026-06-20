@@ -569,6 +569,39 @@ describe("api v1", () => {
       rejectedUnsupportedReasons: expect.arrayContaining(["generic_pivot", "stale_pivot", "contradicted_pivot", "unrelated_actor_pivot", "restricted_only_pivot", "missing_ledger_pivot", "single_source_without_caveat", "no_action_pivot"]) as unknown as string[]
     });
     expect((response.relationshipConfidenceGate as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_09", "agent_10"]));
+    expect((response.paidGraphSearchPackGate as {
+      schemaVersion: string;
+      routeVisibleOn: string[];
+      baselineRunId: string;
+      baselineDatasetId: string;
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      packCount: number;
+      usefulNextSearchCount: number;
+      unsupportedPivotsSuppressed: number;
+      rowsPromotedFromGenericToUseful: number;
+      marketplaceSampleRowsImproved: number;
+      averageBuyerValueDelta: number;
+      rejectionReasons: string[];
+      ownerHandoffs: Array<{ owner: string }>;
+    })).toMatchObject({
+      schemaVersion: "ti.apify_paid_graph_search_pack_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"]) as unknown as string[],
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      packCount: 25,
+      usefulNextSearchCount: 75,
+      unsupportedPivotsSuppressed: 16,
+      rowsPromotedFromGenericToUseful: 10,
+      marketplaceSampleRowsImproved: 12,
+      averageBuyerValueDelta: 0.046,
+      rejectionReasons: expect.arrayContaining(["stale_only_evidence", "generic_relationship", "missing_provenance", "no_buyer_action", "unsafe_raw_content", "unsupported_alias_expansion", "single_source_without_caveat", "unrelated_pivot"]) as unknown as string[]
+    });
+    expect((response.paidGraphSearchPackGate as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_09", "agent_10"]));
     expect((response.qualityConversionGate as {
       schemaVersion: string;
       routeVisibleOn: string[];

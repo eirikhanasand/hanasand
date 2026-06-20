@@ -248,6 +248,33 @@ const relationshipConfidenceRejectedReasons = (relationshipConfidenceGate.reject
 for (const requiredReason of ["generic_pivot", "stale_pivot", "contradicted_pivot", "unrelated_actor_pivot", "restricted_only_pivot", "missing_ledger_pivot", "single_source_without_caveat", "no_action_pivot"]) {
   if (!relationshipConfidenceRejectedReasons.includes(requiredReason)) throw new Error(`Program BW relationship confidence gate must reject ${requiredReason}`);
 }
+const paidGraphSearchPackGate = outputRecord.paidGraphSearchPackGate as Record<string, unknown> | undefined;
+if (
+  !paidGraphSearchPackGate
+  || paidGraphSearchPackGate.schemaVersion !== "ti.apify_paid_graph_search_pack_gate.v1"
+  || paidGraphSearchPackGate.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || paidGraphSearchPackGate.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || paidGraphSearchPackGate.dryRun !== true
+  || paidGraphSearchPackGate.willMutateSources !== false
+  || paidGraphSearchPackGate.willStartCollection !== false
+  || Number(paidGraphSearchPackGate.packCount) < 25
+  || Number(paidGraphSearchPackGate.usefulNextSearchCount) <= 0
+  || Number(paidGraphSearchPackGate.unsupportedPivotsSuppressed) < 8
+  || Number(paidGraphSearchPackGate.rowsPromotedFromGenericToUseful) < 10
+  || Number(paidGraphSearchPackGate.marketplaceSampleRowsImproved) < 10
+  || Number(paidGraphSearchPackGate.averageBuyerValueDelta) <= 0
+  || !Array.isArray(paidGraphSearchPackGate.examples)
+  || paidGraphSearchPackGate.examples.length < 25
+  || !Array.isArray(paidGraphSearchPackGate.rejectionGates)
+  || paidGraphSearchPackGate.rejectionGates.length < 8
+  || !Array.isArray(paidGraphSearchPackGate.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BX paid graph search pack gate");
+}
+const paidGraphPackRejectionReasons = (paidGraphSearchPackGate.rejectionGates as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["stale_only_evidence", "generic_relationship", "missing_provenance", "no_buyer_action", "unsafe_raw_content", "unsupported_alias_expansion", "single_source_without_caveat", "unrelated_pivot"]) {
+  if (!paidGraphPackRejectionReasons.includes(requiredReason)) throw new Error(`Program BX paid graph search packs must reject ${requiredReason}`);
+}
 const qualityConversionGate = outputRecord.qualityConversionGate as Record<string, unknown> | undefined;
 if (
   !qualityConversionGate
@@ -641,6 +668,31 @@ if (activity?.claimType !== "campaign" || activity?.publisherCount !== 1) {
 }
 if (!Array.isArray(activity?.reviewReasons) || !activity.reviewReasons.includes("review:single_source")) {
   throw new Error("Activity rows must explain single-source review state");
+}
+const allowedPaidGraphPackQueryTypes = new Set(["actor", "victim", "sector", "country", "ttp", "tool", "campaign", "ransomware_group", "unknown", "alias_collision"]);
+const allowedPaidGraphPackCorroboration = new Set(["corroborated", "single_source", "metadata_only", "unverified"]);
+const allowedPaidGraphPackCaveats = new Set(["none", "caveated", "contradicted", "held"]);
+const allowedPaidGraphPackExport = new Set(["eligible", "review_required", "not_exportable"]);
+for (const row of output) {
+  const pack = row.paidGraphSearchPack as Record<string, unknown> | undefined;
+  if (
+    !pack
+    || pack.schemaVersion !== "ti.apify_paid_graph_search_pack.v1"
+    || !allowedPaidGraphPackQueryTypes.has(String(pack.queryType))
+    || typeof pack.buyerIntent !== "string"
+    || typeof pack.primaryEntity !== "string"
+    || !Array.isArray(pack.normalizedAliases)
+    || !Array.isArray(pack.usefulNextSearches)
+    || pack.usefulNextSearches.length < 1
+    || !allowedPaidGraphPackCorroboration.has(String(pack.sourceFamilyCorroboration))
+    || !allowedPaidGraphPackCaveats.has(String(pack.contradictionCaveatState))
+    || !Array.isArray(pack.suppressedNoisyPivots)
+    || !allowedPaidGraphPackExport.has(String(pack.exportEligibility))
+    || typeof pack.whyWorthPayingForOrHeld !== "string"
+    || pack.noLeak !== true
+  ) {
+    throw new Error("Every marketplace row must expose a buyer-useful no-leak paid graph search pack");
+  }
 }
 if (activity?.paidRowDecision !== "included_with_caveat" || activity?.billingGuidance !== "include_as_context") {
   throw new Error("Single-source activity rows must be caveated instead of treated as fully sellable");
