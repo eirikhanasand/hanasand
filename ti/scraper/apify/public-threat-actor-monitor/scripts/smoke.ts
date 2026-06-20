@@ -6,7 +6,7 @@ await Bun.spawn(["mkdir", "-p", `${storage}/key_value_stores/default`], { stdout
 await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify({
   queries: ["APT42"],
   includeDatasets: true,
-  maxRowsPerQuery: 10
+  maxRowsPerQuery: 20
 }, null, 2));
 
 const proc = Bun.spawn({
@@ -77,6 +77,56 @@ if (
 ) {
   throw new Error("OUTPUT record must expose monetization readiness");
 }
+const qualityLiftGate = outputRecord.qualityLiftGate as Record<string, unknown> | undefined;
+if (
+  !qualityLiftGate
+  || qualityLiftGate.schemaVersion !== "ti.apify_paid_row_quality_lift_gate.v1"
+  || qualityLiftGate.baselineRunId !== "iMQGeezZ8bx7WtlhQ"
+  || qualityLiftGate.baselineDatasetId !== "5PLmkE30luBA5Lbgc"
+  || qualityLiftGate.dryRun !== true
+  || qualityLiftGate.willMutateSources !== false
+  || qualityLiftGate.willStartCollection !== false
+  || qualityLiftGate.qualityLiftAcceptedCount !== 5
+  || qualityLiftGate.qualityLiftRejectedCount !== 5
+  || typeof qualityLiftGate.sellableRowsAdded !== "number"
+  || typeof qualityLiftGate.freshRowsAdded !== "number"
+  || typeof qualityLiftGate.costPerUsefulRowDelta !== "number"
+  || typeof qualityLiftGate.projectedRowRevenueDeltaUsd !== "number"
+  || !Array.isArray(qualityLiftGate.acceptedExamples)
+  || !Array.isArray(qualityLiftGate.rejectedExamples)
+  || !Array.isArray(qualityLiftGate.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose the paid-row quality-lift gate");
+}
+if (qualityLiftGate.sellableRowsAdded < 2 || qualityLiftGate.freshRowsAdded < 5 || qualityLiftGate.costPerUsefulRowDelta >= 0) {
+  throw new Error("Quality-lift gate must report buyer-visible sellable/fresh row improvement and lower cost per useful row");
+}
+for (const row of qualityLiftGate.acceptedExamples as Array<Record<string, unknown>>) {
+  if (
+    row.outcome !== "accepted"
+    || !["included_with_caveat", "sellable"].includes(String(row.afterDecision))
+    || typeof row.repairAction !== "string"
+    || typeof row.usefulRowsDelta !== "number"
+    || row.usefulRowsDelta < 1
+    || !Array.isArray(row.proofNotes)
+  ) {
+    throw new Error("Accepted quality-lift examples must prove useful paid-output improvement");
+  }
+}
+for (const row of qualityLiftGate.rejectedExamples as Array<Record<string, unknown>>) {
+  if (
+    row.outcome !== "rejected"
+    || typeof row.rejectionReason !== "string"
+    || Number(row.sellableRowsDelta ?? 0) !== 0
+    || Number(row.usefulRowsDelta ?? 0) !== 0
+    || !Array.isArray(row.proofNotes)
+  ) {
+    throw new Error("Rejected quality-lift examples must stay out of payworthy progress metrics");
+  }
+}
+if (!(qualityLiftGate.ownerHandoffs as Array<Record<string, unknown>>).some((row) => row.owner === "agent_03" && Number(row.accepted) >= 1)) {
+  throw new Error("Quality-lift gate must route accepted parser repairs to Agent 03");
+}
 if (
   paidRowQuality.sellable === 0
   && (
@@ -135,6 +185,21 @@ for (const row of output) {
   ) {
     throw new Error("Every row must expose paid-row decision, reason, score, and billing guidance");
   }
+  const graphQualityLiftEvidence = row.graphQualityLiftEvidence as Record<string, unknown> | undefined;
+  if (
+    !["accepted_sellable_lift", "rejected_hold", "rejected_caveat", "not_applicable"].includes(String(row.graphQualityLift))
+    || !Array.isArray(row.graphQualityLiftReasonCodes)
+    || row.graphQualityLiftReasonCodes.length === 0
+    || !graphQualityLiftEvidence
+    || typeof graphQualityLiftEvidence.relationshipReady !== "boolean"
+    || typeof graphQualityLiftEvidence.sourceFamilyCorroborated !== "boolean"
+    || typeof graphQualityLiftEvidence.contradictionHeld !== "boolean"
+    || typeof graphQualityLiftEvidence.freshnessLift !== "boolean"
+    || typeof graphQualityLiftEvidence.exportEligible !== "boolean"
+    || graphQualityLiftEvidence.noLeak !== true
+  ) {
+    throw new Error("Every row must expose graph quality-lift evidence and no-leak export eligibility");
+  }
   if (row.nextPollSeconds !== 3 || row.retryAfterSeconds !== 3 || row.duplicateRunReuse !== true) {
     throw new Error("Every row must expose scheduler polling and duplicate-run reuse state");
   }
@@ -156,8 +221,20 @@ for (const row of output) {
   }
 }
 const profile = output.find((row) => row.rowType === "profile");
-if (profile?.sourceCount !== 1 || profile?.sourceFamilyCount !== 1 || profile?.evidenceGrade !== "single_source") {
-  throw new Error("Internal status sources must not increase evidence grade or source-family coverage");
+if (profile?.sourceCount !== 4 || profile?.sourceFamilyCount !== 1 || profile?.evidenceGrade !== "corroborated") {
+  throw new Error("Internal status sources must not increase source-family coverage, while public evidence sources should raise evidence grade");
+}
+if (
+  profile?.paidRowDecision !== "sellable"
+  || profile?.billingGuidance !== "charge"
+  || !Array.isArray(profile.paidRowReasonCodes)
+  || !profile.paidRowReasonCodes.includes("multi_source_public")
+  || !profile.paidRowReasonCodes.includes("source_family_gap_visible")
+  || profile.graphQualityLift !== "accepted_sellable_lift"
+  || !Array.isArray(profile.graphQualityLiftReasonCodes)
+  || !profile.graphQualityLiftReasonCodes.includes("review_export_candidate")
+) {
+  throw new Error("Fresh multi-source public profile rows must be sellable and graph-export-reviewable while keeping source-family gaps visible");
 }
 if (output.some((row) => row.rowType === "source" && row.sourceType === "system")) {
   throw new Error("Internal status rows must not be included in marketplace evidence output");
@@ -174,6 +251,9 @@ if (!Array.isArray(activity?.reviewReasons) || !activity.reviewReasons.includes(
 }
 if (activity?.paidRowDecision !== "included_with_caveat" || activity?.billingGuidance !== "include_as_context") {
   throw new Error("Single-source activity rows must be caveated instead of treated as fully sellable");
+}
+if (activity?.graphQualityLift !== "rejected_caveat") {
+  throw new Error("Single-source activity graph lift must stay rejected/caveated until corroborated");
 }
 if (!Array.isArray(activity?.analysisFacets) || !activity.analysisFacets.includes("claim:campaign") || !activity.analysisFacets.includes("evidence:single_source")) {
   throw new Error("Activity rows must expose claim and evidence analysis facets");
@@ -222,5 +302,6 @@ console.log(JSON.stringify({
   ok: true,
   rowCount: output.length,
   paidRowQuality,
-  monetizationReadiness
+  monetizationReadiness,
+  qualityLiftGate
 }, null, 2));

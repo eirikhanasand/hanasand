@@ -451,11 +451,84 @@ describe("darkweb metadata index contracts", () => {
       requireNoLeakProof: true,
       requireApifySearchLift: true
     });
+    expect(status.tier1000Readiness).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier1000_readiness.v1",
+      owner: "Agent 05",
+      tier: "tier_1000",
+      mode: "real_metadata_readiness_path",
+      targetRecordCount: 1000,
+      evaluatedRecordCount: 100,
+      safety: {
+        rawUnsafeUrlsExposed: false,
+        stolenFilesDownloaded: false,
+        credentialsRetrieved: false,
+        payloadsFollowed: false,
+        privateAuthCaptchaAccess: false,
+        actorInteraction: false
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(status.tier1000Readiness.productQualifiedRecordCount).toBeGreaterThan(0);
+    expect(status.tier1000Readiness.rejectedLowValueRecordCount).toBeGreaterThan(0);
+    expect(status.tier1000Readiness.sourceFamilies.map((family) => family.family)).toEqual(expect.arrayContaining([
+      "public_report",
+      "analyst_import",
+      "directory_metadata",
+      "public_tracker_reference",
+      "approved_seed",
+      "safe_search_result"
+    ]));
+    expect(status.tier1000Readiness.sourceFamilies.every((family) =>
+      family.evaluatedCount >= 0 &&
+      family.productQualifiedCount >= 0 &&
+      family.needsRefreshCount >= 0 &&
+      family.legalHoldCount >= 0 &&
+      family.blockedUnsafeCount >= 0 &&
+      family.averageBuyerValue >= 0 &&
+      family.refreshCadenceMinutes > 0
+    )).toBe(true);
+    expect(status.tier1000Readiness.freshness).toMatchObject({
+      maxAllowedStaleHours: 72,
+      customerFreshnessLabel: expect.stringMatching(/fresh_enough_for_monitoring|needs_refresh_before_paid_claim/)
+    });
+    expect(status.tier1000Readiness.searchReadiness).toMatchObject({
+      safeSummaryCoverage: 1,
+      categoryCoverageCount: 12,
+      sourceFamilyCoverageCount: 6
+    });
+    expect(status.tier1000Readiness.searchReadiness.actorHintCoverage).toBeGreaterThanOrEqual(0.25);
+    expect(status.tier1000Readiness.searchReadiness.apifyReadyRecordIds.length).toBeGreaterThan(0);
+    expect(status.tier1000Readiness.searchReadiness.searchBoostQueries).toEqual(expect.arrayContaining(["akira", "apt29", "apt42", "lockbit"]));
+    expect(status.tier1000Readiness.importGate).toMatchObject({
+      accepted: status.tier1000Readiness.productQualifiedRecordCount,
+      blockedUnsafe: status.tier100Product.importOutcome.blocked,
+      staleOrDead: status.tier100Product.importOutcome.staleOrDead
+    });
+    expect(status.tier1000Readiness.importGate.acceptanceRate).toBeGreaterThan(0);
+    expect(status.tier1000Readiness.importGate.duplicateRate).toBeGreaterThan(0);
+    expect(status.tier1000Readiness.tier4000Planning).toMatchObject({
+      targetTier: "tier_4000",
+      minProductQualifiedRecords: 720,
+      minFreshnessCurrentRate: 0.55,
+      maxBlockedUnsafeRate: 0.18,
+      requireNoLeakProof: true,
+      requireActorDatasetLift: true
+    });
     expect(contract.tier100Product).toMatchObject({
       schemaVersion: "ti.darkweb_index_tier100_product.v1",
       tier: "tier_100",
       recordGoal: 100,
       advancementTarget: "tier_1000",
+      requireNoLeakProof: true
+    });
+    expect(contract.tier1000Readiness).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier1000_readiness.v1",
+      tier: "tier_1000",
+      targetRecordCount: 1000,
+      routeFields: ["status.tier1000Readiness", "darkwebIndex.productHandoff"],
+      advancementTarget: "tier_4000",
       requireNoLeakProof: true
     });
     expect(status.sourceIngestReadiness.sources).toHaveLength(6);
@@ -555,6 +628,7 @@ describe("darkweb metadata index contracts", () => {
       },
       productHandoff: {
         tier: "tier_100",
+        nextTier: "tier_1000",
         publicSearchUse: "corroborating_metadata_context_only",
         warnings: ["metadata_only", "review_required", "no_raw_locations"]
       }
@@ -563,7 +637,10 @@ describe("darkweb metadata index contracts", () => {
     expect(secondPage.records.map((record) => record.id)).not.toEqual(firstPage.records.map((record) => record.id));
     expect(firstPage.records.every((record) => record.actorHints.includes("akira") && record.network === "tor")).toBe(true);
     expect(firstPage.productHandoff.apifyReadyFields).toEqual(["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"]);
+    expect(firstPage.productHandoff.buyerValueFields).toEqual(["buyerValueScore", "whyItMatters", "freshness", "sourceFamily", "provenanceHash"]);
+    expect(firstPage.productHandoff.freshnessFields).toEqual(["lastSeen", "lastChecked", "liveness", "refreshCadenceMinutes"]);
     expect(firstPage.productHandoff.recordIds).toEqual(firstPage.records.map((record) => record.id));
+    expect(firstPage.productHandoff.tier1000ReadyRecordIds.every((recordId) => firstPage.productHandoff.recordIds.includes(recordId))).toBe(true);
     expect(firstPage.noLeakSerialization.passed).toBe(true);
 
     const serialized = JSON.stringify({ firstPage, secondPage, status: buildDarkwebIndexStatus(records), contract: darkwebIndexContract() });

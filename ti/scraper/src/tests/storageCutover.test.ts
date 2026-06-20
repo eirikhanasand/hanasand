@@ -54,6 +54,7 @@ import { InMemoryObjectEvidenceStore, InMemoryScraperStore } from "../storage/me
 import {
   buildEvidencePromotionTransactionPlan,
   buildEvidencePromotionTransactionAuditReplay,
+  buildEvidenceActorDatasetConsumerHandoff,
   buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorProductImpactReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
@@ -2169,6 +2170,57 @@ describe("evidence storage cutover", () => {
     expect(actorDatasetSerialized).not.toContain(restrictedRaw);
     expect(actorDatasetSerialized).not.toContain("tenant/source/private-key");
     expect(actorDatasetSerialized).not.toContain(".onion");
+
+    const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
+    expect(actorDatasetConsumerHandoff).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_consumer_handoff.v1",
+      sourcePreview: "ti.evidence_actor_dataset_promotion_preview.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      actorBuild: "0.6.4",
+      dryRun: true,
+      willWriteActorDataset: false,
+      willWritePublicAnswerCache: false,
+      latestProof: {
+        runId: "iMQGeezZ8bx7WtlhQ",
+        datasetId: "5PLmkE30luBA5Lbgc"
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(actorDatasetConsumerHandoff.counts.actorDatasetRows).toBe(actorDatasetPromotionPreview.rows.length);
+    expect(actorDatasetConsumerHandoff.counts.publicAnswerCacheWrites).toBe(actorDatasetPromotionPreview.rows.length);
+    expect(actorDatasetConsumerHandoff.actorDatasetRows.some((row) =>
+      row.actorDatasetAction === "render_sellable_candidate" &&
+      row.paidRowDecision === "sellable" &&
+      row.billingGuidance === "charge_after_actor_emit" &&
+      row.coverageStatus === "ready_for_dataset"
+    )).toBe(true);
+    expect(actorDatasetConsumerHandoff.actorDatasetRows.some((row) =>
+      row.actorDatasetAction === "render_caveated_context" &&
+      row.paidRowDecision === "included_with_caveat" &&
+      row.billingGuidance === "do_not_charge_context"
+    )).toBe(true);
+    expect(actorDatasetConsumerHandoff.suppressionReceipts.some((row) => row.reason === "stale_row" && row.visibleState === "suppressed")).toBe(true);
+    expect(actorDatasetConsumerHandoff.coverageGapRows.some((row) => row.actorDatasetAction === "render_coverage_gap" && row.billingGuidance === "do_not_charge_gap")).toBe(true);
+    expect(actorDatasetConsumerHandoff.publicAnswerCacheWrites.some((row) => row.action === "upsert_ready_context" && row.visibleState === "ready")).toBe(true);
+    expect(actorDatasetConsumerHandoff.publicAnswerCacheWrites.some((row) => row.action === "suppress_stale_context" && row.visibleState === "suppressed")).toBe(true);
+    expect(actorDatasetConsumerHandoff.actorDatasetRows.every((row) =>
+      row.safety.rawContentIncluded === false &&
+      row.safety.restrictedMaterialIncluded === false &&
+      row.safety.unsafeUrlIncluded === false &&
+      row.safety.credentialIncluded === false &&
+      row.safety.actorInteractionRequired === false
+    )).toBe(true);
+    const actorConsumerSerialized = JSON.stringify(actorDatasetConsumerHandoff);
+    expect(actorConsumerSerialized).not.toContain(restrictedRaw);
+    expect(actorConsumerSerialized).not.toContain("tenant/source/private-key");
+    expect(actorConsumerSerialized).not.toContain(".onion");
 
     const publicRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === publicCapture.id);
     const restrictedRow = backendWriteSet.postgresDocuments.find((row) => row.capture_id === restrictedCapture.id || row.claim_ledger_entry_id === "claim_read_model_fjord");

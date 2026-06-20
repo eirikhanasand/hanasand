@@ -7744,6 +7744,9 @@ function buildOpsProductSloDashboard(options: ApiServerOptions, url: URL): Recor
       includedWithCaveatRowCount: numberQuery(url.searchParams.get("actorIncludedWithCaveatRows")) ?? null,
       coverageGapOnlyRowCount: numberQuery(url.searchParams.get("actorCoverageGapOnlyRows")) ?? null,
       holdRowCount: numberQuery(url.searchParams.get("actorHoldRows")) ?? null,
+      suppressRowCount: numberQuery(url.searchParams.get("actorSuppressRows")) ?? null,
+      targetSellableRows: numberQuery(url.searchParams.get("actorTargetSellableRows")) ?? null,
+      averageBuyerValueScore: numberQuery(url.searchParams.get("actorAverageBuyerValueScore")) ?? null,
       defaultWatchlistRun: booleanQuery(url.searchParams.get("actorDefaultWatchlistRun"))
     },
     cost: {
@@ -9004,8 +9007,8 @@ function buildEnterpriseApiContractIndex() {
         field: "scheduler.dailyActorRunPlan",
         schemaVersion: "ti.scheduler_daily_actor_run_plan.v1",
         actor: "eirikhanasand/public-threat-actor-monitor",
-        fields: ["apifyActor", "latestProofRun", "runTargets", "watchlist", "sourceTierCadence", "economics", "staleSuppression", "freshCollectionRetryPlan", "routeContracts", "releaseGate"],
-        guarantee: "daily Actor scheduling is dry-run and buyer-visible: the 20-query Apify default watchlist, latest build 0.6.4 proof run, paid-row decision counts, source/dark-metadata 100->1000->4000 sweep cadence, useful-row targets, fresh-row targets, stale-only suppression, duplicate-run reuse, 3-second polling, retry-after/dead-letter visibility, and cost per useful row are exposed without mutating scheduler state"
+        fields: ["apifyActor", "latestProofRun", "runTargets", "watchlist", "sourceTierCadence", "economics", "staleSuppression", "freshCollectionRetryPlan", "executionQueuePlan", "routeContracts", "releaseGate"],
+        guarantee: "daily Actor scheduling is dry-run and buyer-visible: the 20-query Apify default watchlist, latest build 0.6.4 proof run, paid-row decision counts, source/dark-metadata 100->1000->4000 sweep cadence, execution enqueue batches, useful-row targets, fresh-row targets, stale-only suppression, duplicate-run reuse, 3-second polling, retry-after/dead-letter visibility, and cost per useful row are exposed without mutating scheduler state"
       },
       schedulerProductionLeaseSemantics: {
         routes: ["/v1/frontier/status", "/v1/frontier/apply-plan", "/v1/intel/search", "/v1/contracts"],

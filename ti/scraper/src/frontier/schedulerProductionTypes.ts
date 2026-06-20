@@ -1315,6 +1315,43 @@ export interface SchedulerDailyActorRunPlanDto {
       visibleToClient: true;
     }>;
   };
+  executionQueuePlan: {
+    enqueueWindow: "source_sweeps_before_actor_run";
+    duplicateRunReuseBeforeEnqueue: true;
+    batches: Array<{
+      batchId: "interactive_commercial_refresh" | "public_channel_gap_fill" | "tier_100_source_sweep" | "tier_1000_source_sweep" | "tier_4000_metadata_sweep" | "daily_actor_dataset_emit";
+      workClass: SchedulerWorkClass;
+      target: "watchlist" | "source_tier" | "apify_actor_dataset";
+      queries: string[];
+      tier?: "tier_100" | "tier_1000" | "tier_4000";
+      enqueueAfter: "now" | "after_interactive_reuse_check" | "after_public_gap_probe" | "after_source_sweeps";
+      maxTasks: number;
+      reservedWorkerSlots: number;
+      freshnessGate: "must_produce_fresh_or_partial" | "dedupe_and_parser_gate" | "metadata_review_gate" | "paid_row_gate";
+      staleOnlyRowsBlocked: boolean;
+      expectedVisibleState: "searching" | "partial" | "metadata_review" | "ready";
+    }>;
+    fairnessGuards: {
+      maxActorQueriesPerTenantPerDay: number;
+      publicChannelReservedWorkerSlots: number;
+      darkMetadataReservedWorkerSlots: number;
+      backgroundSweepMaxWorkerShare: number;
+      priorityAgingAfterSeconds: number;
+      retryDebtDeadLetterAtAttempts: number;
+    };
+    paidRowGate: {
+      rowsWithOnlyStaleActivity: "suppress_from_ready";
+      rowsMissingPublicChannelForFocusedActors: "include_caveat_and_enqueue_gap_fill";
+      rowsMissingApprovedDarkMetadataForRansomware: "include_caveat_and_enqueue_metadata_review";
+      weakVictimExtraction: "hold_paid_row_until_review_or_caveat";
+    };
+    suppressionDecisions: Array<{
+      query: string;
+      reason: "stale_only_activity" | "missing_public_channel" | "missing_dark_metadata" | "unknown_freshness";
+      action: "raise_priority" | "enqueue_gap_fill" | "metadata_review" | "suppress_ready_state";
+      visibleState: "searching" | "partial" | "metadata_review";
+    }>;
+  };
   routeContracts: {
     frontierStatusField: "scheduler.dailyActorRunPlan";
     searchSchedulerField: "scheduler.dailyActorRunPlan";

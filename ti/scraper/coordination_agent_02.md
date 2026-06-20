@@ -13,6 +13,15 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-20 19:19 CEST
+
+- Added `scheduler.dailyActorRunPlan.executionQueuePlan` so the daily Actor plan now states which work is enqueued first and why: commercial actor refreshes, public-channel gap fill, tier-100/tier-1000 public source sweeps, tier-4000 approved metadata review, then dataset emission.
+- Added buyer-visible paid-row gates for stale-only rows, missing public-channel coverage, missing approved dark metadata, and weak victim extraction so static/stale rows are suppressed or caveated before paid output.
+- Added fairness and retry guardrails to the daily plan: duplicate-run reuse before enqueue, public-channel/restricted-metadata reserved slots, background sweep share cap, 180-second priority aging, and retry-debt dead-letter after three attempts.
+- Updated `/v1/contracts` semantics, scheduler tests, and operations docs so UI/API/ops can show the execution plan instead of a generic searching state.
+- Green: `bun run check`, `bun test src/tests/schedulerProduction.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (527 pass).
+- Next: continue turning the execution plan into concrete source sweep/run-reuse behavior, especially live source-family gap closure for APT29/APT42 and dark-metadata review scheduling for ransomware rows.
+
 ## Progress - 2026-06-20 18:55 CEST
 
 - Completed the latest daily Actor freshness/scheduler slice for published Apify build `0.6.4`.

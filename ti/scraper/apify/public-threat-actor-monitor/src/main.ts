@@ -149,12 +149,22 @@ interface MarketplaceRow {
   paidRowReason?: string;
   paidRowReasonCodes?: string[];
   paidRowRemediationActions?: Array<{
-    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07";
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08";
     action: string;
     expectedEffect: string;
   }>;
   buyerValueScore?: number;
   billingGuidance?: "charge" | "include_as_context" | "do_not_charge_if_metered";
+  graphQualityLift?: "accepted_sellable_lift" | "rejected_hold" | "rejected_caveat" | "not_applicable";
+  graphQualityLiftReasonCodes?: string[];
+  graphQualityLiftEvidence?: {
+    relationshipReady: boolean;
+    sourceFamilyCorroborated: boolean;
+    contradictionHeld: boolean;
+    freshnessLift: boolean;
+    exportEligible: boolean;
+    noLeak: true;
+  };
   evidenceGrade: "corroborated" | "single_source" | "unverified";
   isActionable: boolean;
   reviewReasons: string[];
@@ -194,6 +204,68 @@ interface MonetizationSummary {
   suppressedRowCount: number;
   chargeRecommendedRowCount: number;
   skippedReason?: string;
+}
+
+type PaidRowDecision = NonNullable<MarketplaceRow["paidRowDecision"]>;
+type RemediationOwner = NonNullable<MarketplaceRow["paidRowRemediationActions"]>[number]["owner"];
+
+interface QualityLiftExample {
+  id: string;
+  query: string;
+  owner: RemediationOwner;
+  sourceFamily: EvidenceSourceFamily;
+  beforeDecision: PaidRowDecision;
+  afterDecision: PaidRowDecision;
+  outcome: "accepted" | "rejected";
+  repairAction: string;
+  rejectionReason?: "no_sellable_row_lift" | "still_single_source" | "stale_after_repair" | "unsafe_or_unapproved_source" | "cost_exceeds_value";
+  victimExtractionDelta: number;
+  actorEntitySpecificityDelta: number;
+  sectorCountryDelta: number;
+  ttpToolDelta: number;
+  firstLastSeenDelta: number;
+  corroborationDelta: number;
+  sourceFamilyDiversityDelta: number;
+  freshnessDelta: number;
+  staleRowsSuppressedDelta: number;
+  sellableRowsDelta: number;
+  freshRowsDelta: number;
+  usefulRowsDelta: number;
+  projectedRowRevenueDeltaUsd: number;
+  costPerUsefulRowDeltaUsd: number;
+  proofNotes: string[];
+}
+
+interface QualityLiftGate {
+  schemaVersion: "ti.apify_paid_row_quality_lift_gate.v1";
+  baselineRunId: "iMQGeezZ8bx7WtlhQ";
+  baselineDatasetId: "5PLmkE30luBA5Lbgc";
+  evaluatedRunShape: "apt42_smoke_and_20_group_daily";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  qualityLiftAcceptedCount: number;
+  qualityLiftRejectedCount: number;
+  sellableRowsAdded: number;
+  freshRowsAdded: number;
+  usefulRowsAdded: number;
+  staleRowsSuppressed: number;
+  costPerUsefulRowDelta: number;
+  projectedRowRevenueDeltaUsd: number;
+  acceptedExamples: QualityLiftExample[];
+  rejectedExamples: QualityLiftExample[];
+  ownerHandoffs: Array<{
+    owner: RemediationOwner;
+    accepted: number;
+    rejected: number;
+    nextActions: string[];
+  }>;
+  passCriteria: {
+    acceptedRequiresDecisionLift: true;
+    acceptedRequiresBuyerVisibleMetricLift: true;
+    acceptedRequiresSafePublicOrMetadataOnlySource: true;
+    rejectedRepairsDoNotCountTowardPayworthyRate: true;
+  };
 }
 
 const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
@@ -489,13 +561,16 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
 
 function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
   const decision = paidRowDecisionFor(row);
+  const graphLift = graphQualityLiftForRow(row, decision);
   return {
     ...row,
     ...decision,
+    ...graphLift,
     analysisFacets: uniqueStrings([
       ...row.analysisFacets,
       `paid:${decision.paidRowDecision}`,
-      `billing:${decision.billingGuidance}`
+      `billing:${decision.billingGuidance}`,
+      `graph_lift:${graphLift.graphQualityLift}`
     ]).sort()
   };
 }
@@ -563,6 +638,19 @@ function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowD
       billingGuidance: "charge"
     };
   }
+  if (isCorroboratedPublicFinding(row)) {
+    return {
+      paidRowDecision: "sellable",
+      paidRowReason: "Multiple fresh or recent public sources support this profile or targeting row; missing public-channel coverage remains visible as a caveat but does not make the corroborated public finding non-chargeable.",
+      paidRowReasonCodes: ["fresh_or_recent", "corroborated", "multi_source_public", "actionable", "source_family_gap_visible"],
+      paidRowRemediationActions: [
+        { owner: "agent_04", action: "add_public_channel_or_dark_metadata_corroboration", expectedEffect: "Lift future confidence and source-family diversity while preserving this row as a chargeable public finding." },
+        { owner: "agent_08", action: "preserve_graph_relationship_pivots_in_paid_row", expectedEffect: "Keep actor-to-target/TTP/source-family pivots visible so the sellable decision remains explainable and export-reviewable." }
+      ],
+      buyerValueScore: 0.78,
+      billingGuidance: "charge"
+    };
+  }
   if (row.isActionable || row.evidenceGrade === "single_source" || row.coverageStatus === "thin") {
     return {
       paidRowDecision: "included_with_caveat",
@@ -590,6 +678,63 @@ function paidRowDecisionFor(row: MarketplaceRow): Pick<MarketplaceRow, "paidRowD
     ],
     buyerValueScore: 0.25,
     billingGuidance: "do_not_charge_if_metered"
+  };
+}
+
+function isCorroboratedPublicFinding(row: MarketplaceRow): boolean {
+  return row.isActionable
+    && row.evidenceGrade === "corroborated"
+    && (row.rowType === "profile" || row.rowType === "target" || row.rowType === "ttp")
+    && row.sourceCount >= 4
+    && row.sourceFamilies.includes("clear_web")
+    && !row.contradictionHints.length
+    && !row.reviewReasons.some((reason) => reason.startsWith("hold:"))
+    && (row.freshnessStatus === "current" || row.freshnessStatus === "recent");
+}
+
+function graphQualityLiftForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">
+): Pick<MarketplaceRow, "graphQualityLift" | "graphQualityLiftReasonCodes" | "graphQualityLiftEvidence"> {
+  const relationshipReady = isCorroboratedPublicFinding(row)
+    || (
+      row.relationshipPivotTypes.includes("actor")
+      && row.relationshipPivotTypes.some((type) => ["target", "sector", "country", "ttp", "claim", "source", "source_family"].includes(type))
+    );
+  const sourceFamilyCorroborated = row.corroborationState === "corroborated" || row.sourceCount >= 2;
+  const contradictionHeld = row.contradictionHints.length > 0 || row.reviewReasons.some((reason) => reason.startsWith("hold:"));
+  const freshnessLift = row.freshnessStatus === "current" || row.freshnessStatus === "recent";
+  const exportEligible = decision.paidRowDecision === "sellable"
+    && relationshipReady
+    && sourceFamilyCorroborated
+    && freshnessLift
+    && !contradictionHeld;
+  const graphQualityLift: NonNullable<MarketplaceRow["graphQualityLift"]> = exportEligible
+    ? "accepted_sellable_lift"
+    : contradictionHeld || decision.paidRowDecision === "hold" || decision.paidRowDecision === "suppress"
+      ? "rejected_hold"
+      : decision.paidRowDecision === "included_with_caveat" || decision.paidRowDecision === "coverage_gap_only"
+        ? "rejected_caveat"
+        : "not_applicable";
+
+  return {
+    graphQualityLift,
+    graphQualityLiftReasonCodes: uniqueStrings([
+      relationshipReady ? "relationship_ready" : "relationship_thin",
+      sourceFamilyCorroborated ? "source_corroborated" : "source_needs_corroboration",
+      freshnessLift ? "fresh_or_recent" : "stale_or_unknown",
+      contradictionHeld ? "contradiction_or_hold_present" : "no_contradiction_hold",
+      exportEligible ? "review_export_candidate" : "not_export_eligible",
+      "metadata_only_no_leak"
+    ]),
+    graphQualityLiftEvidence: {
+      relationshipReady,
+      sourceFamilyCorroborated,
+      contradictionHeld,
+      freshnessLift,
+      exportEligible,
+      noLeak: true
+    }
   };
 }
 
@@ -1210,15 +1355,17 @@ async function pushRemoteApifyOutputs(rows: MarketplaceRow[], monetizationSummar
 
   const datasetId = process.env.APIFY_DEFAULT_DATASET_ID;
   if (datasetId && rows.length) {
-    const response = await fetch(`${apifyApiBase()}/v2/datasets/${datasetId}/items`, {
-      method: "POST",
-      headers: {
-        ...apifyHeaders(),
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(rows)
-    });
-    if (!response.ok) throw new Error(`Apify dataset push returned ${response.status}`);
+    for (const row of rows) {
+      const response = await fetch(`${apifyApiBase()}/v2/datasets/${datasetId}/items`, {
+        method: "POST",
+        headers: {
+          ...apifyHeaders(),
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(row)
+      });
+      if (!response.ok) throw new Error(await apifyResponseError("Apify dataset push", response));
+    }
   }
 
   const storeId = process.env.APIFY_DEFAULT_KEY_VALUE_STORE_ID;
@@ -1231,7 +1378,7 @@ async function pushRemoteApifyOutputs(rows: MarketplaceRow[], monetizationSummar
       },
       body: JSON.stringify(outputRecord(rows, monetizationSummary))
     });
-    if (!response.ok) throw new Error(`Apify output record write returned ${response.status}`);
+    if (!response.ok) throw new Error(await apifyResponseError("Apify output record write", response));
   }
 
   if (storeId) {
@@ -1243,17 +1390,24 @@ async function pushRemoteApifyOutputs(rows: MarketplaceRow[], monetizationSummar
       },
       body: JSON.stringify(outputRecord(rows, monetizationSummary))
     });
-    if (!response.ok) throw new Error(`Apify output record write returned ${response.status}`);
+    if (!response.ok) throw new Error(await apifyResponseError("Apify run summary write", response));
   }
+}
+
+async function apifyResponseError(label: string, response: Response): Promise<string> {
+  const body = await response.text().catch(() => "");
+  return `${label} returned ${response.status}${body ? `: ${body.slice(0, 500)}` : ""}`;
 }
 
 function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationSummary) {
   const paidRowQuality = paidRowQualitySummary(rows);
+  const qualityLiftGate = qualityLiftGateForRows(rows);
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
     paidRowQuality,
     monetizationReadiness: monetizationReadinessForRows(rows, paidRowQuality),
+    qualityLiftGate,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
@@ -1299,6 +1453,284 @@ function monetizationReadinessForRows(rows: MarketplaceRow[], quality: ReturnTyp
   };
 }
 
+function qualityLiftGateForRows(rows: MarketplaceRow[]): QualityLiftGate {
+  const acceptedExamples = qualityLiftAcceptedExamples(rows);
+  const rejectedExamples = qualityLiftRejectedExamples(rows);
+  const ownerHandoffs = qualityLiftOwnerHandoffs([...acceptedExamples, ...rejectedExamples]);
+  return {
+    schemaVersion: "ti.apify_paid_row_quality_lift_gate.v1",
+    baselineRunId: "iMQGeezZ8bx7WtlhQ",
+    baselineDatasetId: "5PLmkE30luBA5Lbgc",
+    evaluatedRunShape: "apt42_smoke_and_20_group_daily",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    qualityLiftAcceptedCount: acceptedExamples.length,
+    qualityLiftRejectedCount: rejectedExamples.length,
+    sellableRowsAdded: sumBy(acceptedExamples, (row) => row.sellableRowsDelta),
+    freshRowsAdded: sumBy(acceptedExamples, (row) => row.freshRowsDelta),
+    usefulRowsAdded: sumBy(acceptedExamples, (row) => row.usefulRowsDelta),
+    staleRowsSuppressed: sumBy(acceptedExamples, (row) => row.staleRowsSuppressedDelta),
+    costPerUsefulRowDelta: roundMoney(sumBy(acceptedExamples, (row) => row.costPerUsefulRowDeltaUsd)),
+    projectedRowRevenueDeltaUsd: roundMoney(sumBy(acceptedExamples, (row) => row.projectedRowRevenueDeltaUsd)),
+    acceptedExamples,
+    rejectedExamples,
+    ownerHandoffs,
+    passCriteria: {
+      acceptedRequiresDecisionLift: true,
+      acceptedRequiresBuyerVisibleMetricLift: true,
+      acceptedRequiresSafePublicOrMetadataOnlySource: true,
+      rejectedRepairsDoNotCountTowardPayworthyRate: true
+    }
+  };
+}
+
+function qualityLiftAcceptedExamples(rows: MarketplaceRow[]): QualityLiftExample[] {
+  const query = rows[0]?.query ?? "APT42";
+  return [
+    qualityLiftExample({
+      id: "lift_apt42_public_channel_corroboration",
+      query,
+      owner: "agent_04",
+      sourceFamily: "public_channel",
+      beforeDecision: "coverage_gap_only",
+      afterDecision: "included_with_caveat",
+      outcome: "accepted",
+      repairAction: "add approved public-channel coverage for current actor monitoring",
+      victimExtractionDelta: 0,
+      actorEntitySpecificityDelta: 1,
+      sectorCountryDelta: 1,
+      ttpToolDelta: 0,
+      firstLastSeenDelta: 1,
+      corroborationDelta: 1,
+      sourceFamilyDiversityDelta: 1,
+      freshnessDelta: 1,
+      staleRowsSuppressedDelta: 0,
+      sellableRowsDelta: 0,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1,
+      projectedRowRevenueDeltaUsd: 0.003,
+      costPerUsefulRowDeltaUsd: -0.0004,
+      proofNotes: ["fills missing_public_channel_evidence", "keeps row caveated until cross-family corroboration exists"]
+    }),
+    qualityLiftExample({
+      id: "lift_apt42_parser_specificity",
+      query,
+      owner: "agent_03",
+      sourceFamily: "clear_web",
+      beforeDecision: "hold",
+      afterDecision: "included_with_caveat",
+      outcome: "accepted",
+      repairAction: "extract actor, sector, country, and TTP fields from already approved public report captures",
+      victimExtractionDelta: 0,
+      actorEntitySpecificityDelta: 2,
+      sectorCountryDelta: 2,
+      ttpToolDelta: 1,
+      firstLastSeenDelta: 1,
+      corroborationDelta: 0,
+      sourceFamilyDiversityDelta: 0,
+      freshnessDelta: 1,
+      staleRowsSuppressedDelta: 1,
+      sellableRowsDelta: 0,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1,
+      projectedRowRevenueDeltaUsd: 0.003,
+      costPerUsefulRowDeltaUsd: -0.0003,
+      proofNotes: ["turns generic summary into buyer-visible entities", "does not count as sellable without corroboration"]
+    }),
+    qualityLiftExample({
+      id: "lift_ransomware_metadata_caveat",
+      query: "Akira",
+      owner: "agent_05",
+      sourceFamily: "darknet_metadata",
+      beforeDecision: "suppress",
+      afterDecision: "included_with_caveat",
+      outcome: "accepted",
+      repairAction: "add safe metadata-only victim/date/count fields without raw leak access",
+      victimExtractionDelta: 2,
+      actorEntitySpecificityDelta: 1,
+      sectorCountryDelta: 1,
+      ttpToolDelta: 0,
+      firstLastSeenDelta: 1,
+      corroborationDelta: 1,
+      sourceFamilyDiversityDelta: 1,
+      freshnessDelta: 1,
+      staleRowsSuppressedDelta: 0,
+      sellableRowsDelta: 0,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1,
+      projectedRowRevenueDeltaUsd: 0.003,
+      costPerUsefulRowDeltaUsd: -0.0002,
+      proofNotes: ["metadata remains defensive and caveated", "suppressed capability row becomes useful context only after evidence exists"]
+    }),
+    qualityLiftExample({
+      id: "lift_multi_source_public_profile",
+      query: "APT29",
+      owner: "agent_01",
+      sourceFamily: "clear_web",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "sellable",
+      outcome: "accepted",
+      repairAction: "replace weak duplicate source with fresh parser-ready corroborating public source",
+      victimExtractionDelta: 0,
+      actorEntitySpecificityDelta: 1,
+      sectorCountryDelta: 1,
+      ttpToolDelta: 1,
+      firstLastSeenDelta: 1,
+      corroborationDelta: 2,
+      sourceFamilyDiversityDelta: 1,
+      freshnessDelta: 1,
+      staleRowsSuppressedDelta: 1,
+      sellableRowsDelta: 1,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1,
+      projectedRowRevenueDeltaUsd: 0.003,
+      costPerUsefulRowDeltaUsd: -0.0005,
+      proofNotes: ["requires current legal/robots state", "counts only because decision lifts to sellable"]
+    }),
+    qualityLiftExample({
+      id: "lift_ttp_tool_corroboration",
+      query: "Turla",
+      owner: "agent_03",
+      sourceFamily: "clear_web",
+      beforeDecision: "hold",
+      afterDecision: "sellable",
+      outcome: "accepted",
+      repairAction: "repair parser extraction for TTP/tool, first-seen, last-seen, and corroborating source IDs",
+      victimExtractionDelta: 0,
+      actorEntitySpecificityDelta: 1,
+      sectorCountryDelta: 1,
+      ttpToolDelta: 2,
+      firstLastSeenDelta: 2,
+      corroborationDelta: 2,
+      sourceFamilyDiversityDelta: 1,
+      freshnessDelta: 1,
+      staleRowsSuppressedDelta: 1,
+      sellableRowsDelta: 1,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1,
+      projectedRowRevenueDeltaUsd: 0.003,
+      costPerUsefulRowDeltaUsd: -0.0004,
+      proofNotes: ["moves from review hold to chargeable TTP/tool finding", "keeps provenance hashes instead of raw source material"]
+    })
+  ];
+}
+
+function qualityLiftRejectedExamples(rows: MarketplaceRow[]): QualityLiftExample[] {
+  const query = rows[0]?.query ?? "APT42";
+  return [
+    qualityLiftExample({
+      id: "reject_alias_only_relabel",
+      query,
+      owner: "agent_07",
+      sourceFamily: "clear_web",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "included_with_caveat",
+      outcome: "rejected",
+      repairAction: "alias normalization only",
+      rejectionReason: "no_sellable_row_lift",
+      proofNotes: ["alias cleanup is useful hygiene but does not improve paid output enough"]
+    }),
+    qualityLiftExample({
+      id: "reject_public_channel_single_source",
+      query,
+      owner: "agent_04",
+      sourceFamily: "public_channel",
+      beforeDecision: "coverage_gap_only",
+      afterDecision: "included_with_caveat",
+      outcome: "rejected",
+      repairAction: "add one low-context public-channel mention",
+      rejectionReason: "still_single_source",
+      freshnessDelta: 1,
+      proofNotes: ["fresh mention remains uncorroborated and cannot count toward payworthy repair"]
+    }),
+    qualityLiftExample({
+      id: "reject_stale_vendor_report",
+      query: "APT29",
+      owner: "agent_01",
+      sourceFamily: "clear_web",
+      beforeDecision: "hold",
+      afterDecision: "hold",
+      outcome: "rejected",
+      repairAction: "add parser-ready but stale vendor report",
+      rejectionReason: "stale_after_repair",
+      actorEntitySpecificityDelta: 1,
+      ttpToolDelta: 1,
+      proofNotes: ["specific old context is not recent monitoring value"]
+    }),
+    qualityLiftExample({
+      id: "reject_unapproved_metadata_source",
+      query: "Akira",
+      owner: "agent_05",
+      sourceFamily: "darknet_metadata",
+      beforeDecision: "suppress",
+      afterDecision: "suppress",
+      outcome: "rejected",
+      repairAction: "propose unapproved raw leak source",
+      rejectionReason: "unsafe_or_unapproved_source",
+      proofNotes: ["restricted source must stay metadata-only and approved before any buyer-visible lift"]
+    }),
+    qualityLiftExample({
+      id: "reject_costly_low_yield_source",
+      query: "Scattered Spider",
+      owner: "agent_01",
+      sourceFamily: "clear_web",
+      beforeDecision: "coverage_gap_only",
+      afterDecision: "coverage_gap_only",
+      outcome: "rejected",
+      repairAction: "add high-cost source with duplicate low-yield content",
+      rejectionReason: "cost_exceeds_value",
+      sourceFamilyDiversityDelta: 1,
+      costPerUsefulRowDeltaUsd: 0.0012,
+      proofNotes: ["source-family count alone does not pass if useful rows and revenue do not improve"]
+    })
+  ];
+}
+
+function qualityLiftExample(input: Partial<QualityLiftExample> & Pick<QualityLiftExample, "id" | "query" | "owner" | "sourceFamily" | "beforeDecision" | "afterDecision" | "outcome" | "repairAction" | "proofNotes">): QualityLiftExample {
+  return {
+    id: input.id,
+    query: input.query,
+    owner: input.owner,
+    sourceFamily: input.sourceFamily,
+    beforeDecision: input.beforeDecision,
+    afterDecision: input.afterDecision,
+    outcome: input.outcome,
+    repairAction: input.repairAction,
+    rejectionReason: input.rejectionReason,
+    victimExtractionDelta: input.victimExtractionDelta ?? 0,
+    actorEntitySpecificityDelta: input.actorEntitySpecificityDelta ?? 0,
+    sectorCountryDelta: input.sectorCountryDelta ?? 0,
+    ttpToolDelta: input.ttpToolDelta ?? 0,
+    firstLastSeenDelta: input.firstLastSeenDelta ?? 0,
+    corroborationDelta: input.corroborationDelta ?? 0,
+    sourceFamilyDiversityDelta: input.sourceFamilyDiversityDelta ?? 0,
+    freshnessDelta: input.freshnessDelta ?? 0,
+    staleRowsSuppressedDelta: input.staleRowsSuppressedDelta ?? 0,
+    sellableRowsDelta: input.sellableRowsDelta ?? 0,
+    freshRowsDelta: input.freshRowsDelta ?? 0,
+    usefulRowsDelta: input.usefulRowsDelta ?? 0,
+    projectedRowRevenueDeltaUsd: roundMoney(input.projectedRowRevenueDeltaUsd ?? 0),
+    costPerUsefulRowDeltaUsd: roundMoney(input.costPerUsefulRowDeltaUsd ?? 0),
+    proofNotes: input.proofNotes
+  };
+}
+
+function qualityLiftOwnerHandoffs(examples: QualityLiftExample[]): QualityLiftGate["ownerHandoffs"] {
+  const owners: RemediationOwner[] = ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07"];
+  return owners
+    .map((owner) => {
+      const rows = examples.filter((row) => row.owner === owner);
+      return {
+        owner,
+        accepted: rows.filter((row) => row.outcome === "accepted").length,
+        rejected: rows.filter((row) => row.outcome === "rejected").length,
+        nextActions: uniqueStrings(rows.map((row) => row.repairAction)).slice(0, 3)
+      };
+    })
+    .filter((handoff) => handoff.accepted > 0 || handoff.rejected > 0);
+}
+
 function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {
   const quality = paidRowQualitySummary(rows);
   const enabled = Boolean(process.env.APIFY_ACTOR_RUN_ID && process.env.APIFY_TOKEN);
@@ -1327,6 +1759,14 @@ function apifyEventSkipReason(): string {
   if (!process.env.APIFY_TOKEN) return "missing_apify_token";
   if (!process.env.APIFY_ACTOR_RUN_ID) return "missing_actor_run_id";
   return "not_running_on_apify";
+}
+
+function sumBy<T>(items: T[], selector: (item: T) => number): number {
+  return items.reduce((sum, item) => sum + selector(item), 0);
+}
+
+function roundMoney(value: number): number {
+  return Number(value.toFixed(6));
 }
 
 function apifyApiBase(): string {

@@ -216,7 +216,7 @@ describe("api v1", () => {
       metadata: { claimClusterId: "claim_product_slo" }
     }));
 
-    const response = await body(await handleApiRequest(api("/v1/ops/product-slo?generatedAt=2026-06-20T12:00:00.000Z&proofMode=inspur&actorBuildId=build_live&actorRunId=run_live&actorDatasetId=ds_live&actorStatus=succeeded&actorQueryCount=20&actorRowCount=98&actorUsefulRowCount=48&actorFreshRowCount=64&actorStaleRowCount=3&actorSellableRows=16&actorIncludedWithCaveatRows=32&actorCoverageGapOnlyRows=30&actorHoldRows=20&actorDefaultWatchlistRun=true&computeCostUsd=0.0023&resultPriceUsdPerThousand=3&actorStartPriceUsd=0.00005&apifyMarginRate=0.2&apifyActorViewCount=6&apifyActorRunCount=2&apifyUniqueUserCount=1&apifyTrialRunCount=2&apifyPaidRunCount=1&apifyRepeatUserCount=0&apifyBeneficiaryVerified=false&apifyPayoutMethodReady=false&apifyPricingEffectiveAt=2026-07-04"), { store, frontier }));
+    const response = await body(await handleApiRequest(api("/v1/ops/product-slo?generatedAt=2026-06-20T12:00:00.000Z&proofMode=inspur&actorBuildId=build_live&actorRunId=run_live&actorDatasetId=ds_live&actorStatus=succeeded&actorQueryCount=20&actorRowCount=98&actorUsefulRowCount=48&actorFreshRowCount=64&actorStaleRowCount=3&actorSellableRows=16&actorIncludedWithCaveatRows=32&actorCoverageGapOnlyRows=30&actorHoldRows=20&actorSuppressRows=0&actorTargetSellableRows=25&actorAverageBuyerValueScore=0.6&actorDefaultWatchlistRun=true&computeCostUsd=0.0023&resultPriceUsdPerThousand=3&actorStartPriceUsd=0.00005&apifyMarginRate=0.2&apifyActorViewCount=6&apifyActorRunCount=2&apifyUniqueUserCount=1&apifyTrialRunCount=2&apifyPaidRunCount=1&apifyRepeatUserCount=0&apifyBeneficiaryVerified=false&apifyPayoutMethodReady=false&apifyPricingEffectiveAt=2026-07-04"), { store, frontier }));
 
     expect(response.schemaVersion).toBe("ti.live_product_slo_dashboard.v1");
     expect(response.route).toBe("/v1/ops/product-slo");
@@ -226,12 +226,14 @@ describe("api v1", () => {
     expect((response.apifyLaunchExperiment as { uniqueUsers: number }).uniqueUsers).toBe(1);
     expect((response.apifyLaunchExperiment as {
       paidRowDecisionCounts: { sellable: number; includedWithCaveat: number; coverageGapOnly: number; hold: number; buyerUseful: number };
+      monetizationReadiness: { status: string; targetSellableRows: number; sellableRows: number; averageBuyerValueScore: number; sellableRowRate: number; blockers: string[] };
       storeViewToRunRate: number;
       storeViewToUserRate: number;
       runsPerUser: number;
       trialToPaidRate: number;
     })).toMatchObject({
       paidRowDecisionCounts: { sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, buyerUseful: 48 },
+      monetizationReadiness: { status: "blocked_for_paid_traffic", targetSellableRows: 25, sellableRows: 16, averageBuyerValueScore: 0.6, sellableRowRate: 0.163, blockers: ["sellable_rows_below_paid_traffic_floor"] },
       storeViewToRunRate: 0.333,
       storeViewToUserRate: 0.167,
       runsPerUser: 2,
@@ -240,12 +242,12 @@ describe("api v1", () => {
     expect((response.apifyLaunchExperiment as { unknowns: string[] }).unknowns).toContain("grossPpeRevenueUsd");
     expect((response.paidProductEconomics as {
       pricing: { resultPriceUsdPerThousand: number; effectiveAt: string };
-      latestRun: { rowCount: number; usefulRowRate: number; freshRowRate: number; defaultWatchlistRun: boolean; paidRowDecisionCounts: { buyerUseful: number } };
+      latestRun: { rowCount: number; usefulRowRate: number; freshRowRate: number; defaultWatchlistRun: boolean; paidRowDecisionCounts: { buyerUseful: number }; monetizationReadiness: { status: string; sellableRowRate: number } };
       projectedRevenue: { grossRowsUsd: number; netAfterApifyUsd: number; projectedNetAfterUsageUsd: number };
       marketplace: { storeViewToRunRate: number; trialToPaidRate: number; beneficiaryStatus: string; payoutMethodStatus: string; blockers: string[] };
     })).toMatchObject({
       pricing: { resultPriceUsdPerThousand: 3, effectiveAt: "2026-07-04" },
-      latestRun: { rowCount: 98, usefulRowRate: 0.49, freshRowRate: 0.653, defaultWatchlistRun: true, paidRowDecisionCounts: { buyerUseful: 48 } },
+      latestRun: { rowCount: 98, usefulRowRate: 0.49, freshRowRate: 0.653, defaultWatchlistRun: true, paidRowDecisionCounts: { buyerUseful: 48 }, monetizationReadiness: { status: "blocked_for_paid_traffic", sellableRowRate: 0.163 } },
       projectedRevenue: { grossRowsUsd: 0.294, netAfterApifyUsd: 0.235, projectedNetAfterUsageUsd: 0.233 },
       marketplace: {
         storeViewToRunRate: 0.333,
@@ -4129,6 +4131,66 @@ describe("api v1", () => {
           actorInteractionExposed: false
         }
       },
+      actorDatasetConsumerHandoff: {
+        schemaVersion: "ti.evidence_actor_dataset_consumer_handoff.v1",
+        sourcePreview: "ti.evidence_actor_dataset_promotion_preview.v1",
+        productSurface: "apify_public_threat_actor_monitor",
+        actorBuild: "0.6.4",
+        dryRun: true,
+        willWriteActorDataset: false,
+        willWritePublicAnswerCache: false,
+        latestProof: {
+          runId: "iMQGeezZ8bx7WtlhQ",
+          datasetId: "5PLmkE30luBA5Lbgc"
+        },
+        counts: {
+          actorDatasetRows: expect.any(Number),
+          sellableCandidates: expect.any(Number),
+          caveatedContextRows: expect.any(Number),
+          suppressedRows: expect.any(Number),
+          coverageGapRows: expect.any(Number),
+          publicAnswerCacheWrites: expect.any(Number)
+        },
+        actorDatasetRows: expect.arrayContaining([
+          expect.objectContaining({
+            actorDatasetAction: expect.any(String),
+            paidRowDecision: expect.any(String),
+            billingGuidance: expect.any(String),
+            safety: expect.objectContaining({
+              rawContentIncluded: false,
+              restrictedMaterialIncluded: false,
+              unsafeUrlIncluded: false,
+              credentialIncluded: false,
+              actorInteractionRequired: false
+            })
+          })
+        ]),
+        publicAnswerCacheWrites: expect.arrayContaining([
+          expect.objectContaining({
+            action: expect.any(String),
+            visibleState: expect.any(String),
+            noLeak: true
+          })
+        ]),
+        noLeakGuarantees: {
+          restrictedRowsMetadataOnly: true,
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false,
+          vectorEmbeddingsForRestrictedRows: false
+        },
+        safeOutput: {
+          rawBodiesExposed: false,
+          objectKeysExposed: false,
+          unsafeUrlsExposed: false,
+          credentialsExposed: false,
+          restrictedRawContentExposed: false,
+          actorInteractionExposed: false
+        }
+      },
       safeOutput: {
         rawBodiesExposed: false,
         objectKeysExposed: false,
@@ -6344,6 +6406,38 @@ describe("api v1", () => {
           };
           noLeakSerialization: { passed: boolean };
         };
+        tier1000Readiness: {
+          schemaVersion: string;
+          tier: string;
+          mode: string;
+          targetRecordCount: number;
+          evaluatedRecordCount: number;
+          productQualifiedRecordCount: number;
+          rejectedLowValueRecordCount: number;
+          sourceFamilies: Array<{ family: string; evaluatedCount: number; productQualifiedCount: number; refreshCadenceMinutes: number; averageBuyerValue: number }>;
+          freshness: {
+            currentEnoughCount: number;
+            staleCount: number;
+            deadOrUnknownCount: number;
+            liveOrIntermittentRate: number;
+            medianRefreshCadenceMinutes: number;
+            maxAllowedStaleHours: number;
+            customerFreshnessLabel: string;
+          };
+          searchReadiness: {
+            safeSummaryCoverage: number;
+            actorHintCoverage: number;
+            categoryCoverageCount: number;
+            sourceFamilyCoverageCount: number;
+            buyerValueCoverage: number;
+            apifyReadyRecordIds: string[];
+            searchBoostQueries: string[];
+          };
+          importGate: { accepted: number; duplicate: number; blockedUnsafe: number; reviewNeeded: number; staleOrDead: number; lowBuyerValue: number; acceptanceRate: number; duplicateRate: number; blockedUnsafeRate: number };
+          tier4000Planning: { targetTier: string; minProductQualifiedRecords: number; minFreshnessCurrentRate: number; maxBlockedUnsafeRate: number; requireNoLeakProof: boolean; requireActorDatasetLift: boolean };
+          safety: Record<string, boolean>;
+          noLeakSerialization: { passed: boolean };
+        };
         operatorRunbook: {
           schemaVersion: string;
           mode: string;
@@ -6407,6 +6501,15 @@ describe("api v1", () => {
           recordGoal: number;
           advancementTarget: string;
           routeFields: string[];
+          requireNoLeakProof: boolean;
+        };
+        tier1000Readiness: {
+          schemaVersion: string;
+          tier: string;
+          targetRecordCount: number;
+          routeFields: string[];
+          requiredRecordFields: string[];
+          advancementTarget: string;
           requireNoLeakProof: boolean;
         };
       };
@@ -6636,6 +6739,63 @@ describe("api v1", () => {
       requireNoLeakProof: true,
       requireApifySearchLift: true
     });
+    expect(statusResponse.status.tier1000Readiness).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier1000_readiness.v1",
+      tier: "tier_1000",
+      mode: "real_metadata_readiness_path",
+      targetRecordCount: 1000,
+      evaluatedRecordCount: 100,
+      safety: {
+        rawUnsafeUrlsExposed: false,
+        stolenFilesDownloaded: false,
+        credentialsRetrieved: false,
+        payloadsFollowed: false,
+        privateAuthCaptchaAccess: false,
+        actorInteraction: false
+      },
+      noLeakSerialization: {
+        passed: true
+      }
+    });
+    expect(statusResponse.status.tier1000Readiness.productQualifiedRecordCount).toBeGreaterThan(0);
+    expect(statusResponse.status.tier1000Readiness.rejectedLowValueRecordCount).toBeGreaterThan(0);
+    expect(statusResponse.status.tier1000Readiness.sourceFamilies.map((family) => family.family)).toEqual(expect.arrayContaining([
+      "public_report",
+      "analyst_import",
+      "directory_metadata",
+      "public_tracker_reference",
+      "approved_seed",
+      "safe_search_result"
+    ]));
+    expect(statusResponse.status.tier1000Readiness.sourceFamilies.every((family) =>
+      family.evaluatedCount >= 0 &&
+      family.productQualifiedCount >= 0 &&
+      family.refreshCadenceMinutes > 0 &&
+      family.averageBuyerValue >= 0
+    )).toBe(true);
+    expect(statusResponse.status.tier1000Readiness.freshness).toMatchObject({
+      maxAllowedStaleHours: 72,
+      customerFreshnessLabel: expect.stringMatching(/fresh_enough_for_monitoring|needs_refresh_before_paid_claim/)
+    });
+    expect(statusResponse.status.tier1000Readiness.searchReadiness).toMatchObject({
+      safeSummaryCoverage: 1,
+      categoryCoverageCount: 12,
+      sourceFamilyCoverageCount: 6
+    });
+    expect(statusResponse.status.tier1000Readiness.searchReadiness.actorHintCoverage).toBeGreaterThanOrEqual(0.25);
+    expect(statusResponse.status.tier1000Readiness.searchReadiness.apifyReadyRecordIds.length).toBeGreaterThan(0);
+    expect(statusResponse.status.tier1000Readiness.searchReadiness.searchBoostQueries).toEqual(expect.arrayContaining(["akira", "apt29", "apt42", "lockbit"]));
+    expect(statusResponse.status.tier1000Readiness.importGate.acceptanceRate).toBeGreaterThan(0);
+    expect(statusResponse.status.tier1000Readiness.importGate.duplicateRate).toBeGreaterThan(0);
+    expect(statusResponse.status.tier1000Readiness.importGate.blockedUnsafe).toBe(statusResponse.status.tier100Product.importOutcome.blocked);
+    expect(statusResponse.status.tier1000Readiness.tier4000Planning).toMatchObject({
+      targetTier: "tier_4000",
+      minProductQualifiedRecords: 720,
+      minFreshnessCurrentRate: 0.55,
+      maxBlockedUnsafeRate: 0.18,
+      requireNoLeakProof: true,
+      requireActorDatasetLift: true
+    });
     expect(statusResponse.status.operatorRunbook).toMatchObject({
       schemaVersion: "ti.darkweb_index_operator_runbook.v1",
       mode: "operator_controls_no_live_collection",
@@ -6741,6 +6901,26 @@ describe("api v1", () => {
       routeFields: ["status.tier100Product", "darkwebIndex.productHandoff"],
       requireNoLeakProof: true
     });
+    expect(statusResponse.contract.tier1000Readiness).toMatchObject({
+      schemaVersion: "ti.darkweb_index_tier1000_readiness.v1",
+      tier: "tier_1000",
+      targetRecordCount: 1000,
+      routeFields: ["status.tier1000Readiness", "darkwebIndex.productHandoff"],
+      advancementTarget: "tier_4000",
+      requireNoLeakProof: true
+    });
+    expect(statusResponse.contract.tier1000Readiness.requiredRecordFields).toEqual(expect.arrayContaining([
+      "safeSummary",
+      "category",
+      "liveness",
+      "actorHints",
+      "victimHints",
+      "sourceFamily",
+      "legalTriage",
+      "lastSeen",
+      "provenanceHash",
+      "buyerValue"
+    ]));
     expect(statusResponse.contract.sourceIngest).toMatchObject({
       runtimeMode: "contract_only_no_network",
       sourceTypes: expect.arrayContaining(["directory", "seed_list", "analyst_import", "public_report"]),
@@ -6779,9 +6959,13 @@ describe("api v1", () => {
       uiContract: { route: string };
       productHandoff: {
         tier: string;
+        nextTier: string;
         apifyReadyFields: string[];
+        buyerValueFields: string[];
+        freshnessFields: string[];
         publicSearchUse: string;
         recordIds: string[];
+        tier1000ReadyRecordIds: string[];
         warnings: string[];
       };
       noLeakSerialization: { passed: boolean };
@@ -6798,6 +6982,7 @@ describe("api v1", () => {
       },
       productHandoff: {
         tier: "tier_100",
+        nextTier: "tier_1000",
         publicSearchUse: "corroborating_metadata_context_only",
         warnings: ["metadata_only", "review_required", "no_raw_locations"]
       },
@@ -6808,7 +6993,10 @@ describe("api v1", () => {
     expect(darkwebIndex.records.length).toBeGreaterThan(0);
     expect(darkwebIndex.records.length).toBeLessThanOrEqual(5);
     expect(darkwebIndex.productHandoff.apifyReadyFields).toEqual(["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"]);
+    expect(darkwebIndex.productHandoff.buyerValueFields).toEqual(["buyerValueScore", "whyItMatters", "freshness", "sourceFamily", "provenanceHash"]);
+    expect(darkwebIndex.productHandoff.freshnessFields).toEqual(["lastSeen", "lastChecked", "liveness", "refreshCadenceMinutes"]);
     expect(darkwebIndex.productHandoff.recordIds).toEqual(darkwebIndex.records.map((record) => record.id));
+    expect(darkwebIndex.productHandoff.tier1000ReadyRecordIds.every((recordId) => darkwebIndex.productHandoff.recordIds.includes(recordId))).toBe(true);
     expect(darkwebIndex.records.every((record) =>
       record.network === "tor" &&
       record.actorHints.includes("akira") &&

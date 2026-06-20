@@ -88,7 +88,7 @@
         "items": {
           "type": "object",
           "properties": {
-            "owner": { "type": "string", "enum": ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07"] },
+            "owner": { "type": "string", "enum": ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08"] },
             "action": { "type": "string" },
             "expectedEffect": { "type": "string" }
           },
@@ -98,6 +98,21 @@
       },
       "buyerValueScore": { "type": "number", "minimum": 0, "maximum": 1 },
       "billingGuidance": { "type": "string", "enum": ["charge", "include_as_context", "do_not_charge_if_metered"] },
+      "graphQualityLift": { "type": "string", "enum": ["accepted_sellable_lift", "rejected_hold", "rejected_caveat", "not_applicable"] },
+      "graphQualityLiftReasonCodes": { "type": "array", "items": { "type": "string" } },
+      "graphQualityLiftEvidence": {
+        "type": "object",
+        "properties": {
+          "relationshipReady": { "type": "boolean" },
+          "sourceFamilyCorroborated": { "type": "boolean" },
+          "contradictionHeld": { "type": "boolean" },
+          "freshnessLift": { "type": "boolean" },
+          "exportEligible": { "type": "boolean" },
+          "noLeak": { "type": "boolean", "const": true }
+        },
+        "required": ["relationshipReady", "sourceFamilyCorroborated", "contradictionHeld", "freshnessLift", "exportEligible", "noLeak"],
+        "additionalProperties": false
+      },
       "evidenceGrade": { "type": "string", "enum": ["corroborated", "single_source", "unverified"] },
       "isActionable": { "type": "boolean" },
       "reviewReasons": { "type": "array", "items": { "type": "string" } },
@@ -177,6 +192,9 @@
       "paidRowRemediationActions",
       "buyerValueScore",
       "billingGuidance",
+      "graphQualityLift",
+      "graphQualityLiftReasonCodes",
+      "graphQualityLiftEvidence",
       "evidenceGrade",
       "isActionable",
       "reviewReasons",
@@ -191,7 +209,7 @@
     "overview": {
       "title": "Actor intelligence",
       "transformation": {
-        "fields": ["actor", "rowType", "paidRowDecision", "billingGuidance", "buyerValueScore", "title", "summary", "relationshipSummary", "relationshipPivotTypes", "relationshipPivots", "whyActionable", "freshnessDelta", "confidenceDelta", "contradictionHints", "corroborationState", "nextSearchPivots", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "freshnessExpectation", "highestValueMissingFamily", "nextBestSourceAction", "expectedTimeToUsefulSignal", "buyerCaveat", "paidRowReason", "paidRowReasonCodes", "paidRowRemediationActions", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
+        "fields": ["actor", "rowType", "paidRowDecision", "billingGuidance", "buyerValueScore", "graphQualityLift", "graphQualityLiftReasonCodes", "graphQualityLiftEvidence", "title", "summary", "relationshipSummary", "relationshipPivotTypes", "relationshipPivots", "whyActionable", "freshnessDelta", "confidenceDelta", "contradictionHints", "corroborationState", "nextSearchPivots", "claimType", "victimName", "impact", "publisherCount", "freshnessStatus", "schedulerDecision", "pollingHint", "nextPollSeconds", "retryAfterSeconds", "sourceCoverageState", "sourceCoverageGaps", "freshnessExpectation", "highestValueMissingFamily", "nextBestSourceAction", "expectedTimeToUsefulSignal", "buyerCaveat", "paidRowReason", "paidRowReasonCodes", "paidRowRemediationActions", "evidenceGrade", "coverageStatus", "collectionPriority", "recommendedCollectionAction", "isActionable", "reviewReasons", "analysisFacets", "sourceType", "sourceFamilies", "missingSourceFamilies", "claimedDate", "sector", "attackId", "confidence", "lastSeen", "sourceName", "sourceUrl"]
       },
       "display": {
         "component": "table",
@@ -201,6 +219,9 @@
           "paidRowDecision": { "label": "Paid row decision", "format": "text" },
           "billingGuidance": { "label": "Billing guidance", "format": "text" },
           "buyerValueScore": { "label": "Buyer value", "format": "number" },
+          "graphQualityLift": { "label": "Graph lift", "format": "text" },
+          "graphQualityLiftReasonCodes": { "label": "Graph lift reasons", "format": "array" },
+          "graphQualityLiftEvidence": { "label": "Graph lift evidence", "format": "object" },
           "title": { "label": "Finding", "format": "text" },
           "summary": { "label": "Summary", "format": "text" },
           "relationshipSummary": { "label": "Relationship insight", "format": "text" },

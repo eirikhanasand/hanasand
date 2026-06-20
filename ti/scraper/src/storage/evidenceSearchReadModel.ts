@@ -625,6 +625,78 @@ export interface EvidenceActorDatasetPromotionRow {
   noLeak: true;
 }
 
+export interface EvidenceActorDatasetConsumerHandoff {
+  schemaVersion: "ti.evidence_actor_dataset_consumer_handoff.v1";
+  generatedAt: string;
+  handoffId: string;
+  sourcePreview: "ti.evidence_actor_dataset_promotion_preview.v1";
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  dryRun: true;
+  willWriteActorDataset: false;
+  willWritePublicAnswerCache: false;
+  latestProof: EvidenceActorDatasetPromotionPreview["latestProof"];
+  counts: {
+    actorDatasetRows: number;
+    sellableCandidates: number;
+    caveatedContextRows: number;
+    suppressedRows: number;
+    coverageGapRows: number;
+    publicAnswerCacheWrites: number;
+  };
+  actorDatasetRows: EvidenceActorDatasetConsumerRow[];
+  publicAnswerCacheWrites: EvidenceActorPublicAnswerCacheWrite[];
+  suppressionReceipts: Array<{
+    receiptId: string;
+    sourceRowId: string;
+    documentId?: string;
+    reason: "stale_row" | "unsafe_or_restricted_for_dataset" | "coverage_gap";
+    visibleState: "suppressed" | "context_only" | "coverage_gap";
+    noLeak: true;
+  }>;
+  coverageGapRows: EvidenceActorDatasetConsumerRow[];
+  noLeakGuarantees: EvidenceActorProductImpactReplay["noLeakGuarantees"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetConsumerRow {
+  datasetRowId: string;
+  sourcePromotionRowId: string;
+  actorDatasetAction: "render_sellable_candidate" | "render_caveated_context" | "suppress_from_dataset" | "render_coverage_gap";
+  paidRowDecision: "sellable" | "included_with_caveat" | "hold";
+  paidRowReason: string;
+  billingGuidance: "charge_after_actor_emit" | "do_not_charge_context" | "do_not_charge_suppressed" | "do_not_charge_gap";
+  buyerValueScore: number;
+  evidenceGrade: "corroborated" | "metadata_only_context" | "stale_suppressed" | "coverage_gap";
+  coverageStatus: "ready_for_dataset" | "context_only" | "suppressed" | "gap";
+  title: string;
+  summary: string;
+  sourceFamily?: EvidenceActorProductImpactRow["sourceFamily"];
+  documentId?: string;
+  sourceId?: string;
+  captureId?: string;
+  replayId?: string;
+  retentionClass?: RetentionClass;
+  safety: {
+    rawContentIncluded: false;
+    restrictedMaterialIncluded: false;
+    unsafeUrlIncluded: false;
+    credentialIncluded: false;
+    actorInteractionRequired: false;
+  };
+}
+
+export interface EvidenceActorPublicAnswerCacheWrite {
+  cacheWriteId: string;
+  sourcePromotionRowId: string;
+  cacheKey: string;
+  action: "upsert_ready_context" | "upsert_caveated_context" | "suppress_stale_context" | "record_coverage_gap";
+  documentId?: string;
+  visibleState: "ready" | "partial" | "suppressed" | "coverage_gap";
+  summary: string;
+  noLeak: true;
+}
+
 export interface EvidenceSearchReadModelRepository {
   readonly backend: EvidenceSearchReadModelBackend;
   readiness(): EvidenceSearchReadModelReadiness;
@@ -1462,6 +1534,59 @@ export function buildEvidenceActorDatasetPromotionPreview(
   };
 }
 
+export function buildEvidenceActorDatasetConsumerHandoff(
+  preview: EvidenceActorDatasetPromotionPreview
+): EvidenceActorDatasetConsumerHandoff {
+  const actorDatasetRows: EvidenceActorDatasetConsumerRow[] = preview.rows.map(actorDatasetConsumerRow);
+  const publicAnswerCacheWrites: EvidenceActorPublicAnswerCacheWrite[] = preview.rows.map(actorPublicAnswerCacheWrite);
+  const suppressionReceipts = preview.rows
+    .filter((row) => row.paidRowDecision !== "billable_result_candidate")
+    .map((row) => ({
+      receiptId: stableId("evidence-actor-dataset-suppression", `${preview.handoffId}:${row.rowId}:${row.paidRowDecision}`),
+      sourceRowId: row.rowId,
+      documentId: row.documentId,
+      reason: row.paidRowDecision === "not_billable_suppressed"
+        ? "stale_row" as const
+        : row.paidRowDecision === "not_billable_coverage_gap"
+          ? "coverage_gap" as const
+          : "unsafe_or_restricted_for_dataset" as const,
+      visibleState: row.paidRowDecision === "not_billable_suppressed"
+        ? "suppressed" as const
+        : row.paidRowDecision === "not_billable_coverage_gap"
+          ? "coverage_gap" as const
+          : "context_only" as const,
+      noLeak: true as const
+    }));
+  const coverageGapRows = actorDatasetRows.filter((row) => row.actorDatasetAction === "render_coverage_gap");
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_consumer_handoff.v1",
+    generatedAt: preview.generatedAt,
+    handoffId: stableId("evidence-actor-dataset-consumer", `${preview.handoffId}:${preview.latestProof.runId}`),
+    sourcePreview: preview.schemaVersion,
+    productSurface: preview.productSurface,
+    actorBuild: preview.actorBuild,
+    dryRun: true,
+    willWriteActorDataset: false,
+    willWritePublicAnswerCache: false,
+    latestProof: { ...preview.latestProof },
+    counts: {
+      actorDatasetRows: actorDatasetRows.length,
+      sellableCandidates: actorDatasetRows.filter((row) => row.actorDatasetAction === "render_sellable_candidate").length,
+      caveatedContextRows: actorDatasetRows.filter((row) => row.actorDatasetAction === "render_caveated_context").length,
+      suppressedRows: actorDatasetRows.filter((row) => row.actorDatasetAction === "suppress_from_dataset").length,
+      coverageGapRows: coverageGapRows.length,
+      publicAnswerCacheWrites: publicAnswerCacheWrites.length
+    },
+    actorDatasetRows,
+    publicAnswerCacheWrites,
+    suppressionReceipts,
+    coverageGapRows,
+    noLeakGuarantees: { ...preview.noLeakGuarantees },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
 class InMemoryEvidenceSearchReadModelRepository implements EvidenceSearchReadModelRepository {
   readonly backend: EvidenceSearchReadModelBackend = "embedded_memory";
   private readonly records = new Map<string, EvidenceSearchReadModelRecord>();
@@ -1916,6 +2041,89 @@ function actorDatasetBuyerValue(row: EvidenceActorProductImpactRow, rowType: "ev
   const metadataContextWeight = rowType === "metadata_context" ? 0.14 : 0;
   const replayWeight = row.replayId ? 0.12 : 0;
   return Math.round(Math.min(1, confidence * 0.46 + sourceFamilyWeight + publicWeight + metadataContextWeight + replayWeight) * 1000) / 1000;
+}
+
+function actorDatasetConsumerRow(row: EvidenceActorDatasetPromotionRow): EvidenceActorDatasetConsumerRow {
+  const action = actorDatasetActionFor(row.paidRowDecision);
+  return {
+    datasetRowId: stableId("evidence-actor-dataset-rendered-row", `${row.rowId}:${action}`),
+    sourcePromotionRowId: row.rowId,
+    actorDatasetAction: action,
+    paidRowDecision: action === "render_sellable_candidate" ? "sellable" : action === "render_caveated_context" ? "included_with_caveat" : "hold",
+    paidRowReason: row.paidRowReason,
+    billingGuidance: action === "render_sellable_candidate"
+      ? "charge_after_actor_emit"
+      : action === "render_caveated_context"
+        ? "do_not_charge_context"
+        : action === "suppress_from_dataset"
+          ? "do_not_charge_suppressed"
+          : "do_not_charge_gap",
+    buyerValueScore: row.buyerValueScore,
+    evidenceGrade: action === "render_sellable_candidate"
+      ? "corroborated"
+      : action === "render_caveated_context"
+        ? "metadata_only_context"
+        : action === "suppress_from_dataset"
+          ? "stale_suppressed"
+          : "coverage_gap",
+    coverageStatus: action === "render_sellable_candidate"
+      ? "ready_for_dataset"
+      : action === "render_caveated_context"
+        ? "context_only"
+        : action === "suppress_from_dataset"
+          ? "suppressed"
+          : "gap",
+    title: row.title,
+    summary: row.summary,
+    sourceFamily: row.sourceFamily,
+    documentId: row.documentId,
+    sourceId: row.sourceId,
+    captureId: row.captureId,
+    replayId: row.replayId,
+    retentionClass: row.retentionClass,
+    safety: {
+      rawContentIncluded: false,
+      restrictedMaterialIncluded: false,
+      unsafeUrlIncluded: false,
+      credentialIncluded: false,
+      actorInteractionRequired: false
+    }
+  };
+}
+
+function actorPublicAnswerCacheWrite(row: EvidenceActorDatasetPromotionRow): EvidenceActorPublicAnswerCacheWrite {
+  const action = row.paidRowDecision === "billable_result_candidate"
+    ? "upsert_ready_context"
+    : row.paidRowDecision === "not_billable_context"
+      ? "upsert_caveated_context"
+      : row.paidRowDecision === "not_billable_suppressed"
+        ? "suppress_stale_context"
+        : "record_coverage_gap";
+  return {
+    cacheWriteId: stableId("evidence-actor-public-answer-cache", `${row.rowId}:${action}`),
+    sourcePromotionRowId: row.rowId,
+    cacheKey: stableId("api-intel-search-answer-cache", `${row.documentId ?? row.rowId}:${row.sourceFamily ?? "gap"}`),
+    action,
+    documentId: row.documentId,
+    visibleState: action === "upsert_ready_context"
+      ? "ready"
+      : action === "upsert_caveated_context"
+        ? "partial"
+        : action === "suppress_stale_context"
+          ? "suppressed"
+          : "coverage_gap",
+    summary: row.summary,
+    noLeak: true
+  };
+}
+
+function actorDatasetActionFor(
+  decision: EvidenceActorDatasetPromotionRow["paidRowDecision"]
+): EvidenceActorDatasetConsumerRow["actorDatasetAction"] {
+  if (decision === "billable_result_candidate") return "render_sellable_candidate";
+  if (decision === "not_billable_context") return "render_caveated_context";
+  if (decision === "not_billable_suppressed") return "suppress_from_dataset";
+  return "render_coverage_gap";
 }
 
 function tokenize(query: string): string[] {

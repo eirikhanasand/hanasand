@@ -1619,6 +1619,144 @@ describe("source seed bundles", () => {
     )).toBe(true);
     expect(atlas.sourceLadder.paidSourceTierPlan.gapClosure.topRepairableCandidateIds.every((sourceId) => sourceId.startsWith("atlas_src_"))).toBe(true);
     expect(atlas.sourceLadder.paidSourceTierPlan.gapClosure.nextMeasuredPass).toContain("Actor daily proof");
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue).toMatchObject({
+      schemaVersion: "ti.source_atlas.payworthy_repair_queue.v1",
+      routeHint: "/v1/sources/atlas",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      evaluatedCandidateCount: 4000,
+      currentPayworthySourceCount: 1468,
+      targetPayworthySourceCount: 2880,
+      additionalPayworthySourcesNeeded: 1412
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.duplicateSuppressed).toMatchObject({
+      blocker: "duplicate_suppressed",
+      candidateCount: 108
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.legalReviewNotCurrent).toMatchObject({
+      blocker: "legal_review_not_current",
+      candidateCount: 262
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.notReadyForDryRun).toMatchObject({
+      blocker: "not_ready_for_dry_run",
+      candidateCount: 624
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.aggregateProjectedPayworthyLift).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.projectedPayworthySourceCount).toBeGreaterThan(
+      atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.currentPayworthySourceCount
+    );
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.replacementCandidateIds.every((sourceId) => sourceId.startsWith("atlas_src_"))).toBe(true);
+    const payworthyRepairRows = [
+      ...atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.duplicateSuppressed.rows,
+      ...atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.legalReviewNotCurrent.rows,
+      ...atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.notReadyForDryRun.rows
+    ];
+    expect(payworthyRepairRows.length).toBeGreaterThan(0);
+    expect(payworthyRepairRows.every((row) =>
+      row.atlasSourceId.startsWith("atlas_src_") &&
+      row.safeSourceHash.startsWith("ti_source_atlas_source_") &&
+      row.exactUnblockAction.length > 50 &&
+      row.whyBuyerWouldCare.includes("paid Actor") &&
+      typeof row.legalRobotsEvidence.canClearWithoutPrivateAuthCaptcha === "boolean" &&
+      row.noLeakBoundary.rawUrlExposed === false &&
+      row.noLeakBoundary.rawPayloadExposed === false &&
+      row.noLeakBoundary.privateAuthCaptchaRequired === false &&
+      row.noLeakBoundary.crawlStarted === false
+	    )).toBe(true);
+	    expect(payworthyRepairRows.some((row) => row.legalRobotsEvidence.canClearWithoutPrivateAuthCaptcha === true)).toBe(true);
+	    expect(payworthyRepairRows.filter((row) => row.repairDecision === "repair").every((row) =>
+	      row.legalRobotsEvidence.canClearWithoutPrivateAuthCaptcha === true
+	    )).toBe(true);
+	    expect(payworthyRepairRows.some((row) =>
+	      row.repairDecision === "replace" &&
+	      row.repairability === "replace_with_better_source" &&
+	      row.replacementCandidateIds.length > 0
+	    )).toBe(true);
+	    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.duplicateSuppressed.rows.every((row) =>
+      row.repairDecision === "retire_duplicate" &&
+      row.replacementCandidateIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.noLeakBoundary.rawUrlExposed === false &&
+      row.noLeakBoundary.rawPayloadExposed === false &&
+      row.noLeakBoundary.privateAuthCaptchaRequired === false &&
+      row.noLeakBoundary.crawlStarted === false
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.legalReviewNotCurrent.rows.every((row) =>
+      ["repair", "replace"].includes(row.repairDecision) &&
+      row.legalRobotsEvidence.notes.length > 20 &&
+      row.expectedFreshRowsPerDay >= 0
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.nonMutatingApplyPlan.allowedActions).toEqual(expect.arrayContaining([
+      "refresh_legal_review",
+      "retire_duplicate",
+      "request_readiness_review",
+      "replace_candidate"
+    ]));
+    expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.nonMutatingApplyPlan.forbiddenActions).toEqual(expect.arrayContaining([
+      "auto_activate",
+      "start_crawl",
+      "download_payload",
+      "bypass_auth_or_captcha",
+      "contact_actor"
+    ]));
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch).toMatchObject({
+      schemaVersion: "ti.source_atlas.high_value_replacement_batch.v1",
+      routeHint: "/v1/sources/atlas",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      evaluatedCandidateCount: 4000,
+      targetCandidateCount: 10000,
+      currentPayworthySourceCount: 1468,
+      targetPayworthySourceCount: 2880,
+      additionalPayworthySourcesNeeded: 1412
+    });
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.replacementRows.length).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.replacementRows.map((row) => row.replacementForBlocker)).toEqual(expect.arrayContaining([
+      "low_source_value",
+      "low_freshness",
+      "low_evidence_yield",
+      "low_public_answer_impact"
+    ]));
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.replacementRows.every((row) =>
+      row.safeSourceHash.startsWith("ti_source_atlas_source_") &&
+      row.expectedFreshRowsPerDay >= 0 &&
+      row.expectedEvidenceYield >= 0 &&
+      row.expectedEntities.includes("source_family") &&
+      ["certified", "parser_repair_needed", "descriptor_review_only"].includes(row.parserReadiness) &&
+      ["urgent", "high", "normal", "hold"].includes(row.activationPriority) &&
+      row.noLeakBoundary.rawUrlExposed === false &&
+      row.noLeakBoundary.rawPayloadExposed === false &&
+      row.noLeakBoundary.privateAuthCaptchaRequired === false &&
+      row.noLeakBoundary.crawlStarted === false &&
+      row.noLeakBoundary.actorInteractionRequired === false
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.familyPlans.every((row) =>
+      row.sampledReplacementCount > 0 &&
+      row.expectedFreshRowsPerDay >= 0 &&
+      row.averageEvidenceYield >= 0 &&
+      row.buyerVisibleEffect.includes("padding")
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.actorPlans.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT28",
+      "APT42",
+      "Volt Typhoon",
+      "Lazarus",
+      "Scattered Spider",
+      "FIN7",
+      "LockBit",
+      "Akira"
+    ]));
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.actorPlans.every((row) =>
+      row.currentBlockers.length > 0 &&
+      row.topReplacementSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.buyerVisibleEffect.length > 60
+    )).toBe(true);
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.aggregate.projectedPayworthySourceCount).toBeGreaterThan(
+      atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.currentPayworthySourceCount
+    );
+    expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.aggregate.nextMeasuredPass).toContain("daily Actor proof");
     expect(atlas.sourceLadder.candidate1000).toMatchObject({
       candidateCount: 1000,
       evaluatedCandidateCount: 500,
@@ -1694,6 +1832,71 @@ describe("source seed bundles", () => {
     expect(atlas.sourceLadder.parserRepairExecution.fixtures.some((fixture) => fixture.repairApplied === "apt29_freshness")).toBe(true);
     expect(atlas.sourceLadder.parserRepairExecution.fixtures.some((fixture) => fixture.repairApplied === "apt28_evidence_recovery")).toBe(true);
     expect(atlas.sourceLadder.parserRepairExecution.fixtures.some((fixture) => fixture.repairApplied === "ransomware_victim_activity")).toBe(true);
+    expect(atlas.sourceLadder.parserRepairBatch1000).toMatchObject({
+      schemaVersion: "ti.source_atlas.parser_repair_batch_1000.v1",
+      sourcePack: "first_1000",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      baseline: {
+        candidateCount: 1000,
+        evaluatedCandidateCount: 500,
+        targetPayworthyRate: 0.72
+      },
+      safety: {
+        normalizedToCollectedItem: true,
+        provenancePreserved: true,
+        rawSourceBodiesIncluded: false,
+        unsafeUrlsIncluded: false,
+        sourceActivationApplied: false,
+        crawlStarted: false
+      }
+    });
+    expect(atlas.sourceLadder.parserRepairBatch1000.baseline.parserFailureCandidateCount).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.parserRepairBatch1000.baseline.repairableParserFailureCount).toBeGreaterThan(0);
+    expect(atlas.sourceLadder.parserRepairBatch1000.groupRows.length).toBeGreaterThan(3);
+    expect(atlas.sourceLadder.parserRepairBatch1000.groupRows.every((row) =>
+      row.groupId.startsWith("ti_source_atlas_parser_repair_group_") &&
+      row.parserFailureCount > 0 &&
+      row.sampleSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.requiredExtractedFields.includes("reported_date") &&
+      row.qualityGate.includes("Agent 07")
+    )).toBe(true);
+    expect(atlas.sourceLadder.parserRepairBatch1000.groupRows.some((row) =>
+      row.parserFamily === "rss" || row.parserFamily === "static_html" || row.parserFamily === "advisory_security_signal"
+    )).toBe(true);
+    expect(atlas.sourceLadder.parserRepairBatch1000.fixtures).toHaveLength(25);
+    expect(atlas.sourceLadder.parserRepairBatch1000.fixtures.every((fixture) =>
+      fixture.before.rawText.startsWith("Reported by ") &&
+      fixture.after.metadata.normalizedTo === "CollectedItem" &&
+      fixture.after.rawText.includes("actor=") &&
+      fixture.after.rawText.includes("victim=") &&
+      fixture.after.rawText.includes("sector=") &&
+      fixture.after.rawText.includes("country=") &&
+      fixture.after.rawText.includes("ttp=") &&
+      fixture.after.rawText.includes("malware_tool=") &&
+      fixture.after.rawText.includes("first_reported_at=") &&
+      fixture.extractedFacts.corroboratingSourceIds.length >= 2 &&
+      fixture.safety.provenancePreserved === true &&
+      fixture.safety.rawSourceBodyIncluded === false &&
+      fixture.safety.unsafeUrlIncluded === false
+    )).toBe(true);
+    expect(atlas.sourceLadder.parserRepairBatch1000.agent07QualityLiftRows).toHaveLength(25);
+    expect(atlas.sourceLadder.parserRepairBatch1000.agent07QualityLiftRows.every((row) =>
+      row.requiredFacts.includes("actor") &&
+      row.requiredFacts.includes("corroboration") &&
+      row.beforeGenericSummary === true &&
+      row.afterSpecificFactCount >= 6 &&
+      row.agent07AcceptIf.length >= 3 &&
+      row.rejectIf.some((condition) => condition.includes("raw unsafe URL"))
+    )).toBe(true);
+    expect(atlas.sourceLadder.parserRepairBatch1000.summary.movedRejectedToPayworthySourceCount).toBeGreaterThanOrEqual(1);
+    expect(atlas.sourceLadder.parserRepairBatch1000.summary.projectedPayworthySourceCount).toBeGreaterThan(
+      atlas.sourceLadder.parserRepairBatch1000.baseline.payworthySourceCountBefore
+    );
+    expect(atlas.sourceLadder.parserRepairBatch1000.fixtures.some((fixture) => fixture.repairApplied === "apt29_freshness")).toBe(true);
+    expect(atlas.sourceLadder.parserRepairBatch1000.fixtures.some((fixture) => fixture.repairApplied === "apt28_evidence_recovery")).toBe(true);
+    expect(atlas.sourceLadder.parserRepairBatch1000.fixtures.some((fixture) => fixture.repairApplied === "ransomware_victim_activity")).toBe(true);
     expect(atlas.sourceLadder.paidSourceTierPlan.graphRelationshipQuality).toMatchObject({
       schemaVersion: "ti.source_atlas.graph_relationship_tier_quality.v1",
       evaluatedCandidateCount: 100,

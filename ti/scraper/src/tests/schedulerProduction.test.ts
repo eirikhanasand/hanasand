@@ -1507,6 +1507,45 @@ describe("scheduler production readiness", () => {
     expect(daily.freshCollectionRetryPlan.retryAfterSecondsByWorkClass.find((row) => row.workClass === "public_channel_probe")).toMatchObject({ retryAfterSeconds: 15, visibleState: "partial" });
     expect(daily.freshCollectionRetryPlan.retryAfterSecondsByWorkClass.find((row) => row.workClass === "restricted_darknet_metadata_sweep")).toMatchObject({ retryAfterSeconds: 60, visibleState: "metadata_review" });
     expect(daily.freshCollectionRetryPlan.escalation.map((row) => row.condition)).toEqual(expect.arrayContaining(["stale_commercial_actor", "public_channel_gap", "dark_metadata_gap", "weak_victim_extraction", "retry_debt"]));
+    expect(daily.executionQueuePlan).toMatchObject({
+      enqueueWindow: "source_sweeps_before_actor_run",
+      duplicateRunReuseBeforeEnqueue: true,
+      fairnessGuards: {
+        maxActorQueriesPerTenantPerDay: 20,
+        priorityAgingAfterSeconds: 180,
+        retryDebtDeadLetterAtAttempts: 3
+      },
+      paidRowGate: {
+        rowsWithOnlyStaleActivity: "suppress_from_ready",
+        rowsMissingPublicChannelForFocusedActors: "include_caveat_and_enqueue_gap_fill",
+        rowsMissingApprovedDarkMetadataForRansomware: "include_caveat_and_enqueue_metadata_review",
+        weakVictimExtraction: "hold_paid_row_until_review_or_caveat"
+      }
+    });
+    expect(daily.executionQueuePlan.batches.map((batch) => batch.batchId)).toEqual([
+      "interactive_commercial_refresh",
+      "public_channel_gap_fill",
+      "tier_100_source_sweep",
+      "tier_1000_source_sweep",
+      "tier_4000_metadata_sweep",
+      "daily_actor_dataset_emit"
+    ]);
+    expect(daily.executionQueuePlan.batches.find((batch) => batch.batchId === "public_channel_gap_fill")).toMatchObject({
+      workClass: "public_channel_probe",
+      freshnessGate: "must_produce_fresh_or_partial",
+      staleOnlyRowsBlocked: true,
+      expectedVisibleState: "partial"
+    });
+    expect(daily.executionQueuePlan.batches.find((batch) => batch.batchId === "tier_4000_metadata_sweep")).toMatchObject({
+      workClass: "restricted_darknet_metadata_sweep",
+      tier: "tier_4000",
+      freshnessGate: "metadata_review_gate"
+    });
+    expect(daily.executionQueuePlan.suppressionDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ query: "APT29", reason: "stale_only_activity", action: "raise_priority" }),
+      expect.objectContaining({ query: "APT42", reason: "missing_public_channel", action: "enqueue_gap_fill" }),
+      expect.objectContaining({ query: "LockBit", reason: "missing_dark_metadata", action: "metadata_review" })
+    ]));
     expect(daily.staleSuppression.affectedQueries).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42"]));
     expect(daily.routeContracts.contractsField).toBe("surfaces.frontier.contracts.scheduler_daily_actor_run_plan");
     expect(daily.releaseGate.proofCommands).toContain("bun run check:apify-publication");

@@ -478,6 +478,75 @@ export interface DarkwebIndexTier100ProductSlice {
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
 }
 
+export interface DarkwebIndexTier1000Readiness {
+  readonly schemaVersion: "ti.darkweb_index_tier1000_readiness.v1";
+  readonly owner: "Agent 05";
+  readonly tier: "tier_1000";
+  readonly mode: "real_metadata_readiness_path";
+  readonly targetRecordCount: 1000;
+  readonly evaluatedRecordCount: number;
+  readonly productQualifiedRecordCount: number;
+  readonly rejectedLowValueRecordCount: number;
+  readonly sourceFamilies: ReadonlyArray<{
+    readonly family: "public_report" | "analyst_import" | "directory_metadata" | "public_tracker_reference" | "approved_seed" | "safe_search_result";
+    readonly evaluatedCount: number;
+    readonly productQualifiedCount: number;
+    readonly needsRefreshCount: number;
+    readonly legalHoldCount: number;
+    readonly blockedUnsafeCount: number;
+    readonly averageBuyerValue: number;
+    readonly refreshCadenceMinutes: number;
+  }>;
+  readonly freshness: {
+    readonly currentEnoughCount: number;
+    readonly staleCount: number;
+    readonly deadOrUnknownCount: number;
+    readonly liveOrIntermittentRate: number;
+    readonly medianRefreshCadenceMinutes: number;
+    readonly maxAllowedStaleHours: 72;
+    readonly customerFreshnessLabel: "fresh_enough_for_monitoring" | "needs_refresh_before_paid_claim";
+  };
+  readonly searchReadiness: {
+    readonly safeSummaryCoverage: number;
+    readonly actorHintCoverage: number;
+    readonly victimHintCoverage: number;
+    readonly categoryCoverageCount: number;
+    readonly sourceFamilyCoverageCount: number;
+    readonly buyerValueCoverage: number;
+    readonly apifyReadyRecordIds: readonly string[];
+    readonly searchBoostQueries: readonly string[];
+  };
+  readonly importGate: {
+    readonly accepted: number;
+    readonly duplicate: number;
+    readonly blockedUnsafe: number;
+    readonly reviewNeeded: number;
+    readonly staleOrDead: number;
+    readonly lowBuyerValue: number;
+    readonly acceptanceRate: number;
+    readonly duplicateRate: number;
+    readonly blockedUnsafeRate: number;
+  };
+  readonly tier4000Planning: {
+    readonly targetTier: "tier_4000";
+    readonly requiredBeforeAdvance: readonly string[];
+    readonly minProductQualifiedRecords: 720;
+    readonly minFreshnessCurrentRate: 0.55;
+    readonly maxBlockedUnsafeRate: 0.18;
+    readonly requireNoLeakProof: true;
+    readonly requireActorDatasetLift: true;
+  };
+  readonly safety: {
+    readonly rawUnsafeUrlsExposed: false;
+    readonly stolenFilesDownloaded: false;
+    readonly credentialsRetrieved: false;
+    readonly payloadsFollowed: false;
+    readonly privateAuthCaptchaAccess: false;
+    readonly actorInteraction: false;
+  };
+  readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
+}
+
 export interface DarkwebIndexOperatorRunbook {
   readonly schemaVersion: "ti.darkweb_index_operator_runbook.v1";
   readonly owner: "Agent 05";
@@ -584,6 +653,7 @@ export interface DarkwebIndexStatusDto {
   readonly driftPacket: DarkwebIndexDriftPacket;
   readonly searchQuality: DarkwebIndexSearchQualityMetrics;
   readonly tier100Product: DarkwebIndexTier100ProductSlice;
+  readonly tier1000Readiness: DarkwebIndexTier1000Readiness;
   readonly operatorRunbook: DarkwebIndexOperatorRunbook;
   readonly storageReadiness: {
     readonly tables: readonly string[];
@@ -625,9 +695,13 @@ export interface DarkwebIndexSearchDto {
   };
   readonly productHandoff: {
     readonly tier: "tier_100";
+    readonly nextTier: "tier_1000";
     readonly apifyReadyFields: readonly ["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"];
+    readonly buyerValueFields: readonly ["buyerValueScore", "whyItMatters", "freshness", "sourceFamily", "provenanceHash"];
+    readonly freshnessFields: readonly ["lastSeen", "lastChecked", "liveness", "refreshCadenceMinutes"];
     readonly publicSearchUse: "corroborating_metadata_context_only";
     readonly recordIds: readonly string[];
+    readonly tier1000ReadyRecordIds: readonly string[];
     readonly warnings: readonly ["metadata_only", "review_required", "no_raw_locations"];
   };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
@@ -709,6 +783,15 @@ export interface DarkwebIndexContractDto {
     readonly routeFields: readonly ["status.tier100Product", "darkwebIndex.productHandoff"];
     readonly requireNoLeakProof: true;
   };
+  readonly tier1000Readiness: {
+    readonly schemaVersion: "ti.darkweb_index_tier1000_readiness.v1";
+    readonly tier: "tier_1000";
+    readonly targetRecordCount: 1000;
+    readonly routeFields: readonly ["status.tier1000Readiness", "darkwebIndex.productHandoff"];
+    readonly requiredRecordFields: readonly ["safeSummary", "category", "liveness", "actorHints", "victimHints", "sourceFamily", "legalTriage", "lastSeen", "provenanceHash", "buyerValue"];
+    readonly advancementTarget: "tier_4000";
+    readonly requireNoLeakProof: true;
+  };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
 }
 
@@ -767,6 +850,7 @@ export function buildDarkwebIndexStatus(records: readonly DarkwebIndexRecord[] =
     driftPacket: buildDarkwebIndexDriftPacket(records),
     searchQuality: buildDarkwebIndexSearchQualityMetrics(records),
     tier100Product: buildDarkwebIndexTier100ProductSlice(records),
+    tier1000Readiness: buildDarkwebIndexTier1000Readiness(records),
     operatorRunbook: buildDarkwebIndexOperatorRunbook(),
     storageReadiness: {
       tables: ["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs", "darkweb_index_classification_history", "darkweb_index_liveness_checks", "darkweb_index_review_notes"],
@@ -831,9 +915,13 @@ export function searchDarkwebIndex(input: {
     },
     productHandoff: {
       tier: "tier_100",
+      nextTier: "tier_1000",
       apifyReadyFields: ["actorHints", "victimHints", "category", "legalTriage", "liveness", "safeSummary", "sourceFamily", "lastSeen"],
+      buyerValueFields: ["buyerValueScore", "whyItMatters", "freshness", "sourceFamily", "provenanceHash"],
+      freshnessFields: ["lastSeen", "lastChecked", "liveness", "refreshCadenceMinutes"],
       publicSearchUse: "corroborating_metadata_context_only",
       recordIds: page.map((record) => record.id),
+      tier1000ReadyRecordIds: page.filter(isTier1000ProductQualifiedRecord).map((record) => record.id),
       warnings: ["metadata_only", "review_required", "no_raw_locations"]
     },
     noLeakSerialization: darkwebIndexNoLeakSerialization()
@@ -915,6 +1003,15 @@ export function darkwebIndexContract(): DarkwebIndexContractDto {
       recordGoal: 100,
       advancementTarget: "tier_1000",
       routeFields: ["status.tier100Product", "darkwebIndex.productHandoff"],
+      requireNoLeakProof: true
+    },
+    tier1000Readiness: {
+      schemaVersion: "ti.darkweb_index_tier1000_readiness.v1",
+      tier: "tier_1000",
+      targetRecordCount: 1000,
+      routeFields: ["status.tier1000Readiness", "darkwebIndex.productHandoff"],
+      requiredRecordFields: ["safeSummary", "category", "liveness", "actorHints", "victimHints", "sourceFamily", "legalTriage", "lastSeen", "provenanceHash", "buyerValue"],
+      advancementTarget: "tier_4000",
       requireNoLeakProof: true
     },
     noLeakSerialization: darkwebIndexNoLeakSerialization()
@@ -1535,6 +1632,91 @@ function buildDarkwebIndexTier100ProductSlice(records: readonly DarkwebIndexReco
   };
 }
 
+function buildDarkwebIndexTier1000Readiness(records: readonly DarkwebIndexRecord[]): DarkwebIndexTier1000Readiness {
+  const tierRecords = records.slice(0, 1000);
+  const duplicateRecordIds = darkwebIndexDedupePlan(tierRecords).duplicateClusters.flatMap((cluster) => cluster.duplicateRecordIds).filter((recordId) => tierRecords.some((record) => record.id === recordId));
+  const duplicateSet = new Set(duplicateRecordIds);
+  const blockedRecords = tierRecords.filter((record) => record.reviewState === "blocked_unsafe" || record.legalTriage === "blocked_unsafe");
+  const reviewRecords = tierRecords.filter((record) => record.reviewState === "needs_review" || record.reviewState === "legal_hold" || record.reviewState === "false_positive_review");
+  const staleOrDeadRecords = tierRecords.filter((record) => record.liveness === "dead" || record.liveness === "unknown");
+  const qualifiedRecords = tierRecords.filter((record) => isTier1000ProductQualifiedRecord(record) && !duplicateSet.has(record.id));
+  const lowBuyerValueRecords = tierRecords.filter((record) => buyerValueScoreFor(record) < 0.55);
+  const currentEnoughRecords = tierRecords.filter((record) => isCurrentEnoughForMonitoring(record));
+  const sourceFamilies: DarkwebIndexTier1000Readiness["sourceFamilies"] = [
+    tier1000SourceFamily("public_report", tierRecords),
+    tier1000SourceFamily("analyst_import", tierRecords),
+    tier1000SourceFamily("directory_metadata", tierRecords),
+    tier1000SourceFamily("public_tracker_reference", tierRecords),
+    tier1000SourceFamily("approved_seed", tierRecords),
+    tier1000SourceFamily("safe_search_result", tierRecords)
+  ];
+  return {
+    schemaVersion: "ti.darkweb_index_tier1000_readiness.v1",
+    owner: "Agent 05",
+    tier: "tier_1000",
+    mode: "real_metadata_readiness_path",
+    targetRecordCount: 1000,
+    evaluatedRecordCount: tierRecords.length,
+    productQualifiedRecordCount: qualifiedRecords.length,
+    rejectedLowValueRecordCount: lowBuyerValueRecords.length,
+    sourceFamilies,
+    freshness: {
+      currentEnoughCount: currentEnoughRecords.length,
+      staleCount: tierRecords.filter((record) => !isCurrentEnoughForMonitoring(record) && record.liveness !== "dead" && record.liveness !== "unknown").length,
+      deadOrUnknownCount: staleOrDeadRecords.length,
+      liveOrIntermittentRate: ratio(tierRecords.filter((record) => record.liveness === "live" || record.liveness === "intermittent").length, Math.max(1, tierRecords.length)),
+      medianRefreshCadenceMinutes: median(sourceFamilies.map((family) => family.refreshCadenceMinutes)),
+      maxAllowedStaleHours: 72,
+      customerFreshnessLabel: ratio(currentEnoughRecords.length, Math.max(1, tierRecords.length)) >= 0.55 ? "fresh_enough_for_monitoring" : "needs_refresh_before_paid_claim"
+    },
+    searchReadiness: {
+      safeSummaryCoverage: ratio(tierRecords.filter((record) => record.safeSummary.length >= 80).length, Math.max(1, tierRecords.length)),
+      actorHintCoverage: ratio(tierRecords.filter((record) => record.actorHints.length > 0).length, Math.max(1, tierRecords.length)),
+      victimHintCoverage: ratio(tierRecords.filter((record) => record.victimHints.length > 0).length, Math.max(1, tierRecords.length)),
+      categoryCoverageCount: uniqueSorted(tierRecords.map((record) => record.category)).length,
+      sourceFamilyCoverageCount: sourceFamilies.filter((family) => family.evaluatedCount > 0).length,
+      buyerValueCoverage: ratio(tierRecords.filter((record) => buyerValueScoreFor(record) >= 0.55).length, Math.max(1, tierRecords.length)),
+      apifyReadyRecordIds: qualifiedRecords.slice(0, 50).map((record) => record.id),
+      searchBoostQueries: uniqueSorted(tierRecords.flatMap((record) => [...record.actorHints, ...record.victimHints, record.category])).slice(0, 30)
+    },
+    importGate: {
+      accepted: qualifiedRecords.length,
+      duplicate: duplicateSet.size,
+      blockedUnsafe: blockedRecords.length,
+      reviewNeeded: reviewRecords.length,
+      staleOrDead: staleOrDeadRecords.length,
+      lowBuyerValue: lowBuyerValueRecords.length,
+      acceptanceRate: ratio(qualifiedRecords.length, Math.max(1, tierRecords.length)),
+      duplicateRate: ratio(duplicateSet.size, Math.max(1, tierRecords.length)),
+      blockedUnsafeRate: ratio(blockedRecords.length, Math.max(1, tierRecords.length))
+    },
+    tier4000Planning: {
+      targetTier: "tier_4000",
+      requiredBeforeAdvance: [
+        "replace low-buyer-value records before counting tier progress",
+        "raise current-enough freshness above 55 percent with approved refresh runs",
+        "prove Apify/public search lift on actor and victim queries",
+        "keep blocked unsafe and legal-hold rows out of public-ready counts",
+        "preserve no-leak serialization for every status/search response"
+      ],
+      minProductQualifiedRecords: 720,
+      minFreshnessCurrentRate: 0.55,
+      maxBlockedUnsafeRate: 0.18,
+      requireNoLeakProof: true,
+      requireActorDatasetLift: true
+    },
+    safety: {
+      rawUnsafeUrlsExposed: false,
+      stolenFilesDownloaded: false,
+      credentialsRetrieved: false,
+      payloadsFollowed: false,
+      privateAuthCaptchaAccess: false,
+      actorInteraction: false
+    },
+    noLeakSerialization: darkwebIndexNoLeakSerialization()
+  };
+}
+
 function buildDarkwebIndexOperatorRunbook(): DarkwebIndexOperatorRunbook {
   return {
     schemaVersion: "ti.darkweb_index_operator_runbook.v1",
@@ -1888,6 +2070,87 @@ function tier100SourceFamily(
     staleOrDeadCount: staleOrDead.length,
     productLift: productLiftByFamily[family]
   };
+}
+
+function tier1000SourceFamily(
+  family: DarkwebIndexTier1000Readiness["sourceFamilies"][number]["family"],
+  records: readonly DarkwebIndexRecord[]
+): DarkwebIndexTier1000Readiness["sourceFamilies"][number] {
+  const sourceTypesByFamily: Record<DarkwebIndexTier1000Readiness["sourceFamilies"][number]["family"], readonly DarkwebIndexSourceType[]> = {
+    public_report: ["public_report"],
+    analyst_import: ["analyst_import"],
+    directory_metadata: ["directory"],
+    public_tracker_reference: ["public_report", "safe_search_result"],
+    approved_seed: ["seed_list", "internal_discovery"],
+    safe_search_result: ["safe_search_result"]
+  };
+  const selected = records.filter((record) => sourceTypesByFamily[family].includes(record.provenance.sourceType));
+  const qualified = selected.filter(isTier1000ProductQualifiedRecord);
+  const needsRefresh = selected.filter((record) => !isCurrentEnoughForMonitoring(record));
+  const legalHold = selected.filter((record) => record.reviewState === "legal_hold");
+  const blockedUnsafe = selected.filter((record) => record.reviewState === "blocked_unsafe" || record.legalTriage === "blocked_unsafe");
+  return {
+    family,
+    evaluatedCount: selected.length,
+    productQualifiedCount: qualified.length,
+    needsRefreshCount: needsRefresh.length,
+    legalHoldCount: legalHold.length,
+    blockedUnsafeCount: blockedUnsafe.length,
+    averageBuyerValue: selected.length === 0 ? 0 : Math.round((selected.reduce((sum, record) => sum + buyerValueScoreFor(record), 0) / selected.length) * 100) / 100,
+    refreshCadenceMinutes: refreshCadenceMinutesFor(family)
+  };
+}
+
+function isTier1000ProductQualifiedRecord(record: DarkwebIndexRecord): boolean {
+  return record.reviewState === "approved_metadata_only" &&
+    record.safeSummary.length >= 80 &&
+    record.title.length >= 20 &&
+    (record.liveness === "live" || record.liveness === "intermittent") &&
+    (record.actorHints.length > 0 || record.victimHints.length > 0) &&
+    buyerValueScoreFor(record) >= 0.55;
+}
+
+function buyerValueScoreFor(record: DarkwebIndexRecord): number {
+  let score = 0.35;
+  if (record.actorHints.length > 0) score += 0.2;
+  if (record.victimHints.length > 0) score += 0.16;
+  if (record.ttpHints.length > 0) score += 0.08;
+  if (record.liveness === "live") score += 0.12;
+  if (record.liveness === "intermittent") score += 0.06;
+  if (record.reviewState === "approved_metadata_only") score += 0.1;
+  if (record.provenance.sourceType === "public_report" || record.provenance.sourceType === "safe_search_result") score += 0.04;
+  if (record.reviewState === "blocked_unsafe" || record.legalTriage === "blocked_unsafe") score -= 0.25;
+  if (record.reviewState === "legal_hold" || record.reviewState === "needs_review" || record.reviewState === "false_positive_review") score -= 0.12;
+  if (record.liveness === "dead" || record.liveness === "unknown" || record.liveness === "blocked_by_policy") score -= 0.16;
+  return Math.max(0, Math.min(1, Math.round(score * 100) / 100));
+}
+
+function isCurrentEnoughForMonitoring(record: DarkwebIndexRecord): boolean {
+  const checked = Date.parse(record.lastChecked);
+  const generated = Date.parse("2026-05-24T00:00:00.000Z");
+  if (!Number.isFinite(checked) || !Number.isFinite(generated)) return false;
+  const ageHours = Math.max(0, (generated - checked) / 3_600_000);
+  return ageHours <= 72 && (record.liveness === "live" || record.liveness === "intermittent");
+}
+
+function refreshCadenceMinutesFor(family: DarkwebIndexTier1000Readiness["sourceFamilies"][number]["family"]): number {
+  const cadence: Record<DarkwebIndexTier1000Readiness["sourceFamilies"][number]["family"], number> = {
+    public_report: 360,
+    analyst_import: 1440,
+    directory_metadata: 720,
+    public_tracker_reference: 360,
+    approved_seed: 1440,
+    safe_search_result: 720
+  };
+  return cadence[family];
+}
+
+function median(values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle]!;
+  return Math.round(((sorted[middle - 1]! + sorted[middle]!) / 2) * 100) / 100;
 }
 
 function ratio(numerator: number, denominator: number): number {

@@ -1574,6 +1574,142 @@ export interface TiSourceAtlasProductSourceLadderPacket {
       topReplacementCandidateIds: string[];
       nextMeasuredPass: string;
     };
+    payworthyRepairQueue: {
+      schemaVersion: "ti.source_atlas.payworthy_repair_queue.v1";
+      routeHint: "/v1/sources/atlas";
+      dryRun: true;
+      willMutate: false;
+      willStartCrawling: false;
+      evaluatedCandidateCount: number;
+      currentPayworthySourceCount: number;
+      targetPayworthySourceCount: number;
+      additionalPayworthySourcesNeeded: number;
+      queues: {
+        duplicateSuppressed: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"];
+        legalReviewNotCurrent: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"];
+        notReadyForDryRun: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"];
+      };
+      queue: {
+        blocker: "duplicate_suppressed" | "legal_review_not_current" | "not_ready_for_dry_run";
+        candidateCount: number;
+        sampledRowCount: number;
+        repairableCount: number;
+        replaceCount: number;
+        expectedPayworthyLiftIfCleared: number;
+        rows: Array<{
+          rank: number;
+          atlasSourceId: string;
+          sourceName: string;
+          family: TiSourceAtlasFamily;
+          domain: string;
+          safeSourceHash: string;
+          blocker: "duplicate_suppressed" | "legal_review_not_current" | "not_ready_for_dry_run";
+          currentState: TiSourceAtlasRecord["activationReadiness"]["state"];
+          repairDecision: "repair" | "replace" | "retire_duplicate";
+          repairability: "plausible_public_review" | "operator_legal_required" | "replace_with_better_source";
+          exactUnblockAction: string;
+          whyBuyerWouldCare: string;
+          expectedRowLift: number;
+          expectedFreshRowsPerDay: number;
+          replacementCandidateIds: string[];
+          legalRobotsEvidence: {
+            legalReview: TiSourceAtlasRecord["legalRobotsState"]["legalReview"];
+            robotsReview: TiSourceAtlasRecord["legalRobotsState"]["robotsReview"];
+            notes: string;
+            canClearWithoutPrivateAuthCaptcha: boolean;
+          };
+          noLeakBoundary: {
+            rawUrlExposed: false;
+            rawPayloadExposed: false;
+            privateAuthCaptchaRequired: false;
+            crawlStarted: false;
+          };
+        }>;
+      };
+      replacementCandidateIds: string[];
+      aggregateProjectedPayworthyLift: number;
+      projectedPayworthySourceCount: number;
+      projectedPayworthyRate: number;
+      nonMutatingApplyPlan: {
+        routeHint: "/v1/analyst/source-activation-packets";
+        allowedActions: Array<"refresh_legal_review" | "retire_duplicate" | "request_readiness_review" | "replace_candidate">;
+        forbiddenActions: Array<"auto_activate" | "start_crawl" | "import_without_review" | "download_payload" | "bypass_auth_or_captcha" | "contact_actor">;
+        agent01Inputs: string[];
+        agent02Inputs: string[];
+        agent03Inputs: string[];
+        agent07Inputs: string[];
+        agent10Inputs: string[];
+      };
+    };
+    highValueReplacementBatch: {
+      schemaVersion: "ti.source_atlas.high_value_replacement_batch.v1";
+      routeHint: "/v1/sources/atlas";
+      dryRun: true;
+      willMutate: false;
+      willStartCrawling: false;
+      evaluatedCandidateCount: number;
+      targetCandidateCount: number;
+      currentPayworthySourceCount: number;
+      targetPayworthySourceCount: number;
+      additionalPayworthySourcesNeeded: number;
+      replacementRows: Array<{
+        rank: number;
+        atlasSourceId: string;
+        sourceName: string;
+        domain: string;
+        safeSourceHash: string;
+        family: TiSourceAtlasFamily;
+        replacementForBlocker: "low_source_value" | "low_freshness" | "low_evidence_yield" | "low_public_answer_impact";
+        publicAccessMethod: "public_http" | "official_api" | "public_rss" | "public_dataset" | "public_channel_descriptor";
+        parserFamily: SourceMarketplaceParserProfile;
+        parserReadiness: "certified" | "parser_repair_needed" | "descriptor_review_only";
+        legalReview: TiSourceAtlasRecord["legalRobotsState"]["legalReview"];
+        robotsReview: TiSourceAtlasRecord["legalRobotsState"]["robotsReview"];
+        expectedFreshRowsPerDay: number;
+        expectedEvidenceYield: number;
+        expectedActorCoverage: string[];
+        expectedRansomwareCoverage: string[];
+        expectedEntities: Array<"actor" | "victim" | "sector" | "country" | "ttp" | "malware_tool" | "cve" | "infrastructure" | "source_family">;
+        buyerVisibleRowEffect: "fresh_actor_activity" | "ransomware_victim_activity" | "advisory_corroboration" | "ttp_tooling_context" | "source_family_diversity";
+        activationPriority: "urgent" | "high" | "normal" | "hold";
+        canImprovePaidRowsWithin1To3Days: boolean;
+        noLeakBoundary: {
+          rawUrlExposed: false;
+          rawPayloadExposed: false;
+          privateAuthCaptchaRequired: false;
+          crawlStarted: false;
+          actorInteractionRequired: false;
+        };
+      }>;
+      familyPlans: Array<{
+        family: TiSourceAtlasFamily;
+        sampledReplacementCount: number;
+        payworthyCandidateCount: number;
+        replacementNeedCount: number;
+        expectedFreshRowsPerDay: number;
+        averageEvidenceYield: number;
+        parserReadyCount: number;
+        legalCurrentCount: number;
+        buyerVisibleEffect: string;
+      }>;
+      actorPlans: Array<{
+        actor: "APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira";
+        currentBlockers: Array<"low_source_value" | "low_freshness" | "low_evidence_yield" | "low_public_answer_impact">;
+        topReplacementSourceIds: string[];
+        expectedFreshRowsPerDay: number;
+        buyerVisibleEffect: string;
+      }>;
+      aggregate: {
+        sampledReplacementCount: number;
+        projectedAdditionalPayworthySources: number;
+        projectedPayworthySourceCount: number;
+        projectedPayworthyRate: number;
+        expectedFreshRowsPerDay: number;
+        expectedRansomwareRowsPerDay: number;
+        expectedActorRowsPerDay: number;
+        nextMeasuredPass: string;
+      };
+    };
     graphRelationshipQuality: {
       schemaVersion: "ti.source_atlas.graph_relationship_tier_quality.v1";
       evaluatedCandidateCount: number;
@@ -1841,6 +1977,70 @@ export interface TiSourceAtlasProductSourceLadderPacket {
       agent03: string[];
       agent07: string[];
       agent10: string[];
+    };
+  };
+  parserRepairBatch1000: {
+    schemaVersion: "ti.source_atlas.parser_repair_batch_1000.v1";
+    sourcePack: "first_1000";
+    generatedAt: string;
+    dryRun: true;
+    willMutate: false;
+    willStartCrawling: false;
+    baseline: {
+      candidateCount: 1000;
+      evaluatedCandidateCount: number;
+      parserFailureCandidateCount: number;
+      repairableParserFailureCount: number;
+      rejectedParserFailureCount: number;
+      replacementRequiredCount: number;
+      payworthySourceCountBefore: number;
+      targetPayworthyRate: 0.72;
+    };
+    groupRows: Array<{
+      groupId: string;
+      family: TiSourceAtlasFamily;
+      parserFamily: SourceMarketplaceParserProfile;
+      candidateCount: number;
+      parserFailureCount: number;
+      repairableCount: number;
+      rejectedCount: number;
+      replacementRequiredCount: number;
+      expectedPayworthyLift: number;
+      sampleSourceIds: string[];
+      requiredExtractedFields: Array<"actor" | "alias" | "victim" | "cve" | "malware_tool" | "campaign" | "sector" | "country" | "reported_date">;
+      qualityGate: string;
+    }>;
+    fixtures: TiSourceAtlasProductSourceLadderPacket["parserRepairExecution"]["fixtures"];
+    summary: {
+      repairedFixtureCount: number;
+      movedRejectedToPayworthySourceCount: number;
+      repairableCount: number;
+      rejectedCount: number;
+      replacementRequiredCount: number;
+      projectedPayworthySourceCount: number;
+      projectedPayworthyRate: number;
+    };
+    agent07QualityLiftRows: Array<{
+      fixtureId: string;
+      atlasSourceId: string;
+      requiredFacts: Array<"actor" | "victim" | "sector" | "country" | "ttp" | "malware_tool" | "reported_date" | "publisher" | "corroboration">;
+      beforeGenericSummary: true;
+      afterSpecificFactCount: number;
+      agent07AcceptIf: string[];
+      rejectIf: string[];
+    }>;
+    safety: {
+      normalizedToCollectedItem: true;
+      provenancePreserved: true;
+      rawSourceBodiesIncluded: false;
+      unsafeUrlsIncluded: false;
+      sourceActivationApplied: false;
+      crawlStarted: false;
+    };
+    handoffs: {
+      agent03ParserRepair: string[];
+      agent07QualityGate: string[];
+      agent10ProductSlo: string[];
     };
   };
   expectedActorOutputImpact: {

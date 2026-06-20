@@ -68,6 +68,7 @@ console.log(JSON.stringify({
   snapshotDate: snapshot.snapshotDate,
   appendedSnapshotCount: snapshots.length,
   metrics: snapshot.metrics,
+  monetizationReadiness: snapshot.monetizationReadiness,
   apifyUnknowns: dashboard.apifyLaunchExperiment.unknowns,
   paidProductEconomics: dashboard.paidProductEconomics,
   sourceMonetizationGate: dashboard.sourceMonetizationGate,
@@ -98,6 +99,9 @@ function buildEndpoint(baseUrl: string, proofMode: LiveProductProofMode, generat
   copyEnvParam(url, "actorIncludedWithCaveatRows", "TI_PRODUCT_SLO_ACTOR_INCLUDED_WITH_CAVEAT_ROWS");
   copyEnvParam(url, "actorCoverageGapOnlyRows", "TI_PRODUCT_SLO_ACTOR_COVERAGE_GAP_ONLY_ROWS");
   copyEnvParam(url, "actorHoldRows", "TI_PRODUCT_SLO_ACTOR_HOLD_ROWS");
+  copyEnvParam(url, "actorSuppressRows", "TI_PRODUCT_SLO_ACTOR_SUPPRESS_ROWS");
+  copyEnvParam(url, "actorTargetSellableRows", "TI_PRODUCT_SLO_ACTOR_TARGET_SELLABLE_ROWS");
+  copyEnvParam(url, "actorAverageBuyerValueScore", "TI_PRODUCT_SLO_ACTOR_AVERAGE_BUYER_VALUE_SCORE");
   copyEnvParam(url, "actorDefaultWatchlistRun", "TI_PRODUCT_SLO_ACTOR_DEFAULT_WATCHLIST_RUN");
   copyEnvParam(url, "grossPpeRevenueUsd", "TI_PRODUCT_SLO_GROSS_PPE_REVENUE_USD");
   copyEnvParam(url, "apifyCommissionUsd", "TI_PRODUCT_SLO_APIFY_COMMISSION_USD");
@@ -237,12 +241,16 @@ function isDashboard(value: unknown): value is LiveProductSloDashboard {
   const record = value as Record<string, unknown>;
   const snapshot = record.dailySnapshot as Record<string, unknown> | undefined;
   const sourceMonetizationGate = record.sourceMonetizationGate as Record<string, unknown> | undefined;
+  const monetizationReadiness = record.apifyLaunchExperiment && typeof record.apifyLaunchExperiment === "object"
+    ? (record.apifyLaunchExperiment as Record<string, unknown>).monetizationReadiness as Record<string, unknown> | undefined
+    : undefined;
   return record.schemaVersion === "ti.live_product_slo_dashboard.v1"
     && record.route === "/v1/ops/product-slo"
     && Boolean(snapshot)
     && typeof snapshot?.snapshotId === "string"
     && snapshot?.appendOnly === true
-    && sourceMonetizationGate?.schemaVersion === "ti.live_product_source_monetization_gate.v1";
+    && sourceMonetizationGate?.schemaVersion === "ti.live_product_source_monetization_gate.v1"
+    && monetizationReadiness?.schemaVersion === "ti.live_product_monetization_readiness.v1";
 }
 
 function proofModeFromEnv(value: string): LiveProductProofMode {

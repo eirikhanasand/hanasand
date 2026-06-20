@@ -45,6 +45,9 @@ export interface LiveProductActorRunMeasurement {
   includedWithCaveatRowCount?: number | null;
   coverageGapOnlyRowCount?: number | null;
   holdRowCount?: number | null;
+  suppressRowCount?: number | null;
+  targetSellableRows?: number | null;
+  averageBuyerValueScore?: number | null;
   defaultWatchlistRun?: boolean | null;
 }
 
@@ -170,8 +173,10 @@ export interface LiveProductSloDashboard {
         includedWithCaveat: number | null;
         coverageGapOnly: number | null;
         hold: number | null;
+        suppress: number | null;
         buyerUseful: number | null;
       };
+      monetizationReadiness: LiveProductMonetizationReadiness;
     };
     projectedRevenue: {
       grossRowsUsd: number | null;
@@ -250,8 +255,10 @@ export interface LiveProductSloDashboard {
       includedWithCaveat: number | null;
       coverageGapOnly: number | null;
       hold: number | null;
+      suppress: number | null;
       buyerUseful: number | null;
     };
+    monetizationReadiness: LiveProductMonetizationReadiness;
     storeViewToRunRate: number | null;
     storeViewToUserRate: number | null;
     runsPerUser: number | null;
@@ -312,10 +319,25 @@ export interface LiveProductDailySnapshot {
     projectedNetAfterUsageUsd: number | null;
     sourcePayworthyRate: number | null;
     sourcePayworthyCount: number | null;
+    sellableRowRate: number | null;
+    averageBuyerValueScore: number | null;
     queueAgeP95Seconds: number | null;
     memoryRssGb: number | null;
     diskGrowthGbPerDay: number | null;
   };
+  monetizationReadiness: LiveProductMonetizationReadiness;
+}
+
+export interface LiveProductMonetizationReadiness {
+  schemaVersion: "ti.live_product_monetization_readiness.v1";
+  status: "ready_for_paid_traffic" | "blocked_for_paid_traffic";
+  targetSellableRows: number | null;
+  sellableRows: number | null;
+  usefulForBuyerRows: number | null;
+  averageBuyerValueScore: number | null;
+  sellableRowRate: number | null;
+  blockers: string[];
+  nextRevenueAction: string;
 }
 
 interface PercentileMetric {
@@ -396,6 +418,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const staleRowPenaltyRows = stalePenaltyRows(paidRowCount, paidFreshRows, input.actorRun?.staleRowCount);
   const costPerUsefulRowUsd = costPerUsefulRow(input.cost, paidUsefulRows);
   const paidRowDecisionCounts = paidRowDecisionCountsFor(input.actorRun);
+  const monetizationReadiness = buildMonetizationReadiness(input.actorRun, paidRowDecisionCounts, paidRowCount);
   const marketplaceConversion = marketplaceConversionFor(input.marketplace);
   const paidProductEconomics = buildPaidProductEconomics({
     actorRun: input.actorRun,
@@ -409,6 +432,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     freshRowRate,
     costPerUsefulRowUsd,
     paidRowDecisionCounts,
+    monetizationReadiness,
     marketplaceConversion
   });
   const sourceMonetizationGate = buildSourceMonetizationGate(input.sourceMonetization, costPerUsefulRowUsd);
@@ -475,6 +499,9 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     includedWithCaveatRows: paidRowDecisionCounts.includedWithCaveat,
     coverageGapOnlyRows: paidRowDecisionCounts.coverageGapOnly,
     holdRows: paidRowDecisionCounts.hold,
+    suppressRows: paidRowDecisionCounts.suppress,
+    monetizationStatusReady: monetizationReadiness.status === "ready_for_paid_traffic" ? 1 : 0,
+    averageBuyerValueScore: monetizationReadiness.averageBuyerValueScore,
     storeViewToRunRate: marketplaceConversion.storeViewToRunRate,
     storeViewToUserRate: marketplaceConversion.storeViewToUserRate,
     runsPerUser: marketplaceConversion.runsPerUser,
@@ -501,7 +528,8 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     storagePath: input.snapshotStoragePath ?? DEFAULT_SNAPSHOT_PATH,
     metrics,
     paidProductEconomics,
-    sourceMonetizationGate
+    sourceMonetizationGate,
+    monetizationReadiness
   });
 
   return {
@@ -542,6 +570,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
       successfulQueries: successfulQueries(measurements, input.actorRun),
       usefulActivityClaimRows: input.actorRun?.activityClaimRowCount ?? sumNullable(measurements.map((item) => item.activityClaimCount)),
       paidRowDecisionCounts,
+      monetizationReadiness,
       storeViewToRunRate: marketplaceConversion.storeViewToRunRate,
       storeViewToUserRate: marketplaceConversion.storeViewToUserRate,
       runsPerUser: marketplaceConversion.runsPerUser,
@@ -620,6 +649,7 @@ function buildDailySnapshot(input: {
   metrics: LiveProductSloDashboard["metrics"];
   paidProductEconomics: LiveProductSloDashboard["paidProductEconomics"];
   sourceMonetizationGate: LiveProductSloDashboard["sourceMonetizationGate"];
+  monetizationReadiness: LiveProductMonetizationReadiness;
 }): LiveProductDailySnapshot {
   const snapshotDate = input.generatedAt.slice(0, 10);
   return {
@@ -644,10 +674,13 @@ function buildDailySnapshot(input: {
       projectedNetAfterUsageUsd: input.paidProductEconomics.projectedRevenue.projectedNetAfterUsageUsd,
       sourcePayworthyRate: input.sourceMonetizationGate.payworthyRate,
       sourcePayworthyCount: input.sourceMonetizationGate.payworthySourceCount,
+      sellableRowRate: input.monetizationReadiness.sellableRowRate,
+      averageBuyerValueScore: input.monetizationReadiness.averageBuyerValueScore,
       queueAgeP95Seconds: input.metrics.queueAgeSeconds.value,
       memoryRssGb: input.metrics.memoryRssGb.value,
       diskGrowthGbPerDay: input.metrics.diskGrowthGbPerDay.value
-    }
+    },
+    monetizationReadiness: input.monetizationReadiness
   };
 }
 
@@ -711,6 +744,7 @@ const buildPaidProductEconomics = (input: {
   freshRowRate: number | null;
   costPerUsefulRowUsd: number | null;
   paidRowDecisionCounts: LiveProductSloDashboard["apifyLaunchExperiment"]["paidRowDecisionCounts"];
+  monetizationReadiness: LiveProductMonetizationReadiness;
   marketplaceConversion: {
     storeViewToRunRate: number | null;
     storeViewToUserRate: number | null;
@@ -758,7 +792,8 @@ const buildPaidProductEconomics = (input: {
       staleRowPenaltyRows: input.staleRowPenaltyRows,
       usefulRowRate: input.usefulRowRate,
       freshRowRate: input.freshRowRate,
-      paidRowDecisionCounts: input.paidRowDecisionCounts
+      paidRowDecisionCounts: input.paidRowDecisionCounts,
+      monetizationReadiness: input.monetizationReadiness
     },
     projectedRevenue: {
       grossRowsUsd,
@@ -899,12 +934,48 @@ function paidRowDecisionCountsFor(actorRun: LiveProductActorRunMeasurement | und
   const includedWithCaveat = nullableInteger(actorRun?.includedWithCaveatRowCount);
   const coverageGapOnly = nullableInteger(actorRun?.coverageGapOnlyRowCount);
   const hold = nullableInteger(actorRun?.holdRowCount);
+  const suppress = nullableInteger(actorRun?.suppressRowCount);
   return {
     sellable,
     includedWithCaveat,
     coverageGapOnly,
     hold,
+    suppress,
     buyerUseful: sumNullable([sellable, includedWithCaveat])
+  };
+}
+
+function buildMonetizationReadiness(
+  actorRun: LiveProductActorRunMeasurement | undefined,
+  paidRowDecisionCounts: LiveProductSloDashboard["apifyLaunchExperiment"]["paidRowDecisionCounts"],
+  rowCount: number | null
+): LiveProductMonetizationReadiness {
+  const targetSellableRows = nullableInteger(actorRun?.targetSellableRows) ?? (rowCount !== null ? Math.max(1, Math.ceil(rowCount * 0.25)) : null);
+  const sellableRows = paidRowDecisionCounts.sellable;
+  const usefulForBuyerRows = paidRowDecisionCounts.buyerUseful;
+  const averageBuyerValueScore = isFiniteNumber(actorRun?.averageBuyerValueScore) ? round(actorRun.averageBuyerValueScore) : null;
+  const sellableRowRate = rateFromCounts(sellableRows, rowCount);
+  const blockers = [
+    sellableRows === null ? "paid_row_decision_counts_missing" : null,
+    targetSellableRows !== null && sellableRows !== null && sellableRows < targetSellableRows ? "sellable_rows_below_paid_traffic_floor" : null,
+    averageBuyerValueScore === null ? "average_buyer_value_missing" : null,
+    averageBuyerValueScore !== null && averageBuyerValueScore < 0.55 ? "average_buyer_value_below_listing_floor" : null,
+    usefulForBuyerRows === 0 ? "no_buyer_useful_rows" : null
+  ].filter((blocker): blocker is string => Boolean(blocker));
+  return {
+    schemaVersion: "ti.live_product_monetization_readiness.v1",
+    status: blockers.length === 0 ? "ready_for_paid_traffic" : "blocked_for_paid_traffic",
+    targetSellableRows,
+    sellableRows,
+    usefulForBuyerRows,
+    averageBuyerValueScore,
+    sellableRowRate,
+    blockers,
+    nextRevenueAction: blockers.includes("sellable_rows_below_paid_traffic_floor")
+      ? "add_or_repair live corroborating sources until at least 25 percent of output rows are chargeable findings"
+      : blockers.includes("average_buyer_value_below_listing_floor") || blockers.includes("average_buyer_value_missing")
+        ? "improve row specificity, corroboration, freshness, and buyer-value extraction before paid traffic"
+        : "send paid traffic and measure Apify views, starts, dataset rows, and repeat runs"
   };
 }
 

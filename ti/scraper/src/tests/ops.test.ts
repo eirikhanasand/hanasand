@@ -300,7 +300,7 @@ describe("ops controls", () => {
         { query: "APT29", proofMode: "inspur", firstResponseMs: 900, firstFreshEvidenceMs: 7000, pollIntervalMs: 3000, status: "ready", rowCount: 29, usefulRowCount: 12, freshRowCount: 24, activityClaimCount: 4, duplicateArticleRate: 0.05, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false },
         { query: "Made Up Actor", proofMode: "inspur", firstResponseMs: 650, pollIntervalMs: 3000, status: "empty", rowCount: 0, usefulRowCount: 0, freshRowCount: 0, activityClaimCount: 0, duplicateArticleRate: 0, sourceProviderFailures: 0, staleRejected: true, emptyResultHonest: true, apiError: false }
       ],
-      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.4", buildId: "build_123", runId: "run_actor_123", datasetId: "ds_123", status: "succeeded", queryCount: 20, rowCount: 98, usefulRowCount: 48, freshRowCount: 64, staleRowCount: 3, activityClaimRowCount: 4, sellableRowCount: 16, includedWithCaveatRowCount: 32, coverageGapOnlyRowCount: 30, holdRowCount: 20, defaultWatchlistRun: true },
+      actorRun: { actorId: "apify/public-threat-actor-monitor", actorVersion: "0.6.4", buildId: "build_123", runId: "run_actor_123", datasetId: "ds_123", status: "succeeded", queryCount: 20, rowCount: 98, usefulRowCount: 48, freshRowCount: 64, staleRowCount: 3, activityClaimRowCount: 4, sellableRowCount: 16, includedWithCaveatRowCount: 32, coverageGapOnlyRowCount: 30, holdRowCount: 20, suppressRowCount: 0, targetSellableRows: 25, averageBuyerValueScore: 0.6, defaultWatchlistRun: true },
       cost: { computeCostUsd: 0.0023, resultPriceUsdPerThousand: 3, actorStartPriceUsd: 0.00005, apifyMarginRate: 0.2 },
       marketplace: { actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, trialRunCount: 2, paidRunCount: 1, repeatUserCount: 0, beneficiaryVerified: false, payoutMethodReady: false, pricingEffectiveAt: "2026-07-04" },
       sourceMonetization: { evaluatedSourceCandidateCount: 4000, payworthySourceCount: 1468, payworthyThresholdRate: 0.72 },
@@ -334,7 +334,16 @@ describe("ops controls", () => {
     expect(dashboard.metrics.costPerUsefulRowUsd.value).toBe(0);
     expect(dashboard.paidProductEconomics.pricing).toMatchObject({ resultPriceUsdPerThousand: 3, actorStartPriceUsd: 0.00005, apifyMarginRate: 0.2, effectiveAt: "2026-07-04" });
     expect(dashboard.paidProductEconomics.latestRun).toMatchObject({ rowCount: 98, usefulRowCount: 48, freshRowCount: 64, staleRowPenaltyRows: 3, defaultWatchlistRun: true });
-    expect(dashboard.paidProductEconomics.latestRun.paidRowDecisionCounts).toMatchObject({ sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, buyerUseful: 48 });
+    expect(dashboard.paidProductEconomics.latestRun.paidRowDecisionCounts).toMatchObject({ sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, suppress: 0, buyerUseful: 48 });
+    expect(dashboard.paidProductEconomics.latestRun.monetizationReadiness).toMatchObject({
+      status: "blocked_for_paid_traffic",
+      targetSellableRows: 25,
+      sellableRows: 16,
+      usefulForBuyerRows: 48,
+      averageBuyerValueScore: 0.6,
+      sellableRowRate: 0.163,
+      blockers: ["sellable_rows_below_paid_traffic_floor"]
+    });
     expect(dashboard.paidProductEconomics.projectedRevenue).toMatchObject({ grossRowsUsd: 0.294, grossActorStartUsd: 0.00005, grossTotalUsd: 0.294, apifyMarginUsd: 0.059, netAfterApifyUsd: 0.235, internalUsageCostUsd: 0.002, projectedNetAfterUsageUsd: 0.233, costPerRunUsd: 0.002, costPerRowUsd: 0, costPerUsefulRowUsd: 0 });
     expect(dashboard.paidProductEconomics.marketplace).toMatchObject({ actorViewCount: 6, actorRunCount: 2, uniqueUserCount: 1, trialRunCount: 2, paidRunCount: 1, repeatUserCount: 0, storeViewToRunRate: 0.333, storeViewToUserRate: 0.167, runsPerUser: 2, trialToPaidRate: 0.5 });
     expect(dashboard.paidProductEconomics.marketplace.blockers).toEqual(expect.arrayContaining(["apify_beneficiary_verification_not_confirmed", "apify_payout_method_not_confirmed"]));
@@ -355,9 +364,16 @@ describe("ops controls", () => {
     });
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyRate).toBe(0.367);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyCount).toBe(1468);
+    expect(dashboard.dailySnapshot.metrics.sellableRowRate).toBe(0.163);
+    expect(dashboard.dailySnapshot.metrics.averageBuyerValueScore).toBe(0.6);
+    expect(dashboard.dailySnapshot.monetizationReadiness.status).toBe("blocked_for_paid_traffic");
     expect(dashboard.apifyLaunchExperiment.grossPpeRevenueUsd).toBeNull();
     expect(dashboard.apifyLaunchExperiment.uniqueUsers).toBe(1);
-    expect(dashboard.apifyLaunchExperiment.paidRowDecisionCounts).toMatchObject({ sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, buyerUseful: 48 });
+    expect(dashboard.apifyLaunchExperiment.paidRowDecisionCounts).toMatchObject({ sellable: 16, includedWithCaveat: 32, coverageGapOnly: 30, hold: 20, suppress: 0, buyerUseful: 48 });
+    expect(dashboard.apifyLaunchExperiment.monetizationReadiness).toMatchObject({
+      status: "blocked_for_paid_traffic",
+      nextRevenueAction: "add_or_repair live corroborating sources until at least 25 percent of output rows are chargeable findings"
+    });
     expect(dashboard.apifyLaunchExperiment).toMatchObject({ storeViewToRunRate: 0.333, storeViewToUserRate: 0.167, runsPerUser: 2, trialToPaidRate: 0.5 });
     expect(dashboard.apifyLaunchExperiment.unknowns).toContain("grossPpeRevenueUsd");
     expect(dashboard.deploymentProof.actorBuildId).toBe("build_123");

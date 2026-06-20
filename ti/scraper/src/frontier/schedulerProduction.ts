@@ -1975,6 +1975,140 @@ export function buildSchedulerDailyActorRunPlan(input: {
     : affectedQueries.length > 0 || input.queueEconomics.totals.retryDebt > 0
       ? "hold"
       : "pass";
+  const publicChannelGapQueries = watchlist
+    .filter((row) => row.sourceFamilyFocus.includes("public_channel") && row.currentFreshness !== "fresh")
+    .map((row) => row.query);
+  const darkMetadataGapQueries = watchlist
+    .filter((row) => row.sourceFamilyFocus.includes("approved_dark_metadata") && row.currentFreshness !== "fresh")
+    .map((row) => row.query);
+  const tier100 = sourceTierCadence.find((tier) => tier.tier === "tier_100") ?? sourceTierCadence[0];
+  const tier1000 = sourceTierCadence.find((tier) => tier.tier === "tier_1000") ?? sourceTierCadence[1] ?? tier100;
+  const tier4000 = sourceTierCadence.find((tier) => tier.tier === "tier_4000") ?? sourceTierCadence[2] ?? tier1000;
+  const executionQueuePlan: SchedulerDailyActorRunPlanDto["executionQueuePlan"] = {
+    enqueueWindow: "source_sweeps_before_actor_run",
+    duplicateRunReuseBeforeEnqueue: true,
+    batches: [
+      {
+        batchId: "interactive_commercial_refresh",
+        workClass: "interactive_live_search",
+        target: "watchlist",
+        queries: watchlist.filter((row) => row.priority === "daily_until_fresh").map((row) => row.query),
+        enqueueAfter: "now",
+        maxTasks: 60,
+        reservedWorkerSlots: partitions.get("interactive_actor_search")?.reservedWorkerSlots ?? 1,
+        freshnessGate: "must_produce_fresh_or_partial",
+        staleOnlyRowsBlocked: true,
+        expectedVisibleState: "searching"
+      },
+      {
+        batchId: "public_channel_gap_fill",
+        workClass: "public_channel_probe",
+        target: "watchlist",
+        queries: publicChannelGapQueries,
+        enqueueAfter: "after_interactive_reuse_check",
+        maxTasks: Math.max(20, publicChannelGapQueries.length * 8),
+        reservedWorkerSlots: partitions.get("public_channel_window")?.reservedWorkerSlots ?? 1,
+        freshnessGate: "must_produce_fresh_or_partial",
+        staleOnlyRowsBlocked: true,
+        expectedVisibleState: "partial"
+      },
+      {
+        batchId: "tier_100_source_sweep",
+        workClass: tier100.workClass,
+        target: "source_tier",
+        queries: defaultQueries,
+        tier: "tier_100",
+        enqueueAfter: "after_public_gap_probe",
+        maxTasks: tier100.maxDailyTasks,
+        reservedWorkerSlots: tier100.reservedWorkerSlots,
+        freshnessGate: "dedupe_and_parser_gate",
+        staleOnlyRowsBlocked: true,
+        expectedVisibleState: "partial"
+      },
+      {
+        batchId: "tier_1000_source_sweep",
+        workClass: tier1000.workClass,
+        target: "source_tier",
+        queries: defaultQueries,
+        tier: "tier_1000",
+        enqueueAfter: "after_public_gap_probe",
+        maxTasks: tier1000.maxDailyTasks,
+        reservedWorkerSlots: tier1000.reservedWorkerSlots,
+        freshnessGate: "dedupe_and_parser_gate",
+        staleOnlyRowsBlocked: true,
+        expectedVisibleState: "partial"
+      },
+      {
+        batchId: "tier_4000_metadata_sweep",
+        workClass: tier4000.workClass,
+        target: "source_tier",
+        queries: darkMetadataGapQueries,
+        tier: "tier_4000",
+        enqueueAfter: "after_source_sweeps",
+        maxTasks: tier4000.maxDailyTasks,
+        reservedWorkerSlots: tier4000.reservedWorkerSlots,
+        freshnessGate: "metadata_review_gate",
+        staleOnlyRowsBlocked: true,
+        expectedVisibleState: "metadata_review"
+      },
+      {
+        batchId: "daily_actor_dataset_emit",
+        workClass: "interactive_live_search",
+        target: "apify_actor_dataset",
+        queries: defaultQueries,
+        enqueueAfter: "after_source_sweeps",
+        maxTasks: defaultQueries.length,
+        reservedWorkerSlots: 1,
+        freshnessGate: "paid_row_gate",
+        staleOnlyRowsBlocked: true,
+        expectedVisibleState: decision === "pass" ? "ready" : "partial"
+      }
+    ],
+    fairnessGuards: {
+      maxActorQueriesPerTenantPerDay: defaultQueries.length,
+      publicChannelReservedWorkerSlots: partitions.get("public_channel_window")?.reservedWorkerSlots ?? 1,
+      darkMetadataReservedWorkerSlots: partitions.get("restricted_metadata_approval")?.reservedWorkerSlots ?? 1,
+      backgroundSweepMaxWorkerShare: 0.42,
+      priorityAgingAfterSeconds: 180,
+      retryDebtDeadLetterAtAttempts: 3
+    },
+    paidRowGate: {
+      rowsWithOnlyStaleActivity: "suppress_from_ready",
+      rowsMissingPublicChannelForFocusedActors: "include_caveat_and_enqueue_gap_fill",
+      rowsMissingApprovedDarkMetadataForRansomware: "include_caveat_and_enqueue_metadata_review",
+      weakVictimExtraction: "hold_paid_row_until_review_or_caveat"
+    },
+    suppressionDecisions: Array.from(new Map([
+      ...watchlist
+        .filter((row) => row.staleSuppression === "drop_stale_only_activity")
+        .map((row) => ({
+          query: row.query,
+          reason: "stale_only_activity" as const,
+          action: "raise_priority" as const,
+          visibleState: "searching" as const
+        })),
+      ...publicChannelGapQueries.map((query) => ({
+        query,
+        reason: "missing_public_channel" as const,
+        action: "enqueue_gap_fill" as const,
+        visibleState: "partial" as const
+      })),
+      ...darkMetadataGapQueries.map((query) => ({
+        query,
+        reason: "missing_dark_metadata" as const,
+        action: "metadata_review" as const,
+        visibleState: "metadata_review" as const
+      })),
+      ...watchlist
+        .filter((row) => row.currentFreshness === "unknown")
+        .map((row) => ({
+          query: row.query,
+          reason: "unknown_freshness" as const,
+          action: "suppress_ready_state" as const,
+          visibleState: "searching" as const
+        }))
+    ].map((row) => [`${row.query}:${row.reason}`, row])).values())
+  };
 
   return {
     generatedAt: now.toISOString(),
@@ -2054,6 +2188,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
         { condition: "retry_debt", action: "dead_letter_review", visibleToClient: true }
       ]
     },
+    executionQueuePlan,
     routeContracts: {
       frontierStatusField: "scheduler.dailyActorRunPlan",
       searchSchedulerField: "scheduler.dailyActorRunPlan",

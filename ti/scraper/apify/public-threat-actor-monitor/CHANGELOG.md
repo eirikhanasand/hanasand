@@ -5,6 +5,9 @@
 - Published Apify build `0.6.4` on Actor version `0.6`. Proof run `iMQGeezZ8bx7WtlhQ` produced dataset `5PLmkE30luBA5Lbgc` with 10 safe APT42 rows and visible paid-row decisions, caveated lead rows, held stale rows, and metadata-only safety fields.
 - Added paid-row enforcement fields for `suppress`, stable reason codes, and owner-specific remediation actions so low-evidence capability rows are not presented or counted like sellable findings.
 - Added `OUTPUT.monetizationReadiness` so every run states whether it has enough chargeable rows for paid-traffic confidence, why it is blocked, and the next revenue action.
+- Promoted fresh or recent multi-source public profile, target, and TTP rows to `sellable` while keeping missing source families visible as caveats; single-source activity, stale, contradicted, and no-evidence rows remain held or caveated.
+- Added dry-run `OUTPUT.qualityLiftGate` with accepted/rejected before-after repair examples, sellable/fresh/useful row lift metrics, cost-per-useful-row delta, projected row revenue delta, and owner handoffs so repair work only counts when buyer-visible paid output improves.
+- Added per-row `graphQualityLift` and `graphQualityLiftEvidence` so sellable/caveated/held rows expose relationship readiness, corroboration, contradiction holds, freshness lift, export-review eligibility, and no-leak state.
 
 ## 0.6.3 - 2026-06-20
 

@@ -23,6 +23,7 @@ import {
 import {
   buildEvidencePromotionTransactionPlan,
   buildEvidencePromotionTransactionAuditReplay,
+  buildEvidenceActorDatasetConsumerHandoff,
   buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorProductImpactReplay,
   buildEvidenceSearchReadModelBackendWriteSet,
@@ -30,6 +31,7 @@ import {
   evidencePromotionExecutionToPostgresRows,
   executeEvidencePromotionTransactionPlan,
   type EvidenceActorProductImpactReplay,
+  type EvidenceActorDatasetConsumerHandoff,
   type EvidenceActorDatasetPromotionPreview,
   evidenceSearchReadModelReadiness,
   type EvidencePromotionTransactionAuditReplay,
@@ -200,6 +202,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   promotionAuditReplay: EvidencePromotionTransactionAuditReplay;
   actorProductImpactReplay: EvidenceActorProductImpactReplay;
   actorDatasetPromotionPreview: EvidenceActorDatasetPromotionPreview;
+  actorDatasetConsumerHandoff: EvidenceActorDatasetConsumerHandoff;
   safeOutput: {
     rawBodiesExposed: false;
     objectKeysExposed: false;
@@ -429,6 +432,7 @@ function buildEvidenceSearchReadModelCutoverDto(
   const promotionAuditReplay = buildEvidencePromotionTransactionAuditReplay(promotionAuditRows, { generatedAt });
   const actorProductImpactReplay = buildEvidenceActorProductImpactReplay(writeSet, promotionTransaction, promotionAuditReplay, { generatedAt });
   const actorDatasetPromotionPreview = buildEvidenceActorDatasetPromotionPreview(actorProductImpactReplay, promotionTransaction);
+  const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
   const restrictedVectorRows = writeSet.pgvectorCandidates.filter((row) => row.restricted_metadata || row.metadata_only).length;
   const embedded = evidenceSearchReadModelReadiness({ backend: "embedded_memory", enabled: true });
   const postgres = evidenceSearchReadModelReadiness({ backend: "postgres_read_model" });
@@ -481,6 +485,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     promotionAuditReplay,
     actorProductImpactReplay,
     actorDatasetPromotionPreview,
+    actorDatasetConsumerHandoff,
     safeOutput: {
       rawBodiesExposed: false,
       objectKeysExposed: false,

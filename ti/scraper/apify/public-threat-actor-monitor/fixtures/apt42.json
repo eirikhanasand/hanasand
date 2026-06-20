@@ -5,7 +5,7 @@
   "status": "partial",
   "refreshAfterSeconds": 3,
   "summary": "APT42 is an Iran-linked espionage actor commonly associated with social engineering, credential theft, account takeover, and targeting of policy, diplomatic, journalist, NGO, and research communities.",
-  "confidence": 0.46,
+  "confidence": 0.62,
   "lastSeen": "2026-06-20T02:29:22.559Z",
   "aliases": ["Charming Kitten", "Mint Sandstorm", "TA453", "Yellow Garuda"],
   "recentActivity": [
@@ -71,6 +71,27 @@
       "type": "live_news",
       "provenance": "https://example.com/public-report",
       "url": "https://example.com/public-report"
+    },
+    {
+      "id": "fixture:public-report-2",
+      "name": "Second public report fixture",
+      "type": "live_news",
+      "provenance": "https://example.com/public-report-2",
+      "url": "https://example.com/public-report-2"
+    },
+    {
+      "id": "fixture:public-report-3",
+      "name": "Third public report fixture",
+      "type": "rss",
+      "provenance": "https://example.com/public-report-3",
+      "url": "https://example.com/public-report-3"
+    },
+    {
+      "id": "fixture:public-report-4",
+      "name": "Fourth public report fixture",
+      "type": "clear_web_report",
+      "provenance": "https://example.com/public-report-4",
+      "url": "https://example.com/public-report-4"
     }
   ],
   "scheduler": {

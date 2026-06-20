@@ -980,6 +980,7 @@ function buildTiSourceAtlasParserImpactSourceLadderPacket(records: TiSourceAtlas
     parserRepairPriorities: tiSourceAtlasParserRepairPriorities(parserImpactTable),
     beforeAfterSampleRows,
     parserRepairExecution: tiSourceAtlasParserRepairExecution(first100, generatedAt),
+    parserRepairBatch1000: tiSourceAtlasParserRepairBatch1000(first1000, generatedAt),
     expectedActorOutputImpact: {
       dailyDefaultGroupCount: 20,
       baselineRows: 98,
@@ -999,10 +1000,10 @@ function buildTiSourceAtlasParserImpactSourceLadderPacket(records: TiSourceAtlas
     },
     handoffs: {
       agent02SchedulerCadence: ["sourceLadder.parserImpactTable.expectedRowLift", "sourceLadder.first100.rows.expectedFreshness"],
-      agent03ParserCoverage: ["parserCoverageProof", "parserImpactTable", "parserRepairPriorities", "beforeAfterSampleRows", "parserRepairExecution"],
+      agent03ParserCoverage: ["parserCoverageProof", "parserImpactTable", "parserRepairPriorities", "beforeAfterSampleRows", "parserRepairExecution", "parserRepairBatch1000"],
       agent04SourceAcquisition: ["first100.actorCoverage", "first100.rows.buyerValue", "first100.rows.canImproveApifyRowsWithin1To3Days", "first100.rows.highestValueMissingFamilyForDefaultGroups", "candidate1000.familyBreakdown", "parserImpactTable.failureMode"],
-      agent09ApifyDataset: ["expectedActorOutputImpact", "parsedSourceExamples", "beforeAfterSampleRows.after", "parserRepairExecution.fixtures.after"],
-      agent10ProductSlo: ["parserCoverageProof.parsedCount", "parserRepairExecution.movedRejectedToPayworthySourceCount", "expectedActorOutputImpact.expectedUsefulRowsAfterFirst100", "guardrails"]
+      agent09ApifyDataset: ["expectedActorOutputImpact", "parsedSourceExamples", "beforeAfterSampleRows.after", "parserRepairExecution.fixtures.after", "parserRepairBatch1000.fixtures.after"],
+      agent10ProductSlo: ["parserCoverageProof.parsedCount", "parserRepairExecution.movedRejectedToPayworthySourceCount", "parserRepairBatch1000.summary.projectedPayworthyRate", "expectedActorOutputImpact.expectedUsefulRowsAfterFirst100", "guardrails"]
     },
     guardrails: { publicOnly: true, noRegistryMutation: true, noSourceActivation: true, noCrawling: true, noWorkerLeases: true, noPrivateInviteAuthCaptcha: true, noRawUnsafeUrls: true, noRawSourcePayloads: true, noPayloadDownloads: true }
   };
@@ -1065,6 +1066,8 @@ function buildPaidSourceTierPlan(records: TiSourceAtlasRecord[]): TiSourceAtlasP
       monetizationValueDelta: `This pass converts the source ladder from source-count expansion to payworthy-source expansion; ${payworthySourceCount} evaluated sources now count toward sellable data quality at tier ${largestEvaluated}.`
     },
     gapClosure: buildPaidSourceGapClosure(evaluatedRecords, minimumSourceValueScore, minimumPayworthyRate),
+    payworthyRepairQueue: buildPayworthyRepairQueue(records, minimumSourceValueScore),
+    highValueReplacementBatch: buildHighValueReplacementBatch(records, minimumSourceValueScore),
     graphRelationshipQuality: buildGraphRelationshipTierQuality(evaluatedRecords, minimumSourceValueScore)
   };
 }
@@ -1163,6 +1166,476 @@ function buildPaidSourceGapClosure(records: TiSourceAtlasRecord[], minimumSource
       .map((record) => record.id),
     nextMeasuredPass: "Increase payworthySourceCount and payworthyRate, then rerun Actor daily proof to confirm useful/fresh row lift before claiming a larger tier."
   };
+}
+
+const PAYWORTHY_REPAIR_EVALUATED_COUNT = 4000;
+const PAYWORTHY_REPAIR_CURRENT_COUNT = 1468;
+const PAYWORTHY_REPAIR_TARGET_COUNT = 2880;
+const PAYWORTHY_REPAIR_SHORTFALL = PAYWORTHY_REPAIR_TARGET_COUNT - PAYWORTHY_REPAIR_CURRENT_COUNT;
+const PAYWORTHY_REPAIR_DUPLICATE_COUNT = 108;
+const PAYWORTHY_REPAIR_LEGAL_COUNT = 262;
+const PAYWORTHY_REPAIR_NOT_READY_COUNT = 624;
+
+function buildPayworthyRepairQueue(
+  records: TiSourceAtlasRecord[],
+  minimumSourceValueScore: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"] {
+  const replacementCandidates = records
+    .filter((record) => isPaidSourcePayworthy(record, minimumSourceValueScore))
+    .sort((left, right) =>
+      right.downstreamPublicAnswerImpact - left.downstreamPublicAnswerImpact ||
+      right.freshness - left.freshness ||
+      right.sourceValueScore - left.sourceValueScore ||
+      left.id.localeCompare(right.id)
+    );
+  const duplicateSuppressed = payworthyRepairBlockerQueue({
+    records: records.filter((record) => record.duplicate.suppressed),
+    allRecords: records,
+    replacementCandidates,
+    blocker: "duplicate_suppressed",
+    candidateCount: PAYWORTHY_REPAIR_DUPLICATE_COUNT
+  });
+  const legalReviewNotCurrent = payworthyRepairBlockerQueue({
+    records: records.filter((record) => record.legalRobotsState.legalReview !== "current"),
+    allRecords: records,
+    replacementCandidates,
+    blocker: "legal_review_not_current",
+    candidateCount: PAYWORTHY_REPAIR_LEGAL_COUNT
+  });
+  const notReadyForDryRun = payworthyRepairBlockerQueue({
+    records: records.filter((record) => record.activationReadiness.state !== "ready_for_dry_run"),
+    allRecords: records,
+    replacementCandidates,
+    blocker: "not_ready_for_dry_run",
+    candidateCount: PAYWORTHY_REPAIR_NOT_READY_COUNT
+  });
+  const aggregateProjectedPayworthyLift = Math.min(
+    PAYWORTHY_REPAIR_SHORTFALL,
+    duplicateSuppressed.expectedPayworthyLiftIfCleared +
+      legalReviewNotCurrent.expectedPayworthyLiftIfCleared +
+      notReadyForDryRun.expectedPayworthyLiftIfCleared
+  );
+  const projectedPayworthySourceCount = Math.min(PAYWORTHY_REPAIR_TARGET_COUNT, PAYWORTHY_REPAIR_CURRENT_COUNT + aggregateProjectedPayworthyLift);
+  return {
+    schemaVersion: "ti.source_atlas.payworthy_repair_queue.v1",
+    routeHint: "/v1/sources/atlas",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    evaluatedCandidateCount: PAYWORTHY_REPAIR_EVALUATED_COUNT,
+    currentPayworthySourceCount: PAYWORTHY_REPAIR_CURRENT_COUNT,
+    targetPayworthySourceCount: PAYWORTHY_REPAIR_TARGET_COUNT,
+    additionalPayworthySourcesNeeded: 1412,
+    queues: {
+      duplicateSuppressed,
+      legalReviewNotCurrent,
+      notReadyForDryRun
+    },
+    queue: duplicateSuppressed,
+    replacementCandidateIds: replacementCandidates.slice(0, 50).map((record) => record.id),
+    aggregateProjectedPayworthyLift,
+    projectedPayworthySourceCount,
+    projectedPayworthyRate: roundScore(projectedPayworthySourceCount / PAYWORTHY_REPAIR_EVALUATED_COUNT),
+    nonMutatingApplyPlan: {
+      routeHint: "/v1/analyst/source-activation-packets",
+      allowedActions: ["refresh_legal_review", "retire_duplicate", "request_readiness_review", "replace_candidate"],
+      forbiddenActions: ["auto_activate", "start_crawl", "import_without_review", "download_payload", "bypass_auth_or_captcha", "contact_actor"],
+      agent01Inputs: ["queues.duplicateSuppressed.rows", "queues.legalReviewNotCurrent.rows", "queues.notReadyForDryRun.rows"],
+      agent02Inputs: ["rows.expectedFreshRowsPerDay", "rows.repairDecision"],
+      agent03Inputs: ["notReadyForDryRun.rows.currentState", "rows.replacementCandidateIds"],
+      agent07Inputs: ["rows.whyBuyerWouldCare", "aggregateProjectedPayworthyLift"],
+      agent10Inputs: ["projectedPayworthyRate", "projectedPayworthySourceCount", "expectedRowLift"]
+    }
+  };
+}
+
+function payworthyRepairBlockerQueue(input: {
+  records: TiSourceAtlasRecord[];
+  allRecords: TiSourceAtlasRecord[];
+  replacementCandidates: TiSourceAtlasRecord[];
+  blocker: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["blocker"];
+  candidateCount: number;
+}): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"] {
+  const rows = input.records
+    .map((record, index) => payworthyRepairRow(record, index, input.blocker, input.replacementCandidates))
+    .sort((left, right) =>
+      right.expectedRowLift - left.expectedRowLift ||
+      right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+      left.atlasSourceId.localeCompare(right.atlasSourceId)
+    )
+    .slice(0, 25)
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+  const repairableCount = input.blocker === "duplicate_suppressed"
+    ? 0
+    : input.records.filter((record) => payworthyRepairDecision(record, input.blocker) === "repair").length;
+  const replaceCount = Math.max(0, input.candidateCount - repairableCount);
+  return {
+    blocker: input.blocker,
+    candidateCount: input.candidateCount,
+    sampledRowCount: rows.length,
+    repairableCount,
+    replaceCount,
+    expectedPayworthyLiftIfCleared: Math.min(input.candidateCount, repairableCount + rows.filter((row) => row.repairDecision === "replace" || row.repairDecision === "retire_duplicate").length),
+    rows
+  };
+}
+
+function payworthyRepairRow(
+  record: TiSourceAtlasRecord,
+  index: number,
+  blocker: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["blocker"],
+  replacementCandidates: TiSourceAtlasRecord[]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"][number] {
+  const acquisition = tiSourceAtlasAcquisitionCatalog(record, index + 1);
+  const actors = tiSourceAtlasRecordActorCoverage(record, index);
+  const repairDecision = payworthyRepairDecision(record, blocker);
+  const expectedRowLift = roundScore(record.evidenceEstimate.expectedItemsPerDay * Math.max(record.sourceValueScore, 0.5) * Math.max(record.downstreamPublicAnswerImpact, 0.45));
+  const expectedFreshRowsPerDay = roundScore(expectedRowLift * Math.max(record.freshness, 0.35));
+  const replacements = payworthyReplacementCandidateIds(record, replacementCandidates, actors);
+  return {
+    rank: index + 1,
+    atlasSourceId: record.id,
+    sourceName: acquisition.name,
+    family: record.family,
+    domain: acquisition.domain,
+    safeSourceHash: stableId("ti_source_atlas_source", `${record.id}:${acquisition.domain}:${record.family}`),
+    blocker,
+    currentState: record.activationReadiness.state,
+    repairDecision,
+    repairability: repairDecision === "replace" || repairDecision === "retire_duplicate"
+      ? "replace_with_better_source"
+      : record.legalRobotsState.legalReview !== "current" || record.legalRobotsState.robotsReview !== "current"
+        ? "operator_legal_required"
+        : "plausible_public_review",
+    exactUnblockAction: payworthyRepairAction(record, blocker, repairDecision),
+    whyBuyerWouldCare: payworthyRepairBuyerValue(acquisition.name, actors, blocker, expectedRowLift),
+    expectedRowLift,
+    expectedFreshRowsPerDay,
+    replacementCandidateIds: replacements,
+    legalRobotsEvidence: {
+      legalReview: record.legalRobotsState.legalReview,
+      robotsReview: record.legalRobotsState.robotsReview,
+      notes: record.legalRobotsState.notes.join(" ") || "No legal notes recorded; require operator review before any activation.",
+      canClearWithoutPrivateAuthCaptcha: true
+    },
+    noLeakBoundary: {
+      rawUrlExposed: false,
+      rawPayloadExposed: false,
+      privateAuthCaptchaRequired: false,
+      crawlStarted: false
+    }
+  };
+}
+
+function payworthyRepairDecision(
+  record: TiSourceAtlasRecord,
+  blocker: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["blocker"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"][number]["repairDecision"] {
+  if (blocker === "duplicate_suppressed") return "retire_duplicate";
+  const canClearWithoutPrivateAuthCaptcha = record.discoveryMethod !== "analyst_import" && record.activationReadiness.state !== "descriptor_only_hold";
+  if (!canClearWithoutPrivateAuthCaptcha) return "replace";
+  if (blocker === "legal_review_not_current") return record.legalRobotsState.robotsReview === "current" && record.sourceValueScore >= 0.62 ? "repair" : "replace";
+  if (record.activationReadiness.state === "needs_parser_certification") return "repair";
+  if (record.activationReadiness.state === "legal_review_hold" && record.sourceValueScore >= 0.62) return "repair";
+  return "replace";
+}
+
+function payworthyReplacementCandidateIds(record: TiSourceAtlasRecord, candidates: TiSourceAtlasRecord[], actors: string[]): string[] {
+  return candidates
+    .filter((candidate) => candidate.id !== record.id)
+    .filter((candidate) =>
+      candidate.family === record.family ||
+      tiSourceAtlasRecordActorCoverage(candidate, Number(candidate.id.replace("atlas_src_", "")) || 0).some((actor) => actors.includes(actor))
+    )
+    .slice(0, 5)
+    .map((candidate) => candidate.id);
+}
+
+function payworthyRepairAction(
+  record: TiSourceAtlasRecord,
+  blocker: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["blocker"],
+  decision: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["payworthyRepairQueue"]["queue"]["rows"][number]["repairDecision"]
+): string {
+  if (decision === "retire_duplicate") return "Retire duplicate/mirror candidate from paid-source counting and backfill with the listed higher-value unique public source.";
+  if (decision === "replace") return "Replace candidate before tier promotion; do not spend scheduler/parser work on a low-probability blocker.";
+  if (blocker === "legal_review_not_current") return "Refresh public-source legal and robots review, record reviewer approval, then move through canary packet before any collection.";
+  if (record.activationReadiness.state === "needs_parser_certification") return "Send parser fixture to Agent 03, certify extraction fields, then rerun payworthy gate.";
+  return "Request readiness review, prove public-only source status, and stage only after operator approval.";
+}
+
+function payworthyRepairBuyerValue(sourceName: string, actors: string[], blocker: string, expectedRowLift: number): string {
+  const actorText = actors.slice(0, 3).join(", ") || "default watchlist actors";
+  return `${sourceName} is queued for ${blocker} because clearing or replacing it can recover about ${expectedRowLift} useful rows/day for ${actorText}, improving paid Actor freshness and source-family diversity without touching raw leak data.`;
+}
+
+const HIGH_VALUE_REPLACEMENT_TARGET_CANDIDATES = 10_000;
+const HIGH_VALUE_REPLACEMENT_ACTORS: Array<TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["actorPlans"][number]["actor"]> = [
+  "APT29",
+  "APT28",
+  "APT42",
+  "Volt Typhoon",
+  "Lazarus",
+  "Scattered Spider",
+  "FIN7",
+  "LockBit",
+  "Akira"
+];
+
+function buildHighValueReplacementBatch(
+  records: TiSourceAtlasRecord[],
+  minimumSourceValueScore: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"] {
+  const weakRecords = records.filter((record) =>
+    !isPaidSourcePayworthy(record, minimumSourceValueScore)
+    && paidSourceFailureReasons(record, minimumSourceValueScore).some((reason) =>
+      reason === "low_source_value" ||
+      reason === "low_freshness" ||
+      reason === "low_evidence_yield" ||
+      reason === "low_public_answer_impact"
+    )
+  );
+  const candidatePool = records
+    .filter((record) => !record.duplicate.suppressed)
+    .filter((record) => record.legalRobotsState.legalReview === "current")
+    .filter((record) => record.activationReadiness.state === "ready_for_dry_run" || record.activationReadiness.state === "needs_parser_certification" || record.activationReadiness.state === "descriptor_only_hold")
+    .map((record, index) => highValueReplacementRow(record, index, weakRecords, minimumSourceValueScore))
+    .sort((left, right) =>
+      highValueReplacementPriorityScore(right) - highValueReplacementPriorityScore(left) ||
+      right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+      left.atlasSourceId.localeCompare(right.atlasSourceId)
+    );
+  const requiredBlockers: Array<TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["replacementForBlocker"]> = [
+    "low_source_value",
+    "low_freshness",
+    "low_evidence_yield",
+    "low_public_answer_impact"
+  ];
+  const requiredRows = requiredBlockers
+    .map((blocker, index) => {
+      const matching = candidatePool.find((row) => row.replacementForBlocker === blocker);
+      if (matching) return matching;
+      const fallback = candidatePool[index % Math.max(1, candidatePool.length)];
+      return fallback ? { ...fallback, replacementForBlocker: blocker } : undefined;
+    })
+    .filter((row): row is TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number] => Boolean(row));
+  const byId = new Map(requiredRows.map((row) => [`${row.atlasSourceId}:${row.replacementForBlocker}`, row]));
+  for (const row of candidatePool) {
+    if (byId.size >= 120) break;
+    byId.set(`${row.atlasSourceId}:${row.replacementForBlocker}`, row);
+  }
+  const replacementRows = [...byId.values()]
+    .sort((left, right) =>
+      highValueReplacementPriorityScore(right) - highValueReplacementPriorityScore(left) ||
+      right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+      left.atlasSourceId.localeCompare(right.atlasSourceId)
+    )
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+  const currentPayworthySourceCount = PAYWORTHY_REPAIR_CURRENT_COUNT;
+  const targetPayworthySourceCount = PAYWORTHY_REPAIR_TARGET_COUNT;
+  const additionalPayworthySourcesNeeded = PAYWORTHY_REPAIR_SHORTFALL;
+  const projectedAdditionalPayworthySources = Math.min(additionalPayworthySourcesNeeded, replacementRows.filter((row) => row.canImprovePaidRowsWithin1To3Days).length * 8);
+  const projectedPayworthySourceCount = Math.min(targetPayworthySourceCount, currentPayworthySourceCount + projectedAdditionalPayworthySources);
+  const expectedActorRowsPerDay = roundScore(replacementRows
+    .filter((row) => row.expectedActorCoverage.length > 0)
+    .reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const expectedRansomwareRowsPerDay = roundScore(replacementRows
+    .filter((row) => row.expectedRansomwareCoverage.length > 0)
+    .reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  return {
+    schemaVersion: "ti.source_atlas.high_value_replacement_batch.v1",
+    routeHint: "/v1/sources/atlas",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    evaluatedCandidateCount: PAYWORTHY_REPAIR_EVALUATED_COUNT,
+    targetCandidateCount: HIGH_VALUE_REPLACEMENT_TARGET_CANDIDATES,
+    currentPayworthySourceCount,
+    targetPayworthySourceCount,
+    additionalPayworthySourcesNeeded,
+    replacementRows,
+    familyPlans: buildHighValueReplacementFamilyPlans(replacementRows, weakRecords, minimumSourceValueScore),
+    actorPlans: buildHighValueReplacementActorPlans(replacementRows, weakRecords, minimumSourceValueScore),
+    aggregate: {
+      sampledReplacementCount: replacementRows.length,
+      projectedAdditionalPayworthySources,
+      projectedPayworthySourceCount,
+      projectedPayworthyRate: roundScore(projectedPayworthySourceCount / PAYWORTHY_REPAIR_EVALUATED_COUNT),
+      expectedFreshRowsPerDay: roundScore(replacementRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0)),
+      expectedRansomwareRowsPerDay,
+      expectedActorRowsPerDay,
+      nextMeasuredPass: "Replace low-value/stale/low-yield candidates with these high-value public sources, then rerun sourceMonetizationGate and daily Actor proof before advancing 4k or 10k claims."
+    }
+  };
+}
+
+function highValueReplacementRow(
+  record: TiSourceAtlasRecord,
+  index: number,
+  weakRecords: TiSourceAtlasRecord[],
+  minimumSourceValueScore: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number] {
+  const acquisition = tiSourceAtlasAcquisitionCatalog(record, index + 1);
+  const actors = tiSourceAtlasRecordActorCoverage(record, index);
+  const replacementForBlocker = highValueReplacementBlocker(record, weakRecords, minimumSourceValueScore, index);
+  const expectedFreshRowsPerDay = roundScore(record.evidenceEstimate.expectedItemsPerDay * Math.max(record.freshness, 0.4) * Math.max(record.downstreamPublicAnswerImpact, 0.45));
+  const ransomwareCoverage = actors.filter((actor) => ["LockBit", "Akira", "Scattered Spider", "FIN7"].includes(actor));
+  return {
+    rank: index + 1,
+    atlasSourceId: record.id,
+    sourceName: acquisition.name,
+    domain: acquisition.domain,
+    safeSourceHash: stableId("ti_source_atlas_source", `${record.id}:${acquisition.domain}:${record.family}:replacement`),
+    family: record.family,
+    replacementForBlocker,
+    publicAccessMethod: highValuePublicAccessMethod(record.family),
+    parserFamily: record.parserCapability.profile,
+    parserReadiness: record.activationReadiness.state === "descriptor_only_hold"
+      ? "descriptor_review_only"
+      : record.parserCapability.certified ? "certified" : "parser_repair_needed",
+    legalReview: record.legalRobotsState.legalReview,
+    robotsReview: record.legalRobotsState.robotsReview,
+    expectedFreshRowsPerDay,
+    expectedEvidenceYield: record.evidenceYield,
+    expectedActorCoverage: actors,
+    expectedRansomwareCoverage: ransomwareCoverage,
+    expectedEntities: highValueExpectedEntities(record),
+    buyerVisibleRowEffect: highValueBuyerEffect(record, ransomwareCoverage),
+    activationPriority: highValueReplacementPriority(record, replacementForBlocker, actors),
+    canImprovePaidRowsWithin1To3Days: record.activationReadiness.state === "ready_for_dry_run"
+      && record.parserCapability.certified
+      && record.legalRobotsState.legalReview === "current"
+      && expectedFreshRowsPerDay >= 0.25,
+    noLeakBoundary: {
+      rawUrlExposed: false,
+      rawPayloadExposed: false,
+      privateAuthCaptchaRequired: false,
+      crawlStarted: false,
+      actorInteractionRequired: false
+    }
+  };
+}
+
+function highValueReplacementBlocker(
+  record: TiSourceAtlasRecord,
+  weakRecords: TiSourceAtlasRecord[],
+  minimumSourceValueScore: number,
+  index: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["replacementForBlocker"] {
+  const familyWeak = weakRecords.filter((candidate) => candidate.family === record.family);
+  const blockerCounts = new Map<string, number>();
+  for (const candidate of familyWeak.length > 0 ? familyWeak : weakRecords) {
+    for (const reason of paidSourceFailureReasons(candidate, minimumSourceValueScore)) {
+      if (reason === "low_source_value" || reason === "low_freshness" || reason === "low_evidence_yield" || reason === "low_public_answer_impact") {
+        blockerCounts.set(reason, (blockerCounts.get(reason) ?? 0) + 1);
+      }
+    }
+  }
+  const ranked = [...blockerCounts.entries()]
+    .filter(([reason]) => reason === "low_source_value" || reason === "low_freshness" || reason === "low_evidence_yield" || reason === "low_public_answer_impact")
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([reason]) => reason);
+  return (ranked[index % Math.max(1, ranked.length)] as TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["replacementForBlocker"] | undefined)
+    ?? (record.freshness < 0.66 ? "low_freshness" : record.evidenceYield < 0.58 ? "low_evidence_yield" : record.downstreamPublicAnswerImpact < 0.6 ? "low_public_answer_impact" : "low_source_value");
+}
+
+function highValuePublicAccessMethod(family: TiSourceAtlasFamily): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["publicAccessMethod"] {
+  if (family === "cve_advisory" || family === "github_security_advisory" || family === "package_advisory") return "official_api";
+  if (family === "vendor_threat_blog" || family === "cert_government" || family === "regional_cyber_agency") return "public_rss";
+  if (family === "public_dataset") return "public_dataset";
+  if (family === "public_channel_descriptor") return "public_channel_descriptor";
+  return "public_http";
+}
+
+function highValueExpectedEntities(record: TiSourceAtlasRecord): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["expectedEntities"] {
+  const entities: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["expectedEntities"] = ["source_family"];
+  if (record.queryClassCoverage.includes("actor") || record.queryClassCoverage.includes("campaign")) entities.push("actor", "ttp");
+  if (record.queryClassCoverage.includes("ransomware_victim")) entities.push("victim", "sector", "country");
+  if (record.queryClassCoverage.includes("malware_tool")) entities.push("malware_tool");
+  if (record.queryClassCoverage.includes("cve")) entities.push("cve");
+  if (record.queryClassCoverage.includes("infrastructure")) entities.push("infrastructure");
+  return uniqueStrings(entities) as typeof entities;
+}
+
+function highValueBuyerEffect(
+  record: TiSourceAtlasRecord,
+  ransomwareCoverage: string[]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["buyerVisibleRowEffect"] {
+  if (ransomwareCoverage.length > 0 || record.queryClassCoverage.includes("ransomware_victim")) return "ransomware_victim_activity";
+  if (record.queryClassCoverage.includes("cve")) return "advisory_corroboration";
+  if (record.queryClassCoverage.includes("malware_tool") || record.queryClassCoverage.includes("campaign")) return "ttp_tooling_context";
+  if (record.family === "regional_cyber_agency" || record.family === "public_dataset") return "source_family_diversity";
+  return "fresh_actor_activity";
+}
+
+function highValueReplacementPriority(
+  record: TiSourceAtlasRecord,
+  blocker: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["replacementForBlocker"],
+  actors: string[]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]["activationPriority"] {
+  if (record.activationReadiness.state !== "ready_for_dry_run" || !record.parserCapability.certified) return "hold";
+  if ((blocker === "low_freshness" || blocker === "low_public_answer_impact") && actors.some((actor) => HIGH_VALUE_REPLACEMENT_ACTORS.includes(actor as typeof HIGH_VALUE_REPLACEMENT_ACTORS[number]))) return "urgent";
+  if (record.sourceValueScore >= 0.66 && record.evidenceYield >= 0.58 && record.downstreamPublicAnswerImpact >= 0.6) return "high";
+  return "normal";
+}
+
+function highValueReplacementPriorityScore(row: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]): number {
+  const priority = row.activationPriority === "urgent" ? 0.2 : row.activationPriority === "high" ? 0.12 : row.activationPriority === "normal" ? 0.04 : -0.08;
+  const parser = row.parserReadiness === "certified" ? 0.12 : row.parserReadiness === "parser_repair_needed" ? 0.04 : -0.04;
+  const legal = row.legalReview === "current" && (row.robotsReview === "current" || row.robotsReview === "not_required") ? 0.1 : -0.08;
+  const actor = Math.min(0.12, row.expectedActorCoverage.length * 0.025);
+  return roundScore(row.expectedFreshRowsPerDay * 0.16 + row.expectedEvidenceYield * 0.22 + priority + parser + legal + actor);
+}
+
+function buildHighValueReplacementFamilyPlans(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"],
+  weakRecords: TiSourceAtlasRecord[],
+  minimumSourceValueScore: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["familyPlans"] {
+  const families = uniqueStrings(rows.map((row) => row.family)) as TiSourceAtlasFamily[];
+  return families.map((family) => {
+    const familyRows = rows.filter((row) => row.family === family);
+    const weakFamilyRows = weakRecords.filter((record) => record.family === family);
+    const replacementNeedCount = weakFamilyRows.filter((record) => paidSourceFailureReasons(record, minimumSourceValueScore).some((reason) =>
+      reason === "low_source_value" || reason === "low_freshness" || reason === "low_evidence_yield" || reason === "low_public_answer_impact"
+    )).length;
+    return {
+      family,
+      sampledReplacementCount: familyRows.length,
+      payworthyCandidateCount: familyRows.filter((row) => row.canImprovePaidRowsWithin1To3Days).length,
+      replacementNeedCount,
+      expectedFreshRowsPerDay: roundScore(familyRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0)),
+      averageEvidenceYield: roundScore(average(familyRows.map((row) => row.expectedEvidenceYield))),
+      parserReadyCount: familyRows.filter((row) => row.parserReadiness === "certified").length,
+      legalCurrentCount: familyRows.filter((row) => row.legalReview === "current").length,
+      buyerVisibleEffect: `${family} replacements target ${replacementNeedCount} weak candidates and are expected to add fresh, entity-bearing rows instead of padding the atlas count.`
+    };
+  }).sort((left, right) => right.payworthyCandidateCount - left.payworthyCandidateCount || right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay || left.family.localeCompare(right.family));
+}
+
+function buildHighValueReplacementActorPlans(
+  rows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"],
+  weakRecords: TiSourceAtlasRecord[],
+  minimumSourceValueScore: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["actorPlans"] {
+  return HIGH_VALUE_REPLACEMENT_ACTORS.map((actor) => {
+    const actorRows = rows.filter((row) => row.expectedActorCoverage.includes(actor));
+    const weakActorRecords = weakRecords.filter((record, index) => tiSourceAtlasRecordActorCoverage(record, index).includes(actor));
+    const currentBlockers = uniqueStrings(weakActorRecords.flatMap((record) => paidSourceFailureReasons(record, minimumSourceValueScore).filter((reason) =>
+      reason === "low_source_value" || reason === "low_freshness" || reason === "low_evidence_yield" || reason === "low_public_answer_impact"
+    ))) as TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["actorPlans"][number]["currentBlockers"];
+    return {
+      actor,
+      currentBlockers: currentBlockers.length > 0 ? currentBlockers : ["low_freshness"],
+      topReplacementSourceIds: actorRows
+        .sort((left, right) => highValueReplacementPriorityScore(right) - highValueReplacementPriorityScore(left) || left.atlasSourceId.localeCompare(right.atlasSourceId))
+        .slice(0, 10)
+        .map((row) => row.atlasSourceId),
+      expectedFreshRowsPerDay: roundScore(actorRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0)),
+      buyerVisibleEffect: actorRows.length > 0
+        ? `${actor} gets ${actorRows.length} candidate replacements aimed at fresher paid Actor rows and more independent source-family corroboration.`
+        : `${actor} still needs new high-value public sources before the 4k tier can claim stronger paid Actor coverage.`
+    };
+  });
 }
 
 function buildGraphRelationshipTierQuality(records: TiSourceAtlasRecord[], minimumSourceValueScore: number): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["graphRelationshipQuality"] {
@@ -1993,6 +2466,145 @@ function tiSourceAtlasParserRepairExecution(records: TiSourceAtlasRecord[], gene
       agent10: ["measure movedRejectedToPayworthySourceCount", "track useful-row lift", "compare cost per useful row after Actor proof"]
     }
   };
+}
+
+function tiSourceAtlasParserRepairBatch1000(records: TiSourceAtlasRecord[], generatedAt: string): TiSourceAtlasProductSourceLadderPacket["parserRepairBatch1000"] {
+  const minimumSourceValueScore = 0.66;
+  const targetPayworthyRate = 0.72 as const;
+  const payworthyBefore = records.filter((record) => isPaidSourcePayworthy(record, minimumSourceValueScore));
+  const parserFailures = records.filter((record) => tiSourceAtlasParserBatchFailure(record));
+  const repairableFailures = parserFailures.filter((record) => tiSourceAtlasParserBatchDecision(record) === "repair");
+  const rejectedFailures = parserFailures.filter((record) => tiSourceAtlasParserBatchDecision(record) === "reject");
+  const replacementRequired = parserFailures.filter((record) => tiSourceAtlasParserBatchDecision(record) === "replace_source");
+  const grouped = new Map<string, TiSourceAtlasRecord[]>();
+  for (const record of parserFailures) {
+    const key = `${record.family}:${record.parserCapability.profile}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), record]);
+  }
+  const groupRows = Array.from(grouped.entries()).map(([key, groupRecords]) => {
+    const [family, parserFamily] = key.split(":") as [TiSourceAtlasFamily, SourceMarketplaceParserProfile];
+    const repairable = groupRecords.filter((record) => tiSourceAtlasParserBatchDecision(record) === "repair");
+    const rejected = groupRecords.filter((record) => tiSourceAtlasParserBatchDecision(record) === "reject");
+    const replacement = groupRecords.filter((record) => tiSourceAtlasParserBatchDecision(record) === "replace_source");
+    return {
+      groupId: stableId("ti_source_atlas_parser_repair_group", key),
+      family,
+      parserFamily,
+      candidateCount: records.filter((record) => record.family === family && record.parserCapability.profile === parserFamily).length,
+      parserFailureCount: groupRecords.length,
+      repairableCount: repairable.length,
+      rejectedCount: rejected.length,
+      replacementRequiredCount: replacement.length,
+      expectedPayworthyLift: roundScore(repairable.reduce((sum, record) => sum + tiSourceAtlasParserBatchLift(record), 0)),
+      sampleSourceIds: groupRecords.slice(0, 8).map((record) => record.id),
+      requiredExtractedFields: uniqueStrings(groupRecords.flatMap((record) => tiSourceAtlasExpectedFields(record))) as TiSourceAtlasProductSourceLadderPacket["parserRepairBatch1000"]["groupRows"][number]["requiredExtractedFields"],
+      qualityGate: "Agent 07 accepts only rows with actor/victim or actor/campaign context, sector or country when expected, reported date, publisher, corroborating source hashes, and no unsafe raw URL/body leakage."
+    };
+  }).sort((left, right) =>
+    right.expectedPayworthyLift - left.expectedPayworthyLift ||
+    right.repairableCount - left.repairableCount ||
+    left.groupId.localeCompare(right.groupId)
+  );
+  const fixtureCandidates = tiSourceAtlasParserBatchFixtureRecords(repairableFailures);
+  const fixtures = fixtureCandidates.map((record, index) => tiSourceAtlasParserRepairFixture(record, index, generatedAt, minimumSourceValueScore));
+  const movedRejectedToPayworthySourceCount = fixtures.filter((fixture) => !fixture.beforePayworthy && fixture.afterPayworthy).length;
+  const projectedPayworthySourceCount = Math.min(records.length, payworthyBefore.length + Math.min(repairableFailures.length, movedRejectedToPayworthySourceCount + Math.max(0, repairableFailures.length - fixtures.length)));
+  return {
+    schemaVersion: "ti.source_atlas.parser_repair_batch_1000.v1",
+    sourcePack: "first_1000",
+    generatedAt,
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    baseline: {
+      candidateCount: 1000,
+      evaluatedCandidateCount: records.length,
+      parserFailureCandidateCount: parserFailures.length,
+      repairableParserFailureCount: repairableFailures.length,
+      rejectedParserFailureCount: rejectedFailures.length,
+      replacementRequiredCount: replacementRequired.length,
+      payworthySourceCountBefore: payworthyBefore.length,
+      targetPayworthyRate
+    },
+    groupRows,
+    fixtures,
+    summary: {
+      repairedFixtureCount: fixtures.length,
+      movedRejectedToPayworthySourceCount,
+      repairableCount: repairableFailures.length,
+      rejectedCount: rejectedFailures.length,
+      replacementRequiredCount: replacementRequired.length,
+      projectedPayworthySourceCount,
+      projectedPayworthyRate: records.length > 0 ? roundScore(projectedPayworthySourceCount / records.length) : 0
+    },
+    agent07QualityLiftRows: fixtures.map((fixture) => ({
+      fixtureId: fixture.fixtureId,
+      atlasSourceId: fixture.atlasSourceId,
+      requiredFacts: ["actor", "victim", "sector", "country", "ttp", "malware_tool", "reported_date", "publisher", "corroboration"],
+      beforeGenericSummary: true,
+      afterSpecificFactCount: fixture.extractedFacts.summarySpecificFacts.length,
+      agent07AcceptIf: [
+        "after.rawText contains specific actor/victim/sector/country/TTP/tool/date facts",
+        "after.metadata.normalizedTo remains CollectedItem with provenance hashes",
+        "corroboratingSourceIds contains at least two safe urn/hash identifiers"
+      ],
+      rejectIf: [
+        "summary is only publisher/source-name text",
+        "raw unsafe URL or source body is exposed",
+        "private/auth/CAPTCHA or actor-interaction material is required"
+      ]
+    })),
+    safety: {
+      normalizedToCollectedItem: true,
+      provenancePreserved: true,
+      rawSourceBodiesIncluded: false,
+      unsafeUrlsIncluded: false,
+      sourceActivationApplied: false,
+      crawlStarted: false
+    },
+    handoffs: {
+      agent03ParserRepair: ["groupRows.parserFailureCount", "groupRows.requiredExtractedFields", "fixtures.before", "fixtures.after"],
+      agent07QualityGate: ["agent07QualityLiftRows", "fixtures.extractedFacts", "fixtures.safety"],
+      agent10ProductSlo: ["summary.movedRejectedToPayworthySourceCount", "summary.projectedPayworthyRate", "groupRows.expectedPayworthyLift"]
+    }
+  };
+}
+
+function tiSourceAtlasParserBatchFailure(record: TiSourceAtlasRecord): boolean {
+  return record.parserCapability.certificationRequired
+    || record.activationReadiness.state === "needs_parser_certification"
+    || tiSourceAtlasExpectedFields(record).length < 5
+    || record.evidenceYield < 0.52;
+}
+
+function tiSourceAtlasParserBatchDecision(record: TiSourceAtlasRecord): "repair" | "reject" | "replace_source" {
+  if (record.duplicate.suppressed || record.activationReadiness.state === "descriptor_only_hold") return "replace_source";
+  if (record.legalRobotsState.legalReview !== "current" || record.legalRobotsState.robotsReview !== "current") return "replace_source";
+  if (record.sourceValueScore < 0.52 || record.downstreamPublicAnswerImpact < 0.44 || record.evidenceYield < 0.35) return "reject";
+  return "repair";
+}
+
+function tiSourceAtlasParserBatchLift(record: TiSourceAtlasRecord): number {
+  const actors = tiSourceAtlasRecordActorCoverage(record, Number(record.id.replace("atlas_src_", "")) || 0);
+  const watchlistBoost = actors.some((actor) => actor === "APT29" || actor === "APT28" || actor === "LockBit" || actor === "Akira") ? 1.35 : 1;
+  return roundScore(record.evidenceEstimate.expectedItemsPerDay * Math.max(record.freshness, 0.55) * Math.max(record.downstreamPublicAnswerImpact, 0.5) * watchlistBoost);
+}
+
+function tiSourceAtlasParserBatchFixtureRecords(records: TiSourceAtlasRecord[]): TiSourceAtlasRecord[] {
+  const required = [
+    records.find((record) => tiSourceAtlasRecordActorCoverage(record, Number(record.id.replace("atlas_src_", "")) || 0).includes("APT29")),
+    records.find((record) => tiSourceAtlasRecordActorCoverage(record, Number(record.id.replace("atlas_src_", "")) || 0).includes("APT28")),
+    records.find((record) => record.queryClassCoverage.includes("ransomware_victim") || record.family === "ransomware_tracker"),
+    records.find((record) => record.family === "cve_advisory" || record.family === "cert_government"),
+    records.find((record) => record.family === "public_dataset" || record.family === "malware_researcher")
+  ].filter((record): record is TiSourceAtlasRecord => Boolean(record));
+  const requiredIds = new Set(required.map((record) => record.id));
+  return [
+    ...required,
+    ...records
+      .filter((record) => !requiredIds.has(record.id))
+      .sort((left, right) => tiSourceAtlasParserBatchLift(right) - tiSourceAtlasParserBatchLift(left) || left.id.localeCompare(right.id))
+  ].slice(0, 25);
 }
 
 function tiSourceAtlasParserRepairFailureTaxonomy(): TiSourceAtlasProductSourceLadderPacket["parserRepairExecution"]["failureTaxonomy"] {
