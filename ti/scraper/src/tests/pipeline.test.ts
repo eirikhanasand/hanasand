@@ -2012,7 +2012,8 @@ describe("pipeline", () => {
     expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate.routeVisibleOn).toEqual(expect.arrayContaining([
       "/v1/quality/evaluate",
       "/v1/intel/search",
-      "/v1/contracts"
+      "/v1/contracts",
+      "/v1/ops/product-slo"
     ]));
     expect(pack.paidRowQualityGate.buyerVisibleQualityLiftGate.acceptedExamples.some((row) =>
       row.beforeDecision === "suppress" &&

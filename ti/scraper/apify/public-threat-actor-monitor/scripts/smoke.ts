@@ -101,30 +101,6 @@ if (
 if (qualityLiftGate.sellableRowsAdded < 2 || qualityLiftGate.freshRowsAdded < 5 || qualityLiftGate.costPerUsefulRowDelta >= 0) {
   throw new Error("Quality-lift gate must report buyer-visible sellable/fresh row improvement and lower cost per useful row");
 }
-const graphLiftBatch2 = outputRecord.graphLiftBatch2 as Record<string, unknown> | undefined;
-if (
-  !graphLiftBatch2
-  || graphLiftBatch2.schemaVersion !== "ti.apify_buyer_visible_graph_lift_batch_2.v1"
-  || graphLiftBatch2.baselineRunId !== "OThlfd0uzSCNnedAO"
-  || graphLiftBatch2.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
-  || graphLiftBatch2.dryRun !== true
-  || graphLiftBatch2.willMutateSources !== false
-  || graphLiftBatch2.willStartCollection !== false
-  || !Array.isArray(graphLiftBatch2.acceptedExamples)
-  || graphLiftBatch2.acceptedExamples.length < 1
-  || !Array.isArray(graphLiftBatch2.rejectedGraphOnlyPromotions)
-  || graphLiftBatch2.rejectedGraphOnlyPromotions.length < 6
-) {
-  throw new Error("OUTPUT record must expose Program BO graph-lift batch 2 with current live baseline and graph-only rejection cases");
-}
-const graphLiftBatch2Metrics = graphLiftBatch2.measurableLift as Record<string, unknown> | undefined;
-if (!graphLiftBatch2Metrics || Number(graphLiftBatch2Metrics.sellableRowsAdded) < 1 || Number(graphLiftBatch2Metrics.projectedGrossRowRevenueDeltaUsd) <= 0) {
-  throw new Error("Program BO graph-lift batch must prove measurable sellable-row and revenue lift");
-}
-const rejectedGraphReasons = (graphLiftBatch2.rejectedGraphOnlyPromotions as Array<Record<string, unknown>>).map((row) => row.blockedReason);
-for (const requiredReason of ["stale_graph_context", "single_source_graph_context", "contradicted_graph_context", "restricted_only_graph_context", "missing_ledger_proof", "unrelated_actor_context"]) {
-  if (!rejectedGraphReasons.includes(requiredReason)) throw new Error(`Program BO graph-lift batch must reject ${requiredReason}`);
-}
 for (const row of qualityLiftGate.acceptedExamples as Array<Record<string, unknown>>) {
   if (
     row.outcome !== "accepted"
@@ -163,13 +139,19 @@ if (
   || graphLiftBatch2.willStartCollection !== false
   || !Array.isArray(graphLiftBatch2.acceptedExamples)
   || !Array.isArray(graphLiftBatch2.rejectedGraphOnlyPromotions)
+  || graphLiftBatch2.acceptedExamples.length < 1
+  || graphLiftBatch2.rejectedGraphOnlyPromotions.length < 6
   || typeof graphLiftBatch2.measurableLift !== "object"
 ) {
-  throw new Error("OUTPUT record must expose Program BO graph-lift batch 2");
+  throw new Error("OUTPUT record must expose Program BO graph-lift gate");
 }
 const graphLift = graphLiftBatch2.measurableLift as Record<string, unknown>;
 if (Number(graphLift.sellableRowsAdded) < 1 || Number(graphLift.projectedGrossRowRevenueDeltaUsd) <= 0) {
   throw new Error("Program BO graph-lift gate must project sellable row and row-revenue lift");
+}
+const rejectedGraphReasons = (graphLiftBatch2.rejectedGraphOnlyPromotions as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["stale_graph_context", "single_source_graph_context", "contradicted_graph_context", "restricted_only_graph_context", "missing_ledger_proof", "unrelated_actor_context"]) {
+  if (!rejectedGraphReasons.includes(requiredReason)) throw new Error(`Program BO graph-lift batch must reject ${requiredReason}`);
 }
 for (const row of graphLiftBatch2.acceptedExamples as Array<Record<string, unknown>>) {
   if (

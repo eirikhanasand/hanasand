@@ -1,22 +1,38 @@
-Status: active_program_bo_buyer_visible_graph_lift_batch_2
+Status: active_program_bp_marketplace_graph_signals
 
 # Agent 08 Coordination
 
 Read `coordination_product_focus.md` first. Continue the graph ownership lane only where it improves buyer-visible Actor/public rows. STIX/TAXII work is secondary until the Apify product has stronger fresh data, better sample rows, and clearer conversion proof.
 
-## Current Assignment - Program BO
+## Current Status
 
-Goal: turn graph/context work into direct paid-row improvement for Apify and `/ti`, using the live proof run `OThlfd0uzSCNnedAO` as the new baseline: 10 APT42 rows, 4 sellable, 2 caveated, 4 held, average buyer value 0.577.
+- Completed Program BO buyer-visible graph lift batch 2 against live proof run `OThlfd0uzSCNnedAO` / dataset `LSen2fYtwFTtOr7vK`.
+- Do not stop after Program BO. Continue with Program BP below and then keep moving through the graph lane only when it improves paid-row usefulness, buyer trust, or marketplace conversion.
+
+## Program BP - Marketplace Graph Signals For Paid Rows
+
+Goal: make graph work directly sellable in the Apify Actor and public API. Buyers should see why a row matters, what it connects to, what changed, what is corroborated, and what they should search next. Avoid abstract graph/export readiness unless it changes buyer-visible rows or conversion proof.
+
+Current monetization baseline:
+- Live Apify proof run `OThlfd0uzSCNnedAO`: 10 APT42 rows, 4 sellable, 2 caveated, 4 held, average buyer value 0.577, `ready_for_paid_traffic`.
+- New work must raise one of these measurable values: sellable-row count, useful-row count, fresh-row count, average buyer value, source-family diversity, row trust, next-search utility, or store sample quality.
 
 Work in this order:
+1. Add a compact `marketplaceGraphSignals` contract to Apify rows and `/v1/ops/product-slo` proof surfaces. It should summarize actor-victim-sector-country-TTP-source-family links, freshness/change hints, confidence trend, contradiction state, and next buyer pivots.
+2. Add deterministic examples for at least 8 high-value monitored groups, mixing APT and ransomware. Each example must be safe metadata only and must explain what a buyer can do with it.
+3. Add rejection examples that block graph-only inflation: stale graph facts, single-source edges, unrelated actor links, restricted-only context, missing ledger proof, and no fresh change.
+4. Wire the gate into existing Apify smoke/check tests and focused API/Product-SLO tests. Do not add a new architecture layer if the same proof can live in the existing output/ops contract.
+5. Update README/changelog with concise buyer-facing wording: what fields are returned, why they are useful, and what is not included.
+6. Hand off exact source/parser requirements to Agents 03/04/05 when graph rows are blocked by missing fresh public evidence.
 
-1. Identify which held/caveated rows could become sellable only if graph evidence adds useful corroboration, contradiction handling, freshness, actor/target/TTP pivots, or no-leak provenance.
-2. Add compact graph-derived fields only when they improve current dataset rows, public UI rows, or product SLO metrics. Avoid speculative STIX/TAXII implementation.
-3. Build before/after proof examples that move at least one row from `hold` or `included_with_caveat` toward a higher buyer-value decision without weakening source/evidence gates.
-4. Add tests that reject graph-only promotion when evidence is stale, single-source, contradicted, restricted-only, missing ledger proof, or unrelated to the searched actor.
-5. Update Apify/public documentation only where buyers see a clearer row or stronger trust signal.
+Proof required before marking ready:
+- `bun run check`
+- `bun run check:apify-threat-actor-monitor`
+- `bun run smoke:apify-threat-actor-monitor`
+- focused API/Product-SLO tests that assert the new graph signals are route-visible
+- a note here with: rows improved, rows rejected, expected buyer-visible lift, and remaining source blockers
 
-Do not mark ready until the patch has measurable buyer-visible lift or a documented blocker owned by Agent 01/03/04/06/07/09.
+Do not mark ready after a single helper or DTO. This task is complete only when the marketplace output is more useful to a buyer inspecting a dataset row.
 
 ## Continuation Directive
 
@@ -85,11 +101,6 @@ Keep all graph relationships replayable to evidence, claim ledger state, review 
 - Updated the Apify dataset schema, README, changelog, and smoke gate for graph-lift visibility.
 - Verification is green for `bun run check`, focused Apify/API/source/scheduler/storage/darkweb tests, route inventory, contract index, API regression, Apify check/smoke/publication, and full `bun test` (527 pass).
 
-## Active Next Work
+## Next Work
 
-- Completed Program BM graph-backed tier-quality scoring for the source/dark-metadata ladder.
-- Added `paidSourceTierPlan.graphRelationshipQuality` with relationship-ready source counts/rates, actor pivot rows, source-family diversity, freshness/corroboration metrics, contradiction/no-leak readiness, advancement criteria, and export-safe/no-raw boundaries.
-- Added source-atlas proof coverage for candidate-1000 ranked rows, parser repair execution, activation readiness, and graph relationship quality checks.
-- Repaired adjacent green-build drift in product SLO source monetization gates and public-channel scheduler work-class typing.
-- Verification is green for `bun run check`, focused source/API/ops/scheduler tests, route inventory, contract index, API regression, and full `bun test` (527 pass).
-- Agent 08 requests the next buyer-visible graph task from the master queue.
+- Agent 08 is ready for the next buyer-visible graph/STIX/TAXII task from the master queue.

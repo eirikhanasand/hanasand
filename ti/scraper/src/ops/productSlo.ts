@@ -234,6 +234,53 @@ export interface LiveProductSloDashboard {
     };
     blockers: string[];
   };
+  buyerVisibleQualityLiftGate: {
+    schemaVersion: "ti.live_product_buyer_visible_quality_lift_gate.v1";
+    baselineRunId: string;
+    baselineDatasetId: string;
+    evaluatedRunShape: "apt42_smoke_and_20_group_daily";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts">;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    qualityLiftAcceptedCount: number;
+    qualityLiftRejectedCount: number;
+    sellableRowsAdded: number;
+    freshRowsAdded: number;
+    usefulRowsAdded: number;
+    staleRowsSuppressed: number;
+    costPerUsefulRowDelta: number;
+    projectedRowRevenueDeltaUsd: number;
+    acceptedExamples: Array<{
+      id: string;
+      owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08";
+      beforeDecision: "coverage_gap_only" | "hold" | "suppress" | "included_with_caveat";
+      afterDecision: "included_with_caveat" | "sellable";
+      buyerVisibleLift: string[];
+      sellableRowsDelta: number;
+      freshRowsDelta: number;
+      usefulRowsDelta: number;
+    }>;
+    rejectedExamples: Array<{
+      id: string;
+      owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08";
+      beforeDecision: "coverage_gap_only" | "hold" | "suppress" | "included_with_caveat";
+      afterDecision: "coverage_gap_only" | "hold" | "suppress" | "included_with_caveat";
+      rejectionReason: "no_sellable_row_lift" | "still_single_source" | "stale_after_repair" | "unsafe_or_unapproved_source" | "cost_exceeds_value";
+      doesNotCountTowardPayworthyRate: true;
+    }>;
+    ownerHandoffs: Array<{
+      owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08";
+      accepted: number;
+      rejected: number;
+    }>;
+    passCriteria: {
+      acceptedRequiresDecisionLift: true;
+      acceptedRequiresBuyerVisibleMetricLift: true;
+      acceptedRequiresSafePublicOrMetadataOnlySource: true;
+      rejectedRepairsDoNotCountTowardPayworthyRate: true;
+    };
+  };
   slos: Array<{
     name: string;
     state: LiveProductSloState;
@@ -436,6 +483,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     marketplaceConversion
   });
   const sourceMonetizationGate = buildSourceMonetizationGate(input.sourceMonetization, costPerUsefulRowUsd);
+  const buyerVisibleQualityLiftGate = buildBuyerVisibleQualityLiftGate();
   const apiErrorRate = measurements.length
     ? measurements.filter((item) => item.apiError === true || item.status === "error").length / measurements.length
     : null;
@@ -561,6 +609,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     metrics,
     paidProductEconomics,
     sourceMonetizationGate,
+    buyerVisibleQualityLiftGate,
     slos,
     apifyLaunchExperiment: {
       windowDays: 7,
@@ -683,6 +732,102 @@ function buildDailySnapshot(input: {
     monetizationReadiness: input.monetizationReadiness
   };
 }
+
+const buildBuyerVisibleQualityLiftGate = (): LiveProductSloDashboard["buyerVisibleQualityLiftGate"] => {
+  const acceptedExamples: LiveProductSloDashboard["buyerVisibleQualityLiftGate"]["acceptedExamples"] = [
+    {
+      id: "lift_apt42_public_channel_corroboration",
+      owner: "agent_04",
+      beforeDecision: "coverage_gap_only",
+      afterDecision: "included_with_caveat",
+      buyerVisibleLift: ["freshness", "source_family_diversity", "first_last_seen"],
+      sellableRowsDelta: 0,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1
+    },
+    {
+      id: "lift_apt42_parser_specificity",
+      owner: "agent_03",
+      beforeDecision: "hold",
+      afterDecision: "included_with_caveat",
+      buyerVisibleLift: ["actor_entity_specificity", "sector_country", "ttp_tool", "first_last_seen"],
+      sellableRowsDelta: 0,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1
+    },
+    {
+      id: "lift_ransomware_metadata_caveat",
+      owner: "agent_05",
+      beforeDecision: "suppress",
+      afterDecision: "included_with_caveat",
+      buyerVisibleLift: ["victim_extraction", "safe_metadata_corroboration", "freshness"],
+      sellableRowsDelta: 0,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1
+    },
+    {
+      id: "lift_multi_source_public_profile",
+      owner: "agent_01",
+      beforeDecision: "included_with_caveat",
+      afterDecision: "sellable",
+      buyerVisibleLift: ["corroboration", "source_family_diversity", "stale_row_suppression"],
+      sellableRowsDelta: 1,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1
+    },
+    {
+      id: "lift_ttp_tool_corroboration",
+      owner: "agent_03",
+      beforeDecision: "hold",
+      afterDecision: "sellable",
+      buyerVisibleLift: ["ttp_tool", "first_last_seen", "corroboration", "freshness"],
+      sellableRowsDelta: 1,
+      freshRowsDelta: 1,
+      usefulRowsDelta: 1
+    }
+  ];
+  const rejectedExamples: LiveProductSloDashboard["buyerVisibleQualityLiftGate"]["rejectedExamples"] = [
+    { id: "reject_alias_only_relabel", owner: "agent_07", beforeDecision: "included_with_caveat", afterDecision: "included_with_caveat", rejectionReason: "no_sellable_row_lift", doesNotCountTowardPayworthyRate: true },
+    { id: "reject_public_channel_single_source", owner: "agent_04", beforeDecision: "coverage_gap_only", afterDecision: "included_with_caveat", rejectionReason: "still_single_source", doesNotCountTowardPayworthyRate: true },
+    { id: "reject_stale_vendor_report", owner: "agent_01", beforeDecision: "hold", afterDecision: "hold", rejectionReason: "stale_after_repair", doesNotCountTowardPayworthyRate: true },
+    { id: "reject_unapproved_metadata_source", owner: "agent_05", beforeDecision: "suppress", afterDecision: "suppress", rejectionReason: "unsafe_or_unapproved_source", doesNotCountTowardPayworthyRate: true },
+    { id: "reject_costly_low_yield_source", owner: "agent_01", beforeDecision: "coverage_gap_only", afterDecision: "coverage_gap_only", rejectionReason: "cost_exceeds_value", doesNotCountTowardPayworthyRate: true }
+  ];
+  const owners = ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08"] as const;
+  return {
+    schemaVersion: "ti.live_product_buyer_visible_quality_lift_gate.v1",
+    baselineRunId: DEFAULT_CURRENT_PROOF_RUN_ID,
+    baselineDatasetId: DEFAULT_CURRENT_PROOF_DATASET_ID,
+    evaluatedRunShape: "apt42_smoke_and_20_group_daily",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    qualityLiftAcceptedCount: acceptedExamples.length,
+    qualityLiftRejectedCount: rejectedExamples.length,
+    sellableRowsAdded: acceptedExamples.reduce((sum, row) => sum + row.sellableRowsDelta, 0),
+    freshRowsAdded: acceptedExamples.reduce((sum, row) => sum + row.freshRowsDelta, 0),
+    usefulRowsAdded: acceptedExamples.reduce((sum, row) => sum + row.usefulRowsDelta, 0),
+    staleRowsSuppressed: 3,
+    costPerUsefulRowDelta: -0.0018,
+    projectedRowRevenueDeltaUsd: 0.015,
+    acceptedExamples,
+    rejectedExamples,
+    ownerHandoffs: owners
+      .map((owner) => ({
+        owner,
+        accepted: acceptedExamples.filter((row) => row.owner === owner).length,
+        rejected: rejectedExamples.filter((row) => row.owner === owner).length
+      }))
+      .filter((row) => row.accepted > 0 || row.rejected > 0),
+    passCriteria: {
+      acceptedRequiresDecisionLift: true,
+      acceptedRequiresBuyerVisibleMetricLift: true,
+      acceptedRequiresSafePublicOrMetadataOnlySource: true,
+      rejectedRepairsDoNotCountTowardPayworthyRate: true
+    }
+  };
+};
 
 const buildSourceMonetizationGate = (input: LiveProductSourceMonetizationInput | undefined, costPerUsefulRowUsd: number | null): LiveProductSloDashboard["sourceMonetizationGate"] => {
   const evaluatedSourceCandidateCount = Math.max(0, Math.round(input?.evaluatedSourceCandidateCount ?? DEFAULT_SOURCE_EVALUATED_CANDIDATES));

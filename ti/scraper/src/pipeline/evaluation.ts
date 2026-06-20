@@ -432,7 +432,7 @@ export interface ProgramBdQualityEvaluationPackDto {
       baselineRunId: "iMQGeezZ8bx7WtlhQ";
       baselineDatasetId: "5PLmkE30luBA5Lbgc";
       evaluatedRunShape: "apt42_smoke_and_20_group_daily";
-      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts">;
+      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo">;
       dryRun: true;
       willMutateSources: false;
       willStartCollection: false;
@@ -880,7 +880,7 @@ function buildProgramBgBuyerVisibleQualityLiftGate(): ProgramBdQualityEvaluation
     baselineRunId: "iMQGeezZ8bx7WtlhQ",
     baselineDatasetId: "5PLmkE30luBA5Lbgc",
     evaluatedRunShape: "apt42_smoke_and_20_group_daily",
-    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"],
+    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo"],
     dryRun: true,
     willMutateSources: false,
     willStartCollection: false,

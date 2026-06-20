@@ -278,6 +278,45 @@ describe("api v1", () => {
       },
       blockers: expect.arrayContaining(["source_payworthy_rate_below_72_percent", "replace_low_value_sources_before_marketplace_scale_claim"]) as unknown as string[]
     });
+    expect((response.buyerVisibleQualityLiftGate as {
+      schemaVersion: string;
+      baselineRunId: string;
+      baselineDatasetId: string;
+      routeVisibleOn: string[];
+      dryRun: boolean;
+      willMutateSources: boolean;
+      willStartCollection: boolean;
+      qualityLiftAcceptedCount: number;
+      qualityLiftRejectedCount: number;
+      sellableRowsAdded: number;
+      freshRowsAdded: number;
+      usefulRowsAdded: number;
+      costPerUsefulRowDelta: number;
+      projectedRowRevenueDeltaUsd: number;
+      acceptedExamples: Array<{ owner: string; afterDecision: string }>;
+      rejectedExamples: Array<{ doesNotCountTowardPayworthyRate: boolean; rejectionReason: string }>;
+      ownerHandoffs: Array<{ owner: string; accepted: number }>;
+    })).toMatchObject({
+      schemaVersion: "ti.live_product_buyer_visible_quality_lift_gate.v1",
+      baselineRunId: "iMQGeezZ8bx7WtlhQ",
+      baselineDatasetId: "5PLmkE30luBA5Lbgc",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]) as unknown as string[],
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      qualityLiftAcceptedCount: 5,
+      qualityLiftRejectedCount: 5,
+      sellableRowsAdded: 2,
+      freshRowsAdded: 5,
+      usefulRowsAdded: 5,
+      costPerUsefulRowDelta: -0.0018,
+      projectedRowRevenueDeltaUsd: 0.015,
+      rejectedExamples: expect.arrayContaining([
+        expect.objectContaining({ rejectionReason: "no_sellable_row_lift", doesNotCountTowardPayworthyRate: true })
+      ]) as unknown as Array<{ doesNotCountTowardPayworthyRate: boolean; rejectionReason: string }>
+    });
+    expect((response.buyerVisibleQualityLiftGate as { acceptedExamples: Array<{ owner: string; afterDecision: string }> }).acceptedExamples.some((row) => row.owner === "agent_03" && row.afterDecision === "sellable")).toBe(true);
+    expect((response.buyerVisibleQualityLiftGate as { ownerHandoffs: Array<{ owner: string; accepted: number }> }).ownerHandoffs.some((row) => row.owner === "agent_03" && row.accepted === 2)).toBe(true);
     expect((response.deploymentProof as { actorBuildId: string }).actorBuildId).toBe("build_live");
     expect((response.resourceGuardrails as { scraperTargetRamGb: number }).scraperTargetRamGb).toBe(96);
 
@@ -10731,7 +10770,7 @@ describe("api v1", () => {
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.apifyDatasetFields).toEqual(expect.arrayContaining(["reviewReasons", "analysisFacets", "buyerCaveat"]));
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.buyerVisibleQualityLiftGate).toMatchObject({
       schemaVersion: "ti.program_bg_buyer_visible_quality_lift_gate.v1",
-      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo"]),
       qualityLiftAcceptedCount: 5,
       qualityLiftRejectedCount: 5,
       sellableRowsAdded: 2,

@@ -362,6 +362,31 @@ describe("ops controls", () => {
       },
       blockers: expect.arrayContaining(["source_payworthy_rate_below_72_percent", "10k_20k_60k_tiers_held_until_evaluated"]) as unknown as string[]
     });
+    expect(dashboard.buyerVisibleQualityLiftGate).toMatchObject({
+      schemaVersion: "ti.live_product_buyer_visible_quality_lift_gate.v1",
+      baselineRunId: "iMQGeezZ8bx7WtlhQ",
+      baselineDatasetId: "5PLmkE30luBA5Lbgc",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      qualityLiftAcceptedCount: 5,
+      qualityLiftRejectedCount: 5,
+      sellableRowsAdded: 2,
+      freshRowsAdded: 5,
+      usefulRowsAdded: 5,
+      staleRowsSuppressed: 3,
+      costPerUsefulRowDelta: -0.0018,
+      projectedRowRevenueDeltaUsd: 0.015,
+      passCriteria: {
+        acceptedRequiresDecisionLift: true,
+        acceptedRequiresBuyerVisibleMetricLift: true,
+        rejectedRepairsDoNotCountTowardPayworthyRate: true
+      }
+    });
+    expect(dashboard.buyerVisibleQualityLiftGate.acceptedExamples.some((row) => row.owner === "agent_03" && row.afterDecision === "sellable")).toBe(true);
+    expect(dashboard.buyerVisibleQualityLiftGate.rejectedExamples.every((row) => row.doesNotCountTowardPayworthyRate)).toBe(true);
+    expect(dashboard.buyerVisibleQualityLiftGate.ownerHandoffs.some((row) => row.owner === "agent_03" && row.accepted === 2)).toBe(true);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyRate).toBe(0.367);
     expect(dashboard.dailySnapshot.metrics.sourcePayworthyCount).toBe(1468);
     expect(dashboard.dailySnapshot.metrics.sellableRowRate).toBe(0.163);
