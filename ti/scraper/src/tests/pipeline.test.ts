@@ -2103,6 +2103,27 @@ describe("pipeline", () => {
     expect(pack.paidRowQualityGate.freshnessRepairLoop.repairQueue.map((row) => row.blocker)).toEqual(expect.arrayContaining(["stale_latest_activity", "generic_summary", "single_source", "alias_only", "unrelated_actor", "contradicted", "metadata_only_without_public_support"]));
     expect(pack.paidRowQualityGate.freshnessRepairLoop.repairQueue.every((row) => row.proofNeeded.length > 0 && row.expectedBuyerVisibleLift.length > 0 && row.noLeak)).toBe(true);
     expect(pack.paidRowQualityGate.freshnessRepairLoop.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(pack.paidRowQualityGate.entitySpecificityLift).toMatchObject({
+      schemaVersion: "ti.program_bv_paid_row_entity_specificity_lift.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      lift: {
+        rowsLifted: 12,
+        rowsSuppressed: 4,
+        rowsHeldWithRepairAction: 2,
+        blockerCodesRemoved: 24,
+        averageBuyerValueDelta: 0.169
+      },
+      noLeakProof: { rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false }
+    });
+    expect(pack.paidRowQualityGate.entitySpecificityLift.fixtures).toHaveLength(20);
+    expect(pack.paidRowQualityGate.entitySpecificityLift.fixtures.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "Unknown Actor Query"]));
+    expect(pack.paidRowQualityGate.entitySpecificityLift.fixtures.flatMap((row) => row.missingFields)).toEqual(expect.arrayContaining(["victim", "sector", "country", "dataset_or_impact", "ttp_or_tool", "first_seen", "last_seen", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_action"]));
+    expect(pack.paidRowQualityGate.entitySpecificityLift.fixtures.flatMap((row) => row.blockerCodesRemoved)).toEqual(expect.arrayContaining(["old", "alias_only", "single_source_without_caveat", "unrelated_actor", "contradicted", "metadata_only_without_public_support", "no_useful_buyer_action", "generic_entity_fields"]));
+    expect(pack.paidRowQualityGate.entitySpecificityLift.fixtures.every((row) => row.proofNeeded.length > 0 && row.expectedBuyerVisibleLift.length > 0 && row.whyWorthPayingFor.length > 0 && row.repairAction.length > 0 && row.noLeak)).toBe(true);
+    expect(pack.paidRowQualityGate.entitySpecificityLift.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(pack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",
