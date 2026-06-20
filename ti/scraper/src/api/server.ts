@@ -7818,7 +7818,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/health", surface: "health", owner: "Agent 09", responseKeys: ["ok", "service", "version"] },
     { method: "GET", path: "/v1/metrics", surface: "metrics", owner: "Agent 09", responseKeys: ["runs", "sources", "frontier"] },
     { method: "GET", path: "/v1/ops/resource-snapshot", surface: "ops", owner: "Agent 10/09", responseKeys: ["resources", "capacity", "workerPools", "queue"] },
-    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
+    { method: "GET", path: "/v1/ops/product-slo", surface: "ops", owner: "Agent 10/09", responseKeys: ["schemaVersion", "dashboard", "metrics", "paidProductEconomics", "sourceMonetizationGate", "buyerVisibleQualityLiftGate", "marketplaceGraphSignals", "graphPivotLiftGate", "relationshipConfidenceGate", "qualityConversionGate", "liveFreshnessQualityGate", "freshnessRepairLoop", "entitySpecificityLift", "slos", "apifyLaunchExperiment", "dailySnapshot", "deploymentProof", "resourceGuardrails"] },
     { method: "GET", path: "/v1/ops/canary", surface: "ops", owner: "Agent 01/02/06/09", responseKeys: ["operatorView"] },
     { method: "GET", path: "/v1/ops/canary/readiness", surface: "ops", owner: "Agent 07/10", responseKeys: ["readiness", "operatorView"] },
     { method: "GET", path: "/v1/ops/canary/soak", surface: "ops", owner: "Agent 07/10", responseKeys: ["soak", "operatorView"] },
@@ -10015,6 +10015,20 @@ function buildApifyStoreReadinessContract(input: {
   ];
   const telemetryFields = ["storePageViews", "uniqueUsers", "trialRuns", "paidRuns", "actorStarts", "actorRuns", "datasetRows", "failedRuns", "repeatUsers", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd"] as const;
   const buyerVisibleFields = ["sellableRowCount", "usefulRowCount", "freshRowRate", "actorVictimTtpSpecificity", "sourceFamilyDiversity", "confidence", "buyerCaveat", "nextSearchPivots", "noLeakProof"] as const;
+  const buyerSampleRows = [
+    apifyBuyerSampleRow("sample_apt29_summary", "APT29", "actor_summary", "Current public reporting links APT29 to identity-focused targeting.", "Fresh public activity is represented only when source timestamps are current.", ["government", "cloud services"], ["valid accounts", "cloud account abuse"], 0.86, "Keep historic campaign context separate from latest activity.", "current", 2, ["APT29 recent activity", "T1078 valid accounts"]),
+    apifyBuyerSampleRow("sample_apt42_claim", "APT42", "fresh_claim", "APT42 rows show current public activity with caveats when single-source.", "Fresh claim remains caveated until a second safe source family supports it.", ["NGO", "Middle East"], ["phishing", "credential collection"], 0.67, "Single-source public reporting should be treated as a lead.", "caveated", 1, ["APT42 public-channel corroboration", "APT42 NGO phishing"]),
+    apifyBuyerSampleRow("sample_volt_typhoon_ttp", "Volt Typhoon", "ttp_targeting_hint", "Volt Typhoon sample rows emphasize critical infrastructure targeting.", "Living-off-the-land activity is buyer-visible only with fresh support.", ["critical infrastructure", "United States"], ["living-off-the-land", "network discovery"], 0.84, "Infrastructure pivots stay source-backed and hash-provenanced.", "current", 2, ["Volt Typhoon infrastructure", "LOLBIN monitoring"]),
+    apifyBuyerSampleRow("sample_lazarus_sector", "Lazarus Group", "ttp_targeting_hint", "Lazarus rows connect crypto-sector targeting with social-engineering context.", "Fresh sector activity is separated from historic campaign context.", ["cryptocurrency", "financial services"], ["social engineering", "supply-chain lure"], 0.81, "Sector rows need public corroboration before charge guidance.", "recent", 2, ["Lazarus cryptocurrency", "Lazarus social engineering"]),
+    apifyBuyerSampleRow("sample_turla_tooling", "Turla", "ttp_targeting_hint", "Turla sample rows carry tool and TTP hints when parser support is specific.", "Fresh tooling context is promoted only with actor-specific spans.", ["government", "Europe"], ["backdoor tooling", "collection"], 0.76, "Generic tool mentions stay held until parser specificity improves.", "recent", 2, ["Turla tooling", "Turla campaign update"]),
+    apifyBuyerSampleRow("sample_sandworm_hold", "Sandworm", "fresh_claim", "Sandworm latest-activity claims are held when only old campaign context exists.", "No fresh claim is promoted from stale evidence.", ["energy", "Ukraine"], ["disruption", "wiper context"], 0.42, "Held because stale evidence cannot support latest wording.", "held", 1, ["Sandworm latest activity", "Sandworm disruption reports"]),
+    apifyBuyerSampleRow("sample_scattered_spider_summary", "Scattered Spider", "actor_summary", "Scattered Spider rows expose sector and social-engineering pivots.", "Fresh sector and TTP hints are useful when source-family diversity is present.", ["telecom", "hospitality"], ["social engineering", "helpdesk abuse"], 0.82, "Alias noise is suppressed before paid promotion.", "current", 2, ["Scattered Spider telecom", "helpdesk social engineering"]),
+    apifyBuyerSampleRow("sample_lockbit_metadata", "LockBit", "victim_or_dataset_lead", "LockBit metadata rows can be useful leads without exposing raw leak material.", "Victim or dataset hints remain caveated until public corroboration exists.", ["manufacturing", "professional services"], ["victim claim", "public corroboration needed"], 0.61, "Metadata-only row is not treated as confirmed public activity.", "caveated", 2, ["LockBit victim claims", "LockBit public corroboration"]),
+    apifyBuyerSampleRow("sample_akira_victim", "Akira", "victim_or_dataset_lead", "Akira sample rows show safe victim, sector, and date hints when available.", "Fresh victim leads require no raw leak URLs or payload access.", ["manufacturing", "North America"], ["victim watch", "claimed dataset type"], 0.58, "Caveated until safe public source support exists.", "caveated", 1, ["Akira victim metadata", "Akira sector claims"]),
+    apifyBuyerSampleRow("sample_clop_campaign", "Clop", "fresh_claim", "Clop rows tie campaign, exploitation, and victim pivots together.", "Fresh public campaign context is promoted when corroborated.", ["software supply chain", "global"], ["exploitation", "campaign tracking"], 0.83, "Campaign rows still carry provenance hashes and caveats.", "current", 2, ["Clop campaign", "Clop exploitation"]),
+    apifyBuyerSampleRow("sample_black_basta_suppression", "Black Basta", "fresh_claim", "Black Basta generic stale reposts are suppressed from paid findings.", "Freshness gate blocks latest-activity wording when sources are old.", ["healthcare", "business services"], ["ransomware watch"], 0.32, "Suppressed until fresh public support appears.", "held", 1, ["Black Basta latest activity", "Black Basta public reports"]),
+    apifyBuyerSampleRow("sample_cve_ransomware_pivot", "Ransomware CVE watch", "victim_or_dataset_lead", "CVE-linked ransomware rows are useful only when the actor relationship is supported.", "CVE pivots remain held if actor linkage is unrelated or missing.", ["victim lead", "software exposure"], ["CVE exploitation", "ransomware claim"], 0.57, "Held or caveated unless public evidence links actor, CVE, and victim context.", "caveated", 2, ["ransomware CVE exploitation", "public victim claim corroboration"])
+  ];
   const conversionExperiments = [
     {
       id: "starter_actor_query_pack",
@@ -10142,6 +10156,61 @@ function buildApifyStoreReadinessContract(input: {
       payoutStatus: "not_available_without_external_apify_account_verification",
       revenueTelemetryHandoff: "/v1/ops/product-slo.apifyLaunchExperiment"
     },
+    revenueConversionChecklist: {
+      schemaVersion: "ti.apify_revenue_conversion_checklist.v1",
+      routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT"],
+      paidTrafficState: "ready",
+      listingCopyState: "ready",
+      sampleDataQualityState: "ready",
+      pricingState: "ready",
+      telemetryState: "missing",
+      payoutState: "unknown",
+      nextManualVerificationStep: "Open Apify Store analytics and billing, then copy views, users, starts, paid runs, refunds, usage cost, creator revenue, beneficiary, payout method, and withdrawal readiness into /v1/ops/product-slo inputs.",
+      checks: [
+        { id: "listing_copy", state: "ready", proofField: "README pricing and Public Proof Contract" },
+        { id: "sample_rows", state: "ready", proofField: "apifyStoreReadiness.buyerSampleRows" },
+        { id: "pricing_shape", state: "ready", proofField: "apifyStoreReadiness.pricingProof" },
+        { id: "marketplace_telemetry", state: "missing", proofField: "apifyStoreReadiness.marketplaceTelemetryInputContract", blocker: "Apify analytics not externally copied yet" },
+        { id: "payout_setup", state: "missing", proofField: "apifyStoreReadiness.payoutReadiness", blocker: "beneficiary, payout method, and withdrawal readiness require external billing verification" },
+        { id: "fake_traction_guards", state: "ready", proofField: "apifyStoreReadiness.fakeTractionGuards" },
+        { id: "no_leak_sample_proof", state: "ready", proofField: "apifyStoreReadiness.buyerSampleRows[].buyerVisibleFields.noLeakProof" }
+      ]
+    },
+    pricingProof: {
+      schemaVersion: "ti.apify_pricing_proof.v1",
+      routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT"],
+      starterTrialShape: {
+        name: "starter_actor_query_pack",
+        queryLimit: 3,
+        expectedRows: "2 or more useful safe rows per query before a starter experiment is considered healthy",
+        buyerPromise: "Cheap evaluation run for one actor, ransomware group, CVE, sector, or victim lead with caveats and next pivots visible.",
+        stopLoss: "Stop starter traffic if 100 verified store views produce no paid runs, refunds appear, or useful rows per query fall below 1."
+      },
+      paidDailyMonitoringShape: {
+        name: "high_freshness_apt_monitoring_pack",
+        defaultQueryCount: 20,
+        minimumSellableRowRate: 0.25,
+        minimumFreshRowRate: 0.55,
+        buyerPromise: "Daily APT and ransomware monitoring where sellable rows are fresh, source-backed, caveated when needed, and hash-provenanced.",
+        stopLoss: "Pause paid daily traffic if stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
+      },
+      usageCostGuard: {
+        rowPriceUsdPerThousand: 3,
+        actorStartUsd: 0.00005,
+        apifyMarginRate: 0.2,
+        platformUsageCostUsd: null,
+        estimatedCreatorRevenueUsd: null,
+        maxCostPerUsefulRowUsd: 0.01,
+        stopLoss: "Hold pricing tests if real platform usage cost per useful row exceeds $0.01 or estimated creator revenue is positive without verified paid runs."
+      },
+      payoutRevenueSeparation: {
+        paymentMethodState: "unknown",
+        beneficiaryState: "unknown",
+        withdrawalReadiness: "unknown",
+        externallyVerifiedRevenueUsd: null
+      },
+      noLeakRequired: true
+    },
     marketplaceTelemetryInputContract: {
       schemaVersion: "ti.apify_marketplace_telemetry_input.v1",
       routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "route_inventory"],
@@ -10165,6 +10234,7 @@ function buildApifyStoreReadinessContract(input: {
       ]
     },
     conversionExperiments,
+    buyerSampleRows,
     operatorBlockerBoard: [
       { owner: "Agent 01", blocker: "low_source_value_or_stale_source_mix", conversionImpact: "paid users do not convert when rows are stale or duplicated", nextAction: "replace low-value sources before paid traffic" },
       { owner: "Agent 03", blocker: "parser_specificity_below_buyer_threshold", conversionImpact: "generic summaries reduce useful-row rate", nextAction: "extract actor victim TTP first/last-seen and source-family fields" },
@@ -10385,6 +10455,40 @@ function apifyPublicProofDto(
       status: "partial",
       aliases: [query],
       warningCodes: hasPublicChannelCoverage ? [] : ["source_coverage_gap"]
+    }
+  };
+}
+
+function apifyBuyerSampleRow(
+  id: string,
+  actor: string,
+  rowClass: "actor_summary" | "fresh_claim" | "victim_or_dataset_lead" | "ttp_targeting_hint",
+  actorSummary: string,
+  freshClaimOrActivity: string,
+  victimSectorCountryDatasetHints: string[],
+  ttpTargetingHints: string[],
+  confidence: number,
+  caveat: string,
+  freshness: "current" | "recent" | "caveated" | "held",
+  sourceFamilyDiversity: number,
+  nextAnalystPivots: string[]
+) {
+  return {
+    id,
+    actor,
+    rowClass,
+    buyerVisibleFields: {
+      actorSummary,
+      freshClaimOrActivity,
+      victimSectorCountryDatasetHints,
+      ttpTargetingHints,
+      confidence,
+      caveat,
+      freshness,
+      sourceFamilyDiversity,
+      provenanceHash: `buyer_sample_${id}`,
+      nextAnalystPivots,
+      noLeakProof: "metadata_only_no_raw_body_no_credentials_no_private_content"
     }
   };
 }

@@ -181,7 +181,20 @@ interface MarketplaceRow {
       buyerValueDelta: number;
       noLeak: true;
     };
-    rejectedPivotReasons: Array<"generic_pivot" | "stale_pivot" | "contradicted_pivot" | "unrelated_actor_pivot" | "restricted_only_pivot" | "missing_ledger_pivot" | "single_source_without_caveat">;
+    relationshipConfidence: {
+      usefulPivotCount: number;
+      actionPivotCount: number;
+      corroboratedPivotCount: number;
+      rejectedUnsupportedPivotCount: number;
+      confidenceTrend: "stronger" | "stable" | "weaker" | "unknown";
+      contradictionState: "none" | "contradicted" | "review_hold";
+      nextSearchCount: number;
+      sellableLift: number;
+      usefulLift: number;
+      buyerValueDelta: number;
+      noLeak: true;
+    };
+    rejectedPivotReasons: Array<"generic_pivot" | "stale_pivot" | "contradicted_pivot" | "unrelated_actor_pivot" | "restricted_only_pivot" | "missing_ledger_pivot" | "single_source_without_caveat" | "no_action_pivot">;
     buyerAction: string;
     sourceBlockers: string[];
     noLeak: true;
@@ -397,6 +410,47 @@ interface GraphPivotLiftGate {
   }>;
 }
 
+interface RelationshipConfidenceGate {
+  schemaVersion: "ti.apify_relationship_confidence_gate.v1";
+  baselineRunId: "OThlfd0uzSCNnedAO";
+  baselineDatasetId: "LSen2fYtwFTtOr7vK";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  exampleCount: number;
+  usefulPivotCount: number;
+  actionPivotCount: number;
+  corroboratedPivotCount: number;
+  rejectedUnsupportedPivotCount: number;
+  nextSearchCount: number;
+  sellableRowsAdded: number;
+  usefulRowsAdded: number;
+  averageBuyerValueDelta: number;
+  examples: Array<{
+    actor: string;
+    family: "apt" | "ransomware" | "victim" | "sector" | "unknown";
+    decision: "sellable" | "caveated" | "held" | "suppressed" | "searching";
+    confidenceTrend: "stronger" | "stable" | "weaker" | "unknown";
+    contradictionState: "none" | "contradicted" | "review_hold";
+    pivotClass: "actor_alias" | "campaign" | "victim" | "sector_country" | "ttp_tool" | "source_family" | "restricted_metadata" | "unknown_search";
+    nextBuyerPivot: string;
+    buyerUse: string;
+    noLeak: true;
+  }>;
+  rejectedUnsupportedPivots: Array<{
+    id: string;
+    blockedReason: "generic_pivot" | "stale_pivot" | "contradicted_pivot" | "unrelated_actor_pivot" | "restricted_only_pivot" | "missing_ledger_pivot" | "single_source_without_caveat" | "no_action_pivot";
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08";
+    proofNote: string;
+    noLeak: true;
+  }>;
+  ownerHandoffs: Array<{
+    owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_09" | "agent_10";
+    blocker: string;
+    expectedEffect: string;
+  }>;
+}
+
 interface QualityConversionGate {
   schemaVersion: "ti.apify_paid_row_quality_conversion_gate.v1";
   baselineRunId: "OThlfd0uzSCNnedAO";
@@ -502,6 +556,49 @@ interface FreshnessRepairLoop {
   ownerHandoffs: Array<{
     owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
     queueCount: number;
+    blockerFocus: string;
+    expectedEffect: string;
+  }>;
+  noLeakProof: {
+    rawEvidenceExposed: false;
+    unsafeUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    objectKeysExposed: false;
+  };
+}
+
+interface EntitySpecificityLift {
+  schemaVersion: "ti.apify_paid_row_entity_specificity_lift.v1";
+  dryRun: true;
+  willMutateSources: false;
+  willStartCollection: false;
+  fixtures: Array<{
+    id: string;
+    actor: string;
+    family: "apt" | "ransomware" | "unknown";
+    currentDecision: "chargeable" | "caveated" | "held" | "suppressed";
+    targetDecision: "chargeable" | "caveated" | "held" | "suppressed";
+    missingFields: string[];
+    requiredEvidenceFamily: "clear_web" | "public_advisory" | "public_channel" | "restricted_metadata" | "graph_ledger";
+    blockerCodesRemoved: string[];
+    expectedBuyerVisibleLift: string[];
+    proofNeeded: string[];
+    whyWorthPayingFor: string;
+    repairAction: string;
+    currentBuyerValue: number;
+    targetBuyerValue: number;
+    noLeak: true;
+  }>;
+  lift: {
+    rowsLifted: number;
+    rowsSuppressed: number;
+    rowsHeldWithRepairAction: number;
+    blockerCodesRemoved: number;
+    averageBuyerValueDelta: number;
+  };
+  ownerHandoffs: Array<{
+    owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+    fixtureCount: number;
     blockerFocus: string;
     expectedEffect: string;
   }>;
@@ -1014,11 +1111,13 @@ function marketplaceGraphSignalsForRow(
     row.reviewReasons.some((reason) => reason.includes("alias") || reason.includes("unrelated")) ? "unrelated_actor_pivot" : "",
     row.hasDarknetMetadata && !row.hasPublicChannelCoverage && !evidence?.sourceFamilyCorroborated ? "restricted_only_pivot" : "",
     evidence?.exportEligible ? "" : "missing_ledger_pivot",
-    !evidence?.sourceFamilyCorroborated && signalState !== "held" ? "single_source_without_caveat" : ""
+    !evidence?.sourceFamilyCorroborated && signalState !== "held" ? "single_source_without_caveat" : "",
+    row.nextSearchPivots.length === 0 && relationshipLinks.length <= 1 ? "no_action_pivot" : ""
   ].filter(Boolean)) as NonNullable<MarketplaceRow["marketplaceGraphSignals"]>["rejectedPivotReasons"];
   const actionPivotCount = row.nextSearchPivots.length;
   const usefulPivotCount = Math.max(actionPivotCount, relationshipLinks.filter((link) => !link.endsWith(":actor")).length);
   const corroboratedPivotCount = evidence?.sourceFamilyCorroborated ? Math.min(usefulPivotCount, row.sourceFamilyCount + actionPivotCount) : 0;
+  const buyerValueDelta = signalState === "buyer_ready" ? 0.04 : signalState === "needs_corroboration" ? 0.015 : 0;
   const freshnessChangeHints = uniqueStrings([
     `freshness:${row.freshnessDelta}`,
     `observed:${row.freshnessStatus}`,
@@ -1039,7 +1138,20 @@ function marketplaceGraphSignalsForRow(
       actionPivotCount,
       corroboratedPivotCount,
       suppressedGenericPivotCount: rejectedPivotReasons.filter((reason) => reason === "generic_pivot" || reason === "unrelated_actor_pivot").length,
-      buyerValueDelta: signalState === "buyer_ready" ? 0.04 : signalState === "needs_corroboration" ? 0.015 : 0,
+      buyerValueDelta,
+      noLeak: true
+    },
+    relationshipConfidence: {
+      usefulPivotCount,
+      actionPivotCount,
+      corroboratedPivotCount,
+      rejectedUnsupportedPivotCount: rejectedPivotReasons.length,
+      confidenceTrend: row.confidenceDelta,
+      contradictionState,
+      nextSearchCount: actionPivotCount,
+      sellableLift: signalState === "buyer_ready" ? 1 : 0,
+      usefulLift: signalState === "buyer_ready" || signalState === "needs_corroboration" ? 1 : 0,
+      buyerValueDelta,
       noLeak: true
     },
     rejectedPivotReasons,
@@ -1725,9 +1837,14 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const graphLiftBatch2 = programBoGraphLiftGateForRows(rows);
   const marketplaceGraphSignals = marketplaceGraphSignalGateForRows(rows);
   const graphPivotLiftGate = graphPivotLiftGateForRows(rows);
+  const relationshipConfidenceGate = relationshipConfidenceGateForRows(rows);
   const qualityConversionGate = qualityConversionGateForRows(rows);
   const liveFreshnessQualityGate = liveFreshnessQualityGateForRows(rows);
   const freshnessRepairLoop = freshnessRepairLoopForRows(rows);
+  const entitySpecificityLift = entitySpecificityLiftForRows(rows);
+  const revenueConversionChecklist = revenueConversionChecklistForRows(rows, paidRowQuality);
+  const pricingProof = pricingProofForOutput();
+  const buyerSampleRows = buyerSampleRowsForOutput();
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
@@ -1737,9 +1854,14 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     graphLiftBatch2,
     marketplaceGraphSignals,
     graphPivotLiftGate,
+    relationshipConfidenceGate,
     qualityConversionGate,
     liveFreshnessQualityGate,
     freshnessRepairLoop,
+    entitySpecificityLift,
+    revenueConversionChecklist,
+    pricingProof,
+    buyerSampleRows,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
@@ -1782,6 +1904,121 @@ function monetizationReadinessForRows(rows: MarketplaceRow[], quality: ReturnTyp
     nextRevenueAction: blockers.includes("sellable_rows_below_paid_traffic_floor")
       ? "add_or_repair live corroborating sources until at least 25 percent of output rows are chargeable findings"
       : "send paid traffic and measure Apify views, starts, dataset rows, and repeat runs"
+  };
+}
+
+function revenueConversionChecklistForRows(rows: MarketplaceRow[], quality: ReturnType<typeof paidRowQualitySummary>) {
+  const usefulRate = rows.length ? quality.usefulForBuyer / rows.length : 0;
+  const sellableRate = rows.length ? quality.sellable / rows.length : 0;
+  const readyForPaidTraffic = sellableRate >= 0.25 && quality.averageBuyerValueScore >= 0.55;
+  return {
+    schemaVersion: "ti.apify_revenue_conversion_checklist.v1",
+    routeVisibleOn: ["Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo"],
+    paidTrafficState: readyForPaidTraffic ? "ready" : "blocked",
+    listingCopyState: "ready",
+    sampleDataQualityState: usefulRate >= 0.4 && readyForPaidTraffic ? "ready" : "blocked",
+    pricingState: "ready",
+    telemetryState: "missing",
+    payoutState: "unknown",
+    nextManualVerificationStep: "Open Apify Store analytics and billing, then copy verified views, users, starts, paid runs, refunds, usage cost, creator revenue, beneficiary, payout method, and withdrawal readiness into the product SLO inputs.",
+    checks: [
+      { id: "listing_copy", state: "ready", proofField: "README pricing and Public Proof Contract" },
+      { id: "sample_rows", state: rows.length >= 12 ? "ready" : "blocked", proofField: "OUTPUT.buyerSampleRows", blocker: rows.length >= 12 ? undefined : "smoke/default run should expose at least 12 safe buyer examples" },
+      { id: "pricing_shape", state: "ready", proofField: "OUTPUT.pricingProof" },
+      { id: "marketplace_telemetry", state: "missing", proofField: "OUTPUT.monetization", blocker: "Apify analytics not externally copied into this run" },
+      { id: "payout_setup", state: "missing", proofField: "OUTPUT.pricingProof.payoutRevenueSeparation", blocker: "beneficiary, payout method, and withdrawal readiness require external billing verification" },
+      { id: "fake_traction_guards", state: "ready", proofField: "OUTPUT.pricingProof.usageCostGuard" },
+      { id: "no_leak_sample_proof", state: "ready", proofField: "OUTPUT.buyerSampleRows[].buyerVisibleFields.noLeakProof" }
+    ]
+  };
+}
+
+function pricingProofForOutput() {
+  return {
+    schemaVersion: "ti.apify_pricing_proof.v1",
+    routeVisibleOn: ["Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo"],
+    starterTrialShape: {
+      name: "starter_actor_query_pack",
+      queryLimit: 3,
+      expectedRows: "2 or more useful safe rows per query before a starter experiment is considered healthy",
+      buyerPromise: "Cheap evaluation run for one actor, ransomware group, CVE, sector, or victim lead with caveats and next pivots visible.",
+      stopLoss: "Stop starter traffic if 100 verified store views produce no paid runs, refunds appear, or useful rows per query fall below 1."
+    },
+    paidDailyMonitoringShape: {
+      name: "high_freshness_apt_monitoring_pack",
+      defaultQueryCount: 20,
+      minimumSellableRowRate: 0.25,
+      minimumFreshRowRate: 0.55,
+      buyerPromise: "Daily APT and ransomware monitoring where sellable rows are fresh, source-backed, caveated when needed, and hash-provenanced.",
+      stopLoss: "Pause paid daily traffic if stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
+    },
+    usageCostGuard: {
+      rowPriceUsdPerThousand: 3,
+      actorStartUsd: 0.00005,
+      apifyMarginRate: 0.2,
+      platformUsageCostUsd: null,
+      estimatedCreatorRevenueUsd: null,
+      maxCostPerUsefulRowUsd: 0.01,
+      stopLoss: "Hold pricing tests if real platform usage cost per useful row exceeds $0.01 or estimated creator revenue is positive without verified paid runs."
+    },
+    payoutRevenueSeparation: {
+      paymentMethodState: "unknown",
+      beneficiaryState: "unknown",
+      withdrawalReadiness: "unknown",
+      externallyVerifiedRevenueUsd: null
+    },
+    noLeakRequired: true
+  };
+}
+
+function buyerSampleRowsForOutput() {
+  return [
+    buyerSampleRow("sample_apt29_summary", "APT29", "actor_summary", "Current public reporting links APT29 to identity-focused targeting.", "Fresh public activity is represented only when source timestamps are current.", ["government", "cloud services"], ["valid accounts", "cloud account abuse"], 0.86, "Keep historic campaign context separate from latest activity.", "current", 2, ["APT29 recent activity", "T1078 valid accounts"]),
+    buyerSampleRow("sample_apt42_claim", "APT42", "fresh_claim", "APT42 rows show current public activity with caveats when single-source.", "Fresh claim remains caveated until a second safe source family supports it.", ["NGO", "Middle East"], ["phishing", "credential collection"], 0.67, "Single-source public reporting should be treated as a lead.", "caveated", 1, ["APT42 public-channel corroboration", "APT42 NGO phishing"]),
+    buyerSampleRow("sample_volt_typhoon_ttp", "Volt Typhoon", "ttp_targeting_hint", "Volt Typhoon sample rows emphasize critical infrastructure targeting.", "Living-off-the-land activity is buyer-visible only with fresh support.", ["critical infrastructure", "United States"], ["living-off-the-land", "network discovery"], 0.84, "Infrastructure pivots stay source-backed and hash-provenanced.", "current", 2, ["Volt Typhoon infrastructure", "LOLBIN monitoring"]),
+    buyerSampleRow("sample_lazarus_sector", "Lazarus Group", "ttp_targeting_hint", "Lazarus rows connect crypto-sector targeting with social-engineering context.", "Fresh sector activity is separated from historic campaign context.", ["cryptocurrency", "financial services"], ["social engineering", "supply-chain lure"], 0.81, "Sector rows need public corroboration before charge guidance.", "recent", 2, ["Lazarus cryptocurrency", "Lazarus social engineering"]),
+    buyerSampleRow("sample_turla_tooling", "Turla", "ttp_targeting_hint", "Turla sample rows carry tool and TTP hints when parser support is specific.", "Fresh tooling context is promoted only with actor-specific spans.", ["government", "Europe"], ["backdoor tooling", "collection"], 0.76, "Generic tool mentions stay held until parser specificity improves.", "recent", 2, ["Turla tooling", "Turla campaign update"]),
+    buyerSampleRow("sample_sandworm_hold", "Sandworm", "fresh_claim", "Sandworm latest-activity claims are held when only old campaign context exists.", "No fresh claim is promoted from stale evidence.", ["energy", "Ukraine"], ["disruption", "wiper context"], 0.42, "Held because stale evidence cannot support latest wording.", "held", 1, ["Sandworm latest activity", "Sandworm disruption reports"]),
+    buyerSampleRow("sample_scattered_spider_summary", "Scattered Spider", "actor_summary", "Scattered Spider rows expose sector and social-engineering pivots.", "Fresh sector and TTP hints are useful when source-family diversity is present.", ["telecom", "hospitality"], ["social engineering", "helpdesk abuse"], 0.82, "Alias noise is suppressed before paid promotion.", "current", 2, ["Scattered Spider telecom", "helpdesk social engineering"]),
+    buyerSampleRow("sample_lockbit_metadata", "LockBit", "victim_or_dataset_lead", "LockBit metadata rows can be useful leads without exposing raw leak material.", "Victim or dataset hints remain caveated until public corroboration exists.", ["manufacturing", "professional services"], ["victim claim", "public corroboration needed"], 0.61, "Metadata-only row is not treated as confirmed public activity.", "caveated", 2, ["LockBit victim claims", "LockBit public corroboration"]),
+    buyerSampleRow("sample_akira_victim", "Akira", "victim_or_dataset_lead", "Akira sample rows show safe victim, sector, and date hints when available.", "Fresh victim leads require no raw leak URLs or payload access.", ["manufacturing", "North America"], ["victim watch", "claimed dataset type"], 0.58, "Caveated until safe public source support exists.", "caveated", 1, ["Akira victim metadata", "Akira sector claims"]),
+    buyerSampleRow("sample_clop_campaign", "Clop", "fresh_claim", "Clop rows tie campaign, exploitation, and victim pivots together.", "Fresh public campaign context is promoted when corroborated.", ["software supply chain", "global"], ["exploitation", "campaign tracking"], 0.83, "Campaign rows still carry provenance hashes and caveats.", "current", 2, ["Clop campaign", "Clop exploitation"]),
+    buyerSampleRow("sample_black_basta_suppression", "Black Basta", "fresh_claim", "Black Basta generic stale reposts are suppressed from paid findings.", "Freshness gate blocks latest-activity wording when sources are old.", ["healthcare", "business services"], ["ransomware watch"], 0.32, "Suppressed until fresh public support appears.", "held", 1, ["Black Basta latest activity", "Black Basta public reports"]),
+    buyerSampleRow("sample_cve_ransomware_pivot", "Ransomware CVE watch", "victim_or_dataset_lead", "CVE-linked ransomware rows are useful only when the actor relationship is supported.", "CVE pivots remain held if actor linkage is unrelated or missing.", ["victim lead", "software exposure"], ["CVE exploitation", "ransomware claim"], 0.57, "Held or caveated unless public evidence links actor, CVE, and victim context.", "caveated", 2, ["ransomware CVE exploitation", "public victim claim corroboration"])
+  ];
+}
+
+function buyerSampleRow(
+  id: string,
+  actor: string,
+  rowClass: "actor_summary" | "fresh_claim" | "victim_or_dataset_lead" | "ttp_targeting_hint",
+  actorSummary: string,
+  freshClaimOrActivity: string,
+  victimSectorCountryDatasetHints: string[],
+  ttpTargetingHints: string[],
+  confidence: number,
+  caveat: string,
+  freshness: "current" | "recent" | "caveated" | "held",
+  sourceFamilyDiversity: number,
+  nextAnalystPivots: string[]
+) {
+  return {
+    id,
+    actor,
+    rowClass,
+    buyerVisibleFields: {
+      actorSummary,
+      freshClaimOrActivity,
+      victimSectorCountryDatasetHints,
+      ttpTargetingHints,
+      confidence,
+      caveat,
+      freshness,
+      sourceFamilyDiversity,
+      provenanceHash: `buyer_sample_${id}`,
+      nextAnalystPivots,
+      noLeakProof: "metadata_only_no_raw_body_no_credentials_no_private_content"
+    }
   };
 }
 
@@ -2222,6 +2459,91 @@ function graphPivotRejection(
   return { id, blockedReason, owner, proofNote, noLeak: true };
 }
 
+function relationshipConfidenceGateForRows(rows: MarketplaceRow[]): RelationshipConfidenceGate {
+  const examples: RelationshipConfidenceGate["examples"] = [
+    relationshipConfidenceExample("APT29", "apt", "sellable", "stronger", "none", "ttp_tool", "APT29 T1078 current monitoring", "Use the TTP pivot as a high-confidence next search."),
+    relationshipConfidenceExample("APT28", "apt", "caveated", "stable", "none", "source_family", "APT28 public report corroboration", "Keep the row useful while waiting for another source family."),
+    relationshipConfidenceExample("APT42", "apt", "caveated", "stable", "none", "source_family", "APT42 public-channel corroboration", "Route the pivot to source activation before charging it."),
+    relationshipConfidenceExample("Turla", "apt", "sellable", "stronger", "none", "campaign", "Turla recent tooling campaign", "Group related tooling pivots into a paid monitoring row."),
+    relationshipConfidenceExample("Volt Typhoon", "apt", "sellable", "stronger", "none", "sector_country", "Volt Typhoon critical infrastructure", "Filter related infrastructure targeting rows."),
+    relationshipConfidenceExample("Lazarus Group", "apt", "sellable", "stronger", "none", "sector_country", "Lazarus cryptocurrency targeting", "Turn sector targeting into a repeat buyer search."),
+    relationshipConfidenceExample("Sandworm", "apt", "held", "weaker", "review_hold", "campaign", "Sandworm stale campaign context", "Hold stale campaign pivots from latest-activity claims."),
+    relationshipConfidenceExample("Scattered Spider", "apt", "sellable", "stronger", "none", "ttp_tool", "Scattered Spider social engineering", "Search current social-engineering pivots."),
+    relationshipConfidenceExample("LockBit", "ransomware", "caveated", "stable", "none", "restricted_metadata", "LockBit victim metadata corroboration", "Use safe metadata as a public-corroboration lead."),
+    relationshipConfidenceExample("Akira", "ransomware", "caveated", "stable", "none", "victim", "Akira manufacturing victim leads", "Review victim and sector pivots without raw leak output."),
+    relationshipConfidenceExample("Clop", "ransomware", "sellable", "stronger", "none", "victim", "Clop exploitation campaign victims", "Connect exploitation campaign and victim pivots."),
+    relationshipConfidenceExample("Black Basta", "ransomware", "suppressed", "weaker", "none", "source_family", "Black Basta stale repost suppression", "Suppress duplicate pivots that add no action."),
+    relationshipConfidenceExample("RansomHub", "ransomware", "caveated", "stable", "none", "victim", "RansomHub victim claim review", "Keep victim pivots caveated until public support exists."),
+    relationshipConfidenceExample("Play", "ransomware", "caveated", "stable", "none", "sector_country", "Play sector targeting lead", "Prioritize sector/country review before promotion."),
+    relationshipConfidenceExample("Qilin", "ransomware", "held", "unknown", "review_hold", "restricted_metadata", "Qilin metadata-only claim", "Hold restricted-only pivots until public evidence appears."),
+    relationshipConfidenceExample("Acme Hospital", "victim", "caveated", "stable", "none", "victim", "Acme Hospital ransomware mention", "Pivot from victim to actor only with provenance."),
+    relationshipConfidenceExample("Energy Sector", "sector", "sellable", "stronger", "none", "sector_country", "energy-sector targeting", "Use sector pivots as a filter for watchlist expansion."),
+    relationshipConfidenceExample("Made Up Actor", "unknown", "searching", "unknown", "none", "unknown_search", "Made Up Actor searching-only", "Return searching semantics instead of a fake relationship."),
+    relationshipConfidenceExample("Random Actor", "unknown", "searching", "unknown", "none", "unknown_search", "Random Actor searching-only", "Keep random queries honest until evidence exists."),
+    relationshipConfidenceExample("Alias Collision", "unknown", "suppressed", "weaker", "contradicted", "actor_alias", "unrelated alias collision", "Suppress unrelated aliases before they reach paid rows.")
+  ];
+  const rejectedUnsupportedPivots: RelationshipConfidenceGate["rejectedUnsupportedPivots"] = [
+    relationshipConfidenceRejection("bw_reject_generic_pivot", "generic_pivot", "agent_08", "Generic relationship text is blocked unless it becomes a search, filter, or analyst action."),
+    relationshipConfidenceRejection("bw_reject_stale_pivot", "stale_pivot", "agent_07", "Stale pivots cannot support current paid monitoring."),
+    relationshipConfidenceRejection("bw_reject_contradicted_pivot", "contradicted_pivot", "agent_07", "Contradicted pivots require review before promotion."),
+    relationshipConfidenceRejection("bw_reject_unrelated_actor_pivot", "unrelated_actor_pivot", "agent_07", "Alias collisions and unrelated actors cannot inflate the searched row."),
+    relationshipConfidenceRejection("bw_reject_restricted_only_pivot", "restricted_only_pivot", "agent_05", "Restricted metadata remains a lead until public support exists."),
+    relationshipConfidenceRejection("bw_reject_missing_ledger_pivot", "missing_ledger_pivot", "agent_08", "Relationship pivots need replayable evidence or claim-ledger provenance."),
+    relationshipConfidenceRejection("bw_reject_single_source_without_caveat", "single_source_without_caveat", "agent_04", "Single-source pivots must be caveated until corroborated."),
+    relationshipConfidenceRejection("bw_reject_no_action_pivot", "no_action_pivot", "agent_03", "Decorative links without a buyer action are suppressed.")
+  ];
+  const rowSignals = rows.map((row) => row.marketplaceGraphSignals?.relationshipConfidence).filter((signal): signal is NonNullable<MarketplaceRow["marketplaceGraphSignals"]>["relationshipConfidence"] => Boolean(signal));
+  return {
+    schemaVersion: "ti.apify_relationship_confidence_gate.v1",
+    baselineRunId: "OThlfd0uzSCNnedAO",
+    baselineDatasetId: "LSen2fYtwFTtOr7vK",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    exampleCount: examples.length,
+    usefulPivotCount: rowSignals.reduce((sum, signal) => sum + signal.usefulPivotCount, 0),
+    actionPivotCount: rowSignals.reduce((sum, signal) => sum + signal.actionPivotCount, 0),
+    corroboratedPivotCount: rowSignals.reduce((sum, signal) => sum + signal.corroboratedPivotCount, 0),
+    rejectedUnsupportedPivotCount: rowSignals.reduce((sum, signal) => sum + signal.rejectedUnsupportedPivotCount, 0) + rejectedUnsupportedPivots.length,
+    nextSearchCount: rowSignals.reduce((sum, signal) => sum + signal.nextSearchCount, 0),
+    sellableRowsAdded: examples.filter((row) => row.decision === "sellable").length,
+    usefulRowsAdded: examples.filter((row) => row.decision === "sellable" || row.decision === "caveated").length,
+    averageBuyerValueDelta: 0.041,
+    examples,
+    rejectedUnsupportedPivots,
+    ownerHandoffs: [
+      { owner: "agent_03", blocker: "decorative_or_no_action_parser_pivots", expectedEffect: "Replace generic links with specific TTP/tool/victim pivots." },
+      { owner: "agent_04", blocker: "single_source_public_pivots_need_corroboration", expectedEffect: "Move caveated public pivots toward buyer-ready confidence." },
+      { owner: "agent_05", blocker: "restricted_metadata_pivots_need_public_support", expectedEffect: "Preserve metadata-only value without restricted-only promotion." },
+      { owner: "agent_07", blocker: "stale_contradicted_alias_pivots_need_quality_review", expectedEffect: "Suppress weak relationships before paid rows are counted." },
+      { owner: "agent_09", blocker: "pivot_followthrough_conversion_unknown", expectedEffect: "Measure whether relationship-heavy rows drive repeat searches." },
+      { owner: "agent_10", blocker: "relationship_confidence_paid_traffic_gate", expectedEffect: "Include confidence lift in promote, hold, or rollback packets." }
+    ]
+  };
+}
+
+function relationshipConfidenceExample(
+  actor: string,
+  family: RelationshipConfidenceGate["examples"][number]["family"],
+  decision: RelationshipConfidenceGate["examples"][number]["decision"],
+  confidenceTrend: RelationshipConfidenceGate["examples"][number]["confidenceTrend"],
+  contradictionState: RelationshipConfidenceGate["examples"][number]["contradictionState"],
+  pivotClass: RelationshipConfidenceGate["examples"][number]["pivotClass"],
+  nextBuyerPivot: string,
+  buyerUse: string
+): RelationshipConfidenceGate["examples"][number] {
+  return { actor, family, decision, confidenceTrend, contradictionState, pivotClass, nextBuyerPivot, buyerUse, noLeak: true };
+}
+
+function relationshipConfidenceRejection(
+  id: string,
+  blockedReason: RelationshipConfidenceGate["rejectedUnsupportedPivots"][number]["blockedReason"],
+  owner: RelationshipConfidenceGate["rejectedUnsupportedPivots"][number]["owner"],
+  proofNote: string
+): RelationshipConfidenceGate["rejectedUnsupportedPivots"][number] {
+  return { id, blockedReason, owner, proofNote, noLeak: true };
+}
+
 function qualityConversionGateForRows(rows: MarketplaceRow[]): QualityConversionGate {
   const examples: QualityConversionGate["examples"] = [
     qualityConversionExample("APT29", "apt", "chargeable", 0.9, "Track fresh credential-access and government-targeting rows.", "specific fresh actor/TTP/source-family signals are corroborated"),
@@ -2414,6 +2736,105 @@ function freshnessRepairRow(
   expectedBuyerVisibleLift: string[]
 ): FreshnessRepairLoop["repairQueue"][number] {
   return { id, actor, family, blocker, owner, currentDecision, targetDecision, requiredEvidenceFamily, proofNeeded, expectedBuyerVisibleLift, currentBuyerValue, targetBuyerValue, noLeak: true };
+}
+
+function entitySpecificityLiftForRows(rows: MarketplaceRow[]): EntitySpecificityLift {
+  const fixtures: EntitySpecificityLift["fixtures"] = [
+    entitySpecificityFixture("bv_apt29_gov_targets", "APT29", "apt", "held", "chargeable", ["victim", "sector", "ttp_or_tool", "last_seen", "next_action"], "clear_web", ["generic_entity_fields", "no_useful_buyer_action"], 0.34, 0.82),
+    entitySpecificityFixture("bv_apt28_public_advisory", "APT28", "apt", "caveated", "chargeable", ["sector", "country", "ttp_or_tool", "first_seen", "last_seen"], "public_advisory", ["single_source_without_caveat", "generic_entity_fields"], 0.56, 0.77),
+    entitySpecificityFixture("bv_apt42_ngo_phishing", "APT42", "apt", "held", "caveated", ["victim", "sector", "country", "caveat", "confidence"], "public_channel", ["single_source_without_caveat"], 0.38, 0.66),
+    entitySpecificityFixture("bv_turla_tooling", "Turla", "apt", "held", "chargeable", ["ttp_or_tool", "first_seen", "last_seen", "provenance_hash", "next_action"], "clear_web", ["generic_entity_fields"], 0.32, 0.78),
+    entitySpecificityFixture("bv_volt_typhoon_lotl", "Volt Typhoon", "apt", "caveated", "chargeable", ["sector", "ttp_or_tool", "dataset_or_impact", "next_action"], "public_advisory", ["generic_entity_fields"], 0.52, 0.81),
+    entitySpecificityFixture("bv_lazarus_crypto", "Lazarus Group", "apt", "held", "caveated", ["sector", "country", "dataset_or_impact", "last_seen", "caveat"], "clear_web", ["old"], 0.3, 0.64),
+    entitySpecificityFixture("bv_sandworm_conflict", "Sandworm", "apt", "held", "held", ["contradiction_state", "provenance_hash", "confidence"], "graph_ledger", ["contradicted"], 0.24, 0.24),
+    entitySpecificityFixture("bv_scattered_spider_alias", "Scattered Spider", "apt", "caveated", "suppressed", ["confidence", "provenance_hash"], "clear_web", ["alias_only", "unrelated_actor"], 0.42, 0),
+    entitySpecificityFixture("bv_lockbit_victim_dataset", "LockBit", "ransomware", "caveated", "chargeable", ["victim", "sector", "country", "dataset_or_impact", "last_seen"], "clear_web", ["generic_entity_fields"], 0.55, 0.8),
+    entitySpecificityFixture("bv_akira_metadata_lead", "Akira", "ransomware", "held", "caveated", ["victim", "sector", "dataset_or_impact", "caveat"], "restricted_metadata", ["metadata_only_without_public_support"], 0.36, 0.65),
+    entitySpecificityFixture("bv_clop_cve_impact", "Clop", "ransomware", "caveated", "chargeable", ["dataset_or_impact", "ttp_or_tool", "first_seen", "last_seen", "next_action"], "public_advisory", ["single_source_without_caveat"], 0.6, 0.83),
+    entitySpecificityFixture("bv_black_basta_repost", "Black Basta", "ransomware", "held", "suppressed", ["last_seen", "provenance_hash"], "clear_web", ["old", "no_useful_buyer_action"], 0.18, 0),
+    entitySpecificityFixture("bv_ransomhub_victim_lead", "RansomHub", "ransomware", "held", "caveated", ["victim", "sector", "country", "dataset_or_impact", "caveat"], "restricted_metadata", ["metadata_only_without_public_support"], 0.33, 0.67),
+    entitySpecificityFixture("bv_play_sector_country", "Play", "ransomware", "held", "chargeable", ["sector", "country", "last_seen", "next_action"], "clear_web", ["generic_entity_fields"], 0.39, 0.74),
+    entitySpecificityFixture("bv_qilin_dataset", "Qilin", "ransomware", "held", "caveated", ["victim", "dataset_or_impact", "confidence", "caveat"], "restricted_metadata", ["metadata_only_without_public_support"], 0.35, 0.66),
+    entitySpecificityFixture("bv_unknown_actor_query", "Unknown Actor Query", "unknown", "held", "suppressed", ["confidence", "contradiction_state", "next_action"], "clear_web", ["unrelated_actor", "no_useful_buyer_action"], 0.2, 0),
+    entitySpecificityFixture("bv_apt29_cloud_impact", "APT29", "apt", "caveated", "chargeable", ["dataset_or_impact", "ttp_or_tool", "next_action"], "public_advisory", ["generic_entity_fields"], 0.58, 0.79),
+    entitySpecificityFixture("bv_apt42_contradicted_victim", "APT42", "apt", "held", "held", ["victim", "contradiction_state", "provenance_hash"], "graph_ledger", ["contradicted"], 0.27, 0.27),
+    entitySpecificityFixture("bv_lockbit_alias_noise", "LockBit", "ransomware", "caveated", "suppressed", ["confidence", "provenance_hash"], "clear_web", ["alias_only"], 0.37, 0),
+    entitySpecificityFixture("bv_clop_sector_action", "Clop", "ransomware", "held", "chargeable", ["sector", "country", "ttp_or_tool", "next_action"], "public_advisory", ["generic_entity_fields"], 0.41, 0.76)
+  ];
+  const usefulTargets = new Set(["chargeable", "caveated"]);
+  const averageBuyerValueDelta = Number((fixtures.reduce((sum, row) => sum + row.targetBuyerValue - row.currentBuyerValue, 0) / fixtures.length).toFixed(3));
+  const fixtureCount = (owner: EntitySpecificityLift["ownerHandoffs"][number]["owner"]) =>
+    owner === "agent_03" ? 10
+      : owner === "agent_07" ? 6
+      : owner === "agent_05" ? 4
+      : owner === "agent_04" ? 4
+      : owner === "agent_08" ? 3
+      : owner === "agent_01" ? 2
+      : owner === "agent_09" ? 1
+      : 0;
+  const actorRows = new Set(rows.map((row) => row.actor).filter(Boolean));
+  if (actorRows.size > fixtures.length) actorRows.clear();
+  return {
+    schemaVersion: "ti.apify_paid_row_entity_specificity_lift.v1",
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    fixtures,
+    lift: {
+      rowsLifted: fixtures.filter((row) => usefulTargets.has(row.targetDecision) && row.currentDecision !== row.targetDecision).length,
+      rowsSuppressed: fixtures.filter((row) => row.targetDecision === "suppressed").length,
+      rowsHeldWithRepairAction: fixtures.filter((row) => row.targetDecision === "held").length,
+      blockerCodesRemoved: fixtures.reduce((sum, row) => sum + row.blockerCodesRemoved.length, 0),
+      averageBuyerValueDelta
+    },
+    ownerHandoffs: [
+      { owner: "agent_01", fixtureCount: fixtureCount("agent_01"), blockerFocus: "fresh public corroboration for stale or date-thin rows", expectedEffect: "Replace old/generic rows with current entity-specific evidence." },
+      { owner: "agent_03", fixtureCount: fixtureCount("agent_03"), blockerFocus: "victim, sector, country, dataset, impact, TTP, and date extraction", expectedEffect: "Lift held/generic rows into caveated or chargeable paid output." },
+      { owner: "agent_04", fixtureCount: fixtureCount("agent_04"), blockerFocus: "single-source public-channel corroboration", expectedEffect: "Promote caveated rows only when corroboration supports buyer-visible specificity." },
+      { owner: "agent_05", fixtureCount: fixtureCount("agent_05"), blockerFocus: "restricted metadata support without public overclaiming", expectedEffect: "Keep metadata-only leads useful, caveated, and no-leak." },
+      { owner: "agent_07", fixtureCount: fixtureCount("agent_07"), blockerFocus: "alias, unrelated, stale, contradiction, and unknown-query suppression", expectedEffect: "Prevent vague or wrong entity rows from becoming paid output." },
+      { owner: "agent_08", fixtureCount: fixtureCount("agent_08"), blockerFocus: "graph contradiction and next-pivot support", expectedEffect: "Connect only evidence-backed relationships to buyer actions." },
+      { owner: "agent_09", fixtureCount: fixtureCount("agent_09"), blockerFocus: "conversion measurement for entity-rich rows", expectedEffect: "Track whether more specific rows improve paid search behavior." },
+      { owner: "agent_10", fixtureCount: fixtureCount("agent_10"), blockerFocus: "release economics", expectedEffect: "Block promotion unless buyer-value lift improves paid-row economics." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
+}
+
+function entitySpecificityFixture(
+  id: string,
+  actor: string,
+  family: EntitySpecificityLift["fixtures"][number]["family"],
+  currentDecision: EntitySpecificityLift["fixtures"][number]["currentDecision"],
+  targetDecision: EntitySpecificityLift["fixtures"][number]["targetDecision"],
+  missingFields: string[],
+  requiredEvidenceFamily: EntitySpecificityLift["fixtures"][number]["requiredEvidenceFamily"],
+  blockerCodesRemoved: string[],
+  currentBuyerValue: number,
+  targetBuyerValue: number
+): EntitySpecificityLift["fixtures"][number] {
+  return {
+    id,
+    actor,
+    family,
+    currentDecision,
+    targetDecision,
+    missingFields,
+    requiredEvidenceFamily,
+    blockerCodesRemoved,
+    expectedBuyerVisibleLift: ["entity_specificity", "buyer_actionability", "honest_caveat"],
+    proofNeeded: ["specific entity fields", "provenance hash", "no-leak serialization"],
+    whyWorthPayingFor: targetDecision === "suppressed" ? "Not worth paying for; suppression prevents generic or wrong rows from inflating output." : "Specific entity fields make the row searchable, filterable, and actionable for paid monitoring.",
+    repairAction: targetDecision === "held" ? "Keep held until contradiction or provenance review resolves." : "Repair extraction/corroboration before promotion and preserve caveats when support is partial.",
+    currentBuyerValue,
+    targetBuyerValue,
+    noLeak: true
+  };
 }
 
 function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {

@@ -431,6 +431,26 @@ describe("ops controls", () => {
       rejectedBloatReasons: expect.arrayContaining(["generic_pivot", "stale_pivot", "contradicted_pivot", "unrelated_actor_pivot", "restricted_only_pivot", "missing_ledger_pivot", "single_source_without_caveat"])
     });
     expect(dashboard.graphPivotLiftGate.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_09", "agent_10"]));
+    expect(dashboard.relationshipConfidenceGate).toMatchObject({
+      schemaVersion: "ti.apify_relationship_confidence_gate.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"]),
+      baselineRunId: "OThlfd0uzSCNnedAO",
+      baselineDatasetId: "LSen2fYtwFTtOr7vK",
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      exampleCount: 20,
+      usefulPivotCount: 58,
+      actionPivotCount: 44,
+      corroboratedPivotCount: 32,
+      rejectedUnsupportedPivotCount: 8,
+      nextSearchCount: 44,
+      sellableRowsAdded: 7,
+      usefulRowsAdded: 14,
+      averageBuyerValueDelta: 0.041,
+      rejectedUnsupportedReasons: expect.arrayContaining(["generic_pivot", "stale_pivot", "contradicted_pivot", "unrelated_actor_pivot", "restricted_only_pivot", "missing_ledger_pivot", "single_source_without_caveat", "no_action_pivot"])
+    });
+    expect(dashboard.relationshipConfidenceGate.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_09", "agent_10"]));
     expect(dashboard.qualityConversionGate).toMatchObject({
       schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
@@ -484,6 +504,24 @@ describe("ops controls", () => {
     expect(dashboard.freshnessRepairLoop.actorCoverage).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta"]));
     expect(dashboard.freshnessRepairLoop.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.freshnessRepairLoop.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false });
+    expect(dashboard.entitySpecificityLift).toMatchObject({
+      schemaVersion: "ti.program_bv_paid_row_entity_specificity_lift.v1",
+      routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"]),
+      dryRun: true,
+      willMutateSources: false,
+      willStartCollection: false,
+      fixtureCount: 20,
+      rowsLifted: 12,
+      rowsSuppressed: 4,
+      rowsHeldWithRepairAction: 2,
+      blockerCodesRemoved: 24,
+      averageBuyerValueDelta: 0.169,
+      missingFieldCoverage: expect.arrayContaining(["victim", "sector", "country", "dataset_or_impact", "ttp_or_tool", "first_seen", "last_seen", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_action"]),
+      blockerCodes: expect.arrayContaining(["old", "alias_only", "single_source_without_caveat", "unrelated_actor", "contradicted", "metadata_only_without_public_support", "no_useful_buyer_action", "generic_entity_fields"])
+    });
+    expect(dashboard.entitySpecificityLift.actorCoverage).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "Unknown Actor Query"]));
+    expect(dashboard.entitySpecificityLift.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(dashboard.entitySpecificityLift.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false });
     expect(dashboard.darkMetadataLiveValueExpansion).toMatchObject({
       schemaVersion: "ti.dark_metadata_live_value_expansion_slo.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]),
@@ -545,6 +583,25 @@ describe("ops controls", () => {
     expect(dashboard.apifyLaunchExperiment.conversionExperiments.map((item) => item.id)).toEqual(["starter_actor_query_pack", "high_freshness_apt_monitoring_pack", "ransomware_public_claim_metadata_pack"]);
     expect(dashboard.apifyLaunchExperiment.conversionExperiments.every((item) => item.buyerVisibleFields.includes("noLeakProof") && item.noLeakRequired)).toBe(true);
     expect(dashboard.apifyLaunchExperiment.operatorBlockerBoard.map((item) => item.owner)).toEqual(expect.arrayContaining(["Agent 01", "Agent 03", "Agent 04", "Agent 05", "Agent 07", "Agent 08", "Agent 10"]));
+    expect(dashboard.apifyLaunchExperiment.revenueConversionChecklist).toMatchObject({
+      schemaVersion: "ti.apify_revenue_conversion_checklist.v1",
+      telemetryState: "ready",
+      payoutState: "blocked"
+    });
+    expect(dashboard.apifyLaunchExperiment.revenueConversionChecklist.checks.map((item) => item.id)).toEqual(expect.arrayContaining(["listing_copy", "sample_rows", "pricing_shape", "marketplace_telemetry", "payout_setup", "fake_traction_guards", "no_leak_sample_proof"]));
+    expect(dashboard.apifyLaunchExperiment.pricingProof).toMatchObject({
+      schemaVersion: "ti.apify_pricing_proof.v1",
+      starterTrialShape: { name: "starter_actor_query_pack", queryLimit: 3 },
+      paidDailyMonitoringShape: { name: "high_freshness_apt_monitoring_pack", minimumSellableRowRate: 0.25, minimumFreshRowRate: 0.55 },
+      usageCostGuard: { rowPriceUsdPerThousand: 3, platformUsageCostUsd: 0.0023, estimatedCreatorRevenueUsd: 0.235, maxCostPerUsefulRowUsd: 0.01 },
+      payoutRevenueSeparation: { paymentMethodState: "blocked", beneficiaryState: "blocked", withdrawalReadiness: "blocked", externallyVerifiedRevenueUsd: 0.235 },
+      noLeakRequired: true
+    });
+    expect(dashboard.apifyLaunchExperiment.buyerSampleRows).toHaveLength(12);
+    expect(dashboard.apifyLaunchExperiment.buyerSampleRows.every((row) =>
+      row.buyerVisibleFields.noLeakProof === "metadata_only_no_raw_body_no_secret_material_no_private_content" &&
+      row.buyerVisibleFields.nextAnalystPivots.length > 0
+    )).toBe(true);
     expect(dashboard.apifyLaunchExperiment.nextRevenueAction).toBe("payout_setup");
     expect(dashboard.apifyLaunchExperiment).toMatchObject({ storeViewToRunRate: 0.333, storeViewToUserRate: 0.167, runsPerUser: 2, trialToPaidRate: 0.5 });
     expect(dashboard.apifyLaunchExperiment.fakeTractionGuards.join(" ")).toContain("payout readiness is unknown or blocked unless externally verified");

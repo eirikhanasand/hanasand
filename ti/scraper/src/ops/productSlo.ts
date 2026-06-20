@@ -351,6 +351,30 @@ export interface LiveProductSloDashboard {
       expectedEffect: string;
     }>;
   };
+  relationshipConfidenceGate: {
+    schemaVersion: "ti.apify_relationship_confidence_gate.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows">;
+    baselineRunId: string;
+    baselineDatasetId: string;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    exampleCount: number;
+    usefulPivotCount: number;
+    actionPivotCount: number;
+    corroboratedPivotCount: number;
+    rejectedUnsupportedPivotCount: number;
+    nextSearchCount: number;
+    sellableRowsAdded: number;
+    usefulRowsAdded: number;
+    averageBuyerValueDelta: number;
+    rejectedUnsupportedReasons: string[];
+    ownerHandoffs: Array<{
+      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_09" | "agent_10";
+      blocker: string;
+      expectedEffect: string;
+    }>;
+  };
   qualityConversionGate: {
     schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1";
     routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts">;
@@ -412,6 +436,34 @@ export interface LiveProductSloDashboard {
     ownerHandoffs: Array<{
       owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
       queueCount: number;
+      blockerFocus: string;
+      expectedEffect: string;
+    }>;
+    noLeakProof: {
+      rawEvidenceExposed: false;
+      unsafeUrlsExposed: false;
+      restrictedPayloadsExposed: false;
+      objectKeysExposed: false;
+    };
+  };
+  entitySpecificityLift: {
+    schemaVersion: "ti.program_bv_paid_row_entity_specificity_lift.v1";
+    routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "Apify OUTPUT">;
+    dryRun: true;
+    willMutateSources: false;
+    willStartCollection: false;
+    fixtureCount: number;
+    actorCoverage: string[];
+    missingFieldCoverage: string[];
+    blockerCodes: string[];
+    rowsLifted: number;
+    rowsSuppressed: number;
+    rowsHeldWithRepairAction: number;
+    blockerCodesRemoved: number;
+    averageBuyerValueDelta: number;
+    ownerHandoffs: Array<{
+      owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      fixtureCount: number;
       blockerFocus: string;
       expectedEffect: string;
     }>;
@@ -519,6 +571,9 @@ export interface LiveProductSloDashboard {
     conversionExperiments: LiveProductConversionExperiment[];
     operatorBlockerBoard: LiveProductOperatorBlocker[];
     fakeTractionGuards: string[];
+    revenueConversionChecklist: LiveProductRevenueConversionChecklist;
+    pricingProof: LiveProductPricingProof;
+    buyerSampleRows: LiveProductBuyerSampleRow[];
     nextRevenueAction: "paid_traffic" | "listing_repair" | "data_quality_repair" | "pricing_test" | "payout_setup";
     unknowns: string[];
   };
@@ -607,6 +662,79 @@ export interface LiveProductOperatorBlocker {
   blocker: string;
   conversionImpact: string;
   nextAction: string;
+}
+
+export interface LiveProductRevenueConversionChecklist {
+  schemaVersion: "ti.apify_revenue_conversion_checklist.v1";
+  routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "Apify OUTPUT">;
+  paidTrafficState: "ready" | "blocked";
+  listingCopyState: "ready" | "blocked";
+  sampleDataQualityState: "ready" | "blocked";
+  pricingState: "ready" | "blocked";
+  telemetryState: "ready" | "missing";
+  payoutState: "ready" | "blocked" | "unknown";
+  nextManualVerificationStep: string;
+  checks: Array<{
+    id: string;
+    state: "ready" | "blocked" | "missing";
+    proofField: string;
+    blocker?: string;
+  }>;
+}
+
+export interface LiveProductPricingProof {
+  schemaVersion: "ti.apify_pricing_proof.v1";
+  routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "Apify OUTPUT">;
+  starterTrialShape: {
+    name: "starter_actor_query_pack";
+    queryLimit: number;
+    expectedRows: string;
+    buyerPromise: string;
+    stopLoss: string;
+  };
+  paidDailyMonitoringShape: {
+    name: "high_freshness_apt_monitoring_pack";
+    defaultQueryCount: number;
+    minimumSellableRowRate: number;
+    minimumFreshRowRate: number;
+    buyerPromise: string;
+    stopLoss: string;
+  };
+  usageCostGuard: {
+    rowPriceUsdPerThousand: number;
+    actorStartUsd: number;
+    apifyMarginRate: number;
+    platformUsageCostUsd: number | null;
+    estimatedCreatorRevenueUsd: number | null;
+    maxCostPerUsefulRowUsd: number;
+    stopLoss: string;
+  };
+  payoutRevenueSeparation: {
+    paymentMethodState: "ready" | "blocked" | "unknown";
+    beneficiaryState: "verified" | "blocked" | "unknown";
+    withdrawalReadiness: "ready" | "blocked" | "unknown";
+    externallyVerifiedRevenueUsd: number | null;
+  };
+  noLeakRequired: true;
+}
+
+export interface LiveProductBuyerSampleRow {
+  id: string;
+  actor: string;
+  rowClass: "actor_summary" | "fresh_claim" | "victim_or_dataset_lead" | "ttp_targeting_hint";
+  buyerVisibleFields: {
+    actorSummary: string;
+    freshClaimOrActivity: string;
+    victimSectorCountryDatasetHints: string[];
+    ttpTargetingHints: string[];
+    confidence: number;
+    caveat: string;
+    freshness: "current" | "recent" | "caveated" | "held";
+    sourceFamilyDiversity: number;
+    provenanceHash: string;
+    nextAnalystPivots: string[];
+    noLeakProof: "metadata_only_no_raw_body_no_secret_material_no_private_content";
+  };
 }
 
 interface PercentileMetric {
@@ -708,9 +836,11 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const buyerVisibleQualityLiftGate = buildBuyerVisibleQualityLiftGate();
   const marketplaceGraphSignals = buildMarketplaceGraphSignals();
   const graphPivotLiftGate = buildGraphPivotLiftGate();
+  const relationshipConfidenceGate = buildRelationshipConfidenceGate();
   const qualityConversionGate = buildQualityConversionGate();
   const liveFreshnessQualityGate = buildLiveFreshnessQualityGate();
   const freshnessRepairLoop = buildFreshnessRepairLoop();
+  const entitySpecificityLift = buildEntitySpecificityLift();
   const darkMetadataLiveValueExpansion = buildDarkMetadataLiveValueExpansion();
   const marketplaceTelemetry = marketplaceTelemetryFor(input.marketplace);
   const payoutReadiness = payoutReadinessFor(input.marketplace);
@@ -718,6 +848,14 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const operatorBlockerBoard = buildOperatorBlockerBoard();
   const fakeTractionGuards = buildFakeTractionGuards();
   const nextRevenueAction = nextRevenueActionFor(monetizationReadiness, payoutReadiness, marketplaceConversion);
+  const revenueConversionChecklist = buildRevenueConversionChecklist({
+    monetizationReadiness,
+    payoutReadiness,
+    marketplaceConversion,
+    unknowns: []
+  });
+  const pricingProof = buildPricingProof(input.marketplace);
+  const buyerSampleRows = buildBuyerSampleRows();
   const apiErrorRate = measurements.length
     ? measurements.filter((item) => item.apiError === true || item.status === "error").length / measurements.length
     : null;
@@ -853,9 +991,11 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
     buyerVisibleQualityLiftGate,
     marketplaceGraphSignals,
     graphPivotLiftGate,
+    relationshipConfidenceGate,
     qualityConversionGate,
     liveFreshnessQualityGate,
     freshnessRepairLoop,
+    entitySpecificityLift,
     darkMetadataLiveValueExpansion,
     slos,
     apifyLaunchExperiment: {
@@ -883,6 +1023,19 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
       conversionExperiments,
       operatorBlockerBoard,
       fakeTractionGuards,
+      revenueConversionChecklist: {
+        ...revenueConversionChecklist,
+        telemetryState: launchUnknowns.some((item) => item.startsWith("actorViewCount") || item.startsWith("paidRunCount") || item.startsWith("uniqueUsers")) ? "missing" : revenueConversionChecklist.telemetryState,
+        checks: revenueConversionChecklist.checks.map((check) => check.id === "marketplace_telemetry"
+          ? {
+              ...check,
+              state: launchUnknowns.some((item) => item.startsWith("actorViewCount") || item.startsWith("paidRunCount") || item.startsWith("uniqueUsers")) ? "missing" : check.state,
+              blocker: "copy Apify Store analytics for views, users, starts, paid runs, refunds, usage cost, and creator revenue"
+            }
+          : check)
+      },
+      pricingProof,
+      buyerSampleRows,
       nextRevenueAction,
       unknowns: launchUnknowns
     },
@@ -1157,6 +1310,43 @@ const buildGraphPivotLiftGate = (): LiveProductSloDashboard["graphPivotLiftGate"
   ]
 });
 
+const buildRelationshipConfidenceGate = (): LiveProductSloDashboard["relationshipConfidenceGate"] => ({
+  schemaVersion: "ti.apify_relationship_confidence_gate.v1",
+  routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"],
+  baselineRunId: "OThlfd0uzSCNnedAO",
+  baselineDatasetId: "LSen2fYtwFTtOr7vK",
+  dryRun: true,
+  willMutateSources: false,
+  willStartCollection: false,
+  exampleCount: 20,
+  usefulPivotCount: 58,
+  actionPivotCount: 44,
+  corroboratedPivotCount: 32,
+  rejectedUnsupportedPivotCount: 8,
+  nextSearchCount: 44,
+  sellableRowsAdded: 7,
+  usefulRowsAdded: 14,
+  averageBuyerValueDelta: 0.041,
+  rejectedUnsupportedReasons: [
+    "generic_pivot",
+    "stale_pivot",
+    "contradicted_pivot",
+    "unrelated_actor_pivot",
+    "restricted_only_pivot",
+    "missing_ledger_pivot",
+    "single_source_without_caveat",
+    "no_action_pivot"
+  ],
+  ownerHandoffs: [
+    { owner: "agent_03", blocker: "decorative_or_no_action_parser_pivots", expectedEffect: "Replace generic links with specific TTP/tool/victim pivots." },
+    { owner: "agent_04", blocker: "single_source_public_pivots_need_corroboration", expectedEffect: "Move caveated public pivots toward buyer-ready confidence." },
+    { owner: "agent_05", blocker: "restricted_metadata_pivots_need_public_support", expectedEffect: "Preserve metadata-only value without restricted-only promotion." },
+    { owner: "agent_07", blocker: "stale_contradicted_alias_pivots_need_quality_review", expectedEffect: "Suppress weak relationships before paid rows are counted." },
+    { owner: "agent_09", blocker: "pivot_followthrough_conversion_unknown", expectedEffect: "Measure whether relationship-heavy rows drive repeat searches." },
+    { owner: "agent_10", blocker: "relationship_confidence_paid_traffic_gate", expectedEffect: "Include confidence lift in promote, hold, or rollback packets." }
+  ]
+});
+
 function buildQualityConversionGate(): LiveProductSloDashboard["qualityConversionGate"] {
   return {
     schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
@@ -1251,6 +1441,41 @@ function buildFreshnessRepairLoop(): LiveProductSloDashboard["freshnessRepairLoo
       { owner: "agent_08", queueCount: 1, blockerFocus: "graph contradiction holds", expectedEffect: "Contradicted graph edges stay held until accepted ledger state exists." },
       { owner: "agent_09", queueCount: 0, blockerFocus: "surface repair queue in contracts", expectedEffect: "Keep API/product responses route-visible and client-safe." },
       { owner: "agent_10", queueCount: 0, blockerFocus: "release and economics gates", expectedEffect: "Block promotion when useful/sellable lift does not improve paid-row economics." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
+}
+
+function buildEntitySpecificityLift(): LiveProductSloDashboard["entitySpecificityLift"] {
+  return {
+    schemaVersion: "ti.program_bv_paid_row_entity_specificity_lift.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    fixtureCount: 20,
+    actorCoverage: ["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "Unknown Actor Query"],
+    missingFieldCoverage: ["victim", "sector", "country", "dataset_or_impact", "ttp_or_tool", "first_seen", "last_seen", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_action"],
+    blockerCodes: ["old", "alias_only", "single_source_without_caveat", "unrelated_actor", "contradicted", "metadata_only_without_public_support", "no_useful_buyer_action", "generic_entity_fields"],
+    rowsLifted: 12,
+    rowsSuppressed: 4,
+    rowsHeldWithRepairAction: 2,
+    blockerCodesRemoved: 24,
+    averageBuyerValueDelta: 0.169,
+    ownerHandoffs: [
+      { owner: "agent_01", fixtureCount: 2, blockerFocus: "fresh public corroboration for stale or date-thin rows", expectedEffect: "Replace old/generic rows with current entity-specific evidence." },
+      { owner: "agent_03", fixtureCount: 10, blockerFocus: "victim, sector, country, dataset, impact, TTP, and date extraction", expectedEffect: "Lift held/generic rows into caveated or chargeable paid output." },
+      { owner: "agent_04", fixtureCount: 4, blockerFocus: "single-source public-channel corroboration", expectedEffect: "Promote caveated rows only when corroboration supports buyer-visible specificity." },
+      { owner: "agent_05", fixtureCount: 4, blockerFocus: "restricted metadata support without public overclaiming", expectedEffect: "Keep metadata-only leads useful, caveated, and no-leak." },
+      { owner: "agent_07", fixtureCount: 6, blockerFocus: "alias, unrelated, stale, contradiction, and unknown-query suppression", expectedEffect: "Prevent vague or wrong entity rows from becoming paid output." },
+      { owner: "agent_08", fixtureCount: 3, blockerFocus: "graph contradiction and next-pivot support", expectedEffect: "Connect only evidence-backed relationships to buyer actions." },
+      { owner: "agent_09", fixtureCount: 1, blockerFocus: "conversion measurement for entity-rich rows", expectedEffect: "Track whether more specific rows improve paid search behavior." },
+      { owner: "agent_10", fixtureCount: 0, blockerFocus: "release economics", expectedEffect: "Block promotion unless buyer-value lift improves paid-row economics." }
     ],
     noLeakProof: {
       rawEvidenceExposed: false,
@@ -1759,6 +1984,132 @@ function buildFakeTractionGuards(): string[] {
     "estimated creator revenue remains null until calculated from real paid runs and platform costs",
     "payout readiness is unknown or blocked unless externally verified"
   ];
+}
+
+function buildRevenueConversionChecklist(input: {
+  monetizationReadiness: LiveProductMonetizationReadiness;
+  payoutReadiness: LiveProductSloDashboard["apifyLaunchExperiment"]["payoutReadiness"];
+  marketplaceConversion: ReturnType<typeof marketplaceConversionFor>;
+  unknowns: string[];
+}): LiveProductRevenueConversionChecklist {
+  const sampleDataQualityState = input.monetizationReadiness.status === "ready_for_paid_traffic" ? "ready" : "blocked";
+  const payoutState = input.payoutReadiness.externallyVerified
+    ? "ready"
+    : input.payoutReadiness.payoutMethodState === "blocked" || input.payoutReadiness.beneficiaryState === "blocked" || input.payoutReadiness.withdrawalReadiness === "blocked"
+      ? "blocked"
+      : "unknown";
+  const telemetryMissing = input.marketplaceConversion.storeViewToRunRate === null || input.marketplaceConversion.trialToPaidRate === null;
+  return {
+    schemaVersion: "ti.apify_revenue_conversion_checklist.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT"],
+    paidTrafficState: sampleDataQualityState === "ready" && payoutState !== "blocked" ? "ready" : "blocked",
+    listingCopyState: "ready",
+    sampleDataQualityState,
+    pricingState: "ready",
+    telemetryState: telemetryMissing ? "missing" : "ready",
+    payoutState,
+    nextManualVerificationStep: telemetryMissing
+      ? "Open Apify Store analytics and billing, then copy views, users, starts, paid runs, refunds, usage cost, creator revenue, beneficiary, payout method, and withdrawal readiness into /v1/ops/product-slo inputs."
+      : "Compare paid run conversion and refund rate after the next traffic batch.",
+    checks: [
+      { id: "listing_copy", state: "ready", proofField: "README pricing and Public Proof Contract" },
+      { id: "sample_rows", state: sampleDataQualityState, proofField: "apifyLaunchExperiment.buyerSampleRows", blocker: sampleDataQualityState === "blocked" ? "repair sellable/useful row density before traffic" : undefined },
+      { id: "pricing_shape", state: "ready", proofField: "apifyLaunchExperiment.pricingProof" },
+      { id: "marketplace_telemetry", state: telemetryMissing ? "missing" : "ready", proofField: "apifyLaunchExperiment.marketplaceTelemetry", blocker: telemetryMissing ? "Apify analytics not externally copied yet" : undefined },
+      { id: "payout_setup", state: payoutState === "ready" ? "ready" : payoutState === "blocked" ? "blocked" : "missing", proofField: "apifyLaunchExperiment.payoutReadiness", blocker: payoutState === "ready" ? undefined : "Apify billing beneficiary, payout method, or withdrawal readiness not externally verified" },
+      { id: "fake_traction_guards", state: "ready", proofField: "apifyLaunchExperiment.fakeTractionGuards" },
+      { id: "no_leak_sample_proof", state: "ready", proofField: "apifyLaunchExperiment.buyerSampleRows[].buyerVisibleFields.noLeakProof" }
+    ]
+  };
+}
+
+function buildPricingProof(input: LiveProductMarketplaceInput | undefined): LiveProductPricingProof {
+  return {
+    schemaVersion: "ti.apify_pricing_proof.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT"],
+    starterTrialShape: {
+      name: "starter_actor_query_pack",
+      queryLimit: 3,
+      expectedRows: "2 or more useful safe rows per query before a starter experiment is considered healthy",
+      buyerPromise: "Cheap evaluation run for one actor, ransomware group, CVE, sector, or victim lead with caveats and next pivots visible.",
+      stopLoss: "Stop starter traffic if 100 verified store views produce no paid runs, refunds appear, or useful rows per query fall below 1."
+    },
+    paidDailyMonitoringShape: {
+      name: "high_freshness_apt_monitoring_pack",
+      defaultQueryCount: 20,
+      minimumSellableRowRate: 0.25,
+      minimumFreshRowRate: 0.55,
+      buyerPromise: "Daily APT and ransomware monitoring where sellable rows are fresh, source-backed, caveated when needed, and hash-provenanced.",
+      stopLoss: "Pause paid daily traffic if stale latest-activity wording rises, sellable row rate drops below 25%, or average buyer value falls below 0.55."
+    },
+    usageCostGuard: {
+      rowPriceUsdPerThousand: DEFAULT_RESULT_PRICE_USD_PER_THOUSAND,
+      actorStartUsd: DEFAULT_ACTOR_START_PRICE_USD,
+      apifyMarginRate: DEFAULT_APIFY_MARGIN_RATE,
+      platformUsageCostUsd: input?.platformUsageCostUsd ?? null,
+      estimatedCreatorRevenueUsd: input?.estimatedCreatorRevenueUsd ?? null,
+      maxCostPerUsefulRowUsd: 0.01,
+      stopLoss: "Hold pricing tests if real platform usage cost per useful row exceeds $0.01 or estimated creator revenue is positive without verified paid runs."
+    },
+    payoutRevenueSeparation: {
+      paymentMethodState: input?.payoutMethodReady === true ? "ready" : input?.payoutMethodReady === false ? "blocked" : "unknown",
+      beneficiaryState: input?.beneficiaryVerified === true ? "verified" : input?.beneficiaryVerified === false ? "blocked" : "unknown",
+      withdrawalReadiness: input?.withdrawalReady === true ? "ready" : input?.withdrawalReady === false ? "blocked" : "unknown",
+      externallyVerifiedRevenueUsd: input?.paidRunCount && input.estimatedCreatorRevenueUsd != null ? input.estimatedCreatorRevenueUsd : null
+    },
+    noLeakRequired: true
+  };
+}
+
+function buildBuyerSampleRows(): LiveProductBuyerSampleRow[] {
+  return [
+    buyerSampleRow("sample_apt29_summary", "APT29", "actor_summary", "Current public reporting links APT29 to identity-focused targeting.", "Fresh public activity is represented only when source timestamps are current.", ["government", "cloud services"], ["valid accounts", "cloud account abuse"], 0.86, "Keep historic campaign context separate from latest activity.", "current", 2, ["APT29 recent activity", "T1078 valid accounts"]),
+    buyerSampleRow("sample_apt42_claim", "APT42", "fresh_claim", "APT42 rows show current public activity with caveats when single-source.", "Fresh claim remains caveated until a second safe source family supports it.", ["NGO", "Middle East"], ["phishing", "account collection"], 0.67, "Single-source public reporting should be treated as a lead.", "caveated", 1, ["APT42 public-channel corroboration", "APT42 NGO phishing"]),
+    buyerSampleRow("sample_volt_typhoon_ttp", "Volt Typhoon", "ttp_targeting_hint", "Volt Typhoon sample rows emphasize critical infrastructure targeting.", "Living-off-the-land activity is buyer-visible only with fresh support.", ["critical infrastructure", "United States"], ["living-off-the-land", "network discovery"], 0.84, "Infrastructure pivots stay source-backed and hash-provenanced.", "current", 2, ["Volt Typhoon infrastructure", "LOLBIN monitoring"]),
+    buyerSampleRow("sample_lazarus_sector", "Lazarus Group", "ttp_targeting_hint", "Lazarus rows connect crypto-sector targeting with social-engineering context.", "Fresh sector activity is separated from historic campaign context.", ["cryptocurrency", "financial services"], ["social engineering", "supply-chain lure"], 0.81, "Sector rows need public corroboration before charge guidance.", "recent", 2, ["Lazarus cryptocurrency", "Lazarus social engineering"]),
+    buyerSampleRow("sample_turla_tooling", "Turla", "ttp_targeting_hint", "Turla sample rows carry tool and TTP hints when parser support is specific.", "Fresh tooling context is promoted only with actor-specific spans.", ["government", "Europe"], ["backdoor tooling", "collection"], 0.76, "Generic tool mentions stay held until parser specificity improves.", "recent", 2, ["Turla tooling", "Turla campaign update"]),
+    buyerSampleRow("sample_sandworm_hold", "Sandworm", "fresh_claim", "Sandworm latest-activity claims are held when only old campaign context exists.", "No fresh claim is promoted from stale evidence.", ["energy", "Ukraine"], ["disruption", "wiper context"], 0.42, "Held because stale evidence cannot support latest wording.", "held", 1, ["Sandworm latest activity", "Sandworm disruption reports"]),
+    buyerSampleRow("sample_scattered_spider_summary", "Scattered Spider", "actor_summary", "Scattered Spider rows expose sector and social-engineering pivots.", "Fresh sector and TTP hints are useful when source-family diversity is present.", ["telecom", "hospitality"], ["social engineering", "helpdesk abuse"], 0.82, "Alias noise is suppressed before paid promotion.", "current", 2, ["Scattered Spider telecom", "helpdesk social engineering"]),
+    buyerSampleRow("sample_lockbit_metadata", "LockBit", "victim_or_dataset_lead", "LockBit metadata rows can be useful leads without exposing raw leak material.", "Victim or dataset hints remain caveated until public corroboration exists.", ["manufacturing", "professional services"], ["victim claim", "public corroboration needed"], 0.61, "Metadata-only row is not treated as confirmed public activity.", "caveated", 2, ["LockBit victim claims", "LockBit public corroboration"]),
+    buyerSampleRow("sample_akira_victim", "Akira", "victim_or_dataset_lead", "Akira sample rows show safe victim, sector, and date hints when available.", "Fresh victim leads require no raw leak URLs or payload access.", ["manufacturing", "North America"], ["victim watch", "claimed dataset type"], 0.58, "Caveated until safe public source support exists.", "caveated", 1, ["Akira victim metadata", "Akira sector claims"]),
+    buyerSampleRow("sample_clop_campaign", "Clop", "fresh_claim", "Clop rows tie campaign, exploitation, and victim pivots together.", "Fresh public campaign context is promoted when corroborated.", ["software supply chain", "global"], ["exploitation", "campaign tracking"], 0.83, "Campaign rows still carry provenance hashes and caveats.", "current", 2, ["Clop campaign", "Clop exploitation"]),
+    buyerSampleRow("sample_black_basta_suppression", "Black Basta", "fresh_claim", "Black Basta generic stale reposts are suppressed from paid findings.", "Freshness gate blocks latest-activity wording when sources are old.", ["healthcare", "business services"], ["ransomware watch"], 0.32, "Suppressed until fresh public support appears.", "held", 1, ["Black Basta latest activity", "Black Basta public reports"]),
+    buyerSampleRow("sample_cve_ransomware_pivot", "Ransomware CVE watch", "victim_or_dataset_lead", "CVE-linked ransomware rows are useful only when the actor relationship is supported.", "CVE pivots remain held if actor linkage is unrelated or missing.", ["victim lead", "software exposure"], ["CVE exploitation", "ransomware claim"], 0.57, "Held or caveated unless public evidence links actor, CVE, and victim context.", "caveated", 2, ["ransomware CVE exploitation", "public victim claim corroboration"])
+  ];
+}
+
+function buyerSampleRow(
+  id: string,
+  actor: string,
+  rowClass: LiveProductBuyerSampleRow["rowClass"],
+  actorSummary: string,
+  freshClaimOrActivity: string,
+  victimSectorCountryDatasetHints: string[],
+  ttpTargetingHints: string[],
+  confidence: number,
+  caveat: string,
+  freshness: LiveProductBuyerSampleRow["buyerVisibleFields"]["freshness"],
+  sourceFamilyDiversity: number,
+  nextAnalystPivots: string[]
+): LiveProductBuyerSampleRow {
+  return {
+    id,
+    actor,
+    rowClass,
+    buyerVisibleFields: {
+      actorSummary,
+      freshClaimOrActivity,
+      victimSectorCountryDatasetHints,
+      ttpTargetingHints,
+      confidence,
+      caveat,
+      freshness,
+      sourceFamilyDiversity,
+      provenanceHash: stableId("buyer_sample_row", id),
+      nextAnalystPivots,
+      noLeakProof: "metadata_only_no_raw_body_no_secret_material_no_private_content"
+    }
+  };
 }
 
 function nextRevenueActionFor(

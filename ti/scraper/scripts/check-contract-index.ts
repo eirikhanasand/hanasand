@@ -124,10 +124,16 @@ const apifyProofQueries = apifyProofDtos.map((proof) => String(proof.query ?? ""
 const apifyCompatibility = isRecord(apifyStoreReadiness.frontendApiCompatibility) ? apifyStoreReadiness.frontendApiCompatibility : {};
 const apifyCompatibilityStates = Array.isArray(apifyCompatibility.states) ? apifyCompatibility.states.filter(isRecord).map((state) => String(state.state ?? "")) : [];
 const apifyPricingHooks = isRecord(apifyStoreReadiness.pricingHooks) ? apifyStoreReadiness.pricingHooks : {};
+const apifyRevenueConversionChecklist = isRecord(apifyStoreReadiness.revenueConversionChecklist) ? apifyStoreReadiness.revenueConversionChecklist : {};
+const apifyRevenueChecklistRows = Array.isArray(apifyRevenueConversionChecklist.checks) ? apifyRevenueConversionChecklist.checks.filter(isRecord) : [];
+const apifyPricingProof = isRecord(apifyStoreReadiness.pricingProof) ? apifyStoreReadiness.pricingProof : {};
+const apifyUsageCostGuard = isRecord(apifyPricingProof.usageCostGuard) ? apifyPricingProof.usageCostGuard : {};
+const apifyPayoutRevenueSeparation = isRecord(apifyPricingProof.payoutRevenueSeparation) ? apifyPricingProof.payoutRevenueSeparation : {};
 const apifyConversionTracking = isRecord(apifyStoreReadiness.conversionTracking) ? apifyStoreReadiness.conversionTracking : {};
 const apifyMarketplaceTelemetry = isRecord(apifyStoreReadiness.marketplaceTelemetryInputContract) ? apifyStoreReadiness.marketplaceTelemetryInputContract : {};
 const apifyPayoutReadiness = isRecord(apifyStoreReadiness.payoutReadiness) ? apifyStoreReadiness.payoutReadiness : {};
 const apifyConversionExperiments = Array.isArray(apifyStoreReadiness.conversionExperiments) ? apifyStoreReadiness.conversionExperiments.filter(isRecord) : [];
+const apifyBuyerSampleRows = Array.isArray(apifyStoreReadiness.buyerSampleRows) ? apifyStoreReadiness.buyerSampleRows.filter(isRecord) : [];
 const apifyOperatorBlockerBoard = Array.isArray(apifyStoreReadiness.operatorBlockerBoard) ? apifyStoreReadiness.operatorBlockerBoard.filter(isRecord) : [];
 const apifyGuardrails = isRecord(apifyStoreReadiness.marketplaceGuardrails) ? apifyStoreReadiness.marketplaceGuardrails : {};
 const darkwebIndexFrontendContract = isRecord(record.darkwebIndexFrontendContract) ? record.darkwebIndexFrontendContract : {};

@@ -222,6 +222,32 @@ const graphPivotRejectedReasons = (graphPivotLiftGate.rejectedBloatPivots as Arr
 for (const requiredReason of ["generic_pivot", "stale_pivot", "contradicted_pivot", "unrelated_actor_pivot", "restricted_only_pivot", "missing_ledger_pivot", "single_source_without_caveat"]) {
   if (!graphPivotRejectedReasons.includes(requiredReason)) throw new Error(`Program BQ graph pivot gate must reject ${requiredReason}`);
 }
+const relationshipConfidenceGate = outputRecord.relationshipConfidenceGate as Record<string, unknown> | undefined;
+if (
+  !relationshipConfidenceGate
+  || relationshipConfidenceGate.schemaVersion !== "ti.apify_relationship_confidence_gate.v1"
+  || relationshipConfidenceGate.baselineRunId !== "OThlfd0uzSCNnedAO"
+  || relationshipConfidenceGate.baselineDatasetId !== "LSen2fYtwFTtOr7vK"
+  || relationshipConfidenceGate.dryRun !== true
+  || relationshipConfidenceGate.willMutateSources !== false
+  || relationshipConfidenceGate.willStartCollection !== false
+  || Number(relationshipConfidenceGate.exampleCount) < 20
+  || Number(relationshipConfidenceGate.usefulPivotCount) <= 0
+  || Number(relationshipConfidenceGate.actionPivotCount) <= 0
+  || Number(relationshipConfidenceGate.corroboratedPivotCount) <= 0
+  || Number(relationshipConfidenceGate.rejectedUnsupportedPivotCount) < 8
+  || Number(relationshipConfidenceGate.nextSearchCount) <= 0
+  || Number(relationshipConfidenceGate.averageBuyerValueDelta) <= 0
+  || !Array.isArray(relationshipConfidenceGate.rejectedUnsupportedPivots)
+  || relationshipConfidenceGate.rejectedUnsupportedPivots.length < 8
+  || !Array.isArray(relationshipConfidenceGate.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BW relationship confidence gate");
+}
+const relationshipConfidenceRejectedReasons = (relationshipConfidenceGate.rejectedUnsupportedPivots as Array<Record<string, unknown>>).map((row) => row.blockedReason);
+for (const requiredReason of ["generic_pivot", "stale_pivot", "contradicted_pivot", "unrelated_actor_pivot", "restricted_only_pivot", "missing_ledger_pivot", "single_source_without_caveat", "no_action_pivot"]) {
+  if (!relationshipConfidenceRejectedReasons.includes(requiredReason)) throw new Error(`Program BW relationship confidence gate must reject ${requiredReason}`);
+}
 const qualityConversionGate = outputRecord.qualityConversionGate as Record<string, unknown> | undefined;
 if (
   !qualityConversionGate
@@ -317,6 +343,65 @@ if (
 const freshnessRepairOwners = (freshnessRepairLoop.ownerHandoffs as Array<Record<string, unknown>>).map((row) => row.owner);
 for (const owner of ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
   if (!freshnessRepairOwners.includes(owner)) throw new Error(`Program BS repair loop must include ${owner} handoff`);
+}
+const revenueConversionChecklist = outputRecord.revenueConversionChecklist as Record<string, unknown> | undefined;
+if (
+  !revenueConversionChecklist
+  || revenueConversionChecklist.schemaVersion !== "ti.apify_revenue_conversion_checklist.v1"
+  || revenueConversionChecklist.listingCopyState !== "ready"
+  || revenueConversionChecklist.pricingState !== "ready"
+  || revenueConversionChecklist.telemetryState !== "missing"
+  || revenueConversionChecklist.payoutState !== "unknown"
+  || typeof revenueConversionChecklist.nextManualVerificationStep !== "string"
+  || !revenueConversionChecklist.nextManualVerificationStep.includes("Apify Store analytics")
+  || !Array.isArray(revenueConversionChecklist.checks)
+) {
+  throw new Error("OUTPUT record must expose Program BT revenue conversion checklist with missing external telemetry");
+}
+const checklistIds = (revenueConversionChecklist.checks as Array<Record<string, unknown>>).map((row) => row.id);
+for (const requiredCheck of ["listing_copy", "sample_rows", "pricing_shape", "marketplace_telemetry", "payout_setup", "fake_traction_guards", "no_leak_sample_proof"]) {
+  if (!checklistIds.includes(requiredCheck)) throw new Error(`Program BT checklist must include ${requiredCheck}`);
+}
+const pricingProof = outputRecord.pricingProof as Record<string, unknown> | undefined;
+if (
+  !pricingProof
+  || pricingProof.schemaVersion !== "ti.apify_pricing_proof.v1"
+  || !pricingProof.starterTrialShape
+  || !pricingProof.paidDailyMonitoringShape
+  || !pricingProof.usageCostGuard
+  || !pricingProof.payoutRevenueSeparation
+  || pricingProof.noLeakRequired !== true
+) {
+  throw new Error("OUTPUT record must expose Program BT pricing proof");
+}
+const usageCostGuard = pricingProof.usageCostGuard as Record<string, unknown>;
+const payoutRevenueSeparation = pricingProof.payoutRevenueSeparation as Record<string, unknown>;
+if (
+  Number(usageCostGuard.rowPriceUsdPerThousand) !== 3
+  || usageCostGuard.platformUsageCostUsd !== null
+  || usageCostGuard.estimatedCreatorRevenueUsd !== null
+  || Number(usageCostGuard.maxCostPerUsefulRowUsd) !== 0.01
+  || payoutRevenueSeparation.paymentMethodState !== "unknown"
+  || payoutRevenueSeparation.beneficiaryState !== "unknown"
+  || payoutRevenueSeparation.withdrawalReadiness !== "unknown"
+  || payoutRevenueSeparation.externallyVerifiedRevenueUsd !== null
+) {
+  throw new Error("Program BT pricing proof must keep usage, revenue, and payout claims unknown until externally verified");
+}
+const buyerSampleRows = outputRecord.buyerSampleRows as Array<Record<string, unknown>> | undefined;
+if (!Array.isArray(buyerSampleRows) || buyerSampleRows.length < 12) {
+  throw new Error("OUTPUT record must expose at least 12 Program BT buyer sample rows");
+}
+if (!buyerSampleRows.every((row) => {
+  const fields = row.buyerVisibleFields as Record<string, unknown> | undefined;
+  return fields
+    && typeof fields.actorSummary === "string"
+    && typeof fields.freshClaimOrActivity === "string"
+    && Array.isArray(fields.nextAnalystPivots)
+    && fields.nextAnalystPivots.length > 0
+    && fields.noLeakProof === "metadata_only_no_raw_body_no_credentials_no_private_content";
+})) {
+  throw new Error("Program BT buyer sample rows must expose buyer fields and no-leak proof");
 }
 if (
   paidRowQuality.sellable === 0
@@ -416,6 +501,7 @@ for (const row of output) {
     || !["none", "contradicted", "review_hold"].includes(String(marketplaceGraphSignals.contradictionState))
     || !Array.isArray(marketplaceGraphSignals.nextBuyerPivots)
     || typeof marketplaceGraphSignals.pivotUtility !== "object"
+    || typeof marketplaceGraphSignals.relationshipConfidence !== "object"
     || !Array.isArray(marketplaceGraphSignals.rejectedPivotReasons)
     || typeof marketplaceGraphSignals.buyerAction !== "string"
     || !Array.isArray(marketplaceGraphSignals.sourceBlockers)
@@ -424,6 +510,7 @@ for (const row of output) {
     throw new Error("Every row must expose buyer-visible marketplace graph signals");
   }
   const pivotUtility = marketplaceGraphSignals.pivotUtility as Record<string, unknown>;
+  const relationshipConfidence = marketplaceGraphSignals.relationshipConfidence as Record<string, unknown>;
   if (
     Number(pivotUtility.usefulPivotCount) <= 0
     || Number(pivotUtility.actionPivotCount) < 0
@@ -431,6 +518,18 @@ for (const row of output) {
     || pivotUtility.noLeak !== true
   ) {
     throw new Error("Every row must expose useful no-leak graph pivot utility metrics");
+  }
+  if (
+    Number(relationshipConfidence.usefulPivotCount) <= 0
+    || Number(relationshipConfidence.actionPivotCount) < 0
+    || Number(relationshipConfidence.corroboratedPivotCount) < 0
+    || Number(relationshipConfidence.rejectedUnsupportedPivotCount) < 0
+    || !["stronger", "stable", "weaker", "unknown"].includes(String(relationshipConfidence.confidenceTrend))
+    || !["none", "contradicted", "review_hold"].includes(String(relationshipConfidence.contradictionState))
+    || Number(relationshipConfidence.nextSearchCount) < 0
+    || relationshipConfidence.noLeak !== true
+  ) {
+    throw new Error("Every row must expose useful no-leak relationship confidence metrics");
   }
   if (row.paidRowDecision === "sellable" && marketplaceGraphSignals.signalState !== "buyer_ready") {
     throw new Error("Sellable rows must expose buyer-ready marketplace graph signals");

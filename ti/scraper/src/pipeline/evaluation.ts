@@ -601,6 +601,49 @@ export interface ProgramBdQualityEvaluationPackDto {
 	        objectKeysExposed: false;
 	      };
 	    };
+	    entitySpecificityLift: {
+	      schemaVersion: "ti.program_bv_paid_row_entity_specificity_lift.v1";
+	      routeVisibleOn: Array<"/v1/quality/evaluate" | "/v1/intel/search" | "/v1/contracts" | "/v1/ops/product-slo" | "Apify OUTPUT">;
+	      dryRun: true;
+	      willMutateSources: false;
+	      willStartCollection: false;
+	      fixtures: Array<{
+	        id: string;
+	        actor: string;
+	        family: "apt" | "ransomware" | "unknown";
+	        currentDecision: "chargeable" | "caveated" | "held" | "suppressed";
+	        targetDecision: "chargeable" | "caveated" | "held" | "suppressed";
+	        missingFields: Array<"victim" | "sector" | "country" | "dataset_or_impact" | "ttp_or_tool" | "first_seen" | "last_seen" | "confidence" | "caveat" | "contradiction_state" | "provenance_hash" | "next_action">;
+	        requiredEvidenceFamily: "clear_web" | "public_advisory" | "public_channel" | "restricted_metadata" | "graph_ledger";
+	        blockerCodesRemoved: Array<"old" | "alias_only" | "single_source_without_caveat" | "unrelated_actor" | "contradicted" | "metadata_only_without_public_support" | "no_useful_buyer_action" | "generic_entity_fields">;
+	        expectedBuyerVisibleLift: string[];
+	        proofNeeded: string[];
+	        whyWorthPayingFor: string;
+	        repairAction: string;
+	        currentBuyerValue: number;
+	        targetBuyerValue: number;
+	        noLeak: true;
+	      }>;
+	      lift: {
+	        rowsLifted: number;
+	        rowsSuppressed: number;
+	        rowsHeldWithRepairAction: number;
+	        blockerCodesRemoved: number;
+	        averageBuyerValueDelta: number;
+	      };
+	      ownerHandoffs: Array<{
+	        owner: "agent_01" | "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+	        fixtureCount: number;
+	        blockerFocus: string;
+	        expectedEffect: string;
+	      }>;
+	      noLeakProof: {
+	        rawEvidenceExposed: false;
+	        unsafeUrlsExposed: false;
+	        restrictedPayloadsExposed: false;
+	        objectKeysExposed: false;
+	      };
+	    };
 	    releaseDecision: "promote" | "partial" | "hold";
     apifyDatasetFields: string[];
     remediationActions: string[];
@@ -1007,6 +1050,94 @@ function programBsRepairRow(
   return { id, actor, family, blocker, owner, currentDecision, targetDecision, requiredEvidenceFamily, proofNeeded, expectedBuyerVisibleLift, currentBuyerValue, targetBuyerValue, noLeak: true };
 }
 
+function buildProgramBvEntitySpecificityLift(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"] {
+  const fixtures: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["fixtures"] = [
+    programBvSpecificityFixture("bv_apt29_gov_targets", "APT29", "apt", "held", "chargeable", ["victim", "sector", "ttp_or_tool", "last_seen", "next_action"], "clear_web", ["generic_entity_fields", "no_useful_buyer_action"], 0.34, 0.82, ["government victim class", "T1078 or cloud identity TTP", "last-seen date", "provenance hash"], ["specific victim/sector pivots", "identity-access next search"], "Specific government targeting and identity-access pivots create a paid monitoring row.", "Agent 03 extracts victim/TTP spans; Agent 01 refreshes public corroboration."),
+    programBvSpecificityFixture("bv_apt28_public_advisory", "APT28", "apt", "caveated", "chargeable", ["sector", "country", "ttp_or_tool", "first_seen", "last_seen"], "public_advisory", ["single_source_without_caveat", "generic_entity_fields"], 0.56, 0.77, ["advisory source family", "sector/country extraction", "date-bounded TTP"], ["campaign timing", "sector/country filters"], "Date-bounded sector and country context makes the row buyer-actionable.", "Agent 04 adds corroboration and Agent 03 repairs sector/country parsing."),
+    programBvSpecificityFixture("bv_apt42_ngo_phishing", "APT42", "apt", "held", "caveated", ["victim", "sector", "country", "caveat", "confidence"], "public_channel", ["single_source_without_caveat"], 0.38, 0.66, ["public-channel caveat", "NGO sector hint", "confidence rationale"], ["honest caveat", "victim-sector watch"], "A caveated NGO phishing lead is useful when single-source limits are explicit.", "Agent 04 finds corroboration or keeps the row caveated."),
+    programBvSpecificityFixture("bv_turla_tooling", "Turla", "apt", "held", "chargeable", ["ttp_or_tool", "first_seen", "last_seen", "provenance_hash", "next_action"], "clear_web", ["generic_entity_fields"], 0.32, 0.78, ["tool name", "first/last seen", "source-family support"], ["tool pivot", "freshness"], "Tool-specific Turla rows support buyer searches and watchlist tuning.", "Agent 03 extracts tool/TTP fields and provenance hash."),
+    programBvSpecificityFixture("bv_volt_typhoon_lotl", "Volt Typhoon", "apt", "caveated", "chargeable", ["sector", "ttp_or_tool", "dataset_or_impact", "next_action"], "public_advisory", ["generic_entity_fields"], 0.52, 0.81, ["critical infrastructure sector", "LOTL technique", "impact summary"], ["defensive action", "sector pivot"], "LOTL and infrastructure impact details are high-value defensive pivots.", "Agent 03 repairs TTP/impact extraction and Agent 08 links graph pivots."),
+    programBvSpecificityFixture("bv_lazarus_crypto", "Lazarus Group", "apt", "held", "caveated", ["sector", "country", "dataset_or_impact", "last_seen", "caveat"], "clear_web", ["old"], 0.3, 0.64, ["fresh crypto-sector support", "date caveat"], ["freshness caveat", "sector watch"], "Crypto-sector detail is useful only with date-bounded freshness.", "Agent 01 replaces stale rows; Agent 07 keeps old activity caveated."),
+    programBvSpecificityFixture("bv_sandworm_conflict", "Sandworm", "apt", "held", "held", ["contradiction_state", "provenance_hash", "confidence"], "graph_ledger", ["contradicted"], 0.24, 0.24, ["contradiction review", "accepted relationship ledger"], ["honest hold"], "Contradicted rows are not worth selling until attribution is resolved.", "Agent 07 and Agent 08 keep the row held until graph contradiction review passes."),
+    programBvSpecificityFixture("bv_scattered_spider_alias", "Scattered Spider", "apt", "caveated", "suppressed", ["confidence", "provenance_hash"], "clear_web", ["alias_only", "unrelated_actor"], 0.42, 0, ["entity-resolution rejection", "alias collision note"], ["bloat suppression"], "Alias-only hits are not paid CTI rows.", "Agent 07 suppresses alias collisions before marketplace output."),
+    programBvSpecificityFixture("bv_lockbit_victim_dataset", "LockBit", "ransomware", "caveated", "chargeable", ["victim", "sector", "country", "dataset_or_impact", "last_seen"], "clear_web", ["generic_entity_fields"], 0.55, 0.8, ["victim/sector/date extraction", "public support"], ["victim watch", "dataset/impact filter"], "Victim, sector, and dataset hints are core paid ransomware value.", "Agent 03 repairs victim/dataset extraction."),
+    programBvSpecificityFixture("bv_akira_metadata_lead", "Akira", "ransomware", "held", "caveated", ["victim", "sector", "dataset_or_impact", "caveat"], "restricted_metadata", ["metadata_only_without_public_support"], 0.36, 0.65, ["metadata-only label", "public corroboration pointer"], ["safe victim lead", "honest caveat"], "A safe metadata-only victim lead is useful when clearly caveated.", "Agent 05 keeps restricted context metadata-only until public support exists."),
+    programBvSpecificityFixture("bv_clop_cve_impact", "Clop", "ransomware", "caveated", "chargeable", ["dataset_or_impact", "ttp_or_tool", "first_seen", "last_seen", "next_action"], "public_advisory", ["single_source_without_caveat"], 0.6, 0.83, ["CVE relationship", "impact field", "second source family"], ["CVE pivot", "campaign action"], "CVE and impact detail turn Clop rows into chargeable monitoring samples.", "Agent 04 corroborates advisory support and Agent 03 extracts impact fields."),
+    programBvSpecificityFixture("bv_black_basta_repost", "Black Basta", "ransomware", "held", "suppressed", ["last_seen", "provenance_hash"], "clear_web", ["old", "no_useful_buyer_action"], 0.18, 0, ["stale repost rejection"], ["stale bloat suppression"], "Old reposts are not worth paying for.", "Agent 07 suppresses stale reposts unless Agent 01 finds fresh evidence."),
+    programBvSpecificityFixture("bv_ransomhub_victim_lead", "RansomHub", "ransomware", "held", "caveated", ["victim", "sector", "country", "dataset_or_impact", "caveat"], "restricted_metadata", ["metadata_only_without_public_support"], 0.33, 0.67, ["safe metadata lead", "public-support gap"], ["victim lead", "sector/country filter"], "A caveated RansomHub victim lead can guide monitoring without exposing unsafe material.", "Agent 05 reviews metadata and Agent 04 seeks public corroboration."),
+    programBvSpecificityFixture("bv_play_sector_country", "Play", "ransomware", "held", "chargeable", ["sector", "country", "last_seen", "next_action"], "clear_web", ["generic_entity_fields"], 0.39, 0.74, ["sector/country extraction", "fresh date"], ["geographic filter", "buyer action"], "Sector/country specificity makes Play rows searchable and useful.", "Agent 03 extracts sector/country fields from public captures."),
+    programBvSpecificityFixture("bv_qilin_dataset", "Qilin", "ransomware", "held", "caveated", ["victim", "dataset_or_impact", "confidence", "caveat"], "restricted_metadata", ["metadata_only_without_public_support"], 0.35, 0.66, ["dataset hint", "confidence caveat"], ["dataset filter", "honest caveat"], "Dataset hints are useful only with confidence and metadata-only caveats.", "Agent 05 validates metadata-only no-leak serialization."),
+    programBvSpecificityFixture("bv_unknown_actor_query", "Unknown Actor Query", "unknown", "held", "suppressed", ["confidence", "contradiction_state", "next_action"], "clear_web", ["unrelated_actor", "no_useful_buyer_action"], 0.2, 0, ["unknown-query searching state", "no default actor fallback"], ["honest searching"], "Unknown actor guesses must not become paid rows.", "Agent 07 keeps unknown queries in searching/suppressed states."),
+    programBvSpecificityFixture("bv_apt29_cloud_impact", "APT29", "apt", "caveated", "chargeable", ["dataset_or_impact", "ttp_or_tool", "next_action"], "public_advisory", ["generic_entity_fields"], 0.58, 0.79, ["cloud impact", "TTP span"], ["cloud-defense action"], "Cloud impact and TTP detail raises buyer value.", "Agent 03 extracts impact/TTP and Agent 08 adds graph pivots."),
+    programBvSpecificityFixture("bv_apt42_contradicted_victim", "APT42", "apt", "held", "held", ["victim", "contradiction_state", "provenance_hash"], "graph_ledger", ["contradicted"], 0.27, 0.27, ["victim contradiction review"], ["honest hold"], "Contradicted victim rows stay held even if the actor is relevant.", "Agent 07 keeps contradiction state visible and non-chargeable."),
+    programBvSpecificityFixture("bv_lockbit_alias_noise", "LockBit", "ransomware", "caveated", "suppressed", ["confidence", "provenance_hash"], "clear_web", ["alias_only"], 0.37, 0, ["alias rejection proof"], ["bloat suppression"], "Alias noise should not inflate ransomware output.", "Agent 07 suppresses alias-only rows."),
+    programBvSpecificityFixture("bv_clop_sector_action", "Clop", "ransomware", "held", "chargeable", ["sector", "country", "ttp_or_tool", "next_action"], "public_advisory", ["generic_entity_fields"], 0.41, 0.76, ["sector/country extraction", "exploitation TTP", "next search"], ["sector action", "TTP pivot"], "Sector and exploitation pivots make the row worth paying for.", "Agent 03 extracts actionability fields and Agent 09 measures conversion.")
+  ];
+  const usefulTargets = new Set(["chargeable", "caveated"]);
+  const rowsLifted = fixtures.filter((row) => usefulTargets.has(row.targetDecision) && row.currentDecision !== row.targetDecision).length;
+  const averageBuyerValueDelta = fixtures.reduce((sum, row) => sum + row.targetBuyerValue - row.currentBuyerValue, 0) / fixtures.length;
+  const ownerCount = (owner: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["ownerHandoffs"][number]["owner"]) =>
+    owner === "agent_03" ? 10
+      : owner === "agent_07" ? 6
+      : owner === "agent_05" ? 4
+      : owner === "agent_04" ? 4
+      : owner === "agent_08" ? 3
+      : owner === "agent_01" ? 2
+      : owner === "agent_09" ? 1
+      : 0;
+
+  return {
+    schemaVersion: "ti.program_bv_paid_row_entity_specificity_lift.v1",
+    routeVisibleOn: ["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"],
+    dryRun: true,
+    willMutateSources: false,
+    willStartCollection: false,
+    fixtures,
+    lift: {
+      rowsLifted,
+      rowsSuppressed: fixtures.filter((row) => row.targetDecision === "suppressed").length,
+      rowsHeldWithRepairAction: fixtures.filter((row) => row.targetDecision === "held").length,
+      blockerCodesRemoved: fixtures.reduce((sum, row) => sum + row.blockerCodesRemoved.length, 0),
+      averageBuyerValueDelta: programBdRound(averageBuyerValueDelta)
+    },
+    ownerHandoffs: [
+      { owner: "agent_01", fixtureCount: ownerCount("agent_01"), blockerFocus: "fresh public corroboration for stale or date-thin rows", expectedEffect: "Replace old/generic rows with current entity-specific evidence." },
+      { owner: "agent_03", fixtureCount: ownerCount("agent_03"), blockerFocus: "victim, sector, country, dataset, impact, TTP, and date extraction", expectedEffect: "Lift held/generic rows into caveated or chargeable paid output." },
+      { owner: "agent_04", fixtureCount: ownerCount("agent_04"), blockerFocus: "single-source public-channel corroboration", expectedEffect: "Promote caveated rows only when corroboration supports buyer-visible specificity." },
+      { owner: "agent_05", fixtureCount: ownerCount("agent_05"), blockerFocus: "restricted metadata support without public overclaiming", expectedEffect: "Keep metadata-only leads useful, caveated, and no-leak." },
+      { owner: "agent_07", fixtureCount: ownerCount("agent_07"), blockerFocus: "alias, unrelated, stale, contradiction, and unknown-query suppression", expectedEffect: "Prevent vague or wrong entity rows from becoming paid output." },
+      { owner: "agent_08", fixtureCount: ownerCount("agent_08"), blockerFocus: "graph contradiction and next-pivot support", expectedEffect: "Connect only evidence-backed relationships to buyer actions." },
+      { owner: "agent_09", fixtureCount: ownerCount("agent_09"), blockerFocus: "conversion measurement for entity-rich rows", expectedEffect: "Track whether more specific rows improve paid search behavior." },
+      { owner: "agent_10", fixtureCount: ownerCount("agent_10"), blockerFocus: "release economics", expectedEffect: "Block promotion unless buyer-value lift improves paid-row economics." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false
+    }
+  };
+}
+
+function programBvSpecificityFixture(
+  id: string,
+  actor: string,
+  family: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["fixtures"][number]["family"],
+  currentDecision: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["fixtures"][number]["currentDecision"],
+  targetDecision: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["fixtures"][number]["targetDecision"],
+  missingFields: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["fixtures"][number]["missingFields"],
+  requiredEvidenceFamily: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["fixtures"][number]["requiredEvidenceFamily"],
+  blockerCodesRemoved: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["fixtures"][number]["blockerCodesRemoved"],
+  currentBuyerValue: number,
+  targetBuyerValue: number,
+  proofNeeded: string[],
+  expectedBuyerVisibleLift: string[],
+  whyWorthPayingFor: string,
+  repairAction: string
+): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["entitySpecificityLift"]["fixtures"][number] {
+  return { id, actor, family, currentDecision, targetDecision, missingFields, requiredEvidenceFamily, blockerCodesRemoved, expectedBuyerVisibleLift, proofNeeded, whyWorthPayingFor, repairAction, currentBuyerValue, targetBuyerValue, noLeak: true };
+}
+
 function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["paidRowQualityGate"] {
   const baselines: ProgramBdQualityEvaluationPackDto["paidRowQualityGate"]["liveBaselines"] = [
     programBdLiveBaseline({
@@ -1058,6 +1189,7 @@ function buildProgramBdPaidRowQualityGate(): ProgramBdQualityEvaluationPackDto["
 	    qualityConversionGate: buildProgramBqQualityConversionGate(),
 	    liveFreshnessQualityGate: buildProgramBrLiveFreshnessQualityGate(),
 	    freshnessRepairLoop: buildProgramBsFreshnessRepairLoop(),
+	    entitySpecificityLift: buildProgramBvEntitySpecificityLift(),
 	    releaseDecision: hold ? "hold" : warn ? "partial" : "promote",
     apifyDatasetFields: ["reviewReasons", "analysisFacets", "freshnessExpectation", "topMissingSourceFamily", "nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"],
     remediationActions: [
