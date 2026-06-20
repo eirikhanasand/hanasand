@@ -23,9 +23,15 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Continued Program BG high-value source replacement for the 4,000 -> 10,000 source ladder.
+- Added `paidSourceTierPlan.payworthyRepairQueue` with dry-run queues for `duplicate_suppressed`, `legal_review_not_current`, and `not_ready_for_dry_run`, including repair/replace/retire decisions, exact unblock actions, safe source hashes, buyer-visible row lift, legal/robots evidence, replacement candidate ids, and no-leak boundaries.
+- Added `paidSourceTierPlan.highValueReplacementBatch` for low source value, low freshness, low evidence yield, and low public-answer-impact blockers, with expected fresh rows/day, evidence yield, actor/ransomware coverage, parser readiness, legal/robots state, source-family/actor plans, buyer-visible row effect, and projected payworthy-source lift.
+- Preserved dry-run/no-crawl/no-activation/no-private/no-auth/no-CAPTCHA/no-payload/no-actor-interaction boundaries.
+- Verification is green: `bun run check`, focused source/ops/API tests, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` with 527 passing tests.
+- Continue next with additional high-value public source replacement batches that raise the source payworthy rate toward 72% and then prove useful/fresh Actor row lift.
+
 - Completed Program BL source acquisition to 1,000 for `/v1/sources/atlas`.
 - Added a ranked first-1,000 acquisition packet with evaluated/unevaluated candidate counts, decision buckets, safe locator hashes, source family/domain, public access method, legal/robots review, parser family, expected actor/query/entity coverage, freshness expectation, dedupe group, buyer-value score, row-lift estimate, activation priority, rejection reason, and owner handoff.
 - Split acquisition rows into `activate_canary`, `parser_needed`, `review_needed`, `duplicate`, `low_value`, and `reject` while preserving dry-run/no-crawl/no-activation/no-private/no-auth/no-CAPTCHA/no-actor-interaction boundaries.
 - Added transition summaries for APT29, APT28, Volt Typhoon, Sandworm, Lazarus, LockBit, Clop, Akira, Black Basta, Play, and Scattered Spider so the next source-family gaps are visible.
 - Verification is green: `bun run check`, focused source/API/public-signal/advisory tests, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` with 527 passing tests.
-- Request a new Agent 04 task.
