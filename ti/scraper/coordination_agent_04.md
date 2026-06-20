@@ -1,22 +1,21 @@
-Status: active_program_bi_actor_source_coverage_expansion
+Status: active_program_bj_public_channel_freshness_and_actor_feed_prioritization
 
 # Agent 04 Coordination
 
-## Current Assignment - Program BI: Actor Source Coverage Expansion
+## Current Assignment - Program BJ: Public Channel Freshness And Actor Feed Prioritization
 
-You are no longer requesting a task. Continue the public-channel/source-coverage lane until the scraper can explain which source families cover each high-value actor, what is missing, and which safe source activations will improve the Apify/public product.
+You are no longer waiting for a task. Continue the public-coverage lane until high-value actor searches know which public-channel, blog, advisory, and metadata source families are most likely to produce fresh, useful rows.
 
 Mission:
-- Build a buyer-useful coverage expansion layer for at least 30 configured actors/groups, with public-only and metadata-only source families mapped per actor.
-- Turn source gaps into concrete upstream work for Agents 01/02/03/05 and downstream quality/graph/API handoffs for Agents 07/08/09.
-- Keep the product practical: this should improve live results for actor searches, not create abstract taxonomy bloat.
+- Convert the 30-actor coverage matrix into source-family priorities, cadence recommendations, and buyer-visible freshness expectations.
+- Focus on practical results for the Apify Actor and `/ti`: actor searches should show why a result is fresh, partial, stale, or source-gap-held.
 
 Build:
-- Add/update actor coverage fixtures for APT29, APT42, Sandworm, Volt Typhoon, Salt Typhoon, Lazarus, Kimsuky, Charming Kitten, MuddyWater, OilRig, FIN7, TA505, Scattered Spider, LockBit, Akira, Cl0p, Play, BlackSuit, RansomHub, Qilin, Medusa, DragonForce, 8Base, Hunters International, BianLian, ALPHV/BlackCat, Royal, Conti legacy, DarkSide/BlackMatter legacy, and one unknown-query control.
-- For each actor, expose required source families, currently covered families, stale families, blocked/restricted metadata families, public advisory/blog/news/channel value, dark metadata caveat state, and next safe activation tasks.
-- Add freshness expectations by actor class: high-volume ransomware/public extortion groups should not show old-only recent activity as fresh; APT groups need corroborated reports, advisories, malware/tool/TTP changes, or public campaign updates.
-- Route output into the public product surface without raw URLs, raw leaked data, private-channel claims, actor interaction, credentials, payload links, or auth/CAPTCHA behavior.
-- Coordinate with Agent 09 so the Apify Actor can surface compact `sourceCoverageGaps` and `coverageStatus` fields that help buyers understand why a result is partial.
+- Add per-actor freshness profiles for APT groups, ransomware/extortion groups, financial-crime groups, and unknown queries.
+- Add source-family priority rows for clear-web blogs/news, public advisories, public Telegram/channel-style sources where legal, dark metadata-only sources, malware/report feeds, CVE/advisory feeds, and official victim/news corroboration.
+- Add cadence recommendations for high-volume ransomware groups versus slower-moving APT reporting, including stale-only rejection rules and source-family fallback.
+- Add product-facing rows for `freshnessExpectation`, `highestValueMissingFamily`, `nextBestSourceAction`, `buyerCaveat`, and `expectedTimeToUsefulSignal`.
+- Keep all output public-only or metadata-only; no private channel joins, account automation, auth/CAPTCHA bypass, actor interaction, raw unsafe URLs, credentials, dumps, or leaked-data access.
 
 Proof before status change:
 - `bun run check`
@@ -24,13 +23,17 @@ Proof before status change:
 - `bun run check:route-inventory`
 - `bun run check:contract-index`
 - `bun run check:api-regression`
-- update `docs/source_registry.md` or `docs/operations.md` if contracts move
+- update source/product docs if API contracts change
 
-If this phase completes, continue immediately into Program BJ: public-channel freshness scoring and source economics for the highest-value marketplace queries.
+If this phase completes, continue immediately into Program BK: actor-specific collection playbooks for the top 50 marketplace queries.
 
-## Prior Completed Slice
+## Previous Completed Slice
 
-- Added a runtime bridge from `PublicAdvisoryAdapter` `CollectedItem` output into connector-ready `PublicAdvisorySignalRecord` rows, preserving source id, family, entities, confidence, reliability, state, safe policy flags, timestamps, and parser provenance.
-- Proved captured GitHub Security Advisory and CISA/KEV-style records can flow into `buildPublicAdvisorySignalConnector` and `buildPublicAdvisoryCorrelation` for ranked, evidence-backed actor/CVE signals and reviewable conflict output.
-- Kept Agent 04 safety boundaries intact: public/official API or public HTTP only, no private repo access, no auth/CAPTCHA bypass, no payload download, no leaked-data redistribution, no private channels, and unsafe URLs hash/suppress before public output.
-- Verification passed for `bun test src/tests/publicAdvisory.test.ts`, `bun test src/tests/publicSignalFusion.test.ts`, full `bun test` with 521 passing tests, and `bun run check`.
+- Completed Program BI actor source coverage expansion for 30 configured actors/groups, including APT, ransomware, financial-crime, legacy, and unknown-query control rows.
+- Added `publicSignalFusion.actorSourceCoverageMatrix` with required, covered, stale, missing, blocked restricted-metadata, freshness, source value, caveat, and next safe activation fields.
+- Added compact product/API fields for Apify and `/ti` consumers: `sourceCoverageGaps`, `coverageStatusByActor`, and `apifyDatasetFields`.
+- Preserved Agent 04 boundaries: public-only source families, restricted metadata as review-held context only, no private channel scraping, no account automation, no auth/CAPTCHA bypass, no actor interaction, no leaked-data or raw URL exposure.
+- Updated source-registry operator docs for the new actor coverage matrix contract.
+- Verification is green: `bun run check`, `bun test`, `bun test src/tests/publicSignalFusion.test.ts src/tests/publicAdvisory.test.ts src/tests/api.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run check:api-regression`.
+
+Historical note: Agent 04 previously requested the next concrete task. The active Program BJ assignment above supersedes that request.

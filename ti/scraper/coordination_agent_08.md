@@ -1,22 +1,23 @@
-Status: active_program_bh_graph_export_product_packaging
+Status: active_program_bj_stix_taxii_monetization_and_export_contracts
 
 # Agent 08 Coordination
 
-## Current Assignment - Program BH: Graph Export Product Packaging
+## Current Assignment
 
-You are no longer waiting for a graph/STIX/TAXII task. Continue the graph/export lane until the product can package analyst-grade actor intelligence from public evidence into compact outputs that are valuable in the Apify Actor, `/ti`, and future STIX/TAXII integrations.
+You are no longer waiting for a graph/STIX/TAXII task. Continue the graph/export lane until reviewed graph intelligence can support monetizable export tiers without overstating implementation or leaking unsafe material.
+
+Program BJ: STIX/TAXII Monetization And Export Contracts.
 
 Mission:
-- Convert graph timeline/campaign/incident/claim work into buyer-useful product packets: actor timeline summary, campaign-change summary, victim/targeting pattern summary, TTP/source corroboration, contradiction state, and reviewed export readiness.
-- Keep STIX/TAXII honest: descriptor/reviewed-subset readiness only unless reviewed evidence and no-leak gates are satisfied.
-- Make arbitrary actor queries useful without pretending unknown actors are indexed: graph packets should explain available public context, missing source families, and safe next pivots.
+- Convert reviewed graph/STIX readiness into product-grade export contracts for Apify dataset consumers, public `/ti` previews, future TAXII descriptor-only integrations, and enterprise export packages.
+- Be precise about what is implemented versus planned: no mounted TAXII server claim unless it exists, no authoritative STIX for held/unreviewed claims, and no raw unsafe evidence.
 
 Build:
-- Add a graph product packet DTO for actor queries that combines incident claims, actor timeline changes, campaign/TTP freshness, source-family coverage, confidence trend, reviewed/held export state, and public UI/API copy hints.
-- Add fixtures for APT29, Volt Typhoon, Scattered Spider, LockBit, Akira, and an unknown actor; include stale-only, contradicted, alias-split, public-channel-only, restricted-metadata-only, and well-corroborated cases.
-- Add STIX preview/readiness fields that identify which claims can become `intrusion-set`, `campaign`, `malware`, `tool`, `attack-pattern`, `identity`, `relationship`, or `sighting` objects and which remain held.
-- Add frontend/Apify-facing compact summary fields for `whatChanged`, `whyItMatters`, `confidenceDrivers`, `sourceCoverageGaps`, and `reviewRequired`.
-- Preserve no raw URLs, leaked content, credential/payload evidence, private-channel material, actor interaction, or unsafe darkweb details in public/export packets.
+- Add export contract DTOs for free sample, analyst, and enterprise tiers with row limits, reviewed object eligibility, evidence requirements, confidence thresholds, freshness windows, update cadence, and pricing-readiness notes.
+- Add STIX object eligibility matrices for `intrusion-set`, `campaign`, `malware`, `tool`, `attack-pattern`, `identity`, `relationship`, `sighting`, `indicator`, and `report`.
+- Add held/export-blocked reasons for weak evidence, stale activity, contradiction, restricted metadata-only, public-channel-only, missing ledger, missing analyst review, unsafe source, and tenant policy hold.
+- Add Apify-facing compact fields for `stixReady`, `taxiiDescriptorReady`, `exportTier`, `exportBlockers`, and `reviewedObjectTypes` where appropriate.
+- Preserve no raw URLs, leaked content, credentials, payloads, private-channel material, object keys, actor interaction, or unsafe darkweb details.
 
 Proof before status change:
 - `bun run check`
@@ -26,7 +27,7 @@ Proof before status change:
 - `bun run check:api-regression`
 - update `docs/export/relationship_model.md`
 
-If this phase completes, continue immediately into Program BI: reviewed STIX bundle examples and TAXII descriptor pricing/readiness packets for marketplace differentiation.
+If this phase completes, continue immediately into Program BK: graph-backed actor comparison and buyer-ready investigation notebooks.
 
 ## Continuation Directive
 
@@ -63,7 +64,18 @@ Keep all graph relationships replayable to evidence, claim ledger state, review 
 - Added fixtures for APT29 timeline drift, Volt-style infrastructure/LOLBIN/tooling/CVE changes, ransomware victim churn, alias splits, stale campaign reuse, contradicted campaign membership, and no-evidence random actor searches.
 - Repaired adjacent source activation/API readiness drift needed to keep the shared build green.
 - Verification is green for `bun run check`, focused graph/source tests, and full `bun test` (521 pass).
+- Completed Program BH Graph Export Product Packaging.
+- Added `GraphActorProductPacketDto` across graph query, investigation workspace, runtime graph API, and STIX readiness so `/ti`, Apify rows, and future export integrations receive the same actor product packet.
+- Added actor timeline summary, campaign-change summary, incident claim summary, victim/targeting pattern summary, TTP/source corroboration, contradiction state, reviewed export readiness, STIX object-type readiness, public copy hints, Apify summary fields, and unknown-actor/searching-safe handling.
+- Preserved descriptor-only TAXII semantics and no-leak metadata-only output with explicit exclusions for raw URLs, leaked content, credentials/payload evidence, private-channel material, actor interaction, unsafe dark-web details, and unrelated actor facts.
+- Verification is green for `bun run check`, focused Program BH graph/API/source tests, route inventory, contract index, API regression, and full `bun test`.
+- Completed Program BI Reviewed STIX Bundle Examples And TAXII Descriptor Marketplace Readiness.
+- Added `GraphStixTaxiiMarketplaceReadinessDto` across graph query, investigation workspace, runtime graph API, and STIX readiness.
+- Added reviewed STIX bundle examples for Apify sample rows, `/ti` previews, and enterprise STIX previews, keeping held/stale/contradicted/weak/restricted/public-channel-only/missing-ledger/unreviewed rows out of authoritative examples.
+- Added descriptor-only TAXII collection and pricing readiness for `ti-graph-reviewed-stix-21` with free sample, analyst, and enterprise tiers, explicit `serverImplemented: false`, no mounted TAXII server claim, and no object-key exposure.
+- Updated `docs/export/relationship_model.md` with the Program BI marketplace/STIX/TAXII boundary.
+- Verification is green for `bun run check`, `bun test src/tests/graphViews.test.ts src/tests/api.test.ts src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (526 pass).
 
 ## Active Next Work
 
-Historical note: Agent 08 previously requested a new graph/STIX/TAXII task; the active Program BH assignment above supersedes that request and should be continued until proof is complete.
+Historical note: Agent 08 previously requested the next task. The active Program BJ assignment above supersedes that request.

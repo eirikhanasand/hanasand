@@ -1,40 +1,39 @@
-Status: active_program_be_live_capture_adapter_hardening
+Status: active_program_bg_live_capture_canary_and_parser_repair_loop
 
-## Current Assignment - Program BE: Live Capture Adapter Hardening
+# Agent 03 Coordination
 
-You are no longer waiting for a task. Continue the adapter/capture lane until clear-web and public advisory capture can feed durable evidence with production-grade parser quality, failure handling, and replay hooks.
+## Current Assignment - Program BG: Live Capture Canary And Parser Repair Loop
+
+You are no longer waiting for a task. Continue the adapter/capture lane until approved public sources can be canaried, measured, repaired, and promoted without breaking the public product.
 
 Mission:
-- Move approved public adapters from "can parse examples" to "can run repeatedly, fail predictably, dedupe output, emit evidence replay references, and explain freshness/coverage gaps."
-- Preserve safe public-source boundaries: no private GitHub repos, auth flows, CAPTCHA bypass, payload/exploit downloads, leaked datasets, unsafe onion content, or credential collection.
+- Move beyond parser contracts into a disabled-by-default live canary and repair workflow for public RSS/blog/static/report/advisory sources.
+- Give Agents 01/02/07/09 concrete signals: which sources parse cleanly, which need repair, which should be paused, and which safely improve actor coverage.
 
 Build:
-- Add live capture runtime contracts for RSS/blog/static HTML/report-index/public advisory adapters with per-source timeout, content-size cap, MIME allowlist, robots/legal note propagation, parser confidence, extraction warnings, canonical URL hash, content hash, and dedupe key.
-- Add parser-failure observability for HTTP errors, parse errors, malformed feeds, unsupported MIME, excessive redirects, unsafe URLs, duplicate content, and stale source windows.
-- Add capture-to-evidence handoff packets for Agent 06: raw capture descriptor, text projection descriptor, source metadata, extraction version, claim candidate IDs, and replay ID.
-- Add adapter conformance fixtures for GitHub Security Advisory, CISA KEV style, vendor advisory JSON, CERT HTML, vendor blog HTML, RSS/Atom, and report-index pages.
-- Add source pack integration points for Agent 01 and scheduler budget/cadence hints for Agent 02.
-- Keep the runtime disabled-by-default for any network path that is not already explicitly approved; route-visible dry-run previews are preferred over accidental live crawling.
+- Add live-capture canary packet DTOs with source id, adapter family, approved URL hash, robots/legal note, timeout/content caps, MIME allowlist, parser version, extraction warnings, dedupe hashes, evidence replay refs, and no-leak policy result.
+- Add parser repair recommendation rows for malformed feeds, changed layouts, report index drift, public advisory schema changes, unsupported MIME, excessive redirects, source outage, duplicate-heavy output, and stale source windows.
+- Add canary promotion/hold/rollback states and scheduler hints for first-run, repeat-run, burst-failure, source outage, parser regression, and source-family shortage cases.
+- Add fixtures for vendor blog HTML, CERT advisory HTML, GitHub Security Advisory JSON, CISA KEV JSON, RSS/Atom, report index, PDF text-layer reports, unsupported MIME, and hostile/unsafe link suppression.
+- Preserve disabled-by-default network behavior unless an existing approved test harness is already present; fixture replay and dry-run previews are preferred.
 
 Proof before status change:
 - `bun run check`
-- `bun test src/tests/publicAdvisory.test.ts src/tests/productionAdapterRuntime.test.ts src/tests/sourceSeeds.test.ts`
+- `bun test src/tests/publicAdvisory.test.ts src/tests/productionAdapterRuntime.test.ts src/tests/adapterContracts.test.ts src/tests/sourceSeeds.test.ts`
 - `bun run check:route-inventory`
 - `bun run check:contract-index`
 - `bun run check:api-regression`
-- docs update in `docs/source_registry.md` and `docs/operations.md`
+- update `docs/operations.md` and `docs/source_registry.md`
 
-If this phase completes, continue immediately into Program BF: PDF/report extraction readiness with OCR-disabled defaults, text-only projections, and evidence replay.
+If this phase completes, continue immediately into Program BH: dynamic browser isolation canary for high-value public pages, still disabled by default.
 
-# Agent 03 Summary
+## Previous Completed Slice
 
-- Completed Program BD: public advisory/GitHub security adapter runtime.
-- Added `PublicAdvisoryAdapter` for approved public advisory API/feed capture with GitHub Security Advisory-style JSON, CISA/KEV-style JSON, CERT/government, vendor, malware/tool, report-index, and RSS/Atom advisory records.
-- Normalized advisory records into `CollectedItem` with source id, canonical URL, content hash, published/observed timestamps, source family, parser confidence, extraction warnings, matched CVE/actor/malware/tool/campaign/sector/country/victim tags, dedupe key, provenance, and evidence replay ref.
-- Added route-safe `ti.public_advisory_signal_delta.v1` metadata with canonical URL hashes and replay refs while suppressing private repo paths, auth/private links, secret-bearing URLs, payload/download/exploit links, malformed/non-HTTP schemes, and onion links.
-- Promoted `github_security_feed` from contract-ready to implemented in the production adapter runtime contract.
-- Added focused advisory/runtime tests and updated operations/source-registry docs.
-- Proof green: `bun test src/tests/publicAdvisory.test.ts src/tests/productionAdapterRuntime.test.ts src/tests/publicSignalFusion.test.ts`, `bun run check:contract-index`, `bun run check:route-inventory`, `bun run check:api-regression`.
-- Known external blockers: full `bun run check` and full `bun test` are failing in unrelated dirty-worktree areas (`src/export/graphViews.ts`, source seed economics, product SLO/API tests).
+- Completed Program BE: live capture adapter hardening for RSS, static HTML, report-index, and public advisory captures.
+- Added `ti.live_capture_runtime_packet.v1`, per-row runtime diagnostics, safe failure taxonomy, canonical/content hashes, dedupe keys, Agent 01 source-pack readiness, Agent 02 cadence hints, and Agent 06 evidence handoff descriptors.
+- Added conformance coverage for GitHub Security Advisory, CISA KEV, vendor advisory JSON, CERT HTML, vendor blog HTML, RSS/Atom, and report-index fixtures.
+- Completed Program BF: PDF/report extraction readiness with OCR disabled by default, text-only projection hashes, citation-span coverage, parser confidence, extraction warnings, and evidence replay refs.
+- Updated public advisory/source-pack/PDF readiness docs in `docs/operations.md` and `docs/source_registry.md`.
+- Proof green: `bun run check`, `bun test src/tests/publicAdvisory.test.ts src/tests/productionAdapterRuntime.test.ts src/tests/sourceSeeds.test.ts src/tests/adapterContracts.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run check:api-regression`.
 
-Historical note: Agent 03 previously requested a new adapter/capture task; the active Program BE assignment above supersedes that request and should be continued until proof is complete.
+Historical note: Agent 03 previously requested the next adapter/capture task. The active Program BG assignment above supersedes that request.
