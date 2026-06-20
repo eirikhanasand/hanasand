@@ -4778,7 +4778,7 @@ function marketplaceConversionRealRowSamplePackForRows(
       freshness: row.freshnessStatus,
       confidence: row.confidence,
       corroborationState: row.corroborationState,
-      contradictionState: row.contradictionHints.length > 0 ? "review_hold" : "none",
+      contradictionState: row.contradictionHints.length > 0 ? "review_hold" as const : "none" as const,
       sourceFamilies: row.sourceFamilies,
       nextBuyerSearchPivots: row.nextSearchPivots,
       provenanceHash: row.provenanceHash,
@@ -4929,8 +4929,9 @@ function warningsFor(response: TiSearchResponse): string[] {
   return warnings;
 }
 
-function uniqueStrings(values: string[]): string[] {
+function uniqueStrings(values: Array<string | undefined>): string[] {
   return [...new Set(values
+    .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim().replace(/\s+/g, " ").slice(0, 120))
     .filter(Boolean))];
 }
