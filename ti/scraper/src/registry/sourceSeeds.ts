@@ -981,20 +981,20 @@ function buildTiSourceAtlasParserImpactSourceLadderPacket(records: TiSourceAtlas
 function tiSourceAtlasAcquisitionCatalog(record: TiSourceAtlasRecord, order: number): { name: string; domain: string; actors: string[] } {
   const fallbackActors = tiSourceAtlasRecordActorCoverage(record, order - 1);
   const byFamily: Partial<Record<TiSourceAtlasFamily, { name: string; domain: string; actors: string[] }>> = {
-    vendor_threat_blog: { name: "Microsoft Threat Intelligence Blog", domain: "microsoft-threat-intel.example", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
-    ransomware_tracker: { name: "Ransomware.live Victim Tracker", domain: "ransomware-live.example", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
-    cve_advisory: { name: "CISA Known Exploited Vulnerabilities", domain: "cisa-kev.example", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
-    cert_government: { name: "CISA Cybersecurity Advisories", domain: "cisa-advisories.example", actors: ["APT29", "APT28", "Volt Typhoon", "LockBit"] },
-    malware_researcher: { name: "Cisco Talos Intelligence Blog", domain: "talos-intel.example", actors: ["APT29", "APT28", "Sandworm", "Lazarus"] },
-    exploit_intelligence: { name: "Rapid7 Vulnerability Research", domain: "rapid7-research.example", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
-    github_security_advisory: { name: "GitHub Security Advisory Public Feed", domain: "github-security-advisory.example", actors: ["APT29", "APT28", "LockBit", "Akira"] },
-    package_advisory: { name: "GitHub Advisory Database Package Feed", domain: "github-advisory-db.example", actors: ["APT29", "APT28", "Lazarus", "Volt Typhoon"] },
-    regional_cyber_agency: { name: "JPCERT Coordination Center Alerts", domain: "jpcert-alerts.example", actors: ["Lazarus", "APT29", "Volt Typhoon", "Akira"] },
-    ics_ot: { name: "CISA ICS Advisories", domain: "cisa-ics.example", actors: ["Volt Typhoon", "APT28", "APT29", "Sandworm"] },
-    cloud_saas_security: { name: "Google Cloud Threat Horizons", domain: "google-cloud-threats.example", actors: ["APT29", "APT28", "Volt Typhoon", "Scattered Spider"] },
-    phishing_brand_abuse: { name: "Microsoft Digital Defense Phishing Feed", domain: "microsoft-phishing.example", actors: ["APT28", "APT29", "FIN7", "Scattered Spider"] },
-    public_channel_descriptor: { name: "Public CTI Social Channel Descriptor", domain: "public-cti-channel.example", actors: ["APT29", "APT28", "LockBit", "Akira"] },
-    public_dataset: { name: "MITRE ATT&CK Group Updates", domain: "mitre-attack.example", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] }
+    vendor_threat_blog: { name: "Microsoft Threat Intelligence Blog", domain: "microsoft.com", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] },
+    ransomware_tracker: { name: "Ransomware.live Victim Tracker", domain: "ransomware.live", actors: ["LockBit", "Akira", "Scattered Spider", "FIN7"] },
+    cve_advisory: { name: "CISA Known Exploited Vulnerabilities", domain: "cisa.gov", actors: ["APT28", "APT29", "Volt Typhoon", "Lazarus"] },
+    cert_government: { name: "CISA Cybersecurity Advisories", domain: "cisa.gov", actors: ["APT29", "APT28", "Volt Typhoon", "LockBit"] },
+    malware_researcher: { name: "Cisco Talos Intelligence Blog", domain: "talosintelligence.com", actors: ["APT29", "APT28", "Sandworm", "Lazarus"] },
+    exploit_intelligence: { name: "GreyNoise Research Blog", domain: "greynoise.io", actors: ["APT28", "APT29", "Volt Typhoon", "LockBit"] },
+    github_security_advisory: { name: "GitHub Security Advisories", domain: "github.com", actors: ["APT29", "APT28", "LockBit", "Akira"] },
+    package_advisory: { name: "OSV Vulnerability Database", domain: "osv.dev", actors: ["APT29", "APT28", "Lazarus", "Volt Typhoon"] },
+    regional_cyber_agency: { name: "JPCERT Coordination Center Alerts", domain: "jpcert.or.jp", actors: ["Lazarus", "APT29", "Volt Typhoon", "Akira"] },
+    ics_ot: { name: "CISA ICS Advisories", domain: "cisa.gov", actors: ["Volt Typhoon", "APT28", "APT29", "Sandworm"] },
+    cloud_saas_security: { name: "Google Cloud Threat Intelligence Blog", domain: "cloud.google.com", actors: ["APT29", "APT42", "Volt Typhoon", "Scattered Spider"] },
+    phishing_brand_abuse: { name: "Netcraft Cybercrime Disruption Blog", domain: "netcraft.com", actors: ["APT42", "APT28", "FIN7", "Scattered Spider"] },
+    public_channel_descriptor: { name: "Telegram Public Channel Descriptor Review Queue", domain: "telegram.org", actors: ["APT42", "LockBit", "Akira", "Scattered Spider"] },
+    public_dataset: { name: "MITRE ATT&CK Group Updates", domain: "attack.mitre.org", actors: ["APT29", "APT28", "Volt Typhoon", "Lazarus"] }
   };
   return byFamily[record.family] ?? {
     name: record.sourceName,
