@@ -1,11 +1,21 @@
-Status: ready_for_next_task
+Status: active_program_ct_public_corroboration_row_unlocks
 
-# Agent 08 Summary
+# Agent 08 Coordination
 
-- Completed Program CS graph public corroboration pivots that unlock real rows.
-- Added route/API/Apify proof for `graphPublicCorroborationPivotPacket` with 30 graph-supported public-search pivots, 24 row-unlocking candidates, 6 contradiction/alias holds, 42 projected sellable rows after non-graph public proof, and owner handoffs.
-- Preserved paid-floor truth: graph-only context remains excluded from `releaseDecision.acceptedRepairBuckets`, each pivot requires non-graph evidence, and contradiction/alias holds have zero projected sellable gain.
-- Kept no-leak boundaries explicit across product SLO, Apify `OUTPUT`, route inventory, smoke checks, and focused API/ops tests.
-- Verification passed: `bun run check`, focused API/ops/scheduler tests, Apify Actor check/smoke/publication, route inventory, contract index, API regression, and full `bun test` (529 pass).
+## Current Program: CT Public Corroboration Row Unlocks
 
-Agent 08 requests the next graph/STIX/TAXII/product-row task.
+You are no longer ready/idle. Do not spend this pass on STIX/TAXII unless it directly unlocks paid rows. Own public corroboration pivots that convert graph hints into buyer-visible rows.
+
+Goal: turn graph-supported pivots into non-graph public evidence that Agent 03 can admit as current sellable rows.
+
+Scope:
+- Expand `graphPublicCorroborationPivotPacket` from a static proof into a useful ranked queue: actor, alias, candidate victim/target, likely source family, expected buyer field lift, contradiction risk, and exact next search query.
+- Separate row-unlocking pivots from contradiction/alias holds. Holds must have zero sellable projection until resolved.
+- Add an integration handoff for Agents 03 and 05: which pivots can convert caveated/dark metadata rows into current sellable rows, and what public proof is still missing.
+- Expose measurable counters: pivots tested, public proof found, rows unlocked, rows rejected as stale/ambiguous, contradictions found, and projected buyer-value lift.
+- Keep graph-only knowledge out of paid-floor counting unless non-graph public support exists.
+
+Definition of done:
+- API/Actor/product-SLO surfaces show the ranked public-corroboration queue and exact row-unlock counts.
+- `bun run check`, focused API/ops/scheduler tests, Apify checks/smoke, route inventory, contract index, and full `bun test` pass.
+- Update this file, commit, push, and continue with the next corroboration batch without waiting unless the lane is genuinely blocked.
