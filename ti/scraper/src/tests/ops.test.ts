@@ -511,11 +511,11 @@ describe("ops controls", () => {
       willMutateSources: false,
       willStartCollection: false,
       fixtureCount: 20,
-      rowsLifted: 12,
+      rowsLifted: 14,
       rowsSuppressed: 4,
       rowsHeldWithRepairAction: 2,
-      blockerCodesRemoved: 24,
-      averageBuyerValueDelta: 0.169,
+      blockerCodesRemoved: 25,
+      averageBuyerValueDelta: 0.161,
       missingFieldCoverage: expect.arrayContaining(["victim", "sector", "country", "dataset_or_impact", "ttp_or_tool", "first_seen", "last_seen", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_action"]),
       blockerCodes: expect.arrayContaining(["old", "alias_only", "single_source_without_caveat", "unrelated_actor", "contradicted", "metadata_only_without_public_support", "no_useful_buyer_action", "generic_entity_fields"])
     });

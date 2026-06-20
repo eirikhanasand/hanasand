@@ -344,6 +344,50 @@ const freshnessRepairOwners = (freshnessRepairLoop.ownerHandoffs as Array<Record
 for (const owner of ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
   if (!freshnessRepairOwners.includes(owner)) throw new Error(`Program BS repair loop must include ${owner} handoff`);
 }
+const entitySpecificityLift = outputRecord.entitySpecificityLift as Record<string, unknown> | undefined;
+if (
+  !entitySpecificityLift
+  || entitySpecificityLift.schemaVersion !== "ti.apify_paid_row_entity_specificity_lift.v1"
+  || entitySpecificityLift.dryRun !== true
+  || entitySpecificityLift.willMutateSources !== false
+  || entitySpecificityLift.willStartCollection !== false
+  || !Array.isArray(entitySpecificityLift.fixtures)
+  || entitySpecificityLift.fixtures.length < 20
+  || !entitySpecificityLift.lift
+  || !Array.isArray(entitySpecificityLift.ownerHandoffs)
+) {
+  throw new Error("OUTPUT record must expose Program BV paid-row entity specificity lift");
+}
+const entitySpecificityFixtures = entitySpecificityLift.fixtures as Array<Record<string, unknown>>;
+const entitySpecificityActors = entitySpecificityFixtures.map((row) => row.actor);
+for (const requiredActor of ["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "Unknown Actor Query"]) {
+  if (!entitySpecificityActors.includes(requiredActor)) throw new Error(`Program BV entity specificity lift must include ${requiredActor}`);
+}
+const entitySpecificityFields = entitySpecificityFixtures.flatMap((row) => Array.isArray(row.missingFields) ? row.missingFields : []);
+for (const field of ["victim", "sector", "country", "dataset_or_impact", "ttp_or_tool", "first_seen", "last_seen", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_action"]) {
+  if (!entitySpecificityFields.includes(field)) throw new Error(`Program BV entity specificity lift must cover missing field ${field}`);
+}
+const entitySpecificityBlockers = entitySpecificityFixtures.flatMap((row) => Array.isArray(row.blockerCodesRemoved) ? row.blockerCodesRemoved : []);
+for (const blocker of ["old", "alias_only", "single_source_without_caveat", "unrelated_actor", "contradicted", "metadata_only_without_public_support", "no_useful_buyer_action", "generic_entity_fields"]) {
+  if (!entitySpecificityBlockers.includes(blocker)) throw new Error(`Program BV entity specificity lift must cover blocker ${blocker}`);
+}
+if (!entitySpecificityFixtures.every((row) => Array.isArray(row.proofNeeded) && row.proofNeeded.length > 0 && Array.isArray(row.expectedBuyerVisibleLift) && row.expectedBuyerVisibleLift.length > 0 && typeof row.whyWorthPayingFor === "string" && typeof row.repairAction === "string" && row.noLeak === true)) {
+  throw new Error("Program BV fixtures must preserve proof, repair action, buyer value, and no-leak state");
+}
+const entitySpecificityMetrics = entitySpecificityLift.lift as Record<string, unknown>;
+if (
+  Number(entitySpecificityMetrics.rowsLifted) < 8
+  || Number(entitySpecificityMetrics.rowsSuppressed) < 4
+  || Number(entitySpecificityMetrics.rowsHeldWithRepairAction) < 2
+  || Number(entitySpecificityMetrics.blockerCodesRemoved) < 20
+  || Number(entitySpecificityMetrics.averageBuyerValueDelta) < 0.12
+) {
+  throw new Error("Program BV entity specificity lift must expose measurable buyer-value improvement");
+}
+const entitySpecificityOwners = (entitySpecificityLift.ownerHandoffs as Array<Record<string, unknown>>).map((row) => row.owner);
+for (const owner of ["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
+  if (!entitySpecificityOwners.includes(owner)) throw new Error(`Program BV entity specificity lift must include ${owner} handoff`);
+}
 const revenueConversionChecklist = outputRecord.revenueConversionChecklist as Record<string, unknown> | undefined;
 if (
   !revenueConversionChecklist

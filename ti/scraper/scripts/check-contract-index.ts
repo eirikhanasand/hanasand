@@ -318,6 +318,21 @@ const checks = [
   apifyPricingHooks.rowPriceUsdPerThousand === 3,
   apifyPricingHooks.actorStartPriceUsd === 0.00005,
   apifyPricingHooks.apifyMarginPercent === 20,
+  apifyRevenueConversionChecklist.schemaVersion === "ti.apify_revenue_conversion_checklist.v1",
+  apifyRevenueConversionChecklist.telemetryState === "missing",
+  apifyRevenueConversionChecklist.payoutState === "unknown",
+  ["listing_copy", "sample_rows", "pricing_shape", "marketplace_telemetry", "payout_setup", "fake_traction_guards", "no_leak_sample_proof"].every((id) => apifyRevenueChecklistRows.some((row) => row.id === id)),
+  typeof apifyRevenueConversionChecklist.nextManualVerificationStep === "string" && apifyRevenueConversionChecklist.nextManualVerificationStep.includes("Apify Store analytics"),
+  apifyPricingProof.schemaVersion === "ti.apify_pricing_proof.v1",
+  isRecord(apifyPricingProof.starterTrialShape) && apifyPricingProof.starterTrialShape.name === "starter_actor_query_pack",
+  isRecord(apifyPricingProof.paidDailyMonitoringShape) && apifyPricingProof.paidDailyMonitoringShape.minimumSellableRowRate === 0.25,
+  apifyUsageCostGuard.platformUsageCostUsd === null,
+  apifyUsageCostGuard.estimatedCreatorRevenueUsd === null,
+  apifyUsageCostGuard.maxCostPerUsefulRowUsd === 0.01,
+  apifyPayoutRevenueSeparation.paymentMethodState === "unknown",
+  apifyPayoutRevenueSeparation.beneficiaryState === "unknown",
+  apifyPayoutRevenueSeparation.withdrawalReadiness === "unknown",
+  apifyPayoutRevenueSeparation.externallyVerifiedRevenueUsd === null,
   apifyConversionTracking.currentStorePageViews === null,
   stringArray(apifyConversionTracking.metricsToTrack).includes("conversionRate"),
   apifyMarketplaceTelemetry.schemaVersion === "ti.apify_marketplace_telemetry_input.v1",
@@ -330,6 +345,14 @@ const checks = [
   stringArray(apifyPayoutReadiness.externalVerificationRequired).includes("withdrawal_readiness"),
   apifyConversionExperiments.length === 3,
   apifyConversionExperiments.every((experiment) => Array.isArray(experiment.buyerVisibleFields) && stringArray(experiment.buyerVisibleFields).includes("noLeakProof") && experiment.noLeakRequired === true),
+  apifyBuyerSampleRows.length >= 12,
+  apifyBuyerSampleRows.every((row) => {
+    const fields = isRecord(row.buyerVisibleFields) ? row.buyerVisibleFields : {};
+    return typeof fields.actorSummary === "string"
+      && typeof fields.freshClaimOrActivity === "string"
+      && Array.isArray(fields.nextAnalystPivots)
+      && fields.noLeakProof === "metadata_only_no_raw_body_no_credentials_no_private_content";
+  }),
   ["Agent 01", "Agent 03", "Agent 04", "Agent 05", "Agent 07", "Agent 08", "Agent 10"].every((owner) => apifyOperatorBlockerBoard.some((row) => row.owner === owner)),
   stringArray(apifyDefaultInput.queries).length === 20,
   apifyDefaultInput.maxRowsPerQuery === 25,

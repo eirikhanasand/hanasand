@@ -124,6 +124,7 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 - Track store page views, unique users, trial runs, paid runs, repeat users, conversion rate, useful-row rate, fresh-row rate, no-leak failures, and cost per useful row in `/v1/ops/product-slo.apifyLaunchExperiment`; leave unknown Apify analytics as `null` until copied from the account.
 - Actor pricing is scheduled to switch to pay-per-event on July 4, 2026. Payout/beneficiary readiness still needs to be verified in Apify billing before assuming cash can be withdrawn.
 - Do not store beneficiary, payout, token, or account identifiers in this repository.
+- Before buying traffic, verify `revenueConversionChecklist`, `pricingProof`, and 12 `buyerSampleRows` are visible in `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo.apifyLaunchExperiment`, and Actor `OUTPUT`. Telemetry and payout fields must remain `null`/`unknown` until copied from Apify analytics or billing.
 
 ## Next Data Upgrades
 

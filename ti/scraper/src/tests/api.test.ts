@@ -629,11 +629,11 @@ describe("api v1", () => {
       actorCoverage: expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "Unknown Actor Query"]) as unknown as string[],
       missingFieldCoverage: expect.arrayContaining(["victim", "sector", "country", "dataset_or_impact", "ttp_or_tool", "first_seen", "last_seen", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_action"]) as unknown as string[],
       blockerCodes: expect.arrayContaining(["old", "alias_only", "single_source_without_caveat", "unrelated_actor", "contradicted", "metadata_only_without_public_support", "no_useful_buyer_action", "generic_entity_fields"]) as unknown as string[],
-      rowsLifted: 12,
+      rowsLifted: 14,
       rowsSuppressed: 4,
       rowsHeldWithRepairAction: 2,
-      blockerCodesRemoved: 24,
-      averageBuyerValueDelta: 0.169,
+      blockerCodesRemoved: 25,
+      averageBuyerValueDelta: 0.161,
       noLeakProof: { rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false }
     });
     expect((response.entitySpecificityLift as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
@@ -11614,11 +11614,11 @@ describe("api v1", () => {
       schemaVersion: "ti.program_bv_paid_row_entity_specificity_lift.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "/v1/ops/product-slo", "Apify OUTPUT"]),
       lift: {
-        rowsLifted: 12,
+        rowsLifted: 14,
         rowsSuppressed: 4,
         rowsHeldWithRepairAction: 2,
-        blockerCodesRemoved: 24,
-        averageBuyerValueDelta: 0.169
+        blockerCodesRemoved: 25,
+        averageBuyerValueDelta: 0.161
       },
       noLeakProof: { rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false }
     });

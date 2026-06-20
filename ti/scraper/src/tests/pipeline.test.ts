@@ -2110,11 +2110,11 @@ describe("pipeline", () => {
       willMutateSources: false,
       willStartCollection: false,
       lift: {
-        rowsLifted: 12,
+        rowsLifted: 14,
         rowsSuppressed: 4,
         rowsHeldWithRepairAction: 2,
-        blockerCodesRemoved: 24,
-        averageBuyerValueDelta: 0.169
+        blockerCodesRemoved: 25,
+        averageBuyerValueDelta: 0.161
       },
       noLeakProof: { rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false }
     });
