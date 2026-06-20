@@ -271,6 +271,8 @@ describe("api v1", () => {
     expect(launch.conversionExperiments.every((item) => item.buyerVisibleFields.includes("noLeakProof") && item.noLeakRequired)).toBe(true);
     expect(launch.operatorBlockerBoard.map((item) => item.owner)).toEqual(expect.arrayContaining(["Agent 01", "Agent 03", "Agent 04", "Agent 05", "Agent 07", "Agent 08", "Agent 10"]));
     expect(launch.fakeTractionGuards.join(" ")).toContain("remain null until sourced from Apify analytics");
+    expect(launch.fakeTractionGuards.join(" ")).toContain("local sample runs and owner proof runs never count");
+    expect(launch.fakeTractionGuards.join(" ")).toContain("synthetic proof rows never count");
     expect(launch.revenueConversionChecklist.checks.map((item) => item.id)).toEqual(expect.arrayContaining(["listing_copy", "sample_rows", "pricing_shape", "marketplace_telemetry", "payout_setup", "fake_traction_guards", "no_leak_sample_proof"]));
     expect(launch.revenueConversionChecklist.nextManualVerificationStep).toContain("Compare paid run conversion");
     expect(launch.buyerSampleRows).toHaveLength(12);
@@ -3301,6 +3303,8 @@ describe("api v1", () => {
     )).toBe(true);
     expect(apifyStoreReadiness.operatorBlockerBoard.map((row) => row.owner)).toEqual(expect.arrayContaining(["Agent 01", "Agent 03", "Agent 04", "Agent 05", "Agent 07", "Agent 08", "Agent 10"]));
     expect(apifyStoreReadiness.fakeTractionGuards.join(" ")).toContain("remain null until sourced from Apify analytics");
+    expect(apifyStoreReadiness.fakeTractionGuards.join(" ")).toContain("local sample runs and owner proof runs never count");
+    expect(apifyStoreReadiness.fakeTractionGuards.join(" ")).toContain("synthetic proof rows never count");
     expect(apifyStoreReadiness.buyerFacingConversionProof).toMatchObject({
       schemaVersion: "ti.apify_buyer_facing_conversion_proof.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "/v1/quality/evaluate"]),

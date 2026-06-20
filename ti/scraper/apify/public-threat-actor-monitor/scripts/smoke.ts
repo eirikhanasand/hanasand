@@ -406,6 +406,15 @@ const checklistIds = (revenueConversionChecklist.checks as Array<Record<string, 
 for (const requiredCheck of ["listing_copy", "sample_rows", "pricing_shape", "marketplace_telemetry", "payout_setup", "fake_traction_guards", "no_leak_sample_proof"]) {
   if (!checklistIds.includes(requiredCheck)) throw new Error(`Program BT checklist must include ${requiredCheck}`);
 }
+const fakeTractionGuards = outputRecord.fakeTractionGuards as string[] | undefined;
+if (
+  !Array.isArray(fakeTractionGuards)
+  || !fakeTractionGuards.some((guard) => guard.includes("local sample runs and owner proof runs never count"))
+  || !fakeTractionGuards.some((guard) => guard.includes("synthetic proof rows never count"))
+  || !fakeTractionGuards.some((guard) => guard.includes("payout readiness is unknown or blocked unless externally verified"))
+) {
+  throw new Error("OUTPUT record must expose fake-traction guards for local, owner, synthetic, and payout claims");
+}
 const pricingProof = outputRecord.pricingProof as Record<string, unknown> | undefined;
 if (
   !pricingProof

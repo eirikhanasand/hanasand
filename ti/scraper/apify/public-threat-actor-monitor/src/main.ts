@@ -1845,6 +1845,15 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const revenueConversionChecklist = revenueConversionChecklistForRows(rows, paidRowQuality);
   const pricingProof = pricingProofForOutput();
   const buyerSampleRows = buyerSampleRowsForOutput();
+  const fakeTractionGuards = [
+    "store views remain null until sourced from Apify analytics",
+    "unique users remain null until sourced from Apify analytics",
+    "trial and paid runs remain null until sourced from Apify analytics or billing export",
+    "local sample runs and owner proof runs never count as unique users, paid runs, repeat users, or conversion",
+    "synthetic proof rows never count as dataset demand, creator revenue, refunds, or paid-traffic conversion",
+    "estimated creator revenue remains null until calculated from real paid runs and platform costs",
+    "payout readiness is unknown or blocked unless externally verified"
+  ];
   return {
     outputContract: "safe_metadata_only.v1",
     rowCount: rows.length,
@@ -1862,6 +1871,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     revenueConversionChecklist,
     pricingProof,
     buyerSampleRows,
+    fakeTractionGuards,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     rows
@@ -1927,7 +1937,7 @@ function revenueConversionChecklistForRows(rows: MarketplaceRow[], quality: Retu
       { id: "pricing_shape", state: "ready", proofField: "OUTPUT.pricingProof" },
       { id: "marketplace_telemetry", state: "missing", proofField: "OUTPUT.monetization", blocker: "Apify analytics not externally copied into this run" },
       { id: "payout_setup", state: "missing", proofField: "OUTPUT.pricingProof.payoutRevenueSeparation", blocker: "beneficiary, payout method, and withdrawal readiness require external billing verification" },
-      { id: "fake_traction_guards", state: "ready", proofField: "OUTPUT.pricingProof.usageCostGuard" },
+      { id: "fake_traction_guards", state: "ready", proofField: "OUTPUT.fakeTractionGuards" },
       { id: "no_leak_sample_proof", state: "ready", proofField: "OUTPUT.buyerSampleRows[].buyerVisibleFields.noLeakProof" }
     ]
   };

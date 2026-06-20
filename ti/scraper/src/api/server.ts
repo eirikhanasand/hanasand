@@ -10248,6 +10248,8 @@ function buildApifyStoreReadinessContract(input: {
       "store views remain null until sourced from Apify analytics",
       "unique users remain null until sourced from Apify analytics",
       "trial and paid runs remain null until sourced from Apify analytics or billing export",
+      "local sample runs and owner proof runs never count as unique users, paid runs, repeat users, or conversion",
+      "synthetic proof rows never count as dataset demand, creator revenue, refunds, or paid-traffic conversion",
       "estimated creator revenue remains null until calculated from real paid runs and platform costs",
       "payout readiness is unknown or blocked unless externally verified"
     ],
