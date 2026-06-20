@@ -117,9 +117,16 @@ function buildEndpoint(baseUrl: string, proofMode: LiveProductProofMode, generat
   copyEnvParam(url, "apifyUniqueUserCount", "TI_PRODUCT_SLO_APIFY_UNIQUE_USER_COUNT");
   copyEnvParam(url, "apifyTrialRunCount", "TI_PRODUCT_SLO_APIFY_TRIAL_RUN_COUNT");
   copyEnvParam(url, "apifyPaidRunCount", "TI_PRODUCT_SLO_APIFY_PAID_RUN_COUNT");
+  copyEnvParam(url, "apifyActorStartCount", "TI_PRODUCT_SLO_APIFY_ACTOR_START_COUNT");
+  copyEnvParam(url, "apifyDatasetRowCount", "TI_PRODUCT_SLO_APIFY_DATASET_ROW_COUNT");
+  copyEnvParam(url, "apifyFailedRunCount", "TI_PRODUCT_SLO_APIFY_FAILED_RUN_COUNT");
   copyEnvParam(url, "apifyRepeatUserCount", "TI_PRODUCT_SLO_APIFY_REPEAT_USER_COUNT");
+  copyEnvParam(url, "apifyRefundCount", "TI_PRODUCT_SLO_APIFY_REFUND_COUNT");
+  copyEnvParam(url, "apifyPlatformUsageCostUsd", "TI_PRODUCT_SLO_APIFY_PLATFORM_USAGE_COST_USD");
+  copyEnvParam(url, "apifyEstimatedCreatorRevenueUsd", "TI_PRODUCT_SLO_APIFY_ESTIMATED_CREATOR_REVENUE_USD");
   copyEnvParam(url, "apifyBeneficiaryVerified", "TI_PRODUCT_SLO_APIFY_BENEFICIARY_VERIFIED");
   copyEnvParam(url, "apifyPayoutMethodReady", "TI_PRODUCT_SLO_APIFY_PAYOUT_METHOD_READY");
+  copyEnvParam(url, "apifyWithdrawalReady", "TI_PRODUCT_SLO_APIFY_WITHDRAWAL_READY");
   copyEnvParam(url, "apifyPricingEffectiveAt", "TI_PRODUCT_SLO_APIFY_PRICING_EFFECTIVE_AT");
   copyEnvParam(url, "sourceEvaluatedCandidateCount", "TI_PRODUCT_SLO_SOURCE_EVALUATED_CANDIDATE_COUNT");
   copyEnvParam(url, "sourcePayworthyCount", "TI_PRODUCT_SLO_SOURCE_PAYWORTHY_COUNT");
