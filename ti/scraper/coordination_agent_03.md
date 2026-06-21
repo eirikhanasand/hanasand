@@ -6,6 +6,6 @@ Status: done_requesting_next_task
 - Added buyer-facing `buyerSummary`, `recommendedBuyerAction`, and `keyPivots` fields to Actor rows and the Apify dataset schema so public output describes what changed in buyer terms.
 - Kept strict rejection buckets for stale, generic, alias/wrong-actor, duplicate, contradiction, graph-only, restricted-only, and source-provenance-only rows so they do not count toward paid proof.
 - Surfaced hosted 46-to-100 / 31-to-52 parser lift proof through Actor OUTPUT, product SLO/contracts, paid release audit, and smoke/API assertions without claiming hosted paid proof before the next observed hosted rerun.
-- Verified `bun run check`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, and focused API/ops tests.
+- Verified `bun run check`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, `bun run check:apify-publication`, and `bun test src/tests/ops.test.ts`; mounted API server tests are currently blocked in this runtime by repeatable `Bun.serve({ port: 0 })` `EADDRINUSE` before assertions.
 
 Requesting a new Agent 03 task.
