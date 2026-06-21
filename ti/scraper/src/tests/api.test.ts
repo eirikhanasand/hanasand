@@ -5116,6 +5116,51 @@ describe("api v1", () => {
       hostedProofExecutionGate: { state: "hold", observedOnly: true, observedProofImportState: "missing" },
       marketplacePaidTrafficGate: { state: "hold", paidTrafficAllowedNow: false, noInventedExternalMetrics: true }
     });
+    const programDeReleaseBoard = (readinessPaidReleaseTruthBoard as unknown as {
+      programDeReleaseBoard: {
+        privatePaidBetaGate: { blockers: string[] };
+        publicPaidTrafficGate: { blockers: string[] };
+        topRevenueActions: Array<Record<string, unknown>>;
+      } & Record<string, unknown>;
+    }).programDeReleaseBoard;
+    expect(programDeReleaseBoard).toMatchObject({
+      schemaVersion: "ti.program_de_paid_beta_release_truth.v1",
+      decision: "hold_paid_release",
+      privatePaidBetaAllowedNow: false,
+      publicPaidTrafficAllowedNow: false,
+      privatePaidBetaGate: {
+        state: "hold",
+        observed: {
+          current750State: "hold",
+          current750Gap: 250,
+          current1000UsefulState: "hold",
+          current1000UsefulGap: 393,
+          pricingState: "external_unknown",
+          payoutState: "external_unknown",
+          analyticsObserved: false
+        }
+      },
+      publicPaidTrafficGate: {
+        state: "hold",
+        observed: {
+          current1000LocalSellableState: "hold",
+          current1000SellableGap: 500,
+          marketplacePaidTrafficState: "hold"
+        }
+      },
+      antiBloatGuard: {
+        dtoOnlyCountsTowardRelease: false,
+        stixTaxiiOnlyCountsTowardRelease: false,
+        requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
+      }
+    });
+    expect(programDeReleaseBoard.privatePaidBetaGate.blockers).toEqual(expect.arrayContaining(["current750_sellable_rows", "hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown"]));
+    expect(programDeReleaseBoard.publicPaidTrafficGate.blockers).toEqual(expect.arrayContaining(["private_paid_beta_not_ready", "current1000_local_sellable_rows", "hosted300_observed_proof", "marketplace_paid_traffic_gate"]));
+    expect(programDeReleaseBoard.topRevenueActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rank: 1, owner: "agent_09", action: "import_hosted_100_and_300_observed_proof" }),
+      expect.objectContaining({ rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost" }),
+      expect.objectContaining({ rank: 4, owner: "agent_09", action: "import_pricing_payout_and_analytics" })
+    ]));
     const readinessStoreReadiness = apifyStoreReadiness.storeReadiness as typeof apifyStoreReadiness.storeReadiness & {
       hostedPaidReadinessProof: Record<string, unknown>;
     };

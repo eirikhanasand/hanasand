@@ -2095,6 +2095,35 @@ if (
 ) {
   throw new Error("Program DC release gates must expose current500/current1000/hosted/marketplace gates in Actor OUTPUT and keep hosted marketplace traffic held");
 }
+const programDeReleaseBoard = paidReleaseTruthBoard.programDeReleaseBoard as Record<string, unknown> | undefined;
+const programDePrivateGate = programDeReleaseBoard?.privatePaidBetaGate as Record<string, unknown> | undefined;
+const programDePublicGate = programDeReleaseBoard?.publicPaidTrafficGate as Record<string, unknown> | undefined;
+const programDeActions = programDeReleaseBoard?.topRevenueActions as Array<Record<string, unknown>> | undefined;
+const programDeAntiBloatGuard = programDeReleaseBoard?.antiBloatGuard as Record<string, unknown> | undefined;
+if (
+  !programDeReleaseBoard
+  || programDeReleaseBoard.schemaVersion !== "ti.program_de_paid_beta_release_truth.v1"
+  || programDeReleaseBoard.decision !== "hold_paid_release"
+  || programDeReleaseBoard.privatePaidBetaAllowedNow !== false
+  || programDeReleaseBoard.publicPaidTrafficAllowedNow !== false
+  || programDeReleaseBoard.localProgressIsNotHostedRevenue !== true
+  || !programDePrivateGate
+  || programDePrivateGate.state !== "hold"
+  || !Array.isArray(programDePrivateGate.blockers)
+  || !programDePrivateGate.blockers.includes("current750_sellable_rows")
+  || !programDePrivateGate.blockers.includes("hosted100_observed_proof")
+  || !programDePublicGate
+  || programDePublicGate.state !== "hold"
+  || !Array.isArray(programDeActions)
+  || programDeActions.length !== 5
+  || programDeActions[0]?.owner !== "agent_09"
+  || programDeActions[2]?.action !== "observe_current1000_useful_density_and_cost"
+  || !programDeAntiBloatGuard
+  || programDeAntiBloatGuard.dtoOnlyCountsTowardRelease !== false
+  || programDeAntiBloatGuard.requiresBuyerVisibleRowsOrObservedHostedRevenueProof !== true
+) {
+  throw new Error("Program DE release board must expose private beta/public paid traffic thresholds, ranked revenue actions, and anti-bloat guards");
+}
 if (!paidReleaseBuckets.every((bucket) =>
   typeof bucket.owner === "string"
   && typeof bucket.rowDeltaTo100 === "number"

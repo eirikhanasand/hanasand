@@ -10896,6 +10896,77 @@ function buildApifyStoreReadinessContract(input: {
         nextOwnerAction: "Agent 09: import observed Store analytics, pricing, payout, listing, refunds, and hosted proof before marketplace promotion or paid traffic."
       }
     },
+    programDeReleaseBoard: {
+      schemaVersion: "ti.program_de_paid_beta_release_truth.v1",
+      routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"],
+      decision: "hold_paid_release",
+      privatePaidBetaAllowedNow: false,
+      publicPaidTrafficAllowedNow: false,
+      localProgressIsNotHostedRevenue: true,
+      thresholds: {
+        privatePaidBeta: {
+          current750Gate: "pass",
+          current1000UsefulRows: 1000,
+          hosted100ObservedProof: "pass",
+          pricingState: "observed",
+          payoutState: "observed",
+          analyticsVisibility: "observed",
+          noLeakProof: "pass",
+          costPerUsefulRowUsdAtMost: 0.05
+        },
+        publicPaidTraffic: {
+          current1000LocalSellableRows: 1000,
+          hosted300ObservedProof: "pass",
+          marketplacePaidTrafficGate: "pass",
+          conversionEvidence: "observed_paid_runs_and_refunds",
+          refunds: 0
+        }
+      },
+      privatePaidBetaGate: {
+        state: "hold",
+        blockers: ["current750_sellable_rows", "current1000_useful_rows", "hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved"],
+        observed: {
+          current750State: "hold",
+          current750Gap: 250,
+          current1000UsefulState: "hold",
+          current1000UsefulGap: 393,
+          hosted100State: "hold",
+          pricingState: "external_unknown",
+          payoutState: "external_unknown",
+          analyticsObserved: false,
+          noLeakObserved: true,
+          costPerUsefulRowUsd: null
+        }
+      },
+      publicPaidTrafficGate: {
+        state: "hold",
+        blockers: ["private_paid_beta_not_ready", "current1000_local_sellable_rows", "hosted300_observed_proof", "marketplace_paid_traffic_gate", "paid_runs_unobserved", "refunds_unobserved"],
+        observed: {
+          current1000LocalSellableState: "hold",
+          current1000SellableGap: 500,
+          hosted300State: "hold",
+          marketplacePaidTrafficState: "hold",
+          storeViews: null,
+          actorRuns: null,
+          paidRuns: null,
+          refunds: null
+        }
+      },
+      topRevenueActions: [
+        { rank: 1, owner: "agent_09", action: "import_hosted_100_and_300_observed_proof", expectedRowLift: 0, expectedConversionLift: "unblocks_private_beta_and_public_traffic_proof", proofCommand: "bun run check:hosted-apify-paid-readiness", state: "hold" },
+        { rank: 2, owner: "agent_03", action: "close_current750_sellable_row_gap", expectedRowLift: 250, expectedConversionLift: "unblocks_private_beta_local_gate", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: "hold" },
+        { rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost", expectedRowLift: 393, expectedConversionLift: "prevents_low_value_private_beta", proofCommand: "bun run check:paid-actor-release-audit", state: "hold" },
+        { rank: 4, owner: "agent_09", action: "import_pricing_payout_and_analytics", expectedRowLift: 0, expectedConversionLift: "unblocks_marketplace_revenue_truth", proofCommand: "manual_external_apify_console_or_api_verification_required", state: "hold" },
+        { rank: 5, owner: "agent_08", action: "increase_public_corroboration_for_1000_row_path", expectedRowLift: 500, expectedConversionLift: "improves_source_diversity_and_sellable_density", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: "hold" }
+      ],
+      antiBloatGuard: {
+        coordinationOnlyCountsTowardRelease: false,
+        dtoOnlyCountsTowardRelease: false,
+        stixTaxiiOnlyCountsTowardRelease: false,
+        syntheticIndexRowsCountTowardRelease: false,
+        requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
+      }
+    },
     blockerBuckets: [
       { blocker: "already_chargeable", owner: "agent_10", rowDeltaTo100: 0, expectedRowGain: 3, confidence: "observed", risk: "current smoke rows prove safe output shape only", fastestNextTask: "keep chargeable rows visible while repair buckets create 97 more real rows", coordinationFile: "coordination_agent_10.md", countsTowardPaidFloorNow: true },
       { blocker: "missing_public_support", owner: "agent_04", rowDeltaTo100: 28, expectedRowGain: 28, confidence: "medium", risk: "single-source or unsupported rows stay caveated/held", fastestNextTask: "attach safe public corroboration to highest-value actor/ransomware rows", coordinationFile: "coordination_agent_04.md", countsTowardPaidFloorNow: false },

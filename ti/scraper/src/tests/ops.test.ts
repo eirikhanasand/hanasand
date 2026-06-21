@@ -774,6 +774,47 @@ describe("ops controls", () => {
       expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 250 }),
       expect.objectContaining({ blocker: "useful_row_density_gap", owner: "agent_10", observedGap: 393 })
     ]));
+    expect(dashboard.paidReleaseTruthBoard.programDeReleaseBoard).toMatchObject({
+      schemaVersion: "ti.program_de_paid_beta_release_truth.v1",
+      decision: "hold_paid_release",
+      privatePaidBetaAllowedNow: false,
+      publicPaidTrafficAllowedNow: false,
+      localProgressIsNotHostedRevenue: true,
+      privatePaidBetaGate: {
+        state: "hold",
+        observed: {
+          current750State: "hold",
+          current750Gap: 250,
+          current1000UsefulState: "hold",
+          current1000UsefulGap: 393,
+          pricingState: "external_unknown",
+          payoutState: "external_unknown",
+          analyticsObserved: false
+        }
+      },
+      publicPaidTrafficGate: {
+        state: "hold",
+        observed: {
+          current1000LocalSellableState: "hold",
+          current1000SellableGap: 500,
+          marketplacePaidTrafficState: "hold"
+        }
+      },
+      antiBloatGuard: {
+        coordinationOnlyCountsTowardRelease: false,
+        dtoOnlyCountsTowardRelease: false,
+        stixTaxiiOnlyCountsTowardRelease: false,
+        syntheticIndexRowsCountTowardRelease: false,
+        requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
+      }
+    });
+    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).privatePaidBetaGate.blockers).toEqual(expect.arrayContaining(["current750_sellable_rows", "current1000_useful_rows", "hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved"]));
+    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).publicPaidTrafficGate.blockers).toEqual(expect.arrayContaining(["private_paid_beta_not_ready", "current1000_local_sellable_rows", "hosted300_observed_proof", "marketplace_paid_traffic_gate", "paid_runs_unobserved", "refunds_unobserved"]));
+    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { topRevenueActions: Array<Record<string, unknown>> }).topRevenueActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rank: 1, owner: "agent_09", action: "import_hosted_100_and_300_observed_proof" }),
+      expect.objectContaining({ rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost", expectedRowLift: 393 }),
+      expect.objectContaining({ rank: 4, owner: "agent_09", action: "import_pricing_payout_and_analytics" })
+    ]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(dashboard.scaleStepGates).toMatchObject({
