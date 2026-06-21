@@ -23,7 +23,19 @@ export const REVENUE_CANARY_FEEDS = [
   src("src_canary_varonis", "Varonis Blog", "rss", "https://www.varonis.com/blog/rss.xml", ["breach", "ransomware", "data"], "vendor"),
   src("src_canary_hackread", "Hackread", "rss", "https://www.hackread.com/feed/", ["breach", "ransomware", "leak"], "journalism"),
   src("src_canary_securityaffairs", "Security Affairs", "rss", "https://securityaffairs.com/feed", ["breach", "ransomware", "APT"], "journalism"),
-  src("src_canary_heimdalsecurity", "Heimdal Security Blog", "rss", "https://heimdalsecurity.com/blog/feed/", ["ransomware", "malware", "breach"], "vendor")
+  src("src_canary_heimdalsecurity", "Heimdal Security Blog", "rss", "https://heimdalsecurity.com/blog/feed/", ["ransomware", "malware", "breach"], "vendor"),
+  src("src_canary_exploitdb", "Exploit-DB", "rss", "https://www.exploit-db.com/rss.xml", ["exploit", "CVE", "vulnerability"], "community"),
+  src("src_canary_seclists_fulldisclosure", "Full Disclosure", "rss", "https://seclists.org/rss/fulldisclosure.rss", ["vulnerability", "exploit", "CVE"], "community"),
+  src("src_canary_seclists_bugtraq", "Bugtraq", "rss", "https://seclists.org/rss/bugtraq.rss", ["vulnerability", "exploit", "CVE"], "community"),
+  src("src_canary_projectzero", "Google Project Zero", "rss", "https://googleprojectzero.blogspot.com/feeds/posts/default", ["zero-day", "exploit", "vulnerability"], "vendor"),
+  src("src_canary_redhat_security", "Red Hat Security Blog", "rss", "https://www.redhat.com/en/rss/blog/channel/security", ["CVE", "vulnerability", "exploit"], "vendor"),
+  src("src_canary_snyk", "Snyk Blog", "rss", "https://snyk.io/blog/feed.xml", ["CVE", "supply-chain", "vulnerability"], "vendor"),
+  src("src_canary_aikido", "Aikido Security Blog", "rss", "https://www.aikido.dev/blog/rss.xml", ["CVE", "supply-chain", "vulnerability"], "vendor"),
+  src("src_canary_jfrog", "JFrog Security Research", "rss", "https://jfrog.com/blog/category/security-research/feed/", ["CVE", "supply-chain", "malware"], "vendor"),
+  src("src_canary_checkmarx", "Checkmarx Blog", "rss", "https://checkmarx.com/blog/feed/", ["CVE", "supply-chain", "vulnerability"], "vendor"),
+  src("src_canary_netlab360", "Netlab 360", "rss", "https://blog.netlab.360.com/rss/", ["botnet", "malware", "C2"], "vendor"),
+  src("src_canary_cyble", "Cyble Blog", "rss", "https://cyble.com/blog/feed/", ["ransomware", "breach", "malware"], "vendor"),
+  src("src_canary_asec", "ASEC Blog", "rss", "https://asec.ahnlab.com/en/feed/", ["malware", "ransomware", "APT"], "vendor")
 ];
 
 function src(id: string, name: string, type: string, url: string, q: string[], family: string) {
