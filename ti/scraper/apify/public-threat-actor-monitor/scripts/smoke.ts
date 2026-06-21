@@ -857,6 +857,83 @@ if (
 ) {
   throw new Error("Program DA current sellable admission lift must not claim hosted proof or expose restricted payloads");
 }
+const currentSellable300Lift = findingAdmissionLedger.currentSellable300Lift as Record<string, unknown> | undefined;
+if (
+  !currentSellable300Lift
+  || currentSellable300Lift.schemaVersion !== "ti.program_db_current_sellable_300_lift.v1"
+  || currentSellable300Lift.owner !== "agent_03"
+  || Number(currentSellable300Lift.acceptedCurrentRowsCount) !== 50
+  || Number(currentSellable300Lift.sourceProvenanceRowsConvertedToFindings) !== 5
+  || Number(currentSellable300Lift.rejectedRowsCount) !== 187
+  || Number(currentSellable300Lift.currentSellableRowsAfterAdmission) !== 300
+  || Number(currentSellable300Lift.currentSellableFindingsAfterAdmission) !== 193
+  || Number(currentSellable300Lift.currentSellableSourceProvenanceRowsAfterAdmission) !== 107
+  || Number(currentSellable300Lift.sourceProvenanceShareAfterAdmission) !== 0.357
+  || currentSellable300Lift.countsTowardLocalCurrentPaidPreset !== true
+  || currentSellable300Lift.countsTowardHostedPaidProof !== false
+  || !Array.isArray(currentSellable300Lift.acceptedRows)
+  || !Array.isArray(currentSellable300Lift.convertedSourceProvenanceRows)
+  || !Array.isArray(currentSellable300Lift.rejectedRows)
+) {
+  throw new Error("Program DB current sellable 300 lift must expose 300-row local current proof");
+}
+const current300AcceptedRows = currentSellable300Lift.acceptedRows as Array<Record<string, unknown>>;
+if (
+  current300AcceptedRows.length !== 50
+  || current300AcceptedRows.filter((row) => row.sourcePacket === "agent05_current_chargeable150").length !== 30
+  || current300AcceptedRows.filter((row) => row.sourcePacket === "agent08_parser_ready_public_proof").length !== 15
+  || current300AcceptedRows.filter((row) => row.sourcePacket === "existing_public_source_row").length !== 5
+) {
+  throw new Error("Program DB current sellable 300 lift must draw from Agent 05 current 150, Agent 08 public proof, and existing public source rows");
+}
+for (const row of current300AcceptedRows) {
+  if (
+    typeof row.actor !== "string"
+    || typeof row.victimOrTarget !== "string"
+    || typeof row.sector !== "string"
+    || typeof row.country !== "string"
+    || typeof row.ttpOrTool !== "string"
+    || typeof row.firstSeen !== "string"
+    || typeof row.lastSeen !== "string"
+    || Number(row.confidence) < 0.84
+    || typeof row.provenanceHash !== "string"
+    || typeof row.buyerReason !== "string"
+    || row.countsTowardCurrentSellableRows !== true
+    || row.countsTowardHostedPaidProof !== false
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program DB accepted rows must be current, specific, public-supported, provenance-backed, and local-only");
+  }
+}
+for (const row of currentSellable300Lift.convertedSourceProvenanceRows as Array<Record<string, unknown>>) {
+  if (row.countsTowardSellableFindingFloor !== true || row.noLeak !== true) {
+    throw new Error("Program DB converted source-provenance rows must become true findings without leaks");
+  }
+}
+for (const reason of ["projection_only", "graph_only", "restricted_only", "generic_actor_or_source_page", "stale_latest_error", "duplicate_claim", "contradicted_public_proof", "missing_required_fields"]) {
+  if (!(currentSellable300Lift.rejectedRows as Array<Record<string, unknown>>).some((row) => row.reason === reason && row.countsTowardCurrentSellableRows === false)) {
+    throw new Error(`Program DB current sellable 300 lift must reject ${reason}`);
+  }
+}
+const current300LiftProgress = currentSellable300Lift.targetProgress as Record<string, unknown> | undefined;
+if (
+  !current300LiftProgress
+  || Number(current300LiftProgress.targetCurrentSellableRows) !== 300
+  || Number(current300LiftProgress.remainingGapTo300) !== 0
+  || Number(current300LiftProgress.targetCurrentSellableFindings) !== 150
+  || Number(current300LiftProgress.remainingFindingGapTo150) !== 0
+  || Number(current300LiftProgress.maximumSourceProvenanceShare) !== 0.45
+  || Number(current300LiftProgress.nextTargetCurrentSellableRows) !== 1000
+  || Number(current300LiftProgress.remainingGapTo1000) !== 700
+) {
+  throw new Error("Program DB current sellable 300 lift must show the 300-row gate pass and 1,000-row gap");
+}
+if (
+  (currentSellable300Lift.noLeakBoundary as Record<string, unknown> | undefined)?.hostedPaidProofClaimed !== false
+  || (currentSellable300Lift.noLeakBoundary as Record<string, unknown>).restrictedPayloadsExposed !== false
+) {
+  throw new Error("Program DB current sellable 300 lift must not claim hosted proof or expose restricted payloads");
+}
 for (const row of findingAdmissionLedger.remainingBlockers as Array<Record<string, unknown>>) {
   if (row.countsTowardCurrentSellableRows !== false) throw new Error("Program CX remaining blockers must not count toward sellable rows");
 }
