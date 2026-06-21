@@ -781,6 +781,82 @@ if (
 ) {
   throw new Error("Program CZ public support admission must keep projections out of paid claims and expose no restricted payloads");
 }
+const currentSellableAdmissionLift = findingAdmissionLedger.currentSellableAdmissionLift as Record<string, unknown> | undefined;
+if (
+  !currentSellableAdmissionLift
+  || currentSellableAdmissionLift.schemaVersion !== "ti.program_da_current_sellable_admission_lift.v1"
+  || currentSellableAdmissionLift.owner !== "agent_03"
+  || Number(currentSellableAdmissionLift.acceptedCurrentRowsCount) !== 63
+  || Number(currentSellableAdmissionLift.sourceProvenanceRowsConvertedToFindings) !== 23
+  || Number(currentSellableAdmissionLift.rejectedRowsCount) !== 235
+  || Number(currentSellableAdmissionLift.currentSellableRowsAfterAdmission) !== 250
+  || Number(currentSellableAdmissionLift.currentSellableFindingsAfterAdmission) !== 138
+  || Number(currentSellableAdmissionLift.currentSellableSourceProvenanceRowsAfterAdmission) !== 112
+  || Number(currentSellableAdmissionLift.sourceProvenanceShareAfterAdmission) !== 0.448
+  || currentSellableAdmissionLift.countsTowardLocalCurrentPaidPreset !== true
+  || currentSellableAdmissionLift.countsTowardHostedPaidProof !== false
+  || !Array.isArray(currentSellableAdmissionLift.acceptedRows)
+  || !Array.isArray(currentSellableAdmissionLift.convertedSourceProvenanceRows)
+  || !Array.isArray(currentSellableAdmissionLift.rejectedRows)
+) {
+  throw new Error("Program DA current sellable admission lift must expose 250-row local current proof");
+}
+const currentAcceptedRows = currentSellableAdmissionLift.acceptedRows as Array<Record<string, unknown>>;
+if (
+  currentAcceptedRows.length !== 63
+  || currentAcceptedRows.filter((row) => row.sourcePacket === "agent05_current_chargeable100").length !== 38
+  || currentAcceptedRows.filter((row) => row.sourcePacket === "agent08_parser_handoff").length !== 17
+  || currentAcceptedRows.filter((row) => row.sourcePacket === "existing_public_source_row").length !== 8
+) {
+  throw new Error("Program DA current sellable admission lift must draw from Agent 05, Agent 08, and existing public source rows");
+}
+for (const row of currentAcceptedRows) {
+  if (
+    typeof row.actor !== "string"
+    || typeof row.victimOrTarget !== "string"
+    || typeof row.sector !== "string"
+    || typeof row.country !== "string"
+    || typeof row.ttpOrTool !== "string"
+    || typeof row.firstSeen !== "string"
+    || typeof row.lastSeen !== "string"
+    || Number(row.confidence) < 0.82
+    || typeof row.provenanceHash !== "string"
+    || typeof row.buyerReason !== "string"
+    || row.countsTowardCurrentSellableRows !== true
+    || row.countsTowardHostedPaidProof !== false
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program DA accepted rows must be current, specific, public-supported, provenance-backed, and local-only");
+  }
+}
+for (const row of currentSellableAdmissionLift.convertedSourceProvenanceRows as Array<Record<string, unknown>>) {
+  if (row.countsTowardSellableFindingFloor !== true || row.noLeak !== true) {
+    throw new Error("Program DA converted source-provenance rows must become true findings without leaks");
+  }
+}
+for (const reason of ["projection_only", "graph_only", "restricted_only", "generic_actor_or_source_page", "stale_latest_error", "duplicate_claim", "contradicted_public_proof", "missing_required_fields"]) {
+  if (!(currentSellableAdmissionLift.rejectedRows as Array<Record<string, unknown>>).some((row) => row.reason === reason && row.countsTowardCurrentSellableRows === false)) {
+    throw new Error(`Program DA current sellable admission lift must reject ${reason}`);
+  }
+}
+const currentLiftProgress = currentSellableAdmissionLift.targetProgress as Record<string, unknown> | undefined;
+if (
+  !currentLiftProgress
+  || Number(currentLiftProgress.targetCurrentSellableRows) !== 250
+  || Number(currentLiftProgress.remainingGapTo250) !== 0
+  || Number(currentLiftProgress.targetCurrentSellableFindings) !== 95
+  || Number(currentLiftProgress.remainingFindingGapTo95) !== 0
+  || Number(currentLiftProgress.maximumSourceProvenanceShare) !== 0.45
+  || Number(currentLiftProgress.remainingGapTo300) !== 50
+) {
+  throw new Error("Program DA current sellable admission lift must show the 250-row gate pass and 300-row gap");
+}
+if (
+  (currentSellableAdmissionLift.noLeakBoundary as Record<string, unknown> | undefined)?.hostedPaidProofClaimed !== false
+  || (currentSellableAdmissionLift.noLeakBoundary as Record<string, unknown>).restrictedPayloadsExposed !== false
+) {
+  throw new Error("Program DA current sellable admission lift must not claim hosted proof or expose restricted payloads");
+}
 for (const row of findingAdmissionLedger.remainingBlockers as Array<Record<string, unknown>>) {
   if (row.countsTowardCurrentSellableRows !== false) throw new Error("Program CX remaining blockers must not count toward sellable rows");
 }

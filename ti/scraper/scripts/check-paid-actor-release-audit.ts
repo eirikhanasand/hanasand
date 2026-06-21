@@ -33,6 +33,7 @@ checks.push(checkLocalActorProof(apifyStoreReadiness));
 checks.push(checkHostedActorProof(apifyStoreReadiness));
 checks.push(checkHostedPaidReadinessProof(apifyStoreReadiness, paidReleaseTruthBoard, sloPaidReleaseTruthBoard));
 checks.push(checkReleaseLadder(releaseLadder));
+checks.push(checkObservedHostedProofImport(releaseLadder));
 checks.push(checkPaidCountIntegrity(productSlo, paidReleaseTruthBoard, releaseLadder));
 checks.push(checkPaidFloorGate(apifyStoreReadiness, productSlo));
 checks.push(checkPayoutPricingListing(apifyStoreReadiness, paidReleaseTruthBoard));
@@ -267,11 +268,17 @@ function buildReleaseLadder(
   const localProof = record(storeReadiness.localPaidPresetProof);
   const latestProofRun = record(storeReadiness.latestProofRun);
   const hostedProof = record(record(paidReleaseTruthBoard.hostedPaidReadinessProof));
+  const hostedImportPath = record(hostedProof.hostedProofImportPath);
+  const hostedObservedFields = record(hostedImportPath.observedFields);
+  const hostedAcceptance = record(hostedProof.paidProofAcceptance);
   const marketplace = record(hostedProof.marketplaceConversionInputs);
   const telemetry = record(record(paidReleaseTruthBoard.observedMarketplaceTelemetry).currentValues);
   const parserLedger = record(record(productSlo.parserRealSellableLift).findingAdmissionLedger);
   const deterministicProof = record(parserLedger.deterministic100NameProof);
   const tier1000Gate = record(parserLedger.tier1000Gate);
+  const publicSupportAdmission = record(parserLedger.publicSupportCandidateAdmission);
+  const projected300Effect = record(publicSupportAdmission.projected300RowTierEffect);
+  const currentSellableAdmissionLift = record(parserLedger.currentSellableAdmissionLift);
   const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
   const darkSellable250 = record(darkSupportLift.publicSupportSellable250);
   const darkSellable500 = record(darkSupportLift.publicSupportSellable500);
@@ -279,11 +286,13 @@ function buildReleaseLadder(
   const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
   const graphCounts = record(graphQueue.counts);
 
-  const currentSellableRows = firstFiniteNumber(localProof.sellableRows, deterministicProof.sellableRowsPreserved, parserLedger.baselineSellableRows);
-  const trueFindingCount = firstFiniteNumber(localProof.sellableFindings, deterministicProof.sellableFindingsBaseline, parserLedger.baselineSellableFindingRows);
-  const sellableSourceProvenanceRows = firstFiniteNumber(localProof.sellableSourceProvenanceRows, deterministicProof.sellableSourceProvenanceRows, parserLedger.baselineSellableSourceProvenanceRows);
-  const sourceProvenanceShare = Number.isFinite(numberValue(parserLedger.sourceProvenanceShareOfSellable))
-    ? numberValue(parserLedger.sourceProvenanceShareOfSellable)
+  const currentSellableRows = firstFiniteNumber(currentSellableAdmissionLift.currentSellableRowsAfterAdmission, localProof.sellableRows, deterministicProof.sellableRowsPreserved, parserLedger.baselineSellableRows);
+  const trueFindingCount = firstFiniteNumber(currentSellableAdmissionLift.currentSellableFindingsAfterAdmission, localProof.sellableFindings, deterministicProof.sellableFindingsBaseline, parserLedger.baselineSellableFindingRows);
+  const sellableSourceProvenanceRows = firstFiniteNumber(currentSellableAdmissionLift.currentSellableSourceProvenanceRowsAfterAdmission, localProof.sellableSourceProvenanceRows, deterministicProof.sellableSourceProvenanceRows, parserLedger.baselineSellableSourceProvenanceRows);
+  const sourceProvenanceShare = Number.isFinite(numberValue(currentSellableAdmissionLift.sourceProvenanceShareAfterAdmission))
+    ? numberValue(currentSellableAdmissionLift.sourceProvenanceShareAfterAdmission)
+    : Number.isFinite(numberValue(parserLedger.sourceProvenanceShareOfSellable))
+      ? numberValue(parserLedger.sourceProvenanceShareOfSellable)
     : roundRatio(sellableSourceProvenanceRows, currentSellableRows);
   const darkCurrentChargeableRows = firstFiniteNumber(darkChargeable100.currentChargeableCount, darkSellable500.currentChargeableRows, darkSellable250.currentChargeableRows);
   const darkProjectedRows = firstFiniteNumber(darkChargeable100.projectedAfterPublicSupportCount, darkSellable500.projectedAfterPublicSupportRows, darkSellable250.projectedAfterPublicSupportRows);
@@ -292,12 +301,55 @@ function buildReleaseLadder(
   const hostedStatus = String(hostedProof.status ?? latestProofRun.proofDecision ?? "unknown");
   const hostedSellableRows = firstFiniteNumber(record(hostedProof.latestHostedProof).sellableRows, latestProofRun.sellableRows);
   const hostedQuerySetCount = firstFiniteNumber(record(hostedProof.latestHostedProof).querySetCount, Array.isArray(latestProofRun.querySet) ? latestProofRun.querySet.length : Number.NaN);
+  const hostedObservedSellableRows = numberValue(hostedObservedFields.sellableRows);
+  const hostedObservedFindingRows = numberValue(hostedObservedFields.sellableFindingCount);
+  const hostedObservedDatasetRows = numberValue(hostedObservedFields.datasetItemCount);
+  const hostedObservedNoLeakFailures = numberValue(hostedObservedFields.noLeakFailures);
+  const hostedObservedFalsePositiveFailures = numberValue(hostedObservedFields.falsePositiveInflationFailures);
+  const hostedObservedProofPresent = Boolean(hostedObservedFields.runId && hostedObservedFields.datasetId);
+  const hostedObservedImportSafe = hostedImportPath.schemaVersion === "ti.hosted_apify_proof_import_path.v1"
+    && hostedImportPath.observedOnly === true
+    && hostedImportPath.noSyntheticFallback === true
+    && hostedImportPath.oldProofTreatment === "historical_shape_safety_only";
+  const hostedObservedIntegrityFailed = hostedObservedProofPresent
+    && (
+      !hostedObservedImportSafe
+      || hostedObservedNoLeakFailures !== 0
+      || hostedObservedFields.secondBatchAuditObserved !== true
+      || hostedObservedFalsePositiveFailures !== 0
+    );
+  const requiredHostedQueryCount = firstFiniteNumber(record(hostedProof.requiredHostedPreset).defaultQueryCount, hostedAcceptance.minimumDefaultQueryCount, 100);
+  const requiredHosted100Rows = firstFiniteNumber(hostedAcceptance.minimumSellableRows, 100);
+  const requiredHosted100Findings = firstFiniteNumber(hostedAcceptance.minimumSellableFindingRows, 52);
   const pricingState = String(marketplace.pricingModel ?? telemetry.pricingState ?? "external_unknown");
   const payoutState = String(marketplace.payoutEnabled ?? telemetry.payoutState ?? "external_unknown");
   const analyticsObserved = ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds"].every((field) => marketplace[field] !== null && marketplace[field] !== undefined);
+  const marketplaceObservedOnly = ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds"].every((field) => marketplace[field] === null)
+    && marketplace.unknownMeansNoClaim === true;
 
   const tier1000MinimumSellableRows = firstFiniteNumber(tier1000Gate.minimumSellableRows, 300);
   const tier1000MinimumRows = firstFiniteNumber(tier1000Gate.minimumRows, 1000);
+  const hosted100State = hostedObservedIntegrityFailed
+    ? "fail"
+    : hostedObservedProofPresent
+      && hostedObservedSellableRows >= requiredHosted100Rows
+      && hostedObservedFindingRows >= requiredHosted100Findings
+      && hostedObservedDatasetRows >= requiredHosted100Rows
+        ? "pass"
+        : "hold";
+  const hosted300State = hostedObservedIntegrityFailed
+    ? "fail"
+    : hostedObservedProofPresent
+      && hostedObservedSellableRows >= 300
+      && hostedObservedFindingRows >= 120
+      && hostedObservedDatasetRows >= 300
+        ? "pass"
+        : "hold";
+  const marketplacePromotionState = !marketplaceObservedOnly
+    ? "fail"
+    : hosted100State === "pass" && hosted300State === "pass" && pricingState !== "external_unknown" && payoutState !== "external_unknown" && analyticsObserved
+      ? "pass"
+      : "hold";
   return {
     schemaVersion: "ti.paid_actor_release_ladder_audit.v1",
     status: "hold_paid_release",
@@ -307,8 +359,48 @@ function buildReleaseLadder(
       trueFindingCount,
       sellableSourceProvenanceRows,
       sourceProvenanceShare,
+      currentSellableAdmissionLift: {
+        schemaVersion: currentSellableAdmissionLift.schemaVersion,
+        acceptedCurrentRowsCount: numberValue(currentSellableAdmissionLift.acceptedCurrentRowsCount),
+        sourceProvenanceRowsConvertedToFindings: numberValue(currentSellableAdmissionLift.sourceProvenanceRowsConvertedToFindings),
+        countsTowardLocalCurrentPaidPreset: currentSellableAdmissionLift.countsTowardLocalCurrentPaidPreset,
+        countsTowardHostedPaidProof: currentSellableAdmissionLift.countsTowardHostedPaidProof
+      },
       sourceProvenanceRowsCountTowardFindingFloor: deterministicProof.sourceProvenanceRowsCountTowardFindingFloor === false ? false : parserLedger.sourceProvenanceRowsCountTowardFindingFloor,
       proofDecision: localProof.proofDecision
+    },
+    current250Gate: {
+      state: currentSellableRows >= 250 ? "pass" : "hold",
+      requiredSellableRows: 250,
+      currentSellableRows,
+      gap: Math.max(0, 250 - currentSellableRows),
+      trueFindingCount,
+      sellableSourceProvenanceRows,
+      sourceProvenanceShare,
+      maximumSourceProvenanceShare: 0.45,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      projectedRowsCountTowardCurrent: false,
+      parserAdmissionProjection: {
+        acceptedCount: publicSupportAdmission.acceptedCount,
+        projectedSellableRowsAfterAdmission: projected300Effect.projectedSellableRowsAfterAdmission,
+        projectedSellableFindingsAfterAdmission: projected300Effect.projectedSellableFindingsAfterAdmission,
+        sourceProvenanceShareAfterAdmission: projected300Effect.sourceProvenanceShareAfterAdmission,
+        countsProjectedRowsAsPaid: projected300Effect.countsProjectedRowsAsPaid
+      }
+    },
+    current300Gate: {
+      state: currentSellableRows >= 300 ? "pass" : "hold",
+      requiredSellableRows: 300,
+      currentSellableRows,
+      gap: Math.max(0, 300 - currentSellableRows),
+      trueFindingCount,
+      requiredTrueFindings: 120,
+      trueFindingGap: Math.max(0, 120 - trueFindingCount),
+      sellableSourceProvenanceRows,
+      sourceProvenanceShare,
+      maximumSourceProvenanceShare: 0.45,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      projectedRowsCountTowardCurrent: false
     },
     hosted100Proof: {
       state: hostedStatus === "paid_floor_hosted_proof" && hostedSellableRows >= 100 && hostedQuerySetCount >= 100 ? "pass" : "hold",
@@ -317,6 +409,36 @@ function buildReleaseLadder(
       hostedQuerySetCount,
       countsTowardPaidPromotion: hostedProof.countsTowardPaidPromotion,
       latestHostedProofDecision: record(hostedProof.latestHostedProof).proofDecision ?? latestProofRun.proofDecision
+    },
+    hosted100Gate: {
+      state: hosted100State,
+      source: "hostedProofImportPath.observedFields",
+      observedProofPresent: hostedObservedProofPresent,
+      requiredDefaultQueryCount: requiredHostedQueryCount,
+      requiredSellableRows: requiredHosted100Rows,
+      requiredSellableFindingRows: requiredHosted100Findings,
+      observedDatasetRows: hostedObservedDatasetRows,
+      observedSellableRows: hostedObservedSellableRows,
+      observedSellableFindingRows: hostedObservedFindingRows,
+      noLeakFailures: hostedObservedFields.noLeakFailures,
+      secondBatchAuditObserved: hostedObservedFields.secondBatchAuditObserved,
+      falsePositiveInflationFailures: hostedObservedFields.falsePositiveInflationFailures,
+      externalBlocker: hostedImportPath.externalBlocker,
+      countsTowardPaidPromotion: hostedProof.countsTowardPaidPromotion
+    },
+    hosted300Gate: {
+      state: hosted300State,
+      source: "hostedProofImportPath.observedFields",
+      observedProofPresent: hostedObservedProofPresent,
+      requiredSellableRows: 300,
+      requiredSellableFindingRows: 120,
+      observedDatasetRows: hostedObservedDatasetRows,
+      observedSellableRows: hostedObservedSellableRows,
+      observedSellableFindingRows: hostedObservedFindingRows,
+      noLeakFailures: hostedObservedFields.noLeakFailures,
+      secondBatchAuditObserved: hostedObservedFields.secondBatchAuditObserved,
+      falsePositiveInflationFailures: hostedObservedFields.falsePositiveInflationFailures,
+      countsTowardPaidPromotion: hostedProof.countsTowardPaidPromotion
     },
     next300SellableTarget: {
       state: currentSellableRows >= 300 ? "pass" : "hold",
@@ -352,6 +474,33 @@ function buildReleaseLadder(
       rowsCountTowardFloorNow: graphRowsCountTowardFloorNow,
       graphOnlyCountsTowardPaidFloorNow: graphQueue.graphOnlyCountsTowardPaidFloorNow
     },
+    observedHostedProofImport: {
+      state: hostedObservedIntegrityFailed ? "fail" : hostedObservedProofPresent ? hosted100State : "hold",
+      importPathSafe: hostedObservedImportSafe,
+      observedProofPresent: hostedObservedProofPresent,
+      observedSellableRows: hostedObservedSellableRows,
+      observedFindingRows: hostedObservedFindingRows,
+      observedDatasetRows: hostedObservedDatasetRows,
+      observedNoLeakFailures: hostedObservedNoLeakFailures,
+      observedFalsePositiveFailures: hostedObservedFalsePositiveFailures,
+      secondBatchAuditObserved: hostedObservedFields.secondBatchAuditObserved === true,
+      oldProofTreatment: hostedImportPath.oldProofTreatment,
+      observedOnly: hostedImportPath.observedOnly,
+      noSyntheticFallback: hostedImportPath.noSyntheticFallback
+    },
+    publicProofParserReadyRows: {
+      state: graphRowsCountTowardFloorNow === 0 && publicSupportAdmission.acceptedCount !== undefined ? "hold" : "fail",
+      parserReadyRows: graphCounts.ready_for_parser,
+      publicSupportAdmissionAcceptedRows: publicSupportAdmission.acceptedCount,
+      countsTowardCurrentSellableRowsNow: false,
+      countsAfterParserAdmission: true,
+      projected300RowTierEffect: {
+        projectedSellableRowsAfterAdmission: projected300Effect.projectedSellableRowsAfterAdmission,
+        projectedSellableFindingsAfterAdmission: projected300Effect.projectedSellableFindingsAfterAdmission,
+        sourceProvenanceShareAfterAdmission: projected300Effect.sourceProvenanceShareAfterAdmission,
+        countsProjectedRowsAsPaid: projected300Effect.countsProjectedRowsAsPaid
+      }
+    },
     observedMarketplaceState: {
       state: pricingState !== "external_unknown" && payoutState !== "external_unknown" && analyticsObserved ? "pass" : "hold",
       pricingState,
@@ -363,37 +512,96 @@ function buildReleaseLadder(
       paidUsers: marketplace.paidUsers ?? telemetry.paidRuns,
       refunds: marketplace.refunds ?? telemetry.refunds
     },
+    marketplacePromotionGate: {
+      state: marketplacePromotionState,
+      pricingState,
+      payoutState,
+      analyticsObserved,
+      observedOnly: marketplaceObservedOnly,
+      hosted100GateRequired: true,
+      hosted300GateRequired: true,
+      publicListingStatus: marketplace.publicListingStatus,
+      storeViews: marketplace.storeViews,
+      runs: marketplace.runs,
+      uniqueUsers: marketplace.uniqueUsers,
+      paidUsers: marketplace.paidUsers,
+      refunds: marketplace.refunds
+    },
     nextBuyerVisibleBlockers: [
-      "Agent 03: admit public-supported parser handoff rows as activity, target, TTP, victim, or dataset findings until current sellable rows reach 300 without source-provenance padding.",
-      "Agent 05: continue public-supported dark metadata current chargeable rows from 100 toward 250; projected rows and restricted-only rows stay out of paid counts.",
-      "Agent 08: keep graph rows at zero current paid-floor credit until parser admission converts them into non-graph public findings.",
-      "Agent 09: run/record hosted 100-name Apify proof plus observed Store analytics, payout, pricing, refunds, and listing state before promotion."
+      `Agent 03: current local sellable rows are ${currentSellableRows}; close ${Math.max(0, 250 - currentSellableRows)} rows to the 250 gate and ${Math.max(0, 300 - currentSellableRows)} rows to the 300 gate while keeping source-provenance-only rows out of the finding floor.`,
+      `Agent 05: dark metadata has ${darkCurrentChargeableRows} current chargeable rows, ${Math.max(0, 250 - darkCurrentChargeableRows)} rows still needed for a 250-current dark lane, and ${darkProjectedRows} projected rows that must remain excluded until public support is current.`,
+      `Agent 08: public/graph proof has ${graphCounts.ready_for_parser} parser-ready rows and ${graphRowsCountTowardFloorNow} current paid-floor credit; grow parser-ready proof toward 100 but keep graph-only rows out until parser admission.`,
+      `Agent 09: imported hosted Apify proof is ${hostedObservedProofPresent ? "present" : "missing"}; run or verify the hosted 100-name proof, then import observed Store analytics, payout, pricing, refunds, and listing state before paid promotion.`
     ]
+  };
+}
+
+function checkObservedHostedProofImport(releaseLadder: Record<string, unknown>): AuditCheck {
+  const observed = record(releaseLadder.observedHostedProofImport);
+  const safeImport = observed.importPathSafe === true
+    && observed.observedOnly === true
+    && observed.noSyntheticFallback === true
+    && observed.oldProofTreatment === "historical_shape_safety_only";
+  const proofPresent = observed.observedProofPresent === true;
+  const cleanObservedProof = proofPresent
+    && numberValue(observed.observedSellableRows) >= 100
+    && numberValue(observed.observedFindingRows) >= 52
+    && numberValue(observed.observedDatasetRows) >= 100
+    && numberValue(observed.observedNoLeakFailures) === 0
+    && numberValue(observed.observedFalsePositiveFailures) === 0
+    && observed.secondBatchAuditObserved === true;
+  return {
+    name: "observed_hosted_proof_import",
+    status: !safeImport ? "fail" : cleanObservedProof ? "pass" : "hold",
+    message: !safeImport
+      ? "hosted proof import path is not observed-only or still treats old shape proof as promotion evidence"
+      : cleanObservedProof
+        ? "observed hosted proof import passes the 100-name floor and integrity checks"
+        : "hosted proof import path is safe but no clean observed hosted 100-name proof has been imported yet",
+    remediation: !safeImport ? [
+      "Keep hostedProofImportPath observedOnly=true, noSyntheticFallback=true, and oldProofTreatment=historical_shape_safety_only.",
+      "Do not infer hosted proof from local or historical shape-safety runs."
+    ] : cleanObservedProof ? [] : [
+      "Run the hosted 100-name Actor proof with Apify credentials and import run id, dataset id, row counts, no-leak failures, false-positive audit state, and usage cost.",
+      "Keep paid traffic held until that observed hosted proof and marketplace telemetry pass."
+    ],
+    details: observed
   };
 }
 
 function checkReleaseLadder(releaseLadder: Record<string, unknown>): AuditCheck {
   const local = record(releaseLadder.current100LocalFloor);
-  const hosted = record(releaseLadder.hosted100Proof);
-  const next300 = record(releaseLadder.next300SellableTarget);
+  const current250 = record(releaseLadder.current250Gate);
+  const current300 = record(releaseLadder.current300Gate);
+  const hosted100 = record(releaseLadder.hosted100Gate);
+  const hosted300 = record(releaseLadder.hosted300Gate);
   const tier1000 = record(releaseLadder.tier1000Gate);
-  const observed = record(releaseLadder.observedMarketplaceState);
+  const marketplacePromotion = record(releaseLadder.marketplacePromotionGate);
   const localPassed = local.state === "pass";
-  const hostedPassed = hosted.state === "pass";
-  const next300Passed = next300.state === "pass";
+  const current250Passed = current250.state === "pass";
+  const current300Passed = current300.state === "pass";
+  const hosted100Passed = hosted100.state === "pass";
+  const hosted300Passed = hosted300.state === "pass";
   const tier1000Passed = tier1000.state === "pass";
-  const observedPassed = observed.state === "pass";
+  const marketplacePromotionPassed = marketplacePromotion.state === "pass";
+  const failedGates = [
+    local,
+    current250,
+    current300,
+    hosted100,
+    hosted300,
+    tier1000,
+    marketplacePromotion
+  ].filter((gate) => gate.state === "fail");
   return {
     name: "monetization_release_ladder",
-    status: localPassed && hostedPassed && next300Passed && tier1000Passed && observedPassed ? "pass" : localPassed ? "hold" : "fail",
-    message: localPassed
-      ? "local 100-row floor is passed; hosted 100-name proof, 300-sellable next tier, 1,000-row gate, and observed marketplace state remain explicit ladder steps"
+    status: failedGates.length > 0 ? "fail" : localPassed && current250Passed && current300Passed && hosted100Passed && hosted300Passed && tier1000Passed && marketplacePromotionPassed ? "pass" : localPassed ? "hold" : "fail",
+    message: localPassed && failedGates.length === 0
+      ? "local 100-row floor is passed; current 250/300 local gates, hosted 100/300 proof, 1,000-row gate, and marketplace promotion remain explicit ladder steps"
       : "local 100-row paid floor is not passed, so higher release gates cannot be evaluated",
     remediation: localPassed ? [
-      "Agent 03: convert public-supported parser handoffs into current sellable findings until the 300-row tier is reached.",
-      "Agent 05: increase public-supported dark metadata current chargeable rows; do not count projected or restricted-only rows.",
-      "Agent 08: keep graph-only/public-pivot rows out of paid counts until parser admission.",
-      "Agent 09: run the hosted 100-name Actor proof and import observed Apify payout, pricing, analytics, and refund state."
+      ...((Array.isArray(releaseLadder.nextBuyerVisibleBlockers) ? releaseLadder.nextBuyerVisibleBlockers : []) as string[]),
+      "Keep paid traffic held until every explicit gate is pass; holds are acceptable for missing observed hosted proof, but fail any synthetic or inflated count."
     ] : [
       "Restore the local 100-name paid preset proof with at least 100 current sellable rows before evaluating hosted or 300-row gates."
     ],
@@ -409,6 +617,7 @@ function checkPaidCountIntegrity(
   const parserLedger = record(record(productSlo.parserRealSellableLift).findingAdmissionLedger);
   const deterministicProof = record(parserLedger.deterministic100NameProof);
   const tier1000Gate = record(parserLedger.tier1000Gate);
+  const currentSellableAdmissionLift = record(parserLedger.currentSellableAdmissionLift);
   const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
   const graphCounts = record(graphQueue.counts);
   const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
@@ -423,10 +632,43 @@ function checkPaidCountIntegrity(
   const requiredZeroCounts = record(paidRowIntegrityGate.requiredZeroCounts);
   const marketplace = record(hostedProof.marketplaceConversionInputs);
   const rejectionReasonCounts = Array.isArray(parserLedger.rejectionReasonCounts) ? parserLedger.rejectionReasonCounts.filter(isRecord) : [];
+  const publicSupportAdmission = record(parserLedger.publicSupportCandidateAdmission);
+  const publicSupportAcceptedRows = Array.isArray(publicSupportAdmission.acceptedRows) ? publicSupportAdmission.acceptedRows.filter(isRecord) : [];
+  const projected300Effect = record(publicSupportAdmission.projected300RowTierEffect);
+  const currentAcceptedRows = Array.isArray(currentSellableAdmissionLift.acceptedRows) ? currentSellableAdmissionLift.acceptedRows.filter(isRecord) : [];
+  const currentConvertedRows = Array.isArray(currentSellableAdmissionLift.convertedSourceProvenanceRows) ? currentSellableAdmissionLift.convertedSourceProvenanceRows.filter(isRecord) : [];
+  const currentRejectedRows = Array.isArray(currentSellableAdmissionLift.rejectedRows) ? currentSellableAdmissionLift.rejectedRows.filter(isRecord) : [];
+  const hasCurrentSellableAdmissionLift = currentSellableAdmissionLift.schemaVersion === "ti.program_da_current_sellable_admission_lift.v1";
 
   const failures: string[] = [];
   if (deterministicProof.sourceProvenanceRowsCountTowardFindingFloor !== false) failures.push("source_provenance_rows_count_toward_finding_floor");
   if (tier1000Gate.countsProjectedRowsAsPaid !== false) failures.push("tier1000_counts_projected_rows_as_paid");
+  if (hasCurrentSellableAdmissionLift) {
+    if (numberValue(currentSellableAdmissionLift.currentSellableRowsAfterAdmission) < 250) failures.push("current_sellable_lift_below_250");
+    if (numberValue(currentSellableAdmissionLift.currentSellableFindingsAfterAdmission) < 95) failures.push("current_sellable_findings_below_95");
+    if (numberValue(currentSellableAdmissionLift.sourceProvenanceShareAfterAdmission) > 0.45) failures.push("current_sellable_source_provenance_share_above_45");
+    if (currentSellableAdmissionLift.countsTowardLocalCurrentPaidPreset !== true) failures.push("current_sellable_lift_not_local_countable");
+    if (currentSellableAdmissionLift.countsTowardHostedPaidProof !== false) failures.push("current_sellable_lift_counts_as_hosted_proof");
+    if (currentAcceptedRows.length < 63) failures.push("current_sellable_lift_too_few_accepted_rows");
+    if (currentConvertedRows.length < 23) failures.push("current_sellable_lift_too_few_source_rows_converted");
+  }
+  if (projected300Effect.countsProjectedRowsAsPaid !== false) failures.push("public_support_admission_counts_projected_rows_as_paid");
+  for (const row of publicSupportAcceptedRows) {
+    if (row.countsTowardSellableRowsNow !== false) failures.push("public_support_admission_row_counts_now");
+    if (row.countsAfterParserAdmission !== true) failures.push("public_support_admission_row_not_parser_gated");
+  }
+  for (const row of currentAcceptedRows) {
+    if (row.countsTowardCurrentSellableRows !== true) failures.push("current_accepted_row_not_current_countable");
+    if (row.countsTowardHostedPaidProof !== false) failures.push("current_accepted_row_counts_as_hosted_proof");
+    if (row.noLeak !== true) failures.push("current_accepted_row_missing_no_leak");
+  }
+  for (const row of currentConvertedRows) {
+    if (row.countsTowardSellableFindingFloor !== true) failures.push("converted_source_row_not_finding_countable");
+    if (row.noLeak !== true) failures.push("converted_source_row_missing_no_leak");
+  }
+  for (const row of currentRejectedRows) {
+    if (row.countsTowardCurrentSellableRows !== false) failures.push(`current_rejected_${row.reason}_counts_now`);
+  }
   for (const row of rejectionReasonCounts) {
     if (["source_provenance_only", "graph_only", "restricted_without_public_support"].includes(String(row.reason)) && row.countsTowardSellableFindingFloor !== false) {
       failures.push(`${row.reason}_counts_toward_sellable_finding_floor`);

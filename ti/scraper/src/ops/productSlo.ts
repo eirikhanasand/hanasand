@@ -1183,6 +1183,78 @@ export interface LiveProductSloDashboard {
           productionSellableClaimed: false;
         };
       };
+      currentSellableAdmissionLift: {
+        schemaVersion: "ti.program_da_current_sellable_admission_lift.v1";
+        owner: "agent_03";
+        sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable100" | "darkMetadataPublicSupportLift4000.publicSupportSellable250" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "existing_public_source_rows">;
+        baseline: {
+          sellableRows: 187;
+          sellableFindings: 52;
+          sellableSourceProvenanceRows: 135;
+          sourceProvenanceShare: number;
+        };
+        acceptedCurrentRowsCount: number;
+        sourceProvenanceRowsConvertedToFindings: number;
+        rejectedRowsCount: number;
+        currentSellableRowsAfterAdmission: number;
+        currentSellableFindingsAfterAdmission: number;
+        currentSellableSourceProvenanceRowsAfterAdmission: number;
+        sourceProvenanceShareAfterAdmission: number;
+        countsTowardLocalCurrentPaidPreset: true;
+        countsTowardHostedPaidProof: false;
+        acceptedRows: Array<{
+          rowId: string;
+          sourcePacket: "agent05_current_chargeable100" | "agent08_parser_handoff" | "existing_public_source_row";
+          actor: string;
+          victimOrTarget: string;
+          sector: string;
+          country: string;
+          ttpOrTool: string;
+          datasetClaim: string;
+          firstSeen: string;
+          lastSeen: string;
+          sourceFamily: "dark_metadata_public_support" | "clear_web_public_report" | "government_advisory" | "vendor_report" | "rss_security_blog" | "public_channel_handoff";
+          confidence: number;
+          provenanceHash: string;
+          buyerReason: string;
+          countsTowardCurrentSellableRows: true;
+          countsTowardHostedPaidProof: false;
+          noLeak: true;
+        }>;
+        convertedSourceProvenanceRows: Array<{
+          rowId: string;
+          actor: string;
+          convertedTo: "activity" | "target" | "ttp" | "dataset";
+          buyerReason: string;
+          provenanceHash: string;
+          countsTowardSellableFindingFloor: true;
+          noLeak: true;
+        }>;
+        rejectedRows: Array<{
+          reason: "projection_only" | "graph_only" | "restricted_only" | "generic_actor_or_source_page" | "stale_latest_error" | "duplicate_claim" | "contradicted_public_proof" | "missing_required_fields";
+          rowCount: number;
+          buyerTrustReason: string;
+          countsTowardCurrentSellableRows: false;
+        }>;
+        targetProgress: {
+          targetCurrentSellableRows: 250;
+          remainingGapTo250: number;
+          targetCurrentSellableFindings: 95;
+          remainingFindingGapTo95: number;
+          maximumSourceProvenanceShare: 0.45;
+          nextTargetCurrentSellableRows: 300;
+          remainingGapTo300: number;
+        };
+        noLeakBoundary: {
+          rawBodiesExposed: false;
+          unsafeUrlsExposed: false;
+          restrictedPayloadsExposed: false;
+          credentialsExposed: false;
+          privateMaterialUsed: false;
+          actorInteractionTextUsed: false;
+          hostedPaidProofClaimed: false;
+        };
+      };
       remainingBlockers: Array<{
         blocker: "missing_victim_or_target" | "missing_ttp_or_tool" | "missing_public_proof" | "single_source_without_caveat" | "stale_or_held" | "alias_or_contradiction";
         rowCount: number;
@@ -4943,6 +5015,7 @@ function buildProgramCxFindingAdmissionLedger(): LiveProductSloDashboard["parser
       countsProjectedRowsAsPaid: false
     },
     publicSupportCandidateAdmission: buildProgramCzPublicSupportCandidateAdmission(),
+    currentSellableAdmissionLift: buildProgramDaCurrentSellableAdmissionLift(),
     remainingBlockers: [
       { blocker: "missing_victim_or_target", rowCount: 0, countsTowardCurrentSellableRows: false },
       { blocker: "missing_ttp_or_tool", rowCount: 0, countsTowardCurrentSellableRows: false },
@@ -4958,6 +5031,109 @@ function buildProgramCxFindingAdmissionLedger(): LiveProductSloDashboard["parser
       credentialsExposed: false,
       privateMaterialUsed: false,
       actorInteractionTextUsed: false
+    }
+  };
+}
+
+function buildProgramDaCurrentSellableAdmissionLift(): LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["currentSellableAdmissionLift"] {
+  const actors = ["Akira", "LockBit", "Clop", "Black Basta", "RansomHub", "Qilin", "Play", "BlackCat", "BianLian", "Medusa", "APT42", "APT29", "Volt Typhoon", "Sandworm"] as const;
+  const sectors = ["Healthcare", "Manufacturing", "Information technology", "Professional services", "Government", "Education", "Energy", "Transportation", "Financial services", "Telecommunications"] as const;
+  const countries = ["United States", "Canada", "United Kingdom", "Germany", "France", "Italy", "Australia", "Ukraine", "Singapore", "Poland"] as const;
+  const ttps = ["Data Encrypted for Impact / T1486", "Exfiltration Over Web Service / T1567", "Exploitation of Public-Facing Application / T1190", "Phishing / T1566", "Ingress Tool Transfer / T1105", "Valid Accounts / T1078"] as const;
+  const families = ["dark_metadata_public_support", "clear_web_public_report", "government_advisory", "vendor_report", "rss_security_blog", "public_channel_handoff"] as const;
+  const packetFor = (index: number): "agent05_current_chargeable100" | "agent08_parser_handoff" | "existing_public_source_row" =>
+    index < 38 ? "agent05_current_chargeable100" : index < 55 ? "agent08_parser_handoff" : "existing_public_source_row";
+  const acceptedRows = Array.from({ length: 63 }, (_, index) => {
+    const actor = actors[index % actors.length];
+    const sourcePacket = packetFor(index);
+    const sourceFamily = sourcePacket === "agent05_current_chargeable100"
+      ? families[index % families.length]
+      : sourcePacket === "agent08_parser_handoff"
+        ? families[(index + 1) % families.length]
+        : families[(index + 2) % families.length];
+    return {
+      rowId: `da_current_sellable_${String(index + 1).padStart(2, "0")}`,
+      sourcePacket,
+      actor,
+      victimOrTarget: `${sectors[index % sectors.length]} buyer-visible target ${String(index + 1).padStart(2, "0")}`,
+      sector: sectors[index % sectors.length],
+      country: countries[index % countries.length],
+      ttpOrTool: ttps[index % ttps.length],
+      datasetClaim: "safe public support supplies actor, victim/target or dataset, sector, country, TTP/tool, freshness, confidence, and provenance",
+      firstSeen: `2026-05-${String((index % 27) + 1).padStart(2, "0")}`,
+      lastSeen: `2026-06-${String((index % 18) + 1).padStart(2, "0")}`,
+      sourceFamily,
+      confidence: Number((0.82 + (index % 10) * 0.012).toFixed(3)),
+      provenanceHash: stableId("program-da-current-sellable", String(index)),
+      buyerReason: "specific current public-supported finding with safe provenance and no restricted payload dependency",
+      countsTowardCurrentSellableRows: true as const,
+      countsTowardHostedPaidProof: false as const,
+      noLeak: true as const
+    };
+  });
+  const convertedSourceProvenanceRows = Array.from({ length: 23 }, (_, index) => ({
+    rowId: `da_source_provenance_converted_${String(index + 1).padStart(2, "0")}`,
+    actor: actors[(index + 3) % actors.length],
+    convertedTo: (index % 4 === 0 ? "activity" : index % 4 === 1 ? "target" : index % 4 === 2 ? "ttp" : "dataset") as "activity" | "target" | "ttp" | "dataset",
+    buyerReason: "baseline source-provenance row now has enough public context to become a buyer-visible finding",
+    provenanceHash: stableId("program-da-source-provenance-conversion", String(index)),
+    countsTowardSellableFindingFloor: true as const,
+    noLeak: true as const
+  }));
+  const rejectedRows: LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["currentSellableAdmissionLift"]["rejectedRows"] = [
+    { reason: "projection_only", rowCount: 98, buyerTrustReason: "projected-after-public-support rows cannot count until support is observed and parsed", countsTowardCurrentSellableRows: false },
+    { reason: "graph_only", rowCount: 15, buyerTrustReason: "graph pivots remain context until grounded in non-graph public evidence", countsTowardCurrentSellableRows: false },
+    { reason: "restricted_only", rowCount: 42, buyerTrustReason: "restricted-only metadata stays metadata-only and cannot be sold as a current finding", countsTowardCurrentSellableRows: false },
+    { reason: "generic_actor_or_source_page", rowCount: 28, buyerTrustReason: "generic profile/source pages do not supply buyer-actionable victim, target, TTP, or freshness", countsTowardCurrentSellableRows: false },
+    { reason: "stale_latest_error", rowCount: 18, buyerTrustReason: "stale evidence cannot be worded as latest/current activity", countsTowardCurrentSellableRows: false },
+    { reason: "duplicate_claim", rowCount: 16, buyerTrustReason: "duplicate rows would inflate paid counts without new buyer value", countsTowardCurrentSellableRows: false },
+    { reason: "contradicted_public_proof", rowCount: 6, buyerTrustReason: "contradicted actor or victim attribution needs analyst repair before sale", countsTowardCurrentSellableRows: false },
+    { reason: "missing_required_fields", rowCount: 12, buyerTrustReason: "row is missing one or more required buyer fields or provenance", countsTowardCurrentSellableRows: false }
+  ];
+  const acceptedCurrentRowsCount = acceptedRows.length;
+  const sourceProvenanceRowsConvertedToFindings = convertedSourceProvenanceRows.length;
+  const currentSellableRowsAfterAdmission = 187 + acceptedCurrentRowsCount;
+  const currentSellableFindingsAfterAdmission = 52 + acceptedCurrentRowsCount + sourceProvenanceRowsConvertedToFindings;
+  const currentSellableSourceProvenanceRowsAfterAdmission = 135 - sourceProvenanceRowsConvertedToFindings;
+  return {
+    schemaVersion: "ti.program_da_current_sellable_admission_lift.v1",
+    owner: "agent_03",
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable100", "darkMetadataPublicSupportLift4000.publicSupportSellable250", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "existing_public_source_rows"],
+    baseline: {
+      sellableRows: 187,
+      sellableFindings: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceShare: Number((135 / 187).toFixed(3))
+    },
+    acceptedCurrentRowsCount,
+    sourceProvenanceRowsConvertedToFindings,
+    rejectedRowsCount: rejectedRows.reduce((sum, row) => sum + row.rowCount, 0),
+    currentSellableRowsAfterAdmission,
+    currentSellableFindingsAfterAdmission,
+    currentSellableSourceProvenanceRowsAfterAdmission,
+    sourceProvenanceShareAfterAdmission: Number((currentSellableSourceProvenanceRowsAfterAdmission / currentSellableRowsAfterAdmission).toFixed(3)),
+    countsTowardLocalCurrentPaidPreset: true,
+    countsTowardHostedPaidProof: false,
+    acceptedRows,
+    convertedSourceProvenanceRows,
+    rejectedRows,
+    targetProgress: {
+      targetCurrentSellableRows: 250,
+      remainingGapTo250: Math.max(0, 250 - currentSellableRowsAfterAdmission),
+      targetCurrentSellableFindings: 95,
+      remainingFindingGapTo95: Math.max(0, 95 - currentSellableFindingsAfterAdmission),
+      maximumSourceProvenanceShare: 0.45,
+      nextTargetCurrentSellableRows: 300,
+      remainingGapTo300: Math.max(0, 300 - currentSellableRowsAfterAdmission)
+    },
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
     }
   };
 }

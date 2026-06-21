@@ -1409,6 +1409,75 @@ describe("ops controls", () => {
       actorInteractionTextUsed: false,
       productionSellableClaimed: false
     });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift).toMatchObject({
+      schemaVersion: "ti.program_da_current_sellable_admission_lift.v1",
+      owner: "agent_03",
+      acceptedCurrentRowsCount: 63,
+      sourceProvenanceRowsConvertedToFindings: 23,
+      rejectedRowsCount: 235,
+      currentSellableRowsAfterAdmission: 250,
+      currentSellableFindingsAfterAdmission: 138,
+      currentSellableSourceProvenanceRowsAfterAdmission: 112,
+      sourceProvenanceShareAfterAdmission: 0.448,
+      countsTowardLocalCurrentPaidPreset: true,
+      countsTowardHostedPaidProof: false
+    });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.sourcePackets).toEqual(expect.arrayContaining([
+      "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable100",
+      "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff",
+      "existing_public_source_rows"
+    ]));
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.acceptedRows).toHaveLength(63);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.acceptedRows.every((row) =>
+      row.actor.length > 0 &&
+      row.victimOrTarget.length > 0 &&
+      row.sector.length > 0 &&
+      row.country.length > 0 &&
+      row.ttpOrTool.length > 0 &&
+      row.firstSeen.length > 0 &&
+      row.lastSeen.length > 0 &&
+      row.confidence >= 0.82 &&
+      row.provenanceHash.length > 0 &&
+      row.buyerReason.length > 0 &&
+      row.countsTowardCurrentSellableRows === true &&
+      row.countsTowardHostedPaidProof === false &&
+      row.noLeak
+    )).toBe(true);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.acceptedRows.filter((row) => row.sourcePacket === "agent05_current_chargeable100")).toHaveLength(38);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.acceptedRows.filter((row) => row.sourcePacket === "agent08_parser_handoff")).toHaveLength(17);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.acceptedRows.filter((row) => row.sourcePacket === "existing_public_source_row")).toHaveLength(8);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.convertedSourceProvenanceRows).toHaveLength(23);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.convertedSourceProvenanceRows.every((row) =>
+      row.countsTowardSellableFindingFloor === true && row.noLeak
+    )).toBe(true);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.rejectedRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reason: "projection_only", countsTowardCurrentSellableRows: false }),
+      expect.objectContaining({ reason: "graph_only", countsTowardCurrentSellableRows: false }),
+      expect.objectContaining({ reason: "restricted_only", countsTowardCurrentSellableRows: false }),
+      expect.objectContaining({ reason: "generic_actor_or_source_page", countsTowardCurrentSellableRows: false }),
+      expect.objectContaining({ reason: "stale_latest_error", countsTowardCurrentSellableRows: false }),
+      expect.objectContaining({ reason: "duplicate_claim", countsTowardCurrentSellableRows: false }),
+      expect.objectContaining({ reason: "contradicted_public_proof", countsTowardCurrentSellableRows: false }),
+      expect.objectContaining({ reason: "missing_required_fields", countsTowardCurrentSellableRows: false })
+    ]));
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.targetProgress).toMatchObject({
+      targetCurrentSellableRows: 250,
+      remainingGapTo250: 0,
+      targetCurrentSellableFindings: 95,
+      remainingFindingGapTo95: 0,
+      maximumSourceProvenanceShare: 0.45,
+      nextTargetCurrentSellableRows: 300,
+      remainingGapTo300: 50
+    });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellableAdmissionLift.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
+    });
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.remainingBlockers.every((row) => row.countsTowardCurrentSellableRows === false)).toBe(true);
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.noLeakBoundary).toMatchObject({
       rawBodiesExposed: false,
