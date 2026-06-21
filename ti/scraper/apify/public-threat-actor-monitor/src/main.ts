@@ -1679,6 +1679,45 @@ interface PaidReleaseTruthBoard {
     proofCommands: string[];
     paidTrafficAllowedWhenAllGatesPass: true;
   };
+  buyerPaidReleaseVerdict: {
+    schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1";
+    routeVisibleOn: Array<"Apify OUTPUT" | "/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness">;
+    decision: "hold_paid_traffic";
+    buyerReadableStatus: "useful_sample_ready_paid_release_blocked";
+    publicListingState: "draft_copy_ready_not_promoted";
+    currentSellableRows: number;
+    productionSellableFloor: 100;
+    usefulRows: number;
+    usefulRowDensity: number;
+    averageBuyerValueScore: number;
+    releaseBlockers: Array<{
+      gate: "current_sellable_rows" | "external_marketplace_telemetry" | "payout_readiness" | "pricing_state";
+      state: "hold" | "external_unknown";
+      observed: number | "external_unknown";
+      required: string;
+      buyerMessage: string;
+      proofField: string;
+      countsTowardPaidRelease: false;
+    }>;
+    sampleDatasetPolicy: {
+      bestRowsShown: number;
+      caveatedRowsExplained: true;
+      lowValueRowsSuppressed: true;
+      noRawUnsafeMaterial: true;
+    };
+    operatorRecordingRule: {
+      externalValuesStayUnknownUntilObserved: true;
+      recordOnlyObservedApifyValues: string[];
+      proofPaths: string[];
+    };
+    noLeakProof: {
+      rawEvidenceBodies: false;
+      unsafeUrls: false;
+      credentials: false;
+      restrictedPayloads: false;
+      privateContent: false;
+    };
+  };
   blockerBuckets: Array<{
     blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
     owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -3826,6 +3865,78 @@ function paidReleaseTruthBoardForRows(
     ],
     paidTrafficAllowedWhenAllGatesPass: true
   };
+  const buyerPaidReleaseVerdict: PaidReleaseTruthBoard["buyerPaidReleaseVerdict"] = {
+    schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1",
+    routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness"],
+    decision: "hold_paid_traffic",
+    buyerReadableStatus: "useful_sample_ready_paid_release_blocked",
+    publicListingState: "draft_copy_ready_not_promoted",
+    currentSellableRows: quality.sellable,
+    productionSellableFloor: PRODUCTION_SELLABLE_ROW_FLOOR,
+    usefulRows: quality.usefulForBuyer,
+    usefulRowDensity,
+    averageBuyerValueScore: quality.averageBuyerValueScore,
+    releaseBlockers: [
+      {
+        gate: "current_sellable_rows",
+        state: "hold",
+        observed: quality.sellable,
+        required: ">=100 current sellable rows from observed Actor output",
+        buyerMessage: "The sample rows are useful, but paid traffic stays blocked until current output reaches the 100-row floor.",
+        proofField: "OUTPUT.paidReleaseTruthBoard.observedProof.apifySmokeSellableRows",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "external_marketplace_telemetry",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "observed Store views, trial runs, paid runs, refunds, and conversion from Apify",
+        buyerMessage: "Demand and conversion are not inferred from smoke runs, projections, graph pivots, or repair queues.",
+        proofField: "OUTPUT.paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "payout_readiness",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "known Apify payout readiness from billing/account data",
+        buyerMessage: "Revenue and payout readiness stay unknown until copied from Apify billing.",
+        proofField: "OUTPUT.paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.payoutState",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "pricing_state",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "externally verified Apify pricing state",
+        buyerMessage: "Pricing shape is documented, but marketplace pricing state must be verified externally before paid promotion.",
+        proofField: "OUTPUT.paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.pricingState",
+        countsTowardPaidRelease: false
+      }
+    ],
+    sampleDatasetPolicy: {
+      bestRowsShown: Math.min(6, quality.sellable),
+      caveatedRowsExplained: true,
+      lowValueRowsSuppressed: true,
+      noRawUnsafeMaterial: true
+    },
+    operatorRecordingRule: {
+      externalValuesStayUnknownUntilObserved: true,
+      recordOnlyObservedApifyValues: ["storeViews", "uniqueUsers", "trialRuns", "paidRuns", "actorRuns", "datasetRows", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd", "payoutState", "pricingState"],
+      proofPaths: [
+        "Apify Console > Store > Analytics",
+        "Apify Console > Actor > Runs",
+        "Apify Console > Billing/Payouts"
+      ]
+    },
+    noLeakProof: {
+      rawEvidenceBodies: false,
+      unsafeUrls: false,
+      credentials: false,
+      restrictedPayloads: false,
+      privateContent: false
+    }
+  };
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
@@ -3927,6 +4038,7 @@ function paidReleaseTruthBoardForRows(
     },
     observedMarketplaceTelemetry,
     paidReleaseRunbook,
+    buyerPaidReleaseVerdict,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",

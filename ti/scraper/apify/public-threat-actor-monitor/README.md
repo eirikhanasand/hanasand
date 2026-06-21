@@ -38,6 +38,8 @@ The Program CL conversion sample pack is explicit in `OUTPUT.marketplaceConversi
 
 The Program CT first-100 preview is nested at `OUTPUT.marketplaceConversionRealRowSamplePack.first100BuyerPreview` and stays `blocked_preview_until_100_real_sellable_rows` until the release truth board confirms the real 100-row floor. It shows the current sellable count, useful-but-not-chargeable count, remaining row gap, top blocker buckets, required buyer fields, no-leak proof, freshness proof, and activation gates for the first-100 buyer sample pack without claiming production scale.
 
+The Program CU buyer release verdict is nested at `OUTPUT.paidReleaseTruthBoard.buyerPaidReleaseVerdict`. It is the compact buyer/operator go-no-go summary: useful samples are available, paid traffic remains held, the public listing should not be promoted, and Store telemetry, paid runs, refunds, payout readiness, and pricing state stay `external_unknown` until observed in Apify.
+
 Marketplace demand and payout state are not inferred from sample rows. Store views, unique users, starts, paid runs, refunds, platform usage cost, creator revenue, beneficiary state, payout method, and withdrawal readiness stay `null` or `unknown` until copied from Apify analytics or billing. The next manual verification step is recorded in `OUTPUT.revenueConversionChecklist.nextManualVerificationStep`.
 
 ## Input

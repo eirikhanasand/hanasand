@@ -569,6 +569,59 @@ describe("api v1", () => {
     ]));
     expect(paidReleaseRunbook.holdWhen).toEqual(expect.arrayContaining(["current sellable rows are below 100"]));
     expect(paidReleaseRunbook.rollbackWhen.some((rule) => rule.includes("refund"))).toBe(true);
+    const buyerPaidReleaseVerdict = (response.paidReleaseTruthBoard as {
+      buyerPaidReleaseVerdict: {
+        schemaVersion: string;
+        decision: string;
+        buyerReadableStatus: string;
+        publicListingState: string;
+        currentSellableRows: number;
+        productionSellableFloor: number;
+        usefulRows: number;
+        usefulRowDensity: number;
+        averageBuyerValueScore: number;
+        releaseBlockers: Array<{ gate: string; state: string; observed: number | string; countsTowardPaidRelease: boolean; buyerMessage: string }>;
+        sampleDatasetPolicy: { bestRowsShown: number; caveatedRowsExplained: boolean; lowValueRowsSuppressed: boolean; noRawUnsafeMaterial: boolean };
+        operatorRecordingRule: { externalValuesStayUnknownUntilObserved: boolean; recordOnlyObservedApifyValues: string[]; proofPaths: string[] };
+        noLeakProof: Record<string, boolean>;
+      };
+    }).buyerPaidReleaseVerdict;
+    expect(buyerPaidReleaseVerdict).toMatchObject({
+      schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1",
+      decision: "hold_paid_traffic",
+      buyerReadableStatus: "useful_sample_ready_paid_release_blocked",
+      publicListingState: "draft_copy_ready_not_promoted",
+      currentSellableRows: 3,
+      productionSellableFloor: 100,
+      usefulRows: 9,
+      usefulRowDensity: 0.75,
+      averageBuyerValueScore: 0.558,
+      sampleDatasetPolicy: {
+        bestRowsShown: 3,
+        caveatedRowsExplained: true,
+        lowValueRowsSuppressed: true,
+        noRawUnsafeMaterial: true
+      },
+      operatorRecordingRule: {
+        externalValuesStayUnknownUntilObserved: true
+      },
+      noLeakProof: {
+        rawEvidenceBodies: false,
+        unsafeUrls: false,
+        credentials: false,
+        restrictedPayloads: false,
+        privateContent: false
+      }
+    });
+    expect(buyerPaidReleaseVerdict.releaseBlockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ gate: "current_sellable_rows", state: "hold", observed: 3, countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "external_marketplace_telemetry", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "payout_readiness", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "pricing_state", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false })
+    ]));
+    expect(buyerPaidReleaseVerdict.releaseBlockers.every((gate) => gate.buyerMessage.length > 0)).toBe(true);
+    expect(buyerPaidReleaseVerdict.operatorRecordingRule.recordOnlyObservedApifyValues).toEqual(expect.arrayContaining(["paidRuns", "refunds", "payoutState", "pricingState"]));
+    expect(buyerPaidReleaseVerdict.operatorRecordingRule.proofPaths.join(" ")).toContain("Apify Console");
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {
@@ -1343,6 +1396,16 @@ describe("api v1", () => {
       contradictionOrAliasHoldCount: number;
       graphOnlyRowsExcludedFromFloor: number;
       projectedSellableRowsAfterPublicCorroboration: number;
+      publicProofMetrics: {
+        pivotsTested: number;
+        publicProofFound: number;
+        rowsUnlockedForParserAdmission: number;
+        rowsRejectedAsStaleOrAmbiguous: number;
+        contradictionsFound: number;
+        queuedForNextPublicSearch: number;
+        projectedBuyerValueLift: number;
+        countsTowardPaidFloorNow: boolean;
+      };
     })).toMatchObject({
       schemaVersion: "ti.program_cs_graph_public_corroboration_pivot_packet.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"]) as unknown as string[],
@@ -1350,12 +1413,28 @@ describe("api v1", () => {
       rowUnlockingCandidateCount: 24,
       contradictionOrAliasHoldCount: 6,
       graphOnlyRowsExcludedFromFloor: 30,
-      projectedSellableRowsAfterPublicCorroboration: 42
+      projectedSellableRowsAfterPublicCorroboration: 42,
+      publicProofMetrics: {
+        pivotsTested: 22,
+        publicProofFound: 10,
+        rowsUnlockedForParserAdmission: 18,
+        rowsRejectedAsStaleOrAmbiguous: 6,
+        contradictionsFound: 2,
+        queuedForNextPublicSearch: 8,
+        projectedBuyerValueLift: 0.83,
+        countsTowardPaidFloorNow: false
+      }
     });
-    const graphPublicPivots = (response.graphPublicCorroborationPivotPacket as { candidates: Array<{ actor: string; currentBlockedState: string; expectedSellableRowsUnlockedAfterPublicProof: number; relationshipSupport: string; graphOnlyCountsTowardSellableRows: boolean; rowUnlockRequiresNonGraphEvidence: boolean; noLeak: boolean; nextPublicCorroborationPivot: { queryText: string; expectedSourceFamily: string; repairsRowField: string; contradictionRisk: string; aliasCollisionRisk: string } }> }).candidates;
+    const graphPublicPivots = (response.graphPublicCorroborationPivotPacket as { candidates: Array<{ rank: number; actor: string; aliases: string[]; candidateVictimOrTarget: string; currentBlockedState: string; publicProofState: string; expectedBuyerFieldLift: string; expectedSellableRowsUnlockedAfterPublicProof: number; measuredRowsUnlockedForParserAdmission: number; relationshipSupport: string; graphOnlyCountsTowardSellableRows: boolean; rowUnlockRequiresNonGraphEvidence: boolean; noLeak: boolean; nextPublicCorroborationPivot: { queryText: string; expectedSourceFamily: string; repairsRowField: string; contradictionRisk: string; aliasCollisionRisk: string } }> }).candidates;
     expect(graphPublicPivots.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Qilin", "Sandworm", "NOBELIUM", "Carbanak", "Conti", "8Base"]));
-    expect(graphPublicPivots.every((row) => row.relationshipSupport.length > 0 && row.nextPublicCorroborationPivot.queryText.length > 0 && row.nextPublicCorroborationPivot.expectedSourceFamily.length > 0 && row.nextPublicCorroborationPivot.repairsRowField.length > 0 && row.graphOnlyCountsTowardSellableRows === false && row.rowUnlockRequiresNonGraphEvidence === true && row.noLeak)).toBe(true);
+    expect(graphPublicPivots.every((row) => row.rank > 0 && row.aliases.length > 0 && row.candidateVictimOrTarget.length > 0 && row.expectedBuyerFieldLift.length > 0 && row.relationshipSupport.length > 0 && row.nextPublicCorroborationPivot.queryText.length > 0 && row.nextPublicCorroborationPivot.expectedSourceFamily.length > 0 && row.nextPublicCorroborationPivot.repairsRowField.length > 0 && row.graphOnlyCountsTowardSellableRows === false && row.rowUnlockRequiresNonGraphEvidence === true && row.noLeak)).toBe(true);
+    expect(graphPublicPivots.filter((row) => row.publicProofState === "public_proof_found").reduce((sum, row) => sum + row.measuredRowsUnlockedForParserAdmission, 0)).toBe(18);
+    expect(graphPublicPivots.filter((row) => row.publicProofState === "queued_for_search").every((row) => row.measuredRowsUnlockedForParserAdmission === 0)).toBe(true);
     expect(graphPublicPivots.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) => row.expectedSellableRowsUnlockedAfterPublicProof === 0 && ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) && ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk))).toBe(true);
+    expect((response.graphPublicCorroborationPivotPacket as { integrationHandoffs: Array<{ owner: string; candidateIds: string[]; expectedRowsUnlockedForAdmission: number; countsTowardPaidFloorNow: boolean }> }).integrationHandoffs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ owner: "agent_03", expectedRowsUnlockedForAdmission: 9, countsTowardPaidFloorNow: false }),
+      expect.objectContaining({ owner: "agent_05", expectedRowsUnlockedForAdmission: 0, countsTowardPaidFloorNow: false })
+    ]));
     expect((response.graphPublicCorroborationPivotPacket as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect((response.graphPublicCorroborationPivotPacket as { noLeakBoundary: Record<string, boolean> }).noLeakBoundary).toMatchObject({ rawEvidenceBodies: false, unsafeUrls: false, objectKeys: false, credentials: false, payloadLinks: false, privateMaterial: false, actorInteraction: false });
     expect((response.qualityConversionGate as {
@@ -4439,6 +4518,15 @@ describe("api v1", () => {
         gates: Array<{ gate: string; observed: number | string | null | boolean; state: string }>;
         rollbackWhen: string[];
       };
+      buyerPaidReleaseVerdict: {
+        schemaVersion: string;
+        decision: string;
+        buyerReadableStatus: string;
+        publicListingState: string;
+        currentSellableRows: number;
+        releaseBlockers: Array<{ gate: string; state: string; observed: number | string; countsTowardPaidRelease: boolean }>;
+        operatorRecordingRule: { externalValuesStayUnknownUntilObserved: boolean; recordOnlyObservedApifyValues: string[] };
+      };
     };
     expect(readinessPaidReleaseTruthBoard.observedMarketplaceTelemetry).toMatchObject({
       schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
@@ -4477,6 +4565,23 @@ describe("api v1", () => {
       expect.objectContaining({ gate: "payout_readiness", observed: "external_unknown", state: "external_unknown" })
     ]));
     expect(readinessPaidReleaseTruthBoard.paidReleaseRunbook.rollbackWhen.some((rule) => rule.includes("refund"))).toBe(true);
+    expect(readinessPaidReleaseTruthBoard.buyerPaidReleaseVerdict).toMatchObject({
+      schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1",
+      decision: "hold_paid_traffic",
+      buyerReadableStatus: "useful_sample_ready_paid_release_blocked",
+      publicListingState: "draft_copy_ready_not_promoted",
+      currentSellableRows: 3,
+      operatorRecordingRule: {
+        externalValuesStayUnknownUntilObserved: true
+      }
+    });
+    expect(readinessPaidReleaseTruthBoard.buyerPaidReleaseVerdict.releaseBlockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ gate: "current_sellable_rows", state: "hold", observed: 3, countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "external_marketplace_telemetry", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "payout_readiness", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "pricing_state", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false })
+    ]));
+    expect(readinessPaidReleaseTruthBoard.buyerPaidReleaseVerdict.operatorRecordingRule.recordOnlyObservedApifyValues).toEqual(expect.arrayContaining(["paidRuns", "refunds", "payoutState", "pricingState"]));
     expect(apifyStoreReadiness.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(apifyStoreReadiness.revenueConversionChecklist).toMatchObject({
       schemaVersion: "ti.apify_revenue_conversion_checklist.v1",

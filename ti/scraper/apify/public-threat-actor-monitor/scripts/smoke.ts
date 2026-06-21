@@ -1408,6 +1408,48 @@ if (
 ) {
   throw new Error("Program CX paid release runbook must hold paid traffic until row, refund, payout, and no-leak gates pass");
 }
+const buyerPaidReleaseVerdict = paidReleaseTruthBoard.buyerPaidReleaseVerdict as Record<string, unknown> | undefined;
+const buyerPaidReleaseVerdictBlockers = buyerPaidReleaseVerdict?.releaseBlockers as Array<Record<string, unknown>> | undefined;
+if (
+  !buyerPaidReleaseVerdict
+  || buyerPaidReleaseVerdict.schemaVersion !== "ti.program_cu_buyer_paid_release_verdict.v1"
+  || buyerPaidReleaseVerdict.decision !== "hold_paid_traffic"
+  || buyerPaidReleaseVerdict.buyerReadableStatus !== "useful_sample_ready_paid_release_blocked"
+  || buyerPaidReleaseVerdict.publicListingState !== "draft_copy_ready_not_promoted"
+  || buyerPaidReleaseVerdict.currentSellableRows !== paidRowQuality.sellable
+  || buyerPaidReleaseVerdict.productionSellableFloor !== 100
+  || buyerPaidReleaseVerdict.usefulRows !== paidRowQuality.usefulForBuyer
+  || buyerPaidReleaseVerdict.averageBuyerValueScore !== paidRowQuality.averageBuyerValueScore
+  || !Array.isArray(buyerPaidReleaseVerdictBlockers)
+  || !buyerPaidReleaseVerdictBlockers.some((gate) => gate.gate === "current_sellable_rows" && gate.state === "hold" && gate.countsTowardPaidRelease === false)
+  || !buyerPaidReleaseVerdictBlockers.some((gate) => gate.gate === "external_marketplace_telemetry" && gate.state === "external_unknown" && gate.observed === "external_unknown")
+  || !buyerPaidReleaseVerdictBlockers.some((gate) => gate.gate === "payout_readiness" && gate.state === "external_unknown")
+  || !buyerPaidReleaseVerdictBlockers.some((gate) => gate.gate === "pricing_state" && gate.state === "external_unknown")
+) {
+  throw new Error("Program CU buyer paid-release verdict must hold paid traffic with observed rows and external_unknown marketplace gates");
+}
+const buyerPaidReleaseSamplePolicy = buyerPaidReleaseVerdict.sampleDatasetPolicy as Record<string, unknown> | undefined;
+const buyerPaidReleaseOperatorRule = buyerPaidReleaseVerdict.operatorRecordingRule as Record<string, unknown> | undefined;
+const buyerPaidReleaseNoLeakProof = buyerPaidReleaseVerdict.noLeakProof as Record<string, unknown> | undefined;
+if (
+  !buyerPaidReleaseSamplePolicy
+  || buyerPaidReleaseSamplePolicy.caveatedRowsExplained !== true
+  || buyerPaidReleaseSamplePolicy.lowValueRowsSuppressed !== true
+  || buyerPaidReleaseSamplePolicy.noRawUnsafeMaterial !== true
+  || !buyerPaidReleaseOperatorRule
+  || buyerPaidReleaseOperatorRule.externalValuesStayUnknownUntilObserved !== true
+  || !Array.isArray(buyerPaidReleaseOperatorRule.recordOnlyObservedApifyValues)
+  || !(buyerPaidReleaseOperatorRule.recordOnlyObservedApifyValues as string[]).includes("paidRuns")
+  || !(buyerPaidReleaseOperatorRule.recordOnlyObservedApifyValues as string[]).includes("payoutState")
+  || !buyerPaidReleaseNoLeakProof
+  || buyerPaidReleaseNoLeakProof.rawEvidenceBodies !== false
+  || buyerPaidReleaseNoLeakProof.unsafeUrls !== false
+  || buyerPaidReleaseNoLeakProof.credentials !== false
+  || buyerPaidReleaseNoLeakProof.restrictedPayloads !== false
+  || buyerPaidReleaseNoLeakProof.privateContent !== false
+) {
+  throw new Error("Program CU buyer verdict must explain sample policy, observed-only operator recording, and no-leak proof");
+}
 if (!paidReleaseBuckets.every((bucket) =>
   typeof bucket.owner === "string"
   && typeof bucket.rowDeltaTo100 === "number"

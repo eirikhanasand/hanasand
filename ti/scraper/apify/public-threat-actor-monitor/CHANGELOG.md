@@ -3,6 +3,7 @@
 ## 0.6.8 - 2026-06-21
 
 - Expanded the default monitor from the 20-name proof preset to a 100-name buyer preset / 100-name default watchlist while keeping custom runs capped at 100 names.
+- Added Program CU `buyerPaidReleaseVerdict` under `paidReleaseTruthBoard` so Actor `OUTPUT`, `/v1/contracts#apifyStoreReadiness`, and `/v1/ops/product-slo` expose a compact buyer/operator go-no-go summary with paid traffic held, draft listing state, observed row blockers, observed-only operator recording rules, and no-leak proof.
 - Added sellable public source-provenance rows for fresh or recent safe source evidence that directly supports an actor result, without presenting provenance as a confirmed incident claim.
 - Changed paid defaults to suppress held/suppressed rows and coverage-gap diagnostics unless explicitly requested. The current local 100-name buyer preset produces 607 safe rows: 187 sellable rows, 420 caveated leads, 30.8% sellable rate, and average buyer value `0.593`.
 - Increased the Actor timeout to 600 seconds for the 100-name default tier.

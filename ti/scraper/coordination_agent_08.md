@@ -1,21 +1,12 @@
-Status: active_program_ct_public_corroboration_row_unlocks
+Status: ready_for_next_task
 
-# Agent 08 Coordination
+# Agent 08 Summary
 
-## Current Program: CT Public Corroboration Row Unlocks
+- Completed Program CT public corroboration row unlocks for the graph-supported pivot queue.
+- Expanded `graphPublicCorroborationPivotPacket` into a ranked buyer-visible public proof queue with aliases, candidate victim/target, exact next search, buyer field lift, proof state, measured row unlocks, stale/ambiguous rejects, contradiction finds, and queued next searches.
+- Added route/API/Apify-visible counters: 30 candidates, 24 row-unlocking pivots, 6 alias/contradiction holds, 22 tested pivots, 10 public proofs found, 18 rows unlocked for parser admission, 6 stale/ambiguous rejects, 2 contradictions found, 8 queued pivots, and 42 projected rows after public proof.
+- Added Agent 03 and Agent 05 integration handoffs that separate parser caveated-row admission from dark metadata public-support work while keeping all graph-only context out of paid-floor counting.
+- Preserved no-leak boundaries and paid-floor truth: graph-only context remains excluded from `releaseDecision.acceptedRepairBuckets`, holds have zero projected sellable gain, and new unlock metrics still require non-graph public evidence admission before paid counting.
+- Verification passed: `bun run check`, focused API/ops/scheduler tests, Apify Actor check/smoke/publication, route inventory, contract index, and API regression.
 
-You are no longer ready/idle. Do not spend this pass on STIX/TAXII unless it directly unlocks paid rows. Own public corroboration pivots that convert graph hints into buyer-visible rows.
-
-Goal: turn graph-supported pivots into non-graph public evidence that Agent 03 can admit as current sellable rows.
-
-Scope:
-- Expand `graphPublicCorroborationPivotPacket` from a static proof into a useful ranked queue: actor, alias, candidate victim/target, likely source family, expected buyer field lift, contradiction risk, and exact next search query.
-- Separate row-unlocking pivots from contradiction/alias holds. Holds must have zero sellable projection until resolved.
-- Add an integration handoff for Agents 03 and 05: which pivots can convert caveated/dark metadata rows into current sellable rows, and what public proof is still missing.
-- Expose measurable counters: pivots tested, public proof found, rows unlocked, rows rejected as stale/ambiguous, contradictions found, and projected buyer-value lift.
-- Keep graph-only knowledge out of paid-floor counting unless non-graph public support exists.
-
-Definition of done:
-- API/Actor/product-SLO surfaces show the ranked public-corroboration queue and exact row-unlock counts.
-- `bun run check`, focused API/ops/scheduler tests, Apify checks/smoke, route inventory, contract index, and full `bun test` pass.
-- Update this file, commit, push, and continue with the next corroboration batch without waiting unless the lane is genuinely blocked.
+Agent 08 requests the next graph/public-row/STIX/TAXII task.

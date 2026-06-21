@@ -10434,6 +10434,78 @@ function buildApifyStoreReadinessContract(input: {
     ],
     paidTrafficAllowedWhenAllGatesPass: true
   };
+  const buyerPaidReleaseVerdict = {
+    schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1",
+    routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT"],
+    decision: "hold_paid_traffic",
+    buyerReadableStatus: "useful_sample_ready_paid_release_blocked",
+    publicListingState: "draft_copy_ready_not_promoted",
+    currentSellableRows: 3,
+    productionSellableFloor: 100,
+    usefulRows: 9,
+    usefulRowDensity: 0.75,
+    averageBuyerValueScore: 0.558,
+    releaseBlockers: [
+      {
+        gate: "current_sellable_rows",
+        state: "hold",
+        observed: 3,
+        required: ">=100 current sellable rows from observed Actor output",
+        buyerMessage: "The sample rows are useful, but paid traffic stays blocked until current output reaches the 100-row floor.",
+        proofField: "paidReleaseTruthBoard.observedProof.apifySmokeSellableRows",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "external_marketplace_telemetry",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "observed Store views, trial runs, paid runs, refunds, and conversion from Apify",
+        buyerMessage: "Demand and conversion are not inferred from smoke runs, projections, graph pivots, or repair queues.",
+        proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "payout_readiness",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "known Apify payout readiness from billing/account data",
+        buyerMessage: "Revenue and payout readiness stay unknown until copied from Apify billing.",
+        proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.payoutState",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "pricing_state",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "externally verified Apify pricing state",
+        buyerMessage: "Pricing shape is documented, but marketplace pricing state must be verified externally before paid promotion.",
+        proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.pricingState",
+        countsTowardPaidRelease: false
+      }
+    ],
+    sampleDatasetPolicy: {
+      bestRowsShown: 3,
+      caveatedRowsExplained: true,
+      lowValueRowsSuppressed: true,
+      noRawUnsafeMaterial: true
+    },
+    operatorRecordingRule: {
+      externalValuesStayUnknownUntilObserved: true,
+      recordOnlyObservedApifyValues: ["storeViews", "uniqueUsers", "trialRuns", "paidRuns", "actorRuns", "datasetRows", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd", "payoutState", "pricingState"],
+      proofPaths: [
+        "Apify Console > Store > Analytics",
+        "Apify Console > Actor > Runs",
+        "Apify Console > Billing/Payouts"
+      ]
+    },
+    noLeakProof: {
+      rawEvidenceBodies: false,
+      unsafeUrls: false,
+      credentials: false,
+      restrictedPayloads: false,
+      privateContent: false
+    }
+  };
   const paidReleaseTruthBoard = {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"],
@@ -10535,6 +10607,7 @@ function buildApifyStoreReadinessContract(input: {
     },
     observedMarketplaceTelemetry,
     paidReleaseRunbook,
+    buyerPaidReleaseVerdict,
     blockerBuckets: [
       { blocker: "already_chargeable", owner: "agent_10", rowDeltaTo100: 0, expectedRowGain: 3, confidence: "observed", risk: "current smoke rows prove safe output shape only", fastestNextTask: "keep chargeable rows visible while repair buckets create 97 more real rows", coordinationFile: "coordination_agent_10.md", countsTowardPaidFloorNow: true },
       { blocker: "missing_public_support", owner: "agent_04", rowDeltaTo100: 28, expectedRowGain: 28, confidence: "medium", risk: "single-source or unsupported rows stay caveated/held", fastestNextTask: "attach safe public corroboration to highest-value actor/ransomware rows", coordinationFile: "coordination_agent_04.md", countsTowardPaidFloorNow: false },

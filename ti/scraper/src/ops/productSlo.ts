@@ -453,6 +453,45 @@ export interface LiveProductSloDashboard {
       proofCommands: string[];
       paidTrafficAllowedWhenAllGatesPass: true;
     };
+    buyerPaidReleaseVerdict: {
+      schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1";
+      routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "Apify OUTPUT">;
+      decision: "hold_paid_traffic";
+      buyerReadableStatus: "useful_sample_ready_paid_release_blocked";
+      publicListingState: "draft_copy_ready_not_promoted";
+      currentSellableRows: number;
+      productionSellableFloor: 100;
+      usefulRows: number;
+      usefulRowDensity: number;
+      averageBuyerValueScore: number;
+      releaseBlockers: Array<{
+        gate: "current_sellable_rows" | "external_marketplace_telemetry" | "payout_readiness" | "pricing_state";
+        state: "hold" | "external_unknown";
+        observed: number | "external_unknown";
+        required: string;
+        buyerMessage: string;
+        proofField: string;
+        countsTowardPaidRelease: false;
+      }>;
+      sampleDatasetPolicy: {
+        bestRowsShown: number;
+        caveatedRowsExplained: true;
+        lowValueRowsSuppressed: true;
+        noRawUnsafeMaterial: true;
+      };
+      operatorRecordingRule: {
+        externalValuesStayUnknownUntilObserved: true;
+        recordOnlyObservedApifyValues: string[];
+        proofPaths: string[];
+      };
+      noLeakProof: {
+        rawEvidenceBodies: false;
+        unsafeUrls: false;
+        credentials: false;
+        restrictedPayloads: false;
+        privateContent: false;
+      };
+    };
     blockerBuckets: Array<{
       blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
       owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -1438,13 +1477,26 @@ export interface LiveProductSloDashboard {
     contradictionOrAliasHoldCount: number;
     graphOnlyRowsExcludedFromFloor: number;
     projectedSellableRowsAfterPublicCorroboration: number;
+    publicProofMetrics: {
+      pivotsTested: number;
+      publicProofFound: number;
+      rowsUnlockedForParserAdmission: number;
+      rowsRejectedAsStaleOrAmbiguous: number;
+      contradictionsFound: number;
+      queuedForNextPublicSearch: number;
+      projectedBuyerValueLift: number;
+      countsTowardPaidFloorNow: false;
+    };
     averageProjectedConfidenceLift: number;
     sourceFamilyTargets: Array<{ sourceFamily: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice"; candidateCount: number }>;
     fieldRepairTargets: Array<{ repairsRowField: "actor_attribution" | "victim_or_dataset" | "sector_country" | "ttp_tool" | "campaign_context" | "freshness"; candidateCount: number }>;
     candidates: Array<{
       id: string;
+      rank: number;
       actor: string;
+      aliases: string[];
       family: "apt" | "ransomware";
+      candidateVictimOrTarget: string;
       currentBlockedState: "needs_public_support" | "metadata_only" | "single_source_caveat" | "parser_field_missing" | "contradiction_hold" | "alias_collision_hold";
       relationshipSupport: string;
       nextPublicCorroborationPivot: {
@@ -1456,11 +1508,23 @@ export interface LiveProductSloDashboard {
         aliasCollisionRisk: "none" | "low" | "medium" | "high";
         ownerHandoff: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
       };
+      publicProofState: "queued_for_search" | "public_proof_found" | "stale_or_ambiguous_reject" | "contradiction_found" | "alias_hold";
+      expectedBuyerFieldLift: string;
       expectedSellableRowsUnlockedAfterPublicProof: number;
+      measuredRowsUnlockedForParserAdmission: number;
       projectedConfidenceLift: number;
       graphOnlyCountsTowardSellableRows: false;
       rowUnlockRequiresNonGraphEvidence: true;
       noLeak: true;
+    }>;
+    integrationHandoffs: Array<{
+      owner: "agent_03" | "agent_05";
+      candidateIds: string[];
+      convertsRowsFrom: "parser_caveated_rows" | "dark_metadata_metadata_only_rows";
+      missingPublicProof: string;
+      expectedRowsUnlockedForAdmission: number;
+      countsTowardPaidFloorNow: false;
+      action: string;
     }>;
     ownerHandoffs: Array<{
       owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
@@ -3482,6 +3546,78 @@ function buildPaidReleaseTruthBoard(input: {
     ],
     paidTrafficAllowedWhenAllGatesPass: true
   };
+  const buyerPaidReleaseVerdict: LiveProductSloDashboard["paidReleaseTruthBoard"]["buyerPaidReleaseVerdict"] = {
+    schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT"],
+    decision: "hold_paid_traffic",
+    buyerReadableStatus: "useful_sample_ready_paid_release_blocked",
+    publicListingState: "draft_copy_ready_not_promoted",
+    currentSellableRows: apifySmokeSellableRows,
+    productionSellableFloor: 100,
+    usefulRows: apifySmokeBuyerUsefulRows,
+    usefulRowDensity: apifySmokeBuyerUsefulRows / 12,
+    averageBuyerValueScore: 0.558,
+    releaseBlockers: [
+      {
+        gate: "current_sellable_rows",
+        state: "hold",
+        observed: apifySmokeSellableRows,
+        required: ">=100 current sellable rows from observed Actor output",
+        buyerMessage: "The sample rows are useful, but paid traffic stays blocked until current output reaches the 100-row floor.",
+        proofField: "paidReleaseTruthBoard.observedProof.apifySmokeSellableRows",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "external_marketplace_telemetry",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "observed Store views, trial runs, paid runs, refunds, and conversion from Apify",
+        buyerMessage: "Demand and conversion are not inferred from smoke runs, projections, graph pivots, or repair queues.",
+        proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "payout_readiness",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "known Apify payout readiness from billing/account data",
+        buyerMessage: "Revenue and payout readiness stay unknown until copied from Apify billing.",
+        proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.payoutState",
+        countsTowardPaidRelease: false
+      },
+      {
+        gate: "pricing_state",
+        state: "external_unknown",
+        observed: "external_unknown",
+        required: "externally verified Apify pricing state",
+        buyerMessage: "Pricing shape is documented, but marketplace pricing state must be verified externally before paid promotion.",
+        proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.pricingState",
+        countsTowardPaidRelease: false
+      }
+    ],
+    sampleDatasetPolicy: {
+      bestRowsShown: apifySmokeSellableRows,
+      caveatedRowsExplained: true,
+      lowValueRowsSuppressed: true,
+      noRawUnsafeMaterial: true
+    },
+    operatorRecordingRule: {
+      externalValuesStayUnknownUntilObserved: true,
+      recordOnlyObservedApifyValues: ["storeViews", "uniqueUsers", "trialRuns", "paidRuns", "actorRuns", "datasetRows", "refunds", "platformUsageCostUsd", "estimatedCreatorRevenueUsd", "payoutState", "pricingState"],
+      proofPaths: [
+        "Apify Console > Store > Analytics",
+        "Apify Console > Actor > Runs",
+        "Apify Console > Billing/Payouts"
+      ]
+    },
+    noLeakProof: {
+      rawEvidenceBodies: false,
+      unsafeUrls: false,
+      credentials: false,
+      restrictedPayloads: false,
+      privateContent: false
+    }
+  };
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
@@ -3511,6 +3647,7 @@ function buildPaidReleaseTruthBoard(input: {
     conversionObservability,
     observedMarketplaceTelemetry,
     paidReleaseRunbook,
+    buyerPaidReleaseVerdict,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -5081,10 +5218,15 @@ function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["gr
   const states: Array<Candidate["currentBlockedState"]> = ["needs_public_support", "metadata_only", "single_source_caveat", "parser_field_missing"];
   const candidates = seeds.map((seed, index) => {
     const state = states[index % states.length] ?? "needs_public_support";
+    const proofState = graphPublicProofStateFor(state, index);
+    const expectedRows = state === "parser_field_missing" ? 1 : 2;
     return graphPublicPivotCandidate(
       `cs_public_pivot_${String(index + 1).padStart(2, "0")}`,
+      index + 1,
       seed.actor,
+      graphPublicAliasesFor(seed.actor),
       seed.family,
+      graphPublicTargetFor(seed.actor, seed.field),
       state,
       `graph_relationship:${seed.actor}:${seed.field}`,
       `${seed.actor} public ${seed.field.replaceAll("_", " ")} corroboration 2026`,
@@ -5094,21 +5236,25 @@ function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["gr
       state === "single_source_caveat" ? "medium" : "low",
       seed.actor === "APT28" || seed.actor === "BlackCat" ? "medium" : "low",
       seed.owner,
-      state === "parser_field_missing" ? 1 : 2,
+      proofState,
+      graphPublicBuyerFieldLiftFor(seed.field),
+      expectedRows,
+      proofState === "public_proof_found" ? expectedRows : 0,
       round(0.07 + (index % 4) * 0.01)
     );
   });
   candidates.push(
-    graphPublicPivotCandidate("cs_hold_sandworm_ukraine", "Sandworm", "apt", "contradiction_hold", "graph_relationship:Sandworm:Ukraine_ICS", "Sandworm Ukraine ICS attribution contradiction public advisory", "campaign", "government_advisory", "campaign_context", "high", "medium", "agent_07", 0, 0.01),
-    graphPublicPivotCandidate("cs_hold_nobelium_apt29", "NOBELIUM", "apt", "alias_collision_hold", "graph_relationship:NOBELIUM:APT29", "NOBELIUM APT29 alias collision current reporting", "actor", "vendor_report", "actor_attribution", "medium", "high", "agent_07", 0, 0.01),
-    graphPublicPivotCandidate("cs_hold_carbanak_fin7", "Carbanak", "apt", "alias_collision_hold", "graph_relationship:Carbanak:FIN7", "Carbanak FIN7 alias collision source review", "actor", "security_blog", "actor_attribution", "medium", "high", "agent_07", 0, 0.01),
-    graphPublicPivotCandidate("cs_hold_conti_ryuk", "Conti", "ransomware", "contradiction_hold", "graph_relationship:Conti:Ryuk", "Conti Ryuk overlap attribution contradiction", "actor", "public_report", "actor_attribution", "high", "high", "agent_07", 0, 0.01),
-    graphPublicPivotCandidate("cs_hold_royal_blacksuit", "Royal", "ransomware", "alias_collision_hold", "graph_relationship:Royal:BlackSuit", "Royal BlackSuit alias collision public source review", "actor", "security_blog", "actor_attribution", "medium", "high", "agent_07", 0, 0.01),
-    graphPublicPivotCandidate("cs_hold_8base_phobos", "8Base", "ransomware", "alias_collision_hold", "graph_relationship:8Base:Phobos", "8Base Phobos alias overlap current victim reporting", "actor", "public_report", "actor_attribution", "medium", "high", "agent_07", 0, 0.01)
+    graphPublicPivotCandidate("cs_hold_sandworm_ukraine", 25, "Sandworm", ["Sandworm Team", "Unit 74455"], "apt", "Ukraine ICS campaign", "contradiction_hold", "graph_relationship:Sandworm:Ukraine_ICS", "Sandworm Ukraine ICS attribution contradiction public advisory", "campaign", "government_advisory", "campaign_context", "high", "medium", "agent_07", "contradiction_found", "hold campaign context until current public attribution agrees", 0, 0, 0.01),
+    graphPublicPivotCandidate("cs_hold_nobelium_apt29", 26, "NOBELIUM", ["APT29", "Cozy Bear"], "apt", "current alias attribution", "alias_collision_hold", "graph_relationship:NOBELIUM:APT29", "NOBELIUM APT29 alias collision current reporting", "actor", "vendor_report", "actor_attribution", "medium", "high", "agent_07", "alias_hold", "hold actor attribution until alias/current-name policy resolves", 0, 0, 0.01),
+    graphPublicPivotCandidate("cs_hold_carbanak_fin7", 27, "Carbanak", ["FIN7", "Anunak"], "apt", "current alias attribution", "alias_collision_hold", "graph_relationship:Carbanak:FIN7", "Carbanak FIN7 alias collision source review", "actor", "security_blog", "actor_attribution", "medium", "high", "agent_07", "alias_hold", "hold actor attribution until alias/current-name policy resolves", 0, 0, 0.01),
+    graphPublicPivotCandidate("cs_hold_conti_ryuk", 28, "Conti", ["Ryuk", "Wizard Spider"], "ransomware", "Ryuk overlap attribution", "contradiction_hold", "graph_relationship:Conti:Ryuk", "Conti Ryuk overlap attribution contradiction", "actor", "public_report", "actor_attribution", "high", "high", "agent_07", "contradiction_found", "hold actor attribution until overlap is reviewed", 0, 0, 0.01),
+    graphPublicPivotCandidate("cs_hold_royal_blacksuit", 29, "Royal", ["BlackSuit"], "ransomware", "BlackSuit alias transition", "alias_collision_hold", "graph_relationship:Royal:BlackSuit", "Royal BlackSuit alias collision public source review", "actor", "security_blog", "actor_attribution", "medium", "high", "agent_07", "alias_hold", "hold actor attribution until alias/current-name policy resolves", 0, 0, 0.01),
+    graphPublicPivotCandidate("cs_hold_8base_phobos", 30, "8Base", ["Phobos"], "ransomware", "Phobos overlap attribution", "alias_collision_hold", "graph_relationship:8Base:Phobos", "8Base Phobos alias overlap current victim reporting", "actor", "public_report", "actor_attribution", "medium", "high", "agent_07", "alias_hold", "hold actor attribution until alias/current-name policy resolves", 0, 0, 0.01)
   );
   const rowUnlockingCandidateCount = candidates.filter((candidate) => candidate.expectedSellableRowsUnlockedAfterPublicProof > 0).length;
   const contradictionOrAliasHoldCount = candidates.filter((candidate) => candidate.currentBlockedState === "contradiction_hold" || candidate.currentBlockedState === "alias_collision_hold").length;
   const projectedSellableRowsAfterPublicCorroboration = candidates.reduce((sum, candidate) => sum + candidate.expectedSellableRowsUnlockedAfterPublicProof, 0);
+  const publicProofMetrics = graphPublicProofMetrics(candidates);
   return {
     schemaVersion: "ti.program_cs_graph_public_corroboration_pivot_packet.v1",
     routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"],
@@ -5123,10 +5269,31 @@ function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["gr
     contradictionOrAliasHoldCount,
     graphOnlyRowsExcludedFromFloor: candidates.length,
     projectedSellableRowsAfterPublicCorroboration,
+    publicProofMetrics,
     averageProjectedConfidenceLift: round(candidates.reduce((sum, candidate) => sum + candidate.projectedConfidenceLift, 0) / candidates.length),
     sourceFamilyTargets: graphPublicPivotSourceFamilyTargets(candidates),
     fieldRepairTargets: graphPublicPivotFieldTargets(candidates),
     candidates,
+    integrationHandoffs: [
+      {
+        owner: "agent_03",
+        candidateIds: candidates.filter((candidate) => candidate.publicProofState === "public_proof_found" && candidate.nextPublicCorroborationPivot.ownerHandoff === "agent_03").map((candidate) => candidate.id),
+        convertsRowsFrom: "parser_caveated_rows",
+        missingPublicProof: "parser can admit rows once current public report/advisory proof is attached to the existing graph-supported TTP/tool/campaign field",
+        expectedRowsUnlockedForAdmission: candidates.filter((candidate) => candidate.publicProofState === "public_proof_found" && candidate.nextPublicCorroborationPivot.ownerHandoff === "agent_03").reduce((sum, candidate) => sum + candidate.measuredRowsUnlockedForParserAdmission, 0),
+        countsTowardPaidFloorNow: false,
+        action: "attach public proof hashes and rerun parser admission without using graph-only context as the paid-row evidence"
+      },
+      {
+        owner: "agent_05",
+        candidateIds: candidates.filter((candidate) => candidate.publicProofState === "public_proof_found" && candidate.nextPublicCorroborationPivot.ownerHandoff === "agent_05").map((candidate) => candidate.id),
+        convertsRowsFrom: "dark_metadata_metadata_only_rows",
+        missingPublicProof: "metadata-only victim/dataset leads need a safe public notice or report before admission",
+        expectedRowsUnlockedForAdmission: candidates.filter((candidate) => candidate.publicProofState === "public_proof_found" && candidate.nextPublicCorroborationPivot.ownerHandoff === "agent_05").reduce((sum, candidate) => sum + candidate.measuredRowsUnlockedForParserAdmission, 0),
+        countsTowardPaidFloorNow: false,
+        action: "join safe public victim/report proof to metadata-only leads while preserving no raw locator, payload, credential, or private material"
+      }
+    ],
     ownerHandoffs: [
       graphPublicPivotOwnerHandoff(candidates, "agent_03", "tighten parser fields after public proof lands"),
       graphPublicPivotOwnerHandoff(candidates, "agent_04", "attach safe public source-family support"),
@@ -5150,8 +5317,11 @@ function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["gr
 
 function graphPublicPivotCandidate(
   id: string,
+  rank: number,
   actor: string,
+  aliases: string[],
   family: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["family"],
+  candidateVictimOrTarget: string,
   currentBlockedState: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["currentBlockedState"],
   relationshipSupport: string,
   queryText: string,
@@ -5161,21 +5331,116 @@ function graphPublicPivotCandidate(
   contradictionRisk: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["nextPublicCorroborationPivot"]["contradictionRisk"],
   aliasCollisionRisk: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["nextPublicCorroborationPivot"]["aliasCollisionRisk"],
   ownerHandoff: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["nextPublicCorroborationPivot"]["ownerHandoff"],
+  publicProofState: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["publicProofState"],
+  expectedBuyerFieldLift: string,
   expectedSellableRowsUnlockedAfterPublicProof: number,
+  measuredRowsUnlockedForParserAdmission: number,
   projectedConfidenceLift: number
 ): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number] {
   return {
     id,
+    rank,
     actor,
+    aliases,
     family,
+    candidateVictimOrTarget,
     currentBlockedState,
     relationshipSupport,
     nextPublicCorroborationPivot: { queryText, entityType, expectedSourceFamily, repairsRowField, contradictionRisk, aliasCollisionRisk, ownerHandoff },
+    publicProofState,
+    expectedBuyerFieldLift,
     expectedSellableRowsUnlockedAfterPublicProof,
+    measuredRowsUnlockedForParserAdmission,
     projectedConfidenceLift,
     graphOnlyCountsTowardSellableRows: false,
     rowUnlockRequiresNonGraphEvidence: true,
     noLeak: true
+  };
+}
+
+function graphPublicProofStateFor(
+  state: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["currentBlockedState"],
+  index: number
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["publicProofState"] {
+  if (state === "contradiction_hold") return "contradiction_found";
+  if (state === "alias_collision_hold") return "alias_hold";
+  if (index < 10) return "public_proof_found";
+  if (index < 16) return "stale_or_ambiguous_reject";
+  return "queued_for_search";
+}
+
+function graphPublicAliasesFor(actor: string): string[] {
+  const aliases: Record<string, string[]> = {
+    APT29: ["Cozy Bear", "NOBELIUM"],
+    APT28: ["Fancy Bear", "Forest Blizzard"],
+    APT42: ["Charming Kitten", "Mint Sandstorm"],
+    Turla: ["Snake", "Venomous Bear"],
+    "Volt Typhoon": ["Bronze Silhouette"],
+    "Lazarus Group": ["Hidden Cobra", "Labyrinth Chollima"],
+    "Scattered Spider": ["UNC3944", "0ktapus"],
+    "Mustang Panda": ["Bronze President"],
+    OilRig: ["APT34", "Helix Kitten"],
+    Kimsuky: ["Thallium", "Velvet Chollima"],
+    LockBit: ["LockBitSupp"],
+    Akira: ["Akira ransomware"],
+    Clop: ["Cl0p"],
+    "Black Basta": ["BlackBasta"],
+    RansomHub: ["RansomHub ransomware"],
+    Play: ["Play ransomware"],
+    Qilin: ["Agenda"],
+    BlackCat: ["ALPHV"],
+    BianLian: ["BianLian ransomware"],
+    Medusa: ["Medusa ransomware"],
+    FIN7: ["Carbanak"],
+    MuddyWater: ["Static Kitten"],
+    "Storm-0978": ["RomCom"],
+    Royal: ["Royal ransomware"]
+  };
+  return aliases[actor] ?? [actor];
+}
+
+function graphPublicTargetFor(
+  actor: string,
+  field: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["nextPublicCorroborationPivot"]["repairsRowField"]
+): string {
+  const targetsByField: Record<typeof field, string> = {
+    actor_attribution: `${actor} current attribution`,
+    victim_or_dataset: `${actor} victim or dataset claim`,
+    sector_country: `${actor} sector or country targeting`,
+    ttp_tool: `${actor} TTP or tooling use`,
+    campaign_context: `${actor} campaign context`,
+    freshness: `${actor} current activity freshness`
+  };
+  return targetsByField[field];
+}
+
+function graphPublicBuyerFieldLiftFor(
+  field: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["nextPublicCorroborationPivot"]["repairsRowField"]
+): string {
+  const liftByField: Record<typeof field, string> = {
+    actor_attribution: "adds actor attribution safe enough for row-level buyer filtering",
+    victim_or_dataset: "adds named victim or dataset context needed for a buyer-actionable row",
+    sector_country: "adds sector/country targeting detail that improves marketplace row specificity",
+    ttp_tool: "adds TTP/tool evidence that turns a generic actor row into a useful defensive row",
+    campaign_context: "adds campaign context for the row summary and next-search pivot",
+    freshness: "adds current public activity support so stale-only rows stay suppressed"
+  };
+  return liftByField[field];
+}
+
+function graphPublicProofMetrics(
+  candidates: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"]
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["publicProofMetrics"] {
+  const tested = candidates.filter((candidate) => candidate.publicProofState !== "queued_for_search");
+  return {
+    pivotsTested: tested.length,
+    publicProofFound: candidates.filter((candidate) => candidate.publicProofState === "public_proof_found").length,
+    rowsUnlockedForParserAdmission: candidates.reduce((sum, candidate) => sum + candidate.measuredRowsUnlockedForParserAdmission, 0),
+    rowsRejectedAsStaleOrAmbiguous: candidates.filter((candidate) => candidate.publicProofState === "stale_or_ambiguous_reject").length,
+    contradictionsFound: candidates.filter((candidate) => candidate.publicProofState === "contradiction_found").length,
+    queuedForNextPublicSearch: candidates.filter((candidate) => candidate.publicProofState === "queued_for_search").length,
+    projectedBuyerValueLift: round(candidates.reduce((sum, candidate) => sum + (candidate.measuredRowsUnlockedForParserAdmission > 0 ? candidate.projectedConfidenceLift : 0), 0)),
+    countsTowardPaidFloorNow: false
   };
 }
 

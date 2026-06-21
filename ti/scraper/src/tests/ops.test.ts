@@ -580,6 +580,42 @@ describe("ops controls", () => {
     ]));
     expect(dashboard.paidReleaseTruthBoard.paidReleaseRunbook.holdWhen).toEqual(expect.arrayContaining(["current sellable rows are below 100"]));
     expect(dashboard.paidReleaseTruthBoard.paidReleaseRunbook.rollbackWhen.some((rule) => rule.includes("refund"))).toBe(true);
+    expect(dashboard.paidReleaseTruthBoard.buyerPaidReleaseVerdict).toMatchObject({
+      schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1",
+      decision: "hold_paid_traffic",
+      buyerReadableStatus: "useful_sample_ready_paid_release_blocked",
+      publicListingState: "draft_copy_ready_not_promoted",
+      currentSellableRows: 3,
+      productionSellableFloor: 100,
+      usefulRows: 9,
+      usefulRowDensity: 0.75,
+      averageBuyerValueScore: 0.558,
+      sampleDatasetPolicy: {
+        bestRowsShown: 3,
+        caveatedRowsExplained: true,
+        lowValueRowsSuppressed: true,
+        noRawUnsafeMaterial: true
+      },
+      operatorRecordingRule: {
+        externalValuesStayUnknownUntilObserved: true
+      },
+      noLeakProof: {
+        rawEvidenceBodies: false,
+        unsafeUrls: false,
+        credentials: false,
+        restrictedPayloads: false,
+        privateContent: false
+      }
+    });
+    expect(dashboard.paidReleaseTruthBoard.buyerPaidReleaseVerdict.releaseBlockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ gate: "current_sellable_rows", state: "hold", observed: 3, countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "external_marketplace_telemetry", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "payout_readiness", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false }),
+      expect.objectContaining({ gate: "pricing_state", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false })
+    ]));
+    expect(dashboard.paidReleaseTruthBoard.buyerPaidReleaseVerdict.releaseBlockers.every((gate) => gate.buyerMessage.length > 0)).toBe(true);
+    expect(dashboard.paidReleaseTruthBoard.buyerPaidReleaseVerdict.operatorRecordingRule.recordOnlyObservedApifyValues).toEqual(expect.arrayContaining(["paidRuns", "refunds", "payoutState", "pricingState"]));
+    expect(dashboard.paidReleaseTruthBoard.buyerPaidReleaseVerdict.operatorRecordingRule.proofPaths.join(" ")).toContain("Apify Console");
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(dashboard.scaleStepGates).toMatchObject({
@@ -887,10 +923,24 @@ describe("ops controls", () => {
       rowUnlockingCandidateCount: 24,
       contradictionOrAliasHoldCount: 6,
       graphOnlyRowsExcludedFromFloor: 30,
-      projectedSellableRowsAfterPublicCorroboration: 42
+      projectedSellableRowsAfterPublicCorroboration: 42,
+      publicProofMetrics: {
+        pivotsTested: 22,
+        publicProofFound: 10,
+        rowsUnlockedForParserAdmission: 18,
+        rowsRejectedAsStaleOrAmbiguous: 6,
+        contradictionsFound: 2,
+        queuedForNextPublicSearch: 8,
+        projectedBuyerValueLift: 0.83,
+        countsTowardPaidFloorNow: false
+      }
     });
     expect(dashboard.graphPublicCorroborationPivotPacket.candidates.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Qilin", "Sandworm", "NOBELIUM", "Carbanak", "Conti", "8Base"]));
     expect(dashboard.graphPublicCorroborationPivotPacket.candidates.every((row) =>
+      row.rank > 0 &&
+      row.aliases.length > 0 &&
+      row.candidateVictimOrTarget.length > 0 &&
+      row.expectedBuyerFieldLift.length > 0 &&
       row.relationshipSupport.length > 0 &&
       row.nextPublicCorroborationPivot.queryText.length > 0 &&
       row.nextPublicCorroborationPivot.expectedSourceFamily.length > 0 &&
@@ -899,11 +949,17 @@ describe("ops controls", () => {
       row.rowUnlockRequiresNonGraphEvidence === true &&
       row.noLeak
     )).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.publicProofState === "public_proof_found").reduce((sum, row) => sum + row.measuredRowsUnlockedForParserAdmission, 0)).toBe(18);
+    expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.publicProofState === "queued_for_search").every((row) => row.measuredRowsUnlockedForParserAdmission === 0)).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) =>
       row.expectedSellableRowsUnlockedAfterPublicProof === 0 &&
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) &&
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk)
     )).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.integrationHandoffs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ owner: "agent_03", expectedRowsUnlockedForAdmission: 9, countsTowardPaidFloorNow: false }),
+      expect.objectContaining({ owner: "agent_05", expectedRowsUnlockedForAdmission: 0, countsTowardPaidFloorNow: false })
+    ]));
     expect(dashboard.graphPublicCorroborationPivotPacket.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.graphPublicCorroborationPivotPacket.noLeakBoundary).toMatchObject({ rawEvidenceBodies: false, unsafeUrls: false, objectKeys: false, credentials: false, payloadLinks: false, privateMaterial: false, actorInteraction: false });
     expect(dashboard.parserToSellableRepairPacket).toMatchObject({
