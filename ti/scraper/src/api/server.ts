@@ -10967,6 +10967,57 @@ function buildApifyStoreReadinessContract(input: {
         requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
       }
     },
+    programFgPrivateBetaDecision: {
+      schemaVersion: "ti.program_fg_private_beta_release_decision.v1",
+      routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "bun run check:paid-actor-release-audit", "coordination_agent_10.md"],
+      decision: "hold_paid_release",
+      privatePaidBetaAllowedNow: false,
+      publicPaidTrafficAllowedNow: false,
+      decisionSeparation: {
+        privateBetaDoesNotRequirePublicConversionEvidence: true,
+        publicPaidTrafficRequiresPrivateBetaPlusConversionAndRefundEvidence: true,
+        local1000RowsAloneCannotUnlockHostedRelease: true
+      },
+      costPerUsefulRowGuard: {
+        state: "unknown",
+        observedCostPerUsefulRowUsd: null,
+        maximumCostPerUsefulRowUsd: 0.05,
+        source: "hosted observed cost/useful rows only",
+        localCostEstimateCounts: false
+      },
+      observedEvidence: {
+        importState: "no_proof_imported",
+        hostedProofState: "missing",
+        marketplaceTruthState: "external_unknown",
+        releaseBlockerState: "no_proof_imported"
+      },
+      privateBetaGate: {
+        state: "hold",
+        blockers: ["hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved_or_above_limit"],
+        proofFields: ["programDcReleaseGates.current1000LocalSellableGate", "programDcReleaseGates.current1000Gate", "hostedPaidReadinessProof.programFgObservedEvidenceBoard", "hostedPaidReadinessProof.conversionPayoutTruth"]
+      },
+      publicPaidTrafficGate: {
+        state: "hold",
+        blockers: ["private_paid_beta_not_ready", "hosted300_observed_proof", "hosted500_observed_proof", "marketplace_paid_traffic_gate", "paid_users_unobserved", "refunds_unobserved_or_nonzero"]
+      },
+      orderedRevenueBlockers: [
+        { rank: 1, blocker: "current1000_local_sellable_rows", state: "pass", observed: 1000, required: 1000, proofField: "paidReleaseTruthBoard.programDcReleaseGates.current1000LocalSellableGate" },
+        { rank: 2, blocker: "current1000_useful_rows", state: "pass", observed: 1000, required: 1000, proofField: "paidReleaseTruthBoard.programDcReleaseGates.current1000Gate" },
+        { rank: 3, blocker: "hosted100_300_500_observed_proof", state: "hold", observed: "missing", required: "hosted100 for private beta; hosted300 and hosted500 for public paid traffic", proofField: "hostedPaidReadinessProof.programFgObservedEvidenceBoard" },
+        { rank: 4, blocker: "pricing_payout_analytics", state: "external_unknown", observed: { pricing: "external_unknown", payout: "external_unknown", analytics: "external_unknown" }, required: "observed pricing, payout readiness, and Store analytics visibility", proofField: "hostedPaidReadinessProof.conversionPayoutTruth" },
+        { rank: 5, blocker: "conversion_refunds", state: "external_unknown", observed: { paidUsers: null, refunds: null }, required: "public traffic only: observed paid users/runs and zero refunds", proofField: "hostedPaidReadinessProof.conversionPayoutTruth.analytics" },
+        { rank: 6, blocker: "no_leak_and_stale_latest_proof", state: "hold", observed: { noLeakFailures: null, staleLatestRowsBlocked: true }, required: "no leaks and zero stale/latest-error paid rows", proofField: "hostedPaidReadinessProof.hostedProofImportPath.observedFields" },
+        { rank: 7, blocker: "dirty_tree_and_test_hygiene", state: "pass", observed: "checked_by_release_audit", required: "clean tree and green Bun checks before release", proofField: "bun run check:paid-actor-release-audit" }
+      ],
+      antiBloatGuard: {
+        coordinationOnlyCountsTowardRelease: false,
+        dtoOnlyCountsTowardRelease: false,
+        stixTaxiiOnlyCountsTowardRelease: false,
+        syntheticIndexRowsCountTowardRelease: false,
+        localOnlyProofCountsTowardHostedRelease: false,
+        requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
+      }
+    },
     blockerBuckets: [
       { blocker: "already_chargeable", owner: "agent_10", rowDeltaTo100: 0, expectedRowGain: 3, confidence: "observed", risk: "current smoke rows prove safe output shape only", fastestNextTask: "keep chargeable rows visible while repair buckets create 97 more real rows", coordinationFile: "coordination_agent_10.md", countsTowardPaidFloorNow: true },
       { blocker: "missing_public_support", owner: "agent_04", rowDeltaTo100: 28, expectedRowGain: 28, confidence: "medium", risk: "single-source or unsupported rows stay caveated/held", fastestNextTask: "attach safe public corroboration to highest-value actor/ransomware rows", coordinationFile: "coordination_agent_04.md", countsTowardPaidFloorNow: false },
