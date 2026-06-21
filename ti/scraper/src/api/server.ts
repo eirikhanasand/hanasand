@@ -4,6 +4,7 @@ import { buildLiveProductSloDashboard, type LiveProductProofMode } from "../ops/
 import { activatePublicCanarySources, buildCanaryOperatorSummary, buildCanaryReadinessPacket, runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
+import { handleSourceApplyPlanRoute } from "./sourceApplyPlanRoute.ts";
 import { searchQualityApiExamples } from "../pipeline/searchQualityGate.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import type { CollectionPlan, CollectionRun, IntelligenceRequest, MetricsResponse, SourceRecord } from "../types.ts";
@@ -27,6 +28,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/sources" && request.method === "POST") return createSource(request, options);
     if (url.pathname.startsWith("/v1/sources/") && request.method === "PATCH") return updateSource(request, options, url.pathname.split("/")[3]);
     if (url.pathname === "/v1/sources/atlas") return json({ records: page(options.store.listSources(), url), summary: { total: options.store.listSources().length } });
+    if (url.pathname === "/v1/sources/apply-plan") return sourceApplyPlan(request, options);
     if (url.pathname === "/v1/sources/coverage-plan") return json({ queries: (await readJson(request)).queries ?? [], slo: { goal: "add payworthy fresh rows" } });
     if (url.pathname === "/v1/intel/search" || url.pathname === "/api/ti/search") return searchResponse(request, options, url);
     if (url.pathname === "/v1/intel/runs" && request.method === "POST") return createRun(request, options);
@@ -65,6 +67,18 @@ async function searchResponse(request: Request, options: ApiServerOptions, url: 
   const quality = { query, status: rows.length ? "ready" : "partial", score: rows.length ? 0.86 : 0.46, canPromoteToReady: rows.length > 0, publicWarningText: rows.length ? ["quality gate is ready with durable or reviewed evidence"] : ["searching"], publicWarningCodes: rows.length ? [] : ["insufficient-capture"], analystActions: rows.length ? [{ kind: "promote_quality_status", label: "Promote quality status", manualOnly: false, evidenceIds: rows.map((r) => r.id) }] : [{ kind: "request_more_capture_evidence", label: "Request more capture evidence", manualOnly: false, evidenceIds: [] }] };
   const graph = { endpoint: "/v1/intel/search.graph", reviewQueue: { total: rows.length ? 0 : 1, publicFactPolicy: rows.length ? "ready" : "hold_weak_edges" } };
   return json({ query, status, summary: publicTiAnswer.safeSummary, rows, results: rows, runId: stableId("search", `${query}:${nowIso()}`), actorProfile, publicTiAnswer, quality, graph });
+}
+
+async function sourceApplyPlan(request: Request, options: ApiServerOptions): Promise<Response> {
+  const body = await readJson(request);
+  const tenantId = body.tenantId ?? request.headers.get("x-tenant-id") ?? undefined;
+  const result = handleSourceApplyPlanRoute({ request: { ...body, tenantId }, sources: options.store.listSources(), sourcePacks: starterPacks(body.sourcePackIds) });
+  return json(result.body, result.status);
+}
+
+function starterPacks(ids: unknown) {
+  const names = Array.isArray(ids) ? ids.map(String) : [];
+  return names.includes("safe-public-cti-starter-pack") ? [{ version: 1, name: "safe-public-cti-starter-pack", sources: [{ id: "src_safe_public_cti_starter_feed", name: "Safe Public CTI Starter Feed", type: "rss", url: "https://starter.example.test/cti/rss.xml", accessMethod: "public_http", status: "candidate", risk: "low", trustScore: 0.72, crawlFrequencySeconds: 3600, legalNotes: "Public security RSS metadata collection basis.", catalog: { approvalScope: "safe_public_auto", adapterCompatibility: ["rss"], collection: { freshnessTargetSeconds: 3600 } } }] }] : [];
 }
 
 function qualityPayload(query: string) {

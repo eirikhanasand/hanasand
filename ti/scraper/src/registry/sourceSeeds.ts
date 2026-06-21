@@ -74,7 +74,7 @@ export function buildSourceRuntimeSlaApiResponse(input: any = {}): any {
 export function buildSafePublicSourcePackInstallPlan(bundle: any, mode: any = "dry_run"): any {
   const selectedMode = typeof mode === "string" ? mode : mode.mode ?? "dry_run";
   const report = validateSeedBundle(bundle, { dryRun: selectedMode === "dry_run", existingSources: mode.existingSources ?? [] });
-  return { mode: selectedMode, dryRun: selectedMode === "dry_run", valid: report.valid, safeToInstall: report.valid, willStartCrawling: false, willInstall: selectedMode !== "dry_run" ? report.accepted.length : 0, duplicateSourceCount: report.duplicates.length, recommendations: report.accepted.map((source: SourceRecord) => ({ sourceId: source.id, action: "install_candidate" })), sources: report.accepted, errors: report.errors };
+  return { packName: bundle.name, mode: selectedMode, dryRun: selectedMode === "dry_run", valid: report.valid, safeToInstall: report.valid, willStartCrawling: false, willInstall: selectedMode !== "dry_run" ? report.accepted.length : 0, duplicateSourceCount: report.duplicates.length, recommendations: report.accepted.map((source: SourceRecord) => ({ sourceId: source.id, action: "install_candidate", requiredAction: "install_candidate", reasons: ["safe public source is not present in registry"] })), sources: report.accepted, errors: report.errors };
 }
 
 export function validateSafePublicStarterPackCoverage(bundle: any, queries = ACTORS): any {
