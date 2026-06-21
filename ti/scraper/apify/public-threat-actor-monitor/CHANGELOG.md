@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.9 - 2026-06-21
+
+- Reworked the Apify Store-facing package copy around buyer conversion: clearer title/description, shorter README, explicit pricing explanation, concrete sample dataset row, and role-specific examples for SOC, CTI analyst, brand monitoring, and incident response users.
+- Removed release/process vocabulary from buyer-facing Store text and kept the promise specific: fresh public threat actor and ransomware activity metadata with safe output boundaries.
+
 ## 0.6.8 - 2026-06-21
 
 - Expanded the default monitor from the 20-name proof preset to a 100-name buyer preset / 100-name default watchlist while keeping custom runs capped at 100 names.

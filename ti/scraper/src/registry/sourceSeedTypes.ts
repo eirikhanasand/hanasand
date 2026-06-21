@@ -2944,6 +2944,11 @@ export interface SourceActivationWaveSource {
   legalReviewState: "current" | "missing" | "stale";
   robotsReviewState: "current" | "missing" | "stale" | "not_required";
   parserCompatible: boolean;
+  actorGroups: string[];
+  expectedRowType: "actor_activity" | "ransomware_victim" | "cve_advisory" | "malware_infrastructure" | "sector_country" | "campaign_report";
+  parserPath: "rss" | "static_html" | "official_api" | "text_feed";
+  buyerUse: string;
+  freshnessCadenceSeconds: number;
   schedulerBudget: {
     budgetClass: SourceCollectionSla["budgetClass"];
     cadenceSeconds: number;

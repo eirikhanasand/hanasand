@@ -129,6 +129,14 @@ const latestShapeSafetyProof = {
   localSellableRate: "30.8% sellable rate",
   localAverageBuyerValue: "average buyer value `0.593`"
 };
+const buyerFacingText = [
+  JSON.stringify(manifest, null, 2),
+  readme,
+  JSON.stringify(datasetSchema, null, 2),
+  inputSchema,
+  await Bun.file(".actor/OUTPUT_SCHEMA.json").text()
+].join("\n");
+const forbiddenBuyerTerms = ["proof", "governance", "readiness", "DTO", "blocker", "gate", "Program"];
 
 for (const field of ["title", "description"] as const) {
   if (!manifest[field]?.trim()) failures.push(`Missing actor manifest ${field}`);
@@ -169,8 +177,23 @@ for (const term of forbiddenListingTerms) {
   }
 }
 
+for (const term of forbiddenBuyerTerms) {
+  const pattern = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+  if (pattern.test(buyerFacingText)) {
+    failures.push(`Buyer-facing Store text contains internal term: ${term}`);
+  }
+}
+
 const contractMentions: Array<[string, string[]]> = [
-  ["safe metadata contract", ["safe_metadata_only", "safe-metadata-only"]],
+  ["fresh public threat actor promise", ["fresh public threat actor and ransomware activity"]],
+  ["SOC example", ["SOC team:", "activity worth triage"]],
+  ["CTI analyst example", ["CTI analyst:", "nextSearchPivots"]],
+  ["brand monitoring example", ["Brand monitoring team:", "victim-claim metadata"]],
+  ["incident response example", ["Incident response team:", "containment review"]],
+  ["pricing explanation", ["Dataset rows: `$3.00 / 1,000 rows`", "Actor start: `$0.00005`", "cost tied to output volume"]],
+  ["sample dataset row", ["## Sample Dataset Row", "\"paidRowDecision\": \"sellable\"", "\"billingGuidance\": \"charge\""]],
+  ["sample-output baseline", ["Current sample-output baseline", "187 sellable rows", "420 caveated useful leads", "30.8% sellable rate"]],
+  ["safe metadata boundary", ["Safe metadata only", "no credential values", "no threat-actor interaction"]],
   ["raw content exclusion", ["rawContentIncluded"]],
   ["review reasons", ["reviewReasons"]],
   ["analysis facets", ["analysisFacets"]],
@@ -179,23 +202,11 @@ const contractMentions: Array<[string, string[]]> = [
   ["source coverage action fields", ["nextBestSourceAction", "buyerCaveat", "expectedTimeToUsefulSignal"]],
   ["paid row decision fields", ["paidRowDecision", "billingGuidance", "buyerValueScore", "whyWorthPayingFor"]],
   ["relationship insight fields", ["relationshipSummary", "relationshipPivots", "whyActionable", "nextSearchPivots"]],
-  ["scheduler decision", ["schedulerDecision"]],
   ["pay-per-event pricing", ["pay-per-event", "apify-default-dataset-item"]],
   ["actor start charge event", ["apify-actor-start"]],
   ["synthetic Apify event billing", ["apify_synthetic_events", "default dataset"]],
-  ["100-row conversion proof", ["hundredRowConversionProof", "ti.apify_100_row_conversion_proof.v1"]],
-  ["100 sellable row progress", ["current sellable rows", "projected sellable rows", "one-repair-away rows"]],
-  ["paid-traffic floor", ["at least `100 sellable rows`", "paid-traffic-ready"]],
-  ["100-name buyer preset", ["100-name default watchlist", "100-name buyer preset"]],
-  ["diagnostics opt-in", ["Held rows, suppressed rows, and coverage-gap diagnostics are opt-in", "includeHeldRows"]],
-  ["sellable public evidence rows", ["sellable source-provenance rows", "public source-provenance rows"]],
-  ["real-row conversion sample pack", ["marketplaceConversionRealRowSamplePack", "ti.apify_marketplace_conversion_real_row_sample_pack.v1"]],
-  ["first-100 buyer preview", ["first100BuyerPreview", "ti.apify_first_100_real_rows_buyer_preview.v1", "blocked_preview_until_100_real_sellable_rows"]],
-  ["buyer paid-release verdict", ["buyerPaidReleaseVerdict", "ti.program_cu_buyer_paid_release_verdict.v1", "draft_copy_ready_not_promoted"]],
-  ["hosted paid readiness proof", ["hostedPaidReadinessProof", "ti.hosted_apify_paid_readiness_proof.v1", "ti.program_cp_hosted_paid_row_integrity_gate.v1", "secondBatchAudit", "check:hosted-apify-paid-readiness", "TI_APIFY_HOSTED_PROOF_MODE=run", "TI_APIFY_OBSERVED_PROOF_PATH"]],
-  ["real-row proof exclusions", ["synthetic, graph-only, stale, restricted-only, caveat-only, held, and coverage-gap rows", "excluded from paid-readiness proof"]],
-  ["external unknown marketplace telemetry", ["external_unknown", "cost/useful row", "useful-row density"]],
-  ["external analytics only", ["Store views", "paid runs", "runtime", "platform usage", "conversion rates"]]
+  ["100-name watchlist", ["100-name default watchlist", "100-name default watchlist"]],
+  ["diagnostics opt-in", ["Held rows, suppressed rows, and coverage-gap diagnostics are opt-in", "includeHeldRows"]]
 ];
 
 for (const [label, acceptedTerms] of contractMentions) {

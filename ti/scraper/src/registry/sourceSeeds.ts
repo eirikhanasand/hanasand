@@ -5854,6 +5854,11 @@ function enterpriseActivationWaveSource(
     legalReviewState,
     robotsReviewState,
     parserCompatible: true,
+    actorGroups: enterpriseActivationActorGroups(template),
+    expectedRowType: enterpriseActivationExpectedRowType(template),
+    parserPath: sourceType === "api" ? "official_api" : "rss",
+    buyerUse: enterpriseActivationBuyerUse(template),
+    freshnessCadenceSeconds: cadence,
     schedulerBudget: {
       budgetClass: template.category === "advisory" || template.category === "government_cert" ? "high" : "normal",
       cadenceSeconds: cadence,
@@ -5876,6 +5881,38 @@ function enterpriseActivationWaveSource(
       `coverage:${template.tags.slice(0, 4).join(",")}`
     ]
   };
+}
+
+function enterpriseActivationActorGroups(template: typeof ENTERPRISE_SAFE_PUBLIC_SOURCE_TEMPLATES[number]): string[] {
+  const tags = new Set(template.tags.map((tag) => tag.toLowerCase()));
+  return [
+    tags.has("ransomware") || tags.has("incident") ? "ransomware" : "",
+    tags.has("malware") || tags.has("infrastructure") ? "malware" : "",
+    tags.has("cve") || tags.has("vulnerability") || tags.has("advisory") ? "vulnerability" : "",
+    tags.has("actor") || tags.has("campaign") || tags.has("vendor research") ? "apt" : ""
+  ].filter(Boolean);
+}
+
+function enterpriseActivationExpectedRowType(template: typeof ENTERPRISE_SAFE_PUBLIC_SOURCE_TEMPLATES[number]): SourceActivationWaveSource["expectedRowType"] {
+  if (template.category === "github_security_advisory" || template.tags.some((tag) => /cve|vulnerab|advisory/i.test(tag))) return "cve_advisory";
+  if (template.tags.some((tag) => /ransomware|incident/i.test(tag))) return "ransomware_victim";
+  if (template.tags.some((tag) => /malware|infrastructure/i.test(tag))) return "malware_infrastructure";
+  if (template.tags.some((tag) => /sector|country/i.test(tag))) return "sector_country";
+  if (template.tags.some((tag) => /campaign/i.test(tag))) return "campaign_report";
+  return "actor_activity";
+}
+
+function enterpriseActivationBuyerUse(template: typeof ENTERPRISE_SAFE_PUBLIC_SOURCE_TEMPLATES[number]): string {
+  if (template.category === "government_cert" || template.category === "advisory" || template.category === "github_security_advisory") {
+    return "Track current advisory, CVE, sector, country, and mitigation pivots for buyer triage.";
+  }
+  if (template.tags.some((tag) => /ransomware|incident/i.test(tag))) {
+    return "Track public ransomware and incident reporting for victim, sector, country, and freshness pivots.";
+  }
+  if (template.tags.some((tag) => /malware|infrastructure/i.test(tag))) {
+    return "Track malware, infrastructure, and campaign pivots for current public monitoring rows.";
+  }
+  return "Track public actor, campaign, TTP, and source-provenance pivots for sellable CTI rows.";
 }
 
 function classifyCloseoutQuery(query: string): SourceCoverageCloseoutQueryClass {
