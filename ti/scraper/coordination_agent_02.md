@@ -13,6 +13,12 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-21 11:23 CEST
+
+- Updated `scheduler.dailyActorRunPlan.paidRowCadenceInputs` to distinguish missing hosted proof from the real hosted hold: hosted proof is now observed at 46/100 sellable rows and 31/52 sellable findings, but still counts zero toward hosted paid promotion.
+- Kept the scheduler gate honest: local current750 remains passed, current1000 local sellable/useful gates remain active, and hosted100 remains held until the observed run clears sellable-row, finding-row, second-batch, false-positive, pricing, payout, analytics, listing, conversion, and refund checks.
+- Next: verify this focused scheduler truth update, commit only the Agent 02 files if the shared dirty Agent 09/source-atlas work remains separate, and continue daily Actor/source freshness scheduling.
+
 ## Progress - 2026-06-21 10:25 CEST
 
 - Advanced `scheduler.dailyActorRunPlan.paidRowCadenceInputs` after the Program DE handoffs: current750 is now passed, current1000 local sellable is the active scheduler gate, and current1000 useful density remains the next proof gate.
