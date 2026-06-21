@@ -1,57 +1,8 @@
 import { hashContent } from "../utils.ts";
-
-export interface BrowserWorkerIsolationConfig {
-  enabled: boolean;
-  maxWorkers: number;
-  memoryCapMb: number;
-  timeoutMs: number;
-  allowedHosts: string[];
-  robotsAllowed: boolean;
-  legalNotes?: string;
-}
-
-export interface BrowserWorkerCaptureInput {
-  url: string;
-  finalUrl?: string;
-  html?: string;
-  text?: string;
-  screenshotBytes?: Uint8Array;
-  contentType?: string;
-  durationMs?: number;
-}
-
-export interface BrowserWorkerIsolationPlan {
-  enabled: false;
-  workerPool: "dynamic_public_browser";
-  networkIsolation: {
-    publicOnly: true;
-    hostAllowlist: string[];
-    blockPrivateNetworks: true;
-    blockCredentials: true;
-    blockCaptchaSolving: true;
-    blockDownloads: true;
-  };
-  resourceCaps: {
-    maxWorkers: number;
-    memoryCapMb: number;
-    timeoutMs: number;
-  };
-  policy: {
-    robotsAllowed: boolean;
-    legalNotesPresent: boolean;
-  };
-}
-
-export interface BrowserWorkerCaptureContract {
-  status: "ready" | "blocked";
-  failureCategory?: "timeout" | "robots_policy_hold" | "policy_hold" | "unsupported_media" | "content_too_large" | "unavailable" | "source_disabled";
-  finalUrl?: string;
-  textHash?: string;
-  htmlHash?: string;
-  screenshotHash?: string;
-  extractionStatus: "ready_for_extraction" | "blocked";
-  notes: string[];
-}
+import type { BrowserWorkerIsolationPlan } from "./browserWorkerIsolationPlan.ts";
+import type { BrowserWorkerCaptureContract, BrowserWorkerCaptureInput, BrowserWorkerIsolationConfig } from "./browserWorkerIsolationTypes.ts";
+export type { BrowserWorkerIsolationPlan } from "./browserWorkerIsolationPlan.ts";
+export type { BrowserWorkerCaptureContract, BrowserWorkerCaptureInput, BrowserWorkerIsolationConfig } from "./browserWorkerIsolationTypes.ts";
 
 export function browserWorkerIsolationPlan(config: BrowserWorkerIsolationConfig): BrowserWorkerIsolationPlan {
   return {
