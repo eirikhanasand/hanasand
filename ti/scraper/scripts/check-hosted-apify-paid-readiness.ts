@@ -111,7 +111,7 @@ async function loadHostedObservation(input: {
   const items = resolvedDatasetId ? await fetchDatasetItems(input.token, resolvedDatasetId) : [];
   const output = await fetchOutputRecord(input.token, run);
   const observation = summarizeHostedObservation(run, output, items, resolvedDatasetId, input.runId);
-  const hostedProofPresent = Boolean(
+  const hostedRunMetricsObserved = Boolean(
     observation.runId
     && observation.datasetId
     && observation.datasetItemCount !== null
@@ -120,11 +120,10 @@ async function loadHostedObservation(input: {
     && observation.caveatedRows !== null
     && observation.averageBuyerValueScore !== null
     && observation.noLeakFailures === 0
-    && observation.secondBatchAuditObserved === true
   );
 
   return {
-    status: hostedProofPresent ? "verified_hold" : "hosted_proof_missing",
+    status: hostedRunMetricsObserved ? "verified_hold" : "hosted_proof_missing",
     observation,
     run,
     output,

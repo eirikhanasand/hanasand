@@ -2211,6 +2211,49 @@ if (
 ) {
   throw new Error("Program DE release board must expose private beta/public paid traffic thresholds, ranked revenue actions, and anti-bloat guards");
 }
+const programFgPrivateBetaDecision = paidReleaseTruthBoard.programFgPrivateBetaDecision as Record<string, unknown> | undefined;
+const programFgDecisionSeparation = programFgPrivateBetaDecision?.decisionSeparation as Record<string, unknown> | undefined;
+const programFgCostGuard = programFgPrivateBetaDecision?.costPerUsefulRowGuard as Record<string, unknown> | undefined;
+const programFgObservedEvidence = programFgPrivateBetaDecision?.observedEvidence as Record<string, unknown> | undefined;
+const programFgPrivateGate = programFgPrivateBetaDecision?.privateBetaGate as Record<string, unknown> | undefined;
+const programFgPublicGate = programFgPrivateBetaDecision?.publicPaidTrafficGate as Record<string, unknown> | undefined;
+const programFgBlockers = programFgPrivateBetaDecision?.orderedRevenueBlockers as Array<Record<string, unknown>> | undefined;
+const programFgAntiBloat = programFgPrivateBetaDecision?.antiBloatGuard as Record<string, unknown> | undefined;
+if (
+  !programFgPrivateBetaDecision
+  || programFgPrivateBetaDecision.schemaVersion !== "ti.program_fg_private_beta_release_decision.v1"
+  || programFgPrivateBetaDecision.decision !== "hold_paid_release"
+  || programFgPrivateBetaDecision.privatePaidBetaAllowedNow !== false
+  || programFgPrivateBetaDecision.publicPaidTrafficAllowedNow !== false
+  || !programFgDecisionSeparation
+  || programFgDecisionSeparation.local1000RowsAloneCannotUnlockHostedRelease !== true
+  || programFgDecisionSeparation.publicPaidTrafficRequiresPrivateBetaPlusConversionAndRefundEvidence !== true
+  || !programFgCostGuard
+  || programFgCostGuard.state !== "unknown"
+  || programFgCostGuard.observedCostPerUsefulRowUsd !== null
+  || programFgCostGuard.localCostEstimateCounts !== false
+  || !programFgObservedEvidence
+  || programFgObservedEvidence.importState !== "no_proof_imported"
+  || programFgObservedEvidence.hostedProofState !== "missing"
+  || !programFgPrivateGate
+  || programFgPrivateGate.state !== "hold"
+  || !Array.isArray(programFgPrivateGate.blockers)
+  || !programFgPrivateGate.blockers.includes("current1000_local_sellable_rows")
+  || !programFgPrivateGate.blockers.includes("hosted100_observed_proof")
+  || !programFgPrivateGate.blockers.includes("no_leak_proof_missing")
+  || !programFgPublicGate
+  || programFgPublicGate.state !== "hold"
+  || !Array.isArray(programFgPublicGate.blockers)
+  || !programFgPublicGate.blockers.includes("private_paid_beta_not_ready")
+  || !programFgPublicGate.blockers.includes("hosted500_observed_proof")
+  || !Array.isArray(programFgBlockers)
+  || programFgBlockers.map((row) => row.blocker).join(",") !== "current1000_local_sellable_rows,current1000_useful_rows,hosted100_300_500_observed_proof,pricing_payout_analytics,conversion_refunds,no_leak_and_stale_latest_proof,dirty_tree_and_test_hygiene"
+  || !programFgAntiBloat
+  || programFgAntiBloat.localOnlyProofCountsTowardHostedRelease !== false
+  || programFgAntiBloat.requiresBuyerVisibleRowsOrObservedHostedRevenueProof !== true
+) {
+  throw new Error("Program FG private beta decision must separate private beta from public paid traffic, block local-only proof, and expose observed-only cost/no-leak gates");
+}
 if (!paidReleaseBuckets.every((bucket) =>
   typeof bucket.owner === "string"
   && typeof bucket.rowDeltaTo100 === "number"

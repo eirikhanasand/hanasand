@@ -349,6 +349,10 @@ function buildReleaseLadder(
     && hostedImportPath.observedOnly === true
     && hostedImportPath.noSyntheticFallback === true
     && hostedImportPath.oldProofTreatment === "historical_shape_safety_only";
+  const hostedNoLeakProofObserved = hostedObservedProofPresent
+    && hostedObservedImportSafe
+    && hostedObservedNoLeakFailures === 0
+    && hostedObservedFalsePositiveFailures === 0;
   const hostedObservedIntegrityFailed = hostedObservedProofPresent
     && (
       !hostedObservedImportSafe
@@ -441,7 +445,7 @@ function buildReleaseLadder(
     && observedUsefulDensity >= firstFiniteNumber(tier1000Gate.minimumUsefulDensity, 0.65)
     && observedFreshDensity >= firstFiniteNumber(tier1000Gate.minimumFreshDensity, 0.6)
     && observedSourceFamilyDiversity >= firstFiniteNumber(tier1000Gate.minimumSourceFamilyDiversity, 4)
-    && hostedObservedImportSafe
+    && hostedNoLeakProofObserved
     && observedCostPerUsefulRowUsd <= firstFiniteNumber(tier1000Gate.maximumCostPerUsefulRowUsd, 0.05)
     && tier1000Gate.countsProjectedRowsAsPaid === false;
   const current1000State = tier1000Gate.countsProjectedRowsAsPaid !== false ? "fail" : current1000Pass ? "pass" : "hold";
@@ -584,7 +588,7 @@ function buildReleaseLadder(
           pricingState !== "external_unknown" ? null : "pricing_state_external_unknown",
           payoutState !== "external_unknown" ? null : "payout_state_external_unknown",
           analyticsObserved ? null : "analytics_external_unknown",
-          hostedObservedImportSafe ? null : "no_leak_proof_missing",
+          hostedNoLeakProofObserved ? null : "no_leak_proof_missing",
           observedCostPerUsefulRowUsd <= firstFiniteNumber(tier1000Gate.maximumCostPerUsefulRowUsd, 0.05) ? null : "cost_per_useful_row_unobserved"
         ].filter(Boolean),
         observed: {
@@ -596,7 +600,7 @@ function buildReleaseLadder(
           pricingState,
           payoutState,
           analyticsObserved,
-          noLeakObserved: hostedObservedImportSafe,
+          noLeakObserved: hostedNoLeakProofObserved,
           costPerUsefulRowUsd: Number.isFinite(observedCostPerUsefulRowUsd) ? observedCostPerUsefulRowUsd : null
         }
       },
@@ -669,7 +673,7 @@ function buildReleaseLadder(
           pricingState !== "external_unknown" ? null : "pricing_state_external_unknown",
           payoutState !== "external_unknown" ? null : "payout_state_external_unknown",
           analyticsObserved ? null : "analytics_external_unknown",
-          hostedObservedImportSafe ? null : "no_leak_proof_missing",
+          hostedNoLeakProofObserved ? null : "no_leak_proof_missing",
           costPerUsefulRowGuardState === "pass" ? null : "cost_per_useful_row_unobserved_or_above_limit"
         ].filter(Boolean),
         proofFields: ["programDcReleaseGates.current1000LocalSellableGate", "programDcReleaseGates.current1000Gate", "hostedPaidReadinessProof.programFgObservedEvidenceBoard", "hostedPaidReadinessProof.conversionPayoutTruth"]
@@ -691,7 +695,7 @@ function buildReleaseLadder(
         { rank: 3, blocker: "hosted100_300_500_observed_proof", state: hosted100State === "pass" && hosted300State === "pass" && hosted500State === "pass" ? "pass" : "hold", observed: record(hostedProof.programFgObservedEvidenceBoard).hostedProofState ?? "missing", required: "hosted100 for private beta; hosted300 and hosted500 for public paid traffic", proofField: "hostedPaidReadinessProof.programFgObservedEvidenceBoard" },
         { rank: 4, blocker: "pricing_payout_analytics", state: pricingState !== "external_unknown" && payoutState !== "external_unknown" && analyticsObserved ? "pass" : "external_unknown", observed: { pricing: pricingState, payout: payoutState, analytics: analyticsObserved }, required: "observed pricing, payout readiness, and Store analytics visibility", proofField: "hostedPaidReadinessProof.conversionPayoutTruth" },
         { rank: 5, blocker: "conversion_refunds", state: typeof marketplace.paidUsers === "number" && marketplace.refunds === 0 ? "pass" : "external_unknown", observed: { paidUsers: marketplace.paidUsers ?? null, refunds: marketplace.refunds ?? null }, required: "public traffic only: observed paid users/runs and zero refunds", proofField: "hostedPaidReadinessProof.conversionPayoutTruth.analytics" },
-        { rank: 6, blocker: "no_leak_and_stale_latest_proof", state: hostedObservedImportSafe ? "pass" : "hold", observed: { noLeakFailures: hostedObservedNoLeakFailures, staleLatestRowsBlocked: true }, required: "no leaks and zero stale/latest-error paid rows", proofField: "hostedPaidReadinessProof.hostedProofImportPath.observedFields" },
+        { rank: 6, blocker: "no_leak_and_stale_latest_proof", state: hostedNoLeakProofObserved ? "pass" : "hold", observed: { noLeakFailures: hostedObservedNoLeakFailures, staleLatestRowsBlocked: true }, required: "no leaks and zero stale/latest-error paid rows", proofField: "hostedPaidReadinessProof.hostedProofImportPath.observedFields" },
         { rank: 7, blocker: "dirty_tree_and_test_hygiene", state: "pass", observed: "checked_by_release_audit", required: "clean tree and green Bun checks before release", proofField: "bun run check:paid-actor-release-audit" }
       ],
       antiBloatGuard: {

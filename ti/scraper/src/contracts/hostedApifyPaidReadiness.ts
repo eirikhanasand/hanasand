@@ -54,7 +54,7 @@ interface HostedApifyProofImportPath {
   observedOnly: true;
   noSyntheticFallback: true;
   oldProofTreatment: "historical_shape_safety_only";
-  externalBlocker: "external_token_missing" | "hosted_100_name_run_not_observed" | null;
+  externalBlocker: "external_token_missing" | "hosted_100_name_run_not_observed" | "hosted_100_name_run_below_paid_floor" | "hosted_second_batch_audit_not_observed" | "hosted_false_positive_audit_not_observed" | "external_payout_pricing_analytics_not_yet_verified" | null;
   commandExamples: string[];
   requiredEnvironment: string[];
   observedFields: Required<HostedApifyProofObservation>;
@@ -315,6 +315,28 @@ export interface HostedApifyPaidReadinessProof {
     };
     missingExternalFields: string[];
     insufficientFields: string[];
+    marketplaceMissingFieldsOnlyTemplate: {
+      schemaVersion: "ti.program_fh_marketplace_missing_fields_template.v1";
+      safeToCommit: true;
+      containsSecrets: false;
+      importCommand: "TI_APIFY_OBSERVED_PROOF_PATH=<path-to-observed-proof.json> bun run check:hosted-apify-paid-readiness";
+      missingFields: string[];
+      fields: {
+        storeViews: null;
+        runs: null;
+        uniqueUsers: null;
+        paidUsers: null;
+        refunds: null;
+        pricingModel: "external_unknown";
+        payoutEnabled: "external_unknown";
+        payoutState: "external_unknown";
+        analyticsVisible: "external_unknown";
+        conversionRate: null;
+        listingVisibility: "external_unknown";
+        publicListingStatus: "external_unknown";
+        observedAt: null;
+      };
+    };
     nextSafeCommands: string[];
   };
   manualVerificationSteps: string[];
@@ -332,7 +354,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
   const observedProof = input.observedProof ?? (input.readObservedProofFromEnvironment === false ? undefined : readInlineObservedProofFromEnvironment());
   const observedFields = normalizeHostedObservation(observedProof ?? input.hostedImport);
   const observedProofIsProduction = Boolean(observedProof && observedProof.sampleOnly !== true);
-  const hosted100NameProofObserved = Boolean(
+  const hosted100NameRunObserved = Boolean(
     observedFields.runId
     && observedFields.datasetId
     && observedFields.datasetItemCount !== null
@@ -341,7 +363,13 @@ export function buildHostedApifyPaidReadinessProof(input: {
     && observedFields.caveatedRows !== null
     && observedFields.averageBuyerValueScore !== null
     && observedFields.noLeakFailures === 0
+  );
+  const hosted100NameProofObserved = Boolean(
+    hosted100NameRunObserved
     && observedFields.secondBatchAuditObserved === true
+    && observedFields.falsePositiveInflationFailures === 0
+    && (observedFields.sellableRows ?? 0) >= 100
+    && (observedFields.sellableFindingCount ?? 0) >= 52
   );
   const marketplaceValuesObserved = Boolean(
     observedProofIsProduction
@@ -360,6 +388,14 @@ export function buildHostedApifyPaidReadinessProof(input: {
     && (observedProof.listingVisibility === "private" || observedProof.listingVisibility === "public")
   );
   const importedPaidFloorProof = hosted100NameProofObserved && marketplaceValuesObserved;
+  const externalBlocker = hostedPaidProofExternalBlocker({
+    importedPaidFloorProof,
+    tokenState,
+    hosted100NameRunObserved,
+    hosted100NameProofObserved,
+    marketplaceValuesObserved,
+    observedFields
+  });
   const commandExamples = [
     "TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness",
     "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness",
@@ -388,7 +424,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
   });
   return {
     schemaVersion: "ti.hosted_apify_paid_readiness_proof.v1",
-    status: input.status ?? (importedPaidFloorProof ? "paid_floor_hosted_proof" : tokenState === "external_token_missing" ? "external_token_missing" : hosted100NameProofObserved ? "verified_hold" : "hosted_proof_missing"),
+    status: input.status ?? (importedPaidFloorProof ? "paid_floor_hosted_proof" : tokenState === "external_token_missing" ? "external_token_missing" : hosted100NameRunObserved ? "verified_hold" : "hosted_proof_missing"),
     sourceOfTruth: "Apify hosted Actor run, default dataset, Store analytics, pricing, and billing/payout pages",
     actorId: "eirikhanasand/public-threat-actor-monitor",
     command: "bun run check:hosted-apify-paid-readiness",
@@ -442,7 +478,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
       observedOnly: true,
       noSyntheticFallback: true,
       oldProofTreatment: "historical_shape_safety_only",
-      externalBlocker: importedPaidFloorProof ? null : tokenState === "external_token_missing" ? "external_token_missing" : hosted100NameProofObserved ? null : "hosted_100_name_run_not_observed",
+      externalBlocker,
       commandExamples,
       requiredEnvironment: [
         "APIFY_TOKEN",
@@ -550,6 +586,26 @@ export function buildHostedApifyPaidReadinessProof(input: {
   };
 }
 
+function hostedPaidProofExternalBlocker(input: {
+  importedPaidFloorProof: boolean;
+  tokenState: HostedApifyPaidReadinessProof["tokenState"];
+  hosted100NameRunObserved: boolean;
+  hosted100NameProofObserved: boolean;
+  marketplaceValuesObserved: boolean;
+  observedFields: Required<HostedApifyProofObservation>;
+}): HostedApifyProofImportPath["externalBlocker"] {
+  if (input.importedPaidFloorProof) return null;
+  if (input.tokenState === "external_token_missing") return "external_token_missing";
+  if (!input.hosted100NameRunObserved) return "hosted_100_name_run_not_observed";
+  if ((input.observedFields.sellableRows ?? 0) < 100 || (input.observedFields.sellableFindingCount ?? 0) < 52) {
+    return "hosted_100_name_run_below_paid_floor";
+  }
+  if (input.observedFields.secondBatchAuditObserved !== true) return "hosted_second_batch_audit_not_observed";
+  if (input.observedFields.falsePositiveInflationFailures !== 0) return "hosted_false_positive_audit_not_observed";
+  if (input.hosted100NameProofObserved && !input.marketplaceValuesObserved) return "external_payout_pricing_analytics_not_yet_verified";
+  return null;
+}
+
 const observedProofRequiredFields = [
   "schemaVersion",
   "runId",
@@ -592,6 +648,22 @@ const observedProofRequiredFields = [
   "publicListingStatus",
   "observedAt"
 ] as const;
+
+const marketplaceObservedFieldNames = [
+  "storeViews",
+  "runs",
+  "uniqueUsers",
+  "paidUsers",
+  "refunds",
+  "pricingModel",
+  "payoutEnabled",
+  "payoutState",
+  "analyticsVisible",
+  "conversionRate",
+  "listingVisibility",
+  "publicListingStatus",
+  "observedAt"
+] as const satisfies ReadonlyArray<(typeof observedProofRequiredFields)[number]>;
 
 const hostedProofGateRequiredFields = [
   "schemaVersion",
@@ -679,6 +751,7 @@ function buildHostedProofOperatorChecklist(input: {
     marketplacePromotionPass,
     marketplaceValuesObserved: input.marketplaceValuesObserved,
     missingFields,
+    observedFields: input.observedFields,
     hasToken: input.hasToken,
     hasObservedProofImportSource: input.hasObservedProofImportSource,
     publicListingStatus: input.observedProof?.publicListingStatus
@@ -707,7 +780,7 @@ function buildHostedProofOperatorChecklist(input: {
       hosted100: {
         state: hosted100Pass ? "pass" : blockedState,
         unlocks: hosted100Pass,
-        reason: hosted100Pass ? "production observed proof satisfies the hosted 100-name floor" : gateHoldReason(sampleOnly, unsafeProof, hostedMissingFields, "hosted 100-name proof is incomplete"),
+        reason: hosted100Pass ? "production observed proof satisfies the hosted 100-name floor" : hosted100GateHoldReason(sampleOnly, unsafeProof, hostedMissingFields, input.observedFields),
         required: { defaultQueryCount: 100, sellableRows: 100, sellableFindingRows: 52, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
       },
       hosted300: {
@@ -867,6 +940,7 @@ function buildProgramFgObservedEvidenceBoard(input: {
   const missingExternalFields = noProofImported
     ? [...observedProofRequiredFields]
     : input.checklist.missingFields;
+  const marketplaceMissingFields = marketplaceObservedFieldNames.filter((field) => !hasObservedImportValue(input.observedProof, field));
   const insufficientFields = [
     sampleOnly ? "sampleOnly" : null,
     !hosted100Pass ? "hosted100" : null,
@@ -914,6 +988,28 @@ function buildProgramFgObservedEvidenceBoard(input: {
     },
     missingExternalFields,
     insufficientFields,
+    marketplaceMissingFieldsOnlyTemplate: {
+      schemaVersion: "ti.program_fh_marketplace_missing_fields_template.v1",
+      safeToCommit: true,
+      containsSecrets: false,
+      importCommand: "TI_APIFY_OBSERVED_PROOF_PATH=<path-to-observed-proof.json> bun run check:hosted-apify-paid-readiness",
+      missingFields: marketplaceMissingFields,
+      fields: {
+        storeViews: null,
+        runs: null,
+        uniqueUsers: null,
+        paidUsers: null,
+        refunds: null,
+        pricingModel: "external_unknown",
+        payoutEnabled: "external_unknown",
+        payoutState: "external_unknown",
+        analyticsVisible: "external_unknown",
+        conversionRate: null,
+        listingVisibility: "external_unknown",
+        publicListingStatus: "external_unknown",
+        observedAt: null
+      }
+    },
     nextSafeCommands: [
       "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
       "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
@@ -944,6 +1040,7 @@ function operatorStillBlockedAfterCommand(input: {
   marketplacePromotionPass: boolean;
   marketplaceValuesObserved: boolean;
   missingFields: string[];
+  observedFields: Required<HostedApifyProofObservation>;
   hasToken: boolean;
   hasObservedProofImportSource: boolean;
   publicListingStatus: HostedApifyObservedProofImport["publicListingStatus"] | undefined;
@@ -953,7 +1050,7 @@ function operatorStillBlockedAfterCommand(input: {
   if (input.missingFields.length > 0) blockers.push(`observed proof fields missing: ${input.missingFields.join(", ")}`);
   if (input.sampleOnly) blockers.push("sampleOnly=true cannot unlock hosted or marketplace gates");
   if (input.unsafeProof) blockers.push("no-leak and false-positive inflation failures must be zero");
-  if (!input.hosted100Pass) blockers.push("hosted100 remains held until a production observed proof reaches 100 sellable rows and 52 finding rows");
+  if (!input.hosted100Pass) blockers.push(hosted100ThresholdBlocker(input.observedFields));
   if (input.hosted100Pass && !input.hosted300Pass) blockers.push("hosted300 remains held until a production observed proof reaches 300 sellable rows and 150 finding rows");
   if (input.hosted300Pass && !input.hosted500Pass) blockers.push("hosted500 remains held until a production observed proof reaches 500 sellable rows and 275 finding rows");
   if (input.hosted500Pass && !input.marketplaceValuesObserved) blockers.push("marketplace analytics, pricing, payout, paid users, runs, and refunds remain external_unknown/null");
@@ -974,6 +1071,34 @@ function gateHoldReason(sampleOnly: boolean, unsafeProof: boolean, missingFields
   if (unsafeProof) return "unsafe proof was observed; no-leak and false-positive inflation failures must be zero";
   if (missingFields.length > 0) return `missing required fields: ${missingFields.join(", ")}`;
   return fallback;
+}
+
+function hosted100GateHoldReason(
+  sampleOnly: boolean,
+  unsafeProof: boolean,
+  missingFields: string[],
+  observedFields: Required<HostedApifyProofObservation>
+): string {
+  if (sampleOnly) return "sampleOnly=true imports are accepted for shape checks but cannot unlock production gates";
+  if (unsafeProof) return "unsafe proof was observed; no-leak and false-positive inflation failures must be zero";
+  const observedSellableRows = observedFields.sellableRows;
+  const observedFindingRows = observedFields.sellableFindingCount;
+  if (observedSellableRows !== null && observedFindingRows !== null && (observedSellableRows < 100 || observedFindingRows < 52)) {
+    return hosted100ThresholdBlocker(observedFields);
+  }
+  if (missingFields.length > 0) return `missing required fields: ${missingFields.join(", ")}`;
+  return "hosted 100-name proof is incomplete";
+}
+
+function hosted100ThresholdBlocker(observedFields: Required<HostedApifyProofObservation>): string {
+  const observedSellableRows = observedFields.sellableRows;
+  const observedFindingRows = observedFields.sellableFindingCount;
+  if (observedSellableRows === null || observedFindingRows === null) {
+    return "hosted100 remains held until a production observed proof reaches 100 sellable rows and 52 finding rows";
+  }
+  const sellableGap = Math.max(0, 100 - observedSellableRows);
+  const findingGap = Math.max(0, 52 - observedFindingRows);
+  return `hosted100_below_threshold: observed ${observedSellableRows} sellable rows and ${observedFindingRows} finding rows; needs +${sellableGap} sellable rows and +${findingGap} finding rows`;
 }
 
 function marketplacePromotionHoldReason(

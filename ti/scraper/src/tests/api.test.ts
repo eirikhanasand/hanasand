@@ -848,6 +848,64 @@ describe("api v1", () => {
       expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 0, state: "pass" }),
       expect.objectContaining({ blocker: "useful_row_density_gap", owner: "agent_10", observedGap: 0, state: "pass" })
     ]));
+    const programFgPrivateBetaDecision = (response.paidReleaseTruthBoard as { programFgPrivateBetaDecision: Record<string, unknown> }).programFgPrivateBetaDecision as {
+      schemaVersion: string;
+      decision: string;
+      privatePaidBetaAllowedNow: boolean;
+      publicPaidTrafficAllowedNow: boolean;
+      decisionSeparation: Record<string, boolean>;
+      costPerUsefulRowGuard: Record<string, unknown>;
+      observedEvidence: Record<string, unknown>;
+      privateBetaGate: { blockers: string[] };
+      publicPaidTrafficGate: { blockers: string[] };
+      antiBloatGuard: Record<string, boolean>;
+    };
+    expect(programFgPrivateBetaDecision).toMatchObject({
+      schemaVersion: "ti.program_fg_private_beta_release_decision.v1",
+      decision: "hold_paid_release",
+      privatePaidBetaAllowedNow: false,
+      publicPaidTrafficAllowedNow: false,
+      decisionSeparation: {
+        privateBetaDoesNotRequirePublicConversionEvidence: true,
+        publicPaidTrafficRequiresPrivateBetaPlusConversionAndRefundEvidence: true,
+        local1000RowsAloneCannotUnlockHostedRelease: true
+      },
+      costPerUsefulRowGuard: {
+        state: "unknown",
+        observedCostPerUsefulRowUsd: null,
+        localCostEstimateCounts: false
+      },
+      observedEvidence: {
+        importState: "no_proof_imported",
+        hostedProofState: "missing",
+        marketplaceTruthState: "external_unknown"
+      },
+      antiBloatGuard: {
+        coordinationOnlyCountsTowardRelease: false,
+        dtoOnlyCountsTowardRelease: false,
+        stixTaxiiOnlyCountsTowardRelease: false,
+        syntheticIndexRowsCountTowardRelease: false,
+        localOnlyProofCountsTowardHostedRelease: false,
+        requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
+      }
+    });
+    expect(programFgPrivateBetaDecision.privateBetaGate.blockers).toEqual(expect.arrayContaining([
+      "hosted100_observed_proof",
+      "pricing_state_external_unknown",
+      "payout_state_external_unknown",
+      "analytics_external_unknown",
+      "no_leak_proof_missing",
+      "cost_per_useful_row_unobserved_or_above_limit"
+    ]));
+    expect(programFgPrivateBetaDecision.privateBetaGate.blockers).not.toContain("current1000_local_sellable_rows");
+    expect(programFgPrivateBetaDecision.publicPaidTrafficGate.blockers).toEqual(expect.arrayContaining([
+      "private_paid_beta_not_ready",
+      "hosted300_observed_proof",
+      "hosted500_observed_proof",
+      "marketplace_paid_traffic_gate",
+      "paid_users_unobserved",
+      "refunds_unobserved_or_nonzero"
+    ]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {

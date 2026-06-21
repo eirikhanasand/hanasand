@@ -10993,7 +10993,7 @@ function buildApifyStoreReadinessContract(input: {
       },
       privateBetaGate: {
         state: "hold",
-        blockers: ["hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved_or_above_limit"],
+        blockers: ["hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "no_leak_proof_missing", "cost_per_useful_row_unobserved_or_above_limit"],
         proofFields: ["programDcReleaseGates.current1000LocalSellableGate", "programDcReleaseGates.current1000Gate", "hostedPaidReadinessProof.programFgObservedEvidenceBoard", "hostedPaidReadinessProof.conversionPayoutTruth"]
       },
       publicPaidTrafficGate: {
