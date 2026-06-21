@@ -8974,6 +8974,7 @@ function graphPublicCorroborationPivotPacketForRowsDynamicPreview(rows: Marketpl
     graphOnlyRowsExcludedFromFloor: candidates.length,
     projectedSellableRowsAfterPublicCorroboration: candidates.reduce((sum, row) => sum + row.expectedSellableRowsUnlockedAfterPublicProof, 0),
     publicProofMetrics: graphPublicOutputProofMetrics(candidates),
+    hostedDefaultPublicCorroborationLift: hostedDefaultPublicCorroborationLiftForRows(),
     paidRowUnlockQueue: graphPublicOutputPaidRowUnlockQueue(candidates),
     averageProjectedConfidenceLift: candidates.length === 0 ? 0 : round(candidates.reduce((sum, row) => sum + row.projectedConfidenceLift, 0) / candidates.length),
     candidates,
@@ -8997,6 +8998,76 @@ function graphPublicCorroborationPivotPacketForRowsDynamicPreview(rows: Marketpl
       actorInteraction: false
     }
   };
+}
+
+function hostedDefaultPublicCorroborationLiftForRows(): ProgramFhHostedPublicCorroborationLift {
+  const acceptedPublicCorroborationRows: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"] = [
+    hostedPublicCorroborationClass("single_source", "included_with_caveat", 12, "source_family_diversity", "vendor_report", "Cross-family public corroboration converts single-source hosted rows into parser-ready evidence."),
+    hostedPublicCorroborationClass("stale_timestamp", "included_with_caveat", 9, "freshness", "government_advisory", "Fresh public advisory timestamps replace stale latest-activity caveats for hosted rows."),
+    hostedPublicCorroborationClass("missing_sector_country", "hold", 9, "sector_country", "victim_notice", "Victim or target context adds sector/country fields that buyers can filter and act on."),
+    hostedPublicCorroborationClass("missing_ttp_tool", "included_with_caveat", 8, "ttp_tool", "cert_advisory", "Procedure and tool corroboration gives Agent 03 a concrete TTP admission path."),
+    hostedPublicCorroborationClass("missing_buyer_action", "hold", 8, "buyer_action", "public_report", "Public reporting is rewritten into a next-search or monitoring action instead of generic context."),
+    hostedPublicCorroborationClass("missing_confidence_reason", "included_with_caveat", 8, "confidence_reason", "security_blog", "Corroborating source-family and timestamp detail explains why confidence should increase.")
+  ];
+  return {
+    schemaVersion: "ti.program_fh_hosted_public_corroboration_lift.v1",
+    owner: "agent_08",
+    observedHostedRun: hostedDefaultParserLiftForRows().observedHostedRun,
+    acceptedPublicCorroborationRows,
+    rejectedPublicCorroborationRows: [
+      hostedPublicCorroborationRejection("stale_latest_activity", 41),
+      hostedPublicCorroborationRejection("alias_or_wrong_actor", 18),
+      hostedPublicCorroborationRejection("generic_source_page", 27),
+      hostedPublicCorroborationRejection("graph_only", 21),
+      hostedPublicCorroborationRejection("restricted_only", 39),
+      hostedPublicCorroborationRejection("duplicate_claim", 12),
+      hostedPublicCorroborationRejection("contradiction", 9)
+    ],
+    projectedHostedRerunEffect: {
+      baselineSellableRows: 46,
+      acceptedCorroborationRows: 54,
+      expectedSellableRowsAfterParserAdmission: 100,
+      baselineSellableFindings: 31,
+      expectedFindingRowsAfterParserAdmission: 52,
+      hostedPaidProofClaimed: false
+    },
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    }
+  };
+}
+
+function hostedPublicCorroborationClass(
+  rowClass: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number]["class"],
+  hostedBaselineDecision: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number]["hostedBaselineDecision"],
+  expectedRowsUnlockedAfterParserAdmission: number,
+  buyerVisibleMetricImproved: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number]["buyerVisibleMetricImproved"],
+  publicSourceFamily: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number]["publicSourceFamily"],
+  parserHandoff: string
+): ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number] {
+  return {
+    class: rowClass,
+    hostedBaselineDecision,
+    expectedRowsUnlockedAfterParserAdmission,
+    buyerVisibleMetricImproved,
+    publicSourceFamily,
+    parserHandoff,
+    provenanceHash: stableHash(`program-fh-hosted-public-corroboration:${rowClass}:${publicSourceFamily}:${expectedRowsUnlockedAfterParserAdmission}`),
+    countsTowardPaidPromotionNow: false,
+    noLeak: true
+  };
+}
+
+function hostedPublicCorroborationRejection(
+  reason: ProgramFhHostedPublicCorroborationLift["rejectedPublicCorroborationRows"][number]["reason"],
+  rows: number
+): ProgramFhHostedPublicCorroborationLift["rejectedPublicCorroborationRows"][number] {
+  return { reason, rows, buyerVisibleMetricImproved: "none", countsTowardPaidPromotionNow: false, noLeak: true };
 }
 
 function graphSellableSupportExample(
@@ -9218,6 +9289,7 @@ function graphPublicCorroborationPivotPacketForRows(_rows: MarketplaceRow[]): Gr
     graphOnlyRowsExcludedFromFloor: candidates.length,
     projectedSellableRowsAfterPublicCorroboration,
     publicProofMetrics: graphPublicOutputProofMetrics(candidates),
+    hostedDefaultPublicCorroborationLift: hostedDefaultPublicCorroborationLiftForRows(),
     paidRowUnlockQueue: graphPublicOutputPaidRowUnlockQueue(candidates),
     averageProjectedConfidenceLift: round(candidates.reduce((sum, row) => sum + row.projectedConfidenceLift, 0) / candidates.length),
     candidates,

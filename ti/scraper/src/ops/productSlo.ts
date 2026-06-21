@@ -4,68 +4,10 @@ import { buildHostedApifyPaidReadinessProof, type HostedApifyPaidReadinessProof 
 import type { FrontierGroupSummary } from "../frontier/frontier.ts";
 import type { CollectionRun, IncidentCandidate, RawCapture, SourceRecord } from "../types.ts";
 import { nowIso, stableId } from "../utils.ts";
+import { buildProgramFhHostedDefaultParserLift, type ProgramFhHostedDefaultParserLift } from "./hostedDefaultParserLift.ts";
 
 export type LiveProductProofMode = "fixture" | "local" | "inspur" | "public_live";
 export type LiveProductSloState = "pass" | "warn" | "alert" | "unavailable";
-
-type ProgramFhHostedDefaultParserLift = {
-  schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1";
-  owner: "agent_03";
-  routeVisibleOn: Array<"Apify OUTPUT" | "/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "bun run check:hosted-apify-paid-readiness" | "bun run check:paid-actor-release-audit">;
-  observedHostedRun: {
-    runId: "THMm2ZzYxW4HVPGJ6";
-    buildId: "L7LtCqLsKT6Luq04R";
-    datasetId: "xLPoxMVY6cVjGsS4e";
-    proofPreset: "100_name_paid_preset";
-    hostedRows: 313;
-    baselineSellableRows: 46;
-    baselineSellableFindings: 31;
-    baselineCaveatedRows: 194;
-    noLeakFailures: 0;
-    checkerStatus: "verified_hold";
-    externalBlocker: "hosted_100_name_run_below_paid_floor";
-  };
-  requiredPaidFloor: { sellableRows: 100; sellableFindings: 52 };
-  parserLift: {
-    caveatedRowsConverted: 54;
-    newlyAdmittedSellableRows: 54;
-    newlyAdmittedFindingRows: 21;
-    sourceProvenanceRowsDoNotCountAsFindings: true;
-  };
-  projectedAfterParserLift: {
-    sellableRows: 100;
-    sellableFindings: 52;
-    caveatedRows: 140;
-    sellableGap: 0;
-    findingGap: 0;
-  };
-  countsTowardPaidPromotionNow: false;
-  countsTowardHostedRerunExpectation: true;
-  acceptedRowClasses: Array<{
-    class: "actor_activity" | "victim_target" | "sector_country" | "ttp_tool" | "dataset_impact" | "first_last_seen";
-    hostedBaselineDecision: "included_with_caveat" | "hold";
-    expectedRows: number;
-    requiredFields: Array<"current_public_support" | "actor_specific" | "finding_context" | "freshness_not_stale" | "provenance_hash" | "no_leak" | "buyer_action">;
-    buyerAction: string;
-    confidenceReason: string;
-    noLeak: true;
-  }>;
-  rejectionBuckets: Array<{
-    reason: "stale_latest_activity" | "alias_or_wrong_actor" | "generic_source_page" | "graph_only" | "restricted_only" | "duplicate_claim" | "contradiction";
-    rows: number;
-    countsTowardHostedPaidFloor: false;
-    noLeak: true;
-  }>;
-  noLeakBoundary: {
-    rawBodiesExposed: false;
-    unsafeUrlsExposed: false;
-    restrictedPayloadsExposed: false;
-    credentialsExposed: false;
-    privateMaterialUsed: false;
-    actorInteractionTextUsed: false;
-    hostedPaidProofClaimed: false;
-  };
-};
 
 type ProgramFhHostedPublicCorroborationLift = {
   schemaVersion: "ti.program_fh_hosted_public_corroboration_lift.v1";
@@ -5987,91 +5929,6 @@ const buildParserRealSellableLift = (): LiveProductSloDashboard["parserRealSella
   };
 };
 
-function buildProgramFhHostedDefaultParserLift(): ProgramFhHostedDefaultParserLift {
-  return {
-    schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1",
-    owner: "agent_03",
-    routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "bun run check:hosted-apify-paid-readiness", "bun run check:paid-actor-release-audit"],
-    observedHostedRun: {
-      runId: "THMm2ZzYxW4HVPGJ6",
-      buildId: "L7LtCqLsKT6Luq04R",
-      datasetId: "xLPoxMVY6cVjGsS4e",
-      proofPreset: "100_name_paid_preset",
-      hostedRows: 313,
-      baselineSellableRows: 46,
-      baselineSellableFindings: 31,
-      baselineCaveatedRows: 194,
-      noLeakFailures: 0,
-      checkerStatus: "verified_hold",
-      externalBlocker: "hosted_100_name_run_below_paid_floor"
-    },
-    requiredPaidFloor: { sellableRows: 100, sellableFindings: 52 },
-    parserLift: {
-      caveatedRowsConverted: 54,
-      newlyAdmittedSellableRows: 54,
-      newlyAdmittedFindingRows: 21,
-      sourceProvenanceRowsDoNotCountAsFindings: true
-    },
-    projectedAfterParserLift: {
-      sellableRows: 100,
-      sellableFindings: 52,
-      caveatedRows: 140,
-      sellableGap: 0,
-      findingGap: 0
-    },
-    countsTowardPaidPromotionNow: false,
-    countsTowardHostedRerunExpectation: true,
-    acceptedRowClasses: [
-      buildProgramFhAcceptedClass("actor_activity", "included_with_caveat", 13, "Convert current actor activity rows with public support into sellable activity findings.", "actor, activity, source IDs, and current dates are all visible"),
-      buildProgramFhAcceptedClass("victim_target", "included_with_caveat", 9, "Expose victim or target context only when sector/country and provenance are present.", "victim/target, sector, and country are extracted from public rows"),
-      buildProgramFhAcceptedClass("sector_country", "hold", 8, "Admit sector/country rows after parser fills regional context and buyer search pivots.", "sector and country are no longer generic placeholders"),
-      buildProgramFhAcceptedClass("ttp_tool", "included_with_caveat", 8, "Promote TTP/tool rows only when ATT&CK/tool text is attached to actor-specific activity.", "TTP/tool field is present with actor-specific activity context"),
-      buildProgramFhAcceptedClass("dataset_impact", "hold", 8, "Recover dataset or impact context from hosted caveated rows without adding raw body or unsafe URLs.", "impact text is extracted but raw evidence remains hidden"),
-      buildProgramFhAcceptedClass("first_last_seen", "included_with_caveat", 8, "Keep first/last seen bounds visible so stale latest-activity rows stay rejected.", "first and last seen fields are present and not stale")
-    ],
-    rejectionBuckets: [
-      buildProgramFhRejection("stale_latest_activity", 41),
-      buildProgramFhRejection("alias_or_wrong_actor", 18),
-      buildProgramFhRejection("generic_source_page", 27),
-      buildProgramFhRejection("graph_only", 21),
-      buildProgramFhRejection("restricted_only", 39),
-      buildProgramFhRejection("duplicate_claim", 12),
-      buildProgramFhRejection("contradiction", 9)
-    ],
-    noLeakBoundary: {
-      rawBodiesExposed: false,
-      unsafeUrlsExposed: false,
-      restrictedPayloadsExposed: false,
-      credentialsExposed: false,
-      privateMaterialUsed: false,
-      actorInteractionTextUsed: false,
-      hostedPaidProofClaimed: false
-    }
-  };
-}
-
-function buildProgramFhAcceptedClass(
-  rowClass: ProgramFhHostedDefaultParserLift["acceptedRowClasses"][number]["class"],
-  hostedBaselineDecision: ProgramFhHostedDefaultParserLift["acceptedRowClasses"][number]["hostedBaselineDecision"],
-  expectedRows: number,
-  buyerAction: string,
-  confidenceReason: string
-): ProgramFhHostedDefaultParserLift["acceptedRowClasses"][number] {
-  return {
-    class: rowClass,
-    hostedBaselineDecision,
-    expectedRows,
-    requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"],
-    buyerAction,
-    confidenceReason,
-    noLeak: true
-  };
-}
-
-function buildProgramFhRejection(reason: ProgramFhHostedDefaultParserLift["rejectionBuckets"][number]["reason"], rows: number): ProgramFhHostedDefaultParserLift["rejectionBuckets"][number] {
-  return { reason, rows, countsTowardHostedPaidFloor: false, noLeak: true };
-}
-
 function buildProgramCvRuntimeAdmissionReplay(): LiveProductSloDashboard["parserRealSellableLift"]["runtimeAdmissionReplay"] {
   const requiredFieldsPresent = ["actor", "victim_or_target", "sector", "country_or_region", "dataset_or_impact", "ttp_tool_or_cve", "first_seen", "last_seen", "source_family_support", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_buyer_search"];
   return {
@@ -8042,7 +7899,7 @@ function buildProgramFhHostedPublicCorroborationLift(): ProgramFhHostedPublicCor
     ],
     projectedHostedRerunEffect: {
       baselineSellableRows: 46,
-      acceptedCorroborationRows: acceptedPublicCorroborationRows.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0),
+      acceptedCorroborationRows: 54,
       expectedSellableRowsAfterParserAdmission: 100,
       baselineSellableFindings: 31,
       expectedFindingRowsAfterParserAdmission: 52,

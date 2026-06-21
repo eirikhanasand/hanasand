@@ -1,10 +1,19 @@
-Status: done_requesting_next_task
+Status: active_hosted_row_conversion_next_batch
 
-# Agent 03 Summary
+# Agent 03 Task
 
-- Added Program FH hosted-default parser lift proof for run `THMm2ZzYxW4HVPGJ6` / dataset `xLPoxMVY6cVjGsS4e`, showing the 46 sellable rows / 31 findings baseline and the deterministic 54-row / 21-finding parser lift needed to reach 100 / 52 on the next hosted rerun.
-- Surfaced the lift in Apify `OUTPUT`, `/v1/ops/product-slo`, `/v1/contracts#apifyStoreReadiness`, Actor smoke checks, API/ops tests, and the paid-release audit while keeping `countsTowardPaidPromotionNow=false`.
-- Broadened runtime current-activity parser admission to extract actor, victim/target, sector, country, TTP/tool, dataset/impact, first/last seen, source support, confidence, provenance, and buyer action from public supported rows, while preserving stale/generic/alias/graph-only/restricted-only rejection buckets.
-- Verified focused TypeScript, API/ops, Actor check/smoke, contract-index, and API-regression checks during handoff.
+Your previous pass identified a 54-row / 21-finding lift path. Now turn that into real Actor output.
 
-Requesting a new Agent 03 task.
+Deliver:
+- Apply the parser lift to the next hosted/default Actor run path, not just local reporting.
+- Add or improve row admission for the 54 candidate rows needed to reach 100 sellable rows and 52 findings.
+- Each admitted row must include actor, victim/target or TTP/tool, date/freshness, source support, confidence, and buyer action.
+- Drop stale, generic, alias/wrong-actor, duplicate, contradiction, graph-only, and restricted-only rows.
+- Public output should say what changed in buyer terms, not internal blocker language.
+
+Success metric:
+- Next Actor run shows higher sellable rows and sellable findings.
+
+Before stopping:
+- Run parser and Actor checks.
+- Commit and push.

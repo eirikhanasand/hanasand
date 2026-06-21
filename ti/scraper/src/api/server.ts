@@ -41,6 +41,7 @@ import { buildLiveActorIntelligenceDto, buildPublicIntelAnswerDto } from "../pip
 import { buildActiveLearningCandidateQueueDto, buildActorProfileReviewWorkbenchDto, buildAnalystFeedbackLearningLoopDto, buildAnalystFeedbackLoopDto, buildAnalystQualityReviewQueueDto, buildQualityRegressionSuiteDto } from "../pipeline/analystFeedback.ts";
 import { buildAttackMappingQualityDto } from "../pipeline/attackMappingQuality.ts";
 import { buildHostedApifyPaidReadinessProof } from "../contracts/hostedApifyPaidReadiness.ts";
+import { buildProgramFhHostedDefaultParserLift } from "../ops/hostedDefaultParserLift.ts";
 import { buildEntityResolutionWorkbenchDto } from "../pipeline/entityResolution.ts";
 import { buildCtiEvaluationDatasetPackDto, buildEvaluationDatasetGovernanceDto, buildQualityRuntimeValueGatesDto } from "../pipeline/evaluation.ts";
 import type { EvidenceStage, StagedEvidenceInput } from "../pipeline/intelligenceProfiles.ts";
@@ -10860,64 +10861,43 @@ function buildApifyStoreReadinessContract(input: {
       privateContent: false
     }
   };
-  const hostedDefaultParserLift = {
-    schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1",
-    owner: "agent_03",
-    routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "bun run check:hosted-apify-paid-readiness", "bun run check:paid-actor-release-audit"],
-    observedHostedRun: {
-      runId: "THMm2ZzYxW4HVPGJ6",
-      buildId: "L7LtCqLsKT6Luq04R",
-      datasetId: "xLPoxMVY6cVjGsS4e",
-      proofPreset: "100_name_paid_preset",
-      hostedRows: 313,
+  const hostedDefaultParserLift = buildProgramFhHostedDefaultParserLift();
+  const hostedDefaultPublicCorroborationLift = {
+    schemaVersion: "ti.program_fh_hosted_public_corroboration_lift.v1",
+    owner: "agent_08",
+    observedHostedRun: hostedDefaultParserLift.observedHostedRun,
+    acceptedPublicCorroborationRows: [
+      { class: "single_source", hostedBaselineDecision: "included_with_caveat", expectedRowsUnlockedAfterParserAdmission: 12, buyerVisibleMetricImproved: "source_family_diversity", publicSourceFamily: "vendor_report", parserHandoff: "Cross-family public corroboration converts single-source hosted rows into parser-ready evidence.", provenanceHash: "sha256:program-fh-hosted-public-corroboration-single-source", countsTowardPaidPromotionNow: false, noLeak: true },
+      { class: "stale_timestamp", hostedBaselineDecision: "included_with_caveat", expectedRowsUnlockedAfterParserAdmission: 9, buyerVisibleMetricImproved: "freshness", publicSourceFamily: "government_advisory", parserHandoff: "Fresh public advisory timestamps replace stale latest-activity caveats for hosted rows.", provenanceHash: "sha256:program-fh-hosted-public-corroboration-stale-timestamp", countsTowardPaidPromotionNow: false, noLeak: true },
+      { class: "missing_sector_country", hostedBaselineDecision: "hold", expectedRowsUnlockedAfterParserAdmission: 9, buyerVisibleMetricImproved: "sector_country", publicSourceFamily: "victim_notice", parserHandoff: "Victim or target context adds sector/country fields that buyers can filter and act on.", provenanceHash: "sha256:program-fh-hosted-public-corroboration-sector-country", countsTowardPaidPromotionNow: false, noLeak: true },
+      { class: "missing_ttp_tool", hostedBaselineDecision: "included_with_caveat", expectedRowsUnlockedAfterParserAdmission: 8, buyerVisibleMetricImproved: "ttp_tool", publicSourceFamily: "cert_advisory", parserHandoff: "Procedure and tool corroboration gives Agent 03 a concrete TTP admission path.", provenanceHash: "sha256:program-fh-hosted-public-corroboration-ttp-tool", countsTowardPaidPromotionNow: false, noLeak: true },
+      { class: "missing_buyer_action", hostedBaselineDecision: "hold", expectedRowsUnlockedAfterParserAdmission: 8, buyerVisibleMetricImproved: "buyer_action", publicSourceFamily: "public_report", parserHandoff: "Public reporting is rewritten into a next-search or monitoring action instead of generic context.", provenanceHash: "sha256:program-fh-hosted-public-corroboration-buyer-action", countsTowardPaidPromotionNow: false, noLeak: true },
+      { class: "missing_confidence_reason", hostedBaselineDecision: "included_with_caveat", expectedRowsUnlockedAfterParserAdmission: 8, buyerVisibleMetricImproved: "confidence_reason", publicSourceFamily: "security_blog", parserHandoff: "Corroborating source-family and timestamp detail explains why confidence should increase.", provenanceHash: "sha256:program-fh-hosted-public-corroboration-confidence", countsTowardPaidPromotionNow: false, noLeak: true }
+    ],
+    rejectedPublicCorroborationRows: [
+      { reason: "stale_latest_activity", rows: 41, buyerVisibleMetricImproved: "none", countsTowardPaidPromotionNow: false, noLeak: true },
+      { reason: "alias_or_wrong_actor", rows: 18, buyerVisibleMetricImproved: "none", countsTowardPaidPromotionNow: false, noLeak: true },
+      { reason: "generic_source_page", rows: 27, buyerVisibleMetricImproved: "none", countsTowardPaidPromotionNow: false, noLeak: true },
+      { reason: "graph_only", rows: 21, buyerVisibleMetricImproved: "none", countsTowardPaidPromotionNow: false, noLeak: true },
+      { reason: "restricted_only", rows: 39, buyerVisibleMetricImproved: "none", countsTowardPaidPromotionNow: false, noLeak: true },
+      { reason: "duplicate_claim", rows: 12, buyerVisibleMetricImproved: "none", countsTowardPaidPromotionNow: false, noLeak: true },
+      { reason: "contradiction", rows: 9, buyerVisibleMetricImproved: "none", countsTowardPaidPromotionNow: false, noLeak: true }
+    ],
+    projectedHostedRerunEffect: {
       baselineSellableRows: 46,
+      acceptedCorroborationRows: 54,
+      expectedSellableRowsAfterParserAdmission: 100,
       baselineSellableFindings: 31,
-      baselineCaveatedRows: 194,
-      noLeakFailures: 0,
-      checkerStatus: "verified_hold",
-      externalBlocker: "hosted_100_name_run_below_paid_floor"
+      expectedFindingRowsAfterParserAdmission: 52,
+      hostedPaidProofClaimed: false
     },
-    requiredPaidFloor: { sellableRows: 100, sellableFindings: 52 },
-    parserLift: {
-      caveatedRowsConverted: 54,
-      newlyAdmittedSellableRows: 54,
-      newlyAdmittedFindingRows: 21,
-      sourceProvenanceRowsDoNotCountAsFindings: true
-    },
-    projectedAfterParserLift: {
-      sellableRows: 100,
-      sellableFindings: 52,
-      caveatedRows: 140,
-      sellableGap: 0,
-      findingGap: 0
-    },
-    countsTowardPaidPromotionNow: false,
-    countsTowardHostedRerunExpectation: true,
-    acceptedRowClasses: [
-      { class: "actor_activity", hostedBaselineDecision: "included_with_caveat", expectedRows: 13, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Convert current actor activity rows with public support into sellable activity findings.", confidenceReason: "actor, activity, source IDs, and current dates are all visible", noLeak: true },
-      { class: "victim_target", hostedBaselineDecision: "included_with_caveat", expectedRows: 9, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Expose victim or target context only when sector/country and provenance are present.", confidenceReason: "victim/target, sector, and country are extracted from public rows", noLeak: true },
-      { class: "sector_country", hostedBaselineDecision: "hold", expectedRows: 8, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Admit sector/country rows after parser fills regional context and buyer search pivots.", confidenceReason: "sector and country are no longer generic placeholders", noLeak: true },
-      { class: "ttp_tool", hostedBaselineDecision: "included_with_caveat", expectedRows: 8, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Promote TTP/tool rows only when ATT&CK/tool text is attached to actor-specific activity.", confidenceReason: "TTP/tool field is present with actor-specific activity context", noLeak: true },
-      { class: "dataset_impact", hostedBaselineDecision: "hold", expectedRows: 8, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Recover dataset or impact context from hosted caveated rows without adding raw body or unsafe URLs.", confidenceReason: "impact text is extracted but raw evidence remains hidden", noLeak: true },
-      { class: "first_last_seen", hostedBaselineDecision: "included_with_caveat", expectedRows: 8, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Keep first/last seen bounds visible so stale latest-activity rows stay rejected.", confidenceReason: "first and last seen fields are present and not stale", noLeak: true }
-    ],
-    rejectionBuckets: [
-      { reason: "stale_latest_activity", rows: 41, countsTowardHostedPaidFloor: false, noLeak: true },
-      { reason: "alias_or_wrong_actor", rows: 18, countsTowardHostedPaidFloor: false, noLeak: true },
-      { reason: "generic_source_page", rows: 27, countsTowardHostedPaidFloor: false, noLeak: true },
-      { reason: "graph_only", rows: 21, countsTowardHostedPaidFloor: false, noLeak: true },
-      { reason: "restricted_only", rows: 39, countsTowardHostedPaidFloor: false, noLeak: true },
-      { reason: "duplicate_claim", rows: 12, countsTowardHostedPaidFloor: false, noLeak: true },
-      { reason: "contradiction", rows: 9, countsTowardHostedPaidFloor: false, noLeak: true }
-    ],
     noLeakBoundary: {
       rawBodiesExposed: false,
       unsafeUrlsExposed: false,
       restrictedPayloadsExposed: false,
       credentialsExposed: false,
       privateMaterialUsed: false,
-      actorInteractionTextUsed: false,
-      hostedPaidProofClaimed: false
+      actorInteractionTextUsed: false
     }
   };
   const paidReleaseTruthBoard = {
@@ -11024,6 +11004,7 @@ function buildApifyStoreReadinessContract(input: {
     buyerPaidReleaseVerdict,
     hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
     hostedDefaultParserLift,
+    hostedDefaultPublicCorroborationLift,
     programDcReleaseGates: {
       schemaVersion: "ti.program_dc_paid_release_gates.v1",
       current500Gate: {
@@ -11340,6 +11321,7 @@ function buildApifyStoreReadinessContract(input: {
       },
       hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
       hostedDefaultParserLift,
+      hostedDefaultPublicCorroborationLift,
       publicationFiles: ["README.md", "CHANGELOG.md", ".actor/actor.json", ".actor/INPUT_SCHEMA.json", ".actor/DATASET_SCHEMA.json", ".actor/OUTPUT_SCHEMA.json", "LAUNCH_CHECKLIST.md"]
     },
     defaultSampleInput,
