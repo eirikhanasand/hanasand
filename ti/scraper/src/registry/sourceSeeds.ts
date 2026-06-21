@@ -1613,6 +1613,7 @@ function buildHighValueReplacementBatch(
   const expectedRansomwareRowsPerDay = roundScore(replacementRows
     .filter((row) => row.expectedRansomwareCoverage.length > 0)
     .reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const freshnessPriorityQueue = buildHighValueFreshnessPriorityQueue(replacementRows);
   return {
     schemaVersion: "ti.source_atlas.high_value_replacement_batch.v1",
     routeHint: "/v1/sources/atlas",
@@ -1628,7 +1629,8 @@ function buildHighValueReplacementBatch(
     familyPlans: buildHighValueReplacementFamilyPlans(replacementRows, weakRecords, minimumSourceValueScore),
     actorPlans: buildHighValueReplacementActorPlans(replacementRows, weakRecords, minimumSourceValueScore),
     activationRunbook: buildHighValueReplacementActivationRunbook(replacementRows),
-    freshnessPriorityQueue: buildHighValueFreshnessPriorityQueue(replacementRows),
+    freshnessPriorityQueue,
+    dailyActorPresetCanaryPacket: buildDailyActorPresetCanaryPacket(freshnessPriorityQueue),
     aggregate: {
       sampledReplacementCount: replacementRows.length,
       projectedAdditionalPayworthySources,
@@ -1638,6 +1640,92 @@ function buildHighValueReplacementBatch(
       expectedRansomwareRowsPerDay,
       expectedActorRowsPerDay,
       nextMeasuredPass: "Replace low-value/stale/low-yield candidates with these high-value public sources, then rerun sourceMonetizationGate and daily Actor proof before advancing 4k or 10k claims."
+    }
+  };
+}
+
+function buildDailyActorPresetCanaryPacket(
+  queue: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"] {
+  const eligibleRows = queue.rows.filter((row) => row.priority !== "p2_hold_until_review");
+  const rows = HIGH_VALUE_REPLACEMENT_ACTORS
+    .map((actor, actorIndex) => {
+      const directActorRows = eligibleRows
+        .filter((row) => row.actors.includes(actor) || row.ransomwareGroups.includes(actor))
+        .slice(0, 8);
+      const fallbackRows = eligibleRows.length > 0
+        ? [...eligibleRows.slice(actorIndex % eligibleRows.length), ...eligibleRows.slice(0, actorIndex % eligibleRows.length)].slice(0, 4)
+        : [];
+      const actorRows = directActorRows.length > 0 ? directActorRows : fallbackRows;
+      const atlasSourceIds = uniqueStrings(actorRows.map((row) => row.atlasSourceId));
+      const sourceFamilies = uniqueStrings(actorRows.map((row) => row.sourceFamily)) as TiSourceAtlasFamily[];
+      const expectedFreshRowsPerDay = roundScore(actorRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+      const expectedUsefulRowsPerDay = roundScore(actorRows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0));
+      const schedulerCadenceSeconds = actorRows.length > 0
+        ? Math.min(...actorRows.map((row) => row.schedulerCadenceSeconds))
+        : 86_400;
+      return {
+        rank: 0,
+        actor,
+        atlasSourceIds,
+        sourceFamilies,
+        schedulerCadenceSeconds,
+        expectedFreshRowsPerDay,
+        expectedUsefulRowsPerDay,
+        coverageReason: directActorRows.length > 0
+          ? `Stage ${atlasSourceIds.length} reviewed freshness sources for ${actor} in the daily paid Actor preset; count lift only after safe metadata increases fresh/useful rows.`
+          : `Stage ${atlasSourceIds.length} reviewed default-watchlist freshness sources for ${actor} in the daily paid Actor preset while actor-specific public sources remain in the acquisition gap list.`,
+        canaryAcceptance: {
+          minFreshRowsPerDay: roundScore(Math.max(0.05, expectedFreshRowsPerDay * 0.35)),
+          minUsefulRowsPerDay: roundScore(Math.max(0.03, expectedUsefulRowsPerDay * 0.35)),
+          maxCostPerUsefulRowUsd: 0.003,
+          requireSourceFamilyDiversity: sourceFamilies.length > 1
+        },
+        noLeakBoundary: {
+          rawUrlExposed: false as const,
+          rawPayloadExposed: false as const,
+          privateAuthCaptchaRequired: false as const,
+          crawlStarted: false as const,
+          actorInteractionRequired: false as const,
+          sourceActivationApplied: false as const
+        }
+      };
+    })
+    .sort((left, right) =>
+      right.expectedUsefulRowsPerDay - left.expectedUsefulRowsPerDay ||
+      right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+      left.actor.localeCompare(right.actor)
+    )
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+  const canarySourceIds = uniqueStrings(rows.flatMap((row) => row.atlasSourceIds));
+  const p0SourceIds = new Set(queue.rows
+    .filter((row) => row.priority === "p0_fresh_paid_row_lift")
+    .map((row) => row.atlasSourceId));
+  const expectedFreshRowsPerDay = roundScore(rows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+  const expectedUsefulRowsPerDay = roundScore(rows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0));
+
+  return {
+    schemaVersion: "ti.source_atlas.daily_actor_preset_canary_packet.v1",
+    routeHint: "/v1/sources/atlas",
+    dryRun: true,
+    willMutate: false,
+    willStartCrawling: false,
+    presetName: "daily_paid_actor_100",
+    targetActorCount: 100,
+    sampledActorCount: rows.length,
+    uncoveredActorSlots: Math.max(0, 100 - rows.length),
+    canarySourceCount: canarySourceIds.length,
+    p0SourceCount: canarySourceIds.filter((sourceId) => p0SourceIds.has(sourceId)).length,
+    expectedFreshRowsPerDay,
+    expectedUsefulRowsPerDay,
+    expectedActorCoverageCount: rows.filter((row) => row.atlasSourceIds.length > 0 && !row.actor.includes("LockBit") && !row.actor.includes("Akira")).length,
+    expectedRansomwareCoverageCount: rows.filter((row) => row.atlasSourceIds.length > 0 && (row.actor.includes("LockBit") || row.actor.includes("Akira"))).length,
+    rows,
+    ownerHandoffs: {
+      agent02Scheduler: ["Use rows[].atlasSourceIds and schedulerCadenceSeconds to stage approval-only canary packets for the daily 100-name Actor preset after operator approval."],
+      agent07Quality: ["Gate each actor row on canaryAcceptance before counting useful/fresh row lift or source-family diversity in paid output."],
+      agent09Apify: ["Expose dailyActorPresetCanaryPacket in /v1/sources/atlas so the Apify Actor can explain which reviewed sources support the daily paid preset."],
+      agent10Revenue: ["Measure expectedUsefulRowsPerDay against cost per useful row before increasing source-tier marketplace claims."]
     }
   };
 }

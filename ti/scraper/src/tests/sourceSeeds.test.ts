@@ -1945,6 +1945,53 @@ describe("source seed bundles", () => {
       row.expectedUsefulRowsPerDay >= 0 &&
       row.nextAction.length > 40
     )).toBe(true);
+    const dailyPresetPacket = atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.dailyActorPresetCanaryPacket;
+    expect(dailyPresetPacket).toMatchObject({
+      schemaVersion: "ti.source_atlas.daily_actor_preset_canary_packet.v1",
+      routeHint: "/v1/sources/atlas",
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      presetName: "daily_paid_actor_100",
+      targetActorCount: 100
+    });
+    expect(dailyPresetPacket.sampledActorCount).toBe(dailyPresetPacket.rows.length);
+    expect(dailyPresetPacket.uncoveredActorSlots).toBe(100 - dailyPresetPacket.rows.length);
+    expect(dailyPresetPacket.canarySourceCount).toBeGreaterThan(0);
+    expect(dailyPresetPacket.p0SourceCount).toBeGreaterThan(0);
+    expect(dailyPresetPacket.expectedFreshRowsPerDay).toBeGreaterThan(0);
+    expect(dailyPresetPacket.expectedUsefulRowsPerDay).toBeGreaterThan(0);
+    expect(dailyPresetPacket.rows.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT28",
+      "APT42",
+      "Volt Typhoon",
+      "Lazarus",
+      "Scattered Spider",
+      "FIN7",
+      "LockBit",
+      "Akira"
+    ]));
+    expect(dailyPresetPacket.rows.every((row) =>
+      row.rank > 0 &&
+      row.atlasSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.sourceFamilies.length > 0 &&
+      row.schedulerCadenceSeconds > 0 &&
+      row.expectedFreshRowsPerDay >= 0 &&
+      row.expectedUsefulRowsPerDay >= 0 &&
+      row.coverageReason.includes("daily paid Actor preset") &&
+      row.canaryAcceptance.minFreshRowsPerDay > 0 &&
+      row.canaryAcceptance.minUsefulRowsPerDay > 0 &&
+      row.canaryAcceptance.maxCostPerUsefulRowUsd === 0.003 &&
+      row.noLeakBoundary.rawUrlExposed === false &&
+      row.noLeakBoundary.rawPayloadExposed === false &&
+      row.noLeakBoundary.privateAuthCaptchaRequired === false &&
+      row.noLeakBoundary.crawlStarted === false &&
+      row.noLeakBoundary.actorInteractionRequired === false &&
+      row.noLeakBoundary.sourceActivationApplied === false
+    )).toBe(true);
+    expect(dailyPresetPacket.ownerHandoffs.agent02Scheduler.join(" ")).toContain("daily 100-name Actor preset");
+    expect(dailyPresetPacket.ownerHandoffs.agent09Apify.join(" ")).toContain("/v1/sources/atlas");
     expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.aggregate.projectedPayworthySourceCount).toBeGreaterThan(
       atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.currentPayworthySourceCount
     );

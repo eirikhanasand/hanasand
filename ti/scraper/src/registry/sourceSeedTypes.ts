@@ -1916,6 +1916,53 @@ export interface TiSourceAtlasProductSourceLadderPacket {
           nextAction: string;
         }>;
       };
+      dailyActorPresetCanaryPacket: {
+        schemaVersion: "ti.source_atlas.daily_actor_preset_canary_packet.v1";
+        routeHint: "/v1/sources/atlas";
+        dryRun: true;
+        willMutate: false;
+        willStartCrawling: false;
+        presetName: "daily_paid_actor_100";
+        targetActorCount: 100;
+        sampledActorCount: number;
+        uncoveredActorSlots: number;
+        canarySourceCount: number;
+        p0SourceCount: number;
+        expectedFreshRowsPerDay: number;
+        expectedUsefulRowsPerDay: number;
+        expectedActorCoverageCount: number;
+        expectedRansomwareCoverageCount: number;
+        rows: Array<{
+          rank: number;
+          actor: "APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira";
+          atlasSourceIds: string[];
+          sourceFamilies: TiSourceAtlasFamily[];
+          schedulerCadenceSeconds: number;
+          expectedFreshRowsPerDay: number;
+          expectedUsefulRowsPerDay: number;
+          coverageReason: string;
+          canaryAcceptance: {
+            minFreshRowsPerDay: number;
+            minUsefulRowsPerDay: number;
+            maxCostPerUsefulRowUsd: number;
+            requireSourceFamilyDiversity: boolean;
+          };
+          noLeakBoundary: {
+            rawUrlExposed: false;
+            rawPayloadExposed: false;
+            privateAuthCaptchaRequired: false;
+            crawlStarted: false;
+            actorInteractionRequired: false;
+            sourceActivationApplied: false;
+          };
+        }>;
+        ownerHandoffs: {
+          agent02Scheduler: string[];
+          agent07Quality: string[];
+          agent09Apify: string[];
+          agent10Revenue: string[];
+        };
+      };
       aggregate: {
         sampledReplacementCount: number;
         projectedAdditionalPayworthySources: number;

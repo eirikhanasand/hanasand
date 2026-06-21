@@ -23,6 +23,8 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Added `highValueReplacementBatch.dailyActorPresetCanaryPacket` to `/v1/sources/atlas`, deriving actor-slot source IDs, scheduler cadence, expected fresh/useful rows, source-family diversity gates, and no-leak acceptance thresholds for the daily paid 100-name Actor preset without activating sources or starting crawls.
+- Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.
 - Added public-monitor gap summary totals for freshness canary source count plus expected fresh/useful rows per day, derived from per-query freshness canaries so Agent 09/10 can consume buyer-visible lift without recomputing query rows.
 - Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.
 - Added per-query `freshnessCanarySourceIds`, expected fresh rows/day, and expected useful rows/day to `publicMonitorSourceGapHandoff` so Apify/public-monitor gap rows can prefer ready, current-review sources that should improve buyer-visible freshness first.
