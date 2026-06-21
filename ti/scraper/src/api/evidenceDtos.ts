@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { hashContent } from "../utils.ts";
+export { buildEvidenceClaimLedgerDto, buildEvidenceTrustLedgerDto, evidenceClaimLedgerApiContract, evidenceTrustLedgerApiContract } from "./evidenceTrustDtos.ts";
+import { compactTrustLedger } from "./evidenceTrustDtos.ts";
 
 export type EvidenceReplayPlanDto = any; export type EvidenceCutoverReportDto = any; export type EvidenceSearchReadModelCutoverDto = any;
 export type EvidenceLedgerEnforcementDto = any; export type EvidencePersistenceCertificationDto = any;
@@ -44,30 +46,5 @@ export function buildEvidenceCutoverReportDto(store: any, objects: any, query: s
   };
 }
 
-export function buildEvidenceTrustLedgerDto(store: any, objects: any, query: string, options: any = {}): EvidenceTrustLedgerDto {
-  const captures = list(store, "listCaptures").filter((capture: any) => matches(capture, query));
-  return { endpoint: "/v1/evidence/trust-ledger", method: "GET", query, normalizedQuery: norm(query), generatedAt: options.generatedAt ?? new Date().toISOString(), ...compactTrustLedger(store, query, captures), safeOutput: safe };
-}
-
-export function buildEvidenceClaimLedgerDto(store: any, objects: any, query: string, options: any = {}): EvidenceTrustLedgerDto {
-  return { ...buildEvidenceTrustLedgerDto(store, objects, query, options), endpoint: "/v1/evidence/claim-ledger" };
-}
-
 export const evidenceReplayPlanApiContract = () => ({ endpoint: "/v1/evidence/replay-plan", method: "GET", query: "q", safeOutput: safe });
 export const evidenceCutoverReportApiContract = () => ({ endpoint: "/v1/evidence/cutover-report", method: "GET", response: ["readiness", "promotionGate", "trustLedger", "safeOutput"], safeOutput: safe });
-export const evidenceTrustLedgerApiContract = () => ({ endpoint: "/v1/evidence/trust-ledger", method: "GET", response: ["trustGate", "claims", "counts", "safeOutput"], safeOutput: safe });
-export const evidenceClaimLedgerApiContract = () => ({ ...evidenceTrustLedgerApiContract(), endpoint: "/v1/evidence/claim-ledger" });
-
-function compactTrustLedger(store: any, query: string, captures: any[]) {
-  const deltas = store.queries?.().getEvidenceTimeline?.(query, {}) ?? [];
-  const claims = captures.map((capture: any) => ({ claimId: `claim_${capture.id}`, captureId: capture.id, sourceId: capture.sourceId, contentHash: capture.contentHash, confidence: 0.7, trustStatus: "trusted", blockers: [], replayable: true }));
-  return {
-    trustGate: captures.length ? "ready" : "hold",
-    blockers: [],
-    counts: { claims: claims.length, trusted: claims.length, degraded: 0, blocked: 0, metadataOnlyClaims: captures.filter((c: any) => c.storageKind === "metadata_only").length, duplicateClaimsSuppressed: 0, replayable: true },
-    changesSinceCursor: deltas.slice(-20),
-    claims,
-    enforcement: { status: "ready", repairPackets: [] },
-    certification: { status: "ready", releaseAction: "promote", fixtures: [], downstream: [] }
-  };
-}
