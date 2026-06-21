@@ -1,0 +1,79 @@
+import { describe, expect, test } from "bun:test";
+import { createCollectionPlan } from "../planner/intelligencePlanner.ts";
+import { source } from "./helpers/plannerFixtures.ts";
+
+describe("collection planner", () => {
+  test("fans APT29 requests out to clear web and approved metadata sources", () => {
+    const plan = createCollectionPlan({ query: "APT29", entityType: "actor", includeDarknetMetadata: true, tenantId: "tenant_global", requesterId: "analyst_1", priority: "high" }, [
+      source({ id: "rss", type: "rss" }),
+      source({ id: "tor", type: "tor_metadata", accessMethod: "approved_proxy", risk: "high", approvedAt: new Date(0).toISOString(), approvedBy: "operator", governance: { approvalState: "approved", approvalRequired: true, metadataOnly: true, approvedAt: new Date(0).toISOString(), approvedBy: "operator", policyVersion: "collection-policy:v1" } }),
+      source({ id: "paused", status: "paused" })
+    ]);
+    expect(plan.tasks.some((task) => task.sourceId === "rss")).toBe(true);
+    expect(plan.tasks.some((task) => task.sourceId === "tor")).toBe(true);
+    expect(plan.rejected.some((rejected) => rejected.sourceId === "paused")).toBe(true);
+    expect(plan.tasks.every((task) => task.intelRequestId === plan.id)).toBe(true);
+    expect(plan.tasks.every((task) => task.tenantId === "tenant_global")).toBe(true);
+    expect(plan.audit[0]?.action).toBe("intel.plan.created");
+  });
+
+  test("excludes darknet metadata unless requested", () => {
+    const plan = createCollectionPlan({ query: "APT29", entityType: "actor", includeDarknetMetadata: false }, [
+      source({ id: "rss", type: "rss" }),
+      source({ id: "tor", type: "tor_metadata", accessMethod: "approved_proxy", risk: "high", approvedAt: new Date(0).toISOString(), approvedBy: "operator", governance: { approvalState: "approved", approvalRequired: true, metadataOnly: true, approvedAt: new Date(0).toISOString(), approvedBy: "operator", policyVersion: "collection-policy:v1" } })
+    ]);
+    expect(plan.tasks.some((task) => task.sourceId === "rss")).toBe(true);
+    expect(plan.tasks.some((task) => task.sourceId === "tor")).toBe(false);
+  });
+
+  test("expands aliases and splits interactive work from background fanout", () => {
+    const createdAt = "2026-05-24T00:00:00.000Z";
+    const plan = createCollectionPlan({ query: "APT29", entityType: "actor", priority: "urgent", budgetClass: "interactive_search", createdAt, tenantId: "tenant_a" }, [
+      source({ id: "api", type: "api", trustScore: 0.95, tags: ["apt29", "nobelium"] }),
+      source({ id: "rss", type: "rss", trustScore: 0.9 }),
+      source({ id: "static", type: "static_web", trustScore: 0.85 }),
+      source({ id: "pdf", type: "pdf", trustScore: 0.8 }),
+      source({ id: "later", type: "rss", trustScore: 0.75 })
+    ]);
+    expect(plan.queryTerms).toContain("cozy bear");
+    expect(plan.queryTerms).toContain("midnight blizzard");
+    expect(plan.budget?.class).toBe("interactive_search");
+    expect(plan.tasks.length).toBeGreaterThan(4);
+    expect(plan.tasks.filter((task) => task.availableAt && task.availableAt > createdAt).length).toBeGreaterThan(0);
+    expect(plan.tasks.every((task) => task.maxBytes === plan.budget?.maxBytesPerTask)).toBe(true);
+    expect(plan.explanations?.some((explanation) => explanation.status === "delayed")).toBe(true);
+  });
+
+  test("uses freshness and backoff to explain delayed scheduling", () => {
+    const createdAt = "2026-05-24T00:00:00.000Z";
+    const plan = createCollectionPlan({ query: "APT29", entityType: "actor", budgetClass: "analyst_deep_dive", createdAt }, [
+      source({ id: "fresh", type: "rss", trustScore: 0.8, crawlState: { retryCount: 0, lastCollectedAt: "2026-05-23T23:30:00.000Z" } }),
+      source({ id: "backoff", type: "api", trustScore: 0.95, crawlState: { retryCount: 2, backoffUntil: "2026-05-24T00:10:00.000Z" } })
+    ]);
+    expect(plan.tasks[0]?.sourceId).toBe("fresh");
+    expect(plan.tasks.find((task) => task.sourceId === "backoff")?.availableAt).toBe("2026-05-24T00:10:00.000Z");
+    expect(plan.explanations?.some((explanation) => explanation.sourceId === "backoff" && explanation.status === "waiting-for-backoff")).toBe(true);
+  });
+
+  test("blocks unapproved restricted sources with planner explanations", () => {
+    const plan = createCollectionPlan({ query: "APT29", entityType: "actor", includeDarknetMetadata: true, budgetClass: "restricted_darknet_metadata_sweep", createdAt: "2026-05-24T00:00:00.000Z" }, [
+      source({ id: "rss", type: "rss" }),
+      { ...source({ id: "restricted", type: "tor_metadata", accessMethod: "approved_proxy", risk: "restricted" }), approvedAt: undefined, approvedBy: undefined, governance: undefined }
+    ]);
+    expect(plan.tasks.some((task) => task.sourceId === "rss")).toBe(true);
+    expect(plan.tasks.some((task) => task.sourceId === "restricted")).toBe(false);
+    expect(plan.explanations?.some((explanation) => explanation.sourceId === "restricted" && (explanation.status === "blocked-by-policy" || explanation.status === "blocked-by-approval"))).toBe(true);
+  });
+
+  test("keeps broad actor sweeps bounded under large source load", () => {
+    const sources = Array.from({ length: 1_000 }, (_, index) => source({ id: `src_${index}`, type: index % 5 === 0 ? "api" : index % 3 === 0 ? "static_web" : "rss", trustScore: 0.4 + (index % 10) / 20, tags: index % 7 === 0 ? ["apt29", "midnight blizzard"] : undefined, crawlState: index % 11 === 0 ? { retryCount: 1, backoffUntil: "2026-05-24T00:20:00.000Z" } : { retryCount: 0, lastCollectedAt: "2026-05-23T00:00:00.000Z" } }));
+    sources.unshift({ ...source({ id: "restricted_unapproved", type: "tor_metadata", accessMethod: "approved_proxy", risk: "restricted", trustScore: 1, tags: ["apt29"] }), approvedAt: undefined, approvedBy: undefined, governance: undefined });
+    const plan = createCollectionPlan({ query: "APT29", entityType: "actor", budgetClass: "broad_daily_sweep", includeDarknetMetadata: true, createdAt: "2026-05-24T00:00:00.000Z", tenantId: "tenant_large" }, sources);
+    expect(plan.tasks.length + plan.reviewRequired.length).toBeLessThanOrEqual(plan.budget?.maxTasks ?? 0);
+    expect(plan.tasks.length).toBeGreaterThan(50);
+    expect(plan.queryTerms).toContain("nobelium");
+    expect(plan.explanations?.some((explanation) => explanation.status === "waiting-for-backoff")).toBe(true);
+    expect(plan.explanations?.some((explanation) => explanation.sourceId === "restricted_unapproved")).toBe(true);
+    expect(plan.tasks.every((task) => task.tenantId === "tenant_large")).toBe(true);
+  });
+});
