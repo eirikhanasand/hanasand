@@ -21,7 +21,7 @@ export function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
     distinctHostedSourceFindings: live.distinctHostedSourceFindingCount,
     caveatedCandidateRowsProduced: rows.filter((row) => row.paidRowDecision === "included_with_caveat").length,
     refreshedSources,
-    nextCollectionAction: live.sellableLiveDataRealRowCount >= 400
+    nextCollectionAction: live.sellableLiveDataRealRowCount >= 1000
       ? "keep daily refresh cadence and measure hosted conversion"
       : "replace fixture and default-watchlist rows with hosted live-collected distinct public-source findings"
   };
