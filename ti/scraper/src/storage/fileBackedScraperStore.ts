@@ -1,218 +1,55 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type {
-  AnalystClaimLedgerEntry,
-  AnalystLoopSnapshot,
-  AnalystMetadataReviewTask,
-  AnalystSourceActivationPacket,
-  AnalystVictimNotificationPacket,
-  CaptureReplayJob,
-  CaptureWriteResult,
-  CollectionPlan,
-  CollectionRun,
-  DiscoveryEvidence,
-  DiscoveryPromotion,
-  EvidenceDelta,
-  IncidentCandidate,
-  LiveSearchSnapshot,
-  PipelineResult,
-  RawCapture,
-  SourceRecord
-} from "../types.ts";
+import type { AnalystClaimLedgerEntry, AnalystLoopSnapshot, AnalystMetadataReviewTask, AnalystSourceActivationPacket, AnalystVictimNotificationPacket, CaptureReplayJob, CaptureWriteResult, CollectionPlan, CollectionRun, DiscoveryEvidence, DiscoveryPromotion, EvidenceDelta, IncidentCandidate, LiveSearchSnapshot, PipelineResult, RawCapture, SourceRecord } from "../types.ts";
 import { InMemoryScraperStore } from "./memoryStore.ts";
 
-export interface FileBackedScraperStoreOptions {
-  snapshotPath: string;
-}
-
-interface FileBackedScraperSnapshot {
-  schemaVersion: "ti.file_backed_scraper_store.v1";
-  savedAt: string;
-  sources: SourceRecord[];
-  captures: RawCapture[];
-  incidents: IncidentCandidate[];
-  plans: CollectionPlan[];
-  runs: CollectionRun[];
-  discoveryEvidence: DiscoveryEvidence[];
-  liveSearchSnapshots: LiveSearchSnapshot[];
-  evidenceDeltas: EvidenceDelta[];
-  replayJobs: CaptureReplayJob[];
-  analystMetadataReviewTasks: AnalystMetadataReviewTask[];
-  analystSourceActivationPackets: AnalystSourceActivationPacket[];
-  analystVictimNotificationPackets: AnalystVictimNotificationPacket[];
-  analystClaimLedgerEntries: AnalystClaimLedgerEntry[];
-  analystLoopSnapshots: AnalystLoopSnapshot[];
-}
+export type FileBackedScraperStoreOptions = { snapshotPath: string };
+type FileBackedScraperSnapshot = any;
 
 export class FileBackedScraperStore extends InMemoryScraperStore {
-  private readonly snapshotPath: string;
-  private hydrating = false;
-
-  constructor(options: FileBackedScraperStoreOptions) {
-    super();
-    this.snapshotPath = options.snapshotPath;
-    mkdirSync(dirname(this.snapshotPath), { recursive: true });
-    this.hydrate();
+  private readonly snapshotPath: string; private hydrating = false;
+  constructor(options: FileBackedScraperStoreOptions) { super(); this.snapshotPath = options.snapshotPath; mkdirSync(dirname(this.snapshotPath), { recursive: true }); this.hydrate(); }
+  override saveCapture(capture: RawCapture): RawCapture { return this.saved(() => super.saveCapture(capture)); }
+  override saveCaptureWithDedupe(capture: RawCapture): CaptureWriteResult { return this.saved(() => super.saveCaptureWithDedupe(capture)); }
+  override savePipelineResult(result: PipelineResult): PipelineResult { return this.saved(() => super.savePipelineResult(result)); }
+  override saveIncident(candidate: IncidentCandidate): IncidentCandidate { return this.saved(() => super.saveIncident(candidate)); }
+  override saveSource(source: SourceRecord): SourceRecord { return this.saved(() => super.saveSource(source)); }
+  override savePlan(plan: CollectionPlan): CollectionPlan { return this.saved(() => super.savePlan(plan)); }
+  override saveRun(run: CollectionRun): CollectionRun { return this.saved(() => super.saveRun(run)); }
+  override createReplayJob(input: Parameters<InMemoryScraperStore["createReplayJob"]>[0]): CaptureReplayJob { return this.saved(() => super.createReplayJob(input)); }
+  override recordReplayResult(jobId: string, result: PipelineResult): CaptureReplayJob { return this.saved(() => super.recordReplayResult(jobId, result)); }
+  override saveReplayJob(job: CaptureReplayJob): CaptureReplayJob { return this.saved(() => super.saveReplayJob(job)); }
+  override saveDiscoveryEvidence(evidence: DiscoveryEvidence): DiscoveryEvidence { return this.saved(() => super.saveDiscoveryEvidence(evidence)); }
+  override promoteDiscoveryEvidence(promotion: DiscoveryPromotion): DiscoveryEvidence { return this.saved(() => super.promoteDiscoveryEvidence(promotion)); }
+  override saveLiveSearchSnapshot(snapshot: LiveSearchSnapshot): LiveSearchSnapshot { return this.saved(() => super.saveLiveSearchSnapshot(snapshot)); }
+  override saveEvidenceDelta(delta: EvidenceDelta): EvidenceDelta { return this.saved(() => super.saveEvidenceDelta(delta)); }
+  override saveAnalystMetadataReviewTask(task: AnalystMetadataReviewTask): AnalystMetadataReviewTask { return this.saved(() => super.saveAnalystMetadataReviewTask(task)); }
+  override saveAnalystSourceActivationPacket(packet: AnalystSourceActivationPacket): AnalystSourceActivationPacket { return this.saved(() => super.saveAnalystSourceActivationPacket(packet)); }
+  override saveAnalystVictimNotificationPacket(packet: AnalystVictimNotificationPacket): AnalystVictimNotificationPacket { return this.saved(() => super.saveAnalystVictimNotificationPacket(packet)); }
+  override saveAnalystClaimLedgerEntry(entry: AnalystClaimLedgerEntry): AnalystClaimLedgerEntry { return this.saved(() => super.saveAnalystClaimLedgerEntry(entry)); }
+  override saveAnalystLoopSnapshot(snapshot: AnalystLoopSnapshot): AnalystLoopSnapshot { return this.saved(() => super.saveAnalystLoopSnapshot(snapshot)); }
+  private saved<T>(write: () => T): T { const value = write(); this.persist(); return value; }
+  private hydrate(): void { if (!existsSync(this.snapshotPath)) return; this.hydrating = true; try { this.load(JSON.parse(readFileSync(this.snapshotPath, "utf8"))); } finally { this.hydrating = false; } }
+  private load(snapshot: Partial<FileBackedScraperSnapshot>): void {
+    for (const source of snapshot.sources ?? []) super.saveSource(source);
+    for (const capture of snapshot.captures ?? []) this.hydrateCaptureSnapshot(capture);
+    for (const incident of snapshot.incidents ?? []) super.saveIncident(incident);
+    for (const plan of snapshot.plans ?? []) super.savePlan(plan);
+    for (const run of snapshot.runs ?? []) super.saveRun(run);
+    for (const evidence of snapshot.discoveryEvidence ?? []) this.hydrateDiscoveryEvidenceSnapshot(evidence);
+    for (const row of snapshot.liveSearchSnapshots ?? []) this.hydrateLiveSearchSnapshotSnapshot(row);
+    for (const delta of snapshot.evidenceDeltas ?? []) this.hydrateEvidenceDeltaSnapshot(delta);
+    for (const [key, save] of Object.entries(extraSaves)) for (const row of snapshot[key] ?? []) save(this, row);
   }
-
-  override saveCapture(capture: RawCapture): RawCapture {
-    const saved = super.saveCapture(capture);
-    this.persist();
-    return saved;
-  }
-
-  override saveCaptureWithDedupe(capture: RawCapture): CaptureWriteResult {
-    const saved = super.saveCaptureWithDedupe(capture);
-    this.persist();
-    return saved;
-  }
-
-  override savePipelineResult(result: PipelineResult): PipelineResult {
-    const saved = super.savePipelineResult(result);
-    this.persist();
-    return saved;
-  }
-
-  override saveIncident(candidate: IncidentCandidate): IncidentCandidate {
-    const saved = super.saveIncident(candidate);
-    this.persist();
-    return saved;
-  }
-
-  override saveSource(source: SourceRecord): SourceRecord {
-    const saved = super.saveSource(source);
-    this.persist();
-    return saved;
-  }
-
-  override savePlan(plan: CollectionPlan): CollectionPlan {
-    const saved = super.savePlan(plan);
-    this.persist();
-    return saved;
-  }
-
-  override saveRun(run: CollectionRun): CollectionRun {
-    const saved = super.saveRun(run);
-    this.persist();
-    return saved;
-  }
-
-  override createReplayJob(input: Parameters<InMemoryScraperStore["createReplayJob"]>[0]): CaptureReplayJob {
-    const saved = super.createReplayJob(input);
-    this.persist();
-    return saved;
-  }
-
-  override recordReplayResult(jobId: string, result: PipelineResult): CaptureReplayJob {
-    const saved = super.recordReplayResult(jobId, result);
-    this.persist();
-    return saved;
-  }
-
-  override saveReplayJob(job: CaptureReplayJob): CaptureReplayJob {
-    const saved = super.saveReplayJob(job);
-    this.persist();
-    return saved;
-  }
-
-  override saveDiscoveryEvidence(evidence: DiscoveryEvidence): DiscoveryEvidence {
-    const saved = super.saveDiscoveryEvidence(evidence);
-    this.persist();
-    return saved;
-  }
-
-  override promoteDiscoveryEvidence(promotion: DiscoveryPromotion): DiscoveryEvidence {
-    const saved = super.promoteDiscoveryEvidence(promotion);
-    this.persist();
-    return saved;
-  }
-
-  override saveLiveSearchSnapshot(snapshot: LiveSearchSnapshot): LiveSearchSnapshot {
-    const saved = super.saveLiveSearchSnapshot(snapshot);
-    this.persist();
-    return saved;
-  }
-
-  override saveEvidenceDelta(delta: EvidenceDelta): EvidenceDelta {
-    const saved = super.saveEvidenceDelta(delta);
-    this.persist();
-    return saved;
-  }
-
-  override saveAnalystMetadataReviewTask(task: AnalystMetadataReviewTask): AnalystMetadataReviewTask {
-    const saved = super.saveAnalystMetadataReviewTask(task);
-    this.persist();
-    return saved;
-  }
-
-  override saveAnalystSourceActivationPacket(packet: AnalystSourceActivationPacket): AnalystSourceActivationPacket {
-    const saved = super.saveAnalystSourceActivationPacket(packet);
-    this.persist();
-    return saved;
-  }
-
-  override saveAnalystVictimNotificationPacket(packet: AnalystVictimNotificationPacket): AnalystVictimNotificationPacket {
-    const saved = super.saveAnalystVictimNotificationPacket(packet);
-    this.persist();
-    return saved;
-  }
-
-  override saveAnalystClaimLedgerEntry(entry: AnalystClaimLedgerEntry): AnalystClaimLedgerEntry {
-    const saved = super.saveAnalystClaimLedgerEntry(entry);
-    this.persist();
-    return saved;
-  }
-
-  override saveAnalystLoopSnapshot(snapshot: AnalystLoopSnapshot): AnalystLoopSnapshot {
-    const saved = super.saveAnalystLoopSnapshot(snapshot);
-    this.persist();
-    return saved;
-  }
-
-  private hydrate(): void {
-    if (!existsSync(this.snapshotPath)) return;
-    this.hydrating = true;
-    try {
-      const snapshot = JSON.parse(readFileSync(this.snapshotPath, "utf8")) as Partial<FileBackedScraperSnapshot>;
-      for (const source of snapshot.sources ?? []) super.saveSource(source);
-      for (const capture of snapshot.captures ?? []) this.hydrateCaptureSnapshot(capture);
-      for (const incident of snapshot.incidents ?? []) super.saveIncident(incident);
-      for (const plan of snapshot.plans ?? []) super.savePlan(plan);
-      for (const run of snapshot.runs ?? []) super.saveRun(run);
-      for (const evidence of snapshot.discoveryEvidence ?? []) this.hydrateDiscoveryEvidenceSnapshot(evidence);
-      for (const snapshotRow of snapshot.liveSearchSnapshots ?? []) this.hydrateLiveSearchSnapshotSnapshot(snapshotRow);
-      for (const delta of snapshot.evidenceDeltas ?? []) this.hydrateEvidenceDeltaSnapshot(delta);
-      for (const job of snapshot.replayJobs ?? []) super.saveReplayJob(job);
-      for (const task of snapshot.analystMetadataReviewTasks ?? []) super.saveAnalystMetadataReviewTask(task);
-      for (const packet of snapshot.analystSourceActivationPackets ?? []) super.saveAnalystSourceActivationPacket(packet);
-      for (const packet of snapshot.analystVictimNotificationPackets ?? []) super.saveAnalystVictimNotificationPacket(packet);
-      for (const entry of snapshot.analystClaimLedgerEntries ?? []) super.saveAnalystClaimLedgerEntry(entry);
-      for (const loopSnapshot of snapshot.analystLoopSnapshots ?? []) super.saveAnalystLoopSnapshot(loopSnapshot);
-    } finally {
-      this.hydrating = false;
-    }
-  }
-
-  private persist(): void {
-    if (this.hydrating) return;
-    const snapshot: FileBackedScraperSnapshot = {
-      schemaVersion: "ti.file_backed_scraper_store.v1",
-      savedAt: new Date().toISOString(),
-      sources: this.listSources(),
-      captures: this.listCaptures(),
-      incidents: this.listIncidents(),
-      plans: this.listPlans(),
-      runs: this.listRuns(),
-      discoveryEvidence: this.listDiscoveryEvidence(),
-      liveSearchSnapshots: this.listLiveSearchSnapshots(),
-      evidenceDeltas: this.listEvidenceDeltas(),
-      replayJobs: this.listReplayJobs(),
-      analystMetadataReviewTasks: this.listAnalystMetadataReviewTasks(),
-      analystSourceActivationPackets: this.listAnalystSourceActivationPackets(),
-      analystVictimNotificationPackets: this.listAnalystVictimNotificationPackets(),
-      analystClaimLedgerEntries: this.listAnalystClaimLedgerEntries(),
-      analystLoopSnapshots: this.listAnalystLoopSnapshots()
-    };
-    writeFileSync(this.snapshotPath, JSON.stringify(snapshot, null, 2));
-  }
+  private persist(): void { if (!this.hydrating) writeFileSync(this.snapshotPath, JSON.stringify(this.snapshot(), null, 2)); }
+  private snapshot(): FileBackedScraperSnapshot { return { schemaVersion: "ti.file_backed_scraper_store.v1", savedAt: new Date().toISOString(), sources: this.listSources(), captures: this.listCaptures(), incidents: this.listIncidents(), plans: this.listPlans(), runs: this.listRuns(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas(), replayJobs: this.listReplayJobs(), analystMetadataReviewTasks: this.listAnalystMetadataReviewTasks(), analystSourceActivationPackets: this.listAnalystSourceActivationPackets(), analystVictimNotificationPackets: this.listAnalystVictimNotificationPackets(), analystClaimLedgerEntries: this.listAnalystClaimLedgerEntries(), analystLoopSnapshots: this.listAnalystLoopSnapshots() }; }
 }
+
+const extraSaves: Record<string, (store: FileBackedScraperStore, row: any) => void> = {
+  replayJobs: (s, r) => InMemoryScraperStore.prototype.saveReplayJob.call(s, r),
+  analystMetadataReviewTasks: (s, r) => InMemoryScraperStore.prototype.saveAnalystMetadataReviewTask.call(s, r),
+  analystSourceActivationPackets: (s, r) => InMemoryScraperStore.prototype.saveAnalystSourceActivationPacket.call(s, r),
+  analystVictimNotificationPackets: (s, r) => InMemoryScraperStore.prototype.saveAnalystVictimNotificationPacket.call(s, r),
+  analystClaimLedgerEntries: (s, r) => InMemoryScraperStore.prototype.saveAnalystClaimLedgerEntry.call(s, r),
+  analystLoopSnapshots: (s, r) => InMemoryScraperStore.prototype.saveAnalystLoopSnapshot.call(s, r)
+};
