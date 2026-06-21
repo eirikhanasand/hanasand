@@ -259,6 +259,15 @@ Progress update 2026-06-21 09:45 CEST:
 - Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, and `bun run check:route-inventory`.
 - Continue next with completed public-support replay receipt ingestion when Agent 01/04/07 produce completed support rows, so blocked metadata rows can be promoted only after corroborated replay.
 
+Progress update 2026-06-21 10:33 CEST:
+- Continued with pending public-support replay receipt ingestion for searchable restricted/dark metadata candidates.
+- Added `ti.evidence_searchable_source_metadata_public_support_replay_receipt_ledger.v1` on `/v1/evidence/cutover-report.readModelCutover.searchableSourceMetadataPublicSupportReplayReceiptLedger`.
+- The ledger enumerates every metadata candidate's required public report, public-channel, advisory/vendor, or freshness support and keeps rows in `awaiting_public_support_receipts` until Agent 01/04/07 support receipts replay through the read model.
+- Direct Actor/public-answer promotion remains disabled until completed public support exists; raw public-support bodies are not accepted, and the ledger writes zero queues or production rows.
+- Restricted/leak material remains metadata-only: receipts contain ids, source family, owner agents, required support, buyer-visible field names, promotion receipt links, and no-leak flags only.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, `bun run check:route-inventory`, and `bun run check:contract-index`.
+- Continue next with completed support receipt ingestion once Agent 01/04/07 emit completed rows, or disabled repository/audit rows for this receipt ledger.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

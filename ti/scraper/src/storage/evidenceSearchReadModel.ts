@@ -593,6 +593,51 @@ export interface EvidenceSearchableSourceMetadataPromotionConsumerReplayReceipt 
   noLeak: true;
 }
 
+export interface EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger {
+  schemaVersion: "ti.evidence_searchable_source_metadata_public_support_replay_receipt_ledger.v1";
+  generatedAt: string;
+  ledgerId: string;
+  sourcePublicSupportQueue: EvidenceSearchableSourceMetadataPublicSupportQueue["schemaVersion"];
+  sourcePromotionConsumerReplay: EvidenceSearchableSourceMetadataPromotionConsumerReplay["schemaVersion"];
+  productSurface: "apify_public_threat_actor_monitor";
+  dryRun: true;
+  willMutateQueues: false;
+  willPromoteActorRows: false;
+  counts: {
+    expectedReceipts: number;
+    completedReceipts: number;
+    pendingReceipts: number;
+    blockedActorRows: number;
+  };
+  receipts: EvidenceSearchableSourceMetadataPublicSupportReplayReceipt[];
+  policy: {
+    completedPublicSupportRequiredBeforeActorPromotion: true;
+    restrictedRowsRemainMetadataOnlyUntilComplete: true;
+    rawPublicSupportBodiesAccepted: false;
+    productionWritesDisabled: true;
+  };
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportReplayReceipt {
+  receiptId: string;
+  candidateId: string;
+  documentId: string;
+  sourceCatalogRowId: string;
+  sourceId?: string;
+  captureId?: string;
+  claimLedgerEntryId?: string;
+  sourceFamily: EvidenceSearchableSourceMetadataPublicSupportCandidate["sourceFamily"];
+  ownerAgents: EvidenceSearchableSourceMetadataPublicSupportCandidate["ownerAgents"];
+  requiredPublicSupport: EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"];
+  completedPublicSupport: EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"];
+  missingPublicSupport: EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"];
+  replayState: "awaiting_public_support_receipts" | "ready_for_promotion_gate_replay";
+  promotionConsumerReceiptId?: string;
+  buyerVisibleFields: EvidenceSearchableSourceMetadataPublicSupportCandidate["buyerVisibleFields"];
+  noLeak: true;
+}
+
 export interface EvidenceSearchReadModelPromotionReplay {
   schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
   generatedAt: string;
@@ -2385,6 +2430,71 @@ export function buildEvidenceSearchableSourceMetadataPromotionConsumerReplay(
       repositoryPersistenceRequiredBeforeProductionWrite: true,
       productionWritesDisabled: true,
       restrictedRowsMetadataOnly: true
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function buildEvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger(
+  queue: EvidenceSearchableSourceMetadataPublicSupportQueue,
+  promotionConsumerReplay: EvidenceSearchableSourceMetadataPromotionConsumerReplay,
+  input: { generatedAt?: string } = {}
+): EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger {
+  const generatedAt = input.generatedAt ?? promotionConsumerReplay.generatedAt ?? queue.generatedAt;
+  const receipts = queue.candidates.map((candidate) => {
+    const promotionReceipt = promotionConsumerReplay.receipts.find((receipt) =>
+      receipt.documentId === candidate.documentId &&
+      receipt.consumerAction === "await_public_support_replay"
+    );
+    const completedPublicSupport: EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"] = [];
+    const missingPublicSupport = candidate.requiredPublicSupport.filter((requirement) =>
+      !completedPublicSupport.includes(requirement)
+    ) as EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"];
+    return {
+      receiptId: stableId("evidence-searchable-source-public-support-replay", `${queue.queueId}:${candidate.candidateId}`),
+      candidateId: candidate.candidateId,
+      documentId: candidate.documentId,
+      sourceCatalogRowId: candidate.sourceCatalogRowId,
+      sourceId: candidate.sourceId,
+      captureId: candidate.captureId,
+      claimLedgerEntryId: candidate.claimLedgerEntryId,
+      sourceFamily: candidate.sourceFamily,
+      ownerAgents: [...candidate.ownerAgents],
+      requiredPublicSupport: [...candidate.requiredPublicSupport],
+      completedPublicSupport,
+      missingPublicSupport,
+      replayState: missingPublicSupport.length === 0 ? "ready_for_promotion_gate_replay" as const : "awaiting_public_support_receipts" as const,
+      promotionConsumerReceiptId: promotionReceipt?.receiptId,
+      buyerVisibleFields: [...candidate.buyerVisibleFields],
+      noLeak: true as const
+    };
+  });
+
+  return {
+    schemaVersion: "ti.evidence_searchable_source_metadata_public_support_replay_receipt_ledger.v1",
+    generatedAt,
+    ledgerId: stableId("evidence-searchable-source-public-support-replay", `${queue.queueId}:${promotionConsumerReplay.replayId}`),
+    sourcePublicSupportQueue: queue.schemaVersion,
+    sourcePromotionConsumerReplay: promotionConsumerReplay.schemaVersion,
+    productSurface: queue.productSurface,
+    dryRun: true,
+    willMutateQueues: false,
+    willPromoteActorRows: false,
+    counts: {
+      expectedReceipts: receipts.length,
+      completedReceipts: receipts.filter((receipt) => receipt.replayState === "ready_for_promotion_gate_replay").length,
+      pendingReceipts: receipts.filter((receipt) => receipt.replayState === "awaiting_public_support_receipts").length,
+      blockedActorRows: receipts.filter((receipt) =>
+        receipt.replayState === "awaiting_public_support_receipts" &&
+        receipt.promotionConsumerReceiptId !== undefined
+      ).length
+    },
+    receipts,
+    policy: {
+      completedPublicSupportRequiredBeforeActorPromotion: true,
+      restrictedRowsRemainMetadataOnlyUntilComplete: true,
+      rawPublicSupportBodiesAccepted: false,
+      productionWritesDisabled: true
     },
     safeOutput: SAFE_OUTPUT
   };

@@ -31,6 +31,7 @@ import {
   buildEvidenceActorDatasetSourceGapRepairReplayLedger,
   buildEvidenceActorDatasetSourceGapSuppressionFeedback,
   buildEvidenceActorProductImpactReplay,
+  buildEvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger,
   createEvidenceActorDatasetConsumerAuditRepository,
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
@@ -70,6 +71,7 @@ import {
   type EvidenceSearchableSourceMetadataPromotionConsumerReplay,
   type EvidenceSearchableSourceMetadataPromotionGate,
   type EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus,
+  type EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger,
   type EvidenceSearchableSourceMetadataPublicSupportQueue,
   type EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus,
   type EvidenceSearchReadModelBackendWriteSet,
@@ -220,6 +222,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   searchableSourceMetadataPromotionGate: EvidenceSearchableSourceMetadataPromotionGate;
   searchableSourceMetadataPromotionGateRepository: EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus;
   searchableSourceMetadataPromotionConsumerReplay: EvidenceSearchableSourceMetadataPromotionConsumerReplay;
+  searchableSourceMetadataPublicSupportReplayReceiptLedger: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger;
   readiness: {
     embedded: EvidenceSearchReadModelReadiness;
     postgres: EvidenceSearchReadModelReadiness;
@@ -493,6 +496,11 @@ function buildEvidenceSearchReadModelCutoverDto(
     searchableSourceMetadataPromotionGateRepository,
     { generatedAt }
   );
+  const searchableSourceMetadataPublicSupportReplayReceiptLedger = buildEvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger(
+    searchableSourceMetadataPublicSupportQueue,
+    searchableSourceMetadataPromotionConsumerReplay,
+    { generatedAt }
+  );
   const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(writeSet, {
     query,
     normalizedQuery: handoff.normalizedQuery,
@@ -562,6 +570,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     searchableSourceMetadataPromotionGate,
     searchableSourceMetadataPromotionGateRepository,
     searchableSourceMetadataPromotionConsumerReplay,
+    searchableSourceMetadataPublicSupportReplayReceiptLedger,
     readiness: {
       embedded,
       postgres,

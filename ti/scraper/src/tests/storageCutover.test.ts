@@ -66,6 +66,7 @@ import {
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
+  buildEvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger,
   buildEvidenceSearchableSourceMetadataPromotionConsumerReplay,
   buildEvidenceSearchableSourceMetadataPromotionGate,
   createEvidenceSearchableSourceMetadataPromotionGateRepository,
@@ -2352,6 +2353,63 @@ describe("evidence storage cutover", () => {
     expect(searchableSourceMetadataPromotionConsumerReplaySerialized).not.toContain(restrictedRaw);
     expect(searchableSourceMetadataPromotionConsumerReplaySerialized).not.toContain("tenant/source/private-key");
     expect(searchableSourceMetadataPromotionConsumerReplaySerialized).not.toContain(".onion");
+
+    const searchableSourceMetadataPublicSupportReplayReceiptLedger = buildEvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger(
+      searchableSourceMetadataPublicSupportQueue,
+      searchableSourceMetadataPromotionConsumerReplay,
+      { generatedAt: "2026-05-24T21:44:44.750Z" }
+    );
+    const searchableSourceMetadataBlockedActorRows = searchableSourceMetadataPublicSupportQueue.candidates.filter((candidate) =>
+      searchableSourceMetadataPromotionConsumerReplay.receipts.some((receipt) =>
+        receipt.documentId === candidate.documentId &&
+        receipt.consumerAction === "await_public_support_replay"
+      )
+    ).length;
+    expect(searchableSourceMetadataPublicSupportReplayReceiptLedger).toMatchObject({
+      schemaVersion: "ti.evidence_searchable_source_metadata_public_support_replay_receipt_ledger.v1",
+      sourcePublicSupportQueue: "ti.evidence_searchable_source_metadata_public_support_queue.v1",
+      sourcePromotionConsumerReplay: "ti.evidence_searchable_source_metadata_promotion_consumer_replay.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      dryRun: true,
+      willMutateQueues: false,
+      willPromoteActorRows: false,
+      counts: {
+        expectedReceipts: searchableSourceMetadataPublicSupportQueue.candidates.length,
+        completedReceipts: 0,
+        pendingReceipts: searchableSourceMetadataPublicSupportQueue.candidates.length,
+        blockedActorRows: searchableSourceMetadataBlockedActorRows
+      },
+      policy: {
+        completedPublicSupportRequiredBeforeActorPromotion: true,
+        restrictedRowsRemainMetadataOnlyUntilComplete: true,
+        rawPublicSupportBodiesAccepted: false,
+        productionWritesDisabled: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(searchableSourceMetadataPublicSupportReplayReceiptLedger.receipts.length).toBeGreaterThan(0);
+    expect(searchableSourceMetadataPublicSupportReplayReceiptLedger.receipts.every((receipt) =>
+      receipt.replayState === "awaiting_public_support_receipts" &&
+      receipt.completedPublicSupport.length === 0 &&
+      receipt.missingPublicSupport.length > 0 &&
+      receipt.noLeak === true
+    )).toBe(true);
+    expect(searchableSourceMetadataPublicSupportReplayReceiptLedger.receipts.some((receipt) =>
+      receipt.requiredPublicSupport.includes("public_channel_corroboration") &&
+      receipt.ownerAgents.includes("agent_04") &&
+      receipt.promotionConsumerReceiptId !== undefined
+    )).toBe(true);
+    const searchableSourceMetadataPublicSupportReplayReceiptLedgerSerialized = JSON.stringify(searchableSourceMetadataPublicSupportReplayReceiptLedger);
+    expect(searchableSourceMetadataPublicSupportReplayReceiptLedgerSerialized).not.toContain(restrictedRaw);
+    expect(searchableSourceMetadataPublicSupportReplayReceiptLedgerSerialized).not.toContain("tenant/source/private-key");
+    expect(searchableSourceMetadataPublicSupportReplayReceiptLedgerSerialized).not.toContain(".onion");
 
     const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(backendWriteSet, {
       query: "APT29",
