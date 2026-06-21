@@ -23,6 +23,8 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Added `dailyActorPresetCanaryPacket.sourceFamilyAcquisitionSummary`, compacting source-family acquisition candidate families, unique candidate source count, p0 family count, stageable canary source ids, missing candidate families, expected fresh/useful row lift, next action, and no-leak boundaries for daily paid Actor source acquisition.
+- Verification is green for this pass: `bun test src/tests/sourceSeeds.test.ts`, `bun run check`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 539 passing tests.
 - Added `dailyActorPresetCanaryPacket.sourceFamilyAcquisitionRows`, mapping source-family gaps to concrete reviewed atlas candidate IDs from both freshness-priority and high-value replacement rows, including affected actors, expected fresh/useful rows, scheduler cadence, source actions, measurement gate, and no-leak boundaries.
 - Candidate mapping now falls back from missing same-family freshness rows to broader actor-overlap replacement candidates, so public-channel/vendor/cloud/ransomware family gaps do not disappear when the freshness queue is advisory/government-heavy.
 - Verification is green for this pass: `bun test src/tests/sourceSeeds.test.ts`, `bun run check`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 538 passing tests.
