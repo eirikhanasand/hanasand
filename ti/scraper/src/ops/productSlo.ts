@@ -3,7 +3,6 @@ import { dirname } from "node:path";
 import type { CollectionRun, IncidentCandidate, RawCapture, SourceRecord } from "../types.ts";
 import type { FrontierGroupSummary } from "../frontier/frontier.ts";
 import { nowIso, stableId } from "../utils.ts";
-
 export type LiveProductProofMode = "fixture" | "local" | "inspur" | "public_live";
 export type LiveProductSloState = "pass" | "warn" | "alert" | "unavailable";
 export interface LiveProductQueryMeasurement { query: string; proofMode: LiveProductProofMode; firstResponseMs?: number | null; firstFreshEvidenceMs?: number | null; pollIntervalMs?: number | null; status?: string; rowCount?: number | null; usefulRowCount?: number | null; freshRowCount?: number | null; activityClaimCount?: number | null; duplicateArticleRate?: number | null; sourceProviderFailures?: number | null; staleRejected?: boolean | null; emptyResultHonest?: boolean | null; apiError?: boolean | null; }
@@ -11,7 +10,6 @@ export interface LiveProductActorRunMeasurement { actorId?: string; actorVersion
 export interface BuildLiveProductSloDashboardInput { generatedAt?: string; proofMode?: LiveProductProofMode; runs: CollectionRun[]; sources: SourceRecord[]; captures: RawCapture[]; incidents: IncidentCandidate[]; frontier: FrontierGroupSummary; queryMeasurements?: LiveProductQueryMeasurement[]; actorRun?: LiveProductActorRunMeasurement; cost?: Record<string, number | null>; marketplace?: Record<string, number | boolean | string | null>; sourceMonetization?: Record<string, number | string | null>; resource?: Record<string, number | null | undefined>; snapshotStoragePath?: string; }
 export type LiveProductDailySnapshot = any;
 export type LiveProductSloDashboard = any;
-
 export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboardInput): LiveProductSloDashboard {
   const generatedAt = input.generatedAt ?? nowIso();
   const rows = value(input.actorRun?.rowCount) ?? sum(input.queryMeasurements?.map((item) => item.rowCount));
@@ -31,12 +29,10 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const dailySnapshot = { snapshotId: stableId("product-slo", generatedAt), snapshotDate: generatedAt.slice(0, 10), generatedAt, appendOnly: true, proofMode: input.proofMode ?? "local", storagePath: input.snapshotStoragePath, metrics: { rows, useful, fresh, sellable, usefulRate, freshRate }, monetizationReadiness, marketplaceTelemetry: marketplace, sourceMonetizationGate: sourceGate, scaleStepGates: scaleGates(sellable, usefulRate, freshRate), nonMonetizingWorkDetector: { allowedWork: ["add real rows", "improve parser extraction", "increase source value"], blockedWork: ["governance-only", "proof-only", "schema-only"] } };
   return { schemaVersion: "ti.live_product_slo.compact.v2", generatedAt, proofMode: input.proofMode ?? "local", dashboard, metrics: dailySnapshot.metrics, slos: slos(dashboard.state as LiveProductSloState, sellable, target, usefulRate, freshRate), monetizationReadiness, paidProductEconomics, sourceMonetizationGate: sourceGate, apifyLaunchExperiment, dailySnapshot, scaleStepGates: dailySnapshot.scaleStepGates, nonMonetizingWorkDetector: dailySnapshot.nonMonetizingWorkDetector, revenueBlockerBoard: blockers(sellable, target, payoutReadiness.externallyVerified), deploymentProof: { actorBuildId: input.actorRun?.buildId ?? null, actorRunId: input.actorRun?.runId ?? null, datasetId: input.actorRun?.datasetId ?? null }, resourceGuardrails: { scraperTargetRamGb: 96, scraperNormalCeilingGb: 160, browserPoolDefault: "disabled", gpuRequired: false } };
 }
-
 export async function appendLiveProductDailySnapshot(path: string, snapshot: LiveProductDailySnapshot): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await appendFile(path, `${JSON.stringify({ ...snapshot, appendOnly: true })}\n`, "utf8");
 }
-
 export async function readLiveProductDailySnapshots(path: string): Promise<LiveProductDailySnapshot[]> {
   try {
     const text = await readFile(path, "utf8");
@@ -46,7 +42,6 @@ export async function readLiveProductDailySnapshots(path: string): Promise<LiveP
     throw error;
   }
 }
-
 function value(input: number | null | undefined): number | null { return typeof input === "number" && Number.isFinite(input) ? input : null; }
 function sum(values: readonly (number | null | undefined)[] | undefined): number | null { const nums = (values ?? []).map(value).filter((item): item is number => item !== null); return nums.length ? nums.reduce((total, item) => total + item, 0) : null; }
 function rate(part: number | null | undefined, total: number | null | undefined): number | null { return value(part) === null || !total ? null : round((part as number) / total); }

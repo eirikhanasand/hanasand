@@ -1,27 +1,13 @@
 import type { Logger } from "./logger.ts";
 import type { MetricsRegistry } from "./metrics.ts";
-
-export type WorkerKind = "collection" | "processing" | "telegram" | "browser" | "darknet_metadata";
-export type WorkerState = "idle" | "running" | "stopped" | "failed";
-
-export interface SupervisedWorker {
-  id: string;
-  kind: WorkerKind;
-  state: WorkerState;
-  startedAt?: string;
-  stoppedAt?: string;
-  failures: number;
-  lastError?: string;
-}
-
+export type { SupervisedWorker, WorkerKind, WorkerState } from "./supervisorTypes.ts";
+import type { SupervisedWorker, WorkerKind, WorkerState } from "./supervisorTypes.ts";
 export class WorkerSupervisor {
   private readonly workers = new Map<string, SupervisedWorker>();
-
   constructor(
     private readonly logger: Logger,
     private readonly metrics: MetricsRegistry
   ) {}
-
   register(id: string, kind: WorkerKind): SupervisedWorker {
     const worker: SupervisedWorker = { id, kind, state: "idle", failures: 0 };
     this.workers.set(id, worker);
@@ -29,7 +15,6 @@ export class WorkerSupervisor {
     this.logger.info("worker registered", { event: "worker.registered", workerId: id, kind });
     return worker;
   }
-
   markRunning(id: string): SupervisedWorker {
     const worker = this.requireWorker(id);
     worker.state = "running";
@@ -38,7 +23,6 @@ export class WorkerSupervisor {
     this.updateStateMetrics();
     return worker;
   }
-
   markStopped(id: string): SupervisedWorker {
     const worker = this.requireWorker(id);
     worker.state = "stopped";
@@ -47,7 +31,6 @@ export class WorkerSupervisor {
     this.logger.info("worker stopped", { event: "worker.stopped", workerId: id, kind: worker.kind });
     return worker;
   }
-
   markFailed(id: string, error: unknown): SupervisedWorker {
     const worker = this.requireWorker(id);
     worker.state = "failed";
@@ -59,17 +42,14 @@ export class WorkerSupervisor {
     this.logger.error("worker failed", { event: "worker.failed", workerId: id, kind: worker.kind, error: worker.lastError });
     return worker;
   }
-
   snapshot(): SupervisedWorker[] {
     return [...this.workers.values()].sort((a, b) => a.id.localeCompare(b.id));
   }
-
   private requireWorker(id: string): SupervisedWorker {
     const worker = this.workers.get(id);
     if (!worker) throw new Error(`Unknown worker: ${id}`);
     return worker;
   }
-
   private updateStateMetrics(): void {
     const states: WorkerState[] = ["idle", "running", "stopped", "failed"];
     for (const state of states) {

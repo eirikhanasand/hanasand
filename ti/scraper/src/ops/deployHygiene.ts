@@ -1,17 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-
-export interface DeployHygieneCheck {
-  name: string;
-  ok: boolean;
-  message: string;
-}
-
-export interface DeployHygieneReport {
-  ok: boolean;
-  repoRoot: string;
-  checks: DeployHygieneCheck[];
-}
+import { check, readIfExists } from "./deployHygieneHelpers.ts";
+export type { DeployHygieneCheck, DeployHygieneReport } from "./deployHygieneTypes.ts";
+import type { DeployHygieneCheck, DeployHygieneReport } from "./deployHygieneTypes.ts";
 
 export function checkDeployHygiene(repoRoot = resolve("../../..")): DeployHygieneReport {
   const root = resolve(repoRoot);
@@ -55,12 +45,4 @@ export function assertDeployHygiene(report: DeployHygieneReport): void {
   const failures = report.checks.filter((item) => !item.ok);
   if (failures.length === 0) return;
   throw new Error(failures.map((item) => `${item.name}: ${item.message}`).join("; "));
-}
-
-function check(name: string, ok: boolean, message: string): DeployHygieneCheck {
-  return { name, ok, message };
-}
-
-function readIfExists(path: string): string {
-  return existsSync(path) ? readFileSync(path, "utf8") : "";
 }
