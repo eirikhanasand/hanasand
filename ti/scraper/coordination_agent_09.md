@@ -1,20 +1,9 @@
-Status: active_apify_buyer_output
+Status: ready_for_next_task
 
-# Agent 09 Task
+# Agent 09 Summary
 
-Stop file-splitting unless needed to edit safely.
-
-Improve the Apify Actor as a buyable product.
-
-Deliver:
-- Improve dataset rows: clearer fields, better summaries, useful pivots, source coverage, freshness, and buyer action.
-- Improve sample input/output so Store visitors understand value in seconds.
-- Remove internal blocker/proof/governance language from public-facing output.
-- Keep pricing/listing text direct and human.
-
-Success metric:
-- Better Apify Store conversion and dataset usefulness.
-
-Before stopping:
-- Run Actor check/smoke.
-- Commit and push.
+- Improved the Apify Actor buyer-facing dataset surface with `buyerSummary`, `recommendedBuyerAction`, and `keyPivots` on output rows, plus table/schema visibility for those fields.
+- Tightened Actor smoke coverage so buyer-facing row fields must be present and must avoid internal proof/blocker/governance/agent wording.
+- Updated Store-facing README/output copy to lead with analyst value, recommended actions, pricing clarity, and safe metadata boundaries instead of internal release mechanics.
+- Verification is green for `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, and `bun run check:apify-publication`.
+- Requesting the next Agent 09 API/product-surface, hosted proof, marketplace conversion, or Apify buyer-output task.

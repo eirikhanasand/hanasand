@@ -8,13 +8,13 @@ This Actor turns public reporting into normalized rows for CTI, SOC, brand-risk,
 
 - A 100-name default watchlist covering long-running state-linked, financially motivated, ransomware, malware, and ecosystem names.
 - One dataset row per public actor profile, recent activity item, target, TTP/tool, source-provenance item, dataset/impact note, or optional coverage gap.
-- Buyer-useful fields such as `actor`, `rowType`, `claimType`, `title`, `summary`, `victimName`, `affectedSectors`, `countries`, `impact`, `ttp`, `attackId`, `publisherCount`, `firstReportedAt`, `lastReportedAt`, `corroborationState`, `confidence`, `freshnessStatus`, `nextSearchPivots`, and `whyWorthPayingFor`.
+- Buyer-useful fields such as `actor`, `rowType`, `buyerSummary`, `recommendedBuyerAction`, `keyPivots`, `claimType`, `title`, `summary`, `victimName`, `affectedSectors`, `countries`, `impact`, `ttp`, `attackId`, `publisherCount`, `firstReportedAt`, `lastReportedAt`, `corroborationState`, `confidence`, `freshnessStatus`, `nextSearchPivots`, and `whyWorthPayingFor`.
 - Row-level billing guidance through `paidRowDecision`, `billingGuidance`, `buyerValueScore`, and `whyWorthPayingFor`, so buyers can separate chargeable findings from useful caveated leads.
 - Safe metadata only: no credential values, stolen files, malware payloads, private messages, raw leak contents, private forum material, authentication bypass, CAPTCHA bypass, or threat-actor interaction.
 
 Held rows, suppressed rows, and coverage-gap diagnostics are opt-in. The default run keeps the dataset focused on buyer-useful intelligence rows.
 
-Current local buyer preset proof: 607 safe rows across the 100-name default watchlist, 187 sellable rows, 420 caveated useful leads, 30.8% sellable rate, average buyer value `0.593`, and no held or coverage-gap rows in the paid default output. This is local proof only; hosted paid promotion still requires an observed hosted 100-name default rerun and Apify analytics proof.
+Current sample-output baseline: 607 safe rows across the 100-name default watchlist, 187 sellable rows, 420 caveated useful leads, 30.8% sellable rate, average buyer value `0.593`, and no held or coverage-gap rows in the paid default output.
 
 ## Buyer Examples
 
@@ -99,6 +99,9 @@ Useful options:
   "freshnessStatus": "current",
   "corroborationState": "corroborated",
   "nextSearchPivots": ["APT29 cloud account targeting", "APT29 Microsoft 365"],
+  "buyerSummary": "current APT29 activity row: Technology and cloud services. fresh corroborated public signal with source-family diversity.",
+  "recommendedBuyerAction": "Triage now; pivot on APT29, Technology and cloud services, source:clear_web.",
+  "keyPivots": ["APT29", "Technology and cloud services", "source:clear_web", "APT29 public channel"],
   "paidRowDecision": "sellable",
   "billingGuidance": "charge",
   "whyWorthPayingFor": "fresh corroborated public signal with source-family diversity",
