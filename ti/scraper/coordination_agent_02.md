@@ -29,6 +29,14 @@ Side-tool support priority:
 - Green: `bun run check`, `bun test src/tests/schedulerProduction.test.ts`, focused `bun test src/tests/api.test.ts -t "returns frozen scheduler apply-plan contract without mutating frontier state"`, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run check:api-regression`.
 - Next: continue toward worker entry-point wiring only after explicit feature gates and shared API/ops routes remain stable.
 
+## Progress - 2026-06-21 05:37 CEST
+
+- Added `executeSchedulerSourceGapWorkerEntry`, a worker-facing wrapper around the guarded source-gap enqueue harness.
+- Worker entry is fail-closed: even if a worker requests apply, it returns `blocked_before_repository` unless both the normal source-gap/Postgres/source-policy/paid-row/metadata gates and the separate `workerMutationEnabled` gate are explicit.
+- The receipt exposes worker id, partition, mutation gate, selected source-gap task ids, allowed operations, forbidden operations, underlying rehearsal, and next worker action so UI/ops can distinguish blocked workers from explicit repository handoff.
+- Green so far: `bun test src/tests/schedulerProduction.test.ts` and `bun run check`.
+- Next: continue from worker entry receipt into a real disabled-by-default worker loop adapter only after shared Agent 03/05/08/09/10 paid-row changes settle.
+
 ## Progress - 2026-06-21 01:13 CEST
 
 - Added a disabled-by-default source-gap enqueue adapter preview under `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness.enqueueAdapterPreview`.
