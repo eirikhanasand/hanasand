@@ -4079,7 +4079,7 @@ function pricingProofForOutput() {
     },
     paidDailyMonitoringShape: {
       name: "high_freshness_apt_monitoring_pack",
-      defaultQueryCount: 20,
+      defaultQueryCount: 100,
       minimumSellableRows: PRODUCTION_SELLABLE_ROW_FLOOR,
       minimumSellableRowRate: 0.25,
       minimumFreshRowRate: 0.55,

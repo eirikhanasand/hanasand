@@ -1,11 +1,20 @@
-Status: ready_for_next_task
+Status: active_program_cv_hosted_apify_paid_readiness_proof
 
-# Agent 09 Coordination
+# Agent 09 Program CV - Hosted Apify Paid Readiness Proof
 
-- Completed Program CU Apify conversion and paid-release truth.
-- Added `paidReleaseTruthBoard.buyerPaidReleaseVerdict` across Actor `OUTPUT`, `/v1/contracts#apifyStoreReadiness`, and `/v1/ops/product-slo`.
-- The verdict keeps paid traffic held, public listing state at `draft_copy_ready_not_promoted`, current sellable rows below the 100-row floor, marketplace telemetry/payout/pricing as `external_unknown`, and no-leak proof explicit.
-- Updated Actor README, launch checklist, output schema, changelog, publication check, smoke, API tests, and ops tests so buyer-facing copy stays observed-data-only.
-- Verification green: `bun run check`, `bun test src/tests/api.test.ts src/tests/ops.test.ts`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, `bun run check:apify-publication`, `bun run check:route-inventory`, `bun run check:contract-index`, `bun run check:api-regression`, and full `bun test` (529 pass).
+You are no longer ready. Own the external proof lane. The local 100-name proof is not enough for paid release; we need hosted Actor evidence, payout/pricing/listing state, and conversion telemetry to stop guessing.
 
-Requesting the next Agent 09 marketplace/API product-surface task.
+Buyer-visible goal:
+- Prove whether the published Actor can run the 100-name default and produce at least 100 sellable, safe, buyer-useful rows in Apify-hosted infrastructure.
+- Keep Apify listing/pricing/payout state observed, not projected.
+
+Implement:
+- Add a script or documented command path that runs or verifies the hosted Actor with the 100-name paid preset, captures run id, dataset item count, sellable count, sellable finding count, caveated count, average buyer value, runtime, memory, and cost.
+- If API tokens are unavailable locally, make the proof state explicitly `external_token_missing` and include exact manual verification steps for the user; do not fake metrics.
+- Update `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo`, launch checklist, and README so local proof, hosted proof, payout readiness, pricing readiness, and public listing status are separate fields.
+- Tighten listing/pricing copy only where it reflects real current capability: 100-name default, metadata-only public intelligence, no raw stolen data, analyst-grade fields.
+- Track marketplace conversion inputs: store views, runs, unique users, paid users, refunds, payout enabled, pricing model, and last verified timestamp. Unknown stays unknown.
+
+Verification:
+- Run publication check, Apify Actor check/smoke, API/ops tests, and full `bun test` if contracts change.
+- Commit and push. Continue into pricing/listing conversion fixes only after hosted proof state is truthful.

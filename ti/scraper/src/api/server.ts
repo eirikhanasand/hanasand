@@ -65,7 +65,12 @@ import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion
 import type { ObjectEvidenceStore } from "../storage/evidenceStore.ts";
 import { buildAnalystLoopPersistenceReadinessPacket } from "../storage/analystLoopPostgres.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
-import { tiSourceAtlasRepairActivationPacketInputsToPostgresRows, type SourceAtlasActivationPacketAuditRow } from "../storage/sourceRegistryPostgres.ts";
+import {
+  tiSourceAtlasRepairActivationPacketInputsToPostgresRows,
+  tiSourceAtlasSourcePackCandidatesToPostgresRows,
+  type SourceAtlasActivationPacketAuditRow,
+  type SourceAtlasSourcePackCandidateReviewRow
+} from "../storage/sourceRegistryPostgres.ts";
 import type { SeedSourceBundle } from "../registry/sourceSeeds.ts";
 import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourceMarketplaceApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, buildTiSourceAtlasApiResponse, buildTiSourceAtlasExportManifestApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
 import type {
@@ -5261,6 +5266,10 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
     tenantId: input.tenantId,
     limit: Math.min(input.limit, 25)
   });
+  const sourcePackReview = buildSourceAtlasSourcePackCandidateReviewReadModel({
+    tenantId: input.tenantId,
+    limit: Math.min(input.limit, 25)
+  });
   const allPackets = store.listAnalystSourceActivationPackets()
     .filter((packet) => !input.tenantId || packet.tenantId === input.tenantId)
     .filter((packet) => !input.execution || packet.execution === input.execution)
@@ -5292,19 +5301,23 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
     runStatusClarity: {
       activationPackets: allPackets.length,
       sourceAtlasAuditRows: atlasAudit.summary.auditRows,
+      sourcePackCandidateReviewRows: sourcePackReview.summary.reviewRows,
       approvalRequired: allPackets.filter((packet) => packet.execution === "approval_required").length,
       dryRunOnly: allPackets.filter((packet) => packet.execution === "dry_run_only").length,
       blocked: allPackets.filter((packet) => packet.execution === "blocked").length,
       approvedDryRunPackets: allPackets.filter((packet) => packet.approvedAt).length,
-      meaningfulWorkCount: allPackets.filter((packet) => packet.execution !== "blocked" || !packet.approvedAt).length + atlasAudit.summary.auditRows,
+      meaningfulWorkCount: allPackets.filter((packet) => packet.execution !== "blocked" || !packet.approvedAt).length + atlasAudit.summary.auditRows + sourcePackReview.summary.reviewRows,
       byExecution
     },
     packets,
     sourceAtlasAuditSummary: atlasAudit.summary,
     sourceAtlasAuditPackets: atlasAudit.packets,
+    sourcePackReviewSummary: sourcePackReview.summary,
+    sourcePackReviewPackets: sourcePackReview.packets,
     guarantees: [
       "activation packets are operator/legal approval metadata, not source mutations",
       "source-atlas audit packets are persisted-row review context and are not executable approval packets",
+      "source-pack candidate review rows are economics review context and do not import source packs",
       "approving a packet records dry-run approval context only",
       "restricted sources are not silently restored, crawled, or fetched by this route",
       "raw leak downloads, credential material, private access, CAPTCHA/auth bypass, and threat-actor interaction remain blocked"
@@ -5379,6 +5392,93 @@ function safeSourceAtlasActivationAuditPacketDto(row: SourceAtlasActivationPacke
       privateAuthCaptchaRequired: row.private_auth_captcha_required,
       crawlStarted: row.crawl_started,
       sourceActivationApplied: row.source_activation_applied,
+      executableApprovalPacket: false
+    }
+  };
+}
+
+function buildSourceAtlasSourcePackCandidateReviewReadModel(input: { tenantId?: string; limit: number }) {
+  const atlas = buildTiSourceAtlasApiResponse({ tenantId: input.tenantId, recordLimit: 4000 });
+  const rows = tiSourceAtlasSourcePackCandidatesToPostgresRows(atlas.sourceEconomics.sourcePackCandidates, {
+    tenantId: input.tenantId,
+    generatedAt: atlas.generatedAt
+  });
+  const byFamily = countBy(rows, (row) => row.family);
+  const byAcquisitionMode = countBy(rows, (row) => row.acquisition_mode);
+  const baseline = atlas.sourceEconomics.sourcePackCandidates.baseline;
+  const projectedPayworthySourceCount = baseline.currentPayworthySourceCount + rows.reduce((sum, row) => sum + row.expected_payworthy_lift, 0);
+  return {
+    summary: {
+      schemaVersion: "ti.source_atlas_source_pack_candidate_review_read_model.v1",
+      sourceTable: "source_atlas_source_pack_candidate_review",
+      sourceRoute: "/v1/sources/atlas",
+      sourceField: "sourceEconomics.sourcePackCandidates",
+      reviewRows: rows.length,
+      tenantId: input.tenantId,
+      generatedAt: atlas.generatedAt,
+      currentPayworthySourceCount: baseline.currentPayworthySourceCount,
+      targetPayworthySourceCount: baseline.targetPayworthySourceCount,
+      shortfall: baseline.additionalPayworthySourcesNeeded,
+      projectedPayworthySourceCount,
+      projectedShortfallAfterReview: Math.max(0, baseline.targetPayworthySourceCount - projectedPayworthySourceCount),
+      expectedPayworthyLift: rows.reduce((sum, row) => sum + row.expected_payworthy_lift, 0),
+      expectedFreshRowsPerDay: round1(rows.reduce((sum, row) => sum + row.expected_fresh_rows_per_day, 0)),
+      expectedUsefulEvidenceItemsPerDay: round1(rows.reduce((sum, row) => sum + row.expected_useful_evidence_items_per_day, 0)),
+      expectedSchedulerTasksPerDay: round1(rows.reduce((sum, row) => sum + row.expected_scheduler_tasks_per_day, 0)),
+      byFamily,
+      byAcquisitionMode,
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      sourcePackImported: false,
+      sourceActivationApplied: false,
+      executableApprovalPacketsCreated: false
+    },
+    packets: rows.slice(0, input.limit).map(safeSourceAtlasSourcePackCandidateReviewPacketDto)
+  };
+}
+
+function safeSourceAtlasSourcePackCandidateReviewPacketDto(row: SourceAtlasSourcePackCandidateReviewRow) {
+  return {
+    packId: row.pack_id,
+    tenantId: row.tenant_id,
+    rank: row.rank,
+    packLabel: row.pack_label,
+    family: row.family,
+    acquisitionMode: row.acquisition_mode,
+    sourceIds: row.source_ids,
+    safeSourceHashes: row.safe_source_hashes,
+    expectedPayworthyLift: row.expected_payworthy_lift,
+    expectedFreshRowsPerDay: row.expected_fresh_rows_per_day,
+    expectedUsefulEvidenceItemsPerDay: row.expected_useful_evidence_items_per_day,
+    expectedSchedulerTasksPerDay: row.expected_scheduler_tasks_per_day,
+    estimatedCostUnitsPerUsefulEvidence: row.estimated_cost_units_per_useful_evidence,
+    buyerVisibleUseCase: row.buyer_visible_use_case,
+    requiredProof: row.required_proof,
+    ownerHandoffs: {
+      agent01SourceRegistry: row.agent01_source_registry_handoff,
+      agent03Parser: row.agent03_parser_handoff,
+      agent07Quality: row.agent07_quality_handoff,
+      agent09Marketplace: row.agent09_marketplace_handoff,
+      agent10Slo: row.agent10_slo_handoff
+    },
+    persistence: {
+      table: "source_atlas_source_pack_candidate_review",
+      generatedAt: row.generated_at,
+      replayRole: "operator/legal source-pack economics review only"
+    },
+    deliveryBoundary: {
+      dryRunOnly: row.dry_run,
+      willMutateSource: row.will_mutate,
+      willImportSourcePacks: row.will_import_source_packs,
+      willStartCrawling: row.will_start_crawling,
+      sourcePackImported: row.source_pack_imported,
+      sourceActivationApplied: row.source_activation_applied,
+      registryMutationPlanned: row.registry_mutation_planned,
+      crawlEnqueued: row.crawl_enqueued,
+      rawUrlsExposed: row.raw_urls_exposed,
+      rawPayloadsExposed: row.raw_payloads_exposed,
       executableApprovalPacket: false
     }
   };
@@ -10065,26 +10165,27 @@ function buildApifyStoreReadinessContract(input: {
   scraperNativeReplacementReadiness: ReturnType<typeof buildScraperNativeReplacementReadinessContract>;
 }) {
   const defaultQueries = [
-    "APT29",
-    "APT28",
-    "APT42",
-    "Lazarus Group",
-    "Volt Typhoon",
-    "Salt Typhoon",
-    "Turla",
-    "Sandworm",
-    "Kimsuky",
-    "MuddyWater",
-    "Charming Kitten",
-    "Scattered Spider",
-    "LockBit",
-    "Clop",
-    "Akira",
-    "Black Basta",
-    "Play",
-    "RansomHub",
-    "ALPHV",
-    "Hunters International"
+    "APT29", "APT28", "APT42", "Lazarus Group", "Volt Typhoon",
+    "Salt Typhoon", "Turla", "Sandworm", "Kimsuky", "MuddyWater",
+    "Charming Kitten", "Scattered Spider", "LockBit", "Clop", "Akira",
+    "Black Basta", "Play", "RansomHub", "ALPHV", "Hunters International",
+    "Qilin", "Medusa", "BianLian", "DragonForce", "INC Ransom",
+    "8Base", "Royal", "BlackSuit", "Rhysida", "Everest",
+    "KillSec", "Cactus", "Lynx", "SafePay", "FunkSec",
+    "BlackByte", "Snatch", "Stormous", "REvil", "Conti",
+    "Maze", "DarkSide", "Babuk", "Hive", "DoppelPaymer",
+    "Cuba", "Ragnar Locker", "NoEscape", "Dark Angels", "Lorenz",
+    "FIN7", "FIN8", "FIN11", "Evil Corp", "TA505",
+    "APT41", "APT40", "APT31", "APT27", "APT10",
+    "Mustang Panda", "Earth Estries", "UNC3886", "Flax Typhoon", "Bronze Starlight",
+    "APT37", "APT43", "APT33", "APT34", "APT35",
+    "APT36", "APT38", "APT39", "Transparent Tribe", "SideWinder",
+    "Bitter", "Confucius", "Patchwork", "DoNot Team", "Gamaredon",
+    "OilRig", "BlueNoroff", "Andariel", "TA410",
+    "TA416", "TA428", "TA459", "TA551", "TA558",
+    "TA577", "TA570", "TA866", "TA2541", "Carbanak",
+    "Cobalt Group", "Lapsus$", "Storm-0501", "Storm-0978", "Storm-1811",
+    "Raspberry Robin"
   ];
   const defaultSampleInput = {
     queries: defaultQueries,
@@ -10094,7 +10195,7 @@ function buildApifyStoreReadinessContract(input: {
     includeTtps: true,
     includeSources: true,
     includeDatasets: false,
-    includeCoverageGaps: true
+    includeCoverageGaps: false
   };
   const safetyContract = {
     outputContract: "safe_metadata_only.v1",
@@ -10706,7 +10807,21 @@ function buildApifyStoreReadinessContract(input: {
         noLeakFailures: 0,
         thinRowCount: 80,
         singleSourceRowCount: 69,
-        knownQualityGaps: ["stale_apt29_rows", "apt28_rows_without_public_evidence", "apt42_missing_public_channel_coverage"]
+        knownQualityGaps: ["historical_20_query_baseline_before_100_name_paid_preset", "stale_apt29_rows", "apt28_rows_without_public_evidence", "apt42_missing_public_channel_coverage"]
+      },
+      localPaidPresetProof: {
+        source: "local 100-name buyer preset",
+        defaultQueryCount: 100,
+        rowCount: 607,
+        sellableRows: 187,
+        sellableFindings: 52,
+        sellableSourceProvenanceRows: 135,
+        includedWithCaveatRows: 420,
+        sellableRowRate: 0.308,
+        averageBuyerValueScore: 0.593,
+        noLeakFailures: 0,
+        proofDecision: "local_paid_floor_pass_hosted_proof_required",
+        productionBlockers: ["hosted_100_name_apify_run_not_yet_verified", "external_payout_pricing_analytics_not_yet_verified"]
       },
       publicationFiles: ["README.md", "CHANGELOG.md", ".actor/actor.json", ".actor/INPUT_SCHEMA.json", ".actor/DATASET_SCHEMA.json", ".actor/OUTPUT_SCHEMA.json", "LAUNCH_CHECKLIST.md"]
     },
@@ -10774,7 +10889,7 @@ function buildApifyStoreReadinessContract(input: {
       },
       paidDailyMonitoringShape: {
         name: "high_freshness_apt_monitoring_pack",
-        defaultQueryCount: 20,
+        defaultQueryCount: 100,
         minimumSellableRows: 100,
         minimumSellableRowRate: 0.25,
         minimumFreshRowRate: 0.55,

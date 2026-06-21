@@ -4165,37 +4165,17 @@ describe("api v1", () => {
       outputContract: "safe_metadata_only.v1"
     });
     expect(apifyStoreReadiness.actor.categories).toEqual(["SECURITY", "MONITORING"]);
-    expect(apifyStoreReadiness.defaultSampleInput).toEqual({
-      queries: [
-        "APT29",
-        "APT28",
-        "APT42",
-        "Lazarus Group",
-        "Volt Typhoon",
-        "Salt Typhoon",
-        "Turla",
-        "Sandworm",
-        "Kimsuky",
-        "MuddyWater",
-        "Charming Kitten",
-        "Scattered Spider",
-        "LockBit",
-        "Clop",
-        "Akira",
-        "Black Basta",
-        "Play",
-        "RansomHub",
-        "ALPHV",
-        "Hunters International"
-      ],
+    expect(apifyStoreReadiness.defaultSampleInput).toMatchObject({
       maxRowsPerQuery: 25,
       includeActivity: true,
       includeTargets: true,
       includeTtps: true,
       includeSources: true,
       includeDatasets: false,
-      includeCoverageGaps: true
+      includeCoverageGaps: false
     });
+    expect(apifyStoreReadiness.defaultSampleInput.queries).toHaveLength(100);
+    expect(apifyStoreReadiness.defaultSampleInput.queries).toEqual(expect.arrayContaining(["APT29", "APT42", "LockBit", "Qilin", "Raspberry Robin"]));
     expect(apifyStoreReadiness.storeReadiness.listingFields).toMatchObject({
       title: "complete",
       readme: "complete",
@@ -4238,6 +4218,7 @@ describe("api v1", () => {
       singleSourceRowCount: 69
     });
     expect(apifyStoreReadiness.storeReadiness.dailyRunBaseline.knownQualityGaps).toEqual(expect.arrayContaining([
+      "historical_20_query_baseline_before_100_name_paid_preset",
       "stale_apt29_rows",
       "apt28_rows_without_public_evidence",
       "apt42_missing_public_channel_coverage"
@@ -4593,7 +4574,7 @@ describe("api v1", () => {
     expect(apifyStoreReadiness.pricingProof).toMatchObject({
       schemaVersion: "ti.apify_pricing_proof.v1",
       starterTrialShape: { name: "starter_actor_query_pack", queryLimit: 3 },
-      paidDailyMonitoringShape: { name: "high_freshness_apt_monitoring_pack", defaultQueryCount: 20, minimumSellableRows: 100, minimumSellableRowRate: 0.25, minimumFreshRowRate: 0.55 },
+      paidDailyMonitoringShape: { name: "high_freshness_apt_monitoring_pack", defaultQueryCount: 100, minimumSellableRows: 100, minimumSellableRowRate: 0.25, minimumFreshRowRate: 0.55 },
       usageCostGuard: { rowPriceUsdPerThousand: 3, platformUsageCostUsd: null, estimatedCreatorRevenueUsd: null, maxCostPerUsefulRowUsd: 0.01 },
       payoutRevenueSeparation: { paymentMethodState: "unknown", beneficiaryState: "unknown", withdrawalReadiness: "unknown", externallyVerifiedRevenueUsd: null },
       noLeakRequired: true
@@ -9637,6 +9618,7 @@ describe("api v1", () => {
       body: JSON.stringify({
         scenario: "api_scheduler_contract",
         includeExecutionPreview: true,
+        includeSourceGapEnqueueRehearsal: true,
         workerUtilization: 0.96,
         dbConnectionUtilization: 0.91,
         maxApiP95QueueAgeSeconds: 120
@@ -9659,6 +9641,16 @@ describe("api v1", () => {
       willChangeRuns: boolean;
       summary: { stepCount: number };
       executionPreview: { willMutate: boolean; steps: Array<{ wouldApply: boolean }> };
+      sourceGapEnqueueRehearsal: {
+        schemaVersion: string;
+        routeField: string;
+        mode: string;
+        willMutate: boolean;
+        blockedReasons: string[];
+        mutatedRunCount: number;
+        mutatedTaskCount: number;
+        repositoryCalls: Array<{ executed: boolean; skippedReason?: string }>;
+      };
       promotionPacketLink: { field: string };
     };
 
@@ -9711,6 +9703,17 @@ describe("api v1", () => {
     expect(applyPlan.summary.stepCount).toBeGreaterThan(0);
     expect(applyPlan.executionPreview.willMutate).toBe(false);
     expect(applyPlan.executionPreview.steps.every((step) => step.wouldApply === false)).toBe(true);
+    expect(applyPlan.sourceGapEnqueueRehearsal).toMatchObject({
+      schemaVersion: "ti.scheduler_source_gap_enqueue_rehearsal.v1",
+      routeField: "applyPlan.sourceGapEnqueueRehearsal",
+      mode: "blocked_dry_run",
+      willMutate: false,
+      mutatedRunCount: 0,
+      mutatedTaskCount: 0
+    });
+    expect(applyPlan.sourceGapEnqueueRehearsal.blockedReasons).toEqual(expect.arrayContaining(["apply_not_requested", "source_gap_enqueue_flag_disabled", "postgres_queue_disabled"]));
+    expect(applyPlan.sourceGapEnqueueRehearsal.repositoryCalls.length).toBeGreaterThan(0);
+    expect(applyPlan.sourceGapEnqueueRehearsal.repositoryCalls.every((call) => call.executed === false && call.skippedReason === "blocked_by_preflight")).toBe(true);
     expect(applyPlan.promotionPacketLink.field).toBe("schedulerApplyPlanId");
     expect(afterQueued).toEqual(beforeQueued);
     expect(afterLeased).toEqual(beforeLeased);
@@ -11482,9 +11485,11 @@ describe("api v1", () => {
       frontier: new FocusedFrontier()
     }))) as {
       contract: Record<string, unknown>;
-      runStatusClarity: { activationPackets: number; approvalRequired: number; sourceAtlasAuditRows: number; meaningfulWorkCount: number };
+      runStatusClarity: { activationPackets: number; approvalRequired: number; sourceAtlasAuditRows: number; sourcePackCandidateReviewRows: number; meaningfulWorkCount: number };
       sourceAtlasAuditSummary: { auditRows: number };
       sourceAtlasAuditPackets: unknown[];
+      sourcePackReviewSummary: { sourceTable: string; reviewRows: number };
+      sourcePackReviewPackets: unknown[];
       packets: unknown[];
     };
     expect(sourceActivationPackets).toMatchObject({
@@ -11501,6 +11506,7 @@ describe("api v1", () => {
       }
     });
     expect(sourceActivationPackets.runStatusClarity.sourceAtlasAuditRows).toBeGreaterThan(0);
+    expect(sourceActivationPackets.runStatusClarity.sourcePackCandidateReviewRows).toBeGreaterThan(0);
     expect(sourceActivationPackets.runStatusClarity.meaningfulWorkCount).toBeGreaterThan(1);
     expect(sourceActivationPackets.sourceAtlasAuditSummary).toMatchObject({
       sourceTable: "source_atlas_activation_packet_audit",
@@ -11513,6 +11519,52 @@ describe("api v1", () => {
       executableApprovalPacketsCreated: false
     });
     expect(sourceActivationPackets.sourceAtlasAuditSummary.auditRows).toBe(sourceActivationPackets.runStatusClarity.sourceAtlasAuditRows);
+    expect(sourceActivationPackets.sourcePackReviewSummary).toMatchObject({
+      sourceTable: "source_atlas_source_pack_candidate_review",
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      sourcePackImported: false,
+      sourceActivationApplied: false,
+      executableApprovalPacketsCreated: false
+    });
+    expect(sourceActivationPackets.sourcePackReviewSummary.reviewRows).toBe(sourceActivationPackets.runStatusClarity.sourcePackCandidateReviewRows);
+    const sourcePackReviewPacket = (sourceActivationPackets.sourcePackReviewPackets as Array<{
+      packId: string;
+      safeSourceHashes: string[];
+      expectedPayworthyLift: number;
+      requiredProof: string[];
+      deliveryBoundary: {
+        dryRunOnly: boolean;
+        willMutateSource: boolean;
+        willImportSourcePacks: boolean;
+        willStartCrawling: boolean;
+        sourcePackImported: boolean;
+        sourceActivationApplied: boolean;
+        rawUrlsExposed: boolean;
+        rawPayloadsExposed: boolean;
+        executableApprovalPacket: boolean;
+      };
+    }>)[0];
+    expect(sourcePackReviewPacket).toMatchObject({
+      deliveryBoundary: {
+        dryRunOnly: true,
+        willMutateSource: false,
+        willImportSourcePacks: false,
+        willStartCrawling: false,
+        sourcePackImported: false,
+        sourceActivationApplied: false,
+        rawUrlsExposed: false,
+        rawPayloadsExposed: false,
+        executableApprovalPacket: false
+      }
+    });
+    expect(sourcePackReviewPacket.packId).toStartWith("ti_source_atlas_source_pack_candidate_");
+    expect(sourcePackReviewPacket.expectedPayworthyLift).toBeGreaterThan(0);
+    expect(sourcePackReviewPacket.requiredProof.length).toBeGreaterThan(0);
+    expect(sourcePackReviewPacket.safeSourceHashes.every((hash) => hash.startsWith("ti_source_atlas_source_"))).toBe(true);
+    expect(JSON.stringify(sourceActivationPackets.sourcePackReviewPackets)).not.toContain("https://");
     const atlasAuditPacket = (sourceActivationPackets.sourceAtlasAuditPackets as Array<{
       packetId: string;
       approvalMode: string;

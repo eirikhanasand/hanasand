@@ -1450,8 +1450,8 @@ describe("scheduler production readiness", () => {
     expect(daily.apiTargets).toEqual(expect.arrayContaining(["/v1/frontier/status", "/v1/intel/search.scheduler", "apify_public_threat_actor_monitor"]));
     expect(daily.apifyActor).toMatchObject({
       actorId: "eirikhanasand/public-threat-actor-monitor",
-      publishedBuild: "0.6.4",
-      defaultQueryCount: 20,
+      publishedBuild: "0.6.7",
+      defaultQueryCount: 100,
       runCadence: "daily"
     });
     expect(daily.apifyActor.defaultQueries).toEqual(expect.arrayContaining(["APT29", "APT42", "LockBit", "Hunters International"]));
@@ -1474,7 +1474,7 @@ describe("scheduler production readiness", () => {
       nextPollSeconds: 3,
       sourceFamilyDiversityTarget: 4
     });
-    expect(daily.watchlist).toHaveLength(20);
+    expect(daily.watchlist).toHaveLength(100);
     expect(daily.watchlist.find((row) => row.query === "APT29")).toMatchObject({
       priority: "daily_until_fresh",
       schedulerAction: "raise_priority",
@@ -1512,7 +1512,7 @@ describe("scheduler production readiness", () => {
       enqueueWindow: "source_sweeps_before_actor_run",
       duplicateRunReuseBeforeEnqueue: true,
       fairnessGuards: {
-        maxActorQueriesPerTenantPerDay: 20,
+        maxActorQueriesPerTenantPerDay: 100,
         priorityAgingAfterSeconds: 180,
         retryDebtDeadLetterAtAttempts: 3
       },

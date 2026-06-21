@@ -1843,26 +1843,27 @@ export function buildSchedulerDailyActorRunPlan(input: {
   const now = input.now ?? new Date();
   const actorByName = new Map(input.freshnessSloDashboard.actors.map((actor) => [actor.actor.toLowerCase(), actor]));
   const defaultQueries = [
-    "APT29",
-    "APT28",
-    "APT42",
-    "Lazarus Group",
-    "Volt Typhoon",
-    "Salt Typhoon",
-    "Turla",
-    "Sandworm",
-    "Kimsuky",
-    "MuddyWater",
-    "Charming Kitten",
-    "Scattered Spider",
-    "LockBit",
-    "Clop",
-    "Akira",
-    "Black Basta",
-    "Play",
-    "RansomHub",
-    "ALPHV",
-    "Hunters International"
+    "APT29", "APT28", "APT42", "Lazarus Group", "Volt Typhoon",
+    "Salt Typhoon", "Turla", "Sandworm", "Kimsuky", "MuddyWater",
+    "Charming Kitten", "Scattered Spider", "LockBit", "Clop", "Akira",
+    "Black Basta", "Play", "RansomHub", "ALPHV", "Hunters International",
+    "Qilin", "Medusa", "BianLian", "DragonForce", "INC Ransom",
+    "8Base", "Royal", "BlackSuit", "Rhysida", "Everest",
+    "KillSec", "Cactus", "Lynx", "SafePay", "FunkSec",
+    "BlackByte", "Snatch", "Stormous", "REvil", "Conti",
+    "Maze", "DarkSide", "Babuk", "Hive", "DoppelPaymer",
+    "Cuba", "Ragnar Locker", "NoEscape", "Dark Angels", "Lorenz",
+    "FIN7", "FIN8", "FIN11", "Evil Corp", "TA505",
+    "APT41", "APT40", "APT31", "APT27", "APT10",
+    "Mustang Panda", "Earth Estries", "UNC3886", "Flax Typhoon", "Bronze Starlight",
+    "APT37", "APT43", "APT33", "APT34", "APT35",
+    "APT36", "APT38", "APT39", "Transparent Tribe", "SideWinder",
+    "Bitter", "Confucius", "Patchwork", "DoNot Team", "Gamaredon",
+    "OilRig", "BlueNoroff", "Andariel", "TA410",
+    "TA416", "TA428", "TA459", "TA551", "TA558",
+    "TA577", "TA570", "TA866", "TA2541", "Carbanak",
+    "Cobalt Group", "Lapsus$", "Storm-0501", "Storm-0978", "Storm-1811",
+    "Raspberry Robin"
   ];
   const commercialBlockers = new Set(["APT29", "APT28", "APT42"]);
   const publicChannelFocus = new Set(["APT42", "Charming Kitten", "Scattered Spider", "Volt Typhoon", "Salt Typhoon"]);
@@ -2529,8 +2530,8 @@ export function buildSchedulerDailyActorRunPlan(input: {
     schemaVersion: "ti.scheduler_daily_actor_run_plan.v1",
     apifyActor: {
       actorId: "eirikhanasand/public-threat-actor-monitor",
-      publishedBuild: "0.6.4",
-      defaultQueryCount: 20,
+      publishedBuild: "0.6.7",
+      defaultQueryCount: 100,
       defaultQueries,
       runCadence: "daily",
       window: "00:15_utc_after_source_sweeps",
@@ -5437,7 +5438,8 @@ export function buildSchedulerApplyPlan(input: {
 
 export function buildSchedulerApplyPlanApiResponse(
   plan: SchedulerApplyPlanReport,
-  request: SchedulerApplyPlanApiRequestDto = {}
+  request: SchedulerApplyPlanApiRequestDto = {},
+  sourceGapEnqueueRehearsal?: SchedulerSourceGapEnqueueRehearsalReceipt
 ): SchedulerApplyPlanApiResponseDto {
   const selectedActions = new Set(request.selectedActions ?? plan.steps.map((step) => step.action));
   const items = plan.steps
@@ -5474,6 +5476,12 @@ export function buildSchedulerApplyPlanApiResponse(
     apiWarnings: plan.apiWarnings,
     items,
     executionPreview: request.includeExecutionPreview ? schedulerApplyExecutionPreview(items) : undefined,
+    sourceGapEnqueueRehearsal: request.includeSourceGapEnqueueRehearsal && sourceGapEnqueueRehearsal
+      ? {
+          ...sourceGapEnqueueRehearsal,
+          routeField: "applyPlan.sourceGapEnqueueRehearsal"
+        }
+      : undefined,
     canaryControlPlane: schedulerApplyPlanCanaryControlPlane(items),
     promotionPacketLink: {
       field: "schedulerApplyPlanId",
@@ -5498,6 +5506,7 @@ export function schedulerApplyPlanApiContract(): SchedulerApplyPlanApiContractDt
         { name: "scenario", type: "string", required: false, description: "Optional label for Agent 10 promotion packets and operator audit." },
         { name: "selectedActions", type: "SchedulerRepairAction[]", required: false, description: "Optional action filter for compact Agent 09 responses." },
         { name: "includeExecutionPreview", type: "boolean", required: false, description: "Includes a dry-run preview that explicitly reports no mutation, leasing, acknowledgement, or run changes." },
+        { name: "includeSourceGapEnqueueRehearsal", type: "boolean", required: false, description: "Includes the guarded daily Actor source-gap enqueue rehearsal receipt; default output is blocked/no-mutation unless every promotion gate is explicit." },
         { name: "hostMemoryMb", type: "number", required: false, description: "Host memory used to compute emergency-brake headroom for the 1 TB deployment target." },
         { name: "dbConnectionUtilization", type: "number", required: false, description: "Current DB connection utilization ratio for headroom warnings." },
         { name: "workerUtilization", type: "number", required: false, description: "Current worker utilization ratio for headroom warnings." },
@@ -5505,7 +5514,7 @@ export function schedulerApplyPlanApiContract(): SchedulerApplyPlanApiContractDt
       ]
     },
     response: {
-      fields: ["contract", "applyPlan"],
+      fields: ["contract", "applyPlan", "applyPlan.sourceGapEnqueueRehearsal"],
       itemFields: ["stepId", "action", "dryRun", "execution", "riskClass", "operatorApprovalRequired", "affectedCount", "reasonCodes", "preconditions", "expectedQueueRunDelta", "rollback", "apiWarningCode", "sourceIds", "canaryControlPlane"],
       forbiddenMutationFields: ["leasedTask", "acknowledgedTask", "mutatedRun", "updatedSource", "startedWorker", "rawQueueRow", "dbTransaction", "cursorPayload", "replayPayload"],
       actions: ["release_expired_leases", "cancel_abandoned_runs", "requeue_transient_failures", "delay_low_priority_sweeps", "pause_noisy_source_queues", "quarantine_permanently_failing_sources", "trigger_emergency_brake"],

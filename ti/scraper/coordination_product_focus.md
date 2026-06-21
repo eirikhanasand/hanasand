@@ -37,7 +37,7 @@ Do not advance a tier until the previous tier has dedupe, rejection metrics, sea
 
 Every agent should prefer work that improves one or more of:
 
-- daily 20-group Actor run success;
+- daily 100-name paid Actor preset success;
 - useful-row rate;
 - fresh-row rate;
 - source-family diversity;

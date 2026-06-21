@@ -1222,8 +1222,8 @@ export interface SchedulerDailyActorRunPlanDto {
   schemaVersion: "ti.scheduler_daily_actor_run_plan.v1";
   apifyActor: {
     actorId: "eirikhanasand/public-threat-actor-monitor";
-    publishedBuild: "0.6.4";
-    defaultQueryCount: 20;
+    publishedBuild: "0.6.7";
+    defaultQueryCount: 100;
     defaultQueries: string[];
     runCadence: "daily";
     window: "00:15_utc_after_source_sweeps";
@@ -2088,6 +2088,7 @@ export interface SchedulerApplyPlanApiRequestDto {
   scenario?: string;
   selectedActions?: SchedulerRepairAction[];
   includeExecutionPreview?: boolean;
+  includeSourceGapEnqueueRehearsal?: boolean;
   hostMemoryMb?: number;
   dbConnectionUtilization?: number;
   workerUtilization?: number;
@@ -2170,6 +2171,9 @@ export interface SchedulerApplyPlanApiResponseDto {
   apiWarnings: string[];
   items: SchedulerApplyPlanApiItemDto[];
   executionPreview?: SchedulerApplyPlanExecutionPreview;
+  sourceGapEnqueueRehearsal?: SchedulerSourceGapEnqueueRehearsalReceipt & {
+    routeField: "applyPlan.sourceGapEnqueueRehearsal";
+  };
   canaryControlPlane: {
     dryRun: true;
     willMutate: false;

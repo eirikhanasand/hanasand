@@ -2,7 +2,7 @@ Status: active_program_followon
 
 # Agent 02 Coordination
 
-Read `coordination_product_focus.md` first. Continue current scheduler work only where it supports daily 20-group Actor runs, source/dark-metadata scale ladder scheduling, live freshness, and marketplace row quality. Queue theory without buyer-visible output is lower priority.
+Read `coordination_product_focus.md` first. Continue current scheduler work only where it supports the daily 100-name paid Actor preset, source/dark-metadata scale ladder scheduling, live freshness, and marketplace row quality. Queue theory without buyer-visible output is lower priority.
 
 ## CONTINUATION DIRECTIVE
 
@@ -20,6 +20,14 @@ Side-tool support priority:
 - Tests now prove both blocked/no-mutation behavior and explicit in-memory repository run/task materialization from the daily Actor source-gap plan.
 - Green: `bun test src/tests/schedulerProduction.test.ts` and `bun run check`.
 - Next: wire this guarded harness into a route/apply-plan or worker entry point only after shared API/ops files settle, preserving default no-mutation behavior.
+
+## Progress - 2026-06-21 04:53 CEST
+
+- Wired guarded source-gap enqueue rehearsal into `POST /v1/frontier/apply-plan` behind `includeSourceGapEnqueueRehearsal=true`.
+- The mounted route now returns `applyPlan.sourceGapEnqueueRehearsal` as a blocked no-mutation receipt derived from the daily Actor source-gap plan, preserving no lease/ack/enqueue/run mutation behavior.
+- Repaired adjacent source-pack baseline field drift in `/v1/sources/atlas` read-model composition so `bun run check` stays green with the current shared tree.
+- Green: `bun run check`, `bun test src/tests/schedulerProduction.test.ts`, focused `bun test src/tests/api.test.ts -t "returns frozen scheduler apply-plan contract without mutating frontier state"`, `bun run check:route-inventory`, `bun run check:contract-index`, and `bun run check:api-regression`.
+- Next: continue toward worker entry-point wiring only after explicit feature gates and shared API/ops routes remain stable.
 
 ## Progress - 2026-06-21 01:13 CEST
 

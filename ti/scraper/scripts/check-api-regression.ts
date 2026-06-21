@@ -204,7 +204,7 @@ for (const query of ["APT29", "Volt Typhoon", "Scattered Spider", "LockBit"]) {
 for (const state of ["queued", "searching", "partial", "ready", "empty_delta"]) {
   check(stringArray(apifyStoreReadinessInvariant.compatibilityStates).includes(state), `Apify compatibility state missing ${state}`);
 }
-check(stringArray(apifyStoreReadinessInvariant.defaultQueries).length === 20, "Apify default watchlist must contain 20 queries");
+check(stringArray(apifyStoreReadinessInvariant.defaultQueries).length === 100, "Apify default watchlist must contain 100 queries");
 check(stringArray(apifyStoreReadinessInvariant.blockers).includes("apify_beneficiary_and_payout_method_not_stored_in_repo"), "Apify payout blocker missing");
 check(stringArray(apifyStoreReadinessInvariant.proofCommands).includes("bun run check:apify-publication"), "Apify publication proof missing");
 check(darkwebIndexFrontendContract.schemaVersion === "ti.darkweb_index_frontend_contract.v1", "darkweb index frontend contract schema drifted");
