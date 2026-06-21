@@ -1451,15 +1451,15 @@ describe("api v1", () => {
         newlyChargeableParserHandoffRowCount: number;
       };
     }).publicSupportSellable500).toMatchObject({
-      candidateCount: 500,
-      previousCurrentChargeableRows: 250,
-      currentChargeableRows: 500,
+      candidateCount: 750,
+      previousCurrentChargeableRows: 500,
+      currentChargeableRows: 750,
       newlyChargeableRows: 250,
       projectedAfterPublicSupportRows: 0,
       blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 500,
-        newlyChargeableSinceProgramCw: 450,
+        currentChargeableCount: 750,
+        newlyChargeableSinceProgramCw: 700,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo100: 0,
@@ -1468,8 +1468,8 @@ describe("api v1", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 500,
-        newlyChargeableSinceProgramDa: 400,
+        currentChargeableCount: 750,
+        newlyChargeableSinceProgramDa: 650,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo150: 0,
@@ -1478,8 +1478,8 @@ describe("api v1", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 500,
-        newlyChargeableSinceProgramDc: 350,
+        currentChargeableCount: 750,
+        newlyChargeableSinceProgramDc: 600,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo250: 0,
@@ -1487,17 +1487,27 @@ describe("api v1", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable500: {
-        currentChargeableCount: 500,
+        currentChargeableCount: 750,
         newlyChargeableSinceProgramDd: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo500: 0,
-        currentGapTo1000: 500,
+        currentGapTo1000: 250,
+        parserHandoffRowCount: 250,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable750: {
+        currentChargeableCount: 750,
+        newlyChargeableSinceProgramDe: 250,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 0,
+        currentGapTo750: 0,
+        currentGapTo1000: 250,
         parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 500,
+        current_sellable_public_supported: 750,
         projected_after_public_support: 0,
         blocked_not_chargeable: 0
       },

@@ -1708,6 +1708,7 @@ describe("ops controls", () => {
     });
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellable500Lift.sourcePackets).toEqual(expect.arrayContaining([
       "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250",
+      "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750",
       "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff",
       "agent04_high_value_public_source_replacements",
       "existing_public_source_rows"
@@ -1762,6 +1763,7 @@ describe("ops controls", () => {
         additionalRowsNeeded: 250,
         minimumTrueFindingsAt750: 413,
         maximumSourceProvenanceRowsAt750: 300,
+        sourcePackets: expect.arrayContaining(["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750"]),
         projectedRowsCountTowardCurrent: false
       }
     });
@@ -2145,15 +2147,15 @@ describe("ops controls", () => {
       schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1",
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
-      candidateCount: 500,
-      previousCurrentChargeableRows: 250,
-      currentChargeableRows: 500,
+      candidateCount: 750,
+      previousCurrentChargeableRows: 500,
+      currentChargeableRows: 750,
       newlyChargeableRows: 250,
       projectedAfterPublicSupportRows: 0,
       blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 500,
-        newlyChargeableSinceProgramCw: 450,
+        currentChargeableCount: 750,
+        newlyChargeableSinceProgramCw: 700,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo100: 0,
@@ -2162,8 +2164,8 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 500,
-        newlyChargeableSinceProgramDa: 400,
+        currentChargeableCount: 750,
+        newlyChargeableSinceProgramDa: 650,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo150: 0,
@@ -2172,8 +2174,8 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 500,
-        newlyChargeableSinceProgramDc: 350,
+        currentChargeableCount: 750,
+        newlyChargeableSinceProgramDc: 600,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo250: 0,
@@ -2181,17 +2183,27 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable500: {
-        currentChargeableCount: 500,
+        currentChargeableCount: 750,
         newlyChargeableSinceProgramDd: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo500: 0,
-        currentGapTo1000: 500,
+        currentGapTo1000: 250,
+        parserHandoffRowCount: 250,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable750: {
+        currentChargeableCount: 750,
+        newlyChargeableSinceProgramDe: 250,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 0,
+        currentGapTo750: 0,
+        currentGapTo1000: 250,
         parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 500,
+        current_sellable_public_supported: 750,
         projected_after_public_support: 0,
         blocked_not_chargeable: 0
       },

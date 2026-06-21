@@ -1126,7 +1126,7 @@ interface ParserRealSellableLift {
     currentSellable500Lift: {
       schemaVersion: "ti.program_dc_current_sellable_500_lift.v1";
       owner: "agent_03";
-      sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+      sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
       baseline: {
         sellableRows: 300;
         sellableFindings: 193;
@@ -6636,7 +6636,7 @@ function currentSellable500LiftPacket(): ParserRealSellableLift["findingAdmissio
   return {
     schemaVersion: "ti.program_dc_current_sellable_500_lift.v1",
     owner: "agent_03",
-    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250", "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
     baseline: {
       sellableRows: 300,
       sellableFindings: 193,
@@ -6669,7 +6669,7 @@ function currentSellable500LiftPacket(): ParserRealSellableLift["findingAdmissio
         additionalRowsNeeded: Math.max(0, 750 - currentSellableRowsAfterAdmission),
         minimumTrueFindingsAt750: Math.ceil(750 * 0.55),
         maximumSourceProvenanceRowsAt750: Math.floor(750 * 0.4),
-        sourcePackets: ["agent05_current_chargeable250_plus_next_250", "agent08_parser_ready_public_proof_300", "agent04_public_source_replacements", "existing_current_public_sources"],
+        sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750", "agent08_parser_ready_public_proof_300", "agent04_public_source_replacements", "existing_current_public_sources"],
         projectedRowsCountTowardCurrent: false
       }
     },
