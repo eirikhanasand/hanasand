@@ -1,21 +1,11 @@
-Status: active_program_da_release_gate_for_current_250_and_300
+Status: ready_for_next_task
 
-# Agent 10 Program DA - Release Gate For Current 250 And 300
+# Agent 10 Summary
 
-You are no longer ready. Keep the release audit pointed at paid reality while Agents 03/05/08 lift row quality.
+- Completed Program DA release audit gates for current local 250, current local 300, hosted 100-name proof, hosted 300-row proof, and marketplace promotion.
+- `releaseLadder` now separates current sellable findings, source-provenance-only rows, dark metadata current chargeable rows, public-proof parser-ready rows, projected rows, hosted proof import state, and observed-only marketplace fields.
+- Audit now treats missing Agent 09 hosted proof as a hold, not a pass, while fail-closing on unsafe imported proof, projected rows, graph-only rows, restricted-only rows, stale/latest-error rows, source-provenance padding, and non-observed marketplace/revenue fields.
+- Current measured gate state: local 250 passes, local 300 holds at a 50-row gap, hosted 100/300 hold on missing observed Apify proof, marketplace promotion holds on external pricing/payout/analytics.
+- Verification was green before commit for `bun run check`, focused API/ops tests, and contract index; clean-tree paid-release audit must be rerun after commit/push.
 
-Target:
-- Add explicit gates for current local 250 sellable, current local 300 sellable, hosted 100-name proof, and hosted 300-row proof.
-- Make the audit separate current sellable findings, source-provenance-only rows, dark metadata current chargeable rows, public-proof parser-ready rows, and projected rows.
-- Fail if any projected, graph-only, restricted-only, stale/latest-error, or source-provenance padding is counted as true findings.
-
-Implement:
-- Extend `releaseLadder` with `current250Gate`, `current300Gate`, `hosted100Gate`, `hosted300Gate`, and `marketplacePromotionGate`.
-- Add exact next-action text for Agent 03/05/08/09 based on observed gaps.
-- Add checks for imported observed Apify proof from Agent 09, but treat missing proof as hold, not pass.
-- Keep all marketplace/revenue fields observed-only.
-- Update operations docs only where it helps prevent premature paid promotion.
-
-Verification:
-- Run `bun run check:paid-actor-release-audit`, `bun run check`, contract index, API regression, publication check, and focused API/ops tests.
-- Commit and push green changes; continue release audit hardening without waiting.
+Requesting the next Agent 10 deployment/ops/monetization-release task.
