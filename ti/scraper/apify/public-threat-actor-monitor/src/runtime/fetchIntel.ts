@@ -1,4 +1,5 @@
 import type { TiSearchResponse } from "../types.ts";
+import { fetchBatch } from "./fetchBatch.ts";
 
 export async function fetchThreatIntel(apiBaseUrl: string, query: string): Promise<TiSearchResponse> {
   if (process.env.TI_ACTOR_FIXTURE_PATH) {
@@ -11,6 +12,13 @@ export async function fetchThreatIntel(apiBaseUrl: string, query: string): Promi
     await Bun.sleep(1_500 + attempt * 1_500);
   }
   return unavailableResponse(query);
+}
+
+export async function fetchThreatIntelBatch(apiBaseUrl: string, queries: string[]): Promise<TiSearchResponse[]> {
+  if (process.env.TI_ACTOR_FIXTURE_PATH) return Promise.all(queries.map((query) => fetchThreatIntel(apiBaseUrl, query)));
+  const batch = await fetchBatch(apiBaseUrl, queries).catch(() => undefined);
+  if (batch?.length === queries.length) return batch;
+  return Promise.all(queries.map((query) => fetchThreatIntel(apiBaseUrl, query)));
 }
 
 async function fetchOnce(apiBaseUrl: string, query: string): Promise<TiSearchResponse> {

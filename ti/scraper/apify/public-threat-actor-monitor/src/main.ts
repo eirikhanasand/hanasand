@@ -2,7 +2,7 @@ import type { MarketplaceRow } from "./types.ts";
 import { dailyCollectionRunForRows, monetizationForRows } from "./outputQuality.ts";
 import { fetchPublicNewsFallback } from "./runtime/newsFallback.ts";
 import { writeOutputs } from "./outputWrite.ts";
-import { fetchThreatIntel, needsNewsFallback, normalizeInput, outputRowsFor, readInput } from "./actorRuntime.ts";
+import { fetchThreatIntelBatch, needsNewsFallback, normalizeInput, outputRowsFor, readInput } from "./actorRuntime.ts";
 
 async function main() {
   const input = normalizeInput(await readInput());
@@ -10,9 +10,9 @@ async function main() {
   let newsFallbackAttempts = 0;
   let newsFallbacksUsed = 0;
 
-  for (let index = 0; index < input.queries.length; index += 3) {
-    const batch = input.queries.slice(index, index + 3);
-    const responses = await Promise.all(batch.map((query) => fetchThreatIntel(input.apiBaseUrl, query)));
+  for (let index = 0; index < input.queries.length; index += 50) {
+    const batch = input.queries.slice(index, index + 50);
+    const responses = await fetchThreatIntelBatch(input.apiBaseUrl, batch);
     for (const response of responses) {
       let outputRows = outputRowsFor(response, input);
       if (needsNewsFallback(outputRows) && newsFallbackAttempts < 25) {
@@ -25,7 +25,6 @@ async function main() {
       }
       rows.push(...outputRows.slice(0, input.maxRowsPerQuery));
     }
-    await Bun.sleep(250);
   }
 
   const monetizationSummary = monetizationForRows(rows);

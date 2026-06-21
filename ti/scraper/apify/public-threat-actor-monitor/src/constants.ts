@@ -9,7 +9,7 @@ import { THREAT_CLUSTER_QUERIES } from "./watchlist/threatClusters.ts";
 export const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
 export const ACTOR_START_EVENT = "apify-actor-start";
 export const DATASET_ITEM_EVENT = "apify-default-dataset-item";
-export const MAX_QUERIES_PER_RUN = 400;
+export const MAX_QUERIES_PER_RUN = 1000;
 
 export const DEFAULT_QUERIES = [
   ...APT_QUERIES,

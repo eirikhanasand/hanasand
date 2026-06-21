@@ -127,7 +127,7 @@ import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAu
 import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
 import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, stopImpersonation } from './handlers/impersonation.ts'
 import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUserProjects, getUserShares, postShare, putShare, toggleShareLock } from './handlers/share.ts'
-import postTiSearch from './handlers/ti/search.ts'
+import postTiSearch, { postTiSearchBatch } from './handlers/ti/search.ts'
 
 /**
  * Defines the routes available in the API.
@@ -192,6 +192,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Threat intelligence
     fastify.post('/ti/search', postTiSearch)
+    fastify.post('/ti/search/batch', postTiSearchBatch)
 
     // Article handlers
     fastify.get('/articles', getArticles)
