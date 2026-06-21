@@ -1626,15 +1626,15 @@ describe("api v1", () => {
         newlyChargeableParserHandoffRowCount: number;
       };
     }).publicSupportSellable500).toMatchObject({
-      candidateCount: 1000,
-      previousCurrentChargeableRows: 750,
-      currentChargeableRows: 1000,
+      candidateCount: 1250,
+      previousCurrentChargeableRows: 1000,
+      currentChargeableRows: 1250,
       newlyChargeableRows: 250,
       projectedAfterPublicSupportRows: 0,
       blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 1000,
-        newlyChargeableSinceProgramCw: 950,
+        currentChargeableCount: 1250,
+        newlyChargeableSinceProgramCw: 1200,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo100: 0,
@@ -1643,8 +1643,8 @@ describe("api v1", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 1000,
-        newlyChargeableSinceProgramDa: 900,
+        currentChargeableCount: 1250,
+        newlyChargeableSinceProgramDa: 1150,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo150: 0,
@@ -1653,8 +1653,8 @@ describe("api v1", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 1000,
-        newlyChargeableSinceProgramDc: 850,
+        currentChargeableCount: 1250,
+        newlyChargeableSinceProgramDc: 1100,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo250: 0,
@@ -1662,7 +1662,7 @@ describe("api v1", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable500: {
-        currentChargeableCount: 1000,
+        currentChargeableCount: 1250,
         newlyChargeableSinceProgramDd: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
@@ -1672,7 +1672,7 @@ describe("api v1", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable750: {
-        currentChargeableCount: 1000,
+        currentChargeableCount: 1250,
         newlyChargeableSinceProgramDe: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
@@ -1682,17 +1682,27 @@ describe("api v1", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable1000: {
-        currentChargeableCount: 1000,
+        currentChargeableCount: 1250,
         newlyChargeableSinceProgramFg: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo1000: 0,
-        currentGapTo4000: 3000,
+        currentGapTo4000: 2750,
+        parserHandoffRowCount: 250,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable1250: {
+        currentChargeableCount: 1250,
+        newlyChargeableSinceProgramGh: 250,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 0,
+        currentGapTo1250: 0,
+        currentGapTo4000: 2750,
         parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 1000,
+        current_sellable_public_supported: 1250,
         projected_after_public_support: 0,
         blocked_not_chargeable: 0
       },

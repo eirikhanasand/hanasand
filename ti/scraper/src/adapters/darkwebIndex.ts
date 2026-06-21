@@ -1159,8 +1159,8 @@ export interface DarkwebIndexPublicSupportSellable500 {
   readonly schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1";
   readonly candidateSource: "publicSupportLift1000.tier10000_ranked_rows";
   readonly targetSellableRows: 250;
-  readonly candidateCount: 1000;
-  readonly previousCurrentChargeableRows: 750;
+  readonly candidateCount: 1250;
+  readonly previousCurrentChargeableRows: 1000;
   readonly currentChargeableRows: number;
   readonly newlyChargeableRows: number;
   readonly projectedAfterPublicSupportRows: number;
@@ -1224,6 +1224,16 @@ export interface DarkwebIndexPublicSupportSellable500 {
     readonly parserHandoffRowCount: number;
     readonly countsProjectedRowsAsCurrent: false;
   };
+  readonly currentChargeable1250: {
+    readonly currentChargeableCount: number;
+    readonly newlyChargeableSinceProgramGh: number;
+    readonly projectedAfterPublicSupportCount: number;
+    readonly blockedOrRetiredCount: number;
+    readonly currentGapTo1250: number;
+    readonly currentGapTo4000: number;
+    readonly parserHandoffRowCount: number;
+    readonly countsProjectedRowsAsCurrent: false;
+  };
   readonly rowDecisionCounts: {
     readonly current_sellable_public_supported: number;
     readonly projected_after_public_support: number;
@@ -1246,6 +1256,7 @@ export interface DarkwebIndexPublicSupportSellable500Row extends Omit<DarkwebInd
   readonly newlyChargeableSinceProgramDd: boolean;
   readonly newlyChargeableSinceProgramDe: boolean;
   readonly newlyChargeableSinceProgramFg: boolean;
+  readonly newlyChargeableSinceProgramGh: boolean;
   readonly freshness: "fresh_current" | "recent_recheck_due" | "stale_blocked";
   readonly liveness: "live" | "intermittent" | "requires_recheck" | "blocked";
   readonly recheckCadenceHours: 24 | 48 | 168;
@@ -1264,6 +1275,7 @@ export interface DarkwebIndexPublicSupportSellable500ParserHandoff extends Omit<
   readonly newlyChargeableSinceProgramDd: boolean;
   readonly newlyChargeableSinceProgramDe: boolean;
   readonly newlyChargeableSinceProgramFg: boolean;
+  readonly newlyChargeableSinceProgramGh: boolean;
 }
 
 export interface DarkwebIndexPublicSupportLiftTier {
@@ -3815,23 +3827,23 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
   const blockedRows = rankedRows
     .filter((row) => !currentRowIds.has(row.recordId))
     .sort(publicSupportLiftValueSort)
-    .slice(0, Math.max(0, 1000 - currentRows.length));
+    .slice(0, Math.max(0, 1250 - currentRows.length));
   const rows = [...currentRows, ...blockedRows]
-    .slice(0, 1000)
+    .slice(0, 1250)
     .map((row, index) => publicSupportSellable500RowFor(row, index + 1));
   const currentChargeableRows = rows.filter((row) => row.rowDecision === "current_sellable_public_supported").length;
   const projectedAfterPublicSupportRows = rows.filter((row) => row.rowDecision === "projected_after_public_support").length;
   const blockedOrRetiredRows = rows.filter((row) => row.rowDecision === "blocked_not_chargeable").length;
-  const newlyChargeableRows = rows.filter((row) => row.newlyChargeableSinceProgramFg).length;
+  const newlyChargeableRows = rows.filter((row) => row.newlyChargeableSinceProgramGh).length;
   const newlyChargeableParserHandoffRows = rows
-    .filter((row) => row.newlyChargeableSinceProgramFg)
+    .filter((row) => row.newlyChargeableSinceProgramGh)
     .map(publicSupportSellable500ParserHandoffFor);
   return {
     schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1",
     candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
     targetSellableRows: 250,
-    candidateCount: 1000,
-    previousCurrentChargeableRows: 750,
+    candidateCount: 1250,
+    previousCurrentChargeableRows: 1000,
     currentChargeableRows,
     newlyChargeableRows,
     projectedAfterPublicSupportRows,
@@ -3887,10 +3899,20 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
     },
     currentChargeable1000: {
       currentChargeableCount: currentChargeableRows,
-      newlyChargeableSinceProgramFg: newlyChargeableRows,
+      newlyChargeableSinceProgramFg: rows.filter((row) => row.newlyChargeableSinceProgramFg).length,
       projectedAfterPublicSupportCount: projectedAfterPublicSupportRows,
       blockedOrRetiredCount: blockedOrRetiredRows,
       currentGapTo1000: Math.max(0, 1000 - currentChargeableRows),
+      currentGapTo4000: Math.max(0, 4000 - currentChargeableRows),
+      parserHandoffRowCount: rows.filter((row) => row.newlyChargeableSinceProgramFg).length,
+      countsProjectedRowsAsCurrent: false
+    },
+    currentChargeable1250: {
+      currentChargeableCount: currentChargeableRows,
+      newlyChargeableSinceProgramGh: newlyChargeableRows,
+      projectedAfterPublicSupportCount: projectedAfterPublicSupportRows,
+      blockedOrRetiredCount: blockedOrRetiredRows,
+      currentGapTo1250: Math.max(0, 1250 - currentChargeableRows),
       currentGapTo4000: Math.max(0, 4000 - currentChargeableRows),
       parserHandoffRowCount: newlyChargeableParserHandoffRows.length,
       countsProjectedRowsAsCurrent: false
@@ -3952,7 +3974,7 @@ function programDdActorHintFor(index: number): string {
 }
 
 function publicSupportSellable500RowFor(row: DarkwebIndexPublicSupportLiftRow, rank: number): DarkwebIndexPublicSupportSellable500Row {
-  const currentSellable = rank <= 1000 && (row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat");
+  const currentSellable = rank <= 1250 && (row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat");
   const projected = !currentSellable && row.outcome === "sellable_after_public_support";
   const [sector, country] = splitSectorCountry(row.sectorCountry);
   const safePublicSourceId = `public_support_500_source_${String(rank).padStart(3, "0")}`;
@@ -3985,7 +4007,8 @@ function publicSupportSellable500RowFor(row: DarkwebIndexPublicSupportLiftRow, r
     newlyChargeableSinceProgramDc: currentSellable && rank > 150,
     newlyChargeableSinceProgramDd: currentSellable && rank > 250 && rank <= 500,
     newlyChargeableSinceProgramDe: currentSellable && rank > 500 && rank <= 750,
-    newlyChargeableSinceProgramFg: currentSellable && rank > 750,
+    newlyChargeableSinceProgramFg: currentSellable && rank > 750 && rank <= 1000,
+    newlyChargeableSinceProgramGh: currentSellable && rank > 1000,
     countsTowardSellableFloorNow: currentSellable,
     countsTowardSellableFloorAfterPublicSupport: currentSellable || projected,
     parserHandoffFields: ["actor", "victim_or_dataset", "sector", "country", "ttp_or_tool", "dataset_claim", "claimed_or_observed_date", "public_source_family", "safe_public_source_id", "provenance_hash"],
@@ -4046,7 +4069,8 @@ function publicSupportSellable500ParserHandoffFor(
     newlyChargeableSinceProgramDc: row.newlyChargeableSinceProgramDc,
     newlyChargeableSinceProgramDd: row.newlyChargeableSinceProgramDd,
     newlyChargeableSinceProgramDe: row.newlyChargeableSinceProgramDe,
-    newlyChargeableSinceProgramFg: row.newlyChargeableSinceProgramFg
+    newlyChargeableSinceProgramFg: row.newlyChargeableSinceProgramFg,
+    newlyChargeableSinceProgramGh: row.newlyChargeableSinceProgramGh
   };
 }
 

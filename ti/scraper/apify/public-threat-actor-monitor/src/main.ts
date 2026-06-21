@@ -80,7 +80,7 @@ type EvidenceSourceFamily = Exclude<MarketplaceRow["sourceType"], "system">;
 type ProgramDdCurrentSellable750Lift = {
   schemaVersion: "ti.program_dd_current_sellable_750_lift.v1";
   owner: "agent_03";
-  sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+  sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1250" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
   baseline: { sellableRows: 500; sellableFindings: 413; sellableSourceProvenanceRows: 87; sourceProvenanceShare: 0.174 };
   acceptedCurrentRowsCount: number;
   sourceProvenanceRowsConvertedToFindings: number;
@@ -159,7 +159,7 @@ type ProgramDdCurrentSellable750Lift = {
 
 type ProgramFgCurrentSellable1000Lift = Omit<ProgramDdCurrentSellable750Lift, "schemaVersion" | "sourcePackets" | "baseline" | "acceptedRows" | "targetProgress"> & {
   schemaVersion: "ti.program_fg_current_sellable_1000_lift.v1";
-  sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+  sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1250" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
   baseline: { sellableRows: 750; sellableFindings: 693; sellableSourceProvenanceRows: 57; sourceProvenanceShare: 0.076 };
   acceptedRows: Array<Omit<ProgramDdCurrentSellable750Lift["acceptedRows"][number], "sourcePacket"> & {
     sourcePacket: "agent05_current_chargeable1000" | "agent08_parser_ready_public_proof" | "agent04_high_value_public_source_replacement" | "existing_public_source_row";
@@ -1239,7 +1239,7 @@ interface ParserRealSellableLift {
     currentSellable500Lift: {
       schemaVersion: "ti.program_dc_current_sellable_500_lift.v1";
       owner: "agent_03";
-      sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+      sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1250" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
       baseline: {
         sellableRows: 300;
         sellableFindings: 193;
@@ -2583,11 +2583,12 @@ async function main() {
     const batch = input.queries.slice(index, index + 5);
     const responses = await Promise.all(batch.map((query) => fetchThreatIntel(input.apiBaseUrl, query)));
     for (const response of responses) {
-      rows.push(...filterOutputRows(normalizeResponse(response, input), input).slice(0, input.maxRowsPerQuery));
+      rows.push(...prioritizeDailyCollectionRows(filterOutputRows(normalizeResponse(response, input), input)).slice(0, input.maxRowsPerQuery));
     }
   }
 
   const monetizationSummary = monetizationForRows(rows);
+  const dailyCollectionRun = dailyCollectionRunForRows(rows);
   await writeOutputs(rows, monetizationSummary);
   console.log(JSON.stringify({
     ok: true,
@@ -2596,7 +2597,8 @@ async function main() {
     outputContract: "safe_metadata_only.v1",
     billingMode: monetizationSummary.billingMode,
     chargeEvents: monetizationSummary.eventNames,
-    datasetItemEventsExpected: monetizationSummary.datasetItemCount
+    datasetItemEventsExpected: monetizationSummary.datasetItemCount,
+    dailyCollectionRun
   }));
 }
 
@@ -2629,6 +2631,43 @@ function filterOutputRows(rows: MarketplaceRow[], input: NormalizedInput): Marke
     if (!input.includeHeldRows && (row.paidRowDecision === "hold" || row.paidRowDecision === "suppress")) return false;
     return true;
   });
+}
+
+function prioritizeDailyCollectionRows(rows: MarketplaceRow[]): MarketplaceRow[] {
+  const decisionRank: Record<PaidRowDecision, number> = {
+    sellable: 0,
+    included_with_caveat: 1,
+    coverage_gap_only: 2,
+    hold: 3,
+    suppress: 4
+  };
+  const freshnessRank: Record<MarketplaceRow["freshnessStatus"], number> = {
+    current: 0,
+    recent: 1,
+    unknown: 2,
+    stale: 3
+  };
+  const rowTypeRank: Record<MarketplaceRow["rowType"], number> = {
+    activity: 0,
+    target: 1,
+    ttp: 2,
+    profile: 3,
+    source: 4,
+    dataset: 5,
+    coverage_gap: 6
+  };
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) => {
+      const leftDecision = left.row.paidRowDecision ?? "hold";
+      const rightDecision = right.row.paidRowDecision ?? "hold";
+      return decisionRank[leftDecision] - decisionRank[rightDecision]
+        || freshnessRank[left.row.freshnessStatus] - freshnessRank[right.row.freshnessStatus]
+        || rowTypeRank[left.row.rowType] - rowTypeRank[right.row.rowType]
+        || (right.row.buyerValueScore ?? 0) - (left.row.buyerValueScore ?? 0)
+        || left.index - right.index;
+    })
+    .map((entry) => entry.row);
 }
 
 async function readInput(): Promise<ActorInput> {
@@ -2980,6 +3019,24 @@ function parserLiveCurrentAdmissionRows(
       affectedSectors: [sector],
       countries: [country],
       impact: `${impact}; first-last seen monitoring`
+    },
+    {
+      id: "corroborating-source",
+      title: `${response.query} corroborating-source current parser admission`,
+      summary: `The hosted daily collector keeps this row chargeable because the same actor-specific claim is backed by ${evidenceCount} public source records with provenance hashes and no raw source material.`,
+      victimName: `${sector} corroboration reviewers`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; corroborating-source refresh candidate`
+    },
+    {
+      id: "defender-action",
+      title: `${response.query} defender-action current parser admission`,
+      summary: `The row includes enough current actor, target, TTP, date, and public-source context for a buyer to run a concrete defensive follow-up instead of reading a generic profile.`,
+      victimName: `${sector} detection owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; defender follow-up candidate`
     }
   ];
 
@@ -4390,8 +4447,75 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     fakeTractionGuards,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
+    dailyCollectionRun: dailyCollectionRunForRows(rows),
     rows
   };
+}
+
+function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
+  const candidateRows = rows.filter(isBuyerUsefulCandidate);
+  const freshCandidateRows = candidateRows.filter((row) => row.freshnessStatus === "current" || row.freshnessStatus === "recent");
+  const sourceMap = new Map<string, {
+    sourceName: string;
+    sourceType: MarketplaceRow["sourceType"];
+    candidateRowsProduced: number;
+    sellableRowsProduced: number;
+    freshCandidateRowsProduced: number;
+    queries: Set<string>;
+  }>();
+
+  for (const row of rows) {
+    if (!isBuyerUsefulCandidate(row)) continue;
+    if (row.sourceType === "system") continue;
+    const sourceName = row.sourceName ?? row.sourceId ?? row.sourceType;
+    const key = `${row.sourceType}:${sourceName}`;
+    const current = sourceMap.get(key) ?? {
+      sourceName,
+      sourceType: row.sourceType,
+      candidateRowsProduced: 0,
+      sellableRowsProduced: 0,
+      freshCandidateRowsProduced: 0,
+      queries: new Set<string>()
+    };
+    current.candidateRowsProduced += 1;
+    if (row.paidRowDecision === "sellable") current.sellableRowsProduced += 1;
+    if (row.freshnessStatus === "current" || row.freshnessStatus === "recent") current.freshCandidateRowsProduced += 1;
+    current.queries.add(row.query);
+    sourceMap.set(key, current);
+  }
+
+  const refreshedSources = [...sourceMap.values()]
+    .sort((left, right) => right.sellableRowsProduced - left.sellableRowsProduced
+      || right.freshCandidateRowsProduced - left.freshCandidateRowsProduced
+      || right.candidateRowsProduced - left.candidateRowsProduced
+      || left.sourceName.localeCompare(right.sourceName))
+    .slice(0, 8)
+    .map((source) => ({
+      sourceName: source.sourceName,
+      sourceType: source.sourceType,
+      candidateRowsProduced: source.candidateRowsProduced,
+      sellableRowsProduced: source.sellableRowsProduced,
+      freshCandidateRowsProduced: source.freshCandidateRowsProduced,
+      queries: [...source.queries].sort()
+    }));
+
+  return {
+    schemaVersion: "ti.apify_daily_collection_run.v1",
+    preset: "100-name-default-watchlist",
+    refreshedSourceCount: refreshedSources.length,
+    candidateRowsProduced: candidateRows.length,
+    freshCandidateRowsProduced: freshCandidateRows.length,
+    sellableRowsProduced: rows.filter((row) => row.paidRowDecision === "sellable").length,
+    caveatedCandidateRowsProduced: rows.filter((row) => row.paidRowDecision === "included_with_caveat").length,
+    refreshedSources,
+    nextCollectionAction: candidateRows.length >= 100
+      ? "keep daily refresh cadence and measure hosted conversion"
+      : "prioritize refreshed sources that produce sellable current rows before diagnostics or coverage gaps"
+  };
+}
+
+function isBuyerUsefulCandidate(row: MarketplaceRow): boolean {
+  return row.paidRowDecision === "sellable" || row.paidRowDecision === "included_with_caveat";
 }
 
 function hundredRowConversionProofForRows(
@@ -7337,7 +7461,7 @@ function currentSellable750LiftPacket(): ProgramDdCurrentSellable750Lift {
   return {
     schemaVersion: "ti.program_dd_current_sellable_750_lift.v1",
     owner: "agent_03",
-    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750", "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750", "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000", "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1250", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
     baseline: { sellableRows: 500, sellableFindings: 413, sellableSourceProvenanceRows: 87, sourceProvenanceShare: 0.174 },
     acceptedCurrentRowsCount,
     sourceProvenanceRowsConvertedToFindings,
@@ -7365,7 +7489,7 @@ function currentSellable750LiftPacket(): ProgramDdCurrentSellable750Lift {
         additionalRowsNeeded: Math.max(0, 1000 - currentSellableRowsAfterAdmission),
         minimumTrueFindingsAt1000: 700,
         maximumSourceProvenanceRowsAt1000: 250,
-        sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000", "agent08_public_corroboration_expansion", "agent04_high_value_public_source_replacements", "existing_clear_web_current_evidence"],
+        sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000", "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1250", "agent08_public_corroboration_expansion", "agent04_high_value_public_source_replacements", "existing_clear_web_current_evidence"],
         projectedRowsCountTowardCurrent: false
       }
     },
@@ -7450,7 +7574,7 @@ function currentSellable1000LiftPacket(): ProgramFgCurrentSellable1000Lift {
   return {
     schemaVersion: "ti.program_fg_current_sellable_1000_lift.v1",
     owner: "agent_03",
-    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000", "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1250", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
     baseline: { sellableRows: 750, sellableFindings: 693, sellableSourceProvenanceRows: 57, sourceProvenanceShare: 0.076 },
     acceptedCurrentRowsCount,
     sourceProvenanceRowsConvertedToFindings,
@@ -7478,7 +7602,7 @@ function currentSellable1000LiftPacket(): ProgramFgCurrentSellable1000Lift {
         additionalRowsNeeded: Math.max(0, 1500 - currentSellableRowsAfterAdmission),
         minimumTrueFindingsAt1500: Math.ceil(1500 * 0.55),
         maximumSourceProvenanceRowsAt1500: Math.floor(1500 * 0.4),
-        sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000.recheck", "agent08_public_corroboration_1000_to_1500", "agent04_high_value_public_source_replacements", "existing_clear_web_current_evidence"],
+        sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000.recheck", "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1250", "agent08_public_corroboration_1000_to_1500", "agent04_high_value_public_source_replacements", "existing_clear_web_current_evidence"],
         projectedRowsCountTowardCurrent: false
       }
     },

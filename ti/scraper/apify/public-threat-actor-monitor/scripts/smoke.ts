@@ -10,7 +10,7 @@ await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify
   includeDatasets: true,
   includeCoverageGaps: true,
   includeHeldRows: true,
-  maxRowsPerQuery: 20
+  maxRowsPerQuery: 22
 }, null, 2));
 
 const proc = Bun.spawn({
@@ -84,6 +84,34 @@ if (
   || typeof paidRowQuality.averageBuyerValueScore !== "number"
 ) {
   throw new Error("OUTPUT record must expose paid-row quality counts");
+}
+if (Number(paidRowQuality.sellable) < 18 || Number(paidRowQuality.usefulForBuyer) < 19) {
+  throw new Error("APT42 daily collection smoke must keep at least 18 sellable and 19 buyer-useful candidate rows after row prioritization");
+}
+const dailyCollectionRun = outputRecord.dailyCollectionRun as Record<string, unknown> | undefined;
+if (
+  !dailyCollectionRun
+  || dailyCollectionRun.schemaVersion !== "ti.apify_daily_collection_run.v1"
+  || dailyCollectionRun.preset !== "100-name-default-watchlist"
+  || Number(dailyCollectionRun.candidateRowsProduced) < 19
+  || Number(dailyCollectionRun.freshCandidateRowsProduced) < 19
+  || Number(dailyCollectionRun.sellableRowsProduced) < 18
+  || !Array.isArray(dailyCollectionRun.refreshedSources)
+  || dailyCollectionRun.refreshedSources.length < 3
+) {
+  throw new Error("OUTPUT record must expose daily collection refreshed sources and candidate rows produced");
+}
+for (const source of dailyCollectionRun.refreshedSources as Array<Record<string, unknown>>) {
+  if (
+    typeof source.sourceName !== "string"
+    || typeof source.sourceType !== "string"
+    || Number(source.candidateRowsProduced) < 1
+    || Number(source.freshCandidateRowsProduced) < 1
+    || !Array.isArray(source.queries)
+    || source.queries.length < 1
+  ) {
+    throw new Error("Daily collection refreshed source rows must report source name, type, query, and fresh candidate row counts");
+  }
 }
 const monetizationReadiness = outputRecord.monetizationReadiness as Record<string, unknown> | undefined;
 if (
