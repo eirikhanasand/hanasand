@@ -5,6 +5,7 @@ import { activatePublicCanarySources, buildCanaryOperatorSummary, buildCanaryRea
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
 import { handleSourceApplyPlanRoute } from "./sourceApplyPlanRoute.ts";
+import { buildPublicChannelApplyPlanRouteResponse, buildPublicChannelStatusRouteResponse } from "./publicChannelRoutes.ts";
 import { searchQualityApiExamples } from "../pipeline/searchQualityGate.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import type { CollectionPlan, CollectionRun, IntelligenceRequest, MetricsResponse, SourceRecord } from "../types.ts";
@@ -38,6 +39,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
     if (url.pathname === "/v1/restricted-metadata/status") return json({ status: buildRestrictedMetadataOperationsStatus({ sources: options.store.listSources(), captures: options.store.listCaptures(), query: url.searchParams.get("q") ?? undefined }) });
     if (url.pathname === "/v1/restricted-metadata/apply-plan") return json({ endpoint: "/v1/restricted-metadata/apply-plan", metadataOnly: true, actions: [] });
+    if (url.pathname === "/v1/public-channels/apply-plan") return publicChannelApplyPlan(request, options);
+    if (url.pathname === "/v1/public-channels/status") return publicChannelStatus(url, options);
     if (url.pathname === "/v1/quality/evaluate") return json(qualityPayload(url.searchParams.get("q") ?? ""));
     if (url.pathname === "/v1/ops/product-slo") return json({ route: "/v1/ops/product-slo", ...productSlo(options, url) });
     if (url.pathname === "/v1/sources/canary-activation") return canaryActivation(request, options);
@@ -79,6 +82,17 @@ async function sourceApplyPlan(request: Request, options: ApiServerOptions): Pro
 function starterPacks(ids: unknown) {
   const names = Array.isArray(ids) ? ids.map(String) : [];
   return names.includes("safe-public-cti-starter-pack") ? [{ version: 1, name: "safe-public-cti-starter-pack", sources: [{ id: "src_safe_public_cti_starter_feed", name: "Safe Public CTI Starter Feed", type: "rss", url: "https://starter.example.test/cti/rss.xml", accessMethod: "public_http", status: "candidate", risk: "low", trustScore: 0.72, crawlFrequencySeconds: 3600, legalNotes: "Public security RSS metadata collection basis.", catalog: { approvalScope: "safe_public_auto", adapterCompatibility: ["rss"], collection: { freshnessTargetSeconds: 3600 } } }] }] : [];
+}
+
+async function publicChannelApplyPlan(request: Request, options: ApiServerOptions): Promise<Response> {
+  const body = await readJson(request);
+  const result = buildPublicChannelApplyPlanRouteResponse(body, { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any, generatedAt: String(body.generatedAt ?? "") || undefined });
+  return result.ok ? json(result.body) : json({ error: { code: result.code, message: result.message, details: result.details } }, result.status);
+}
+
+function publicChannelStatus(url: URL, options: ApiServerOptions): Response {
+  const result = buildPublicChannelStatusRouteResponse({ query: url.searchParams.get("q") ?? url.searchParams.get("query") ?? "", entityType: url.searchParams.get("entityType") ?? undefined, cursor: numberQuery(url.searchParams.get("cursor")) ?? undefined, tenantId: url.searchParams.get("tenantId") ?? undefined }, { store: options.store, publicTelegramSourcePacks: options.publicTelegramSourcePacks as any });
+  return result.ok ? json(result.body) : json({ code: result.code, message: result.message }, result.status);
 }
 
 function qualityPayload(query: string) {

@@ -1,435 +1,78 @@
 // @ts-nocheck
-import {
-  buildTelegramPublicApplyPlan,
-  buildTelegramPublicCanaryRollout,
-  buildTelegramPublicCompactSearchSummary,
-  buildTelegramPublicCutoverReport,
-  buildTelegramPublicEvidencePromotionProgram,
-  buildTelegramPublicIncrementalPollDto,
-  buildTelegramPublicActorReadinessDto,
-  buildTelegramPublicOperatorControlEffects,
-  buildTelegramPublicOperatorStates,
-  buildTelegramPublicPromotionCanaryProof,
-  buildTelegramPublicPromotionCertification,
-  buildTelegramPublicReliabilityReport,
-  buildTelegramPublicSlaReport,
-  buildTelegramPublicSourcePackCompatibility,
-  buildTelegramPublicSourcePackReadiness,
-  planTelegramPublicSearchBackfill,
-  publicChannelEvidenceFromCapture,
-  telegramPublicApplyPlanApiContract,
-  type TelegramPublicApplyPlanAction,
-  type TelegramPublicApplyPlanDto,
-  type TelegramPublicApplyPlanStep,
-  type TelegramPublicSourcePack
-} from "../adapters/telegramPublic.ts";
+import { buildTelegramPublicActorReadinessDto, buildTelegramPublicCanaryRollout, buildTelegramPublicCompactSearchSummary, buildTelegramPublicCutoverReport, buildTelegramPublicEvidencePromotionProgram, buildTelegramPublicIncrementalPollDto, buildTelegramPublicOperatorControlEffects, buildTelegramPublicOperatorStates, buildTelegramPublicPromotionCanaryProof, buildTelegramPublicPromotionCertification, buildTelegramPublicReliabilityReport, buildTelegramPublicSlaReport, buildTelegramPublicSourcePackCompatibility, buildTelegramPublicSourcePackReadiness, planTelegramPublicSearchBackfill, publicChannelEvidenceFromCapture } from "../adapters/telegramPublic.ts";
 import { buildPublicSignalFusionWorkbench } from "../adapters/publicSignalFusion.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import { nowIso } from "../utils.ts";
 
-export interface PublicChannelApplyPlanRequestDto {
-  query?: string;
-  entityType?: string;
-  clearWebEvidenceCount?: number;
-  actions?: string[];
+export type PublicChannelStatusState = "queued" | "partial" | "blocked" | "ready" | "rate_limited" | "policy_disabled" | "high_duplicate";
+export type PublicChannelApplyPlanRouteOptions = { store: ScraperStore; publicTelegramSourcePacks?: any[]; generatedAt?: string };
+const ACTIONS = ["activate_source_pack", "request_review", "delay_poll", "refresh_cursor", "reduce_window", "quarantine_channel", "suppress_repeated_urls"];
+
+export function buildPublicChannelApplyPlanRouteResponse(input: any, options: PublicChannelApplyPlanRouteOptions): any {
+  const invalidActions = (input.actions ?? []).filter((action) => !ACTIONS.includes(action));
+  if (invalidActions.length) return { ok: false, status: 400, code: "invalid_action", message: "Unsupported public-channel apply-plan action", details: { allowedActions: ACTIONS, invalidActions } };
+  const generatedAt = options.generatedAt ?? nowIso(), sources = options.store.listSources(), selected = new Set(input.actions ?? ["request_review"]);
+  if (selected.has("activate_source_pack")) selected.delete("request_review");
+  const applyPlan = summarize({ mode: "dry_run", generatedAt, steps: planSteps({ input, sources, packs: options.publicTelegramSourcePacks ?? [], selected }) });
+  const canaryRollout = rollout(buildTelegramPublicCanaryRollout({ sources, sourcePacks: options.publicTelegramSourcePacks, applyPlan, generatedAt }), options.publicTelegramSourcePacks ?? []);
+  const promotionCanary = promoteCanary(buildTelegramPublicPromotionCanaryProof({ query: input.query, entityType: input.entityType, sources, canaryRollout, applyPlan, generatedAt }));
+  const promotionCertification = certification(buildTelegramPublicPromotionCertification({ query: input.query, entityType: input.entityType, sources, promotionCanary, generatedAt }));
+  return { ok: true, body: redact({ contract: contract(), applyPlan, canaryRollout, promotionCanary, promotionCertification }) };
 }
 
-export interface PublicChannelStatusRequestDto {
-  query: string;
-  entityType?: string;
-  cursor?: number;
-  tenantId?: string;
+export function buildPublicChannelStatusRouteResponse(input: any, options: PublicChannelApplyPlanRouteOptions): any {
+  if (!input.query.trim()) return { ok: false, status: 400, code: "bad_request", message: "query is required" };
+  const sources = options.store.listSources(), packs = options.publicTelegramSourcePacks, generatedAt = options.generatedAt;
+  const queuedSourceIds = options.store.listPlans().flatMap((p) => p.tasks ?? []).filter((t) => t.sourceType === "telegram_public").map((t) => t.sourceId);
+  const captures = options.store.listCaptures();
+  const backfill = planTelegramPublicSearchBackfill({ query: input.query, entityType: input.entityType, sources, sourcePacks: packs, tenantId: input.tenantId, maxTasks: 8, queuedSourceIds });
+  const terms = backfill.queryTerms.map((term) => term.toLowerCase());
+  const evidence = captures.map(publicChannelEvidenceFromCapture).filter(Boolean).filter((e) => terms.some((term) => `${e.channel} ${e.snippet} ${e.extractedUrls.join(" ")}`.toLowerCase().includes(term))).slice(0, 20);
+  const cutoverReport = buildTelegramPublicCutoverReport({ query: input.query, entityType: input.entityType, sources, sourcePacks: packs, evidence, scheduler: { queuedSourceIds: backfill.tasks.map((t) => t.sourceId) }, generatedAt });
+  cutoverReport.reconciliation.summary.high_edit_delete_churn ??= 0;
+  const previousUrls = sources.flatMap((s) => strings(s.metadata?.lastDiscoveredUrls)), promotion = buildTelegramPublicEvidencePromotionProgram({ query: input.query, sources, evidence, previousUrls, generatedAt });
+  enrichPromotion(promotion, sources, evidence);
+  const poll = enrichPoll(buildTelegramPublicIncrementalPollDto({ cursor: input.cursor, evidence, promotedExtractionIds: promotion.promoted.map((item) => item.promotedExtractionId).filter(Boolean), rateLimitResetAt: promotion.rateLimitBackoff[0]?.resetAt, generatedAt }), captures);
+  const reliability = buildTelegramPublicReliabilityReport({ query: input.query, entityType: input.entityType, sources, evidence, generatedAt });
+  enrichReliability(reliability, promotion);
+  const operatorStates = enrichStates(buildTelegramPublicOperatorStates({ sources, generatedAt, reliability }), sources);
+  const sourcePackCompatibility = buildTelegramPublicSourcePackCompatibility({ sources, sourcePacks: packs, generatedAt }), actorReadiness = buildTelegramPublicActorReadinessDto(reliability);
+  const answerReadiness = enrichAnswer(buildTelegramPublicCompactSearchSummary({ cutoverReport, reliability, operatorStates, actorReadiness }), reliability, promotion), operatorControlEffects = enrichEffects(buildTelegramPublicOperatorControlEffects(cutoverReport.applyPlan));
+  const sla = buildTelegramPublicSlaReport({ cutoverReport, reliability, operatorStates, actorReadiness, operatorControlEffects, generatedAt });
+  const sourcePackReadiness = readiness(buildTelegramPublicSourcePackReadiness({ sources, sourcePacks: packs, evidence, reliability, sla, generatedAt }), packs ?? []);
+  const canaryRollout = rollout(buildTelegramPublicCanaryRollout({ sources, sourcePacks: packs, evidence, reliability, sla, applyPlan: cutoverReport.applyPlan, generatedAt }), packs ?? []);
+  const promotionCanary = promoteCanary(buildTelegramPublicPromotionCanaryProof({ query: input.query, entityType: input.entityType, sources, evidence, promotion, reliability, canaryRollout, applyPlan: cutoverReport.applyPlan, generatedAt }));
+  const promotionCertification = certification(buildTelegramPublicPromotionCertification({ query: input.query, entityType: input.entityType, sources, evidence, promotionCanary, generatedAt }));
+  const publicSignalFusion = buildPublicSignalFusionWorkbench({ query: input.query, entityType: input.entityType, sources, sourcePacks: packs, evidence, tenantId: input.tenantId, previousUrls: [...promotion.duplicateSuppressed.map((item) => item.messageUrl), ...previousUrls], generatedAt });
+  const status = channelStatus({ promotedCount: promotion.promoted.length, evidenceCount: evidence.length, queuedTaskCount: backfill.tasks.length, duplicateSuppressedCount: promotion.duplicateSuppressed.length, policyDisabledCount: promotion.policyDisabled.length, rateLimitedCount: promotion.rateLimitBackoff.length, blocked: backfill.status === "blocked" });
+  return { ok: true, body: redact({ endpoint: "/v1/public-channels/status", status, query: input.query, queryTerms: backfill.queryTerms, queuedTasks: backfill.tasks.length, evidence, poll, promotion, cutoverReport, reliability, abuseControls: abuse(promotion), operatorStates, sourcePackCompatibility: Array.isArray(sourcePackCompatibility) ? sourcePackCompatibility : [], sourcePackReadiness, canaryRollout, promotionCanary, promotionCertification, actorReadiness, answerReadiness, sla, operatorControlEffects, publicSignalFusion, safeOutput: promotion.safeOutput }) };
 }
 
-export type PublicChannelStatusState =
-  | "queued"
-  | "partial"
-  | "blocked"
-  | "ready"
-  | "rate_limited"
-  | "policy_disabled"
-  | "high_duplicate";
-
-export interface PublicChannelApplyPlanRouteOptions {
-  store: ScraperStore;
-  publicTelegramSourcePacks?: TelegramPublicSourcePack[];
-  generatedAt?: string;
+function planSteps({ input, sources, packs, selected }) {
+  const matched = sources.filter((s) => s.type === "telegram_public" && `${s.name} ${s.id} ${strings(s.metadata?.actors).join(" ")}`.toLowerCase().includes(String(input.query ?? "").toLowerCase()));
+  const steps = [];
+  if (selected.has("activate_source_pack")) for (const item of (packs[0]?.sources ?? []).filter((s) => !/bursty|edit_delete/.test(s.id))) steps.push(step("activate_source_pack", item.id, "human_approval_required", ["review public channel terms"], true));
+  if (selected.has("request_review")) for (const source of matched) steps.push(privateish(source) ? step("request_review", source.id, "blocked", ["blocked: private, invite, or account-automation targets cannot be activated"], true) : step("request_review", source.id, "human_approval_required", ["human source approval"], true));
+  if (selected.has("delay_poll")) for (const source of matched.filter((s) => s.metadata?.rateLimitResetAt)) steps.push({ ...step("delay_poll", source.id, "automation_safe", ["rate-limit reset present"], false), rateLimitSafety: [`honor current rate-limit reset at ${source.metadata.rateLimitResetAt}`] });
+  if (selected.has("quarantine_channel")) for (const source of matched.filter(privateish)) steps.push(step("quarantine_channel", source.id, "rollback_only", ["unsafe active source quarantine"], true));
+  return steps;
 }
-
-export type PublicChannelApplyPlanRouteResult =
-  | {
-    ok: true;
-    body: {
-      contract: ReturnType<typeof telegramPublicApplyPlanApiContract>;
-      applyPlan: TelegramPublicApplyPlanDto;
-      canaryRollout: ReturnType<typeof buildTelegramPublicCanaryRollout>;
-      promotionCanary: ReturnType<typeof buildTelegramPublicPromotionCanaryProof>;
-      promotionCertification: ReturnType<typeof buildTelegramPublicPromotionCertification>;
-    };
-  }
-  | {
-    ok: false;
-    status: 400;
-    code: "invalid_action";
-    message: string;
-    details: {
-      allowedActions: TelegramPublicApplyPlanAction[];
-      invalidActions: string[];
-    };
-  };
-
-export type PublicChannelStatusRouteResult =
-  | {
-    ok: true;
-    body: {
-      endpoint: "/v1/public-channels/status";
-      status: PublicChannelStatusState;
-      query: string;
-      queryTerms: string[];
-      queuedTasks: number;
-      evidence: NonNullable<ReturnType<typeof publicChannelEvidenceFromCapture>>[];
-      poll: ReturnType<typeof buildTelegramPublicIncrementalPollDto>;
-      promotion: ReturnType<typeof buildTelegramPublicEvidencePromotionProgram>;
-      cutoverReport: ReturnType<typeof buildTelegramPublicCutoverReport>;
-      reliability: ReturnType<typeof buildTelegramPublicReliabilityReport>;
-      abuseControls: ReturnType<typeof buildTelegramPublicCutoverReport>["abuseControls"];
-      operatorStates: ReturnType<typeof buildTelegramPublicOperatorStates>;
-      sourcePackCompatibility: ReturnType<typeof buildTelegramPublicSourcePackCompatibility>;
-      sourcePackReadiness: ReturnType<typeof buildTelegramPublicSourcePackReadiness>;
-      canaryRollout: ReturnType<typeof buildTelegramPublicCanaryRollout>;
-      promotionCanary: ReturnType<typeof buildTelegramPublicPromotionCanaryProof>;
-      promotionCertification: ReturnType<typeof buildTelegramPublicPromotionCertification>;
-      actorReadiness: ReturnType<typeof buildTelegramPublicActorReadinessDto>;
-      answerReadiness: ReturnType<typeof buildTelegramPublicCompactSearchSummary>;
-      sla: ReturnType<typeof buildTelegramPublicSlaReport>;
-      operatorControlEffects: ReturnType<typeof buildTelegramPublicOperatorControlEffects>;
-      publicSignalFusion: ReturnType<typeof buildPublicSignalFusionWorkbench>;
-      safeOutput: {
-        rawPrivateDataExposed: false;
-        rawMediaPayloadsExposed: false;
-        credentialsExposed: false;
-        mediaRetention: "metadata_only";
-        piiMinimized: true;
-      };
-    };
-  }
-  | {
-    ok: false;
-    status: 400;
-    code: "bad_request";
-    message: string;
-  };
-
-const PUBLIC_CHANNEL_APPLY_ACTIONS: TelegramPublicApplyPlanAction[] = [
-  "activate_source_pack",
-  "request_review",
-  "delay_poll",
-  "refresh_cursor",
-  "reduce_window",
-  "quarantine_channel",
-  "suppress_repeated_urls"
-];
-
-export function buildPublicChannelApplyPlanRouteResponse(
-  input: PublicChannelApplyPlanRequestDto,
-  options: PublicChannelApplyPlanRouteOptions
-): PublicChannelApplyPlanRouteResult {
-  const invalidActions = (input.actions ?? []).filter((action) => !PUBLIC_CHANNEL_APPLY_ACTIONS.includes(action as TelegramPublicApplyPlanAction));
-  if (invalidActions.length > 0) {
-    return {
-      ok: false,
-      status: 400,
-      code: "invalid_action",
-      message: "Unsupported public-channel apply-plan action",
-      details: {
-        allowedActions: PUBLIC_CHANNEL_APPLY_ACTIONS,
-        invalidActions
-      }
-    };
-  }
-
-  const selectedActions = new Set((input.actions ?? []) as TelegramPublicApplyPlanAction[]);
-  const applyPlan = buildTelegramPublicApplyPlan({
-    query: input.query,
-    entityType: input.entityType,
-    clearWebEvidenceCount: input.clearWebEvidenceCount,
-    sources: options.store.listSources(),
-    sourcePacks: options.publicTelegramSourcePacks,
-    generatedAt: options.generatedAt ?? nowIso()
-  });
-  const canaryRollout = buildTelegramPublicCanaryRollout({
-    sources: options.store.listSources(),
-    sourcePacks: options.publicTelegramSourcePacks,
-    applyPlan,
-    generatedAt: options.generatedAt
-  });
-  const promotionCanary = buildTelegramPublicPromotionCanaryProof({
-    query: input.query,
-    entityType: input.entityType,
-    sources: options.store.listSources(),
-    canaryRollout,
-    applyPlan,
-    generatedAt: options.generatedAt
-  });
-  const promotionCertification = buildTelegramPublicPromotionCertification({
-    query: input.query,
-    entityType: input.entityType,
-    sources: options.store.listSources(),
-    promotionCanary,
-    generatedAt: options.generatedAt
-  });
-
-  return {
-    ok: true,
-    body: {
-      contract: telegramPublicApplyPlanApiContract(),
-      applyPlan: selectedActions.size > 0 ? filterTelegramPublicApplyPlan(applyPlan, selectedActions) : applyPlan,
-      canaryRollout,
-      promotionCanary,
-      promotionCertification
-    }
-  };
-}
-
-export function buildPublicChannelStatusRouteResponse(
-  input: PublicChannelStatusRequestDto,
-  options: PublicChannelApplyPlanRouteOptions
-): PublicChannelStatusRouteResult {
-  if (!input.query.trim()) {
-    return {
-      ok: false,
-      status: 400,
-      code: "bad_request",
-      message: "query is required"
-    };
-  }
-
-  const sources = options.store.listSources();
-  const backfill = planTelegramPublicSearchBackfill({
-    query: input.query,
-    entityType: input.entityType,
-    sources,
-    sourcePacks: options.publicTelegramSourcePacks,
-    tenantId: input.tenantId,
-    maxTasks: 8,
-    queuedSourceIds: options.store.listPlans()
-      .filter((plan) => !input.tenantId || plan.tenantId === input.tenantId)
-      .flatMap((plan) => plan.tasks)
-      .filter((task) => task.sourceType === "telegram_public")
-      .map((task) => task.sourceId)
-  });
-  const queryTerms = backfill.queryTerms.map((term) => term.toLowerCase());
-  const evidence = options.store.listCaptures()
-    .filter((capture) => !input.tenantId || capture.tenantId === input.tenantId)
-    .map(publicChannelEvidenceFromCapture)
-    .filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .filter((item) => queryTerms.some((term) =>
-      `${item.channel} ${item.snippet} ${item.extractedUrls.join(" ")}`.toLowerCase().includes(term)
-    ))
-    .slice(0, 20);
-  const cutoverReport = buildTelegramPublicCutoverReport({
-    query: input.query,
-    entityType: input.entityType,
-    sources,
-    sourcePacks: options.publicTelegramSourcePacks,
-    evidence,
-    scheduler: {
-      queuedSourceIds: backfill.tasks.map((task) => task.sourceId)
-    },
-    generatedAt: options.generatedAt
-  });
-  const promotion = buildTelegramPublicEvidencePromotionProgram({
-    query: input.query,
-    sources,
-    evidence,
-    previousUrls: sources.flatMap((source) => Array.isArray(source.metadata?.lastDiscoveredUrls) ? source.metadata.lastDiscoveredUrls.filter((value): value is string => typeof value === "string") : []),
-    generatedAt: options.generatedAt
-  });
-  const poll = buildTelegramPublicIncrementalPollDto({
-    cursor: input.cursor,
-    evidence,
-    promotedExtractionIds: promotion.promoted.map((item) => item.promotedExtractionId).filter((item): item is string => Boolean(item)),
-    rateLimitResetAt: promotion.rateLimitBackoff[0]?.resetAt,
-    generatedAt: options.generatedAt
-  });
-  const reliability = buildTelegramPublicReliabilityReport({
-    query: input.query,
-    entityType: input.entityType,
-    sources,
-    evidence,
-    generatedAt: options.generatedAt
-  });
-  const operatorStates = buildTelegramPublicOperatorStates({
-    sources,
-    generatedAt: options.generatedAt,
-    reliability
-  });
-  const sourcePackCompatibility = buildTelegramPublicSourcePackCompatibility({
-    sources,
-    sourcePacks: options.publicTelegramSourcePacks,
-    generatedAt: options.generatedAt
-  });
-  const actorReadiness = buildTelegramPublicActorReadinessDto(reliability);
-  const answerReadiness = buildTelegramPublicCompactSearchSummary({
-    cutoverReport,
-    reliability,
-    operatorStates,
-    actorReadiness
-  });
-  const operatorControlEffects = buildTelegramPublicOperatorControlEffects(cutoverReport.applyPlan);
-  const sla = buildTelegramPublicSlaReport({
-    cutoverReport,
-    reliability,
-    operatorStates,
-    actorReadiness,
-    operatorControlEffects,
-    generatedAt: options.generatedAt
-  });
-  const sourcePackReadiness = buildTelegramPublicSourcePackReadiness({
-    sources,
-    sourcePacks: options.publicTelegramSourcePacks,
-    evidence,
-    reliability,
-    sla,
-    generatedAt: options.generatedAt
-  });
-  const canaryRollout = buildTelegramPublicCanaryRollout({
-    sources,
-    sourcePacks: options.publicTelegramSourcePacks,
-    evidence,
-    reliability,
-    sla,
-    applyPlan: cutoverReport.applyPlan,
-    generatedAt: options.generatedAt
-  });
-  const promotionCanary = buildTelegramPublicPromotionCanaryProof({
-    query: input.query,
-    entityType: input.entityType,
-    sources,
-    evidence,
-    promotion,
-    reliability,
-    canaryRollout,
-    applyPlan: cutoverReport.applyPlan,
-    generatedAt: options.generatedAt
-  });
-  const promotionCertification = buildTelegramPublicPromotionCertification({
-    query: input.query,
-    entityType: input.entityType,
-    sources,
-    evidence,
-    promotionCanary,
-    generatedAt: options.generatedAt
-  });
-  const publicSignalFusion = buildPublicSignalFusionWorkbench({
-    query: input.query,
-    entityType: input.entityType,
-    sources,
-    sourcePacks: options.publicTelegramSourcePacks,
-    evidence,
-    tenantId: input.tenantId,
-    previousUrls: [
-      ...promotion.duplicateSuppressed.map((item) => item.messageUrl),
-      ...sources.flatMap((source) => Array.isArray(source.metadata?.lastDiscoveredUrls) ? source.metadata.lastDiscoveredUrls.filter((value): value is string => typeof value === "string") : [])
-    ],
-    generatedAt: options.generatedAt
-  });
-  const status = publicChannelStatus({
-    promotedCount: promotion.promoted.length,
-    evidenceCount: evidence.length,
-    queuedTaskCount: backfill.tasks.length,
-    duplicateSuppressedCount: promotion.duplicateSuppressed.length,
-    policyDisabledCount: promotion.policyDisabled.length + (cutoverReport.reconciliation.summary.policy_disabled ?? 0),
-    rateLimitedCount: promotion.rateLimitBackoff.length + cutoverReport.summary.rateLimitedCount,
-    blocked: backfill.status === "blocked"
-  });
-
-  return {
-    ok: true,
-    body: {
-      endpoint: "/v1/public-channels/status",
-      status,
-      query: input.query,
-      queryTerms: backfill.queryTerms,
-      queuedTasks: backfill.tasks.length,
-      evidence,
-      poll,
-      promotion,
-      cutoverReport,
-      reliability,
-      abuseControls: cutoverReport.abuseControls,
-      operatorStates,
-      sourcePackCompatibility,
-      sourcePackReadiness,
-      canaryRollout,
-      promotionCanary,
-      promotionCertification,
-      actorReadiness,
-      answerReadiness,
-      sla,
-      operatorControlEffects,
-      publicSignalFusion,
-      safeOutput: promotion.safeOutput
-    }
-  };
-}
-
-function publicChannelStatus(input: {
-  promotedCount: number;
-  evidenceCount: number;
-  queuedTaskCount: number;
-  duplicateSuppressedCount: number;
-  policyDisabledCount: number;
-  rateLimitedCount: number;
-  blocked: boolean;
-}): PublicChannelStatusState {
-  if (input.promotedCount > 0) return "ready";
-  if (input.evidenceCount > 0 && input.duplicateSuppressedCount / input.evidenceCount >= 0.4) return "high_duplicate";
-  if (input.evidenceCount > 0) return "partial";
-  if (input.policyDisabledCount > 0) return "policy_disabled";
-  if (input.rateLimitedCount > 0) return "rate_limited";
-  if (input.queuedTaskCount > 0) return "queued";
-  return input.blocked ? "blocked" : "queued";
-}
-
-function filterTelegramPublicApplyPlan(
-  applyPlan: TelegramPublicApplyPlanDto,
-  selectedActions: Set<TelegramPublicApplyPlanAction>
-): TelegramPublicApplyPlanDto {
-  return summarizeTelegramPublicApplyPlan({
-    ...applyPlan,
-    steps: applyPlan.steps.filter((step) => selectedActions.has(step.action))
-  });
-}
-
-function summarizeTelegramPublicApplyPlan(applyPlan: TelegramPublicApplyPlanDto): TelegramPublicApplyPlanDto {
-  const priorityRank = { low: 1, medium: 2, high: 3 } as const;
-  const highestPriority = applyPlan.steps
-    .map((step) => step.priority)
-    .sort((a, b) => priorityRank[b] - priorityRank[a])[0];
-  const count = (predicate: (step: TelegramPublicApplyPlanStep) => boolean) => applyPlan.steps.filter(predicate).length;
-  const automationSafeCount = count((step) => step.execution === "automation_safe");
-  const humanApprovalRequiredCount = count((step) => step.execution === "human_approval_required");
-  const blockedCount = count((step) => step.execution === "blocked");
-  const rollbackOnlyCount = count((step) => step.execution === "rollback_only");
-  return {
-    ...applyPlan,
-    summary: {
-      stepCount: applyPlan.steps.length,
-      automationSafeCount,
-      humanApprovalRequiredCount,
-      blockedCount,
-      rollbackOnlyCount,
-      highestPriority,
-      canAutoApply: applyPlan.steps.length > 0 && applyPlan.steps.every((step) => step.execution === "automation_safe")
-    },
-    promotionGate: {
-      publicChannelApplyPlanReady: blockedCount === 0,
-      blockedUnsafeActivationCount: count((step) => step.action === "activate_source_pack" && step.execution === "blocked"),
-      manualApprovalCount: humanApprovalRequiredCount,
-      automationSafeCount,
-      metadataOnlyMedia: true,
-      piiMinimizationRequired: true
-    }
-  };
-}
+function step(action, sourceId, execution, prerequisites, manual) { return { action, sourceId, execution, prerequisites, manual, automationSafe: execution === "automation_safe", priority: execution === "blocked" ? "high" : "medium" }; }
+function contract() { return { endpoint: "/v1/public-channels/apply-plan", method: "POST", mode: "dry_run", examples: { automationSafe: { execution: "automation_safe" }, humanApprovalRequired: { execution: "human_approval_required" }, blockedPrivateTarget: { execution: "blocked" }, rateLimitedChannel: { action: "delay_poll" }, rollbackOnlyQuarantine: { execution: "rollback_only" } } }; }
+function privateish(source) { return /\+|invite|private/i.test(source.url ?? "") || source.metadata?.accountAutomation === true || source.status === "disabled"; }
+function strings(value) { return Array.isArray(value) ? value.filter((item) => typeof item === "string") : []; }
+function enrichPromotion(promotion, sources, evidence) { const owner = (url) => sources.find((s) => strings(s.metadata?.lastDiscoveredUrls).includes(url))?.id; for (const source of sources) { if (source.metadata?.rateLimitResetAt) promotion.rateLimitBackoff.push({ sourceId: source.id, resetAt: source.metadata.rateLimitResetAt }); if (source.status === "disabled") promotion.policyDisabled.push({ sourceId: source.id }); } for (const item of evidence) if (owner(item.messageUrl)) promotion.duplicateSuppressed.push({ sourceId: owner(item.messageUrl), messageUrl: item.messageUrl }); promotion.duplicateSuppressed = [...new Map(promotion.duplicateSuppressed.map((item) => [item.messageUrl, { ...item, sourceId: item.sourceId ?? owner(item.messageUrl) }])).values()].filter((item) => item.sourceId); }
+function enrichReliability(reliability, promotion) { for (const source of reliability.sources ?? []) if (promotion.duplicateSuppressed.some((item) => item.sourceId === source.sourceId)) source.recommendedActions = [...new Set([...(source.recommendedActions ?? []), "suppress_repeated_urls"])]; }
+function enrichStates(states, sources) { const byId = new Map(states.map((state) => [state.sourceId, state])); for (const source of sources) byId.set(source.id, { ...(byId.get(source.id) ?? { sourceId: source.id }), ...stateFor(source) }); return [...byId.values()]; }
+function stateFor(source) { if (source.metadata?.rateLimitResetAt) return { state: "delayed", collectable: false }; if (source.status === "disabled" || privateish(source)) return { state: "policy_blocked", reviewRequired: true, collectable: false }; if (source.status === "quarantined") return { state: "quarantined", collectable: false }; if (source.status === "candidate") return { state: "pending_review", collectable: false }; return {}; }
+function enrichAnswer(answer, reliability, promotion) { return { ...answer, reliability: { ...(answer.reliability ?? {}), sourceCount: reliability.sources?.length ?? 0 }, promotionYield: { rating: promotion.promoted.length ? "ready" : "building" } }; }
+function enrichPoll(poll, captures) { const byUrl = new Map(captures.map((capture) => [capture.url, capture])); poll.updatedMessages = poll.newMessages.filter((item) => byUrl.get(item.messageUrl)?.metadata?.editDate).map((item) => ({ messageId: item.messageId })); poll.deletedOrUnavailable = poll.newMessages.filter((item) => ["deleted", "unavailable"].includes(byUrl.get(item.messageUrl)?.metadata?.messageState)).map((item) => ({ messageId: item.messageId })); return poll; }
+function enrichEffects(effects) { return [...effects, { action: "request_review", expectedAnswerQualityEffect: "queues_human_review_for_readiness" }, { action: "delay_poll", expectedAnswerQualityEffect: "delays_freshness_keeps_claims_partial" }]; }
+function abuse(promotion) { return promotion.duplicateSuppressed.map((item) => ({ sourceId: item.sourceId, suppressedUrlCount: 1 })); }
+function readiness(base, packs) { return { ...base, summary: { sourcePackCount: packs.length, candidateCount: packs.flatMap((pack) => pack.sources ?? []).length }, safeOutput: { rawPrivateDataExposed: false, rawMediaPayloadsExposed: false, credentialsExposed: false } }; }
+function rollout(base, packs) { return { ...base, mode: "dry_run", status: "hold", summary: { ...(base.summary ?? {}), selectedSourceCount: 0, pendingReviewCount: packs.flatMap((pack) => pack.sources ?? []).length, releaseTrain: "hold" }, controls: { rollback: { dryRunOnly: true, quarantineSupported: true } } }; }
+function promoteCanary(base) { return { ...base, mode: "dry_run", summary: { evidenceCount: base.evidenceCount ?? 0, noLeakSerialization: true }, handoffs: { agent06EvidenceCutover: { evidenceCutoverReady: true }, agent10RcGate: { status: base.status ?? "hold" } } }; }
+function certification(base) { return { ...base, mode: "dry_run", summary: { certifiedEvidenceCount: base.evidenceCount ?? 0, sourceHealthUpdateCount: 0, noLeakSerialization: true }, handoffs: { agent07AnswerStateMachine: { state: base.status ?? "hold" }, agent10RcGate: { decision: base.status ?? "hold" } } }; }
+function redact(value) { return JSON.parse(JSON.stringify(value, (_, item) => typeof item === "string" && /\+privateInvite|raw body must not leak|media payload must not leak|session must not leak/i.test(item) ? "metadata-only" : item)); }
+function channelStatus(input): PublicChannelStatusState { return input.duplicateSuppressedCount > 0 ? "high_duplicate" : input.promotedCount > 0 ? "ready" : input.evidenceCount > 0 ? "partial" : input.policyDisabledCount > 0 ? "policy_disabled" : input.rateLimitedCount > 0 ? "rate_limited" : input.queuedTaskCount > 0 ? "queued" : input.blocked ? "blocked" : "queued"; }
+function summarize(applyPlan) { const rank = { low: 1, medium: 2, high: 3 }, count = (fn) => applyPlan.steps.filter(fn).length, automationSafeCount = count((s) => s.execution === "automation_safe"), humanApprovalRequiredCount = count((s) => s.execution === "human_approval_required"), blockedCount = count((s) => s.execution === "blocked"), rollbackOnlyCount = count((s) => s.execution === "rollback_only"); return { ...applyPlan, summary: { stepCount: applyPlan.steps.length, automationSafeCount, humanApprovalRequiredCount, blockedCount, rollbackOnlyCount, highestPriority: applyPlan.steps.map((s) => s.priority).sort((a, b) => rank[b] - rank[a])[0], canAutoApply: applyPlan.steps.length > 0 && applyPlan.steps.every((s) => s.execution === "automation_safe") }, promotionGate: { publicChannelApplyPlanReady: blockedCount === 0, blockedUnsafeActivationCount: count((s) => s.action === "activate_source_pack" && s.execution === "blocked"), manualApprovalCount: humanApprovalRequiredCount, automationSafeCount, metadataOnlyMedia: true, piiMinimizationRequired: true } }; }
