@@ -11,7 +11,23 @@ export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   src("src_canary_recorded_future", "Recorded Future Research", "rss", "https://www.recordedfuture.com/research/feed", ["APT29", "Turla", "Akira"], "vendor"),
   src("src_canary_thehackernews", "The Hacker News", "rss", "https://feeds.feedburner.com/TheHackersNews", ["APT29", "APT42", "Akira", "CVE"], "community"),
   src("src_canary_bleepingcomputer", "BleepingComputer Security", "rss", "https://www.bleepingcomputer.com/feed/", ["Akira", "Scattered Spider", "CVE"], "community"),
-  src("src_canary_mitre_attack", "MITRE ATT&CK Groups", "static_web", "https://attack.mitre.org/groups/", ["APT29", "APT42", "Turla", "Volt Typhoon"], "standards_body")
+  src("src_canary_mitre_attack", "MITRE ATT&CK Groups", "static_web", "https://attack.mitre.org/groups/", ["APT29", "APT42", "Turla", "Volt Typhoon"], "standards_body"),
+  src("src_canary_krebs", "KrebsOnSecurity", "rss", "https://krebsonsecurity.com/feed/", ["ransomware", "breach", "botnet", "CVE"], "journalism"),
+  src("src_canary_securelist", "Securelist", "rss", "https://securelist.com/feed/", ["APT", "malware", "ransomware", "campaign"], "vendor"),
+  src("src_canary_talos", "Cisco Talos Blog", "rss", "https://blog.talosintelligence.com/rss/", ["APT", "malware", "ransomware", "CVE"], "vendor"),
+  src("src_canary_welivesecurity", "ESET WeLiveSecurity", "rss", "https://www.welivesecurity.com/feed/", ["APT", "malware", "ransomware"], "vendor"),
+  src("src_canary_proofpoint", "Proofpoint Threat Insight", "rss", "https://www.proofpoint.com/us/rss.xml", ["TA", "phishing", "malware", "APT"], "vendor"),
+  src("src_canary_sentinelone_labs", "SentinelOne Labs", "rss", "https://www.sentinelone.com/labs/feed/", ["ransomware", "APT", "malware"], "vendor"),
+  src("src_canary_elastic_labs", "Elastic Security Labs", "rss", "https://www.elastic.co/security-labs/rss/feed.xml", ["malware", "APT", "ransomware"], "vendor"),
+  src("src_canary_checkpoint", "Check Point Research", "rss", "https://research.checkpoint.com/feed/", ["APT", "malware", "ransomware"], "vendor"),
+  src("src_canary_sophos", "Sophos Threat Research", "rss", "https://news.sophos.com/en-us/category/threat-research/feed/", ["ransomware", "malware", "CVE"], "vendor"),
+  src("src_canary_huntress", "Huntress Blog", "rss", "https://www.huntress.com/blog/rss.xml", ["ransomware", "identity", "malware"], "vendor"),
+  src("src_canary_malwarebytes", "Malwarebytes Labs", "rss", "https://www.malwarebytes.com/blog/feed/index.xml", ["malware", "ransomware", "phishing"], "vendor"),
+  src("src_canary_sekoia", "SEKOIA.IO Blog", "rss", "https://blog.sekoia.io/feed/", ["APT", "ransomware", "malware"], "vendor"),
+  src("src_canary_cert_ua", "CERT-UA Alerts", "rss", "https://cert.gov.ua/api/articles/rss", ["Sandworm", "Gamaredon", "UAC", "APT"], "government"),
+  src("src_canary_crowdstrike", "CrowdStrike Blog", "rss", "https://www.crowdstrike.com/en-us/blog/feed/", ["APT", "ransomware", "eCrime"], "vendor"),
+  src("src_canary_cybereason", "Cybereason Blog", "rss", "https://www.cybereason.com/blog/rss.xml", ["ransomware", "malware", "APT"], "vendor"),
+  src("src_canary_redcanary", "Red Canary Blog", "rss", "https://redcanary.com/blog/feed/", ["threat detection", "malware", "ransomware"], "vendor")
 ];
 
 function src(id: string, name: string, type: string, url: string, q: string[], family: string) {
