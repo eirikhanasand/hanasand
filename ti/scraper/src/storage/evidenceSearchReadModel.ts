@@ -844,6 +844,55 @@ export interface EvidenceActorDatasetSourceGapRepairPacket {
   noLeak: true;
 }
 
+export interface EvidenceActorDatasetSourceGapRepairReplayLedger {
+  schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_replay_ledger.v1";
+  generatedAt: string;
+  ledgerId: string;
+  sourceHandoff: EvidenceActorDatasetSourceGapRepairHandoff["schemaVersion"];
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  dryRun: true;
+  willPromoteActorRows: false;
+  willWritePublicAnswerCache: false;
+  willActivateSources: false;
+  latestProof: EvidenceActorDatasetPromotionPreview["latestProof"];
+  counts: {
+    replayCheckpoints: number;
+    queueItemsCovered: number;
+    pendingReplayItems: number;
+    promotionBlockedItems: number;
+  };
+  replayCheckpoints: EvidenceActorDatasetSourceGapRepairReplayCheckpoint[];
+  promotionPolicy: {
+    repairedRowsRequireDurableEvidenceReplay: true;
+    repairedRowsRequireClaimLedgerReplay: true;
+    repairedRowsRequireFreshnessWindowCheck: true;
+    restrictedRowsRemainContextOnlyUntilPublicCorroborated: true;
+    staleRowsRemainSuppressedUntilFreshReplay: true;
+  };
+  guardrails: EvidenceActorDatasetSourceGapConsumerQueue["guardrails"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetSourceGapRepairReplayCheckpoint {
+  checkpointId: string;
+  repairPacketId: string;
+  ownerAgent: EvidenceActorDatasetSourceGapRepairPacket["ownerAgent"];
+  targetRoute: EvidenceActorDatasetSourceGapRepairPacket["targetRoute"];
+  queueItemIds: string[];
+  requiredReplayInputs: Array<
+    | "durable_capture_rows"
+    | "claim_ledger_rows"
+    | "source_family_rows"
+    | "freshness_timestamps"
+    | "restricted_metadata_review_state"
+    | "public_corroboration_rows"
+  >;
+  actorPromotionGate: "blocked_until_replayed_evidence_rows";
+  canPromoteAfterCurrentHandoff: false;
+  noLeak: true;
+}
+
 export interface EvidenceActorDatasetPromotionRow {
   rowId: string;
   rowType: "evidence_result" | "metadata_context" | "stale_suppression" | "coverage_gap";
@@ -2259,6 +2308,31 @@ function evidenceSourceGapRepairTargetRoute(
   return "/v1/quality/evaluate";
 }
 
+function evidenceSourceGapReplayInputs(
+  packet: EvidenceActorDatasetSourceGapRepairPacket
+): EvidenceActorDatasetSourceGapRepairReplayCheckpoint["requiredReplayInputs"] {
+  const base: EvidenceActorDatasetSourceGapRepairReplayCheckpoint["requiredReplayInputs"] = [
+    "durable_capture_rows",
+    "claim_ledger_rows",
+    "source_family_rows",
+    "freshness_timestamps"
+  ];
+  if (packet.ownerAgent === "agent_05" || packet.sourceFamilies.includes("restricted_metadata")) {
+    return evidenceUniqueStrings([
+      ...base,
+      "restricted_metadata_review_state",
+      "public_corroboration_rows"
+    ]) as EvidenceActorDatasetSourceGapRepairReplayCheckpoint["requiredReplayInputs"];
+  }
+  if (packet.ownerAgent === "agent_07") {
+    return evidenceUniqueStrings([
+      ...base,
+      "public_corroboration_rows"
+    ]) as EvidenceActorDatasetSourceGapRepairReplayCheckpoint["requiredReplayInputs"];
+  }
+  return base;
+}
+
 export function buildEvidenceActorDatasetSourceGapRepairHandoff(
   queue: EvidenceActorDatasetSourceGapConsumerQueue
 ): EvidenceActorDatasetSourceGapRepairHandoff {
@@ -2310,6 +2384,52 @@ export function buildEvidenceActorDatasetSourceGapRepairHandoff(
     },
     repairPackets,
     guardrails: { ...queue.guardrails },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+export function buildEvidenceActorDatasetSourceGapRepairReplayLedger(
+  handoff: EvidenceActorDatasetSourceGapRepairHandoff
+): EvidenceActorDatasetSourceGapRepairReplayLedger {
+  const replayCheckpoints = handoff.repairPackets.map((packet) => ({
+    checkpointId: stableId("evidence-actor-source-gap-repair-replay", `${handoff.handoffId}:${packet.packetId}`),
+    repairPacketId: packet.packetId,
+    ownerAgent: packet.ownerAgent,
+    targetRoute: packet.targetRoute,
+    queueItemIds: packet.queueItemIds,
+    requiredReplayInputs: evidenceSourceGapReplayInputs(packet),
+    actorPromotionGate: "blocked_until_replayed_evidence_rows" as const,
+    canPromoteAfterCurrentHandoff: false as const,
+    noLeak: true as const
+  }));
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_replay_ledger.v1",
+    generatedAt: handoff.generatedAt,
+    ledgerId: stableId("evidence-actor-source-gap-repair-replay", `${handoff.handoffId}:${handoff.latestProof.runId}`),
+    sourceHandoff: handoff.schemaVersion,
+    productSurface: handoff.productSurface,
+    actorBuild: handoff.actorBuild,
+    dryRun: true,
+    willPromoteActorRows: false,
+    willWritePublicAnswerCache: false,
+    willActivateSources: false,
+    latestProof: { ...handoff.latestProof },
+    counts: {
+      replayCheckpoints: replayCheckpoints.length,
+      queueItemsCovered: replayCheckpoints.reduce((sum, checkpoint) => sum + checkpoint.queueItemIds.length, 0),
+      pendingReplayItems: replayCheckpoints.reduce((sum, checkpoint) => sum + checkpoint.queueItemIds.length, 0),
+      promotionBlockedItems: replayCheckpoints.reduce((sum, checkpoint) => sum + checkpoint.queueItemIds.length, 0)
+    },
+    replayCheckpoints,
+    promotionPolicy: {
+      repairedRowsRequireDurableEvidenceReplay: true,
+      repairedRowsRequireClaimLedgerReplay: true,
+      repairedRowsRequireFreshnessWindowCheck: true,
+      restrictedRowsRemainContextOnlyUntilPublicCorroborated: true,
+      staleRowsRemainSuppressedUntilFreshReplay: true
+    },
+    guardrails: { ...handoff.guardrails },
     safeOutput: SAFE_OUTPUT
   };
 }

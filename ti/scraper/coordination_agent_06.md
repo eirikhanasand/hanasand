@@ -197,6 +197,13 @@ Progress update 2026-06-21 01:31 CEST:
 - It remains dry-run and fail-closed: no queue mutation, source activation, crawling, unsafe URL, credential, raw leak material, object key, actor interaction, or restricted embedding is serialized or requested.
 - Continue next with a real repository implementation behind explicit enablement or richer replay linkage from completed repair packets back into Actor row promotion.
 
+Progress update 2026-06-21 02:10 CEST:
+- Continued with richer replay linkage from source-gap repair packets back into Actor row promotion.
+- Added `ti.evidence_actor_dataset_source_gap_repair_replay_ledger.v1` on `/v1/evidence/cutover-report.readModelCutover.actorDatasetSourceGapRepairReplayLedger`.
+- The ledger turns Agent 01/04/05/07 repair handoff packets into replay checkpoints requiring durable capture rows, claim-ledger rows, source-family rows, freshness timestamps, and, for restricted metadata, review state plus public corroboration.
+- It promotes zero Actor rows and writes zero public-answer cache rows by itself; all source-gap/stale/restricted rows stay blocked until repaired evidence rows replay through the read model.
+- Continue next with an explicit production repository implementation behind enablement or completed-repair replay receipts once cross-agent repair packets produce completed rows.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

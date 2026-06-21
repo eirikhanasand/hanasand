@@ -60,6 +60,7 @@ import {
   buildEvidenceActorDatasetPromotionPreview,
   buildEvidenceActorDatasetSourceGapConsumerQueue,
   buildEvidenceActorDatasetSourceGapRepairHandoff,
+  buildEvidenceActorDatasetSourceGapRepairReplayLedger,
   buildEvidenceActorDatasetSourceGapSuppressionFeedback,
   buildEvidenceActorProductImpactReplay,
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
@@ -2501,6 +2502,61 @@ describe("evidence storage cutover", () => {
     expect(actorDatasetSourceGapRepairHandoffSerialized).not.toContain(restrictedRaw);
     expect(actorDatasetSourceGapRepairHandoffSerialized).not.toContain("tenant/source/private-key");
     expect(actorDatasetSourceGapRepairHandoffSerialized).not.toContain(".onion");
+
+    const actorDatasetSourceGapRepairReplayLedger = buildEvidenceActorDatasetSourceGapRepairReplayLedger(actorDatasetSourceGapRepairHandoff);
+    expect(actorDatasetSourceGapRepairReplayLedger).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_replay_ledger.v1",
+      sourceHandoff: "ti.evidence_actor_dataset_source_gap_repair_handoff.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      actorBuild: "0.6.4",
+      dryRun: true,
+      willPromoteActorRows: false,
+      willWritePublicAnswerCache: false,
+      willActivateSources: false,
+      latestProof: {
+        runId: "iMQGeezZ8bx7WtlhQ",
+        datasetId: "5PLmkE30luBA5Lbgc"
+      },
+      counts: {
+        replayCheckpoints: actorDatasetSourceGapRepairHandoff.counts.repairPackets,
+        queueItemsCovered: actorDatasetSourceGapRepairHandoff.counts.queueItemsCovered,
+        pendingReplayItems: actorDatasetSourceGapRepairHandoff.counts.queueItemsCovered,
+        promotionBlockedItems: actorDatasetSourceGapRepairHandoff.counts.queueItemsCovered
+      },
+      promotionPolicy: {
+        repairedRowsRequireDurableEvidenceReplay: true,
+        repairedRowsRequireClaimLedgerReplay: true,
+        repairedRowsRequireFreshnessWindowCheck: true,
+        restrictedRowsRemainContextOnlyUntilPublicCorroborated: true,
+        staleRowsRemainSuppressedUntilFreshReplay: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(actorDatasetSourceGapRepairReplayLedger.replayCheckpoints.every((checkpoint) =>
+      checkpoint.actorPromotionGate === "blocked_until_replayed_evidence_rows" &&
+      checkpoint.canPromoteAfterCurrentHandoff === false &&
+      checkpoint.requiredReplayInputs.includes("durable_capture_rows") &&
+      checkpoint.requiredReplayInputs.includes("claim_ledger_rows") &&
+      checkpoint.requiredReplayInputs.includes("source_family_rows") &&
+      checkpoint.requiredReplayInputs.includes("freshness_timestamps") &&
+      checkpoint.noLeak === true
+    )).toBe(true);
+    expect(actorDatasetSourceGapRepairReplayLedger.replayCheckpoints.some((checkpoint) =>
+      checkpoint.ownerAgent === "agent_05" &&
+      checkpoint.requiredReplayInputs.includes("restricted_metadata_review_state") &&
+      checkpoint.requiredReplayInputs.includes("public_corroboration_rows")
+    )).toBe(true);
+    const actorDatasetSourceGapRepairReplayLedgerSerialized = JSON.stringify(actorDatasetSourceGapRepairReplayLedger);
+    expect(actorDatasetSourceGapRepairReplayLedgerSerialized).not.toContain(restrictedRaw);
+    expect(actorDatasetSourceGapRepairReplayLedgerSerialized).not.toContain("tenant/source/private-key");
+    expect(actorDatasetSourceGapRepairReplayLedgerSerialized).not.toContain(".onion");
 
     const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
     expect(actorDatasetConsumerHandoff).toMatchObject({
