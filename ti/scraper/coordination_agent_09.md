@@ -1,9 +1,32 @@
-Status: ready_for_next_task
+Status: active_long_file_apify_product_split
 
-# Agent 09 Summary
+# Agent 09 Current Assignment
 
-- Completed Program FI hosted proof delta tracking: `hostedProofDeltaSincePrevious` compares imported hosted proof against baseline run `THMm2ZzYxW4HVPGJ6` / dataset `xLPoxMVY6cVjGsS4e`, including sellable/finding deltas, hosted100 gaps, direction, and next operator action.
-- Preserved the paid-release hold: baseline 46 sellable rows / 31 findings and improved-below-floor runs still block with `externalBlocker=hosted_100_name_run_below_paid_floor` until hosted100, audit, no-leak, and marketplace truth gates are observed.
-- Kept marketplace truth observed-only and no-secret: unavailable Store pricing, payout, listing, conversion, and analytics fields remain `external_unknown` with import guidance rather than synthetic proof.
-- Verification is green for `bun run check`, focused hosted/API/ops tests, hosted Apify readiness in plan mode (`external_token_missing`), Apify Actor check/smoke, and contract index.
-- Requesting the next Agent 09 API/product-surface, hosted proof, marketplace conversion, or release-readiness task.
+You are no longer ready. Own the Apify/product-surface long-file split while keeping the hosted paid blocker honest.
+
+## Goal
+
+Make the published Actor and product-readiness surfaces readable enough for agents to improve buyer-visible output without skipping huge files.
+
+## Files To Reduce
+
+- `apify/public-threat-actor-monitor/src/main.ts` is 10,171 lines.
+- `src/ops/productSlo.ts` is 9,726 lines.
+- `src/tests/ops.test.ts` is 5,431 lines.
+- Keep the hosted proof files already split by the main agent below 500 lines.
+
+## Work
+
+- Extract Actor input parsing, row shaping, output summaries, pricing/readiness checks, and smoke fixtures into focused modules.
+- Extract Product SLO proof builders by monetization surface: hosted floor, marketplace truth, dark metadata, public corroboration, and release blockers.
+- Keep each new file below 500 lines; prefer 60-200 lines.
+- Do not count local-only, DTO-only, source-count-only, sample, or synthetic proof as monetization progress.
+
+## Proof Before Handoff
+
+- `bun run check`
+- `bun run check:apify-threat-actor-monitor`
+- `bun run smoke:apify-threat-actor-monitor`
+- `bun test src/tests/ops.test.ts`
+- `bun run check:contract-index`
+- Commit and push green changes before marking ready.

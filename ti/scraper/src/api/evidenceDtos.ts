@@ -32,6 +32,7 @@ import {
   buildEvidenceActorDatasetSourceGapSuppressionFeedback,
   buildEvidenceActorProductImpactReplay,
   buildEvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger,
+  createEvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepository,
   createEvidenceActorDatasetConsumerAuditRepository,
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
@@ -48,6 +49,7 @@ import {
   evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows,
   evidenceSearchableSourceMetadataPromotionGateToPostgresRows,
   evidenceSearchableSourceMetadataPublicSupportQueueToPostgresRows,
+  evidenceSearchableSourceMetadataPublicSupportReplayReceiptLedgerToPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
   executeEvidencePromotionTransactionPlan,
@@ -72,6 +74,7 @@ import {
   type EvidenceSearchableSourceMetadataPromotionGate,
   type EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus,
   type EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger,
+  type EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepositoryStatus,
   type EvidenceSearchableSourceMetadataPublicSupportQueue,
   type EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus,
   type EvidenceSearchReadModelBackendWriteSet,
@@ -223,6 +226,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   searchableSourceMetadataPromotionGateRepository: EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus;
   searchableSourceMetadataPromotionConsumerReplay: EvidenceSearchableSourceMetadataPromotionConsumerReplay;
   searchableSourceMetadataPublicSupportReplayReceiptLedger: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger;
+  searchableSourceMetadataPublicSupportReplayReceiptRepository: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepositoryStatus;
   readiness: {
     embedded: EvidenceSearchReadModelReadiness;
     postgres: EvidenceSearchReadModelReadiness;
@@ -501,6 +505,13 @@ function buildEvidenceSearchReadModelCutoverDto(
     searchableSourceMetadataPromotionConsumerReplay,
     { generatedAt }
   );
+  const searchableSourceMetadataPublicSupportReplayReceiptRows =
+    evidenceSearchableSourceMetadataPublicSupportReplayReceiptLedgerToPostgresRows(searchableSourceMetadataPublicSupportReplayReceiptLedger);
+  const searchableSourceMetadataPublicSupportReplayReceiptRepository =
+    createEvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepository().persistReplayReceiptRows(
+      searchableSourceMetadataPublicSupportReplayReceiptRows,
+      { generatedAt }
+    );
   const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(writeSet, {
     query,
     normalizedQuery: handoff.normalizedQuery,
@@ -571,6 +582,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     searchableSourceMetadataPromotionGateRepository,
     searchableSourceMetadataPromotionConsumerReplay,
     searchableSourceMetadataPublicSupportReplayReceiptLedger,
+    searchableSourceMetadataPublicSupportReplayReceiptRepository,
     readiness: {
       embedded,
       postgres,

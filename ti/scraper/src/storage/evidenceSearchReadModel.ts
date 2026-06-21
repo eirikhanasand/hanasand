@@ -638,6 +638,88 @@ export interface EvidenceSearchableSourceMetadataPublicSupportReplayReceipt {
   noLeak: true;
 }
 
+export interface EvidenceSearchableSourceMetadataPublicSupportReplayReceiptPostgresRows {
+  public_support_replay_runs: EvidenceSearchableSourceMetadataPublicSupportReplayRunRow[];
+  public_support_replay_receipts: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRow[];
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportReplayRunRow {
+  ledger_id: string;
+  generated_at: string;
+  source_public_support_queue_schema: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger["sourcePublicSupportQueue"];
+  source_promotion_consumer_replay_schema: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger["sourcePromotionConsumerReplay"];
+  product_surface: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger["productSurface"];
+  dry_run: true;
+  will_mutate_queues: false;
+  will_promote_actor_rows: false;
+  counts: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger["counts"];
+  no_leak: true;
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRow {
+  receipt_id: string;
+  ledger_id: string;
+  candidate_id: string;
+  document_id: string;
+  source_catalog_row_id: string;
+  source_id?: string;
+  capture_id?: string;
+  claim_ledger_entry_id?: string;
+  source_family: EvidenceSearchableSourceMetadataPublicSupportReplayReceipt["sourceFamily"];
+  owner_agents: EvidenceSearchableSourceMetadataPublicSupportReplayReceipt["ownerAgents"];
+  required_public_support: EvidenceSearchableSourceMetadataPublicSupportReplayReceipt["requiredPublicSupport"];
+  completed_public_support: EvidenceSearchableSourceMetadataPublicSupportReplayReceipt["completedPublicSupport"];
+  missing_public_support: EvidenceSearchableSourceMetadataPublicSupportReplayReceipt["missingPublicSupport"];
+  replay_state: EvidenceSearchableSourceMetadataPublicSupportReplayReceipt["replayState"];
+  promotion_consumer_receipt_id?: string;
+  buyer_visible_fields: EvidenceSearchableSourceMetadataPublicSupportReplayReceipt["buyerVisibleFields"];
+  no_leak: true;
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepositoryStatus {
+  schemaVersion: "ti.evidence_searchable_source_metadata_public_support_replay_receipt_repository.v1";
+  generatedAt: string;
+  backend: "postgres_searchable_source_metadata_public_support_replay_receipts";
+  enabled: false;
+  disabledByDefault: true;
+  liveBackendConnection: false;
+  willPersistRows: false;
+  willMutateQueues: false;
+  willPromoteActorRows: false;
+  willWritePublicAnswerCache: false;
+  failClosedWithoutExplicitEnable: true;
+  requiredFeatureFlags: ["TI_SEARCHABLE_SOURCE_METADATA_PUBLIC_SUPPORT_REPLAY_RECEIPT_REPOSITORY_ENABLED"];
+  requiredTables: ["evidence_searchable_source_public_support_replay_runs", "evidence_searchable_source_public_support_replay_receipts"];
+  acceptedRowCounts: {
+    replayRuns: number;
+    receiptRows: number;
+    completedReceipts: number;
+    pendingReceipts: number;
+    blockedActorRows: number;
+  };
+  persistedRowCounts: {
+    replayRuns: 0;
+    receiptRows: 0;
+  };
+  heldRowCounts: {
+    replayRuns: number;
+    receiptRows: number;
+  };
+  blockedReasons: string[];
+  replayReady: boolean;
+  canReplayWithoutRawEvidence: true;
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepository {
+  readonly backend: "postgres_searchable_source_metadata_public_support_replay_receipts";
+  readonly enabled: false;
+  persistReplayReceiptRows(
+    rows: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptPostgresRows,
+    input?: { generatedAt?: string }
+  ): EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepositoryStatus;
+}
+
 export interface EvidenceSearchReadModelPromotionReplay {
   schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
   generatedAt: string;
@@ -2498,6 +2580,136 @@ export function buildEvidenceSearchableSourceMetadataPublicSupportReplayReceiptL
     },
     safeOutput: SAFE_OUTPUT
   };
+}
+
+export function evidenceSearchableSourceMetadataPublicSupportReplayReceiptLedgerToPostgresRows(
+  ledger: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger
+): EvidenceSearchableSourceMetadataPublicSupportReplayReceiptPostgresRows {
+  const counts: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptLedger["counts"] = {
+    expectedReceipts: ledger.receipts.length,
+    completedReceipts: ledger.receipts.filter((receipt) => receipt.replayState === "ready_for_promotion_gate_replay").length,
+    pendingReceipts: ledger.receipts.filter((receipt) => receipt.replayState === "awaiting_public_support_receipts").length,
+    blockedActorRows: ledger.receipts.filter((receipt) =>
+      receipt.replayState === "awaiting_public_support_receipts" &&
+      receipt.promotionConsumerReceiptId !== undefined
+    ).length
+  };
+  return {
+    public_support_replay_runs: [{
+      ledger_id: ledger.ledgerId,
+      generated_at: ledger.generatedAt,
+      source_public_support_queue_schema: ledger.sourcePublicSupportQueue,
+      source_promotion_consumer_replay_schema: ledger.sourcePromotionConsumerReplay,
+      product_surface: ledger.productSurface,
+      dry_run: true,
+      will_mutate_queues: false,
+      will_promote_actor_rows: false,
+      counts,
+      no_leak: true
+    }],
+    public_support_replay_receipts: ledger.receipts.map((receipt) => ({
+      receipt_id: receipt.receiptId,
+      ledger_id: ledger.ledgerId,
+      candidate_id: receipt.candidateId,
+      document_id: receipt.documentId,
+      source_catalog_row_id: receipt.sourceCatalogRowId,
+      source_id: receipt.sourceId,
+      capture_id: receipt.captureId,
+      claim_ledger_entry_id: receipt.claimLedgerEntryId,
+      source_family: receipt.sourceFamily,
+      owner_agents: [...receipt.ownerAgents],
+      required_public_support: [...receipt.requiredPublicSupport],
+      completed_public_support: [...receipt.completedPublicSupport],
+      missing_public_support: [...receipt.missingPublicSupport],
+      replay_state: receipt.replayState,
+      promotion_consumer_receipt_id: receipt.promotionConsumerReceiptId,
+      buyer_visible_fields: [...receipt.buyerVisibleFields],
+      no_leak: true
+    }))
+  };
+}
+
+export function buildDisabledEvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepositoryStatus(
+  rows: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptPostgresRows,
+  input: { generatedAt?: string } = {}
+): EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepositoryStatus {
+  const run = rows.public_support_replay_runs[0];
+  const generatedAt = input.generatedAt ?? run?.generated_at ?? nowIso();
+  const replayBlockers = [
+    !run ? "missing_public_support_replay_run" : null,
+    run && rows.public_support_replay_receipts.length !== run.counts.expectedReceipts ? "public_support_replay_receipt_count_mismatch" : null,
+    run && rows.public_support_replay_receipts.filter((row) => row.replay_state === "ready_for_promotion_gate_replay").length !== run.counts.completedReceipts
+      ? "public_support_replay_completed_count_mismatch"
+      : null,
+    run && rows.public_support_replay_receipts.filter((row) => row.replay_state === "awaiting_public_support_receipts").length !== run.counts.pendingReceipts
+      ? "public_support_replay_pending_count_mismatch"
+      : null,
+    rows.public_support_replay_runs.some((row) => row.no_leak !== true) ? "public_support_replay_run_no_leak_failed" : null,
+    rows.public_support_replay_receipts.some((row) => row.no_leak !== true) ? "public_support_replay_receipt_no_leak_failed" : null,
+    rows.public_support_replay_runs.some((row) => row.will_mutate_queues || row.will_promote_actor_rows) ? "public_support_replay_mutation_flag_failed" : null,
+    rows.public_support_replay_receipts.some((row) =>
+      row.replay_state === "ready_for_promotion_gate_replay" &&
+      row.missing_public_support.length > 0
+    ) ? "public_support_replay_ready_row_missing_support_failed" : null
+  ].filter((blocker): blocker is string => Boolean(blocker));
+
+  return {
+    schemaVersion: "ti.evidence_searchable_source_metadata_public_support_replay_receipt_repository.v1",
+    generatedAt,
+    backend: "postgres_searchable_source_metadata_public_support_replay_receipts",
+    enabled: false,
+    disabledByDefault: true,
+    liveBackendConnection: false,
+    willPersistRows: false,
+    willMutateQueues: false,
+    willPromoteActorRows: false,
+    willWritePublicAnswerCache: false,
+    failClosedWithoutExplicitEnable: true,
+    requiredFeatureFlags: ["TI_SEARCHABLE_SOURCE_METADATA_PUBLIC_SUPPORT_REPLAY_RECEIPT_REPOSITORY_ENABLED"],
+    requiredTables: ["evidence_searchable_source_public_support_replay_runs", "evidence_searchable_source_public_support_replay_receipts"],
+    acceptedRowCounts: {
+      replayRuns: rows.public_support_replay_runs.length,
+      receiptRows: rows.public_support_replay_receipts.length,
+      completedReceipts: rows.public_support_replay_receipts.filter((row) => row.replay_state === "ready_for_promotion_gate_replay").length,
+      pendingReceipts: rows.public_support_replay_receipts.filter((row) => row.replay_state === "awaiting_public_support_receipts").length,
+      blockedActorRows: rows.public_support_replay_receipts.filter((row) =>
+        row.replay_state === "awaiting_public_support_receipts" &&
+        row.promotion_consumer_receipt_id !== undefined
+      ).length
+    },
+    persistedRowCounts: {
+      replayRuns: 0,
+      receiptRows: 0
+    },
+    heldRowCounts: {
+      replayRuns: rows.public_support_replay_runs.length,
+      receiptRows: rows.public_support_replay_receipts.length
+    },
+    blockedReasons: [
+      "searchable_source_metadata_public_support_replay_receipt_repository_disabled",
+      "postgres_searchable_source_metadata_public_support_replay_receipts_not_configured",
+      ...replayBlockers
+    ],
+    replayReady: replayBlockers.length === 0,
+    canReplayWithoutRawEvidence: true,
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+class DisabledEvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepository implements EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepository {
+  readonly backend = "postgres_searchable_source_metadata_public_support_replay_receipts" as const;
+  readonly enabled = false as const;
+
+  persistReplayReceiptRows(
+    rows: EvidenceSearchableSourceMetadataPublicSupportReplayReceiptPostgresRows,
+    input: { generatedAt?: string } = {}
+  ): EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepositoryStatus {
+    return buildDisabledEvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepositoryStatus(rows, input);
+  }
+}
+
+export function createEvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepository(): EvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepository {
+  return new DisabledEvidenceSearchableSourceMetadataPublicSupportReplayReceiptRepository();
 }
 
 export function buildEvidenceSearchReadModelPromotionReplay(
