@@ -1564,6 +1564,16 @@ if (
     && Number((row.programDcPriority as Record<string, unknown>).sourceFamilyDiversityLift) > 0
     && typeof (row.programDcPriority as Record<string, unknown>).corroborationStrength === "string"
     && typeof (row.programDcPriority as Record<string, unknown>).freshnessRisk === "string"
+    && typeof row.programDdPriority === "object"
+    && Number((row.programDdPriority as Record<string, unknown>).gapContribution) > 0
+    && (row.programDdPriority as Record<string, unknown>).admissionBlocker === "none"
+    && Number((row.programDdPriority as Record<string, unknown>).sourceFamilyDiversityLift) > 0
+    && typeof (row.programDdPriority as Record<string, unknown>).corroborationStrength === "string"
+    && typeof (row.programDdPriority as Record<string, unknown>).contradictionRisk === "string"
+    && typeof (row.programDdPriority as Record<string, unknown>).freshnessRisk === "string"
+    && typeof (row.programDdPriority as Record<string, unknown>).buyerVisibleValue === "string"
+    && (row.programDdPriority as Record<string, unknown>).noLeakProof === "hash_only_public_or_metadata_reference"
+    && typeof (row.programDdPriority as Record<string, unknown>).nextPivot === "string"
     && Number(row.expectedPaidRowLiftAfterParserAdmission) > 0
     && row.admissionState === "ready_for_parser"
     && row.countsTowardFloorNow === false
@@ -1580,8 +1590,9 @@ if (
 }
 const graphPublicProgramDbRejectionBuckets = graphPublicUnlockQueue.programDbRejectionBuckets as Record<string, unknown> | undefined;
 const graphPublicProgramDcRejectionBuckets = graphPublicUnlockQueue.programDcRejectionBuckets as Record<string, unknown> | undefined;
+const graphPublicProgramDdRejectionBuckets = graphPublicUnlockQueue.programDdRejectionBuckets as Record<string, unknown> | undefined;
 if (
-  graphPublicParserHandoff.filter((row) => (row.programDcPriority as Record<string, unknown>).findingLikely === true).length < 160
+  graphPublicParserHandoff.filter((row) => (row.programDdPriority as Record<string, unknown>).findingLikely === true).length < 350
   || !graphPublicProgramDbRejectionBuckets
   || Number(graphPublicProgramDbRejectionBuckets.stale) !== 4
   || Number(graphPublicProgramDbRejectionBuckets.alias_conflict) !== 4
@@ -1604,8 +1615,21 @@ if (
   || Number(graphPublicProgramDcRejectionBuckets.weak_source_family_diversity) !== 0
   || Number(graphPublicProgramDcRejectionBuckets.rowsCountTowardFloorNow) !== 0
   || graphPublicProgramDcRejectionBuckets.noLeak !== true
+  || !graphPublicProgramDdRejectionBuckets
+  || Number(graphPublicProgramDdRejectionBuckets.stale) !== 4
+  || Number(graphPublicProgramDdRejectionBuckets.alias_conflict) !== 4
+  || Number(graphPublicProgramDdRejectionBuckets.contradiction) !== 2
+  || Number(graphPublicProgramDdRejectionBuckets.duplicate) !== 0
+  || Number(graphPublicProgramDdRejectionBuckets.generic_source_page) !== 0
+  || Number(graphPublicProgramDdRejectionBuckets.restricted_only) !== 0
+  || Number(graphPublicProgramDdRejectionBuckets.not_enough_source_support) !== 6
+  || Number(graphPublicProgramDdRejectionBuckets.missing_buyer_action) !== 0
+  || Number(graphPublicProgramDdRejectionBuckets.weak_source_family_diversity) !== 0
+  || Number(graphPublicProgramDdRejectionBuckets.graph_only_speculation) !== 0
+  || Number(graphPublicProgramDdRejectionBuckets.rowsCountTowardFloorNow) !== 0
+  || graphPublicProgramDdRejectionBuckets.noLeak !== true
 ) {
-  throw new Error("Program DC graph public handoff must expose 300 rows, 160-plus finding-likely rows, and explicit rejection buckets");
+  throw new Error("Program DD graph public handoff must expose 500 rows, 350-plus finding-likely rows, and explicit rejection buckets");
 }
 const graphPublicPivots = graphPublicCorroborationPivotPacket.candidates as Array<Record<string, unknown>>;
 if (!graphPublicPivots.every((row) => {

@@ -13,6 +13,13 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-21 08:55 CEST
+
+- Aligned `scheduler.dailyActorRunPlan.paidRowCadenceInputs` with the Program DD monetization wave: current500 is passed, current750 is the active sellable-row scheduler gate, and current1000 remains the useful-row proof gate.
+- The cadence type now records a 750 sellable-row target, 500 current sellable rows, 250 current sellable-row gap, 607 useful rows, and 393 useful-row gap.
+- Verified the shared cleanup after Program DD product-gate changes: `bun run check`, `bun test src/tests/schedulerProduction.test.ts`, `bun test src/tests/ops.test.ts`, route inventory, contract index, API regression, and full `bun test` are green.
+- Next: continue Agent 02 work where it directly improves daily 100-name Actor scheduling, source/dark-metadata ladder freshness, hosted proof handoff, or cost/useful-row measurement.
+
 ## Progress - 2026-06-21 08:34 CEST
 
 - Advanced `scheduler.dailyActorRunPlan.paidRowCadenceInputs` from the now-stale current500 gap to the active current1000 useful-row proof gate.
