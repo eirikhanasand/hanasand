@@ -1,7 +1,26 @@
-import { buildHostedApifyPaidReadinessProof, type HostedApifyProofObservation } from "../src/contracts/hostedApifyPaidReadiness.ts";
+import {
+  buildHostedApifyPaidReadinessProof,
+  type HostedApifyObservedProofImport,
+  type HostedApifyProofObservation
+} from "../src/contracts/hostedApifyPaidReadiness.ts";
 
 type HostedProofMode = "plan" | "run" | "verify";
 type JsonRecord = Record<string, unknown>;
+type ObservedProofSource = "none" | "env" | "file";
+
+interface LoadedObservedProofImport {
+  source: ObservedProofSource;
+  proof: HostedApifyObservedProofImport;
+  validationErrors: string[];
+}
+
+interface HostedObservationResult {
+  status: "hosted_proof_missing" | "verified_hold" | "paid_floor_hosted_proof";
+  observation: HostedApifyProofObservation;
+  run?: JsonRecord;
+  output?: JsonRecord;
+  itemSample: JsonRecord[];
+}
 
 const token = process.env.APIFY_TOKEN ?? "";
 const baseProof = buildHostedApifyPaidReadinessProof({ hasToken: Boolean(token) });
@@ -11,13 +30,19 @@ const datasetId = process.env.TI_APIFY_HOSTED_DATASET_ID ?? "";
 const mode = parseMode(process.env.TI_APIFY_HOSTED_PROOF_MODE);
 
 try {
-  const hostedObservation = token ? await loadHostedObservation({ token, actorId, runId, datasetId, mode }) : undefined;
+  const observedProofImport = await loadObservedProofImport();
+  const hostedObservation = observedProofImport
+    ? hostedObservationFromImportedProof(observedProofImport.proof)
+    : token
+      ? await loadHostedObservation({ token, actorId, runId, datasetId, mode })
+      : undefined;
   const proof = buildHostedApifyPaidReadinessProof({
     hasToken: Boolean(token),
     hostedImport: hostedObservation?.observation,
+    observedProof: observedProofImport?.proof,
     status: hostedObservation?.status
   });
-  const payload = buildPayload(proof, actorId, runId, datasetId, mode, hostedObservation);
+  const payload = buildPayload(proof, actorId, runId, datasetId, mode, hostedObservation, undefined, observedProofImport);
 
   assertPaidRowIntegrityGate(payload.paidRowIntegrityGate);
   console.log(JSON.stringify(payload, null, 2));
@@ -31,17 +56,19 @@ try {
     `status=${payload.status}`,
     `tokenState=${payload.tokenState}`,
     `mode=${mode}`,
+    `observedProofImport=${payload.observedProofImport.source}`,
     `externalBlocker=${payload.hostedProofImportPath.externalBlocker ?? "external_marketplace_payout_pricing_not_observed"}`,
     "paidRowIntegrityGate=hold_until_hosted_second_batch_audit_observed",
     "This is expected when APIFY_TOKEN, hosted 100-name run metrics, payout, pricing, or Store analytics are unavailable; do not promote paid traffic from local proof alone."
   ].join("\n"));
   process.exit(0);
 } catch (error) {
+  const message = errorMessage(error);
   const proof = buildHostedApifyPaidReadinessProof({
     hasToken: Boolean(token),
     status: token ? "hosted_proof_missing" : "external_token_missing"
   });
-  const payload = buildPayload(proof, actorId, runId, datasetId, mode, undefined, errorMessage(error));
+  const payload = buildPayload(proof, actorId, runId, datasetId, mode, undefined, message);
   assertPaidRowIntegrityGate(payload.paidRowIntegrityGate);
   console.log(JSON.stringify(payload, null, 2));
   console.warn([
@@ -51,7 +78,7 @@ try {
     `apiError=${payload.apiError ?? "none"}`,
     "Use the commandExamples in hostedProofImportPath and keep paid traffic blocked until observed hosted metrics are present."
   ].join("\n"));
-  process.exit(0);
+  process.exit(message.startsWith("observed_proof_import_rejected:") ? 1 : 0);
 }
 
 function parseMode(value: string | undefined): HostedProofMode {
@@ -65,13 +92,7 @@ async function loadHostedObservation(input: {
   runId: string;
   datasetId: string;
   mode: HostedProofMode;
-}): Promise<{
-  status: "hosted_proof_missing" | "verified_hold";
-  observation: HostedApifyProofObservation;
-  run?: JsonRecord;
-  output?: JsonRecord;
-  itemSample: JsonRecord[];
-}> {
+}): Promise<HostedObservationResult> {
   if (input.mode === "plan") {
     return {
       status: "hosted_proof_missing",
@@ -107,6 +128,35 @@ async function loadHostedObservation(input: {
     run,
     output,
     itemSample: items.slice(0, 3)
+  };
+}
+
+async function loadObservedProofImport(): Promise<LoadedObservedProofImport | undefined> {
+  const rawFromEnv = process.env.TI_APIFY_OBSERVED_PROOF_JSON;
+  const path = process.env.TI_APIFY_OBSERVED_PROOF_PATH;
+  if (rawFromEnv && path) {
+    throw new Error("observed_proof_import_rejected: provide only one of TI_APIFY_OBSERVED_PROOF_JSON or TI_APIFY_OBSERVED_PROOF_PATH");
+  }
+  const source: ObservedProofSource = rawFromEnv ? "env" : path ? "file" : "none";
+  if (source === "none") return undefined;
+  const raw = rawFromEnv ?? await Bun.file(path as string).text();
+  const parsed: unknown = JSON.parse(raw);
+  const validationErrors = validateObservedProofImport(parsed);
+  if (validationErrors.length > 0) {
+    throw new Error(`observed_proof_import_rejected: ${validationErrors.join(", ")}`);
+  }
+  return {
+    source,
+    proof: parsed as HostedApifyObservedProofImport,
+    validationErrors
+  };
+}
+
+function hostedObservationFromImportedProof(proof: HostedApifyObservedProofImport): HostedObservationResult {
+  return {
+    status: proof.sampleOnly === true ? "hosted_proof_missing" : "paid_floor_hosted_proof",
+    observation: proof,
+    itemSample: []
   };
 }
 
@@ -190,8 +240,9 @@ function buildPayload(
   runId: string,
   datasetId: string,
   mode: HostedProofMode,
-  hostedObservation?: Awaited<ReturnType<typeof loadHostedObservation>>,
-  apiError?: string
+  hostedObservation?: HostedObservationResult,
+  apiError?: string,
+  observedProofImport?: LoadedObservedProofImport
 ) {
   return {
     ...proof,
@@ -206,11 +257,20 @@ function buildPayload(
       itemSample: hostedObservation?.itemSample ?? [],
       note: observedRunNote(proof.status, runId, datasetId, mode)
     },
+    observedProofImport: {
+      source: observedProofImport?.source ?? "none",
+      sampleOnly: observedProofImport?.proof.sampleOnly === true,
+      validationErrors: observedProofImport?.validationErrors ?? [],
+      observedAt: observedProofImport?.proof.observedAt ?? null
+    },
     apiError: apiError ?? null
   };
 }
 
 function observedRunNote(status: string, runId: string, datasetId: string, mode: HostedProofMode): string {
+  if (status === "paid_floor_hosted_proof") {
+    return "Hosted 100-name run metrics and marketplace state were imported from observed proof JSON; release audit still evaluates promotion gates separately.";
+  }
   if (status === "verified_hold") {
     return "Hosted 100-name run metrics were observed, but paid promotion still waits for external marketplace, payout, and pricing proof.";
   }
@@ -259,6 +319,80 @@ function isOkForPaidPromotion(payload: ReturnType<typeof buildPayload>): boolean
     && payload.paidProofAcceptance.falsePositiveInflationFailures === 0
     && payload.hostedProofImportPath.observedFields.noLeakFailures === 0
     && payload.hostedProofImportPath.observedFields.secondBatchAuditObserved === true;
+}
+
+function validateObservedProofImport(value: unknown): string[] {
+  const errors: string[] = [];
+  if (!isRecord(value)) return ["proof must be a JSON object"];
+  requireEqual(value, "schemaVersion", "ti.hosted_apify_observed_proof_import.v1", errors);
+  requireString(value, "runId", errors);
+  requireString(value, "datasetId", errors);
+  requireEqual(value, "proofPreset", "100_name_paid_preset", errors);
+  requireMinimumNumber(value, "defaultQueryCount", 100, errors);
+  requireEqual(value, "maxRowsPerQuery", 25, errors);
+  requireEqual(value, "includeCoverageGaps", false, errors);
+  requireEqual(value, "includeHeldRows", false, errors);
+  requireEqual(value, "includeDatasets", false, errors);
+  requireMinimumNumber(value, "datasetItemCount", 100, errors);
+  requireMinimumNumber(value, "sellableRows", 100, errors);
+  requireMinimumNumber(value, "sellableFindingCount", 52, errors);
+  requireMinimumNumber(value, "caveatedRows", 0, errors);
+  requireMinimumNumber(value, "averageBuyerValueScore", 0, errors);
+  requireMinimumNumber(value, "runtimeSeconds", 0, errors);
+  requireMinimumNumber(value, "memoryMbytes", 0, errors);
+  requireMinimumNumber(value, "usageUsd", 0, errors);
+  requireMinimumNumber(value, "costUsd", 0, errors);
+  requireEqual(value, "noLeakFailures", 0, errors);
+  requireEqual(value, "secondBatchAuditObserved", true, errors);
+  requireEqual(value, "falsePositiveInflationFailures", 0, errors);
+  requireMinimumNumber(value, "storeViews", 0, errors);
+  requireMinimumNumber(value, "runs", 0, errors);
+  requireMinimumNumber(value, "uniqueUsers", 0, errors);
+  requireMinimumNumber(value, "paidUsers", 0, errors);
+  requireMinimumNumber(value, "refunds", 0, errors);
+  requireString(value, "pricingModel", errors);
+  requireEqual(value, "payoutEnabled", true, errors);
+  requireOneOf(value, "publicListingStatus", ["draft_copy_ready_not_promoted", "public_listed_not_promoted", "public_promoted"], errors);
+  requireDateString(value, "observedAt", errors);
+
+  const sellableRows = numberValue(value.sellableRows);
+  const sellableFindings = numberValue(value.sellableFindingCount);
+  const datasetRows = numberValue(value.datasetItemCount);
+  const caveatedRows = numberValue(value.caveatedRows);
+  const runs = numberValue(value.runs);
+  const uniqueUsers = numberValue(value.uniqueUsers);
+  const paidUsers = numberValue(value.paidUsers);
+  const refunds = numberValue(value.refunds);
+  if (sellableRows !== null && datasetRows !== null && sellableRows > datasetRows) errors.push("sellableRows cannot exceed datasetItemCount");
+  if (sellableFindings !== null && sellableRows !== null && sellableFindings > sellableRows) errors.push("sellableFindingCount cannot exceed sellableRows");
+  if (caveatedRows !== null && sellableRows !== null && datasetRows !== null && sellableRows + caveatedRows > datasetRows) errors.push("sellableRows plus caveatedRows cannot exceed datasetItemCount");
+  if (paidUsers !== null && uniqueUsers !== null && paidUsers > uniqueUsers) errors.push("paidUsers cannot exceed uniqueUsers");
+  if (paidUsers !== null && runs !== null && paidUsers > runs) errors.push("paidUsers cannot exceed runs");
+  if (refunds !== null && paidUsers !== null && refunds > paidUsers) errors.push("refunds cannot exceed paidUsers");
+  if (value.sampleOnly !== undefined && typeof value.sampleOnly !== "boolean") errors.push("sampleOnly must be a boolean when supplied");
+  return errors;
+}
+
+function requireString(record: JsonRecord, field: string, errors: string[]): void {
+  if (typeof record[field] !== "string" || String(record[field]).trim().length === 0) errors.push(`${field} must be a non-empty string`);
+}
+
+function requireDateString(record: JsonRecord, field: string, errors: string[]): void {
+  requireString(record, field, errors);
+  if (typeof record[field] === "string" && !Number.isFinite(Date.parse(record[field] as string))) errors.push(`${field} must be an ISO timestamp`);
+}
+
+function requireMinimumNumber(record: JsonRecord, field: string, minimum: number, errors: string[]): void {
+  const value = numberValue(record[field]);
+  if (value === null || value < minimum) errors.push(`${field} must be a number >= ${minimum}`);
+}
+
+function requireEqual(record: JsonRecord, field: string, expected: unknown, errors: string[]): void {
+  if (record[field] !== expected) errors.push(`${field} must equal ${JSON.stringify(expected)}`);
+}
+
+function requireOneOf(record: JsonRecord, field: string, allowed: string[], errors: string[]): void {
+  if (typeof record[field] !== "string" || !allowed.includes(record[field] as string)) errors.push(`${field} must be one of ${allowed.join("|")}`);
 }
 
 function countFalsePositiveInflationFailures(secondBatchAudit: JsonRecord): number {

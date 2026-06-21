@@ -639,7 +639,7 @@ describe("ops controls", () => {
       },
       hostedProofImportPath: {
         schemaVersion: "ti.hosted_apify_proof_import_path.v1",
-        mode: "run_or_verify_with_apify_token",
+        mode: "json_import_or_run_or_verify_with_apify_token",
         observedOnly: true,
         noSyntheticFallback: true,
         oldProofTreatment: "historical_shape_safety_only",
@@ -1040,8 +1040,9 @@ describe("ops controls", () => {
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) &&
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk)
     )).toBe(true);
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 40, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, stale: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff).toHaveLength(40);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 100, ready_for_current_admission: 100, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff).toHaveLength(100);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_current_admission).toHaveLength(100);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.every((row) =>
       row.actor.length > 0 &&
       row.victimOrTarget.length > 0 &&
@@ -1058,6 +1059,8 @@ describe("ops controls", () => {
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_parser_admission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(25);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_parser_admission.every((row) => row.countsTowardFloorNow === false && row.proofUrlHash.length > 0 && row.noLeak)).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.needs_public_source.some((row) => row.sourceClass === "restricted_metadata_public_support")).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.contradicted_or_alias_hold).toHaveLength(6);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.stale_recheck).toHaveLength(4);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.graphOnlyCountsTowardPaidFloorNow).toBe(false);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.noLeak).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.integrationHandoffs).toEqual(expect.arrayContaining([

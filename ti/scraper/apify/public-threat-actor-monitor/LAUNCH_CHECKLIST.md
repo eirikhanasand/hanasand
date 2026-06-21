@@ -97,6 +97,8 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 - `paidReleaseTruthBoard.hostedPaidReadinessProof` and `apifyStoreReadiness.storeReadiness.hostedPaidReadinessProof` separate local proof, hosted shape proof, payout readiness, pricing readiness, public listing status, and Store conversion telemetry. Run `bun run check:hosted-apify-paid-readiness`; if API tokens are unavailable, status must remain `external_token_missing` with manual verification steps instead of fake metrics.
 - Hosted proof run command: `APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness`.
 - Hosted proof verify/import command: `APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness`.
+- Observed proof JSON import command: `TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness`.
+- Redacted sample import check: `TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness`; this file is `sampleOnly=true` and must not be treated as production proof.
 - Dataset item event: `apify-default-dataset-item` at $3.00 / 1,000 rows.
 - Actor start event: `apify-actor-start` at $0.00005.
 - Platform usage is included for customers under the configured Apify model, and Apify margin is 20%, so row pricing must cover normal runtime cost and margin.

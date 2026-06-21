@@ -1721,10 +1721,13 @@ export interface LiveProductSloDashboard {
       counts: {
         admitted_by_parser: 0;
         ready_for_parser: number;
+        ready_for_current_admission: number;
         ready_for_parser_admission: number;
         needs_public_source: number;
         contradicted: number;
+        contradicted_or_alias_hold: number;
         stale: number;
+        stale_recheck: number;
         unsafe_or_restricted: number;
         rowsCountTowardFloorNow: 0;
         rowsReadyAfterParserAdmission: number;
@@ -1747,6 +1750,7 @@ export interface LiveProductSloDashboard {
         countsTowardFloorNow: false;
         noLeak: true;
       }>;
+      ready_for_current_admission: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"];
       ready_for_parser_admission: Array<{
         candidateId: string;
         actor: string;
@@ -1786,6 +1790,7 @@ export interface LiveProductSloDashboard {
         countsTowardFloorNow: false;
         noLeak: true;
       }>;
+      contradicted_or_alias_hold: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["contradicted"];
       stale: Array<{
         candidateId: string;
         actor: string;
@@ -1799,6 +1804,7 @@ export interface LiveProductSloDashboard {
         countsTowardFloorNow: false;
         noLeak: true;
       }>;
+      stale_recheck: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["stale"];
       unsafe_or_restricted: Array<{
         candidateId: string;
         actor: string;
@@ -6327,19 +6333,25 @@ function graphPublicPaidRowUnlockQueue(
     counts: {
       admitted_by_parser: 0,
       ready_for_parser: parserAdmissionHandoff.length,
+      ready_for_current_admission: parserAdmissionHandoff.length,
       ready_for_parser_admission: readyForParserAdmission.length,
       needs_public_source: needsPublicSource.length,
       contradicted: contradicted.length,
+      contradicted_or_alias_hold: contradicted.length,
       stale: stale.length,
+      stale_recheck: stale.length,
       unsafe_or_restricted: unsafeOrRestricted.length,
       rowsCountTowardFloorNow: 0,
       rowsReadyAfterParserAdmission: readyForParserAdmission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)
     },
     parserAdmissionHandoff,
+    ready_for_current_admission: parserAdmissionHandoff,
     ready_for_parser_admission: readyForParserAdmission,
     needs_public_source: needsPublicSource,
     contradicted,
+    contradicted_or_alias_hold: contradicted,
     stale,
+    stale_recheck: stale,
     unsafe_or_restricted: unsafeOrRestricted,
     graphOnlyCountsTowardPaidFloorNow: false,
     noLeak: true
@@ -6406,6 +6418,40 @@ function graphPublicParserAdmissionHandoff(
     { actor: "APT29", victimOrTarget: "cloud tenant access tradecraft", sector: "technology", country: "United States", ttpOrTool: "Cloud Accounts / T1078.004", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 1 },
     { actor: "APT42", victimOrTarget: "phishing infrastructure campaign", sector: "policy", country: "United Kingdom", ttpOrTool: "Credential Harvesting", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 1 }
   ];
+  const programDaActors = [
+    { actor: "APT29", sector: "government", country: "United States", ttpOrTool: "Valid Accounts / T1078" },
+    { actor: "APT28", sector: "government", country: "Ukraine", ttpOrTool: "Phishing / T1566" },
+    { actor: "APT42", sector: "civil society", country: "United States", ttpOrTool: "Spearphishing Link / T1566.002" },
+    { actor: "Volt Typhoon", sector: "critical infrastructure", country: "United States", ttpOrTool: "Living off the Land" },
+    { actor: "Lazarus Group", sector: "cryptocurrency", country: "global", ttpOrTool: "Social Engineering" },
+    { actor: "Sandworm", sector: "energy", country: "Ukraine", ttpOrTool: "Industrial Control System Impact" },
+    { actor: "Akira", sector: "healthcare", country: "Canada", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "LockBit", sector: "manufacturing", country: "Europe", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "RansomHub", sector: "services", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Qilin", sector: "professional services", country: "United Kingdom", ttpOrTool: "Exfiltration" }
+  ];
+  const programDaThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+  }> = [
+    { victimSuffix: "government advisory public proof", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { victimSuffix: "vendor report campaign row", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { victimSuffix: "CERT advisory TTP row", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { victimSuffix: "public channel corroboration row", sourceFamily: "public_channel", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { victimSuffix: "victim notice sector row", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { victimSuffix: "current public reporting row", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 1 }
+  ];
+  const programDaSupplementalActors = programDaActors.flatMap((actorRow, actorIndex) => programDaThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 5 === 0 ? 1 : 0)
+  })));
+  supplementalActors.push(...programDaSupplementalActors);
   const supplementalRows = supplementalActors.map((row, index) => graphPublicParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -6421,7 +6467,7 @@ function graphPublicParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...supplementalRows].slice(0, 40);
+  return [...fromReadyRows, ...supplementalRows].slice(0, 100);
 }
 
 function graphPublicParserAdmissionHandoffRow(input: {

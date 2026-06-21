@@ -1370,11 +1370,14 @@ const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, 
 if (
   !graphPublicUnlockCounts
   || Number(graphPublicUnlockCounts.admitted_by_parser) !== 0
-  || Number(graphPublicUnlockCounts.ready_for_parser) !== 40
+  || Number(graphPublicUnlockCounts.ready_for_parser) !== 100
+  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 100
   || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
   || Number(graphPublicUnlockCounts.needs_public_source) !== 6
   || Number(graphPublicUnlockCounts.contradicted) !== 6
+  || Number(graphPublicUnlockCounts.contradicted_or_alias_hold) !== 6
   || Number(graphPublicUnlockCounts.stale) !== 4
+  || Number(graphPublicUnlockCounts.stale_recheck) !== 4
   || Number(graphPublicUnlockCounts.unsafe_or_restricted) !== 0
   || Number(graphPublicUnlockCounts.rowsCountTowardFloorNow) !== 0
   || Number(graphPublicUnlockCounts.rowsReadyAfterParserAdmission) !== 25
@@ -1384,11 +1387,14 @@ if (
   throw new Error("Program CY paid row unlock queue must separate parser-ready, source-needed, contradicted, stale, and restricted buckets");
 }
 const graphPublicReadyUnlocks = graphPublicUnlockQueue.ready_for_parser_admission as Array<Record<string, unknown>> | undefined;
+const graphPublicCurrentAdmission = graphPublicUnlockQueue.ready_for_current_admission as Array<Record<string, unknown>> | undefined;
 const graphPublicNeedsPublicSource = graphPublicUnlockQueue.needs_public_source as Array<Record<string, unknown>> | undefined;
 const graphPublicParserHandoff = graphPublicUnlockQueue.parserAdmissionHandoff as Array<Record<string, unknown>> | undefined;
 if (
   !Array.isArray(graphPublicParserHandoff)
-  || graphPublicParserHandoff.length !== 40
+  || graphPublicParserHandoff.length !== 100
+  || !Array.isArray(graphPublicCurrentAdmission)
+  || graphPublicCurrentAdmission.length !== 100
   || !graphPublicParserHandoff.every((row) =>
     typeof row.actor === "string"
     && typeof row.victimOrTarget === "string"
@@ -1745,11 +1751,13 @@ if (
   || latestHostedProof.countsTowardPaidPromotion !== false
   || !hostedProofImportPath
   || hostedProofImportPath.schemaVersion !== "ti.hosted_apify_proof_import_path.v1"
-  || hostedProofImportPath.mode !== "run_or_verify_with_apify_token"
+  || hostedProofImportPath.mode !== "json_import_or_run_or_verify_with_apify_token"
   || hostedProofImportPath.observedOnly !== true
   || hostedProofImportPath.noSyntheticFallback !== true
   || hostedProofImportPath.oldProofTreatment !== "historical_shape_safety_only"
   || hostedProofImportPath.externalBlocker !== "external_token_missing"
+  || (hostedProofImportPath.observedProofImport as Record<string, unknown> | undefined)?.schemaVersion !== "ti.hosted_apify_observed_proof_import_path.v1"
+  || (hostedProofImportPath.observedProofImport as Record<string, unknown> | undefined)?.validationState !== "missing"
   || !hostedProofObservedFields
   || hostedProofObservedFields.runId !== null
   || hostedProofObservedFields.datasetId !== null
@@ -1781,7 +1789,7 @@ if (
   throw new Error("Hosted paid-readiness proof must keep local and single-query hosted proof out of paid promotion until 100-name hosted Apify metrics are observed");
 }
 const hostedProofCommandExamples = hostedProofImportPath.commandExamples as string[] | undefined;
-if (!hostedProofCommandExamples?.join(" ").includes("TI_APIFY_HOSTED_PROOF_MODE=run")) {
+if (!hostedProofCommandExamples?.join(" ").includes("TI_APIFY_HOSTED_PROOF_MODE=run") || !hostedProofCommandExamples.join(" ").includes("TI_APIFY_OBSERVED_PROOF_PATH")) {
   throw new Error("Hosted paid-readiness proof must expose copy/paste hosted run and verify commands");
 }
 const hostedRequiredZeroCounts = hostedPaidIntegrityGate.requiredZeroCounts as Record<string, unknown> | undefined;
