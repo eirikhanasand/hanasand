@@ -5280,6 +5280,11 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
     counts[packet.execution] = (counts[packet.execution] ?? 0) + 1;
     return counts;
   }, {});
+  const approvalReceipts = buildSourceAtlasActivationApprovalReceiptReadModel({
+    activationPackets: allPackets,
+    auditRows: atlasAudit.rows,
+    limit: Math.min(input.limit, 25)
+  });
 
   return {
     contract: {
@@ -5302,6 +5307,8 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
     runStatusClarity: {
       activationPackets: allPackets.length,
       sourceAtlasAuditRows: atlasAudit.summary.auditRows,
+      sourceAtlasApprovalReceipts: approvalReceipts.summary.receipts,
+      sourceAtlasAuditRowsWithApprovalReceipts: approvalReceipts.summary.matchedAuditRows,
       sourcePackCandidateReviewRows: sourcePackReview.summary.reviewRows,
       approvalRequired: allPackets.filter((packet) => packet.execution === "approval_required").length,
       dryRunOnly: allPackets.filter((packet) => packet.execution === "dry_run_only").length,
@@ -5313,11 +5320,14 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
     packets,
     sourceAtlasAuditSummary: atlasAudit.summary,
     sourceAtlasAuditPackets: atlasAudit.packets,
+    sourceAtlasApprovalReceiptSummary: approvalReceipts.summary,
+    sourceAtlasApprovalReceipts: approvalReceipts.receipts,
     sourcePackReviewSummary: sourcePackReview.summary,
     sourcePackReviewPackets: sourcePackReview.packets,
     guarantees: [
       "activation packets are operator/legal approval metadata, not source mutations",
       "source-atlas audit packets are persisted-row review context and are not executable approval packets",
+      "source-atlas approval receipts link operator decisions back to audit rows where packet ids or atlas source ids match",
       "source-pack candidate review rows are economics review context and do not import source packs",
       "approving a packet records dry-run approval context only",
       "restricted sources are not silently restored, crawled, or fetched by this route",
@@ -5356,7 +5366,8 @@ function buildSourceAtlasActivationAuditReadModel(input: { tenantId?: string; li
       sourceActivationApplied: false,
       executableApprovalPacketsCreated: false
     },
-    packets: rows.slice(0, input.limit).map(safeSourceAtlasActivationAuditPacketDto)
+    packets: rows.slice(0, input.limit).map(safeSourceAtlasActivationAuditPacketDto),
+    rows
   };
 }
 
@@ -5393,6 +5404,70 @@ function safeSourceAtlasActivationAuditPacketDto(row: SourceAtlasActivationPacke
       privateAuthCaptchaRequired: row.private_auth_captcha_required,
       crawlStarted: row.crawl_started,
       sourceActivationApplied: row.source_activation_applied,
+      executableApprovalPacket: false
+    }
+  };
+}
+
+function buildSourceAtlasActivationApprovalReceiptReadModel(input: {
+  activationPackets: AnalystSourceActivationPacket[];
+  auditRows: SourceAtlasActivationPacketAuditRow[];
+  limit: number;
+}) {
+  const approvedPackets = input.activationPackets
+    .filter((packet) => Boolean(packet.approvedAt && packet.approvedBy))
+    .sort((left, right) => (right.approvedAt ?? "").localeCompare(left.approvedAt ?? ""));
+  const receipts = approvedPackets.map((packet) => {
+    const matchedRows = input.auditRows.filter((row) =>
+      row.packet_id === packet.id ||
+      Boolean(packet.sourceId && row.atlas_source_ids.includes(packet.sourceId))
+    );
+    return safeSourceAtlasActivationApprovalReceiptDto(packet, matchedRows);
+  });
+  const matchedAuditPacketIds = new Set(receipts.flatMap((receipt) => receipt.auditPacketIds));
+  return {
+    summary: {
+      schemaVersion: "ti.source_atlas_activation_approval_receipts.v1",
+      sourceTable: "source_atlas_activation_packet_audit",
+      approvalPacketStore: "analyst_source_activation_packets",
+      receipts: receipts.length,
+      matchedAuditRows: matchedAuditPacketIds.size,
+      pendingAuditLinks: receipts.filter((receipt) => receipt.matchState === "pending_audit_link").length,
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      sourceActivationApplied: false,
+      auditRowsMutated: false
+    },
+    receipts: receipts.slice(0, input.limit)
+  };
+}
+
+function safeSourceAtlasActivationApprovalReceiptDto(packet: AnalystSourceActivationPacket, auditRows: SourceAtlasActivationPacketAuditRow[]) {
+  return {
+    packetId: packet.id,
+    sourceId: packet.sourceId,
+    runId: packet.runId,
+    planId: packet.planId,
+    approvedBy: packet.approvedBy,
+    approvedAt: packet.approvedAt,
+    requestedAction: packet.action,
+    execution: packet.execution,
+    matchState: auditRows.length > 0 ? "matched_audit_row" : "pending_audit_link",
+    auditPacketIds: auditRows.map((row) => row.packet_id),
+    matchedAtlasSourceIds: [...new Set(auditRows.flatMap((row) => row.atlas_source_ids))],
+    persistence: {
+      sourceTable: "source_atlas_activation_packet_audit",
+      receiptSource: "analyst_source_activation_packets.approvedAt/approvedBy",
+      replayRole: "approval receipt reconciliation only"
+    },
+    deliveryBoundary: {
+      dryRunOnly: packet.dryRun,
+      auditRowsMutated: false,
+      sourceMutationPerformed: false,
+      crawlingStarted: false,
+      restrictedFetchEnabled: false,
+      sourceActivationApplied: false,
       executableApprovalPacket: false
     }
   };

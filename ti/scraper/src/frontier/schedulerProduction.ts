@@ -84,6 +84,8 @@ import type {
   SchedulerSourceCadenceHint,
   SchedulerSourceGapEnqueueRehearsalOptions,
   SchedulerSourceGapEnqueueRehearsalReceipt,
+  SchedulerSourceGapWorkerEntryOptions,
+  SchedulerSourceGapWorkerEntryReceipt,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -185,6 +187,8 @@ export type {
   SchedulerRuntimeSlaState,
   SchedulerSlaEnforcementDto,
   SchedulerSourceCadenceHint,
+  SchedulerSourceGapWorkerEntryOptions,
+  SchedulerSourceGapWorkerEntryReceipt,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -2709,6 +2713,49 @@ export function rehearseSchedulerSourceGapEnqueue(
     mutatedRunCount,
     mutatedTaskCount,
     emittedDeltaCount
+  };
+}
+
+export function executeSchedulerSourceGapWorkerEntry(
+  plan: SchedulerDailyActorRunPlanDto,
+  repository: SchedulerQueueRepository,
+  options: SchedulerSourceGapWorkerEntryOptions = {}
+): SchedulerSourceGapWorkerEntryReceipt {
+  const now = options.now ?? new Date();
+  const queueTaskSpecs = plan.sourceGapExecutionReadiness.queueTaskSpecs;
+  const workerMutationEnabled = options.workerMutationEnabled === true;
+  const requestedApply = options.apply === true;
+  const rehearsal = rehearseSchedulerSourceGapEnqueue(plan, repository, {
+    ...options,
+    apply: workerMutationEnabled && requestedApply,
+    now
+  });
+  const selectedTaskIds = queueTaskSpecs.map((spec) => spec.task.id);
+  const decision: SchedulerSourceGapWorkerEntryReceipt["decision"] = selectedTaskIds.length === 0
+    ? "skip_no_tasks"
+    : rehearsal.willMutate
+      ? "ready_for_explicit_repository_apply"
+      : "blocked_before_repository";
+
+  return {
+    schemaVersion: "ti.scheduler_source_gap_worker_entry.v1",
+    generatedAt: now.toISOString(),
+    worker: {
+      workerId: options.workerId ?? "source_gap_worker_dry_run",
+      partition: options.workerPartition ?? "background_sweep",
+      mutationGate: workerMutationEnabled ? "enabled" : "disabled",
+      requestedApply
+    },
+    decision,
+    queueTaskCount: selectedTaskIds.length,
+    selectedTaskIds,
+    repositoryCallCount: rehearsal.repositoryCalls.length,
+    allowedOperations: rehearsal.willMutate
+      ? ["inspect_daily_actor_source_gap_plan", "findOrRegisterRun", "enqueueTasks"]
+      : ["inspect_daily_actor_source_gap_plan", "return_blocked_receipt"],
+    forbiddenOperations: ["network_fetch", "lease_task", "ack_task", "raw_url_output", "payload_download", "credential_access", "actor_interaction"],
+    rehearsal,
+    nextWorkerAction: rehearsal.willMutate ? "handoff_to_repository_adapter" : "return_without_mutation"
   };
 }
 

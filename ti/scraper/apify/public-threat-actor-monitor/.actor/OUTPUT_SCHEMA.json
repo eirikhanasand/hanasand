@@ -1,7 +1,7 @@
 {
   "actorOutputSchemaVersion": 1,
   "title": "Threat intelligence output",
-  "description": "Normalized actor profiles, clustered incident claims, activity, targeting, TTP, source, and dataset coverage rows. The OUTPUT key-value record also exposes monetization readiness, 100-row conversion progress, the real-row marketplace conversion sample pack, a blocked first-100 buyer preview, and the paid-release buyer verdict.",
+  "description": "Normalized actor profiles, clustered incident claims, activity, targeting, TTP, source, and dataset coverage rows. The OUTPUT key-value record also exposes monetization readiness, 100-row conversion progress, the real-row marketplace conversion sample pack, a blocked first-100 buyer preview, the paid-release buyer verdict, and a graph public-corroboration paid-row unlock queue.",
   "properties": {
     "dataset": {
       "type": "string",

@@ -37,6 +37,7 @@ import {
   schedulerWorkerLoopContract,
   schedulerWorkerRuntimeFixtures,
   schedulerApplyPlanApiContract,
+  executeSchedulerSourceGapWorkerEntry,
   rehearseSchedulerSourceGapEnqueue,
   simulateSchedulerExecution,
   simulateFairnessEnforcement,
@@ -1838,6 +1839,79 @@ describe("scheduler production readiness", () => {
       "dryrun_public_channel_probe_tier_1000_apt42_public_channel",
       "dryrun_restricted_darknet_metadata_sweep_tier_4000_lockbit_approved_dark_metadata"
     ]));
+
+    const workerBlockedRepository = new InMemorySchedulerQueueRepository();
+    const workerBlockedReceipt = executeSchedulerSourceGapWorkerEntry(daily, workerBlockedRepository, {
+      workerId: "worker_source_gap_01",
+      workerPartition: "background_sweep",
+      apply: true,
+      sourceGapEnqueueEnabled: true,
+      postgresQueueEnabled: true,
+      postgresDsnConfigured: true,
+      executorAvailable: true,
+      sourcePolicyCurrent: true,
+      paidRowGateOpen: true,
+      metadataReviewCurrent: true,
+      now
+    });
+    expect(workerBlockedReceipt).toMatchObject({
+      schemaVersion: "ti.scheduler_source_gap_worker_entry.v1",
+      decision: "blocked_before_repository",
+      queueTaskCount: queueTaskSpecs.length,
+      repositoryCallCount: daily.sourceGapExecutionReadiness.enqueueAdapterPreview.repositoryCalls.length,
+      worker: {
+        workerId: "worker_source_gap_01",
+        partition: "background_sweep",
+        mutationGate: "disabled",
+        requestedApply: true
+      },
+      rehearsal: {
+        mode: "blocked_dry_run",
+        willMutate: false,
+        mutatedRunCount: 0,
+        mutatedTaskCount: 0
+      },
+      nextWorkerAction: "return_without_mutation"
+    });
+    expect(workerBlockedReceipt.allowedOperations).toEqual(["inspect_daily_actor_source_gap_plan", "return_blocked_receipt"]);
+    expect(workerBlockedReceipt.forbiddenOperations).toEqual(expect.arrayContaining(["network_fetch", "lease_task", "ack_task", "payload_download", "actor_interaction"]));
+    expect(workerBlockedReceipt.selectedTaskIds).toEqual(queueTaskSpecs.map((spec) => spec.task.id));
+    expect(workerBlockedRepository.runs()).toEqual([]);
+    expect(workerBlockedRepository.tasks()).toEqual([]);
+
+    const workerAppliedRepository = new InMemorySchedulerQueueRepository();
+    const workerAppliedReceipt = executeSchedulerSourceGapWorkerEntry(daily, workerAppliedRepository, {
+      workerId: "worker_source_gap_02",
+      workerPartition: "background_sweep",
+      workerMutationEnabled: true,
+      apply: true,
+      sourceGapEnqueueEnabled: true,
+      postgresQueueEnabled: true,
+      postgresDsnConfigured: true,
+      executorAvailable: true,
+      sourcePolicyCurrent: true,
+      paidRowGateOpen: true,
+      metadataReviewCurrent: true,
+      now
+    });
+    expect(workerAppliedReceipt).toMatchObject({
+      decision: "ready_for_explicit_repository_apply",
+      worker: {
+        workerId: "worker_source_gap_02",
+        mutationGate: "enabled",
+        requestedApply: true
+      },
+      rehearsal: {
+        mode: "applied_explicitly",
+        willMutate: true,
+        mutatedRunCount: queueTaskSpecs.length,
+        mutatedTaskCount: queueTaskSpecs.length
+      },
+      nextWorkerAction: "handoff_to_repository_adapter"
+    });
+    expect(workerAppliedReceipt.allowedOperations).toEqual(["inspect_daily_actor_source_gap_plan", "findOrRegisterRun", "enqueueTasks"]);
+    expect(workerAppliedRepository.runs()).toHaveLength(queueTaskSpecs.length);
+    expect(workerAppliedRepository.tasks()).toHaveLength(queueTaskSpecs.length);
     expect(daily.sourceGapExecutionReadiness.drainExecution).toEqual(expect.arrayContaining([
       expect.objectContaining({
         step: "finish_active_dataset_emit",

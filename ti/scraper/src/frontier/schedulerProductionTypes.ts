@@ -1547,6 +1547,33 @@ export interface SchedulerSourceGapEnqueueRehearsalReceipt {
   emittedDeltaCount: number;
 }
 
+export type SchedulerSourceGapWorkerPartition = SchedulerWorkerWorkload | "background_sweep";
+
+export interface SchedulerSourceGapWorkerEntryOptions extends SchedulerSourceGapEnqueueRehearsalOptions {
+  workerId?: string;
+  workerPartition?: SchedulerSourceGapWorkerPartition;
+  workerMutationEnabled?: boolean;
+}
+
+export interface SchedulerSourceGapWorkerEntryReceipt {
+  schemaVersion: "ti.scheduler_source_gap_worker_entry.v1";
+  generatedAt: string;
+  worker: {
+    workerId: string;
+    partition: SchedulerSourceGapWorkerPartition;
+    mutationGate: "disabled" | "enabled";
+    requestedApply: boolean;
+  };
+  decision: "skip_no_tasks" | "blocked_before_repository" | "ready_for_explicit_repository_apply";
+  queueTaskCount: number;
+  selectedTaskIds: string[];
+  repositoryCallCount: number;
+  allowedOperations: Array<"inspect_daily_actor_source_gap_plan" | "return_blocked_receipt" | "findOrRegisterRun" | "enqueueTasks">;
+  forbiddenOperations: Array<"network_fetch" | "lease_task" | "ack_task" | "raw_url_output" | "payload_download" | "credential_access" | "actor_interaction">;
+  rehearsal: SchedulerSourceGapEnqueueRehearsalReceipt;
+  nextWorkerAction: "return_without_mutation" | "handoff_to_repository_adapter";
+}
+
 export interface SchedulerInteractiveSearchFreshnessDto {
   generatedAt: string;
   apiTargets: Array<"/v1/frontier/status" | "/v1/intel/search.scheduler" | "/v1/intel/runs/{id}" | "/v1/contracts" | "frontend_ti_progressive_update">;

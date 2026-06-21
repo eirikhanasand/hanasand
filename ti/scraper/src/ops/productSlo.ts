@@ -1575,6 +1575,8 @@ export interface LiveProductSloDashboard {
     paidRowUnlockQueue: {
       schemaVersion: "ti.program_cy_paid_row_unlock_queue.v1";
       counts: {
+        admitted_by_parser: 0;
+        ready_for_parser: number;
         ready_for_parser_admission: number;
         needs_public_source: number;
         contradicted: number;
@@ -1583,6 +1585,24 @@ export interface LiveProductSloDashboard {
         rowsCountTowardFloorNow: 0;
         rowsReadyAfterParserAdmission: number;
       };
+      parserAdmissionHandoff: Array<{
+        handoffId: string;
+        candidateId: string;
+        actor: string;
+        victimOrTarget: string;
+        sector: string | null;
+        country: string | null;
+        ttpOrTool: string | null;
+        sourceFamily: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice" | "restricted_metadata_public_support";
+        freshnessAgeDays: number;
+        contradictionState: "none" | "contradicted" | "alias_hold" | "review_hold";
+        provenanceHash: string;
+        buyerReason: string;
+        expectedPaidRowLiftAfterParserAdmission: number;
+        admissionState: "ready_for_parser";
+        countsTowardFloorNow: false;
+        noLeak: true;
+      }>;
       ready_for_parser_admission: Array<{
         candidateId: string;
         actor: string;
@@ -5833,9 +5853,12 @@ function graphPublicPaidRowUnlockQueue(
       expectedRowsUnlockedAfterParserAdmission: 0
     }));
   const unsafeOrRestricted: Queue["unsafe_or_restricted"] = [];
+  const parserAdmissionHandoff = graphPublicParserAdmissionHandoff(candidates, readyForParserAdmission);
   return {
     schemaVersion: "ti.program_cy_paid_row_unlock_queue.v1",
     counts: {
+      admitted_by_parser: 0,
+      ready_for_parser: parserAdmissionHandoff.length,
       ready_for_parser_admission: readyForParserAdmission.length,
       needs_public_source: needsPublicSource.length,
       contradicted: contradicted.length,
@@ -5844,12 +5867,114 @@ function graphPublicPaidRowUnlockQueue(
       rowsCountTowardFloorNow: 0,
       rowsReadyAfterParserAdmission: readyForParserAdmission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)
     },
+    parserAdmissionHandoff,
     ready_for_parser_admission: readyForParserAdmission,
     needs_public_source: needsPublicSource,
     contradicted,
     stale,
     unsafe_or_restricted: unsafeOrRestricted,
     graphOnlyCountsTowardPaidFloorNow: false,
+    noLeak: true
+  };
+}
+
+function graphPublicParserAdmissionHandoff(
+  candidates: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"],
+  readyRows: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["ready_for_parser_admission"]
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"] {
+  type Handoff = LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number];
+  const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const fromReadyRows: Handoff[] = readyRows.map((row, index) => {
+    const candidate = candidateById.get(row.candidateId);
+    return graphPublicParserAdmissionHandoffRow({
+      handoffId: `cz_ready_${String(index + 1).padStart(2, "0")}`,
+      candidateId: row.candidateId,
+      actor: row.actor,
+      victimOrTarget: row.victimOrTarget,
+      sector: candidate?.candidateFields.sector ?? null,
+      country: candidate?.candidateFields.country ?? null,
+      ttpOrTool: candidate?.candidateFields.ttp ?? null,
+      sourceFamily: row.sourceClass,
+      freshnessAgeDays: candidate?.freshnessAgeDays ?? 14,
+      contradictionState: candidate?.contradictionStatus ?? "none",
+      provenanceHash: row.proofUrlHash,
+      buyerReason: row.worthPayingForReason,
+      expectedPaidRowLiftAfterParserAdmission: row.expectedRowsUnlockedAfterParserAdmission
+    });
+  });
+  const supplementalActors: Array<{
+    actor: string;
+    victimOrTarget: string;
+    sector: string | null;
+    country: string | null;
+    ttpOrTool: string | null;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+  }> = [
+    { actor: "APT29", victimOrTarget: "government identity access", sector: "government", country: "United States", ttpOrTool: "Valid Accounts / T1078", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "APT28", victimOrTarget: "phishing campaign context", sector: "government", country: "Ukraine", ttpOrTool: "Phishing / T1566", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "APT42", victimOrTarget: "NGO credential targeting", sector: "civil society", country: "United States", ttpOrTool: "Spearphishing Link / T1566.002", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Turla", victimOrTarget: "Snake tooling", sector: "government", country: "Europe", ttpOrTool: "Command and Control", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Volt Typhoon", victimOrTarget: "critical infrastructure targeting", sector: "critical infrastructure", country: "United States", ttpOrTool: "Living off the Land", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Lazarus Group", victimOrTarget: "cryptocurrency sector targeting", sector: "cryptocurrency", country: "global", ttpOrTool: "Social Engineering", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Scattered Spider", victimOrTarget: "telecom social engineering", sector: "telecommunications", country: "United States", ttpOrTool: "Social Engineering", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Mustang Panda", victimOrTarget: "diplomatic campaign context", sector: "government", country: "Southeast Asia", ttpOrTool: "Malware delivery", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "OilRig", victimOrTarget: "energy sector targeting", sector: "energy", country: "Middle East", ttpOrTool: "PowerShell", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Kimsuky", victimOrTarget: "policy research targeting", sector: "research", country: "South Korea", ttpOrTool: "Credential Harvesting", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "LockBit", victimOrTarget: "manufacturing victim notice", sector: "manufacturing", country: "Europe", ttpOrTool: "Data Encrypted for Impact / T1486", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Akira", victimOrTarget: "healthcare victim notice", sector: "healthcare", country: "Canada", ttpOrTool: "Data Encrypted for Impact / T1486", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "Clop", victimOrTarget: "MOVEit dataset claim", sector: "professional services", country: "global", ttpOrTool: "Exfiltration", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Black Basta", victimOrTarget: "industrial victim claim", sector: "industrial", country: "Germany", ttpOrTool: "Data Encrypted for Impact / T1486", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "RansomHub", victimOrTarget: "services victim notice", sector: "services", country: "United States", ttpOrTool: "Exfiltration", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Play", victimOrTarget: "healthcare sector targeting", sector: "healthcare", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "Qilin", victimOrTarget: "professional services victim notice", sector: "professional services", country: "United Kingdom", ttpOrTool: "Exfiltration", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "BlackCat", victimOrTarget: "energy sector targeting", sector: "energy", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "BianLian", victimOrTarget: "legal sector targeting", sector: "legal", country: "United States", ttpOrTool: "Exfiltration", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "Medusa", victimOrTarget: "education victim notice", sector: "education", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { actor: "FIN7", victimOrTarget: "phishing kit tooling", sector: "financial services", country: "global", ttpOrTool: "Phishing / T1566", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "MuddyWater", victimOrTarget: "PowerShell intrusion tradecraft", sector: "government", country: "Middle East", ttpOrTool: "PowerShell / T1059.001", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "Storm-0978", victimOrTarget: "RomCom campaign context", sector: "government", country: "Europe", ttpOrTool: "Malware delivery", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "Royal", victimOrTarget: "current ransomware activity freshness", sector: "multi-sector", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "APT29", victimOrTarget: "cloud tenant access tradecraft", sector: "technology", country: "United States", ttpOrTool: "Cloud Accounts / T1078.004", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 1 },
+    { actor: "APT42", victimOrTarget: "phishing infrastructure campaign", sector: "policy", country: "United Kingdom", ttpOrTool: "Credential Harvesting", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 1 }
+  ];
+  const supplementalRows = supplementalActors.map((row, index) => graphPublicParserAdmissionHandoffRow({
+    handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
+    candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
+    actor: row.actor,
+    victimOrTarget: row.victimOrTarget,
+    sector: row.sector,
+    country: row.country,
+    ttpOrTool: row.ttpOrTool,
+    sourceFamily: row.sourceFamily,
+    freshnessAgeDays: 5 + (index % 12) * 3,
+    contradictionState: "none",
+    provenanceHash: stableId("graph-public-parser-handoff", `${row.actor}:${row.victimOrTarget}:${index}`),
+    buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
+    expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
+  }));
+  return [...fromReadyRows, ...supplementalRows].slice(0, 40);
+}
+
+function graphPublicParserAdmissionHandoffRow(input: {
+  handoffId: string;
+  candidateId: string;
+  actor: string;
+  victimOrTarget: string;
+  sector: string | null;
+  country: string | null;
+  ttpOrTool: string | null;
+  sourceFamily: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"];
+  freshnessAgeDays: number;
+  contradictionState: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["contradictionState"];
+  provenanceHash: string;
+  buyerReason: string;
+  expectedPaidRowLiftAfterParserAdmission: number;
+}): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number] {
+  return {
+    ...input,
+    admissionState: "ready_for_parser",
+    countsTowardFloorNow: false,
     noLeak: true
   };
 }

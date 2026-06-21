@@ -1,20 +1,20 @@
-Status: active_program_cy_public_proof_unlocks_for_paid_rows
+Status: active_program_cz_public_proof_to_parser_admission
 
-# Agent 08 Program CY - Public Proof Unlocks For Paid Rows
+# Agent 08 Program CZ - Public Proof To Parser Admission
 
-You are no longer ready. Stop expanding graph/STIX/TAXII unless it directly unlocks paid Actor rows. Your lane is to turn graph-supported pivots into externally corroborated, parser-admittable public evidence.
+You are no longer ready. Your next lane is to push public proof unlocks into parser admission and paid Actor row quality, not STIX/TAXII or graph readiness.
 
-Buyer-visible goal:
-- Convert at least 25 held graph/caveated pivots into rows that Agent 03 can admit as safe public findings, or explicitly reject them with buyer-trust reasons.
-- Produce exact source/search handoff rows, not abstract graph readiness.
+Target:
+- Move the 14 `ready_for_parser_admission` pivots into an Agent 03-ready admission package with exact field coverage and expected paid-row lift.
+- Grow the parser-ready queue to at least 40 rows by finding/structuring safe public corroboration, or explicitly reject weak pivots.
+- Keep graph-only rows excluded from paid-floor credit.
 
 Implement:
-- Extend the public proof queue with `proofUrlHash`, source type, candidate actor/victim/sector/country/TTP fields, contradiction status, freshness age, and parser handoff reason.
-- Add a `paidRowUnlockQueue` section that separates `ready_for_parser_admission`, `needs_public_source`, `contradicted`, `stale`, and `unsafe_or_restricted`.
-- Make `/v1/ops/product-slo` and Actor `OUTPUT` show unlocked rows that count toward the 100-row floor only after parser admission. Graph-only rows must remain excluded.
-- Feed Agent 03 with exact high-value pivots: actor + victim/target + source class + reason the row is worth paying for.
-- Feed Agent 05 with exact dark-metadata rows that need public support, but do not expose raw unsafe URLs or raw restricted bodies.
+- Add `parserAdmissionHandoff` under `graphPublicCorroborationPivotPacket.paidRowUnlockQueue` with actor, victim/target, sector/country, TTP/tool, source family, freshness age, contradiction state, provenance hash, and buyer reason.
+- Add bucket counts for `admitted_by_parser`, `ready_for_parser`, `needs_public_source`, `contradicted`, `stale`, and `unsafe_or_restricted`.
+- Feed Agent 03 with the exact rows most likely to lift true findings, and Agent 05 with restricted/dark metadata rows that still need public support.
+- Do not add STIX/TAXII/export work unless it directly helps paid Actor row admission.
 
 Verification:
-- Run `bun run check`, focused API/ops tests, `bun run check:contract-index`, and Apify check/smoke if Actor output changes.
-- Commit and push green changes, then continue into the next unlock batch without waiting.
+- Run `bun run check`, focused API/ops tests, contract index, Apify check/smoke/publication, and full `bun test` if Actor OUTPUT changes.
+- Commit and push green changes; continue into the next public proof batch without waiting.

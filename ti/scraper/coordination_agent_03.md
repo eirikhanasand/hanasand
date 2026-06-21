@@ -1,12 +1,20 @@
-Status: ready_for_next_task
+Status: active_program_cz_parser_public_support_to_300_sellable
 
-# Agent 03 Summary
+# Agent 03 Program CZ - Parser Lift From 187 To 300 Sellable Rows
 
-- Completed Program CY live finding-density ledger for the 100-name paid preset and 1,000-row tier gate.
-- Extended `parserRealSellableLift.findingAdmissionLedger` in Apify `OUTPUT` and `/v1/ops/product-slo` with per-query admitted findings, held findings, top missing-field blockers, strict rejection reason counts, deterministic 100-name proof, and tier-1,000 quality thresholds.
-- Preserved the 100-name paid proof baseline: 607 rows, 187 sellable rows, 52 sellable findings, and 135 sellable source-provenance rows that do not count toward the finding floor.
-- Added strict held-row reasons for `source_provenance_only`, `generic_actor_profile`, `stale_without_recent_corroboration`, `alias_only`, `graph_only`, `restricted_without_public_support`, `duplicate_claim`, `missing_required_fields`, and `single_source_without_caveat`.
-- Added a 1,000-row gate requiring at least 300 sellable rows, at least 40% sellable-finding rate, at most 45% source-provenance share of sellable rows, at least 65% useful density, and no projected rows counted as paid.
-- Verification green: `bun run check`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, focused API/ops tests, `bun run check:apify-publication`, full `bun test`, route inventory, and contract index.
+You are no longer ready. Own the parser side of the next sellable-row jump: convert Agent 05 public-supported metadata candidates and Agent 08 public proof unlocks into admitted findings, not just source-provenance rows.
 
-Agent 03 is ready for the next parser/live-source monetization task.
+Target:
+- Preserve the current 187 local sellable floor.
+- Add a deterministic next-tier proof path toward 300 sellable rows with at least 120 true findings and source-provenance share <=45%.
+- Convert at least 25 of Agent 05's `publicSupportSellable100` candidates or Agent 08's public proof unlocks into parser-admitted rows, or reject them with exact buyer-trust reasons.
+
+Implement:
+- Add parser admission examples for actor/victim/sector/country/TTP/tool/dataset/freshness/confidence/provenance where public support is present.
+- Keep restricted-only metadata, graph-only pivots, stale rows, and generic source pages out of sellable counts.
+- Extend `findingAdmissionLedger` with `publicSupportCandidateAdmission`: accepted count, rejected count, reasons, source families, and projected 300-row tier effect.
+- Surface the same packet in Actor `OUTPUT` and `/v1/ops/product-slo`.
+
+Verification:
+- Run `bun run check`, Actor check/smoke, focused API/ops tests, contract index, and full `bun test` if shared DTOs change.
+- Commit and push green changes; continue into the next parser batch without waiting.

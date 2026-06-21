@@ -1503,6 +1503,8 @@ interface GraphPublicCorroborationPivotPacket {
   paidRowUnlockQueue: {
     schemaVersion: "ti.program_cy_paid_row_unlock_queue.v1";
     counts: {
+      admitted_by_parser: 0;
+      ready_for_parser: number;
       ready_for_parser_admission: number;
       needs_public_source: number;
       contradicted: number;
@@ -1511,6 +1513,24 @@ interface GraphPublicCorroborationPivotPacket {
       rowsCountTowardFloorNow: 0;
       rowsReadyAfterParserAdmission: number;
     };
+    parserAdmissionHandoff: Array<{
+      handoffId: string;
+      candidateId: string;
+      actor: string;
+      victimOrTarget: string;
+      sector: string | null;
+      country: string | null;
+      ttpOrTool: string | null;
+      sourceFamily: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice" | "restricted_metadata_public_support";
+      freshnessAgeDays: number;
+      contradictionState: "none" | "contradicted" | "alias_hold" | "review_hold";
+      provenanceHash: string;
+      buyerReason: string;
+      expectedPaidRowLiftAfterParserAdmission: number;
+      admissionState: "ready_for_parser";
+      countsTowardFloorNow: false;
+      noLeak: true;
+    }>;
     ready_for_parser_admission: Array<{
       candidateId: string;
       actor: string;

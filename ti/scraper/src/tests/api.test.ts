@@ -11653,9 +11653,11 @@ describe("api v1", () => {
       frontier: new FocusedFrontier()
     }))) as {
       contract: Record<string, unknown>;
-      runStatusClarity: { activationPackets: number; approvalRequired: number; sourceAtlasAuditRows: number; sourcePackCandidateReviewRows: number; meaningfulWorkCount: number };
+      runStatusClarity: { activationPackets: number; approvalRequired: number; sourceAtlasAuditRows: number; sourceAtlasApprovalReceipts: number; sourceAtlasAuditRowsWithApprovalReceipts: number; sourcePackCandidateReviewRows: number; meaningfulWorkCount: number };
       sourceAtlasAuditSummary: { auditRows: number };
       sourceAtlasAuditPackets: unknown[];
+      sourceAtlasApprovalReceiptSummary: { receipts: number; matchedAuditRows: number; pendingAuditLinks: number };
+      sourceAtlasApprovalReceipts: unknown[];
       sourcePackReviewSummary: { sourceTable: string; reviewRows: number };
       sourcePackReviewPackets: unknown[];
       packets: unknown[];
@@ -11735,6 +11737,7 @@ describe("api v1", () => {
     expect(JSON.stringify(sourceActivationPackets.sourcePackReviewPackets)).not.toContain("https://");
     const atlasAuditPacket = (sourceActivationPackets.sourceAtlasAuditPackets as Array<{
       packetId: string;
+      atlasSourceIds: string[];
       approvalMode: string;
       expectedPayworthyLift: number;
       prerequisites: string[];
@@ -11845,6 +11848,82 @@ describe("api v1", () => {
     });
     expect(store.listAnalystSourceActivationPackets()[0]).toMatchObject({
       approvedBy: "operator-1"
+    });
+    const matchingAtlasActivationPacketId = "activation_test_atlas_match";
+    store.saveAnalystSourceActivationPacket({
+      id: matchingAtlasActivationPacketId,
+      planId: "plan_test_activation",
+      runId: "run_test_activation",
+      sourceId: atlasAuditPacket.atlasSourceIds[0],
+      action: "request_operator_approval",
+      execution: "approval_required",
+      reason: "Operator approval required before source-atlas repair packet can advance.",
+      expectedEffect: "Record operator approval context for the matching source-atlas audit row only.",
+      rollback: "Keep source-atlas repair packet in review.",
+      dryRun: true,
+      createdAt: "2026-05-24T10:06:00.000Z"
+    });
+    await body(await handleApiRequest(api(`/v1/analyst/source-activation-packets/${encodeURIComponent(matchingAtlasActivationPacketId)}/actions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "operator-2" },
+      body: JSON.stringify({ action: "approve_metadata_only", dryRun: false, reason: "Approve matching atlas audit row for metadata-only review." })
+    }), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+    const sourceActivationReceipts = (await body(await handleApiRequest(api("/v1/analyst/source-activation-packets"), {
+      store,
+      frontier: new FocusedFrontier()
+    }))) as {
+      runStatusClarity: { sourceAtlasApprovalReceipts: number; sourceAtlasAuditRowsWithApprovalReceipts: number };
+      sourceAtlasApprovalReceiptSummary: { receipts: number; matchedAuditRows: number; pendingAuditLinks: number; dryRun: boolean; willMutate: boolean; willStartCrawling: boolean; sourceActivationApplied: boolean; auditRowsMutated: boolean };
+      sourceAtlasApprovalReceipts: Array<{
+        packetId: string;
+        matchState: string;
+        auditPacketIds: string[];
+        matchedAtlasSourceIds: string[];
+        deliveryBoundary: {
+          auditRowsMutated: boolean;
+          sourceMutationPerformed: boolean;
+          crawlingStarted: boolean;
+          restrictedFetchEnabled: boolean;
+          sourceActivationApplied: boolean;
+          executableApprovalPacket: boolean;
+        };
+      }>;
+    };
+    expect(sourceActivationReceipts.sourceAtlasApprovalReceiptSummary).toMatchObject({
+      receipts: 2,
+      pendingAuditLinks: 1,
+      dryRun: true,
+      willMutate: false,
+      willStartCrawling: false,
+      sourceActivationApplied: false,
+      auditRowsMutated: false
+    });
+    expect(sourceActivationReceipts.sourceAtlasApprovalReceiptSummary.matchedAuditRows).toBeGreaterThan(0);
+    expect(sourceActivationReceipts.runStatusClarity.sourceAtlasApprovalReceipts).toBe(2);
+    expect(sourceActivationReceipts.runStatusClarity.sourceAtlasAuditRowsWithApprovalReceipts).toBeGreaterThan(0);
+    const matchedApprovalReceipt = sourceActivationReceipts.sourceAtlasApprovalReceipts.find((receipt) => receipt.packetId === matchingAtlasActivationPacketId);
+    expect(matchedApprovalReceipt).toMatchObject({
+      packetId: matchingAtlasActivationPacketId,
+      matchState: "matched_audit_row",
+      deliveryBoundary: {
+        auditRowsMutated: false,
+        sourceMutationPerformed: false,
+        crawlingStarted: false,
+        restrictedFetchEnabled: false,
+        sourceActivationApplied: false,
+        executableApprovalPacket: false
+      }
+    });
+    expect(matchedApprovalReceipt?.auditPacketIds).toEqual(expect.arrayContaining([atlasAuditPacket.packetId]));
+    expect(matchedApprovalReceipt?.matchedAtlasSourceIds).toEqual(expect.arrayContaining([atlasAuditPacket.atlasSourceIds[0]]));
+    const pendingApprovalReceipt = sourceActivationReceipts.sourceAtlasApprovalReceipts.find((receipt) => receipt.packetId === activationPacketId);
+    expect(pendingApprovalReceipt).toMatchObject({
+      packetId: activationPacketId,
+      matchState: "pending_audit_link",
+      auditPacketIds: []
     });
     const activationExecutionPreview = await body(await handleApiRequest(api(`/v1/analyst/source-activation-packets/${encodeURIComponent(activationPacketId)}/execution-preview`), {
       store,
