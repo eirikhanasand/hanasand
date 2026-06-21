@@ -1165,9 +1165,9 @@ describe("ops controls", () => {
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) &&
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk)
     )).toBe(true);
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 750, ready_for_current_admission: 750, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff).toHaveLength(750);
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_current_admission).toHaveLength(750);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 1000, ready_for_current_admission: 1000, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff).toHaveLength(1000);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_current_admission).toHaveLength(1000);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.every((row) =>
       row.actor.length > 0 &&
       row.victimOrTarget.length > 0 &&
@@ -1202,6 +1202,16 @@ describe("ops controls", () => {
       row.programDePriority.gateContribution.length > 0 &&
       row.programDePriority.noLeakProof === "hash_only_public_or_metadata_reference" &&
       row.programDePriority.admissionBlocker.length > 0 &&
+      row.programFgPriority.whyCorroborationMatters.length > 0 &&
+      row.programFgPriority.buyerActionEnabled.length > 0 &&
+      row.programFgPriority.confidenceDelta > 0 &&
+      row.programFgPriority.freshnessDelta > 0 &&
+      row.programFgPriority.sourceFamilyDelta > 0 &&
+      row.programFgPriority.contradictionRisk.length > 0 &&
+      row.programFgPriority.parserAdmissionReason.length > 0 &&
+      row.programFgPriority.nextParserSlice.length > 0 &&
+      row.programFgPriority.noLeakProof === "hash_only_public_or_metadata_reference" &&
+      row.programFgPriority.admissionBlocker === "none" &&
       row.admissionState === "ready_for_parser" &&
       row.countsTowardFloorNow === false &&
       row.noLeak
@@ -1209,6 +1219,9 @@ describe("ops controls", () => {
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDdPriority.findingLikely).length).toBeGreaterThanOrEqual(350);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDePriority.admissionBlocker === "none" && row.programDePriority.expectedCurrentRowLift > 0).length).toBeGreaterThanOrEqual(150);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDePriority.gateContribution === "current750").length).toBeGreaterThanOrEqual(150);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.filter((row) => row.programFgPriority.nextParserSlice === "current1000_alias_victim_ttp").length).toBeGreaterThanOrEqual(100);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.filter((row) => row.programFgPriority.nextParserSlice === "current1000_source_family_freshness").length).toBeGreaterThanOrEqual(150);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.filter((row) => row.programFgPriority.nextParserSlice === "current1000_metadata_public_support").length).toBeGreaterThanOrEqual(50);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.programDbRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, rowsCountTowardFloorNow: 0, noLeak: true });
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.programDcRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, missing_buyer_action: 0, weak_source_family_diversity: 0, rowsCountTowardFloorNow: 0, noLeak: true });
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.programDdRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, missing_buyer_action: 0, weak_source_family_diversity: 0, graph_only_speculation: 0, rowsCountTowardFloorNow: 0, noLeak: true });

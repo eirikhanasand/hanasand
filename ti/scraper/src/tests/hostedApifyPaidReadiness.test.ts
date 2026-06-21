@@ -26,6 +26,9 @@ function observedProof(overrides: Partial<HostedApifyObservedProofImport> = {}):
   return {
     schemaVersion: "ti.hosted_apify_observed_proof_import.v1",
     runId: "run_observed_001",
+    buildId: "build_observed_001",
+    runStatus: "succeeded",
+    failureState: "none",
     datasetId: "dataset_observed_001",
     proofPreset: "100_name_paid_preset",
     defaultQueryCount: 100,
@@ -42,6 +45,9 @@ function observedProof(overrides: Partial<HostedApifyObservedProofImport> = {}):
     memoryMbytes: 1024,
     usageUsd: 0.25,
     costUsd: 0.25,
+    chargedEventCount: 608,
+    chargedDatasetItemEvents: 607,
+    chargedActorStartEvents: 1,
     noLeakFailures: 0,
     secondBatchAuditObserved: true,
     falsePositiveInflationFailures: 0,
@@ -52,6 +58,10 @@ function observedProof(overrides: Partial<HostedApifyObservedProofImport> = {}):
     refunds: 0,
     pricingModel: "pay_per_event_rows",
     payoutEnabled: true,
+    payoutState: "enabled",
+    analyticsVisible: true,
+    conversionRate: 0.333,
+    listingVisibility: "public",
     publicListingStatus: "public_listed_not_promoted",
     observedAt: "2026-06-21T00:00:00.000Z",
     ...overrides
@@ -181,6 +191,25 @@ describe("hosted Apify paid readiness operator action board", () => {
       payout: { state: "observed", enabled: true },
       analytics: { state: "observed", storeViews: 12, runs: 4, paidUsers: 1, refunds: 0 },
       hosted500: { state: "observed", requiredSellableRows: 500, requiredSellableFindingRows: 275 }
+    });
+    expect(proof.programFgObservedEvidenceBoard).toMatchObject({
+      schemaVersion: "ti.program_fg_observed_apify_hosted_marketplace_truth.v1",
+      importState: "proof_sufficient_for_public_traffic",
+      hostedProofState: "sufficient_for_public_traffic",
+      marketplaceTruthState: "observed_public",
+      observedHostedRun: {
+        runId: "run_observed_001",
+        buildId: "build_observed_001",
+        runStatus: "succeeded",
+        failureState: "none",
+        chargedEventCount: 608
+      },
+      observedMarketplaceTruth: {
+        listingVisibility: "public",
+        payoutState: "enabled",
+        analyticsVisible: true,
+        conversionRate: 0.333
+      }
     });
   }));
 

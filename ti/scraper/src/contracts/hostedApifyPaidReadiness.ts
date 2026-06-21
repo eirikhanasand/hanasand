@@ -2,6 +2,9 @@ export type HostedApifyPaidReadinessStatus = "external_token_missing" | "hosted_
 
 export interface HostedApifyProofObservation {
   runId?: string | null;
+  buildId?: string | null;
+  runStatus?: "succeeded" | "failed" | "timed_out" | "aborted" | "external_unknown" | null;
+  failureState?: "none" | "failed" | "timed_out" | "aborted" | "external_unknown" | null;
   datasetId?: string | null;
   datasetItemCount?: number | null;
   sellableRows?: number | null;
@@ -12,6 +15,9 @@ export interface HostedApifyProofObservation {
   memoryMbytes?: number | null;
   usageUsd?: number | null;
   costUsd?: number | null;
+  chargedEventCount?: number | null;
+  chargedDatasetItemEvents?: number | null;
+  chargedActorStartEvents?: number | null;
   noLeakFailures?: number | null;
   secondBatchAuditObserved?: boolean;
   falsePositiveInflationFailures?: number | null;
@@ -33,6 +39,10 @@ export interface HostedApifyObservedProofImport extends HostedApifyProofObservat
   refunds: number;
   pricingModel: string;
   payoutEnabled: boolean;
+  payoutState: "enabled" | "disabled";
+  analyticsVisible: boolean;
+  conversionRate: number;
+  listingVisibility: "private" | "public";
   publicListingStatus: "draft_copy_ready_not_promoted" | "public_listed_not_promoted" | "public_promoted";
   observedAt: string;
   sampleOnly?: boolean;
@@ -59,6 +69,7 @@ interface HostedApifyProofImportPath {
 }
 
 type HostedProofOperatorGateState = "pass" | "hold" | "blocked_sample" | "blocked_unsafe";
+type HostedEvidenceImportState = "no_proof_imported" | "proof_imported_but_insufficient" | "proof_sufficient_for_private_beta" | "proof_sufficient_for_public_traffic";
 
 interface HostedProofOperatorChecklist {
   schemaVersion: "ti.hosted_apify_proof_operator_checklist.v1";
@@ -174,7 +185,7 @@ export interface HostedApifyPaidReadinessProof {
     includeDatasets: false;
     customQueriesAllowedForPaidProof: false;
   };
-  requiredHostedMetrics: Array<"runId" | "datasetId" | "datasetItemCount" | "sellableRows" | "sellableFindingCount" | "caveatedRows" | "averageBuyerValueScore" | "runtimeSeconds" | "memoryMbytes" | "usageUsd" | "costUsd">;
+  requiredHostedMetrics: Array<"runId" | "buildId" | "runStatus" | "failureState" | "datasetId" | "datasetItemCount" | "sellableRows" | "sellableFindingCount" | "caveatedRows" | "averageBuyerValueScore" | "runtimeSeconds" | "memoryMbytes" | "usageUsd" | "costUsd" | "chargedEventCount" | "chargedDatasetItemEvents" | "chargedActorStartEvents">;
   paidProofAcceptance: {
     minimumDefaultQueryCount: 100;
     minimumSellableRows: 100;
@@ -267,6 +278,45 @@ export interface HostedApifyPaidReadinessProof {
       nextOperatorAction: string;
     };
   };
+  programFgObservedEvidenceBoard: {
+    schemaVersion: "ti.program_fg_observed_apify_hosted_marketplace_truth.v1";
+    importState: HostedEvidenceImportState;
+    hostedProofState: "missing" | "insufficient" | "sufficient_for_private_beta" | "sufficient_for_public_traffic";
+    marketplaceTruthState: "external_unknown" | "insufficient" | "observed_private" | "observed_public";
+    releaseBlockerState: "no_proof_imported" | "proof_imported_but_insufficient" | "ready_for_private_beta_review" | "ready_for_public_traffic_review";
+    noSyntheticFallback: true;
+    blockedProofClasses: Array<"sample" | "template" | "partial" | "local_only" | "historical_shape_safety">;
+    observedHostedRun: {
+      runId: string | null;
+      buildId: string | null;
+      datasetId: string | null;
+      runStatus: HostedApifyProofObservation["runStatus"];
+      failureState: HostedApifyProofObservation["failureState"];
+      runDurationSeconds: number | null;
+      usageUsd: number | null;
+      costUsd: number | null;
+      chargedEventCount: number | null;
+      chargedDatasetItemEvents: number | null;
+      chargedActorStartEvents: number | null;
+    };
+    observedMarketplaceTruth: {
+      listingVisibility: HostedApifyObservedProofImport["listingVisibility"] | "external_unknown";
+      publicListingStatus: HostedApifyObservedProofImport["publicListingStatus"] | "external_unknown";
+      pricingModel: string | "external_unknown";
+      payoutState: HostedApifyObservedProofImport["payoutState"] | "external_unknown";
+      analyticsVisible: boolean | "external_unknown";
+      storeViews: number | null;
+      runs: number | null;
+      uniqueUsers: number | null;
+      paidUsers: number | null;
+      refunds: number | null;
+      conversionRate: number | null;
+      lastVerifiedAt: string | null;
+    };
+    missingExternalFields: string[];
+    insufficientFields: string[];
+    nextSafeCommands: string[];
+  };
   manualVerificationSteps: string[];
   blockers: string[];
 }
@@ -304,6 +354,10 @@ export function buildHostedApifyPaidReadinessProof(input: {
     && typeof observedProof.pricingModel === "string"
     && observedProof.pricingModel.length > 0
     && observedProof.payoutEnabled === true
+    && observedProof.payoutState === "enabled"
+    && observedProof.analyticsVisible === true
+    && Number.isFinite(observedProof.conversionRate)
+    && (observedProof.listingVisibility === "private" || observedProof.listingVisibility === "public")
   );
   const importedPaidFloorProof = hosted100NameProofObserved && marketplaceValuesObserved;
   const commandExamples = [
@@ -325,6 +379,13 @@ export function buildHostedApifyPaidReadinessProof(input: {
     hasObservedProofImportSource: Boolean(process.env.TI_APIFY_OBSERVED_PROOF_JSON || process.env.TI_APIFY_OBSERVED_PROOF_PATH)
   });
   const conversionPayoutTruth = buildConversionPayoutTruth(observedProof, observedFields, marketplaceValuesObserved, hostedProofOperatorChecklist);
+  const programFgObservedEvidenceBoard = buildProgramFgObservedEvidenceBoard({
+    observedProof,
+    observedFields,
+    checklist: hostedProofOperatorChecklist,
+    marketplaceValuesObserved,
+    commandExamples
+  });
   return {
     schemaVersion: "ti.hosted_apify_paid_readiness_proof.v1",
     status: input.status ?? (importedPaidFloorProof ? "paid_floor_hosted_proof" : tokenState === "external_token_missing" ? "external_token_missing" : hosted100NameProofObserved ? "verified_hold" : "hosted_proof_missing"),
@@ -411,7 +472,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
       includeDatasets: false,
       customQueriesAllowedForPaidProof: false
     },
-    requiredHostedMetrics: ["runId", "datasetId", "datasetItemCount", "sellableRows", "sellableFindingCount", "caveatedRows", "averageBuyerValueScore", "runtimeSeconds", "memoryMbytes", "usageUsd", "costUsd"],
+    requiredHostedMetrics: ["runId", "buildId", "runStatus", "failureState", "datasetId", "datasetItemCount", "sellableRows", "sellableFindingCount", "caveatedRows", "averageBuyerValueScore", "runtimeSeconds", "memoryMbytes", "usageUsd", "costUsd", "chargedEventCount", "chargedDatasetItemEvents", "chargedActorStartEvents"],
     paidProofAcceptance: {
       minimumDefaultQueryCount: 100,
       minimumSellableRows: 100,
@@ -470,14 +531,15 @@ export function buildHostedApifyPaidReadinessProof(input: {
       unknownMeansNoClaim: true
     },
     conversionPayoutTruth,
+    programFgObservedEvidenceBoard,
     manualVerificationSteps: [
       "Publish or rebuild eirikhanasand/public-threat-actor-monitor from the current Actor package.",
       "Start a hosted Apify run with the default 100-name input: no custom query list, maxRowsPerQuery=25, includeCoverageGaps=false, includeHeldRows=false, includeDatasets=false.",
-      "After success, record run id, default dataset id, dataset item count, sellable rows, sellable finding count, caveated rows, average buyer value, runtime, memory, usage cost, and no-leak result.",
+      "After success, record run id, build id, run status, failure state, default dataset id, dataset item count, sellable rows, sellable finding count, caveated rows, average buyer value, runtime, memory, usage cost, charged events, and no-leak result.",
       "Paste the complete observed proof once through TI_APIFY_OBSERVED_PROOF_JSON or TI_APIFY_OBSERVED_PROOF_PATH; partial marketplace or hosted proof imports are rejected.",
       "Compare hosted OUTPUT falsePositiveSuppressionGate.programCpHardening.secondBatchAudit against the paid-row integrity gate: source-provenance rows do not count as findings, and stale/latest, alias/wrong-actor, generic-source-page, graph-only, restricted-only, and caveated-as-chargeable failures are zero.",
-      "Open Apify Store analytics and record store views, runs, unique users, paid users, and refunds; leave unavailable fields null.",
-      "Open Apify billing/payouts and Store pricing, then record payout enabled, pricing model, and last verified timestamp.",
+      "Open Apify Store analytics and record analytics visibility, store views, runs, unique users, paid users, refunds, and conversion rate; leave unavailable fields external_unknown rather than inventing values.",
+      "Open Apify billing/payouts and Store pricing/listing, then record payout state, pricing model, listing visibility, public listing status, and last verified timestamp.",
       "Promote paid traffic only when hosted sellable rows are at least 500, hosted finding rows are at least 275, and payout, pricing, telemetry, listing state, refunds, and no-leak proof are observed."
     ],
     blockers: [
@@ -491,6 +553,9 @@ export function buildHostedApifyPaidReadinessProof(input: {
 const observedProofRequiredFields = [
   "schemaVersion",
   "runId",
+  "buildId",
+  "runStatus",
+  "failureState",
   "datasetId",
   "proofPreset",
   "defaultQueryCount",
@@ -507,6 +572,9 @@ const observedProofRequiredFields = [
   "memoryMbytes",
   "usageUsd",
   "costUsd",
+  "chargedEventCount",
+  "chargedDatasetItemEvents",
+  "chargedActorStartEvents",
   "noLeakFailures",
   "secondBatchAuditObserved",
   "falsePositiveInflationFailures",
@@ -517,6 +585,10 @@ const observedProofRequiredFields = [
   "refunds",
   "pricingModel",
   "payoutEnabled",
+  "payoutState",
+  "analyticsVisible",
+  "conversionRate",
+  "listingVisibility",
   "publicListingStatus",
   "observedAt"
 ] as const;
@@ -524,6 +596,9 @@ const observedProofRequiredFields = [
 const hostedProofGateRequiredFields = [
   "schemaVersion",
   "runId",
+  "buildId",
+  "runStatus",
+  "failureState",
   "datasetId",
   "proofPreset",
   "defaultQueryCount",
@@ -540,6 +615,9 @@ const hostedProofGateRequiredFields = [
   "memoryMbytes",
   "usageUsd",
   "costUsd",
+  "chargedEventCount",
+  "chargedDatasetItemEvents",
+  "chargedActorStartEvents",
   "noLeakFailures",
   "secondBatchAuditObserved",
   "falsePositiveInflationFailures",
@@ -745,6 +823,106 @@ function buildConversionPayoutTruth(
   };
 }
 
+function buildProgramFgObservedEvidenceBoard(input: {
+  observedProof: HostedApifyObservedProofImport | undefined;
+  observedFields: Required<HostedApifyProofObservation>;
+  checklist: HostedProofOperatorChecklist;
+  marketplaceValuesObserved: boolean;
+  commandExamples: string[];
+}): HostedApifyPaidReadinessProof["programFgObservedEvidenceBoard"] {
+  const noProofImported = !input.observedProof;
+  const sampleOnly = input.observedProof?.sampleOnly === true;
+  const hosted100Pass = input.checklist.gateEffects.hosted100.unlocks;
+  const hosted500Pass = input.checklist.gateEffects.hosted500.unlocks;
+  const marketplacePromotionPass = input.checklist.gateEffects.marketplacePromotion.unlocks;
+  const listingVisibility = input.marketplaceValuesObserved && input.observedProof ? input.observedProof.listingVisibility : "external_unknown";
+  const publicListingStatus = input.marketplaceValuesObserved && input.observedProof ? input.observedProof.publicListingStatus : "external_unknown";
+  const publicListingReady = listingVisibility === "public" && publicListingStatus !== "draft_copy_ready_not_promoted";
+  const importState: HostedEvidenceImportState = noProofImported
+    ? "no_proof_imported"
+    : hosted500Pass && marketplacePromotionPass && publicListingReady
+      ? "proof_sufficient_for_public_traffic"
+      : hosted100Pass && input.marketplaceValuesObserved
+        ? "proof_sufficient_for_private_beta"
+        : "proof_imported_but_insufficient";
+  const hostedProofState = importState === "proof_sufficient_for_public_traffic"
+    ? "sufficient_for_public_traffic"
+    : importState === "proof_sufficient_for_private_beta"
+      ? "sufficient_for_private_beta"
+      : noProofImported
+        ? "missing"
+        : "insufficient";
+  const marketplaceTruthState = input.marketplaceValuesObserved && publicListingReady
+    ? "observed_public"
+    : input.marketplaceValuesObserved
+      ? "observed_private"
+      : noProofImported
+        ? "external_unknown"
+        : "insufficient";
+  const releaseBlockerState = importState === "proof_sufficient_for_public_traffic"
+    ? "ready_for_public_traffic_review"
+    : importState === "proof_sufficient_for_private_beta"
+      ? "ready_for_private_beta_review"
+      : importState;
+  const missingExternalFields = noProofImported
+    ? [...observedProofRequiredFields]
+    : input.checklist.missingFields;
+  const insufficientFields = [
+    sampleOnly ? "sampleOnly" : null,
+    !hosted100Pass ? "hosted100" : null,
+    hosted100Pass && !hosted500Pass ? "hosted500" : null,
+    !input.marketplaceValuesObserved ? "marketplace_truth" : null,
+    input.marketplaceValuesObserved && !publicListingReady ? "public_listing_visibility" : null,
+    input.observedProof?.refunds !== undefined && input.observedProof.refunds !== 0 ? "refunds" : null,
+    input.observedFields.failureState && input.observedFields.failureState !== "none" ? "failureState" : null
+  ].filter((value): value is string => Boolean(value));
+
+  return {
+    schemaVersion: "ti.program_fg_observed_apify_hosted_marketplace_truth.v1",
+    importState,
+    hostedProofState,
+    marketplaceTruthState,
+    releaseBlockerState,
+    noSyntheticFallback: true,
+    blockedProofClasses: ["sample", "template", "partial", "local_only", "historical_shape_safety"],
+    observedHostedRun: {
+      runId: input.observedFields.runId,
+      buildId: input.observedFields.buildId,
+      datasetId: input.observedFields.datasetId,
+      runStatus: input.observedFields.runStatus,
+      failureState: input.observedFields.failureState,
+      runDurationSeconds: input.observedFields.runtimeSeconds,
+      usageUsd: input.observedFields.usageUsd,
+      costUsd: input.observedFields.costUsd,
+      chargedEventCount: input.observedFields.chargedEventCount,
+      chargedDatasetItemEvents: input.observedFields.chargedDatasetItemEvents,
+      chargedActorStartEvents: input.observedFields.chargedActorStartEvents
+    },
+    observedMarketplaceTruth: {
+      listingVisibility,
+      publicListingStatus,
+      pricingModel: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.pricingModel : "external_unknown",
+      payoutState: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.payoutState : "external_unknown",
+      analyticsVisible: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.analyticsVisible : "external_unknown",
+      storeViews: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.storeViews : null,
+      runs: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.runs : null,
+      uniqueUsers: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.uniqueUsers : null,
+      paidUsers: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.paidUsers : null,
+      refunds: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.refunds : null,
+      conversionRate: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.conversionRate : null,
+      lastVerifiedAt: input.marketplaceValuesObserved && input.observedProof ? input.observedProof.observedAt : null
+    },
+    missingExternalFields,
+    insufficientFields,
+    nextSafeCommands: [
+      "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
+      "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
+      "TI_APIFY_OBSERVED_PROOF_PATH=<path-to-observed-proof.json> bun run check:hosted-apify-paid-readiness",
+      ...input.commandExamples.filter((command) => command.includes("hosted-apify-observed-proof"))
+    ]
+  };
+}
+
 function nextOperatorCommand(input: {
   commandExamples: string[];
   hasToken: boolean;
@@ -833,8 +1011,15 @@ function isObservedProofImport(value: unknown): value is HostedApifyObservedProo
     && value.includeCoverageGaps === false
     && value.includeHeldRows === false
     && value.includeDatasets === false
+    && typeof value.buildId === "string"
+    && typeof value.runStatus === "string"
+    && typeof value.failureState === "string"
     && typeof value.pricingModel === "string"
     && typeof value.payoutEnabled === "boolean"
+    && typeof value.payoutState === "string"
+    && typeof value.analyticsVisible === "boolean"
+    && typeof value.conversionRate === "number"
+    && typeof value.listingVisibility === "string"
     && typeof value.publicListingStatus === "string"
     && typeof value.observedAt === "string";
 }
@@ -847,6 +1032,9 @@ function normalizeHostedObservation(input: HostedApifyProofObservation | undefin
   const inputRecord = isRecord(input) ? input : {};
   return {
     runId: input?.runId ?? null,
+    buildId: input?.buildId ?? null,
+    runStatus: input?.runStatus ?? null,
+    failureState: input?.failureState ?? null,
     datasetId: input?.datasetId ?? null,
     datasetItemCount: finiteNumberOrNull(input?.datasetItemCount),
     sellableRows: finiteNumberOrNull(input?.sellableRows),
@@ -857,6 +1045,9 @@ function normalizeHostedObservation(input: HostedApifyProofObservation | undefin
     memoryMbytes: finiteNumberOrNull(input?.memoryMbytes),
     usageUsd: finiteNumberOrNull(input?.usageUsd),
     costUsd: finiteNumberOrNull(input?.costUsd),
+    chargedEventCount: finiteNumberOrNull(input?.chargedEventCount),
+    chargedDatasetItemEvents: finiteNumberOrNull(input?.chargedDatasetItemEvents),
+    chargedActorStartEvents: finiteNumberOrNull(input?.chargedActorStartEvents),
     noLeakFailures: finiteNumberOrNull(input?.noLeakFailures),
     secondBatchAuditObserved: input?.secondBatchAuditObserved === true,
     falsePositiveInflationFailures: finiteNumberOrNull(input?.falsePositiveInflationFailures),

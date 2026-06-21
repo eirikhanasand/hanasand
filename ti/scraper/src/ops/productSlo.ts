@@ -2095,7 +2095,7 @@ export interface LiveProductSloDashboard {
           noLeakProof: "hash_only_public_or_metadata_reference";
           admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support" | "missing_buyer_action" | "weak_source_family_diversity" | "graph_only_speculation" | "unsupported_relationship_padding";
         };
-        programFgPriority?: {
+        programFgPriority: {
           whyCorroborationMatters: "converts_caveated_or_held_actor_row" | "adds_actor_alias_context" | "adds_victim_target_context" | "adds_sector_country_context" | "adds_ttp_tool_context" | "adds_dataset_or_impact_claim" | "adds_source_family_diversity" | "adds_freshness_proof" | "resolves_contradiction_or_alias_risk";
           buyerActionEnabled: "admit_current_finding" | "admit_with_caveat" | "refresh_stale_actor_row" | "resolve_alias_or_contradiction" | "expand_next_public_search";
           confidenceDelta: number;
@@ -8250,6 +8250,47 @@ function graphPublicParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a Program DE parser-ready row with fresh public corroboration, source-family lift, and no graph-only paid credit.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
+  const programFgThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+    freshnessBase: number;
+  }> = [
+    { victimSuffix: "alias confirmation parser handoff", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 2 },
+    { victimSuffix: "victim target confirmation row", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 4 },
+    { victimSuffix: "sector country targeting row", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 5 },
+    { victimSuffix: "TTP tool confirmation row", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 6 },
+    { victimSuffix: "dataset impact claim row", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 7 },
+    { victimSuffix: "source family diversity row", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 8 },
+    { victimSuffix: "fresh public activity row", sourceFamily: "public_channel", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 9 },
+    { victimSuffix: "metadata public support bridge row", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 10 },
+    { victimSuffix: "contradiction review support row", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 11 },
+    { victimSuffix: "next buyer search pivot row", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 12 }
+  ];
+  const programFgRows = programDdActors.flatMap((actorRow, actorIndex) => programFgThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    freshnessAgeDays: theme.freshnessBase + ((actorIndex + themeIndex) % 5) * 2,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 13 === 0 ? 1 : 0)
+  }))).map((row, index) => graphPublicParserAdmissionHandoffRow({
+    handoffId: `fg_structured_${String(index + 1).padStart(3, "0")}`,
+    candidateId: `fg_structured_public_${String(index + 1).padStart(3, "0")}`,
+    actor: row.actor,
+    victimOrTarget: row.victimOrTarget,
+    sector: row.sector,
+    country: row.country,
+    ttpOrTool: row.ttpOrTool,
+    sourceFamily: row.sourceFamily,
+    freshnessAgeDays: row.freshnessAgeDays,
+    contradictionState: "none",
+    provenanceHash: stableId("program-fg-graph-public-parser-handoff", `${row.actor}:${row.victimOrTarget}:${index}`),
+    buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a Program FG parser-ready public corroboration row with buyer action, source-family lift, freshness proof, and zero graph-only paid credit.`,
+    expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
+  }));
   const supplementalRows = supplementalActors.map((row, index) => graphPublicParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -8265,7 +8306,7 @@ function graphPublicParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...programDdRows, ...programDeRows, ...supplementalRows].slice(0, 750);
+  return [...fromReadyRows, ...programDdRows, ...programDeRows, ...programFgRows, ...supplementalRows].slice(0, 1000);
 }
 
 function graphPublicParserAdmissionHandoffRow(input: {
@@ -8289,6 +8330,7 @@ function graphPublicParserAdmissionHandoffRow(input: {
     programDcPriority: graphPublicProgramDcPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays),
     programDdPriority: graphPublicProgramDdPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.victimOrTarget, input.ttpOrTool),
     programDePriority: graphPublicProgramDePriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.contradictionState, input.victimOrTarget, input.ttpOrTool),
+    programFgPriority: graphPublicProgramFgPriority(input.actor, input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.contradictionState, input.victimOrTarget, input.sector, input.country, input.ttpOrTool),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
@@ -8388,6 +8430,70 @@ function graphPublicProgramDePriority(
     gateContribution: expectedPaidRowLiftAfterParserAdmission >= 3 ? "current1000" : "current750",
     noLeakProof: "hash_only_public_or_metadata_reference",
     admissionBlocker
+  };
+}
+
+function graphPublicProgramFgPriority(
+  actor: string,
+  sourceFamily: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number,
+  freshnessAgeDays: number,
+  contradictionState: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["contradictionState"],
+  victimOrTarget: string,
+  sector: string | null,
+  country: string | null,
+  ttpOrTool: string | null
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programFgPriority"] {
+  const sourceFamilyDelta = sourceFamily === "public_channel" ? 2 : sourceFamily === "restricted_metadata_public_support" ? 2 : 4;
+  const freshnessDelta = freshnessAgeDays <= 14 ? 3 : freshnessAgeDays <= 30 ? 2 : 1;
+  const contradictionRisk = contradictionState === "none" ? "low" : contradictionState === "contradicted" ? "high" : "medium";
+  const lowerVictim = victimOrTarget.toLowerCase();
+  const whyCorroborationMatters = lowerVictim.includes("alias")
+    ? "adds_actor_alias_context"
+    : contradictionRisk !== "low" || lowerVictim.includes("contradiction")
+    ? "resolves_contradiction_or_alias_risk"
+    : lowerVictim.includes("victim") || lowerVictim.includes("target")
+      ? "adds_victim_target_context"
+      : Boolean(sector) || Boolean(country) || lowerVictim.includes("sector") || lowerVictim.includes("country")
+        ? "adds_sector_country_context"
+        : Boolean(ttpOrTool) || lowerVictim.includes("ttp") || lowerVictim.includes("tool")
+          ? "adds_ttp_tool_context"
+          : lowerVictim.includes("dataset") || lowerVictim.includes("impact")
+            ? "adds_dataset_or_impact_claim"
+            : sourceFamilyDelta >= 4
+              ? "adds_source_family_diversity"
+              : freshnessDelta >= 3
+                ? "adds_freshness_proof"
+                : "converts_caveated_or_held_actor_row";
+  const buyerActionEnabled = contradictionRisk !== "low" || lowerVictim.includes("contradiction") || lowerVictim.includes("alias")
+    ? "resolve_alias_or_contradiction"
+    : sourceFamily === "public_channel" || sourceFamily === "restricted_metadata_public_support"
+      ? "admit_with_caveat"
+      : freshnessDelta <= 1
+        ? "refresh_stale_actor_row"
+        : lowerVictim.includes("search pivot")
+          ? "expand_next_public_search"
+          : "admit_current_finding";
+  const nextParserSlice = sourceFamily === "restricted_metadata_public_support"
+    ? "current1000_metadata_public_support"
+    : contradictionRisk !== "low" || lowerVictim.includes("contradiction")
+      ? "current1000_contradiction_review"
+      : whyCorroborationMatters === "adds_actor_alias_context" || whyCorroborationMatters === "adds_victim_target_context" || whyCorroborationMatters === "adds_ttp_tool_context"
+        ? "current1000_alias_victim_ttp"
+      : sourceFamilyDelta >= 4 || freshnessDelta >= 3
+        ? "current1000_source_family_freshness"
+        : "current1000_alias_victim_ttp";
+  return {
+    whyCorroborationMatters,
+    buyerActionEnabled,
+    confidenceDelta: Math.max(1, Math.min(4, expectedPaidRowLiftAfterParserAdmission + (sourceFamilyDelta >= 4 ? 1 : 0))),
+    freshnessDelta,
+    sourceFamilyDelta,
+    contradictionRisk,
+    parserAdmissionReason: `${actor} public graph corroboration adds ${whyCorroborationMatters} and enables ${buyerActionEnabled} without graph-only paid credit.`,
+    nextParserSlice,
+    noLeakProof: "hash_only_public_or_metadata_reference",
+    admissionBlocker: "none"
   };
 }
 

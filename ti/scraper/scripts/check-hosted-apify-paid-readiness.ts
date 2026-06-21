@@ -218,6 +218,9 @@ function summarizeHostedObservation(
 
   return {
     runId: stringValue(run?.id) ?? (suppliedRunId || null),
+    buildId: stringValue(run?.buildId) ?? stringValue(run?.buildNumber) ?? null,
+    runStatus: runStatus(run),
+    failureState: failureState(run),
     datasetId: datasetId || null,
     datasetItemCount: items.length || null,
     sellableRows: items.length ? sellableRows.length : null,
@@ -228,6 +231,9 @@ function summarizeHostedObservation(
     memoryMbytes: memoryMbytes(run),
     usageUsd: firstNumberAt(run, ["usageTotalUsd", "usageUsd"]),
     costUsd: firstNumberAt(run, ["usageTotalUsd", "costUsd"]),
+    chargedEventCount: chargedEventCount(output, items),
+    chargedDatasetItemEvents: chargedDatasetItemEvents(output, items),
+    chargedActorStartEvents: chargedActorStartEvents(output),
     noLeakFailures,
     secondBatchAuditObserved: Boolean(secondBatchAudit),
     falsePositiveInflationFailures: secondBatchAudit ? countFalsePositiveInflationFailures(secondBatchAudit) : null,
@@ -329,6 +335,9 @@ function validateObservedProofImport(value: unknown): string[] {
   if (!isRecord(value)) return ["proof must be a JSON object"];
   requireEqual(value, "schemaVersion", "ti.hosted_apify_observed_proof_import.v1", errors);
   requireString(value, "runId", errors);
+  requireString(value, "buildId", errors);
+  requireOneOf(value, "runStatus", ["succeeded", "failed", "timed_out", "aborted"], errors);
+  requireOneOf(value, "failureState", ["none", "failed", "timed_out", "aborted"], errors);
   requireString(value, "datasetId", errors);
   requireEqual(value, "proofPreset", "100_name_paid_preset", errors);
   requireMinimumNumber(value, "defaultQueryCount", 100, errors);
@@ -345,6 +354,9 @@ function validateObservedProofImport(value: unknown): string[] {
   requireMinimumNumber(value, "memoryMbytes", 0, errors);
   requireMinimumNumber(value, "usageUsd", 0, errors);
   requireMinimumNumber(value, "costUsd", 0, errors);
+  requireMinimumNumber(value, "chargedEventCount", 1, errors);
+  requireMinimumNumber(value, "chargedDatasetItemEvents", 0, errors);
+  requireMinimumNumber(value, "chargedActorStartEvents", 1, errors);
   requireEqual(value, "noLeakFailures", 0, errors);
   requireEqual(value, "secondBatchAuditObserved", true, errors);
   requireEqual(value, "falsePositiveInflationFailures", 0, errors);
@@ -355,6 +367,10 @@ function validateObservedProofImport(value: unknown): string[] {
   requireMinimumNumber(value, "refunds", 0, errors);
   requireString(value, "pricingModel", errors);
   requireEqual(value, "payoutEnabled", true, errors);
+  requireEqual(value, "payoutState", "enabled", errors);
+  requireEqual(value, "analyticsVisible", true, errors);
+  requireMinimumNumber(value, "conversionRate", 0, errors);
+  requireOneOf(value, "listingVisibility", ["private", "public"], errors);
   requireOneOf(value, "publicListingStatus", ["draft_copy_ready_not_promoted", "public_listed_not_promoted", "public_promoted"], errors);
   requireDateString(value, "observedAt", errors);
 
@@ -366,12 +382,20 @@ function validateObservedProofImport(value: unknown): string[] {
   const uniqueUsers = numberValue(value.uniqueUsers);
   const paidUsers = numberValue(value.paidUsers);
   const refunds = numberValue(value.refunds);
+  const chargedEventTotal = numberValue(value.chargedEventCount);
+  const chargedDatasetItemEventsValue = numberValue(value.chargedDatasetItemEvents);
+  const chargedActorStartEventsValue = numberValue(value.chargedActorStartEvents);
+  const conversionRate = numberValue(value.conversionRate);
   if (sellableRows !== null && datasetRows !== null && sellableRows > datasetRows) errors.push("sellableRows cannot exceed datasetItemCount");
   if (sellableFindings !== null && sellableRows !== null && sellableFindings > sellableRows) errors.push("sellableFindingCount cannot exceed sellableRows");
   if (caveatedRows !== null && sellableRows !== null && datasetRows !== null && sellableRows + caveatedRows > datasetRows) errors.push("sellableRows plus caveatedRows cannot exceed datasetItemCount");
   if (paidUsers !== null && uniqueUsers !== null && paidUsers > uniqueUsers) errors.push("paidUsers cannot exceed uniqueUsers");
   if (paidUsers !== null && runs !== null && paidUsers > runs) errors.push("paidUsers cannot exceed runs");
   if (refunds !== null && paidUsers !== null && refunds > paidUsers) errors.push("refunds cannot exceed paidUsers");
+  if (chargedEventTotal !== null && chargedDatasetItemEventsValue !== null && chargedActorStartEventsValue !== null && chargedEventTotal < chargedDatasetItemEventsValue + chargedActorStartEventsValue) errors.push("chargedEventCount must cover chargedDatasetItemEvents plus chargedActorStartEvents");
+  if (paidUsers !== null && uniqueUsers !== null && conversionRate !== null && conversionRate > 0 && uniqueUsers === 0) errors.push("conversionRate cannot be positive when uniqueUsers is 0");
+  if (value.runStatus === "succeeded" && value.failureState !== "none") errors.push("failureState must be none when runStatus is succeeded");
+  if (value.runStatus !== "succeeded" && value.failureState === "none") errors.push("failureState must identify the failure when runStatus is not succeeded");
   if (value.sampleOnly !== undefined && typeof value.sampleOnly !== "boolean") errors.push("sampleOnly must be a boolean when supplied");
   return errors;
 }
@@ -458,6 +482,40 @@ function memoryMbytes(run: JsonRecord | undefined): number | null {
   return firstNumberAt(run, ["memoryMbytes"]);
 }
 
+function runStatus(run: JsonRecord | undefined): HostedApifyProofObservation["runStatus"] {
+  const status = String(run?.status ?? "").toUpperCase();
+  if (status === "SUCCEEDED" || status === "SUCCESS") return "succeeded";
+  if (status === "FAILED") return "failed";
+  if (status === "TIMED-OUT" || status === "TIMED_OUT" || status === "TIMEOUT") return "timed_out";
+  if (status === "ABORTED") return "aborted";
+  return run ? "external_unknown" : null;
+}
+
+function failureState(run: JsonRecord | undefined): HostedApifyProofObservation["failureState"] {
+  const status = runStatus(run);
+  if (status === "succeeded") return "none";
+  if (status === "failed" || status === "timed_out" || status === "aborted") return status;
+  return run ? "external_unknown" : null;
+}
+
+function chargedEventCount(output: JsonRecord | undefined, items: JsonRecord[]): number | null {
+  return firstNumberAt(output, ["chargedEventCount", "billingEventCount", "chargeEventCount"])
+    ?? numberAtPath(output, ["billing", "chargedEventCount"])
+    ?? (items.length ? chargedDatasetItemEvents(output, items) ?? null : null);
+}
+
+function chargedDatasetItemEvents(output: JsonRecord | undefined, items: JsonRecord[]): number | null {
+  return firstNumberAt(output, ["chargedDatasetItemEvents", "datasetItemChargeEvents"])
+    ?? numberAtPath(output, ["billing", "chargedDatasetItemEvents"])
+    ?? (items.length ? items.length : null);
+}
+
+function chargedActorStartEvents(output: JsonRecord | undefined): number | null {
+  return firstNumberAt(output, ["chargedActorStartEvents", "actorStartChargeEvents"])
+    ?? numberAtPath(output, ["billing", "chargedActorStartEvents"])
+    ?? null;
+}
+
 function firstNumberAt(record: JsonRecord | undefined, fields: string[]): number | null {
   if (!record) return null;
   for (const field of fields) {
@@ -465,6 +523,15 @@ function firstNumberAt(record: JsonRecord | undefined, fields: string[]): number
     if (value !== null) return value;
   }
   return null;
+}
+
+function numberAtPath(root: JsonRecord | undefined, path: string[]): number | null {
+  let current: unknown = root;
+  for (const segment of path) {
+    if (!isRecord(current)) return null;
+    current = current[segment];
+  }
+  return numberValue(current);
 }
 
 function recordAtPath(root: JsonRecord | undefined, path: string[]): JsonRecord | undefined {

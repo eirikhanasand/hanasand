@@ -1520,8 +1520,8 @@ const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, 
 if (
   !graphPublicUnlockCounts
   || Number(graphPublicUnlockCounts.admitted_by_parser) !== 0
-  || Number(graphPublicUnlockCounts.ready_for_parser) !== 750
-  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 750
+  || Number(graphPublicUnlockCounts.ready_for_parser) !== 1000
+  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 1000
   || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
   || Number(graphPublicUnlockCounts.needs_public_source) !== 6
   || Number(graphPublicUnlockCounts.contradicted) !== 6
@@ -1542,9 +1542,9 @@ const graphPublicNeedsPublicSource = graphPublicUnlockQueue.needs_public_source 
 const graphPublicParserHandoff = graphPublicUnlockQueue.parserAdmissionHandoff as Array<Record<string, unknown>> | undefined;
 if (
   !Array.isArray(graphPublicParserHandoff)
-  || graphPublicParserHandoff.length !== 750
+  || graphPublicParserHandoff.length !== 1000
   || !Array.isArray(graphPublicCurrentAdmission)
-  || graphPublicCurrentAdmission.length !== 750
+  || graphPublicCurrentAdmission.length !== 1000
   || !graphPublicParserHandoff.every((row) =>
     typeof row.actor === "string"
     && typeof row.victimOrTarget === "string"
@@ -1584,6 +1584,17 @@ if (
     && typeof (row.programDePriority as Record<string, unknown>).gateContribution === "string"
     && (row.programDePriority as Record<string, unknown>).noLeakProof === "hash_only_public_or_metadata_reference"
     && typeof (row.programDePriority as Record<string, unknown>).admissionBlocker === "string"
+    && typeof row.programFgPriority === "object"
+    && typeof (row.programFgPriority as Record<string, unknown>).whyCorroborationMatters === "string"
+    && typeof (row.programFgPriority as Record<string, unknown>).buyerActionEnabled === "string"
+    && Number((row.programFgPriority as Record<string, unknown>).confidenceDelta) > 0
+    && Number((row.programFgPriority as Record<string, unknown>).freshnessDelta) > 0
+    && Number((row.programFgPriority as Record<string, unknown>).sourceFamilyDelta) > 0
+    && typeof (row.programFgPriority as Record<string, unknown>).contradictionRisk === "string"
+    && typeof (row.programFgPriority as Record<string, unknown>).parserAdmissionReason === "string"
+    && typeof (row.programFgPriority as Record<string, unknown>).nextParserSlice === "string"
+    && (row.programFgPriority as Record<string, unknown>).noLeakProof === "hash_only_public_or_metadata_reference"
+    && (row.programFgPriority as Record<string, unknown>).admissionBlocker === "none"
     && Number(row.expectedPaidRowLiftAfterParserAdmission) > 0
     && row.admissionState === "ready_for_parser"
     && row.countsTowardFloorNow === false
@@ -1606,6 +1617,9 @@ if (
   graphPublicParserHandoff.filter((row) => (row.programDdPriority as Record<string, unknown>).findingLikely === true).length < 350
   || graphPublicParserHandoff.filter((row) => (row.programDePriority as Record<string, unknown>).admissionBlocker === "none" && Number((row.programDePriority as Record<string, unknown>).expectedCurrentRowLift) > 0).length < 150
   || graphPublicParserHandoff.filter((row) => (row.programDePriority as Record<string, unknown>).gateContribution === "current750").length < 150
+  || graphPublicParserHandoff.filter((row) => (row.programFgPriority as Record<string, unknown>).nextParserSlice === "current1000_alias_victim_ttp").length < 100
+  || graphPublicParserHandoff.filter((row) => (row.programFgPriority as Record<string, unknown>).nextParserSlice === "current1000_source_family_freshness").length < 150
+  || graphPublicParserHandoff.filter((row) => (row.programFgPriority as Record<string, unknown>).nextParserSlice === "current1000_metadata_public_support").length < 50
   || !graphPublicProgramDbRejectionBuckets
   || Number(graphPublicProgramDbRejectionBuckets.stale) !== 4
   || Number(graphPublicProgramDbRejectionBuckets.alias_conflict) !== 4
@@ -1969,6 +1983,9 @@ const hostedMarketplaceInputs = hostedPaidReadinessProof?.marketplaceConversionI
 const hostedPaidAcceptance = hostedPaidReadinessProof?.paidProofAcceptance as Record<string, unknown> | undefined;
 const hostedPaidIntegrityGate = hostedPaidReadinessProof?.paidRowIntegrityGate as Record<string, unknown> | undefined;
 const hostedConversionPayoutTruth = hostedPaidReadinessProof?.conversionPayoutTruth as Record<string, Record<string, unknown>> | undefined;
+const hostedProgramFgEvidenceBoard = hostedPaidReadinessProof?.programFgObservedEvidenceBoard as Record<string, unknown> | undefined;
+const hostedProgramFgRun = hostedProgramFgEvidenceBoard?.observedHostedRun as Record<string, unknown> | undefined;
+const hostedProgramFgMarketplace = hostedProgramFgEvidenceBoard?.observedMarketplaceTruth as Record<string, unknown> | undefined;
 const hostedProofImportPath = hostedPaidReadinessProof?.hostedProofImportPath as Record<string, unknown> | undefined;
 const hostedProofObservedFields = hostedProofImportPath?.observedFields as Record<string, unknown> | undefined;
 const hostedProofOperatorChecklist = hostedPaidReadinessProof?.hostedProofOperatorChecklist as Record<string, unknown> | undefined;
@@ -2001,9 +2018,15 @@ if (
   || (hostedProofImportPath.observedProofImport as Record<string, unknown> | undefined)?.validationState !== "missing"
   || !hostedProofObservedFields
   || hostedProofObservedFields.runId !== null
+  || hostedProofObservedFields.buildId !== null
+  || hostedProofObservedFields.runStatus !== null
+  || hostedProofObservedFields.failureState !== null
   || hostedProofObservedFields.datasetId !== null
   || hostedProofObservedFields.sellableRows !== null
   || hostedProofObservedFields.sellableFindingCount !== null
+  || hostedProofObservedFields.chargedEventCount !== null
+  || hostedProofObservedFields.chargedDatasetItemEvents !== null
+  || hostedProofObservedFields.chargedActorStartEvents !== null
   || hostedProofObservedFields.secondBatchAuditObserved !== false
   || !hostedMarketplaceInputs
   || hostedMarketplaceInputs.storeViews !== null
@@ -2033,6 +2056,35 @@ if (
   || hostedPaidIntegrityGate.caveatedRowsCountTowardChargeable !== false
 ) {
   throw new Error("Hosted paid-readiness proof must keep local and single-query hosted proof out of paid promotion until 100-name hosted Apify metrics are observed");
+}
+if (
+  !hostedProgramFgEvidenceBoard
+  || hostedProgramFgEvidenceBoard.schemaVersion !== "ti.program_fg_observed_apify_hosted_marketplace_truth.v1"
+  || hostedProgramFgEvidenceBoard.importState !== "no_proof_imported"
+  || hostedProgramFgEvidenceBoard.hostedProofState !== "missing"
+  || hostedProgramFgEvidenceBoard.marketplaceTruthState !== "external_unknown"
+  || hostedProgramFgEvidenceBoard.releaseBlockerState !== "no_proof_imported"
+  || hostedProgramFgEvidenceBoard.noSyntheticFallback !== true
+  || !Array.isArray(hostedProgramFgEvidenceBoard.blockedProofClasses)
+  || !(hostedProgramFgEvidenceBoard.blockedProofClasses as string[]).includes("sample")
+  || !(hostedProgramFgEvidenceBoard.blockedProofClasses as string[]).includes("historical_shape_safety")
+  || !hostedProgramFgRun
+  || hostedProgramFgRun.buildId !== null
+  || hostedProgramFgRun.failureState !== null
+  || hostedProgramFgRun.chargedEventCount !== null
+  || !hostedProgramFgMarketplace
+  || hostedProgramFgMarketplace.pricingModel !== "external_unknown"
+  || hostedProgramFgMarketplace.payoutState !== "external_unknown"
+  || hostedProgramFgMarketplace.analyticsVisible !== "external_unknown"
+  || hostedProgramFgMarketplace.conversionRate !== null
+  || !Array.isArray(hostedProgramFgEvidenceBoard.missingExternalFields)
+  || !(hostedProgramFgEvidenceBoard.missingExternalFields as string[]).includes("buildId")
+  || !(hostedProgramFgEvidenceBoard.missingExternalFields as string[]).includes("chargedEventCount")
+  || !(hostedProgramFgEvidenceBoard.missingExternalFields as string[]).includes("listingVisibility")
+  || !Array.isArray(hostedProgramFgEvidenceBoard.nextSafeCommands)
+  || !(hostedProgramFgEvidenceBoard.nextSafeCommands as string[]).some((command) => command.includes("TI_APIFY_OBSERVED_PROOF_PATH"))
+) {
+  throw new Error("Program FG hosted proof evidence board must expose missing observed Apify run, charge, marketplace, and safe import paths");
 }
 const hostedProofChecklistGateEffects = hostedProofOperatorChecklist?.gateEffects as Record<string, Record<string, unknown>> | undefined;
 const hostedProofChecklistExamples = hostedProofOperatorChecklist?.validationExamples as Array<Record<string, unknown>> | undefined;
