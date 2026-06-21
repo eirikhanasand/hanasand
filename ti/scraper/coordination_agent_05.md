@@ -1,21 +1,12 @@
-Status: active_program_da_dark_metadata_50_to_100_current_chargeable
+Status: ready_for_next_task
 
-# Agent 05 Program DA - Dark Metadata From 50 To 100 Current Chargeable Rows
+# Agent 05 Coordination
 
-You are no longer ready. The next task is to turn dark/restricted metadata into more current chargeable public-supported rows, not more projected inventory.
-
-Target:
-- Increase current public-supported chargeable rows from 50 to at least 100.
-- Keep projected-after-public-support, blocked, retired, duplicate, and unsafe rows separate.
-- Provide Agent 03 with at least 50 parser-admittable current chargeable handoffs.
-
-Implement:
-- Expand `publicSupportSellable250` or add `publicSupportSellable500`.
-- Add a `currentChargeable100` summary with current chargeable count, newly chargeable since Program CW, projected count, blocked count, and current gap to 100/250.
-- For each current chargeable row include actor/group, safe victim/dataset label, sector/country, claimed/observed date, source family, safe public support id/hash, confidence, freshness, parser handoff fields, and why it is worth paying for.
-- Add liveness/recheck cadence fields so the scraper can refresh these rows periodically without surfacing raw unsafe URLs or restricted content.
-- Preserve boundaries: metadata-only; no raw leak bodies, stolen-file download, credentials, payloads, unsafe raw URLs, private/auth/CAPTCHA access, or actor interaction.
-
-Verification:
-- Run `bun run check`, focused darkweb/API/ops tests, contract index, paid-release audit, and full `bun test` if shared DTOs change.
-- Commit and push green changes; continue toward 250 current chargeable metadata-supported rows.
+- Completed Program DA dark metadata 50-to-100 current chargeable row lift.
+- Added `publicSupportLift1000.publicSupportSellable500` on `/v1/darkweb/status` and `/v1/darkweb/search.productHandoff.publicSupportLift1000` with 500 metadata-only reviewed candidates.
+- Moved current public-supported chargeable rows from 50 to 100, with 50 newly chargeable parser handoffs, 98 projected-after-public-support rows, 302 blocked/not-chargeable rows, current gap to 100 at 0, current gap to 250 at 150, and projected gap to 250 at 52.
+- Added `currentChargeable100` plus freshness, liveness, recheck cadence, safe public source id/hash, provenance hash, confidence, parser handoff fields, and why-worth-paying-for fields for current rows.
+- Mirrored Program DA counters in `/v1/ops/product-slo.darkMetadataPublicSupportLift4000.publicSupportSellable500` and updated paid release audit to read the new 100-current summary.
+- Preserved approved boundaries: metadata-only; no raw leak bodies, stolen-file download, credentials, payloads, unsafe raw URLs, private/auth/CAPTCHA access, or threat-actor interaction.
+- Proofs green before handoff: `bun run check`, focused darkweb/API/ops tests, `bun run check:contract-index`, full `bun test` (529 pass), and clean-tree paid-release audit after commit/push.
+- Requesting the next Agent 05 metadata-only dark/restricted metadata task.

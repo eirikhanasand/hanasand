@@ -1785,6 +1785,42 @@ describe("ops controls", () => {
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
       (row.rowDecision === "current_sellable_public_supported" || (!row.countsTowardSellableFloorNow && row.blockerBucket !== undefined))
     )).toBe(true);
+    expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1",
+      candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
+      targetSellableRows: 250,
+      candidateCount: 500,
+      previousCurrentChargeableRows: 50,
+      currentChargeableRows: 100,
+      newlyChargeableRows: 50,
+      projectedAfterPublicSupportRows: 98,
+      blockedOrRetiredRows: 302,
+      currentChargeable100: {
+        currentChargeableCount: 100,
+        newlyChargeableSinceProgramCw: 50,
+        projectedAfterPublicSupportCount: 98,
+        blockedOrRetiredCount: 302,
+        currentGapTo100: 0,
+        currentGapTo250: 150,
+        projectedGapTo250AfterPublicSupport: 52,
+        countsProjectedRowsAsCurrent: false
+      },
+      rowDecisionCounts: {
+        current_sellable_public_supported: 100,
+        projected_after_public_support: 98,
+        blocked_not_chargeable: 302
+      },
+      newlyChargeableParserHandoffRowCount: 50
+    });
+    expect(Object.values(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(400);
+    expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.sampleRows.every((row) =>
+      row.safePublicSourceId.startsWith("public_support_500_source_") &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      row.freshness.length > 0 &&
+      row.recheckCadenceHours > 0 &&
+      row.whyWorthPayingFor.length > 0 &&
+      (row.rowDecision === "current_sellable_public_supported" || (!row.countsTowardSellableFloorNow && row.blockerBucket !== undefined))
+    )).toBe(true);
     expect(dashboard.darkMetadataPublicSupportLift4000.tier10000Preview).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",
       evaluatedCandidateCount: 10000,

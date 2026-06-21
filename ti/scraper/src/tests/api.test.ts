@@ -1303,6 +1303,62 @@ describe("api v1", () => {
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
       (row.rowDecision === "current_sellable_public_supported" || (!row.countsTowardSellableFloorNow && row.blockerBucket !== undefined))
     )).toBe(true);
+    expect((response.darkMetadataPublicSupportLift4000 as {
+      publicSupportSellable500: {
+        candidateCount: number;
+        previousCurrentChargeableRows: number;
+        currentChargeableRows: number;
+        newlyChargeableRows: number;
+        projectedAfterPublicSupportRows: number;
+        blockedOrRetiredRows: number;
+        currentChargeable100: {
+          currentChargeableCount: number;
+          newlyChargeableSinceProgramCw: number;
+          projectedAfterPublicSupportCount: number;
+          blockedOrRetiredCount: number;
+          currentGapTo100: number;
+          currentGapTo250: number;
+          projectedGapTo250AfterPublicSupport: number;
+          countsProjectedRowsAsCurrent: boolean;
+        };
+        rowDecisionCounts: Record<string, number>;
+        blockerBucketCounts: Record<string, number>;
+        sampleRows: Array<{ rowDecision: string; blockerBucket?: string; newlyChargeableSinceProgramCw: boolean; countsTowardSellableFloorNow: boolean; countsTowardSellableFloorAfterPublicSupport: boolean; noLeakProof: string; safePublicSourceId: string; freshness: string; recheckCadenceHours: number; whyWorthPayingFor: string }>;
+        newlyChargeableParserHandoffRowCount: number;
+      };
+    }).publicSupportSellable500).toMatchObject({
+      candidateCount: 500,
+      previousCurrentChargeableRows: 50,
+      currentChargeableRows: 100,
+      newlyChargeableRows: 50,
+      projectedAfterPublicSupportRows: 98,
+      blockedOrRetiredRows: 302,
+      currentChargeable100: {
+        currentChargeableCount: 100,
+        newlyChargeableSinceProgramCw: 50,
+        projectedAfterPublicSupportCount: 98,
+        blockedOrRetiredCount: 302,
+        currentGapTo100: 0,
+        currentGapTo250: 150,
+        projectedGapTo250AfterPublicSupport: 52,
+        countsProjectedRowsAsCurrent: false
+      },
+      rowDecisionCounts: {
+        current_sellable_public_supported: 100,
+        projected_after_public_support: 98,
+        blocked_not_chargeable: 302
+      },
+      newlyChargeableParserHandoffRowCount: 50
+    });
+    expect(Object.values((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable500: { blockerBucketCounts: Record<string, number> } }).publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(400);
+    expect((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable500: { sampleRows: Array<{ rowDecision: string; blockerBucket?: string; countsTowardSellableFloorNow: boolean; noLeakProof: string; safePublicSourceId: string; freshness: string; recheckCadenceHours: number; whyWorthPayingFor: string }> } }).publicSupportSellable500.sampleRows.every((row) =>
+      row.safePublicSourceId.startsWith("public_support_500_source_") &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      row.freshness.length > 0 &&
+      row.recheckCadenceHours > 0 &&
+      row.whyWorthPayingFor.length > 0 &&
+      (row.rowDecision === "current_sellable_public_supported" || (!row.countsTowardSellableFloorNow && row.blockerBucket !== undefined))
+    )).toBe(true);
     expect((response.first100AdmissionQuality as {
       schemaVersion: string;
       routeVisibleOn: string[];

@@ -272,7 +272,10 @@ function buildReleaseLadder(
   const parserLedger = record(record(productSlo.parserRealSellableLift).findingAdmissionLedger);
   const deterministicProof = record(parserLedger.deterministic100NameProof);
   const tier1000Gate = record(parserLedger.tier1000Gate);
-  const darkSellable250 = record(record(productSlo.darkMetadataPublicSupportLift4000).publicSupportSellable250);
+  const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
+  const darkSellable250 = record(darkSupportLift.publicSupportSellable250);
+  const darkSellable500 = record(darkSupportLift.publicSupportSellable500);
+  const darkChargeable100 = record(darkSellable500.currentChargeable100);
   const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
   const graphCounts = record(graphQueue.counts);
 
@@ -282,8 +285,8 @@ function buildReleaseLadder(
   const sourceProvenanceShare = Number.isFinite(numberValue(parserLedger.sourceProvenanceShareOfSellable))
     ? numberValue(parserLedger.sourceProvenanceShareOfSellable)
     : roundRatio(sellableSourceProvenanceRows, currentSellableRows);
-  const darkCurrentChargeableRows = numberValue(darkSellable250.currentChargeableRows);
-  const darkProjectedRows = numberValue(darkSellable250.projectedAfterPublicSupportRows);
+  const darkCurrentChargeableRows = firstFiniteNumber(darkChargeable100.currentChargeableCount, darkSellable500.currentChargeableRows, darkSellable250.currentChargeableRows);
+  const darkProjectedRows = firstFiniteNumber(darkChargeable100.projectedAfterPublicSupportCount, darkSellable500.projectedAfterPublicSupportRows, darkSellable250.projectedAfterPublicSupportRows);
   const graphRowsCountTowardFloorNow = numberValue(graphCounts.rowsCountTowardFloorNow);
   const graphRowsReadyAfterParserAdmission = numberValue(graphCounts.rowsReadyAfterParserAdmission);
   const hostedStatus = String(hostedProof.status ?? latestProofRun.proofDecision ?? "unknown");
@@ -336,10 +339,11 @@ function buildReleaseLadder(
     darkMetadataCurrentChargeable: {
       state: darkCurrentChargeableRows >= 100 ? "pass" : "hold",
       currentChargeableRows: darkCurrentChargeableRows,
-      targetSellableRows: firstFiniteNumber(darkSellable250.targetSellableRows, 100),
-      remainingGapTo100Now: darkSellable250.remainingGapTo100Now,
+      targetSellableRows: firstFiniteNumber(darkSellable500.targetSellableRows, darkSellable250.targetSellableRows, 100),
+      remainingGapTo100Now: firstFiniteNumber(darkChargeable100.currentGapTo100, darkSellable250.remainingGapTo100Now),
+      remainingGapTo250Now: firstFiniteNumber(darkChargeable100.currentGapTo250, 250 - darkCurrentChargeableRows),
       projectedAfterPublicSupportRows: darkProjectedRows,
-      projectedRowsCountTowardFloorNow: false
+      projectedRowsCountTowardFloorNow: darkChargeable100.countsProjectedRowsAsCurrent === false ? false : false
     },
     graphParserHandoff: {
       state: graphRowsCountTowardFloorNow === 0 ? "hold" : "fail",
@@ -361,7 +365,7 @@ function buildReleaseLadder(
     },
     nextBuyerVisibleBlockers: [
       "Agent 03: admit public-supported parser handoff rows as activity, target, TTP, victim, or dataset findings until current sellable rows reach 300 without source-provenance padding.",
-      "Agent 05: lift public-supported dark metadata current chargeable rows from 50 toward 100; projected rows and restricted-only rows stay out of paid counts.",
+      "Agent 05: continue public-supported dark metadata current chargeable rows from 100 toward 250; projected rows and restricted-only rows stay out of paid counts.",
       "Agent 08: keep graph rows at zero current paid-floor credit until parser admission converts them into non-graph public findings.",
       "Agent 09: run/record hosted 100-name Apify proof plus observed Store analytics, payout, pricing, refunds, and listing state before promotion."
     ]
@@ -407,8 +411,13 @@ function checkPaidCountIntegrity(
   const tier1000Gate = record(parserLedger.tier1000Gate);
   const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
   const graphCounts = record(graphQueue.counts);
-  const darkSellable250 = record(record(productSlo.darkMetadataPublicSupportLift4000).publicSupportSellable250);
-  const darkSampleRows = Array.isArray(darkSellable250.sampleRows) ? darkSellable250.sampleRows.filter(isRecord) : [];
+  const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
+  const darkSellable250 = record(darkSupportLift.publicSupportSellable250);
+  const darkSellable500 = record(darkSupportLift.publicSupportSellable500);
+  const darkSampleRows = [
+    ...(Array.isArray(darkSellable250.sampleRows) ? darkSellable250.sampleRows.filter(isRecord) : []),
+    ...(Array.isArray(darkSellable500.sampleRows) ? darkSellable500.sampleRows.filter(isRecord) : [])
+  ];
   const hostedProof = record(paidReleaseTruthBoard.hostedPaidReadinessProof);
   const paidRowIntegrityGate = record(hostedProof.paidRowIntegrityGate);
   const requiredZeroCounts = record(paidRowIntegrityGate.requiredZeroCounts);
