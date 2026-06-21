@@ -12,5 +12,10 @@ export interface MonetizationSummary {
   holdRowCount: number;
   suppressedRowCount: number;
   chargeRecommendedRowCount: number;
+  liveDataRealRowCount: number;
+  sellableLiveDataRealRowCount: number;
+  distinctHostedSourceFindingCount: number;
+  fixtureBackedRowCount: number;
+  defaultWatchlistBackedRowCount: number;
   skippedReason?: string;
 }

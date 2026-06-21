@@ -9,6 +9,7 @@ import { datasetRows } from "./responseRows/datasets.ts";
 import { sourceRows } from "./responseRows/sources.ts";
 import { targetRows } from "./responseRows/targets.ts";
 import { ttpRows } from "./responseRows/ttps.ts";
+import { withDataReality } from "./dataReality.ts";
 
 export function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): MarketplaceRow[] {
   const sourceById = new Map(response.sources.map((source) => [source.id, source]));
@@ -26,5 +27,5 @@ export function normalizeResponse(response: TiSearchResponse, input: NormalizedI
   if (input.includeDatasets) rows.push(...datasetRows(response, generatedAt, lastSeen));
   if (input.includeCoverageGaps) rows.push(...coverageGapRows(response, generatedAt, lastSeen));
 
-  return rows.map(withPaidRowDecision);
+  return rows.map(withDataReality).map(withPaidRowDecision);
 }

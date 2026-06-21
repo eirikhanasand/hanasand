@@ -1,6 +1,7 @@
 import type { MarketplaceRow, MonetizationSummary } from "./types.ts";
 import { ACTOR_START_EVENT, DATASET_ITEM_EVENT } from "./constants.ts";
 import { apifyEventSkipReason } from "./utils.ts";
+import { liveDataMetrics } from "./liveDataMetrics.ts";
 export { buyerVisibleOutputQualityForRows } from "./outputQuality/buyerVisible.ts";
 export { dailyCollectionRunForRows, isBuyerUsefulCandidate } from "./outputQuality/dailyRun.ts";
 export { monetizationReadinessForRows, PRODUCTION_SELLABLE_ROW_FLOOR } from "./outputQuality/readiness.ts";
@@ -26,6 +27,7 @@ export function paidRowQualitySummary(rows: MarketplaceRow[]) {
 }
 export function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary {
   const quality = paidRowQualitySummary(rows);
+  const live = liveDataMetrics(rows);
   const enabled = Boolean(process.env.APIFY_ACTOR_RUN_ID && process.env.APIFY_TOKEN);
   const summary: MonetizationSummary = {
     enabled,
@@ -40,7 +42,8 @@ export function monetizationForRows(rows: MarketplaceRow[]): MonetizationSummary
     coverageGapOnlyRowCount: quality.coverage_gap_only,
     holdRowCount: quality.hold,
     suppressedRowCount: quality.suppress,
-    chargeRecommendedRowCount: quality.chargeRecommended
+    chargeRecommendedRowCount: quality.chargeRecommended,
+    ...live
   };
   if (!summary.enabled) {
     summary.skippedReason = apifyEventSkipReason();

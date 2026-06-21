@@ -1,10 +1,12 @@
 import type { MarketplaceRow } from "../types.ts";
+import { liveDataMetrics } from "../liveDataMetrics.ts";
 
 type SourceStats = { sourceName: string; sourceType: MarketplaceRow["sourceType"]; candidateRowsProduced: number; sellableRowsProduced: number; freshCandidateRowsProduced: number; queries: Set<string>; };
 
 export function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
   const candidateRows = rows.filter(isBuyerUsefulCandidate);
   const freshCandidateRows = candidateRows.filter(isFresh);
+  const live = liveDataMetrics(rows);
   const refreshedSources = [...sourceStats(rows).values()]
     .sort(sortSources).slice(0, 8).map((source) => ({ ...source, queries: [...source.queries].sort() }));
   return {
@@ -14,11 +16,14 @@ export function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
     candidateRowsProduced: candidateRows.length,
     freshCandidateRowsProduced: freshCandidateRows.length,
     sellableRowsProduced: rows.filter((row) => row.paidRowDecision === "sellable").length,
+    liveDataRealRowsProduced: live.liveDataRealRowCount,
+    sellableLiveDataRealRowsProduced: live.sellableLiveDataRealRowCount,
+    distinctHostedSourceFindings: live.distinctHostedSourceFindingCount,
     caveatedCandidateRowsProduced: rows.filter((row) => row.paidRowDecision === "included_with_caveat").length,
     refreshedSources,
-    nextCollectionAction: candidateRows.length >= 100
+    nextCollectionAction: live.sellableLiveDataRealRowCount >= 100
       ? "keep daily refresh cadence and measure hosted conversion"
-      : "prioritize refreshed sources that produce sellable current rows before diagnostics or coverage gaps"
+      : "replace fixture and default-watchlist rows with hosted live-collected distinct public-source findings"
   };
 }
 

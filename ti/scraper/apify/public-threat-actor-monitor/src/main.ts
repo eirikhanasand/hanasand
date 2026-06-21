@@ -29,6 +29,9 @@ async function main() {
     billingMode: monetizationSummary.billingMode,
     chargeEvents: monetizationSummary.eventNames,
     datasetItemEventsExpected: monetizationSummary.datasetItemCount,
+    liveDataRealRowCount: monetizationSummary.liveDataRealRowCount,
+    sellableLiveDataRealRowCount: monetizationSummary.sellableLiveDataRealRowCount,
+    distinctHostedSourceFindingCount: monetizationSummary.distinctHostedSourceFindingCount,
     dailyCollectionRun
   }));
 }

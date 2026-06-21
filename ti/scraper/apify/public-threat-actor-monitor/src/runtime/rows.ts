@@ -1,5 +1,6 @@
 import type { MarketplaceRow, PaidRowDecision } from "../types.ts";
 import type { NormalizedInput } from "./input.ts";
+import { liveDataRealScore } from "../dataReality.ts";
 
 export function filterOutputRows(rows: MarketplaceRow[], input: NormalizedInput): MarketplaceRow[] {
   return rows.filter((row) => {
@@ -22,6 +23,7 @@ function compareRows(left: RankedRow, right: RankedRow): number {
   const leftDecision = left.row.paidRowDecision ?? "hold";
   const rightDecision = right.row.paidRowDecision ?? "hold";
   return decisionRank[leftDecision] - decisionRank[rightDecision]
+    || liveDataRealScore(left.row) - liveDataRealScore(right.row)
     || freshnessRank[left.row.freshnessStatus] - freshnessRank[right.row.freshnessStatus]
     || rowTypeRank[left.row.rowType] - rowTypeRank[right.row.rowType]
     || (right.row.buyerValueScore ?? 0) - (left.row.buyerValueScore ?? 0)
