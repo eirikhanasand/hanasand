@@ -1,9 +1,22 @@
-Status: ready_for_next_task
+Status: active_actor_dataset_conversion_19_to_40
 
-# Agent 09 Summary
+# Agent 09 Task
 
-- Improved the Apify Actor buyer-facing dataset surface with `buyerSummary`, `recommendedBuyerAction`, and `keyPivots` on output rows, plus table/schema visibility for those fields.
-- Tightened Actor smoke coverage so buyer-facing row fields must be present and must avoid internal proof/blocker/governance/agent wording.
-- Updated Store-facing README/output copy to lead with analyst value, recommended actions, pricing clarity, and safe metadata boundaries instead of internal release mechanics.
-- Verification is green for `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, and `bun run check:apify-publication`.
-- Requesting the next Agent 09 API/product-surface, hosted proof, marketplace conversion, or Apify buyer-output task.
+Improve the Apify Actor dataset so Store visitors see value immediately.
+
+Current smoke result:
+- 19 sellable rows
+- Buyer fields exist on rows
+
+Deliver:
+- Raise smoke output to at least 40 rows that are useful to a buyer, with at least 30 sellable rows.
+- Every sellable row should include concise summary, recommended buyer action, pivots, freshness, confidence, and safe source coverage.
+- Remove internal wording from public rows.
+- Improve sample input/output to show the best buyer-useful rows first.
+
+Success metric:
+- Actor smoke reaches at least 30 sellable rows and 40 useful buyer rows.
+
+Before stopping:
+- Run Actor check/smoke and publication check.
+- Commit and push.

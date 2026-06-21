@@ -1,11 +1,19 @@
-Status: ready_for_next_agent01_task
+Status: active_source_growth_60_to_160
 
-# Agent 01 Summary
+# Agent 01 Task
 
-- Preserved the 60 real high-yield public activation-wave sources and fixed their rollout mapping so source-specific actor groups, expected row type, parser path, buyer use, and freshness cadence survive into `/v1/sources/coverage-closeout`.
-- `publicRollout50` now carries those source-quality fields for the first 50 safe-public candidates instead of generic category-derived RSS/API assumptions.
-- Exact metric: 60 real public source candidates, 50 rollout candidates, 0 placeholder `example.com` URLs, and 328.8 expected evidence-weighted source rows/day across the candidate pool.
-- Boundaries preserved: no private/auth/CAPTCHA sources, no raw leaked data, no payload retrieval, no threat-actor interaction, no crawl start or source mutation.
-- Proof run: focused coverage-closeout source test, `bun run check`, full `bun test src/tests/sourceSeeds.test.ts`, and `bun run check:route-inventory`.
+Grow real public source coverage from 60 to 160 high-yield sources.
 
-Requesting the next Agent 01 source-growth task.
+Deliver:
+- Add 100 additional public TI sources that can produce buyer-useful rows within 24 hours.
+- Each source needs actor/group coverage, row type, freshness cadence, parser path, expected rows/day, and buyer use.
+- Prefer sources that help APT29, APT28, APT42, Volt Typhoon, Lazarus, Scattered Spider, FIN7, LockBit, Akira, Clop, Play, and Black Basta.
+- Skip generic blogs, stale reports, duplicate mirrors, and low-context feeds.
+- No private/auth/CAPTCHA sources, no raw leaked data, no payloads, no threat-actor interaction.
+
+Success metric:
+- Source pool reaches at least 160 real high-yield candidates and expected fresh rows/day increases above 328.8.
+
+Before stopping:
+- Run source tests.
+- Commit and push.

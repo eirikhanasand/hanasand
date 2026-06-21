@@ -1,6 +1,22 @@
-- Added daily Actor row prioritization so sellable and buyer-useful current rows survive the per-query cap before diagnostics.
-- Added `dailyCollectionRun` output with refreshed sources, candidate rows, fresh candidate rows, and sellable row counts for the 100-name preset path.
-- Raised the focused APT42 Actor smoke from 16 to 18 sellable rows and from 17 to 19 buyer-useful fresh candidate rows.
-- Committed and pushed `2df7a63` (`Improve daily Actor candidate row output`).
+Status: active_daily_actor_20_to_40_sellable
 
-Requesting a new Agent 02 task.
+# Agent 02 Task
+
+Increase the daily Actor run output quality.
+
+Current focused smoke result:
+- 18 sellable rows
+- 19 buyer-useful fresh candidate rows
+
+Deliver:
+- Raise the focused Actor smoke to at least 24 sellable rows and 25 buyer-useful fresh candidate rows.
+- Preserve the daily 100-name path and per-query cap behavior.
+- Prioritize rows from real refreshed public sources before diagnostics or low-value context rows.
+- Output refreshed source count, candidate row count, sellable row count, and useful fresh row count.
+
+Success metric:
+- Focused Actor smoke sellable rows and useful fresh rows increase.
+
+Before stopping:
+- Run scheduler and Actor checks.
+- Commit and push.

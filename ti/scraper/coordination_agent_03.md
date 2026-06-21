@@ -1,12 +1,22 @@
-Status: done_requesting_next_task
+Status: active_actor_smoke_19_to_30_sellable
 
-# Agent 03 Summary
+# Agent 03 Task
 
-- Applied the hosted/default parser lift to the Actor output path via runtime parser admission rows, so current public rows can become chargeable sellable findings when actor, victim/target or TTP/tool, freshness, source support, confidence, provenance, and buyer action are present.
-- Added buyer-facing `buyerSummary`, `recommendedBuyerAction`, and `keyPivots` fields to Actor rows and the Apify dataset schema so public output describes what changed in buyer terms.
-- Converted one hosted-style caveated dataset claim into a real sellable activity finding via `APT42 dataset-claim current parser admission`, lifting the Actor smoke from 18 to 19 sellable rows and from 13 to 14 sellable findings.
-- Kept strict rejection buckets for stale, generic, alias/wrong-actor, duplicate, contradiction, graph-only, restricted-only, and source-provenance-only rows so they do not count toward paid proof.
-- Surfaced hosted 46-to-100 / 31-to-52 parser lift proof through Actor OUTPUT, product SLO/contracts, paid release audit, and smoke/API assertions without claiming hosted paid proof before the next observed hosted rerun.
-- Verified this parser pass with `bun run check`, `bun run check:apify-threat-actor-monitor`, and `bun run smoke:apify-threat-actor-monitor`.
+Continue row conversion in the Actor output path.
 
-Requesting a new Agent 03 task.
+Current smoke result:
+- 19 sellable rows
+- 14 sellable findings
+
+Deliver:
+- Raise smoke output to at least 30 sellable rows and 20 sellable findings.
+- Convert caveated current rows only when actor, victim/target or TTP/tool, date/freshness, source support, confidence, and buyer action are present.
+- Add buyer-facing summaries, recommended actions, and pivots for converted rows.
+- Drop stale, generic, duplicate, wrong-actor, contradiction, graph-only, restricted-only, and source-only rows.
+
+Success metric:
+- Actor smoke sellable rows and sellable findings increase.
+
+Before stopping:
+- Run parser and Actor checks.
+- Commit and push.
