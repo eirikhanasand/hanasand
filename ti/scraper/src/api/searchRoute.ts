@@ -7,8 +7,9 @@ import { rowFromCapture } from "./searchRows.ts";
 export async function searchResponse(request: Request, options: ApiServerOptions, url: URL): Promise<Response> {
   const body = request.method === "POST" ? await readJson(request) : {};
   const query = String(body.q ?? body.query ?? url.searchParams.get("q") ?? "").trim();
-  const captures = findSearchCaptures(options.store, query, numberQuery(url.searchParams.get("limit")) ?? 50);
-  const rows = captures.map((capture: any) => rowFromCapture(capture, options.store.getSource?.(capture.sourceId)));
+  const limit = numberQuery(url.searchParams.get("limit")) ?? 50;
+  const captures = findSearchCaptures(options.store, query, limit * 3);
+  const rows = dedupeRows(captures.map((capture: any) => rowFromCapture(capture, options.store.getSource?.(capture.sourceId)))).slice(0, limit);
   const provenance = rows.map((row) => ({ evidenceStage: "captured_page", evidenceId: row.id, sourceId: row.sourceId }));
   const status = rows.length ? "ready" : "searching";
   const actorProfile = { query, actor: query, datasets: { evidenceStageCounts: { captured_page: rows.length }, sourceCount: new Set(rows.map((r) => r.sourceId)).size }, provenance };
@@ -30,4 +31,14 @@ function qualityFromRows(query: string, rows: Array<{ id: string }>) {
       ? [{ kind: "promote_quality_status", label: "Promote quality status", manualOnly: false, evidenceIds: rows.map((r) => r.id) }]
       : [{ kind: "request_more_capture_evidence", label: "Request more capture evidence", manualOnly: false, evidenceIds: [] }]
   };
+}
+
+function dedupeRows(rows: any[]) {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = row.url || row.urlHash || `${row.sourceId}:${String(row.title).toLowerCase().replace(/\s+/g, " ").slice(0, 120)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

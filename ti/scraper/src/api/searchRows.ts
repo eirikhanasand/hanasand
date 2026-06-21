@@ -1,7 +1,5 @@
 import { hashContent } from "../utils.ts";
-import { termRegex } from "./searchTerm.ts";
-
-const TAGS = ["ransomware", "breach", "malware", "phishing", "exploit", "cve", "apt", "leak", "victim", "botnet", "ddos", "supply-chain", "zero-day", "infrastructure", "c2"];
+import { tagsFor } from "./searchTags.ts";
 
 export function rowFromCapture(capture: any, source?: any) {
   const summary = cleanSummary(capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
@@ -41,14 +39,8 @@ function isMetadataOnly(capture: any) {
   return capture.storageKind === "metadata_only" || capture.metadata?.adapter === "darknet_metadata";
 }
 
-function tagsFor(text: string) {
-  const lower = text.toLowerCase();
-  return TAGS.filter((tag) => termRegex(tag).test(lower));
-}
-
-
 function cleanSummary(value: unknown) {
-  return String(value ?? "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+  return String(value ?? "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
     .replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'")
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));
