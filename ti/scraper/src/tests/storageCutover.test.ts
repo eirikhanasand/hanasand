@@ -64,11 +64,13 @@ import {
   buildEvidenceActorDatasetSourceGapSuppressionFeedback,
   buildEvidenceActorProductImpactReplay,
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
+  createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   createEvidenceSearchReadModelRepository,
   evidenceActorDatasetConsumerExecutionToPostgresRows,
   evidenceActorDatasetSourceGapConsumerQueueToPostgresRows,
+  evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows,
   evidencePromotionExecutionFromPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
@@ -2557,6 +2559,96 @@ describe("evidence storage cutover", () => {
     expect(actorDatasetSourceGapRepairReplayLedgerSerialized).not.toContain(restrictedRaw);
     expect(actorDatasetSourceGapRepairReplayLedgerSerialized).not.toContain("tenant/source/private-key");
     expect(actorDatasetSourceGapRepairReplayLedgerSerialized).not.toContain(".onion");
+
+    const actorDatasetSourceGapRepairReplayRows = evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows(
+      buildEvidenceActorDatasetSourceGapRepairReplayLedger(actorDatasetSourceGapRepairHandoff)
+    );
+    expect(actorDatasetSourceGapRepairReplayRows.repair_replay_ledger_runs).toHaveLength(1);
+    expect(actorDatasetSourceGapRepairReplayRows.repair_replay_checkpoints).toHaveLength(actorDatasetSourceGapRepairReplayLedger.replayCheckpoints.length);
+    expect(actorDatasetSourceGapRepairReplayRows.repair_replay_ledger_runs[0]).toMatchObject({
+      ledger_id: actorDatasetSourceGapRepairReplayLedger.ledgerId,
+      source_handoff_schema: "ti.evidence_actor_dataset_source_gap_repair_handoff.v1",
+      product_surface: "apify_public_threat_actor_monitor",
+      actor_build: "0.6.4",
+      latest_proof_run_id: "iMQGeezZ8bx7WtlhQ",
+      latest_proof_dataset_id: "5PLmkE30luBA5Lbgc",
+      dry_run: true,
+      will_promote_actor_rows: false,
+      will_write_public_answer_cache: false,
+      will_activate_sources: false,
+      no_leak: true
+    });
+    expect(actorDatasetSourceGapRepairReplayRows.repair_replay_checkpoints.every((row) =>
+      row.ledger_id === actorDatasetSourceGapRepairReplayLedger.ledgerId &&
+      row.queue_item_ids.length > 0 &&
+      row.required_replay_inputs.includes("durable_capture_rows") &&
+      row.required_replay_inputs.includes("claim_ledger_rows") &&
+      row.required_replay_inputs.includes("source_family_rows") &&
+      row.required_replay_inputs.includes("freshness_timestamps") &&
+      row.actor_promotion_gate === "blocked_until_replayed_evidence_rows" &&
+      row.can_promote_after_current_handoff === false &&
+      row.no_leak === true
+    )).toBe(true);
+    const actorDatasetSourceGapRepairReplayRepository = createEvidenceActorDatasetSourceGapRepairReplayRepository();
+    const actorDatasetSourceGapRepairReplayRepositoryStatus = actorDatasetSourceGapRepairReplayRepository.persistReplayRows(
+      actorDatasetSourceGapRepairReplayRows,
+      { generatedAt: "2026-05-24T21:45:00.000Z" }
+    );
+    expect(actorDatasetSourceGapRepairReplayRepositoryStatus).toMatchObject({
+      schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_replay_repository.v1",
+      backend: "postgres_actor_source_gap_repair_replay",
+      enabled: false,
+      disabledByDefault: true,
+      liveBackendConnection: false,
+      willPersistRows: false,
+      willPromoteActorRows: false,
+      willWritePublicAnswerCache: false,
+      willActivateSources: false,
+      failClosedWithoutExplicitEnable: true,
+      requiredFeatureFlags: ["TI_ACTOR_SOURCE_GAP_REPAIR_REPLAY_REPOSITORY_ENABLED"],
+      requiredTables: ["evidence_actor_source_gap_repair_replay_runs", "evidence_actor_source_gap_repair_replay_checkpoints"],
+      acceptedRowCounts: {
+        ledgerRuns: 1,
+        replayCheckpoints: actorDatasetSourceGapRepairReplayLedger.replayCheckpoints.length
+      },
+      persistedRowCounts: {
+        ledgerRuns: 0,
+        replayCheckpoints: 0
+      },
+      heldRowCounts: {
+        ledgerRuns: 1,
+        replayCheckpoints: actorDatasetSourceGapRepairReplayLedger.replayCheckpoints.length
+      },
+      blockedReasons: [
+        "actor_source_gap_repair_replay_repository_disabled",
+        "postgres_actor_source_gap_repair_replay_not_configured"
+      ],
+      replayReceiptReady: true,
+      canReplayWithoutRawEvidence: true,
+      promotionGate: "blocked_until_replayed_evidence_rows",
+      guardrails: {
+        explicitOperatorApprovalRequired: true,
+        sourceActivationNotApplied: true,
+        crawlingNotStarted: true,
+        restrictedRowsMetadataOnly: true,
+        rawLeakMaterialNeverQueued: true,
+        credentialsNeverQueued: true,
+        unsafeUrlsNeverQueued: true,
+        embeddingsForRestrictedRowsDisabled: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    const actorDatasetSourceGapRepairReplayRepositorySerialized = JSON.stringify(actorDatasetSourceGapRepairReplayRepositoryStatus);
+    expect(actorDatasetSourceGapRepairReplayRepositorySerialized).not.toContain(restrictedRaw);
+    expect(actorDatasetSourceGapRepairReplayRepositorySerialized).not.toContain("tenant/source/private-key");
+    expect(actorDatasetSourceGapRepairReplayRepositorySerialized).not.toContain(".onion");
 
     const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
     expect(actorDatasetConsumerHandoff).toMatchObject({

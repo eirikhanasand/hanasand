@@ -33,10 +33,12 @@ import {
   buildEvidenceActorProductImpactReplay,
   createEvidenceActorDatasetConsumerAuditRepository,
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
+  createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   evidenceActorDatasetConsumerExecutionToPostgresRows,
   evidenceActorDatasetSourceGapConsumerQueueToPostgresRows,
+  evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
   executeEvidencePromotionTransactionPlan,
@@ -50,6 +52,7 @@ import {
   type EvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus,
   type EvidenceActorDatasetSourceGapRepairHandoff,
   type EvidenceActorDatasetSourceGapRepairReplayLedger,
+  type EvidenceActorDatasetSourceGapRepairReplayRepositoryStatus,
   type EvidenceActorDatasetSourceGapSuppressionFeedback,
   evidenceSearchReadModelReadiness,
   type EvidencePromotionTransactionAuditReplay,
@@ -225,6 +228,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   actorDatasetSourceGapConsumerQueueAuditRepository: EvidenceActorDatasetSourceGapConsumerQueueAuditRepositoryStatus;
   actorDatasetSourceGapRepairHandoff: EvidenceActorDatasetSourceGapRepairHandoff;
   actorDatasetSourceGapRepairReplayLedger: EvidenceActorDatasetSourceGapRepairReplayLedger;
+  actorDatasetSourceGapRepairReplayRepository: EvidenceActorDatasetSourceGapRepairReplayRepositoryStatus;
   actorDatasetConsumerHandoff: EvidenceActorDatasetConsumerHandoff;
   actorDatasetConsumerExecution: EvidenceActorDatasetConsumerExecutionReceipt;
   actorDatasetConsumerAuditReplay: EvidenceActorDatasetConsumerAuditReplay;
@@ -467,6 +471,11 @@ function buildEvidenceSearchReadModelCutoverDto(
   );
   const actorDatasetSourceGapRepairHandoff = buildEvidenceActorDatasetSourceGapRepairHandoff(actorDatasetSourceGapConsumerQueue);
   const actorDatasetSourceGapRepairReplayLedger = buildEvidenceActorDatasetSourceGapRepairReplayLedger(actorDatasetSourceGapRepairHandoff);
+  const actorDatasetSourceGapRepairReplayRows = evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows(actorDatasetSourceGapRepairReplayLedger);
+  const actorDatasetSourceGapRepairReplayRepository = createEvidenceActorDatasetSourceGapRepairReplayRepository().persistReplayRows(
+    actorDatasetSourceGapRepairReplayRows,
+    { generatedAt }
+  );
   const actorDatasetConsumerHandoff = buildEvidenceActorDatasetConsumerHandoff(actorDatasetPromotionPreview);
   const actorDatasetConsumerExecution = executeEvidenceActorDatasetConsumerHandoff(actorDatasetConsumerHandoff, { generatedAt });
   const actorDatasetConsumerAuditRows = evidenceActorDatasetConsumerExecutionToPostgresRows(actorDatasetConsumerExecution);
@@ -532,6 +541,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     actorDatasetSourceGapConsumerQueueAuditRepository,
     actorDatasetSourceGapRepairHandoff,
     actorDatasetSourceGapRepairReplayLedger,
+    actorDatasetSourceGapRepairReplayRepository,
     actorDatasetConsumerHandoff,
     actorDatasetConsumerExecution,
     actorDatasetConsumerAuditReplay,

@@ -893,6 +893,83 @@ export interface EvidenceActorDatasetSourceGapRepairReplayCheckpoint {
   noLeak: true;
 }
 
+export interface EvidenceActorDatasetSourceGapRepairReplayPostgresRows {
+  repair_replay_ledger_runs: EvidenceActorDatasetSourceGapRepairReplayLedgerRunRow[];
+  repair_replay_checkpoints: EvidenceActorDatasetSourceGapRepairReplayCheckpointRow[];
+}
+
+export interface EvidenceActorDatasetSourceGapRepairReplayLedgerRunRow {
+  ledger_id: string;
+  generated_at: string;
+  source_handoff_schema: EvidenceActorDatasetSourceGapRepairReplayLedger["sourceHandoff"];
+  product_surface: EvidenceActorDatasetSourceGapRepairReplayLedger["productSurface"];
+  actor_build: EvidenceActorDatasetSourceGapRepairReplayLedger["actorBuild"];
+  latest_proof_run_id: EvidenceActorDatasetSourceGapRepairReplayLedger["latestProof"]["runId"];
+  latest_proof_dataset_id: EvidenceActorDatasetSourceGapRepairReplayLedger["latestProof"]["datasetId"];
+  dry_run: true;
+  will_promote_actor_rows: false;
+  will_write_public_answer_cache: false;
+  will_activate_sources: false;
+  counts: EvidenceActorDatasetSourceGapRepairReplayLedger["counts"];
+  no_leak: true;
+}
+
+export interface EvidenceActorDatasetSourceGapRepairReplayCheckpointRow {
+  checkpoint_id: string;
+  ledger_id: string;
+  repair_packet_id: string;
+  owner_agent: EvidenceActorDatasetSourceGapRepairReplayCheckpoint["ownerAgent"];
+  target_route: EvidenceActorDatasetSourceGapRepairReplayCheckpoint["targetRoute"];
+  queue_item_ids: string[];
+  required_replay_inputs: EvidenceActorDatasetSourceGapRepairReplayCheckpoint["requiredReplayInputs"];
+  actor_promotion_gate: EvidenceActorDatasetSourceGapRepairReplayCheckpoint["actorPromotionGate"];
+  can_promote_after_current_handoff: false;
+  no_leak: true;
+}
+
+export interface EvidenceActorDatasetSourceGapRepairReplayRepositoryStatus {
+  schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_replay_repository.v1";
+  generatedAt: string;
+  backend: "postgres_actor_source_gap_repair_replay";
+  enabled: false;
+  disabledByDefault: true;
+  liveBackendConnection: false;
+  willPersistRows: false;
+  willPromoteActorRows: false;
+  willWritePublicAnswerCache: false;
+  willActivateSources: false;
+  failClosedWithoutExplicitEnable: true;
+  requiredFeatureFlags: ["TI_ACTOR_SOURCE_GAP_REPAIR_REPLAY_REPOSITORY_ENABLED"];
+  requiredTables: ["evidence_actor_source_gap_repair_replay_runs", "evidence_actor_source_gap_repair_replay_checkpoints"];
+  acceptedRowCounts: {
+    ledgerRuns: number;
+    replayCheckpoints: number;
+  };
+  persistedRowCounts: {
+    ledgerRuns: 0;
+    replayCheckpoints: 0;
+  };
+  heldRowCounts: {
+    ledgerRuns: number;
+    replayCheckpoints: number;
+  };
+  blockedReasons: string[];
+  replayReceiptReady: boolean;
+  canReplayWithoutRawEvidence: true;
+  promotionGate: "blocked_until_replayed_evidence_rows";
+  guardrails: EvidenceActorDatasetSourceGapConsumerQueue["guardrails"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceActorDatasetSourceGapRepairReplayRepository {
+  readonly backend: "postgres_actor_source_gap_repair_replay";
+  readonly enabled: false;
+  persistReplayRows(
+    rows: EvidenceActorDatasetSourceGapRepairReplayPostgresRows,
+    input?: { generatedAt?: string }
+  ): EvidenceActorDatasetSourceGapRepairReplayRepositoryStatus;
+}
+
 export interface EvidenceActorDatasetPromotionRow {
   rowId: string;
   rowType: "evidence_result" | "metadata_context" | "stale_suppression" | "coverage_gap";
@@ -2432,6 +2509,123 @@ export function buildEvidenceActorDatasetSourceGapRepairReplayLedger(
     guardrails: { ...handoff.guardrails },
     safeOutput: SAFE_OUTPUT
   };
+}
+
+export function evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows(
+  ledger: EvidenceActorDatasetSourceGapRepairReplayLedger
+): EvidenceActorDatasetSourceGapRepairReplayPostgresRows {
+  return {
+    repair_replay_ledger_runs: [{
+      ledger_id: ledger.ledgerId,
+      generated_at: ledger.generatedAt,
+      source_handoff_schema: ledger.sourceHandoff,
+      product_surface: ledger.productSurface,
+      actor_build: ledger.actorBuild,
+      latest_proof_run_id: ledger.latestProof.runId,
+      latest_proof_dataset_id: ledger.latestProof.datasetId,
+      dry_run: true,
+      will_promote_actor_rows: false,
+      will_write_public_answer_cache: false,
+      will_activate_sources: false,
+      counts: { ...ledger.counts },
+      no_leak: true
+    }],
+    repair_replay_checkpoints: ledger.replayCheckpoints.map((checkpoint) => ({
+      checkpoint_id: checkpoint.checkpointId,
+      ledger_id: ledger.ledgerId,
+      repair_packet_id: checkpoint.repairPacketId,
+      owner_agent: checkpoint.ownerAgent,
+      target_route: checkpoint.targetRoute,
+      queue_item_ids: [...checkpoint.queueItemIds],
+      required_replay_inputs: [...checkpoint.requiredReplayInputs],
+      actor_promotion_gate: checkpoint.actorPromotionGate,
+      can_promote_after_current_handoff: false,
+      no_leak: true
+    }))
+  };
+}
+
+export function buildDisabledEvidenceActorDatasetSourceGapRepairReplayRepositoryStatus(
+  rows: EvidenceActorDatasetSourceGapRepairReplayPostgresRows,
+  input: { generatedAt?: string } = {}
+): EvidenceActorDatasetSourceGapRepairReplayRepositoryStatus {
+  const run = rows.repair_replay_ledger_runs[0];
+  const generatedAt = input.generatedAt ?? run?.generated_at ?? nowIso();
+  const replayBlockers = [
+    !run ? "missing_repair_replay_ledger_run" : null,
+    run && rows.repair_replay_checkpoints.length !== run.counts.replayCheckpoints ? "repair_replay_checkpoint_count_mismatch" : null,
+    rows.repair_replay_ledger_runs.some((row) => row.no_leak !== true) ? "repair_replay_ledger_no_leak_failed" : null,
+    rows.repair_replay_checkpoints.some((row) => row.no_leak !== true) ? "repair_replay_checkpoint_no_leak_failed" : null,
+    rows.repair_replay_ledger_runs.some((row) =>
+      row.will_promote_actor_rows || row.will_write_public_answer_cache || row.will_activate_sources
+    ) ? "repair_replay_ledger_mutation_flag_failed" : null,
+    rows.repair_replay_checkpoints.some((row) =>
+      row.actor_promotion_gate !== "blocked_until_replayed_evidence_rows" || row.can_promote_after_current_handoff !== false
+    ) ? "repair_replay_checkpoint_promotion_gate_failed" : null
+  ].filter((blocker): blocker is string => Boolean(blocker));
+
+  return {
+    schemaVersion: "ti.evidence_actor_dataset_source_gap_repair_replay_repository.v1",
+    generatedAt,
+    backend: "postgres_actor_source_gap_repair_replay",
+    enabled: false,
+    disabledByDefault: true,
+    liveBackendConnection: false,
+    willPersistRows: false,
+    willPromoteActorRows: false,
+    willWritePublicAnswerCache: false,
+    willActivateSources: false,
+    failClosedWithoutExplicitEnable: true,
+    requiredFeatureFlags: ["TI_ACTOR_SOURCE_GAP_REPAIR_REPLAY_REPOSITORY_ENABLED"],
+    requiredTables: ["evidence_actor_source_gap_repair_replay_runs", "evidence_actor_source_gap_repair_replay_checkpoints"],
+    acceptedRowCounts: {
+      ledgerRuns: rows.repair_replay_ledger_runs.length,
+      replayCheckpoints: rows.repair_replay_checkpoints.length
+    },
+    persistedRowCounts: {
+      ledgerRuns: 0,
+      replayCheckpoints: 0
+    },
+    heldRowCounts: {
+      ledgerRuns: rows.repair_replay_ledger_runs.length,
+      replayCheckpoints: rows.repair_replay_checkpoints.length
+    },
+    blockedReasons: [
+      "actor_source_gap_repair_replay_repository_disabled",
+      "postgres_actor_source_gap_repair_replay_not_configured",
+      ...replayBlockers
+    ],
+    replayReceiptReady: replayBlockers.length === 0,
+    canReplayWithoutRawEvidence: true,
+    promotionGate: "blocked_until_replayed_evidence_rows",
+    guardrails: {
+      explicitOperatorApprovalRequired: true,
+      sourceActivationNotApplied: true,
+      crawlingNotStarted: true,
+      restrictedRowsMetadataOnly: true,
+      rawLeakMaterialNeverQueued: true,
+      credentialsNeverQueued: true,
+      unsafeUrlsNeverQueued: true,
+      embeddingsForRestrictedRowsDisabled: true
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+class DisabledEvidenceActorDatasetSourceGapRepairReplayRepository implements EvidenceActorDatasetSourceGapRepairReplayRepository {
+  readonly backend = "postgres_actor_source_gap_repair_replay" as const;
+  readonly enabled = false as const;
+
+  persistReplayRows(
+    rows: EvidenceActorDatasetSourceGapRepairReplayPostgresRows,
+    input: { generatedAt?: string } = {}
+  ): EvidenceActorDatasetSourceGapRepairReplayRepositoryStatus {
+    return buildDisabledEvidenceActorDatasetSourceGapRepairReplayRepositoryStatus(rows, input);
+  }
+}
+
+export function createEvidenceActorDatasetSourceGapRepairReplayRepository(): EvidenceActorDatasetSourceGapRepairReplayRepository {
+  return new DisabledEvidenceActorDatasetSourceGapRepairReplayRepository();
 }
 
 export function buildEvidenceActorDatasetConsumerHandoff(
