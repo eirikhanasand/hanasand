@@ -1,0 +1,79 @@
+export type ProgramDdCurrentSellable750Lift = {
+  schemaVersion: "ti.program_dd_current_sellable_750_lift.v1";
+  owner: "agent_03";
+  sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1250" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+  baseline: { sellableRows: 500; sellableFindings: 413; sellableSourceProvenanceRows: 87; sourceProvenanceShare: 0.174 };
+  acceptedCurrentRowsCount: number;
+  sourceProvenanceRowsConvertedToFindings: number;
+  rejectedRowsCount: number;
+  currentSellableRowsAfterAdmission: number;
+  currentSellableFindingsAfterAdmission: number;
+  currentSellableSourceProvenanceRowsAfterAdmission: number;
+  sourceProvenanceShareAfterAdmission: number;
+  trueFindingShareAfterAdmission: number;
+  countsTowardLocalCurrentPaidPreset: boolean;
+  countsTowardHostedPaidProof: false;
+  acceptedRows: Array<{
+    rowId: string;
+    sourcePacket: "agent05_current_chargeable750" | "agent08_parser_ready_public_proof" | "agent04_high_value_public_source_replacement" | "existing_public_source_row";
+    actor: string;
+    victimOrTarget: string;
+    sector: string;
+    countryOrRegion: string;
+    ttpToolOrCampaign: string;
+    datasetOrImpactClaim: string;
+    firstSeen: string;
+    lastSeen: string;
+    sourceFamily: "dark_metadata_public_support" | "clear_web_public_report" | "government_advisory" | "vendor_report" | "rss_security_blog" | "public_channel_handoff";
+    confidence: number;
+    freshnessState: "fresh_current" | "current_recheck_due";
+    provenanceHash: string;
+    whyWorthPayingFor: string;
+    nextPivot: string;
+    countsTowardCurrentSellableRows: true;
+    countsTowardHostedPaidProof: false;
+    noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials";
+    noLeak: true;
+  }>;
+  convertedSourceProvenanceRows: Array<{
+    rowId: string;
+    actor: string;
+    convertedTo: "activity" | "target" | "ttp" | "dataset";
+    buyerReason: string;
+    provenanceHash: string;
+    countsTowardSellableFindingFloor: true;
+    noLeak: true;
+  }>;
+  rejectedRows: Array<{
+    reason: "stale_only" | "duplicate" | "generic_profile_or_source_page" | "weak_actor_match" | "wrong_actor_or_alias_conflict" | "restricted_only" | "graph_only" | "missing_victim_or_context" | "missing_source_family" | "missing_buyer_action" | "missing_no_leak_proof" | "source_provenance_density_overflow";
+    rowCount: number;
+    buyerTrustReason: string;
+    countsTowardCurrentSellableRows: false;
+  }>;
+  targetProgress: {
+    targetCurrentSellableRows: 750;
+    remainingGapTo750: number;
+    minimumTrueFindingShare: 0.7;
+    remainingFindingGapTo70Percent: number;
+    maximumSourceProvenanceShare: 0.25;
+    nextTargetCurrentSellableRows: 1000;
+    remainingGapTo1000: number;
+    next1000Plan: {
+      targetCurrentSellableRows: 1000;
+      additionalRowsNeeded: number;
+      minimumTrueFindingsAt1000: number;
+      maximumSourceProvenanceRowsAt1000: number;
+      sourcePackets: string[];
+      projectedRowsCountTowardCurrent: false;
+    };
+  };
+  noLeakBoundary: {
+    rawBodiesExposed: false;
+    unsafeUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    credentialsExposed: false;
+    privateMaterialUsed: false;
+    actorInteractionTextUsed: false;
+    hostedPaidProofClaimed: false;
+  };
+};
