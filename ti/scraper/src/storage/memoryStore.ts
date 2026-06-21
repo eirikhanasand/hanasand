@@ -1,22 +1,19 @@
 // @ts-nocheck
-import type { CaptureDedupeKey, CaptureReplayJob, DiscoveryEvidence, DiscoveryPromotion, EvidenceDelta, EvidenceDeltaKind, IncidentCandidate, LiveSearchSnapshot, ObjectStoreRef, PipelineResult, RawCapture, ReplayPipelineInput, SourceRecord } from "../types.ts";
-import { hashContent, normalizeWhitespace, nowIso, stableId } from "../utils.ts";
-import type { CaptureMetadataStore, ObjectEvidenceRecord, ObjectEvidenceStore, ObjectEvidenceWrite } from "./evidenceStore.ts";
+import type { CaptureReplayJob, DiscoveryEvidence, EvidenceDelta, IncidentCandidate, LiveSearchSnapshot, PipelineResult, RawCapture, ReplayPipelineInput, SourceRecord } from "../types.ts";
+import type { CaptureMetadataStore } from "./evidenceStore.ts";
 import { InMemoryEvidenceQueries } from "./evidenceQueries.ts";
-
-export interface RawEvidenceStore extends CaptureMetadataStore {}
-export interface ScraperStore extends CaptureMetadataStore {}
-
+import { installMemoryStoreDiscoveryMethods } from "./memoryStoreDiscoveryMethods.ts";
+import { InMemoryObjectEvidenceStore } from "./memoryObjectEvidenceStore.ts";
+import { installMemoryStoreReplayMethods } from "./memoryStoreReplayMethods.ts";
+import { canonicalizeUrl, captureDedupeKey, dedupeIndexKeys, enforceSensitiveMetadataOnly, prepareCapture } from "./memoryStoreHelpers.ts";
+export interface RawEvidenceStore extends CaptureMetadataStore {} export interface ScraperStore extends CaptureMetadataStore {}
 const mapValues = <T>(map: Map<string, T>) => [...map.values()];
 const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set(item.id, item), item);
-const objectKey = (ref: ObjectStoreRef) => `${ref.bucket}:${ref.key}:${ref.versionId ?? ""}`;
-
 export class InMemoryScraperStore implements ScraperStore {
   private captures = new Map<string, RawCapture>(); private dedupe = new Map<string, string>(); private incidents = new Map<string, IncidentCandidate>(); private sources = new Map<string, SourceRecord>(); private plans = new Map<string, any>(); private runs = new Map<string, any>();
   private analystMetadataReviewTasks = new Map<string, any>(); private analystSourceActivationPackets = new Map<string, any>(); private analystVictimNotificationPackets = new Map<string, any>(); private analystClaimLedgerEntries = new Map<string, any>(); private analystLoopSnapshots = new Map<string, any>();
   private replayJobs = new Map<string, CaptureReplayJob>(); private discoveryEvidence = new Map<string, DiscoveryEvidence>(); private liveSearchSnapshots = new Map<string, LiveSearchSnapshot>(); private evidenceDeltas = new Map<string, EvidenceDelta>(); private cursorOwners = new Map<string, string>(); private sequence = 0;
   private evidenceQueries = new InMemoryEvidenceQueries(() => ({ captures: this.listCaptures(), incidents: this.listIncidents(), replayJobs: this.listReplayJobs(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas() }));
-
   saveCapture(capture: RawCapture): RawCapture { return this.saveCaptureWithDedupe(capture).capture; }
   protected hydrateCaptureSnapshot(capture: RawCapture): RawCapture { return this.insertCapture(prepareCapture(capture), false); }
   saveCaptureWithDedupe(capture: RawCapture) {
@@ -33,35 +30,22 @@ export class InMemoryScraperStore implements ScraperStore {
   listCaptures() { return mapValues(this.captures); }
   savePipelineResult(result: PipelineResult): PipelineResult { const capture = this.saveCapture(result.capture); if (result.incident) { const incident = this.saveIncident({ ...result.incident, captureId: capture.id }); this.recordExtractionDelta("added", capture, incident.id); } return { ...result, capture }; }
   replayInput(captureId: string, extractorVersion: string): ReplayPipelineInput | undefined { const c = this.captures.get(captureId); return c && { captureId: c.id, sourceId: c.sourceId, url: c.url, collectedAt: c.collectedAt, mediaType: c.mediaType, storageKind: c.storageKind, body: c.body, objectRef: c.objectRef, metadata: c.metadata, contentHash: c.contentHash, normalizedTextHash: c.normalizedTextHash, extractorVersion }; }
-
-  createReplayJob(input: any): CaptureReplayJob { const capture = this.mustCapture(input.captureId); const requestedAt = input.requestedAt ?? nowIso(); return put(this.replayJobs, { ...input, id: input.id ?? stableId("replay", `${input.captureId}:${input.toExtractorVersion}:${requestedAt}`), tenantId: input.tenantId ?? capture.tenantId, sourceId: input.sourceId || capture.sourceId, requestedAt, status: "queued", metadata: input.metadata ?? {} }); }
-  saveReplayJob(job: CaptureReplayJob): CaptureReplayJob { const capture = this.mustCapture(job.captureId), previous = this.replayJobs.get(job.id); if (previous && previous.captureId !== job.captureId) throw new Error(`Replay job capture cannot change: ${job.id}`); return put(this.replayJobs, { ...job, tenantId: job.tenantId ?? capture.tenantId, sourceId: job.sourceId || capture.sourceId }); }
-  recordReplayResult(jobId: string, result: PipelineResult): CaptureReplayJob {
-    const job = this.replayJobs.get(jobId); if (!job) throw new Error(`Unknown replay job: ${jobId}`);
-    const capture = this.mustCapture(job.captureId); if (result.capture.id !== capture.id || result.capture.contentHash !== capture.contentHash) throw new Error(`Replay result must reference immutable capture: ${job.captureId}`);
-    if (result.incident) this.saveIncident({ ...result.incident, captureId: capture.id });
-    const completedAt = nowIso();
-    return put(this.replayJobs, { ...job, status: "succeeded", startedAt: job.startedAt ?? completedAt, completedAt, incidentId: result.incident?.id, indicatorCount: result.indicators.length, entityCount: result.entities.length, diffSummary: replayDiff(job, result), metadata: { ...job.metadata, replayedContentHash: capture.contentHash, replayedStorageKind: capture.storageKind, rawEvidenceMutated: false } });
-  }
-  getReplayJob(id: string) { return this.replayJobs.get(id); }
-  listReplayJobs() { return mapValues(this.replayJobs); }
+  createReplayJob(input: any): CaptureReplayJob { throw new Error("prototype not installed"); }
+  saveReplayJob(job: CaptureReplayJob): CaptureReplayJob { throw new Error("prototype not installed"); }
+  recordReplayResult(jobId: string, result: PipelineResult): CaptureReplayJob { throw new Error("prototype not installed"); }
+  getReplayJob(id: string) { return this.replayJobs.get(id); } listReplayJobs() { return mapValues(this.replayJobs); }
   private mustCapture(id: string) { const capture = this.getCapture(id); if (!capture) throw new Error(`Unknown capture for replay: ${id}`); return capture; }
-
-  saveDiscoveryEvidence(evidence: DiscoveryEvidence) { const previous = this.discoveryEvidence.get(evidence.id); if (previous && JSON.stringify(previous) !== JSON.stringify(evidence)) throw new Error(`Discovery evidence is immutable: ${evidence.id}`); this.discoveryEvidence.set(evidence.id, evidence); if (!previous) this.recordDiscoveryDelta("added", evidence); return evidence; }
+  saveDiscoveryEvidence(evidence: DiscoveryEvidence): any { throw new Error("prototype not installed"); }
   protected hydrateDiscoveryEvidenceSnapshot(evidence: DiscoveryEvidence) { return put(this.discoveryEvidence, evidence); }
-  getDiscoveryEvidence(id: string) { return this.discoveryEvidence.get(id); }
-  listDiscoveryEvidence() { return mapValues(this.discoveryEvidence); }
-  promoteDiscoveryEvidence(promotion: DiscoveryPromotion) { const evidence = this.discoveryEvidence.get(promotion.discoveryEvidenceId); if (!evidence) throw new Error(`Unknown discovery evidence: ${promotion.discoveryEvidenceId}`); if (promotion.captureId && !this.captures.has(promotion.captureId)) throw new Error(`Unknown capture for discovery promotion: ${promotion.captureId}`); if (promotion.incidentId && !this.incidents.has(promotion.incidentId)) throw new Error(`Unknown incident for discovery promotion: ${promotion.incidentId}`); const promoted = { ...evidence, promotedToTaskId: promotion.taskId ?? evidence.promotedToTaskId, promotedToCaptureId: promotion.captureId ?? evidence.promotedToCaptureId, promotedToIncidentId: promotion.incidentId ?? evidence.promotedToIncidentId, metadata: { ...evidence.metadata, promotions: [...readPromotionMetadata(evidence.metadata), promotion] } }; this.discoveryEvidence.set(promoted.id, promoted); this.recordDiscoveryDelta("promoted", promoted, promotion); return promoted; }
-
-  saveLiveSearchSnapshot(snapshot: LiveSearchSnapshot) { const previous = this.liveSearchSnapshots.get(snapshot.id), delta = this.saveEvidenceDelta(deltaForSnapshot(previous ? "updated" : "added", snapshot)); return put(this.liveSearchSnapshots, { ...snapshot, deltaCursors: [...(snapshot.deltaCursors ?? []), delta.cursor] }); }
+  getDiscoveryEvidence(id: string) { return this.discoveryEvidence.get(id); } listDiscoveryEvidence() { return mapValues(this.discoveryEvidence); }
+  promoteDiscoveryEvidence(promotion: any): any { throw new Error("prototype not installed"); }
+  saveLiveSearchSnapshot(snapshot: LiveSearchSnapshot): any { throw new Error("prototype not installed"); }
   protected hydrateLiveSearchSnapshotSnapshot(snapshot: LiveSearchSnapshot) { return put(this.liveSearchSnapshots, snapshot); }
   listLiveSearchSnapshots() { return mapValues(this.liveSearchSnapshots); }
-  saveEvidenceDelta(delta: EvidenceDelta) { return this.storeDelta(delta, true); }
-  protected hydrateEvidenceDeltaSnapshot(delta: EvidenceDelta) { return this.storeDelta(delta, false); }
-  private storeDelta(delta: EvidenceDelta, immutable: boolean) { const prepared = { ...delta, cursor: delta.cursor || evidenceCursor(delta.observedAt, ++this.sequence, delta.id) }, previous = this.evidenceDeltas.get(prepared.id); if (immutable && previous && JSON.stringify(previous) !== JSON.stringify(prepared)) throw new Error(`Evidence delta is immutable: ${prepared.id}`); const owner = this.cursorOwners.get(prepared.cursor); if (owner && owner !== prepared.id) throw new Error(`Evidence delta cursor must be unique: ${prepared.cursor}`); this.cursorOwners.set(prepared.cursor, prepared.id); return put(this.evidenceDeltas, prepared); }
+  saveEvidenceDelta(delta: EvidenceDelta): any { throw new Error("prototype not installed"); }
+  protected hydrateEvidenceDeltaSnapshot(delta: EvidenceDelta) { return (this as any).storeDelta(delta, false); }
   listEvidenceDeltas() { return mapValues(this.evidenceDeltas); }
   queries() { return this.evidenceQueries; }
-
   saveIncident(candidate: IncidentCandidate) { return put(this.incidents, candidate); } listIncidents() { return mapValues(this.incidents); }
   saveSource(source: SourceRecord) { return put(this.sources, source); } getSource(id: string) { return this.sources.get(id); } listSources() { return mapValues(this.sources); }
   savePlan(plan: any) { return put(this.plans, plan); } getPlan(id: string) { return this.plans.get(id); } listPlans() { return mapValues(this.plans); }
@@ -71,32 +55,6 @@ export class InMemoryScraperStore implements ScraperStore {
   saveAnalystVictimNotificationPacket(packet: any) { return put(this.analystVictimNotificationPackets, packet); } listAnalystVictimNotificationPackets() { return mapValues(this.analystVictimNotificationPackets); }
   saveAnalystClaimLedgerEntry(entry: any) { return put(this.analystClaimLedgerEntries, entry); } listAnalystClaimLedgerEntries() { return mapValues(this.analystClaimLedgerEntries); }
   saveAnalystLoopSnapshot(snapshot: any) { return put(this.analystLoopSnapshots, snapshot); } listAnalystLoopSnapshots() { return mapValues(this.analystLoopSnapshots); }
-
-  private recordDiscoveryDelta(kind: EvidenceDeltaKind, evidence: DiscoveryEvidence, promotion?: DiscoveryPromotion) { this.saveEvidenceDelta({ id: stableId("delta", `${kind}:discovery:${evidence.id}:${promotion?.promotedAt ?? evidence.observedAt}`), tenantId: evidence.tenantId, query: evidence.query, normalizedQuery: evidence.normalizedQuery, cursor: "", kind, subjectType: "discovery_evidence", subjectId: evidence.id, observedAt: promotion?.promotedAt ?? evidence.observedAt, sourceId: evidence.sourceId, discoveryEvidenceIds: [evidence.id], captureIds: evidence.promotedToCaptureId ? [evidence.promotedToCaptureId] : [], incidentIds: evidence.promotedToIncidentId ? [evidence.promotedToIncidentId] : [], relationshipIds: [], policyEventIds: [], retentionClass: evidence.retentionClass, staleAt: evidence.staleAt, metadata: { resultId: evidence.resultId, provider: evidence.provider, evidenceType: evidence.evidenceType, promotion } }); }
-  private recordCaptureDelta(kind: EvidenceDeltaKind, capture: RawCapture) { const m = evidenceMetadata(capture.metadata); this.saveEvidenceDelta({ id: stableId("delta", `${kind}:capture:${capture.id}:${capture.collectedAt}`), tenantId: capture.tenantId, query: m.query, normalizedQuery: m.normalizedQuery, runId: m.runId, cursor: "", kind: capture.redaction?.applied ? "redacted" : kind, subjectType: "capture", subjectId: capture.id, observedAt: capture.collectedAt, sourceId: capture.sourceId, discoveryEvidenceIds: m.discoveryEvidenceId ? [m.discoveryEvidenceId] : [], captureIds: [capture.id], incidentIds: [], relationshipIds: [], policyEventIds: [], retentionClass: capture.retentionClass ?? "standard", metadata: { contentHash: capture.contentHash, storageKind: capture.storageKind, sensitive: capture.sensitive, redaction: capture.redaction } }); }
-  private recordExtractionDelta(kind: EvidenceDeltaKind, capture: RawCapture, incidentId: string) { const m = evidenceMetadata(capture.metadata); this.saveEvidenceDelta({ id: stableId("delta", `${kind}:extraction:${incidentId}:${capture.id}`), tenantId: capture.tenantId, query: m.query, normalizedQuery: m.normalizedQuery, runId: m.runId, cursor: "", kind, subjectType: "extraction", subjectId: incidentId, observedAt: capture.collectedAt, sourceId: capture.sourceId, discoveryEvidenceIds: m.discoveryEvidenceId ? [m.discoveryEvidenceId] : [], captureIds: [capture.id], incidentIds: [incidentId], relationshipIds: [], policyEventIds: [], retentionClass: capture.retentionClass ?? "standard", metadata: { extractorVersion: capture.provenance?.extractorVersion, contentHash: capture.contentHash } }); }
 }
-
-export class InMemoryObjectEvidenceStore implements ObjectEvidenceStore {
-  private objects = new Map<string, ObjectEvidenceRecord>();
-  putObject(input: ObjectEvidenceWrite) { const sizeBytes = typeof input.body === "string" ? new TextEncoder().encode(input.body).byteLength : input.body.byteLength, key = `${input.tenantId ?? "global"}/${input.sourceId}/${input.captureId}/${input.contentHash}`; const ref = { bucket: "memory-evidence", key, versionId: stableId("objv", `${key}:${sizeBytes}`), sizeBytes, sha256: input.contentHash }; const record = { ref, tenantId: input.tenantId, sourceId: input.sourceId, captureId: input.captureId, mediaType: input.mediaType, contentHash: input.contentHash, retentionClass: input.retentionClass, createdAt: nowIso(), metadata: input.metadata ?? {} }; this.objects.set(objectKey(ref), record); return record; }
-  getObject(ref: ObjectStoreRef) { return this.objects.get(objectKey(ref)); }
-  deleteObject(ref: ObjectStoreRef, _reason: string) { return this.objects.delete(objectKey(ref)); }
-}
-
-export function captureDedupeKey(capture: RawCapture): CaptureDedupeKey { const p = prepareCapture(capture); return { sourceId: p.sourceId, canonicalUrl: p.canonicalUrl ?? canonicalizeUrl(p.url), normalizedTextHash: p.normalizedTextHash, publishedAt: p.publishedAt }; }
-export function canonicalizeUrl(value: string): string { try { const url = new URL(value); url.hash = ""; url.hostname = url.hostname.toLowerCase(); url.pathname = url.pathname.replace(/\/{2,}/g, "/").replace(/\/$/, "") || "/"; url.search = sortedSearch(url.searchParams); return url.toString(); } catch { return value.trim(); } }
-
-function prepareCapture(capture: RawCapture): RawCapture { const sensitivityFlags = capture.sensitivityFlags ?? (capture.sensitive ? ["sensitive_source"] : ["public"]), metadataOnly = capture.sensitive || sensitivityFlags.some(isMetadataOnlyFlag); return { ...capture, canonicalUrl: capture.canonicalUrl ?? canonicalizeUrl(capture.url), normalizedTextHash: capture.normalizedTextHash ?? normalizedBodyHash(capture.body), storageKind: metadataOnly ? "metadata_only" : capture.storageKind, body: metadataOnly ? undefined : capture.body, metadata: metadataOnly ? { ...capture.metadata, safeEntityHints: capture.metadata.safeEntityHints ?? safeEntityHintsFromBody(capture.body) } : capture.metadata, sensitivityFlags, redaction: capture.redaction ?? { applied: metadataOnly, policy: metadataOnly ? "metadata_only" : "none", reason: metadataOnly ? "Sensitive evidence is persisted as metadata only." : "Raw storage allowed by source policy." }, retentionClass: capture.retentionClass ?? (metadataOnly ? "restricted_metadata" : "standard"), provenance: capture.provenance ?? { sourceId: capture.sourceId, captureId: capture.id, url: capture.url, collectedAt: capture.collectedAt, contentHash: capture.contentHash, extractorVersion: "capture-store:v1", taskId: capture.taskId, tenantId: capture.tenantId } }; }
-function enforceSensitiveMetadataOnly(capture: RawCapture) { if (!capture.sensitive && !capture.sensitivityFlags?.some(isMetadataOnlyFlag)) return; if (capture.storageKind !== "metadata_only") throw new Error(`Sensitive capture must be metadata-only: ${capture.id}`); if (capture.body) throw new Error(`Sensitive capture cannot persist raw body: ${capture.id}`); }
-function dedupeIndexKeys(capture: RawCapture) { const key = captureDedupeKey(capture), published = key.publishedAt ?? "", normalized = key.normalizedTextHash ?? ""; return [`source-url-published:${key.sourceId}:${key.canonicalUrl}:${published}`, `source-text-published:${key.sourceId}:${normalized}:${published}`, `source-content-published:${capture.sourceId}:${capture.contentHash}:${published}`].filter((v) => !v.includes("::")); }
-function deltaForSnapshot(kind: EvidenceDeltaKind, s: LiveSearchSnapshot): EvidenceDelta { return { id: stableId("delta", `${kind}:snapshot:${s.id}:${s.capturedAt}`), tenantId: s.tenantId, query: s.query, normalizedQuery: s.normalizedQuery, runId: s.runId, cursor: "", kind: s.status === "blocked" || s.status === "disabled" ? "blocked" : kind, subjectType: "live_snapshot", subjectId: s.id, observedAt: s.capturedAt, discoveryEvidenceIds: s.discoveryEvidenceIds, captureIds: s.captureIds, incidentIds: s.incidentIds, relationshipIds: stringArray(s.metadata.relationshipIds), policyEventIds: stringArray(s.metadata.policyEventIds), retentionClass: s.retentionClass, staleAt: s.staleAt, metadata: { status: s.status, newEvidenceIds: s.newEvidenceIds } }; }
-const evidenceCursor = (observedAt: string, sequence: number, id: string) => `${observedAt}#${String(sequence).padStart(12, "0")}#${id}`;
-function evidenceMetadata(metadata: Record<string, unknown>) { const query = typeof metadata.query === "string" ? metadata.query : undefined; return { query, normalizedQuery: typeof metadata.normalizedQuery === "string" ? metadata.normalizedQuery : query?.trim().toLowerCase().replace(/\s+/g, " "), runId: typeof metadata.runId === "string" ? metadata.runId : undefined, discoveryEvidenceId: typeof metadata.promotedFromDiscoveryId === "string" ? metadata.promotedFromDiscoveryId : typeof metadata.discoveryEvidenceId === "string" ? metadata.discoveryEvidenceId : undefined }; }
-const stringArray = (v: unknown) => Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-const normalizedBodyHash = (body?: string) => body ? hashContent(normalizeWhitespace(body).toLowerCase()) : undefined;
-const isMetadataOnlyFlag = (flag: string) => ["sensitive_source", "leak_metadata", "credential_material", "restricted_protocol"].includes(flag);
-function safeEntityHintsFromBody(body?: string) { if (!body) return undefined; const victims = new Set([...body.matchAll(/\bvictim\s*:?\s+([A-Z][A-Za-z0-9&., -]{2,80})/g)].map((m) => m[1]?.replace(/\s+\b(?:on|in|using|with|after|from)\b.*$/i, "").trim()).filter(Boolean)); const sectors = new Set(["healthcare", "telecommunications", "energy", "government", "finance", "education", "manufacturing"].filter((s) => new RegExp(`\\b${s}\\b`, "i").test(body))); return victims.size || sectors.size ? { victims: [...victims], sectors: [...sectors] } : undefined; }
-function sortedSearch(params: URLSearchParams) { const sorted = new URLSearchParams(); for (const [k, v] of [...params.entries()].sort(([a], [b]) => a.localeCompare(b))) sorted.append(k, v); const text = sorted.toString(); return text ? `?${text}` : ""; }
-function replayDiff(job: CaptureReplayJob, result: PipelineResult) { return { incidentChanged: Boolean(typeof job.metadata.previousIncidentId === "string" && job.metadata.previousIncidentId !== result.incident?.id), indicatorDelta: result.indicators.length - (typeof job.metadata.previousIndicatorCount === "number" ? job.metadata.previousIndicatorCount : 0), entityDelta: result.entities.length - (typeof job.metadata.previousEntityCount === "number" ? job.metadata.previousEntityCount : 0), newReviewReasons: result.incident?.reviewReasons ?? [] }; }
-function readPromotionMetadata(metadata: Record<string, unknown>): DiscoveryPromotion[] { return Array.isArray(metadata.promotions) ? metadata.promotions.filter((x): x is DiscoveryPromotion => Boolean(x && typeof x === "object" && "discoveryEvidenceId" in x)) : []; }
+installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscoveryMethods(InMemoryScraperStore);
+export { canonicalizeUrl, captureDedupeKey, InMemoryObjectEvidenceStore };
