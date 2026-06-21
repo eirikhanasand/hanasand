@@ -1,14 +1,6 @@
 import type { AttackTactic, AttackTechniqueCandidate, ExtractedEntity, PipelineResult } from "../types.ts";
 import { clampScore, stableId } from "../utils.ts";
-
-const TECHNIQUE_HINTS: Array<{ pattern: RegExp; attackId: string; name: string; tactic: AttackTactic }> = [
-  { pattern: /\bphishing\b/i, attackId: "T1566", name: "Phishing", tactic: "initial-access" },
-  { pattern: /\bcredential dumping\b/i, attackId: "T1003", name: "OS Credential Dumping", tactic: "credential-access" },
-  { pattern: /\blateral movement\b/i, attackId: "T1021", name: "Remote Services", tactic: "lateral-movement" },
-  { pattern: /\bcommand and control\b/i, attackId: "T1105", name: "Ingress Tool Transfer", tactic: "command-and-control" },
-  { pattern: /\bexfiltration\b/i, attackId: "T1041", name: "Exfiltration Over C2 Channel", tactic: "exfiltration" },
-  { pattern: /\bpersistence\b/i, attackId: "T1547", name: "Boot or Logon Autostart Execution", tactic: "persistence" }
-];
+import { TECHNIQUE_HINTS } from "./attackHints.ts";
 
 const EXPLICIT_ATTACK_ID = /\bT\d{4}(?:\.\d{3})?\b/i;
 
