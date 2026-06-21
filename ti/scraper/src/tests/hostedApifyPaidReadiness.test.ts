@@ -204,6 +204,52 @@ describe("hosted Apify paid readiness operator action board", () => {
         listingVisibility: "external_unknown"
       }
     });
+    expect(proof.hostedProofDeltaSincePrevious).toMatchObject({
+      schemaVersion: "ti.program_fi_hosted_proof_delta_since_previous.v1",
+      baselineRunId: "THMm2ZzYxW4HVPGJ6",
+      baselineDatasetId: "xLPoxMVY6cVjGsS4e",
+      currentRunId: "THMm2ZzYxW4HVPGJ6",
+      currentDatasetId: "xLPoxMVY6cVjGsS4e",
+      currentSellableRows: 46,
+      currentSellableFindingRows: 31,
+      sellableRowsDelta: 0,
+      sellableFindingRowsDelta: 0,
+      hosted100SellableGap: 54,
+      hosted100FindingGap: 21,
+      direction: "regressed_or_flat_below_floor"
+    });
+  }));
+
+  test("next hosted proof delta reports improvement while paid release remains held below hosted100", () => withHostedProofEnv({}, () => {
+    const proof = buildHostedApifyPaidReadinessProof({
+      hasToken: true,
+      observedProof: observedProof({
+        runId: "run_after_parser_lift_001",
+        datasetId: "dataset_after_parser_lift_001",
+        datasetItemCount: 360,
+        sellableRows: 68,
+        sellableFindingCount: 44,
+        caveatedRows: 210,
+        noLeakFailures: 0,
+        secondBatchAuditObserved: true,
+        falsePositiveInflationFailures: 0,
+        publicListingStatus: "draft_copy_ready_not_promoted"
+      }),
+      readObservedProofFromEnvironment: false
+    });
+
+    expect(proof.hostedProofImportPath.externalBlocker).toBe("hosted_100_name_run_below_paid_floor");
+    expect(proof.hostedProofDeltaSincePrevious).toMatchObject({
+      currentRunId: "run_after_parser_lift_001",
+      currentSellableRows: 68,
+      currentSellableFindingRows: 44,
+      sellableRowsDelta: 22,
+      sellableFindingRowsDelta: 13,
+      hosted100SellableGap: 32,
+      hosted100FindingGap: 8,
+      direction: "improved_below_floor"
+    });
+    expect(proof.hostedProofDeltaSincePrevious.nextAction).toContain("Hosted100 remains held");
   }));
 
   test("production hosted300 proof holds hosted500 below 500-row and 275-finding gate", () => withHostedProofEnv({}, () => {
