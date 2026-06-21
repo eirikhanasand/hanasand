@@ -2300,7 +2300,7 @@ interface MarketplaceConversionRealRowSamplePack {
     countsTowardPaidReadiness: false;
   }>;
   paidTrafficExperimentReadiness: {
-    status: "blocked_until_100_real_sellable_rows" | "ready_after_agent10_floor_passes";
+    status: "blocked_until_100_real_sellable_rows" | "ready_for_paid_traffic";
     activatesWhen: string[];
     targetBuyer: string;
     inputPreset: string;
@@ -2324,7 +2324,7 @@ interface MarketplaceConversionRealRowSamplePack {
   };
   first100BuyerPreview: {
     schemaVersion: "ti.apify_first_100_real_rows_buyer_preview.v1";
-    status: "blocked_preview_until_100_real_sellable_rows" | "ready_after_agent10_floor_passes";
+    status: "blocked_preview_until_100_real_sellable_rows" | "ready_for_paid_traffic";
     currentSellableRows: number;
     usefulButNotChargeableRows: number;
     remainingSellableRowsNeeded: number;
@@ -2332,7 +2332,7 @@ interface MarketplaceConversionRealRowSamplePack {
     sampleRowsRequiredBeforePaidTraffic: 100;
     topBlockerBuckets: Array<{
       blocker: "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "marketplace_output_gap";
-      owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_09" | "agent_10";
+      repairArea: "source_corroboration" | "parser_extraction" | "freshness" | "safe_metadata_support" | "marketplace_output";
       rowCount: number;
       buyerVisibleFix: string;
       countsTowardPaidFloorNow: false;
@@ -10686,7 +10686,7 @@ function marketplaceConversionRealRowSamplePackForRows(
     productionPaidTrafficReady: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR,
     productionBlockers: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? [] : [
       "sellable_rows_below_100_production_floor",
-      "paid_traffic_experiment_blocked_until_agent10_floor_passes",
+      "paid_traffic_experiment_blocked_until_sellable_floor_passes",
       "external_apify_marketplace_analytics_unknown"
     ],
     currentSellableRows: quality.sellable,
@@ -10702,9 +10702,9 @@ function marketplaceConversionRealRowSamplePackForRows(
       { rowClass: "coverage_gap", reason: "Coverage gaps explain missing evidence and are not paid findings.", countsTowardPaidReadiness: false }
     ],
     paidTrafficExperimentReadiness: {
-      status: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready_after_agent10_floor_passes" : "blocked_until_100_real_sellable_rows",
+      status: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready_for_paid_traffic" : "blocked_until_100_real_sellable_rows",
       activatesWhen: [
-        "Agent 10 release decision observes at least 100 real current sellable rows",
+        "Actor output contains at least 100 real current sellable rows",
         "sellable row rate is at least 25 percent",
         "average buyer value score is at least 0.55",
         "Apify marketplace telemetry is externally verified",
@@ -10735,18 +10735,18 @@ function marketplaceConversionRealRowSamplePackForRows(
     },
     first100BuyerPreview: {
       schemaVersion: "ti.apify_first_100_real_rows_buyer_preview.v1",
-      status: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready_after_agent10_floor_passes" : "blocked_preview_until_100_real_sellable_rows",
+      status: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready_for_paid_traffic" : "blocked_preview_until_100_real_sellable_rows",
       currentSellableRows: quality.sellable,
       usefulButNotChargeableRows,
       remainingSellableRowsNeeded: Math.max(0, PRODUCTION_SELLABLE_ROW_FLOOR - quality.sellable),
       sampleRowsShownNow: sampleRows.length,
       sampleRowsRequiredBeforePaidTraffic: PRODUCTION_SELLABLE_ROW_FLOOR,
       topBlockerBuckets: [
-        { blocker: "missing_public_support", owner: "agent_04", rowCount: 28, buyerVisibleFix: "add safe public corroboration for single-source actor/ransomware rows", countsTowardPaidFloorNow: false },
-        { blocker: "parser_repair", owner: "agent_03", rowCount: 20, buyerVisibleFix: "extract actor, victim or target, sector/country, TTP/tool, dates, confidence, and provenance", countsTowardPaidFloorNow: false },
-        { blocker: "dark_metadata_public_support", owner: "agent_05", rowCount: 19, buyerVisibleFix: "convert metadata-only leads into public-supported safe rows or explicit rejects", countsTowardPaidFloorNow: false },
-        { blocker: "freshness", owner: "agent_07", rowCount: 5, buyerVisibleFix: "replace stale latest-activity rows with current evidence or suppress them", countsTowardPaidFloorNow: false },
-        { blocker: "marketplace_output_gap", owner: "agent_09", rowCount: 3, buyerVisibleFix: "keep row examples specific to real safe evidence and preserve external_unknown analytics", countsTowardPaidFloorNow: false }
+        { blocker: "missing_public_support", repairArea: "source_corroboration", rowCount: 28, buyerVisibleFix: "add safe public corroboration for single-source actor/ransomware rows", countsTowardPaidFloorNow: false },
+        { blocker: "parser_repair", repairArea: "parser_extraction", rowCount: 20, buyerVisibleFix: "extract actor, victim or target, sector/country, TTP/tool, dates, confidence, and provenance", countsTowardPaidFloorNow: false },
+        { blocker: "dark_metadata_public_support", repairArea: "safe_metadata_support", rowCount: 19, buyerVisibleFix: "convert metadata-only leads into public-supported safe rows or explicit rejects", countsTowardPaidFloorNow: false },
+        { blocker: "freshness", repairArea: "freshness", rowCount: 5, buyerVisibleFix: "replace stale latest-activity rows with current evidence or suppress them", countsTowardPaidFloorNow: false },
+        { blocker: "marketplace_output_gap", repairArea: "marketplace_output", rowCount: 3, buyerVisibleFix: "keep row examples specific to real safe evidence and preserve external_unknown analytics", countsTowardPaidFloorNow: false }
       ],
       requiredBuyerFields: ["actorOrGroup", "claimType", "victimOrTargetWhenSafe", "sectorCountry", "datasetOrImpactClaimWhenSafe", "ttpToolCvePivots", "freshness", "confidence", "corroborationState", "contradictionState", "sourceFamilies", "nextBuyerSearchPivots", "provenanceHash", "noLeakProof"],
       noLeakProof: {
@@ -10761,7 +10761,7 @@ function marketplaceConversionRealRowSamplePackForRows(
         staleRowsCountTowardPaidFloor: false
       },
       activationGate: [
-        "Agent 10 paidReleaseTruthBoard confirms at least 100 real current sellable rows",
+        "paidReleaseTruthBoard confirms at least 100 real current sellable rows",
         "every preview row has required buyer fields, provenance hash, and no-leak proof",
         "useful-but-not-chargeable rows remain caveated or held outside the paid floor",
         "Apify analytics, payout, revenue, and conversion metrics remain external_unknown until observed"

@@ -1936,7 +1936,7 @@ if (
 }
 if (
   Number(marketplaceConversionRealRowSamplePack.currentSellableRows) >= 100
-  && paidTrafficExperimentReadiness.status !== "ready_after_agent10_floor_passes"
+  && paidTrafficExperimentReadiness.status !== "ready_for_paid_traffic"
 ) {
   throw new Error("Program CL paid-traffic experiment readiness must be ready after the 100-row floor passes");
 }
@@ -1978,7 +1978,7 @@ if (
 if (
   Number(first100BuyerPreview.currentSellableRows) >= 100
   && (
-    first100BuyerPreview.status !== "ready_after_agent10_floor_passes"
+    first100BuyerPreview.status !== "ready_for_paid_traffic"
     || Number(first100BuyerPreview.remainingSellableRowsNeeded) !== 0
   )
 ) {
