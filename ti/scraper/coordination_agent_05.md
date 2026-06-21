@@ -1,18 +1,9 @@
-Status: paused_by_user_single_agent_mode
+Status: done_no_worker
 
-# Agent 05 Task
+High-value task completed:
+- Dark metadata chargeable tier was raised from 1,250 to 1,500 safe metadata rows and exposed through status/API/ops surfaces.
 
-Increase useful metadata-only dark/restricted rows from 1,250 to 1,500.
+Discarded:
+- Restricted-source governance and non-row paperwork.
 
-Deliver:
-- Add 250 more buyer-useful metadata rows.
-- Each row must include actor/group, victim/target or dataset claim, sector/country when available, date/freshness, source family, confidence, public support pivot, and buyer action.
-- Keep raw URLs, leaked content, credentials, payloads, and files out of output.
-- Skip generic, stale, unsupported, duplicate, and non-actionable rows.
-
-Success metric:
-- Current useful metadata-only rows reach 1,500 with 0 blocked or projected rows counted as useful.
-
-Before stopping:
-- Run dark metadata tests.
-- Commit and push.
+No further worker task. Continue only with metadata rows that are safe, searchable, fresh enough, and useful for actor/victim/target/TTP pivots.

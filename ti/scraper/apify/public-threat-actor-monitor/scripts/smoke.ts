@@ -10,7 +10,7 @@ await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify
   includeDatasets: true,
   includeCoverageGaps: true,
   includeHeldRows: true,
-  maxRowsPerQuery: 23
+  maxRowsPerQuery: 40
 }, null, 2));
 
 const proc = Bun.spawn({
@@ -102,8 +102,8 @@ if (
 ) {
   throw new Error("OUTPUT record must expose paid-row quality counts");
 }
-if (Number(paidRowQuality.sellable) < 23 || Number(paidRowQuality.usefulForBuyer) < 23) {
-  throw new Error("APT42 daily collection smoke must keep at least 23 sellable and 23 buyer-useful candidate rows after row prioritization");
+if (Number(paidRowQuality.sellable) < 40 || Number(paidRowQuality.usefulForBuyer) < 40) {
+  throw new Error("APT42 daily collection smoke must keep at least 40 sellable and 40 buyer-useful candidate rows after row prioritization");
 }
 const buyerVisibleOutputQuality = outputRecord.buyerVisibleOutputQuality as Record<string, unknown> | undefined;
 if (
@@ -2823,8 +2823,8 @@ if (sourceProofs.length > 0 && !sourceProofs.every((proof) =>
   throw new Error("Generic source-page rows must not become parser-admitted sellable rows");
 }
 if (
-  output.length === 23
-  && Number(paidRowQuality.sellable) === 23
+  output.length === 40
+  && Number(paidRowQuality.sellable) === 40
   && (
     output.some((row) => row.rowType === "coverage_gap")
     || output.some((row) => row.paidRowDecision === "suppress")

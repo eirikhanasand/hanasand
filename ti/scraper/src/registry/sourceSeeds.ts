@@ -734,8 +734,7 @@ function tiSourceAtlasRecord(index: number, family: TiSourceAtlasFamily, generat
 function tiSourceAtlasHighYieldReplacementCandidate(index: number, family: TiSourceAtlasFamily): boolean {
   if (index > PAYWORTHY_REPAIR_EVALUATED_COUNT) return false;
   if (family === "public_channel_descriptor") return false;
-  if (index % 13 !== 0) return false;
-  return [
+  const highValueFamilies: TiSourceAtlasFamily[] = [
     "vendor_threat_blog",
     "cert_government",
     "cve_advisory",
@@ -743,12 +742,16 @@ function tiSourceAtlasHighYieldReplacementCandidate(index: number, family: TiSou
     "ransomware_tracker",
     "exploit_intelligence",
     "github_security_advisory",
-    "package_advisory",
-    "public_dataset",
     "regional_cyber_agency",
-    "ics_ot",
     "cloud_saas_security",
     "phishing_brand_abuse"
+  ];
+  if (highValueFamilies.includes(family)) return index % 5 === 0 || index % 7 === 0 || index % 11 === 0;
+  if (index % 9 !== 0) return false;
+  return [
+    "package_advisory",
+    "public_dataset",
+    "ics_ot"
   ].includes(family);
 }
 

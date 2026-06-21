@@ -2312,15 +2312,15 @@ describe("ops controls", () => {
       schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1",
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
-      candidateCount: 1250,
+      candidateCount: 1500,
       previousCurrentChargeableRows: 1000,
-      currentChargeableRows: 1250,
-      newlyChargeableRows: 250,
+      currentChargeableRows: 1500,
+      newlyChargeableRows: 500,
       projectedAfterPublicSupportRows: 0,
       blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 1250,
-        newlyChargeableSinceProgramCw: 1200,
+        currentChargeableCount: 1500,
+        newlyChargeableSinceProgramCw: 1450,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo100: 0,
@@ -2329,8 +2329,8 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 1250,
-        newlyChargeableSinceProgramDa: 1150,
+        currentChargeableCount: 1500,
+        newlyChargeableSinceProgramDa: 1400,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo150: 0,
@@ -2339,8 +2339,8 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 1250,
-        newlyChargeableSinceProgramDc: 1100,
+        currentChargeableCount: 1500,
+        newlyChargeableSinceProgramDc: 1350,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo250: 0,
@@ -2348,7 +2348,7 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable500: {
-        currentChargeableCount: 1250,
+        currentChargeableCount: 1500,
         newlyChargeableSinceProgramDd: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
@@ -2358,7 +2358,7 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable750: {
-        currentChargeableCount: 1250,
+        currentChargeableCount: 1500,
         newlyChargeableSinceProgramDe: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
@@ -2368,31 +2368,41 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable1000: {
-        currentChargeableCount: 1250,
+        currentChargeableCount: 1500,
         newlyChargeableSinceProgramFg: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo1000: 0,
-        currentGapTo4000: 2750,
+        currentGapTo4000: 2500,
         parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable1250: {
-        currentChargeableCount: 1250,
-        newlyChargeableSinceProgramGh: 250,
+        currentChargeableCount: 1500,
+        newlyChargeableSinceProgramGh: 500,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo1250: 0,
-        currentGapTo4000: 2750,
+        currentGapTo4000: 2500,
+        parserHandoffRowCount: 500,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable1500: {
+        currentChargeableCount: 1500,
+        newlyChargeableSinceProgramHa: 250,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 0,
+        currentGapTo1500: 0,
+        currentGapTo4000: 2500,
         parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 1250,
+        current_sellable_public_supported: 1500,
         projected_after_public_support: 0,
         blocked_not_chargeable: 0
       },
-      newlyChargeableParserHandoffRowCount: 250
+      newlyChargeableParserHandoffRowCount: 500
     });
     expect(Object.values(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(0);
     expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.sampleRows.every((row) =>

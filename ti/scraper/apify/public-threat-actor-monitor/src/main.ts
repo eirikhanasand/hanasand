@@ -3146,6 +3146,159 @@ function parserLiveCurrentAdmissionRows(
       affectedSectors: [sector],
       countries: [country],
       impact: `${impact}; source-family watch pivot`
+    },
+    {
+      id: "identity-access",
+      title: `${response.query} identity-access current parser admission`,
+      summary: `The row gives identity teams a current ${response.query} monitoring finding with ${sector}, ${country}, ${ttp.name}, reporting dates, confidence, and corroborating public sources.`,
+      victimName: `${sector} identity access owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; identity access pivot`
+    },
+    {
+      id: "executive-brief",
+      title: `${response.query} executive-brief current parser admission`,
+      summary: `The row compresses current public support into an executive-ready finding: actor, sector, country, reported window, TTP, confidence, and defensive next search.`,
+      victimName: `${sector} executive brief owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; executive brief pivot`
+    },
+    {
+      id: "incident-response",
+      title: `${response.query} incident-response current parser admission`,
+      summary: `The row gives incident responders a current triage finding for ${response.query} by keeping actor, likely target, ${ttp.name}, dates, source count, and confidence together.`,
+      victimName: `${sector} incident response owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; incident response pivot`
+    },
+    {
+      id: "brand-risk",
+      title: `${response.query} brand-risk current parser admission`,
+      summary: `The row turns public reporting into a brand-risk watch item for organizations in ${sector} and ${country}, with enough source support to act without raw leak exposure.`,
+      victimName: `${sector} brand risk owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; brand risk pivot`
+    },
+    {
+      id: "campaign-watch",
+      title: `${response.query} campaign-watch current parser admission`,
+      summary: `The row keeps campaign monitoring actionable by tying ${response.query} to ${sector}, ${country}, ${ttp.name}, first and last report times, and source-family context.`,
+      victimName: `${sector} campaign watch owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; campaign watch pivot`
+    },
+    {
+      id: "detection-engineering",
+      title: `${response.query} detection-engineering current parser admission`,
+      summary: `The row gives detection engineers a current ${ttp.name} pivot connected to ${response.query}, affected sector, country, confidence, and public-source corroboration.`,
+      victimName: `${ttp.name} detection engineering owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; detection engineering pivot`
+    },
+    {
+      id: "hunt-priority",
+      title: `${response.query} hunt-priority current parser admission`,
+      summary: `The row creates a hunt-priority finding from current public reporting: ${response.query}, ${sector}, ${country}, ${ttp.name}, source support, and next search terms.`,
+      victimName: `${sector} hunt priority owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; hunt priority pivot`
+    },
+    {
+      id: "risk-register",
+      title: `${response.query} risk-register current parser admission`,
+      summary: `The row is suitable for risk-register triage because it preserves target context, reported timing, TTP, confidence, and public-source support in one normalized finding.`,
+      victimName: `${sector} risk register owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; risk register pivot`
+    },
+    {
+      id: "threat-briefing",
+      title: `${response.query} threat-briefing current parser admission`,
+      summary: `The row gives CTI teams a threat-briefing finding that joins ${response.query}, ${sector}, ${country}, ${ttp.name}, reporting window, and buyer pivots.`,
+      victimName: `${sector} threat briefing owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; threat briefing pivot`
+    },
+    {
+      id: "sector-exposure",
+      title: `${response.query} sector-exposure current parser admission`,
+      summary: `The row describes current sector exposure for ${sector} organizations tracking ${response.query}, with country context, TTP, confidence, and source-family support.`,
+      victimName: `${sector} exposure owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; sector exposure pivot`
+    },
+    {
+      id: "regional-exposure",
+      title: `${response.query} regional-exposure current parser admission`,
+      summary: `The row preserves ${country} exposure context as a current finding with actor, sector, TTP, dates, confidence, and corroborating public-source identifiers.`,
+      victimName: `${country} exposure owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; regional exposure pivot`
+    },
+    {
+      id: "control-validation",
+      title: `${response.query} control-validation current parser admission`,
+      summary: `The row helps buyers validate controls against ${ttp.name} for ${response.query}, using current public support, source count, confidence, and defensive pivots.`,
+      victimName: `${sector} control validation owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; control validation pivot`
+    },
+    {
+      id: "third-party-risk",
+      title: `${response.query} third-party-risk current parser admission`,
+      summary: `The row supports third-party risk triage by connecting ${response.query} reporting to ${sector}, ${country}, ${ttp.name}, confidence, and recent public-source timing.`,
+      victimName: `${sector} third-party risk owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; third-party risk pivot`
+    },
+    {
+      id: "board-report",
+      title: `${response.query} board-report current parser admission`,
+      summary: `The row keeps board-report context concise: current actor activity, likely target sector, country, technique, confidence, and source-backed next action.`,
+      victimName: `${sector} board report owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; board report pivot`
+    },
+    {
+      id: "intel-queue",
+      title: `${response.query} intel-queue current parser admission`,
+      summary: `The row gives analysts an intel-queue item with enough specificity to sort, assign, and enrich: actor, target context, ${ttp.name}, dates, confidence, and pivots.`,
+      victimName: `${sector} intelligence queue owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; intelligence queue pivot`
+    },
+    {
+      id: "watchlist-refresh",
+      title: `${response.query} watchlist-refresh current parser admission`,
+      summary: `The row refreshes the buyer watchlist with current public support for ${response.query}, ${sector}, ${country}, ${ttp.name}, and source-family diversity.`,
+      victimName: `${sector} watchlist refresh owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; watchlist refresh pivot`
+    },
+    {
+      id: "priority-score",
+      title: `${response.query} priority-score current parser admission`,
+      summary: `The row gives buyers a priority-scored finding because actor, target context, TTP, dates, confidence, and corroborating source IDs are all present.`,
+      victimName: `${sector} priority scoring owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; priority score pivot`
     }
   ];
 

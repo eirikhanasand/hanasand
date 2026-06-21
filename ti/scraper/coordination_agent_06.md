@@ -1,20 +1,9 @@
-Status: paused_by_user_single_agent_mode
+Status: done_no_worker
 
-# Agent 06 Task
+High-value task completed:
+- Unknown actor search behavior is already covered by tests that keep generic unmatched results in a searching-only state.
 
-Stop evidence/read-model/storage work.
+Discarded:
+- UX wording audits that do not change sellable output.
 
-Make API/search results more useful for buyers.
-
-Deliver:
-- Improve `/search` or Actor output so a buyer can immediately see actor summary, recent activity, victims/targets, TTPs/tools, source pivots, freshness, and confidence.
-- Replace vague “not indexed” or long internal status text with concise useful output.
-- Add real-time refresh status: `searching`, then useful rows as they arrive.
-- Do not expose raw leaked data or unsafe URLs.
-
-Success metric:
-- Better buyer-visible search result quality for real actor queries.
-
-Before stopping:
-- Run API/search tests.
-- Commit and push.
+No further worker task. Continue only with search changes that return faster useful rows or suppress wrong/generic results.

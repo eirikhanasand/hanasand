@@ -1159,7 +1159,7 @@ export interface DarkwebIndexPublicSupportSellable500 {
   readonly schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1";
   readonly candidateSource: "publicSupportLift1000.tier10000_ranked_rows";
   readonly targetSellableRows: 250;
-  readonly candidateCount: 1250;
+  readonly candidateCount: 1500;
   readonly previousCurrentChargeableRows: 1000;
   readonly currentChargeableRows: number;
   readonly newlyChargeableRows: number;
@@ -1230,6 +1230,16 @@ export interface DarkwebIndexPublicSupportSellable500 {
     readonly projectedAfterPublicSupportCount: number;
     readonly blockedOrRetiredCount: number;
     readonly currentGapTo1250: number;
+    readonly currentGapTo4000: number;
+    readonly parserHandoffRowCount: number;
+    readonly countsProjectedRowsAsCurrent: false;
+  };
+  readonly currentChargeable1500: {
+    readonly currentChargeableCount: number;
+    readonly newlyChargeableSinceProgramHa: number;
+    readonly projectedAfterPublicSupportCount: number;
+    readonly blockedOrRetiredCount: number;
+    readonly currentGapTo1500: number;
     readonly currentGapTo4000: number;
     readonly parserHandoffRowCount: number;
     readonly countsProjectedRowsAsCurrent: false;
@@ -3827,9 +3837,9 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
   const blockedRows = rankedRows
     .filter((row) => !currentRowIds.has(row.recordId))
     .sort(publicSupportLiftValueSort)
-    .slice(0, Math.max(0, 1250 - currentRows.length));
+    .slice(0, Math.max(0, 1500 - currentRows.length));
   const rows = [...currentRows, ...blockedRows]
-    .slice(0, 1250)
+    .slice(0, 1500)
     .map((row, index) => publicSupportSellable500RowFor(row, index + 1));
   const currentChargeableRows = rows.filter((row) => row.rowDecision === "current_sellable_public_supported").length;
   const projectedAfterPublicSupportRows = rows.filter((row) => row.rowDecision === "projected_after_public_support").length;
@@ -3842,7 +3852,7 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
     schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1",
     candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
     targetSellableRows: 250,
-    candidateCount: 1250,
+    candidateCount: 1500,
     previousCurrentChargeableRows: 1000,
     currentChargeableRows,
     newlyChargeableRows,
@@ -3917,6 +3927,16 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
       parserHandoffRowCount: newlyChargeableParserHandoffRows.length,
       countsProjectedRowsAsCurrent: false
     },
+    currentChargeable1500: {
+      currentChargeableCount: currentChargeableRows,
+      newlyChargeableSinceProgramHa: rows.filter((row) => row.rank > 1250 && row.rowDecision === "current_sellable_public_supported").length,
+      projectedAfterPublicSupportCount: projectedAfterPublicSupportRows,
+      blockedOrRetiredCount: blockedOrRetiredRows,
+      currentGapTo1500: Math.max(0, 1500 - currentChargeableRows),
+      currentGapTo4000: Math.max(0, 4000 - currentChargeableRows),
+      parserHandoffRowCount: rows.filter((row) => row.rank > 1250 && row.rowDecision === "current_sellable_public_supported").length,
+      countsProjectedRowsAsCurrent: false
+    },
     rowDecisionCounts: {
       current_sellable_public_supported: currentChargeableRows,
       projected_after_public_support: projectedAfterPublicSupportRows,
@@ -3974,7 +3994,7 @@ function programDdActorHintFor(index: number): string {
 }
 
 function publicSupportSellable500RowFor(row: DarkwebIndexPublicSupportLiftRow, rank: number): DarkwebIndexPublicSupportSellable500Row {
-  const currentSellable = rank <= 1250 && (row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat");
+  const currentSellable = rank <= 1500 && (row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat");
   const projected = !currentSellable && row.outcome === "sellable_after_public_support";
   const [sector, country] = splitSectorCountry(row.sectorCountry);
   const safePublicSourceId = `public_support_500_source_${String(rank).padStart(3, "0")}`;

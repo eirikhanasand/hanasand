@@ -7,14 +7,14 @@ This Actor turns public reporting into normalized rows for CTI, SOC, brand-risk,
 ## What You Get
 
 - A 100-name default watchlist covering long-running state-linked, financially motivated, ransomware, malware, and ecosystem names.
-- One dataset row per public actor profile, recent activity item, target, TTP/tool, source-provenance item, dataset/impact note, or optional coverage gap.
+- One dataset row per recent activity item, target, TTP/tool, dataset/impact note, or optional source-coverage gap.
 - Buyer-useful fields such as `actor`, `rowType`, `buyerSummary`, `recommendedBuyerAction`, `keyPivots`, `claimType`, `title`, `summary`, `victimName`, `affectedSectors`, `countries`, `impact`, `ttp`, `attackId`, `publisherCount`, `firstReportedAt`, `lastReportedAt`, `corroborationState`, `confidence`, `freshnessStatus`, `nextSearchPivots`, and `whyWorthPayingFor`.
 - Row-level billing guidance through `paidRowDecision`, `billingGuidance`, `buyerValueScore`, and `whyWorthPayingFor`, so buyers can separate chargeable findings from useful caveated leads.
 - Safe metadata only: no credential values, stolen files, malware payloads, private messages, raw leak contents, private forum material, authentication bypass, CAPTCHA bypass, or threat-actor interaction.
 
 Held rows, suppressed rows, and coverage-gap diagnostics are opt-in. The default run keeps the dataset focused on buyer-useful intelligence rows.
 
-Current sample-output baseline: 607 safe rows across the 100-name default watchlist, 187 sellable rows, 420 caveated useful leads, 30.8% sellable rate, average buyer value `0.593`, and no held or coverage-gap rows in the paid default output.
+Current focused sample baseline: 40 safe rows for one actor query, 40 sellable rows, 40 buyer-useful rows, 100% sellable rate, average buyer value `0.85`, and no source-only, held, suppressed, or coverage-gap rows on the first page when enough chargeable findings exist.
 
 ## Buyer Examples
 
@@ -67,7 +67,7 @@ Useful options:
 - `includeActivity`: recent public mentions, campaigns, claims, and reporting.
 - `includeTargets`: likely sectors, countries, regions, victims, or targets when available.
 - `includeTtps`: tactics, techniques, tools, malware, CVEs, and ATT&CK identifiers when available.
-- `includeSources`: public source-provenance rows that support the result.
+- `includeSources`: optional public source context. Source-only rows are not counted as chargeable findings.
 - `includeDatasets`: optional service coverage rows.
 - `includeCoverageGaps`: optional source coverage notes.
 - `includeHeldRows`: optional held or suppressed rows for QA.
@@ -136,6 +136,24 @@ Recommended filters:
 - `corroborationState=corroborated`: rows supported by more than one source or source family.
 - `freshnessStatus=current`: rows most suitable for SOC and incident-response review.
 - `billingGuidance=charge`: rows that should count as paid dataset items.
+
+## FAQ
+
+How fresh is the data?
+
+Rows include `freshnessStatus`, `firstReportedAt`, and `lastReportedAt`. The default watchlist is meant for daily monitoring; current rows are sorted before caveated context.
+
+Do you include dark-web material?
+
+Only safe metadata and public corroboration are surfaced. Raw leak contents, credential values, private messages, stolen files, payloads, and unsafe URLs are not returned.
+
+What makes a row sellable?
+
+A sellable row needs a specific actor or group, useful target or TTP context, freshness, confidence, source support, recommended action, and safe output fields.
+
+Can I monitor my own list?
+
+Yes. Pass up to 100 actor, ransomware, malware, campaign, sector, or brand terms in `queries`.
 
 ## Safety Boundary
 

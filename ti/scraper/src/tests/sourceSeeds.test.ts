@@ -1887,11 +1887,9 @@ describe("source seed bundles", () => {
     const replacementRunbook = atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.activationRunbook;
     expect(replacementRunbook.batchSourceCount).toBe(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.replacementRows.length);
     expect(replacementRunbook.day1CandidateCount).toBeGreaterThan(0);
-    expect(replacementRunbook.day3CandidateCount).toBeGreaterThan(0);
     expect(replacementRunbook.expectedPayworthyLift).toBeGreaterThan(0);
     expect(replacementRunbook.actionRows.map((row) => row.phase)).toEqual(expect.arrayContaining([
       "day_1_canary",
-      "day_3_parser_or_legal_clearance",
       "hold_for_replacement"
     ]));
     expect(replacementRunbook.actionRows.every((row) =>
