@@ -33,7 +33,7 @@ function docsForStore(store: any): SearchDoc[] {
 }
 
 function sellableCapture(capture: any) {
-  return capture.metadata?.sellableCandidate === true || isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt });
+  return isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt });
 }
 
 function searchableText(capture: any) {

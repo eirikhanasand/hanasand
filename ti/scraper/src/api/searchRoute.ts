@@ -1,13 +1,14 @@
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { json, numberQuery, readJson } from "./http.ts";
-import { hashContent, nowIso, stableId } from "../utils.ts";
+import { nowIso, stableId } from "../utils.ts";
 import { findSearchCaptures } from "./searchCaptureIndex.ts";
+import { rowFromCapture } from "./searchRows.ts";
 
 export async function searchResponse(request: Request, options: ApiServerOptions, url: URL): Promise<Response> {
   const body = request.method === "POST" ? await readJson(request) : {};
   const query = String(body.q ?? body.query ?? url.searchParams.get("q") ?? "").trim();
   const captures = findSearchCaptures(options.store, query, numberQuery(url.searchParams.get("limit")) ?? 50);
-  const rows = captures.map((capture: any) => rowFromCapture(capture));
+  const rows = captures.map((capture: any) => rowFromCapture(capture, options.store.getSource?.(capture.sourceId)));
   const provenance = rows.map((row) => ({ evidenceStage: "captured_page", evidenceId: row.id, sourceId: row.sourceId }));
   const status = rows.length ? "ready" : "searching";
   const actorProfile = { query, actor: query, datasets: { evidenceStageCounts: { captured_page: rows.length }, sourceCount: new Set(rows.map((r) => r.sourceId)).size }, provenance };
@@ -15,25 +16,6 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const quality = qualityFromRows(query, rows);
   const graph = { endpoint: "/v1/intel/search.graph", reviewQueue: { total: rows.length ? 0 : 1, publicFactPolicy: rows.length ? "ready" : "hold_weak_edges" } };
   return json({ query, status, summary: publicTiAnswer.safeSummary, rows, results: rows, runId: stableId("search", `${query}:${nowIso()}`), actorProfile, publicTiAnswer, quality, graph });
-}
-
-function rowFromCapture(capture: any) {
-  return {
-    id: capture.id,
-    sourceId: capture.sourceId,
-    title: capture.title,
-    summary: cleanSummary(capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "").slice(0, 500),
-    collectedAt: capture.collectedAt,
-    provenanceHash: hashContent(capture.id),
-    metadataOnly: capture.storageKind === "metadata_only" || capture.metadata?.adapter === "darknet_metadata"
-  };
-}
-
-function cleanSummary(value: unknown) {
-  return String(value ?? "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'")
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));
 }
 
 function qualityFromRows(query: string, rows: Array<{ id: string }>) {
