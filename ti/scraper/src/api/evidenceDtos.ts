@@ -35,6 +35,7 @@ import {
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
+  buildEvidenceSearchableSourceMetadataPromotionGate,
   buildEvidenceSearchableSourceMetadataPublicSupportQueue,
   createEvidenceSearchableSourceMetadataPublicSupportRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
@@ -63,6 +64,7 @@ import {
   type EvidencePromotionTransactionExecutionReceipt,
   type EvidencePromotionTransactionPlan,
   type EvidenceSearchableSourceMetadataCatalog,
+  type EvidenceSearchableSourceMetadataPromotionGate,
   type EvidenceSearchableSourceMetadataPublicSupportQueue,
   type EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus,
   type EvidenceSearchReadModelBackendWriteSet,
@@ -210,6 +212,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   searchableSourceMetadataCatalog: EvidenceSearchableSourceMetadataCatalog;
   searchableSourceMetadataPublicSupportQueue: EvidenceSearchableSourceMetadataPublicSupportQueue;
   searchableSourceMetadataPublicSupportRepository: EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus;
+  searchableSourceMetadataPromotionGate: EvidenceSearchableSourceMetadataPromotionGate;
   readiness: {
     embedded: EvidenceSearchReadModelReadiness;
     postgres: EvidenceSearchReadModelReadiness;
@@ -467,6 +470,12 @@ function buildEvidenceSearchReadModelCutoverDto(
     searchableSourceMetadataPublicSupportRows,
     { generatedAt }
   );
+  const searchableSourceMetadataPromotionGate = buildEvidenceSearchableSourceMetadataPromotionGate(
+    searchableSourceMetadataCatalog,
+    searchableSourceMetadataPublicSupportQueue,
+    searchableSourceMetadataPublicSupportRepository,
+    { generatedAt }
+  );
   const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(writeSet, {
     query,
     normalizedQuery: handoff.normalizedQuery,
@@ -533,6 +542,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     searchableSourceMetadataCatalog,
     searchableSourceMetadataPublicSupportQueue,
     searchableSourceMetadataPublicSupportRepository,
+    searchableSourceMetadataPromotionGate,
     readiness: {
       embedded,
       postgres,

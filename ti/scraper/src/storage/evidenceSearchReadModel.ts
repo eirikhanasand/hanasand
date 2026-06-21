@@ -413,6 +413,61 @@ export interface EvidenceSearchableSourceMetadataPublicSupportRepository {
   ): EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus;
 }
 
+export interface EvidenceSearchableSourceMetadataPromotionGate {
+  schemaVersion: "ti.evidence_searchable_source_metadata_promotion_gate.v1";
+  generatedAt: string;
+  gateId: string;
+  sourceCatalog: EvidenceSearchableSourceMetadataCatalog["schemaVersion"];
+  sourcePublicSupportQueue: EvidenceSearchableSourceMetadataPublicSupportQueue["schemaVersion"];
+  sourcePublicSupportRepository: EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus["schemaVersion"];
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  dryRun: true;
+  willPromoteActorRows: false;
+  willWritePublicAnswerCache: false;
+  counts: {
+    directPublicSupportRows: number;
+    metadataRowsBlockedForPublicSupport: number;
+    likelyUnlocksAfterPublicSupportReplay: number;
+    caveatedContextRows: number;
+    promotableNow: number;
+  };
+  rows: EvidenceSearchableSourceMetadataPromotionGateRow[];
+  policy: {
+    directPublicRowsMaySupportActorAnswers: true;
+    restrictedMetadataRequiresPublicSupportReplay: true;
+    publicSupportRepositoryMustReplay: true;
+    restrictedRowsMetadataOnly: true;
+    restrictedEmbeddingsDisabled: true;
+    productionWritesDisabled: true;
+  };
+  noLeakGuarantees: EvidenceSearchableSourceMetadataCatalog["noLeakGuarantees"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceSearchableSourceMetadataPromotionGateRow {
+  gateRowId: string;
+  documentId: string;
+  sourceCatalogRowId: string;
+  sourceId?: string;
+  captureId?: string;
+  claimLedgerEntryId?: string;
+  sourceFamily: EvidenceSearchableSourceMetadataCatalogRow["sourceFamily"];
+  currentUse: EvidenceSearchableSourceMetadataCatalogRow["publicAnswerUse"];
+  targetUse: "actor_public_answer_support" | "public_supported_actor_row" | "stronger_caveated_context";
+  promotionState: "eligible_direct_public_support" | "blocked_public_support_required";
+  canPromoteNow: boolean;
+  requiredEvidence: Array<
+    "public_report_source" |
+    "public_channel_corroboration" |
+    "advisory_or_vendor_reference" |
+    "freshness_timestamp" |
+    "public_support_repository_replay"
+  >;
+  buyerVisibleFields: EvidenceSearchableSourceMetadataCatalogRow["buyerVisibleFields"];
+  noLeak: true;
+}
+
 export interface EvidenceSearchReadModelPromotionReplay {
   schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
   generatedAt: string;
@@ -1936,6 +1991,87 @@ class DisabledEvidenceSearchableSourceMetadataPublicSupportRepository implements
 
 export function createEvidenceSearchableSourceMetadataPublicSupportRepository(): EvidenceSearchableSourceMetadataPublicSupportRepository {
   return new DisabledEvidenceSearchableSourceMetadataPublicSupportRepository();
+}
+
+export function buildEvidenceSearchableSourceMetadataPromotionGate(
+  catalog: EvidenceSearchableSourceMetadataCatalog,
+  queue: EvidenceSearchableSourceMetadataPublicSupportQueue,
+  repositoryStatus: EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus,
+  input: { generatedAt?: string } = {}
+): EvidenceSearchableSourceMetadataPromotionGate {
+  const generatedAt = input.generatedAt ?? repositoryStatus.generatedAt ?? queue.generatedAt ?? catalog.generatedAt;
+  const directRows = catalog.rows.filter((row) =>
+    row.publicAnswerUse === "direct_support" &&
+    row.canSupportActorDatasetRow
+  );
+  const directGateRows: EvidenceSearchableSourceMetadataPromotionGateRow[] = directRows.map((row) => ({
+    gateRowId: stableId("evidence-searchable-source-promotion-gate", `${catalog.handoffId}:${row.rowId}:direct`),
+    documentId: row.documentId,
+    sourceCatalogRowId: row.rowId,
+    sourceId: row.sourceId,
+    captureId: row.captureId,
+    claimLedgerEntryId: row.claimLedgerEntryId,
+    sourceFamily: row.sourceFamily,
+    currentUse: row.publicAnswerUse,
+    targetUse: "actor_public_answer_support",
+    promotionState: "eligible_direct_public_support",
+    canPromoteNow: true,
+    requiredEvidence: ["public_report_source", "freshness_timestamp"],
+    buyerVisibleFields: [...row.buyerVisibleFields],
+    noLeak: true
+  }));
+  const blockedGateRows: EvidenceSearchableSourceMetadataPromotionGateRow[] = queue.candidates.map((candidate) => ({
+    gateRowId: stableId("evidence-searchable-source-promotion-gate", `${queue.queueId}:${candidate.candidateId}:blocked`),
+    documentId: candidate.documentId,
+    sourceCatalogRowId: candidate.sourceCatalogRowId,
+    sourceId: candidate.sourceId,
+    captureId: candidate.captureId,
+    claimLedgerEntryId: candidate.claimLedgerEntryId,
+    sourceFamily: candidate.sourceFamily,
+    currentUse: candidate.currentUse,
+    targetUse: candidate.targetUse,
+    promotionState: "blocked_public_support_required",
+    canPromoteNow: false,
+    requiredEvidence: uniqueStrings([
+      ...candidate.requiredPublicSupport,
+      "public_support_repository_replay"
+    ]) as EvidenceSearchableSourceMetadataPromotionGateRow["requiredEvidence"],
+    buyerVisibleFields: [...candidate.buyerVisibleFields],
+    noLeak: true
+  }));
+  const rows = [...directGateRows, ...blockedGateRows];
+
+  return {
+    schemaVersion: "ti.evidence_searchable_source_metadata_promotion_gate.v1",
+    generatedAt,
+    gateId: stableId("evidence-searchable-source-promotion-gate", `${catalog.handoffId}:${queue.queueId}:${repositoryStatus.generatedAt}`),
+    sourceCatalog: catalog.schemaVersion,
+    sourcePublicSupportQueue: queue.schemaVersion,
+    sourcePublicSupportRepository: repositoryStatus.schemaVersion,
+    productSurface: catalog.productSurface,
+    actorBuild: "0.6.4",
+    dryRun: true,
+    willPromoteActorRows: false,
+    willWritePublicAnswerCache: false,
+    counts: {
+      directPublicSupportRows: directGateRows.length,
+      metadataRowsBlockedForPublicSupport: blockedGateRows.length,
+      likelyUnlocksAfterPublicSupportReplay: queue.counts.likelyActorRowUnlocks,
+      caveatedContextRows: queue.counts.caveatedContextRows,
+      promotableNow: directGateRows.length
+    },
+    rows,
+    policy: {
+      directPublicRowsMaySupportActorAnswers: true,
+      restrictedMetadataRequiresPublicSupportReplay: true,
+      publicSupportRepositoryMustReplay: true,
+      restrictedRowsMetadataOnly: true,
+      restrictedEmbeddingsDisabled: true,
+      productionWritesDisabled: true
+    },
+    noLeakGuarantees: { ...catalog.noLeakGuarantees },
+    safeOutput: SAFE_OUTPUT
+  };
 }
 
 export function buildEvidenceSearchReadModelPromotionReplay(

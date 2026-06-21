@@ -232,6 +232,15 @@ Progress update 2026-06-21 06:44 CEST:
 - The repository status persists zero rows, mutates zero queues, activates zero sources, starts no crawling, promotes zero Actor rows, and keeps restricted/leak rows metadata-only.
 - Continue next with completed public-support replay receipts when Agent 01/04/07 produce completed support rows, or with another measurable read-model path that makes metadata-supported rows sellable.
 
+Progress update 2026-06-21 07:27 CEST:
+- Continued with the explicit promotion gate for searchable source/dark metadata rows.
+- Added `ti.evidence_searchable_source_metadata_promotion_gate.v1` on `/v1/evidence/cutover-report.readModelCutover.searchableSourceMetadataPromotionGate`.
+- The gate separates direct public-support rows that can be eligible for dry-run Actor/public-answer support from restricted/dark metadata rows that stay blocked until public-support replay and repository corroboration complete.
+- It exposes required evidence, buyer-visible fields, promotion state, and no-leak proof while writing zero production Actor rows or public-answer cache entries.
+- Restricted/leak material remains metadata-only: no raw bodies, object keys, unsafe URLs, credentials, actor interaction, restricted raw content, or restricted embeddings are exposed.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, and `bun run check:route-inventory`.
+- Continue next with completed public-support replay receipts once cross-agent repair rows exist, or with a disabled repository/audit boundary for promotion-gate decisions.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

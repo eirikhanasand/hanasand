@@ -66,6 +66,7 @@ import {
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
+  buildEvidenceSearchableSourceMetadataPromotionGate,
   buildEvidenceSearchableSourceMetadataPublicSupportQueue,
   createEvidenceSearchableSourceMetadataPublicSupportRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
@@ -2129,6 +2130,86 @@ describe("evidence storage cutover", () => {
     expect(searchableSourceMetadataPublicSupportRepositorySerialized).not.toContain(restrictedRaw);
     expect(searchableSourceMetadataPublicSupportRepositorySerialized).not.toContain("tenant/source/private-key");
     expect(searchableSourceMetadataPublicSupportRepositorySerialized).not.toContain(".onion");
+
+    const searchableSourceMetadataPromotionGate = buildEvidenceSearchableSourceMetadataPromotionGate(
+      searchableSourceMetadataCatalog,
+      searchableSourceMetadataPublicSupportQueue,
+      searchableSourceMetadataPublicSupportRepositoryStatus,
+      { generatedAt: "2026-05-24T21:44:43.000Z" }
+    );
+    expect(searchableSourceMetadataPromotionGate).toMatchObject({
+      schemaVersion: "ti.evidence_searchable_source_metadata_promotion_gate.v1",
+      sourceCatalog: "ti.evidence_searchable_source_metadata_catalog.v1",
+      sourcePublicSupportQueue: "ti.evidence_searchable_source_metadata_public_support_queue.v1",
+      sourcePublicSupportRepository: "ti.evidence_searchable_source_metadata_public_support_repository.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      actorBuild: "0.6.4",
+      dryRun: true,
+      willPromoteActorRows: false,
+      willWritePublicAnswerCache: false,
+      counts: {
+        directPublicSupportRows: searchableSourceMetadataCatalog.rows.filter((row) =>
+          row.publicAnswerUse === "direct_support" && row.canSupportActorDatasetRow
+        ).length,
+        metadataRowsBlockedForPublicSupport: searchableSourceMetadataPublicSupportQueue.candidates.length,
+        likelyUnlocksAfterPublicSupportReplay: searchableSourceMetadataPublicSupportQueue.candidates.filter((candidate) =>
+          candidate.targetUse === "public_supported_actor_row"
+        ).length,
+        caveatedContextRows: searchableSourceMetadataPublicSupportQueue.counts.caveatedContextRows,
+        promotableNow: searchableSourceMetadataCatalog.rows.filter((row) =>
+          row.publicAnswerUse === "direct_support" && row.canSupportActorDatasetRow
+        ).length
+      },
+      policy: {
+        directPublicRowsMaySupportActorAnswers: true,
+        restrictedMetadataRequiresPublicSupportReplay: true,
+        publicSupportRepositoryMustReplay: true,
+        restrictedRowsMetadataOnly: true,
+        restrictedEmbeddingsDisabled: true,
+        productionWritesDisabled: true
+      },
+      noLeakGuarantees: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false,
+        restrictedEmbeddingsCreated: false
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(searchableSourceMetadataPromotionGate.counts.directPublicSupportRows).toBeGreaterThan(0);
+    expect(searchableSourceMetadataPromotionGate.counts.promotableNow).toBe(searchableSourceMetadataPromotionGate.counts.directPublicSupportRows);
+    expect(searchableSourceMetadataPromotionGate.counts.metadataRowsBlockedForPublicSupport).toBeGreaterThan(0);
+    expect(searchableSourceMetadataPromotionGate.rows.some((row) =>
+      row.promotionState === "eligible_direct_public_support" &&
+      row.canPromoteNow &&
+      row.targetUse === "actor_public_answer_support" &&
+      row.requiredEvidence.includes("public_report_source") &&
+      row.requiredEvidence.includes("freshness_timestamp") &&
+      row.noLeak === true
+    )).toBe(true);
+    expect(searchableSourceMetadataPromotionGate.rows.some((row) =>
+      row.promotionState === "blocked_public_support_required" &&
+      row.canPromoteNow === false &&
+      row.requiredEvidence.includes("public_report_source") &&
+      row.requiredEvidence.includes("public_channel_corroboration") &&
+      row.requiredEvidence.includes("freshness_timestamp") &&
+      row.requiredEvidence.includes("public_support_repository_replay") &&
+      row.noLeak === true
+    )).toBe(true);
+    const searchableSourceMetadataPromotionGateSerialized = JSON.stringify(searchableSourceMetadataPromotionGate);
+    expect(searchableSourceMetadataPromotionGateSerialized).not.toContain(restrictedRaw);
+    expect(searchableSourceMetadataPromotionGateSerialized).not.toContain("tenant/source/private-key");
+    expect(searchableSourceMetadataPromotionGateSerialized).not.toContain(".onion");
 
     const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(backendWriteSet, {
       query: "APT29",
