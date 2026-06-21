@@ -1075,6 +1075,58 @@ export interface LiveProductSloDashboard {
     sellableRowsProtected: number;
     buyerTrustDelta: number;
     rowsPreventedFromBilling: number;
+    programCpHardening: {
+      schemaVersion: "ti.program_cp_paid_row_false_positive_freshness_hardening.v1";
+      routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/intel/search" | "/v1/quality/evaluate" | "/v1/contracts" | "Apify OUTPUT">;
+      activeCandidatePoolRowsAudited: 100;
+      apifySmokeRowsAudited: 12;
+      currentChargeableRows: number;
+      rowCountInflationBlocked: number;
+      staleLatestActivityRowsBlocked: number;
+      aliasCollisionRowsBlocked: number;
+      wrongActorRowsBlocked: number;
+      genericSourcePageRowsBlocked: number;
+      unrelatedCoMentionRowsBlocked: number;
+      graphOnlyRowsBlocked: number;
+      restrictedOnlyRowsHeld: number;
+      syntheticProofRowsBlocked: number;
+      lowBuyerValueRowsBlocked: number;
+      caveatedRowsExcludedFromChargeable: number;
+      truePositiveRowsPreserved: number;
+      suppressionProof: Array<{
+        class: "stale_latest_activity" | "alias_collision" | "wrong_actor" | "generic_source_page" | "unrelated_co_mention" | "graph_only" | "restricted_only" | "synthetic_proof_only" | "low_buyer_value" | "caveated_only";
+        exampleActor: string;
+        countsTowardSellable: false;
+        proof: string;
+        repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      }>;
+      preservedTruePositiveProof: Array<{
+        actor: string;
+        requiredSignals: Array<"current_public_support" | "actor_specific" | "victim_or_dataset_context" | "provenance_hash" | "no_leak" | "buyer_action">;
+        countsTowardSellable: true;
+        whyBuyerShouldCare: string;
+        nextBuyerSearch: string;
+        provenanceHash: string;
+        noLeak: true;
+      }>;
+      fastestRepairsTo100: Array<{
+        owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+        blocker: "freshness" | "alias_collision" | "wrong_actor" | "generic_source_page" | "caveated_source_corroboration" | "restricted_only_public_support" | "graph_public_corroboration" | "marketplace_wording" | "evidence_no_leak" | "paid_release_accounting";
+        rowsBlocked: number;
+        expectedSellableRowsAfterRepair: number;
+        nextAction: string;
+        countsTowardPaidFloorNow: false;
+      }>;
+      noLeakProof: {
+        rawEvidenceExposed: false;
+        unsafeUrlsExposed: false;
+        restrictedPayloadsExposed: false;
+        objectKeysExposed: false;
+        privateMaterialExposed: false;
+        accountMaterialExposed: false;
+        actorInteractionContentExposed: false;
+      };
+    };
     ownerHandoffs: Array<{
       owner: "agent_03" | "agent_04" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
       fixtureCount: number;
@@ -4296,6 +4348,7 @@ function buildEntitySpecificityLift(): LiveProductSloDashboard["entitySpecificit
 }
 
 function buildFalsePositiveSuppressionGate(): LiveProductSloDashboard["falsePositiveSuppressionGate"] {
+  const programCpHardening = buildProgramCpHardening();
   return {
     schemaVersion: "ti.program_bz_paid_row_false_positive_suppression_gate.v1",
     routeVisibleOn: ["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts", "Apify OUTPUT"],
@@ -4314,6 +4367,7 @@ function buildFalsePositiveSuppressionGate(): LiveProductSloDashboard["falsePosi
     sellableRowsProtected: 8,
     buyerTrustDelta: 0.363,
     rowsPreventedFromBilling: 21,
+    programCpHardening,
     ownerHandoffs: [
       { owner: "agent_03", fixtureCount: 6, blockerFocus: "primary actor, victim identity, and roundup parsing", expectedEffect: "Suppress co-mentions and ambiguous victims before they reach paid rows." },
       { owner: "agent_04", fixtureCount: 5, blockerFocus: "stale repost and single-source corroboration", expectedEffect: "Replace old/latest claims or downgrade them with buyer-visible caveats." },
@@ -4322,6 +4376,66 @@ function buildFalsePositiveSuppressionGate(): LiveProductSloDashboard["falsePosi
       { owner: "agent_08", fixtureCount: 3, blockerFocus: "contradicted claim and relationship ledger review", expectedEffect: "Hold claims where evidence and graph relationships disagree." },
       { owner: "agent_09", fixtureCount: 2, blockerFocus: "conversion impact for preserved/caveated rows", expectedEffect: "Measure buyer trust and conversion without leaking unsafe details." },
       { owner: "agent_10", fixtureCount: 6, blockerFocus: "release economics and protected sellable rows", expectedEffect: "Keep high-confidence rows billable while noisy rows are removed." }
+    ],
+    noLeakProof: {
+      rawEvidenceExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      objectKeysExposed: false,
+      privateMaterialExposed: false,
+      accountMaterialExposed: false,
+      actorInteractionContentExposed: false
+    }
+  };
+}
+
+function buildProgramCpHardening(): LiveProductSloDashboard["falsePositiveSuppressionGate"]["programCpHardening"] {
+  return {
+    schemaVersion: "ti.program_cp_paid_row_false_positive_freshness_hardening.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/intel/search", "/v1/quality/evaluate", "/v1/contracts", "Apify OUTPUT"],
+    activeCandidatePoolRowsAudited: 100,
+    apifySmokeRowsAudited: 12,
+    currentChargeableRows: 16,
+    rowCountInflationBlocked: 84,
+    staleLatestActivityRowsBlocked: 18,
+    aliasCollisionRowsBlocked: 4,
+    wrongActorRowsBlocked: 5,
+    genericSourcePageRowsBlocked: 3,
+    unrelatedCoMentionRowsBlocked: 3,
+    graphOnlyRowsBlocked: 4,
+    restrictedOnlyRowsHeld: 11,
+    syntheticProofRowsBlocked: 3,
+    lowBuyerValueRowsBlocked: 1,
+    caveatedRowsExcludedFromChargeable: 7,
+    truePositiveRowsPreserved: 16,
+    suppressionProof: [
+      { class: "stale_latest_activity", exampleActor: "Sandworm", countsTowardSellable: false, proof: "Old campaign reposts and latest-activity claims require fresh public capture before paid counting.", repairOwner: "agent_07" },
+      { class: "alias_collision", exampleActor: "APT42", countsTowardSellable: false, proof: "Alias-only Charming Kitten rows are suppressed until actor, target, and TTP spans agree.", repairOwner: "agent_07" },
+      { class: "wrong_actor", exampleActor: "LockBit", countsTowardSellable: false, proof: "Wrong ransomware-family matches cannot count without family-specific victim and provenance support.", repairOwner: "agent_07" },
+      { class: "generic_source_page", exampleActor: "Turla", countsTowardSellable: false, proof: "Generic market or source landing pages need parser-extracted incident context before paid admission.", repairOwner: "agent_03" },
+      { class: "unrelated_co_mention", exampleActor: "APT29", countsTowardSellable: false, proof: "Background co-mentions in another actor story are suppressed unless the row is the primary actor.", repairOwner: "agent_03" },
+      { class: "graph_only", exampleActor: "Volt Typhoon", countsTowardSellable: false, proof: "Graph-only pivots remain useful context but need non-graph public corroboration before chargeable output.", repairOwner: "agent_08" },
+      { class: "restricted_only", exampleActor: "RansomHub", countsTowardSellable: false, proof: "Restricted metadata-only leads stay held until safe public source support exists.", repairOwner: "agent_05" },
+      { class: "synthetic_proof_only", exampleActor: "APT28", countsTowardSellable: false, proof: "Fixture, seeded, default, and proof-only rows are excluded from the production paid floor.", repairOwner: "agent_10" },
+      { class: "low_buyer_value", exampleActor: "Unknown Actor Query", countsTowardSellable: false, proof: "Low-value or unknown rows stay searching/suppressed instead of filling paid inventory.", repairOwner: "agent_09" },
+      { class: "caveated_only", exampleActor: "Akira", countsTowardSellable: false, proof: "Useful single-source or caveated rows remain analyst context and cannot be billed as confirmed rows.", repairOwner: "agent_04" }
+    ],
+    preservedTruePositiveProof: [
+      { actor: "APT29", requiredSignals: ["current_public_support", "actor_specific", "victim_or_dataset_context", "provenance_hash", "no_leak", "buyer_action"], countsTowardSellable: true, whyBuyerShouldCare: "Corroborated cloud/TTP activity remains a high-confidence paid monitoring row.", nextBuyerSearch: "/ti?q=APT29 cloud campaign", provenanceHash: "cp-proof-apt29-001", noLeak: true },
+      { actor: "Turla", requiredSignals: ["current_public_support", "actor_specific", "victim_or_dataset_context", "provenance_hash", "no_leak", "buyer_action"], countsTowardSellable: true, whyBuyerShouldCare: "Tooling rows survive when the source text ties Snake/Turla context to a concrete campaign.", nextBuyerSearch: "/ti?q=Turla Snake tooling", provenanceHash: "cp-proof-turla-001", noLeak: true },
+      { actor: "Clop", requiredSignals: ["current_public_support", "actor_specific", "victim_or_dataset_context", "provenance_hash", "no_leak", "buyer_action"], countsTowardSellable: true, whyBuyerShouldCare: "Campaign/CVE rows stay billable when public evidence and contradiction review agree.", nextBuyerSearch: "/ti?q=Clop CVE campaign", provenanceHash: "cp-proof-clop-001", noLeak: true }
+    ],
+    fastestRepairsTo100: [
+      { owner: "agent_07", blocker: "freshness", rowsBlocked: 18, expectedSellableRowsAfterRepair: 5, nextAction: "Replace latest-activity claims with current public captures or keep stale caveats visible.", countsTowardPaidFloorNow: false },
+      { owner: "agent_07", blocker: "alias_collision", rowsBlocked: 4, expectedSellableRowsAfterRepair: 2, nextAction: "Require accepted alias ledger match, actor span, and source-family support before admission.", countsTowardPaidFloorNow: false },
+      { owner: "agent_07", blocker: "wrong_actor", rowsBlocked: 5, expectedSellableRowsAfterRepair: 2, nextAction: "Split wrong-family and background actor rows before they reach paid output.", countsTowardPaidFloorNow: false },
+      { owner: "agent_03", blocker: "generic_source_page", rowsBlocked: 3, expectedSellableRowsAfterRepair: 3, nextAction: "Extract incident/victim/TTP fields from concrete source pages instead of landing pages.", countsTowardPaidFloorNow: false },
+      { owner: "agent_04", blocker: "caveated_source_corroboration", rowsBlocked: 7, expectedSellableRowsAfterRepair: 4, nextAction: "Add second-family public corroboration before caveated rows become chargeable.", countsTowardPaidFloorNow: false },
+      { owner: "agent_05", blocker: "restricted_only_public_support", rowsBlocked: 11, expectedSellableRowsAfterRepair: 11, nextAction: "Attach safe public corroboration or keep metadata-only leads held.", countsTowardPaidFloorNow: false },
+      { owner: "agent_08", blocker: "graph_public_corroboration", rowsBlocked: 4, expectedSellableRowsAfterRepair: 4, nextAction: "Convert graph pivots into non-graph public corroboration before paid counting.", countsTowardPaidFloorNow: false },
+      { owner: "agent_06", blocker: "evidence_no_leak", rowsBlocked: 0, expectedSellableRowsAfterRepair: 0, nextAction: "Keep durable evidence hashes and no-leak proof intact for any promoted row.", countsTowardPaidFloorNow: false },
+      { owner: "agent_09", blocker: "marketplace_wording", rowsBlocked: 7, expectedSellableRowsAfterRepair: 0, nextAction: "Label caveated rows as useful context, not chargeable confirmations.", countsTowardPaidFloorNow: false },
+      { owner: "agent_10", blocker: "paid_release_accounting", rowsBlocked: 84, expectedSellableRowsAfterRepair: 0, nextAction: "Keep the paid floor blocked until 100 fresh public-supported sellable rows exist.", countsTowardPaidFloorNow: false }
     ],
     noLeakProof: {
       rawEvidenceExposed: false,

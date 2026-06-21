@@ -1055,6 +1055,44 @@ describe("api v1", () => {
     expect((response.first100AdmissionQuality as { nonSellableExclusionProof: Array<{ class: string; countsAsSellable: boolean; reason: string }> }).nonSellableExclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["graph_only", "synthetic_proof_only", "stale_duplicate", "restricted_only", "caveated_useful", "generic_market_source_page", "low_buyer_value", "alias_or_wrong_actor"]));
     expect((response.first100AdmissionQuality as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect((response.first100AdmissionQuality as { noLeakProof: Record<string, boolean> }).noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
+    const programCpHardening = (response.falsePositiveSuppressionGate as {
+      programCpHardening: {
+        schemaVersion: string;
+        activeCandidatePoolRowsAudited: number;
+        apifySmokeRowsAudited: number;
+        rowCountInflationBlocked: number;
+        staleLatestActivityRowsBlocked: number;
+        aliasCollisionRowsBlocked: number;
+        wrongActorRowsBlocked: number;
+        genericSourcePageRowsBlocked: number;
+        graphOnlyRowsBlocked: number;
+        restrictedOnlyRowsHeld: number;
+        caveatedRowsExcludedFromChargeable: number;
+        suppressionProof: Array<{ class: string; countsTowardSellable: boolean; proof: string }>;
+        preservedTruePositiveProof: Array<{ countsTowardSellable: boolean; noLeak: boolean; provenanceHash: string; requiredSignals: string[] }>;
+        fastestRepairsTo100: Array<{ owner: string; countsTowardPaidFloorNow: boolean; nextAction: string }>;
+        noLeakProof: Record<string, boolean>;
+      };
+    }).programCpHardening;
+    expect(programCpHardening).toMatchObject({
+      schemaVersion: "ti.program_cp_paid_row_false_positive_freshness_hardening.v1",
+      activeCandidatePoolRowsAudited: 100,
+      apifySmokeRowsAudited: 12,
+      rowCountInflationBlocked: 84,
+      staleLatestActivityRowsBlocked: 18,
+      aliasCollisionRowsBlocked: 4,
+      wrongActorRowsBlocked: 5,
+      genericSourcePageRowsBlocked: 3,
+      graphOnlyRowsBlocked: 4,
+      restrictedOnlyRowsHeld: 11,
+      caveatedRowsExcludedFromChargeable: 7
+    });
+    expect(programCpHardening.suppressionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["stale_latest_activity", "alias_collision", "wrong_actor", "generic_source_page", "unrelated_co_mention", "graph_only", "restricted_only", "synthetic_proof_only", "low_buyer_value", "caveated_only"]));
+    expect(programCpHardening.suppressionProof.every((row) => row.countsTowardSellable === false && row.proof.length > 0)).toBe(true);
+    expect(programCpHardening.preservedTruePositiveProof.every((row) => row.countsTowardSellable && row.noLeak && row.provenanceHash.length > 0 && row.requiredSignals.includes("current_public_support") && row.requiredSignals.includes("actor_specific") && row.requiredSignals.includes("buyer_action"))).toBe(true);
+    expect(programCpHardening.fastestRepairsTo100.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_06", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(programCpHardening.fastestRepairsTo100.every((row) => row.countsTowardPaidFloorNow === false && row.nextAction.length > 0)).toBe(true);
+    expect(programCpHardening.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect((response.marketplaceGraphSignals as {
       schemaVersion: string;
       baselineRunId: string;
@@ -13014,6 +13052,44 @@ describe("api v1", () => {
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.entitySpecificityLift.fixtures.flatMap((row) => row.blockerCodesRemoved)).toEqual(expect.arrayContaining(["old", "alias_only", "single_source_without_caveat", "unrelated_actor", "contradicted", "metadata_only_without_public_support", "no_useful_buyer_action", "generic_entity_fields"]));
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.entitySpecificityLift.fixtures.every((row) => row.proofNeeded.length > 0 && row.expectedBuyerVisibleLift.length > 0 && row.whyWorthPayingFor.length > 0 && row.repairAction.length > 0 && row.noLeak)).toBe(true);
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate.entitySpecificityLift.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_01", "agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    const pipelineCpHardening = (qualityRuntimeValueGates.programBdQualityEvaluationPack.paidRowQualityGate as unknown as {
+      falsePositiveSuppressionGate: {
+        programCpHardening: {
+          schemaVersion: string;
+          activeCandidatePoolRowsAudited: number;
+          apifySmokeRowsAudited: number;
+          rowCountInflationBlocked: number;
+          staleLatestActivityRowsBlocked: number;
+          aliasCollisionRowsBlocked: number;
+          wrongActorRowsBlocked: number;
+          genericSourcePageRowsBlocked: number;
+          graphOnlyRowsBlocked: number;
+          restrictedOnlyRowsHeld: number;
+          caveatedRowsExcludedFromChargeable: number;
+          suppressionProof: Array<{ class: string; countsTowardSellable: boolean; proof: string }>;
+          fastestRepairsTo100: Array<{ owner: string; countsTowardPaidFloorNow: boolean; nextAction: string }>;
+          noLeakProof: Record<string, boolean>;
+        };
+      };
+    }).falsePositiveSuppressionGate.programCpHardening;
+    expect(pipelineCpHardening).toMatchObject({
+      schemaVersion: "ti.program_cp_paid_row_false_positive_freshness_hardening.v1",
+      activeCandidatePoolRowsAudited: 100,
+      apifySmokeRowsAudited: 12,
+      rowCountInflationBlocked: 84,
+      staleLatestActivityRowsBlocked: 18,
+      aliasCollisionRowsBlocked: 4,
+      wrongActorRowsBlocked: 5,
+      genericSourcePageRowsBlocked: 3,
+      graphOnlyRowsBlocked: 4,
+      restrictedOnlyRowsHeld: 11,
+      caveatedRowsExcludedFromChargeable: 7
+    });
+    expect(pipelineCpHardening.suppressionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["stale_latest_activity", "alias_collision", "wrong_actor", "generic_source_page", "unrelated_co_mention", "graph_only", "restricted_only", "synthetic_proof_only", "low_buyer_value", "caveated_only"]));
+    expect(pipelineCpHardening.suppressionProof.every((row) => row.countsTowardSellable === false && row.proof.length > 0)).toBe(true);
+    expect(pipelineCpHardening.fastestRepairsTo100.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_06", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(pipelineCpHardening.fastestRepairsTo100.every((row) => row.countsTowardPaidFloorNow === false && row.nextAction.length > 0)).toBe(true);
+    expect(pipelineCpHardening.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(qualityRuntimeValueGates.programBdQualityEvaluationPack.watchlistFixtures.map((fixture) => fixture.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT42",

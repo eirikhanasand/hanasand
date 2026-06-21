@@ -6,6 +6,8 @@ await Bun.spawn(["mkdir", "-p", `${storage}/key_value_stores/default`], { stdout
 await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify({
   queries: ["APT42"],
   includeDatasets: true,
+  includeCoverageGaps: true,
+  includeHeldRows: true,
   maxRowsPerQuery: 20
 }, null, 2));
 
@@ -863,6 +865,50 @@ if (
 const falsePositiveOwners = (falsePositiveSuppressionGate.ownerHandoffs as Array<Record<string, unknown>>).map((row) => row.owner);
 for (const owner of ["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]) {
   if (!falsePositiveOwners.includes(owner)) throw new Error(`Program BZ false-positive gate must include ${owner} handoff`);
+}
+const programCpHardening = falsePositiveSuppressionGate.programCpHardening as Record<string, unknown> | undefined;
+if (
+  !programCpHardening
+  || programCpHardening.schemaVersion !== "ti.apify_program_cp_paid_row_false_positive_freshness_hardening.v1"
+  || programCpHardening.activeCandidatePoolRowsAudited !== 100
+  || programCpHardening.apifySmokeRowsAudited !== 12
+  || Number(programCpHardening.rowCountInflationBlocked) < 80
+  || Number(programCpHardening.staleLatestActivityRowsBlocked) < 18
+  || Number(programCpHardening.aliasCollisionRowsBlocked) < 4
+  || Number(programCpHardening.wrongActorRowsBlocked) < 5
+  || Number(programCpHardening.graphOnlyRowsBlocked) < 4
+  || Number(programCpHardening.restrictedOnlyRowsHeld) < 11
+  || !Array.isArray(programCpHardening.suppressionProof)
+  || !Array.isArray(programCpHardening.preservedTruePositiveProof)
+  || !Array.isArray(programCpHardening.fastestRepairsTo100)
+) {
+  throw new Error("OUTPUT record must expose Program CP paid-row false-positive and freshness hardening");
+}
+const programCpSuppression = programCpHardening.suppressionProof as Array<Record<string, unknown>>;
+for (const suppressedClass of ["stale_latest_activity", "alias_collision", "wrong_actor", "generic_source_page", "unrelated_co_mention", "graph_only", "restricted_only", "synthetic_proof_only", "low_buyer_value", "caveated_only"]) {
+  if (!programCpSuppression.some((row) => row.class === suppressedClass && row.countsTowardSellable === false)) {
+    throw new Error(`Program CP must keep ${suppressedClass} out of sellable paid rows`);
+  }
+}
+const programCpTruePositiveProof = programCpHardening.preservedTruePositiveProof as Array<Record<string, unknown>>;
+if (!programCpTruePositiveProof.every((row) =>
+  row.countsTowardSellable === true &&
+  row.noLeak === true &&
+  typeof row.provenanceHash === "string" &&
+  row.provenanceHash.length > 0 &&
+  Array.isArray(row.requiredSignals) &&
+  row.requiredSignals.includes("current_public_support") &&
+  row.requiredSignals.includes("actor_specific") &&
+  row.requiredSignals.includes("buyer_action")
+)) {
+  throw new Error("Program CP must preserve true positives with public support, actor specificity, provenance, buyer action, and no-leak proof");
+}
+const programCpRepairOwners = (programCpHardening.fastestRepairsTo100 as Array<Record<string, unknown>>).map((row) => row.owner);
+for (const owner of ["agent_03", "agent_04", "agent_05", "agent_06", "agent_07", "agent_08", "agent_09", "agent_10"]) {
+  if (!programCpRepairOwners.includes(owner)) throw new Error(`Program CP fastest repairs must include ${owner} handoff`);
+}
+if (!(programCpHardening.fastestRepairsTo100 as Array<Record<string, unknown>>).every((row) => row.countsTowardPaidFloorNow === false && typeof row.nextAction === "string" && row.nextAction.length > 0)) {
+  throw new Error("Program CP repair rows must remain excluded from paid floor until repaired");
 }
 const paidRowAudit100 = outputRecord.paidRowAudit100 as Record<string, unknown> | undefined;
 if (

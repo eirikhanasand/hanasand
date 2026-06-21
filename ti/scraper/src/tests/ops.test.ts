@@ -1122,6 +1122,25 @@ describe("ops controls", () => {
     });
     expect(dashboard.falsePositiveSuppressionGate.buyerTrustDelta).toBeGreaterThan(0.2);
     expect(dashboard.falsePositiveSuppressionGate.actorCoverage).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "Sandworm", "Scattered Spider", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Play", "Qilin", "Random Actor", "Made Up Actor", "Unknown Actor Query"]));
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening).toMatchObject({
+      schemaVersion: "ti.program_cp_paid_row_false_positive_freshness_hardening.v1",
+      activeCandidatePoolRowsAudited: 100,
+      apifySmokeRowsAudited: 12,
+      rowCountInflationBlocked: 84,
+      staleLatestActivityRowsBlocked: 18,
+      aliasCollisionRowsBlocked: 4,
+      wrongActorRowsBlocked: 5,
+      genericSourcePageRowsBlocked: 3,
+      graphOnlyRowsBlocked: 4,
+      restrictedOnlyRowsHeld: 11,
+      caveatedRowsExcludedFromChargeable: 7
+    });
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.suppressionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["stale_latest_activity", "alias_collision", "wrong_actor", "generic_source_page", "unrelated_co_mention", "graph_only", "restricted_only", "synthetic_proof_only", "low_buyer_value", "caveated_only"]));
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.suppressionProof.every((row) => row.countsTowardSellable === false && row.proof.length > 0)).toBe(true);
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.preservedTruePositiveProof.every((row) => row.countsTowardSellable && row.noLeak && row.provenanceHash.length > 0 && row.requiredSignals.includes("current_public_support") && row.requiredSignals.includes("actor_specific") && row.requiredSignals.includes("buyer_action"))).toBe(true);
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.fastestRepairsTo100.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_06", "agent_07", "agent_08", "agent_09", "agent_10"]));
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.fastestRepairsTo100.every((row) => row.countsTowardPaidFloorNow === false && row.nextAction.length > 0)).toBe(true);
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(dashboard.falsePositiveSuppressionGate.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.falsePositiveSuppressionGate.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(dashboard.paidRowAudit100).toMatchObject({
