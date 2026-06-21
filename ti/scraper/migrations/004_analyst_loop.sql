@@ -1,341 +1,37 @@
--- Analyst loop bridge: durable safe workflow state for /ti review, polling, and notification.
--- This migration intentionally stores metadata, provenance, hashes, and redacted summaries only.
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_analyst_result_state') THEN
-    CREATE DOMAIN ti_analyst_result_state AS TEXT
-      CHECK (VALUE IN (
-        'queued',
-        'metadata_review',
-        'blocked_unsafe_target',
-        'needs_source_activation',
-        'ready'
-      ));
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_review_status') THEN
-    CREATE DOMAIN ti_review_status AS TEXT
-      CHECK (VALUE IN (
-        'open',
-        'duplicate',
-        'approval_requested',
-        'escalated',
-        'notified',
-        'closed'
-      ));
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_review_action') THEN
-    CREATE DOMAIN ti_review_action AS TEXT
-      CHECK (VALUE IN (
-        'notify_company',
-        'mark_duplicate',
-        'request_approval',
-        'escalate'
-      ));
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_activation_action') THEN
-    CREATE DOMAIN ti_activation_action AS TEXT
-      CHECK (VALUE IN (
-        'dry_run_packet',
-        'request_operator_approval',
-        'request_legal_approval',
-        'restore_metadata_only_source',
-        'keep_blocked'
-      ));
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_activation_execution') THEN
-    CREATE DOMAIN ti_activation_execution AS TEXT
-      CHECK (VALUE IN (
-        'dry_run_only',
-        'approval_required',
-        'blocked'
-      ));
-  END IF;
-END
-$$;
-
-CREATE TABLE IF NOT EXISTS collection_plans (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT,
-  request_id TEXT NOT NULL,
-  query TEXT NOT NULL,
-  normalized_query TEXT NOT NULL,
-  entity_type TEXT NOT NULL,
-  budget_class TEXT,
-  created_at TIMESTAMPTZ NOT NULL,
-  requester_id TEXT,
-  result_state ti_analyst_result_state NOT NULL DEFAULT 'queued',
-  queued_task_count INTEGER NOT NULL DEFAULT 0 CHECK (queued_task_count >= 0),
-  review_required_count INTEGER NOT NULL DEFAULT 0 CHECK (review_required_count >= 0),
-  rejected_source_count INTEGER NOT NULL DEFAULT 0 CHECK (rejected_source_count >= 0),
-  request JSONB NOT NULL,
-  explanations JSONB NOT NULL DEFAULT '[]'::jsonb,
-  audit JSONB NOT NULL DEFAULT '[]'::jsonb,
-  created_row_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (length(btrim(query)) > 0),
-  CHECK (length(btrim(normalized_query)) > 0),
-  CHECK (jsonb_typeof(request) = 'object'),
-  CHECK (jsonb_typeof(explanations) = 'array'),
-  CHECK (jsonb_typeof(audit) = 'array'),
-  CHECK (NOT (request ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset']))
-);
-
-CREATE TABLE IF NOT EXISTS collection_tasks (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT,
-  plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE CASCADE,
-  run_id TEXT,
-  source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
-  task_state TEXT NOT NULL CHECK (task_state IN ('queued', 'leased', 'completed', 'failed', 'review_required', 'blocked', 'rejected')),
-  target_kind TEXT NOT NULL CHECK (target_kind IN ('safe_public', 'metadata_only', 'source_activation_gap', 'blocked_unsafe_target')),
-  source_type TEXT NOT NULL,
-  target_url TEXT NOT NULL,
-  priority INTEGER NOT NULL,
-  reason TEXT NOT NULL,
-  queued_at TIMESTAMPTZ NOT NULL,
-  available_at TIMESTAMPTZ,
-  deadline_at TIMESTAMPTZ,
-  max_bytes BIGINT CHECK (max_bytes IS NULL OR max_bytes >= 0),
-  retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
-  planning JSONB NOT NULL DEFAULT '{}'::jsonb,
-  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_row_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (length(btrim(target_url)) > 0),
-  CHECK (length(btrim(reason)) > 0),
-  CHECK (jsonb_typeof(planning) = 'object'),
-  CHECK (jsonb_typeof(metadata) = 'object'),
-  CHECK (NOT (metadata ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset']))
-);
-
-CREATE TABLE IF NOT EXISTS collection_runs (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT,
-  plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE RESTRICT,
-  request_id TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')),
-  created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL,
-  started_at TIMESTAMPTZ,
-  completed_at TIMESTAMPTZ,
-  idempotency_key TEXT,
-  request_hash TEXT,
-  task_count INTEGER NOT NULL DEFAULT 0 CHECK (task_count >= 0),
-  review_task_count INTEGER NOT NULL DEFAULT 0 CHECK (review_task_count >= 0),
-  rejected_source_count INTEGER NOT NULL DEFAULT 0 CHECK (rejected_source_count >= 0),
-  capture_count INTEGER NOT NULL DEFAULT 0 CHECK (capture_count >= 0),
-  incident_count INTEGER NOT NULL DEFAULT 0 CHECK (incident_count >= 0),
-  result_state ti_analyst_result_state NOT NULL DEFAULT 'queued',
-  error TEXT,
-  summary JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_row_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (jsonb_typeof(summary) = 'object')
-);
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'collection_tasks_run_fk'
-  ) THEN
-    ALTER TABLE collection_tasks
-      ADD CONSTRAINT collection_tasks_run_fk
-      FOREIGN KEY (run_id) REFERENCES collection_runs(id) ON DELETE SET NULL;
-  END IF;
-END
-$$;
-
-CREATE TABLE IF NOT EXISTS metadata_review_tasks (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT,
-  plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE RESTRICT,
-  run_id TEXT REFERENCES collection_runs(id) ON DELETE SET NULL,
-  task_id TEXT REFERENCES collection_tasks(id) ON DELETE SET NULL,
-  source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
-  capture_id TEXT REFERENCES raw_captures(id) ON DELETE SET NULL,
-  status ti_review_status NOT NULL DEFAULT 'open',
-  result_state ti_analyst_result_state NOT NULL DEFAULT 'metadata_review',
-  company TEXT,
-  victim TEXT,
-  affected_accounts_text TEXT,
-  affected_accounts_count BIGINT CHECK (affected_accounts_count IS NULL OR affected_accounts_count >= 0),
-  account_subjects TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
-  dataset_size_text TEXT,
-  dataset_size_bytes BIGINT CHECK (dataset_size_bytes IS NULL OR dataset_size_bytes >= 0),
-  actor_statement_summary TEXT,
-  claimed_at TIMESTAMPTZ,
-  observed_at TIMESTAMPTZ NOT NULL,
-  source_url TEXT,
-  source_hash TEXT NOT NULL,
-  provenance JSONB NOT NULL,
-  allowed_actions ti_review_action[] NOT NULL DEFAULT ARRAY['notify_company', 'mark_duplicate', 'request_approval', 'escalate']::ti_review_action[],
-  confidence DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
-  unsafe_material_accessed BOOLEAN NOT NULL DEFAULT FALSE CHECK (unsafe_material_accessed = FALSE),
-  what_was_not_accessed TEXT[] NOT NULL DEFAULT ARRAY[
-    'raw leaked files',
-    'credential material',
-    'private communities',
-    'CAPTCHA or authenticated areas',
-    'threat actor interaction'
-  ]::TEXT[],
-  duplicate_of TEXT REFERENCES metadata_review_tasks(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (company IS NOT NULL OR victim IS NOT NULL),
-  CHECK (jsonb_typeof(provenance) = 'object'),
-  CHECK (NOT (provenance ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset']))
-);
-
-CREATE TABLE IF NOT EXISTS source_activation_packets (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT,
-  plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE RESTRICT,
-  run_id TEXT REFERENCES collection_runs(id) ON DELETE SET NULL,
-  source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
-  action ti_activation_action NOT NULL,
-  execution ti_activation_execution NOT NULL,
-  reason TEXT NOT NULL,
-  expected_effect TEXT NOT NULL,
-  rollback TEXT NOT NULL,
-  dry_run BOOLEAN NOT NULL DEFAULT TRUE CHECK (dry_run = TRUE),
-  approved_by TEXT,
-  approved_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (
-    execution <> 'approval_required'
-    OR (approved_by IS NULL AND approved_at IS NULL)
-  )
-);
-
-CREATE TABLE IF NOT EXISTS victim_notification_packets (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT,
-  review_task_id TEXT NOT NULL REFERENCES metadata_review_tasks(id) ON DELETE RESTRICT,
-  status TEXT NOT NULL CHECK (status IN ('draft', 'approved', 'sent', 'cancelled')),
-  company TEXT NOT NULL,
-  victim TEXT,
-  claim_summary TEXT NOT NULL,
-  affected_accounts_text TEXT,
-  dataset_size_text TEXT,
-  actor_statement_summary TEXT,
-  claimed_at TIMESTAMPTZ,
-  observed_at TIMESTAMPTZ NOT NULL,
-  source_hash TEXT NOT NULL,
-  confidence DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
-  provenance JSONB NOT NULL,
-  redactions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
-  what_was_not_accessed TEXT[] NOT NULL DEFAULT ARRAY[
-    'raw leaked files',
-    'credential material',
-    'private communities',
-    'CAPTCHA or authenticated areas',
-    'threat actor interaction'
-  ]::TEXT[],
-  safe_to_send BOOLEAN NOT NULL DEFAULT FALSE,
-  approved_by TEXT,
-  sent_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (jsonb_typeof(provenance) = 'object'),
-  CHECK (NOT (provenance ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset']))
-);
-
-CREATE TABLE IF NOT EXISTS claim_ledger_entries (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT,
-  normalized_query TEXT NOT NULL,
-  review_task_id TEXT REFERENCES metadata_review_tasks(id) ON DELETE SET NULL,
-  capture_id TEXT REFERENCES raw_captures(id) ON DELETE SET NULL,
-  source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
-  claim_kind TEXT NOT NULL CHECK (claim_kind IN ('leak_claim', 'victim_claim', 'dataset_size_claim', 'affected_accounts_claim', 'actor_statement_claim')),
-  company TEXT,
-  victim TEXT,
-  claim_text_summary TEXT NOT NULL,
-  source_hash TEXT NOT NULL,
-  confidence DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
-  ledger_status TEXT NOT NULL CHECK (ledger_status IN ('metadata_review', 'trusted', 'duplicate', 'notified', 'blocked', 'closed')),
-  observed_at TIMESTAMPTZ NOT NULL,
-  provenance JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (length(btrim(normalized_query)) > 0),
-  CHECK (length(btrim(claim_text_summary)) > 0),
-  CHECK (jsonb_typeof(provenance) = 'object'),
-  CHECK (NOT (provenance ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset']))
-);
-
-CREATE TABLE IF NOT EXISTS analyst_loop_snapshots (
-  id TEXT PRIMARY KEY,
-  tenant_id TEXT,
-  plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE RESTRICT,
-  run_id TEXT REFERENCES collection_runs(id) ON DELETE SET NULL,
-  normalized_query TEXT NOT NULL,
-  result_state ti_analyst_result_state NOT NULL,
-  headline TEXT NOT NULL,
-  queued_tasks INTEGER NOT NULL DEFAULT 0 CHECK (queued_tasks >= 0),
-  review_tasks INTEGER NOT NULL DEFAULT 0 CHECK (review_tasks >= 0),
-  rejected_sources INTEGER NOT NULL DEFAULT 0 CHECK (rejected_sources >= 0),
-  blocked_unsafe_targets INTEGER NOT NULL DEFAULT 0 CHECK (blocked_unsafe_targets >= 0),
-  meaningful_work_count INTEGER NOT NULL DEFAULT 0 CHECK (meaningful_work_count >= 0),
-  next_steps JSONB NOT NULL DEFAULT '[]'::jsonb,
-  review_task_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
-  activation_packet_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
-  victim_notification_packet_id TEXT REFERENCES victim_notification_packets(id) ON DELETE SET NULL,
-  captured_at TIMESTAMPTZ NOT NULL,
-  CHECK (jsonb_typeof(next_steps) = 'array')
-);
-
-CREATE INDEX IF NOT EXISTS collection_plans_query_created_idx
-  ON collection_plans (tenant_id, normalized_query, created_at DESC);
-
-CREATE INDEX IF NOT EXISTS collection_tasks_plan_state_idx
-  ON collection_tasks (tenant_id, plan_id, task_state, queued_at DESC);
-
-CREATE INDEX IF NOT EXISTS collection_tasks_source_state_idx
-  ON collection_tasks (tenant_id, source_id, task_state, queued_at DESC);
-
-CREATE INDEX IF NOT EXISTS collection_runs_plan_status_idx
-  ON collection_runs (tenant_id, plan_id, status, updated_at DESC);
-
-CREATE INDEX IF NOT EXISTS collection_runs_idempotency_idx
-  ON collection_runs (tenant_id, idempotency_key)
-  WHERE idempotency_key IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS metadata_review_tasks_status_idx
-  ON metadata_review_tasks (tenant_id, status, observed_at DESC);
-
-CREATE INDEX IF NOT EXISTS metadata_review_tasks_company_idx
-  ON metadata_review_tasks (tenant_id, lower(COALESCE(company, victim)), observed_at DESC);
-
-CREATE INDEX IF NOT EXISTS metadata_review_tasks_source_hash_idx
-  ON metadata_review_tasks (tenant_id, source_hash);
-
-CREATE INDEX IF NOT EXISTS source_activation_packets_plan_idx
-  ON source_activation_packets (tenant_id, plan_id, action, created_at DESC);
-
-CREATE INDEX IF NOT EXISTS victim_notification_packets_review_idx
-  ON victim_notification_packets (tenant_id, review_task_id, status);
-
-CREATE INDEX IF NOT EXISTS claim_ledger_entries_query_idx
-  ON claim_ledger_entries (tenant_id, normalized_query, observed_at DESC);
-
-CREATE INDEX IF NOT EXISTS claim_ledger_entries_source_hash_idx
-  ON claim_ledger_entries (tenant_id, source_hash, claim_kind);
-
-CREATE UNIQUE INDEX IF NOT EXISTS claim_ledger_entries_dedupe_idx
-  ON claim_ledger_entries (
-    COALESCE(tenant_id, ''),
-    source_hash,
-    claim_kind,
-    lower(COALESCE(company, victim, ''))
-  );
-
-CREATE INDEX IF NOT EXISTS analyst_loop_snapshots_run_idx
-  ON analyst_loop_snapshots (tenant_id, run_id, captured_at DESC)
-  WHERE run_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS analyst_loop_snapshots_query_idx
-  ON analyst_loop_snapshots (tenant_id, normalized_query, captured_at DESC);
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_analyst_result_state') THEN CREATE DOMAIN ti_analyst_result_state AS TEXT CHECK (VALUE IN ( 'queued', 'metadata_review', 'blocked_unsafe_target', 'needs_source_activation', 'ready' ));
+END IF;
+IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_review_status') THEN CREATE DOMAIN ti_review_status AS TEXT CHECK (VALUE IN ( 'open', 'duplicate', 'approval_requested', 'escalated', 'notified', 'closed' ));
+END IF;
+IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_review_action') THEN CREATE DOMAIN ti_review_action AS TEXT CHECK (VALUE IN ( 'notify_company', 'mark_duplicate', 'request_approval', 'escalate' ));
+END IF;
+IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_activation_action') THEN CREATE DOMAIN ti_activation_action AS TEXT CHECK (VALUE IN ( 'dry_run_packet', 'request_operator_approval', 'request_legal_approval', 'restore_metadata_only_source', 'keep_blocked' ));
+END IF;
+IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ti_activation_execution') THEN CREATE DOMAIN ti_activation_execution AS TEXT CHECK (VALUE IN ( 'dry_run_only', 'approval_required', 'blocked' ));
+END IF;
+END $$;
+CREATE TABLE IF NOT EXISTS collection_plans ( id TEXT PRIMARY KEY, tenant_id TEXT, request_id TEXT NOT NULL, query TEXT NOT NULL, normalized_query TEXT NOT NULL, entity_type TEXT NOT NULL, budget_class TEXT, created_at TIMESTAMPTZ NOT NULL, requester_id TEXT, result_state ti_analyst_result_state NOT NULL DEFAULT 'queued', queued_task_count INTEGER NOT NULL DEFAULT 0 CHECK (queued_task_count >= 0), review_required_count INTEGER NOT NULL DEFAULT 0 CHECK (review_required_count >= 0), rejected_source_count INTEGER NOT NULL DEFAULT 0 CHECK (rejected_source_count >= 0), request JSONB NOT NULL, explanations JSONB NOT NULL DEFAULT '[]'::jsonb, audit JSONB NOT NULL DEFAULT '[]'::jsonb, created_row_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (length(btrim(query)) > 0), CHECK (length(btrim(normalized_query)) > 0), CHECK (jsonb_typeof(request) = 'object'), CHECK (jsonb_typeof(explanations) = 'array'), CHECK (jsonb_typeof(audit) = 'array'), CHECK (NOT (request ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset'])) );
+CREATE TABLE IF NOT EXISTS collection_tasks ( id TEXT PRIMARY KEY, tenant_id TEXT, plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE CASCADE, run_id TEXT, source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT, task_state TEXT NOT NULL CHECK (task_state IN ('queued', 'leased', 'completed', 'failed', 'review_required', 'blocked', 'rejected')), target_kind TEXT NOT NULL CHECK (target_kind IN ('safe_public', 'metadata_only', 'source_activation_gap', 'blocked_unsafe_target')), source_type TEXT NOT NULL, target_url TEXT NOT NULL, priority INTEGER NOT NULL, reason TEXT NOT NULL, queued_at TIMESTAMPTZ NOT NULL, available_at TIMESTAMPTZ, deadline_at TIMESTAMPTZ, max_bytes BIGINT CHECK (max_bytes IS NULL OR max_bytes >= 0), retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0), planning JSONB NOT NULL DEFAULT '{}'::jsonb, metadata JSONB NOT NULL DEFAULT '{}'::jsonb, created_row_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (length(btrim(target_url)) > 0), CHECK (length(btrim(reason)) > 0), CHECK (jsonb_typeof(planning) = 'object'), CHECK (jsonb_typeof(metadata) = 'object'), CHECK (NOT (metadata ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset'])) );
+CREATE TABLE IF NOT EXISTS collection_runs ( id TEXT PRIMARY KEY, tenant_id TEXT, plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE RESTRICT, request_id TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed', 'cancelled')), created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, started_at TIMESTAMPTZ, completed_at TIMESTAMPTZ, idempotency_key TEXT, request_hash TEXT, task_count INTEGER NOT NULL DEFAULT 0 CHECK (task_count >= 0), review_task_count INTEGER NOT NULL DEFAULT 0 CHECK (review_task_count >= 0), rejected_source_count INTEGER NOT NULL DEFAULT 0 CHECK (rejected_source_count >= 0), capture_count INTEGER NOT NULL DEFAULT 0 CHECK (capture_count >= 0), incident_count INTEGER NOT NULL DEFAULT 0 CHECK (incident_count >= 0), result_state ti_analyst_result_state NOT NULL DEFAULT 'queued', error TEXT, summary JSONB NOT NULL DEFAULT '{}'::jsonb, created_row_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (jsonb_typeof(summary) = 'object') );
+DO $$ BEGIN IF NOT EXISTS ( SELECT 1 FROM pg_constraint WHERE conname = 'collection_tasks_run_fk' ) THEN ALTER TABLE collection_tasks ADD CONSTRAINT collection_tasks_run_fk FOREIGN KEY (run_id) REFERENCES collection_runs(id) ON DELETE SET NULL;
+END IF;
+END $$;
+CREATE TABLE IF NOT EXISTS metadata_review_tasks ( id TEXT PRIMARY KEY, tenant_id TEXT, plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE RESTRICT, run_id TEXT REFERENCES collection_runs(id) ON DELETE SET NULL, task_id TEXT REFERENCES collection_tasks(id) ON DELETE SET NULL, source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT, capture_id TEXT REFERENCES raw_captures(id) ON DELETE SET NULL, status ti_review_status NOT NULL DEFAULT 'open', result_state ti_analyst_result_state NOT NULL DEFAULT 'metadata_review', company TEXT, victim TEXT, affected_accounts_text TEXT, affected_accounts_count BIGINT CHECK (affected_accounts_count IS NULL OR affected_accounts_count >= 0), account_subjects TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], dataset_size_text TEXT, dataset_size_bytes BIGINT CHECK (dataset_size_bytes IS NULL OR dataset_size_bytes >= 0), actor_statement_summary TEXT, claimed_at TIMESTAMPTZ, observed_at TIMESTAMPTZ NOT NULL, source_url TEXT, source_hash TEXT NOT NULL, provenance JSONB NOT NULL, allowed_actions ti_review_action[] NOT NULL DEFAULT ARRAY['notify_company', 'mark_duplicate', 'request_approval', 'escalate']::ti_review_action[], confidence DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1), unsafe_material_accessed BOOLEAN NOT NULL DEFAULT FALSE CHECK (unsafe_material_accessed = FALSE), what_was_not_accessed TEXT[] NOT NULL DEFAULT ARRAY[ 'raw leaked files', 'credential material', 'private communities', 'CAPTCHA or authenticated areas', 'threat actor interaction' ]::TEXT[], duplicate_of TEXT REFERENCES metadata_review_tasks(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (company IS NOT NULL OR victim IS NOT NULL), CHECK (jsonb_typeof(provenance) = 'object'), CHECK (NOT (provenance ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset'])) );
+CREATE TABLE IF NOT EXISTS source_activation_packets ( id TEXT PRIMARY KEY, tenant_id TEXT, plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE RESTRICT, run_id TEXT REFERENCES collection_runs(id) ON DELETE SET NULL, source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT, action ti_activation_action NOT NULL, execution ti_activation_execution NOT NULL, reason TEXT NOT NULL, expected_effect TEXT NOT NULL, rollback TEXT NOT NULL, dry_run BOOLEAN NOT NULL DEFAULT TRUE CHECK (dry_run = TRUE), approved_by TEXT, approved_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK ( execution <> 'approval_required' OR (approved_by IS NULL AND approved_at IS NULL) ) );
+CREATE TABLE IF NOT EXISTS victim_notification_packets ( id TEXT PRIMARY KEY, tenant_id TEXT, review_task_id TEXT NOT NULL REFERENCES metadata_review_tasks(id) ON DELETE RESTRICT, status TEXT NOT NULL CHECK (status IN ('draft', 'approved', 'sent', 'cancelled')), company TEXT NOT NULL, victim TEXT, claim_summary TEXT NOT NULL, affected_accounts_text TEXT, dataset_size_text TEXT, actor_statement_summary TEXT, claimed_at TIMESTAMPTZ, observed_at TIMESTAMPTZ NOT NULL, source_hash TEXT NOT NULL, confidence DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1), provenance JSONB NOT NULL, redactions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], what_was_not_accessed TEXT[] NOT NULL DEFAULT ARRAY[ 'raw leaked files', 'credential material', 'private communities', 'CAPTCHA or authenticated areas', 'threat actor interaction' ]::TEXT[], safe_to_send BOOLEAN NOT NULL DEFAULT FALSE, approved_by TEXT, sent_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (jsonb_typeof(provenance) = 'object'), CHECK (NOT (provenance ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset'])) );
+CREATE TABLE IF NOT EXISTS claim_ledger_entries ( id TEXT PRIMARY KEY, tenant_id TEXT, normalized_query TEXT NOT NULL, review_task_id TEXT REFERENCES metadata_review_tasks(id) ON DELETE SET NULL, capture_id TEXT REFERENCES raw_captures(id) ON DELETE SET NULL, source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT, claim_kind TEXT NOT NULL CHECK (claim_kind IN ('leak_claim', 'victim_claim', 'dataset_size_claim', 'affected_accounts_claim', 'actor_statement_claim')), company TEXT, victim TEXT, claim_text_summary TEXT NOT NULL, source_hash TEXT NOT NULL, confidence DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1), ledger_status TEXT NOT NULL CHECK (ledger_status IN ('metadata_review', 'trusted', 'duplicate', 'notified', 'blocked', 'closed')), observed_at TIMESTAMPTZ NOT NULL, provenance JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (length(btrim(normalized_query)) > 0), CHECK (length(btrim(claim_text_summary)) > 0), CHECK (jsonb_typeof(provenance) = 'object'), CHECK (NOT (provenance ?| ARRAY['rawBody', 'rawPayload', 'leakedRows', 'credentialValues', 'downloadedDataset'])) );
+CREATE TABLE IF NOT EXISTS analyst_loop_snapshots ( id TEXT PRIMARY KEY, tenant_id TEXT, plan_id TEXT NOT NULL REFERENCES collection_plans(id) ON DELETE RESTRICT, run_id TEXT REFERENCES collection_runs(id) ON DELETE SET NULL, normalized_query TEXT NOT NULL, result_state ti_analyst_result_state NOT NULL, headline TEXT NOT NULL, queued_tasks INTEGER NOT NULL DEFAULT 0 CHECK (queued_tasks >= 0), review_tasks INTEGER NOT NULL DEFAULT 0 CHECK (review_tasks >= 0), rejected_sources INTEGER NOT NULL DEFAULT 0 CHECK (rejected_sources >= 0), blocked_unsafe_targets INTEGER NOT NULL DEFAULT 0 CHECK (blocked_unsafe_targets >= 0), meaningful_work_count INTEGER NOT NULL DEFAULT 0 CHECK (meaningful_work_count >= 0), next_steps JSONB NOT NULL DEFAULT '[]'::jsonb, review_task_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], activation_packet_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[], victim_notification_packet_id TEXT REFERENCES victim_notification_packets(id) ON DELETE SET NULL, captured_at TIMESTAMPTZ NOT NULL, CHECK (jsonb_typeof(next_steps) = 'array') );
+CREATE INDEX IF NOT EXISTS collection_plans_query_created_idx ON collection_plans (tenant_id, normalized_query, created_at DESC);
+CREATE INDEX IF NOT EXISTS collection_tasks_plan_state_idx ON collection_tasks (tenant_id, plan_id, task_state, queued_at DESC);
+CREATE INDEX IF NOT EXISTS collection_tasks_source_state_idx ON collection_tasks (tenant_id, source_id, task_state, queued_at DESC);
+CREATE INDEX IF NOT EXISTS collection_runs_plan_status_idx ON collection_runs (tenant_id, plan_id, status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS collection_runs_idempotency_idx ON collection_runs (tenant_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS metadata_review_tasks_status_idx ON metadata_review_tasks (tenant_id, status, observed_at DESC);
+CREATE INDEX IF NOT EXISTS metadata_review_tasks_company_idx ON metadata_review_tasks (tenant_id, lower(COALESCE(company, victim)), observed_at DESC);
+CREATE INDEX IF NOT EXISTS metadata_review_tasks_source_hash_idx ON metadata_review_tasks (tenant_id, source_hash);
+CREATE INDEX IF NOT EXISTS source_activation_packets_plan_idx ON source_activation_packets (tenant_id, plan_id, action, created_at DESC);
+CREATE INDEX IF NOT EXISTS victim_notification_packets_review_idx ON victim_notification_packets (tenant_id, review_task_id, status);
+CREATE INDEX IF NOT EXISTS claim_ledger_entries_query_idx ON claim_ledger_entries (tenant_id, normalized_query, observed_at DESC);
+CREATE INDEX IF NOT EXISTS claim_ledger_entries_source_hash_idx ON claim_ledger_entries (tenant_id, source_hash, claim_kind);
+CREATE UNIQUE INDEX IF NOT EXISTS claim_ledger_entries_dedupe_idx ON claim_ledger_entries ( COALESCE(tenant_id, ''), source_hash, claim_kind, lower(COALESCE(company, victim, '')) );
+CREATE INDEX IF NOT EXISTS analyst_loop_snapshots_run_idx ON analyst_loop_snapshots (tenant_id, run_id, captured_at DESC) WHERE run_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS analyst_loop_snapshots_query_idx ON analyst_loop_snapshots (tenant_id, normalized_query, captured_at DESC);
