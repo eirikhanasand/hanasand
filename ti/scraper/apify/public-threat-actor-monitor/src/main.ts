@@ -1,30 +1,19 @@
 import type { MarketplaceRow } from "./types.ts";
 import { dailyCollectionRunForRows, monetizationForRows } from "./outputQuality.ts";
-import { fetchPublicNewsFallback } from "./runtime/newsFallback.ts";
 import { writeOutputs } from "./outputWrite.ts";
-import { fetchThreatIntelBatch, needsNewsFallback, normalizeInput, outputRowsFor, readInput } from "./actorRuntime.ts";
+import { fetchThreatIntelBatch, normalizeInput, readInput } from "./actorRuntime.ts";
+import { collectRowsForResponses } from "./runtime/collectRows.ts";
+import { createNewsFallbackBudget } from "./runtime/fallbackBudget.ts";
 
 async function main() {
   const input = normalizeInput(await readInput());
   const rows: MarketplaceRow[] = [];
-  let newsFallbackAttempts = 0;
-  let newsFallbacksUsed = 0;
+  const newsFallbackBudget = createNewsFallbackBudget(input.queries.length);
 
   for (let index = 0; index < input.queries.length; index += 50) {
     const batch = input.queries.slice(index, index + 50);
     const responses = await fetchThreatIntelBatch(input.apiBaseUrl, batch);
-    for (const response of responses) {
-      let outputRows = outputRowsFor(response, input);
-      if (needsNewsFallback(outputRows) && newsFallbackAttempts < 25) {
-        newsFallbackAttempts += 1;
-        const fallback = await fetchPublicNewsFallback(response.query);
-        if (fallback) {
-          outputRows = outputRowsFor(fallback, input);
-          newsFallbacksUsed += 1;
-        }
-      }
-      rows.push(...outputRows.slice(0, input.maxRowsPerQuery));
-    }
+    rows.push(...await collectRowsForResponses(responses, input, newsFallbackBudget));
   }
 
   const monetizationSummary = monetizationForRows(rows);
@@ -41,8 +30,9 @@ async function main() {
     liveDataRealRowCount: monetizationSummary.liveDataRealRowCount,
     sellableLiveDataRealRowCount: monetizationSummary.sellableLiveDataRealRowCount,
     distinctHostedSourceFindingCount: monetizationSummary.distinctHostedSourceFindingCount,
-    publicNewsFallbackAttempts: newsFallbackAttempts,
-    publicNewsFallbacksUsed: newsFallbacksUsed,
+    publicNewsFallbackAttempts: newsFallbackBudget.attempts,
+    publicNewsFallbacksUsed: newsFallbackBudget.used,
+    publicNewsFallbackLimit: newsFallbackBudget.limit,
     dailyCollectionRun
   }));
 }

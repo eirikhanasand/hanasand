@@ -4,10 +4,14 @@ import { parseNewsRss } from "../newsFallback/rss.ts";
 
 export async function fetchPublicNewsFallback(query: string): Promise<TiSearchResponse | undefined> {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(`${query} cyber threat when:30d`)}&hl=en-US&gl=US&ceid=US:en`;
-  const response = await fetch(url, { headers: { "user-agent": "hanasand-ti-apify-actor/0.6 public-news-fallback" } });
-  if (!response.ok) return undefined;
-  const items = parseNewsRss(await response.text()).filter((item) => isRelevantRecent(query, item.title, item.pubDate));
-  return items.length ? newsFallbackResponse(query, items) : undefined;
+  try {
+    const response = await fetch(url, { headers: { "user-agent": "hanasand-ti-apify-actor/0.6 public-news-fallback" } });
+    if (!response.ok) return undefined;
+    const items = parseNewsRss(await response.text()).filter((item) => isRelevantRecent(query, item.title, item.pubDate));
+    return items.length ? newsFallbackResponse(query, items) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function isRelevantRecent(query: string, title: string, pubDate: string): boolean {

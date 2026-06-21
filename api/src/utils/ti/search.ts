@@ -246,7 +246,11 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
             return null
         }
 
-        const seeded = await liveSearch(query)
+        const [liveResult, evidenceRows] = await Promise.all([
+            liveSearch(query),
+            fetchScraperEvidence(scraperBase, query)
+        ])
+        const seeded = mergeScraperEvidence(query, liveResult, evidenceRows)
         const operationalStatus = buildOperationalStatus(body.scheduler, {
             query,
             mode: 'scraper',
@@ -320,6 +324,68 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
         }
     } catch {
         return null
+    }
+}
+
+interface ScraperEvidenceRow {
+    id?: string
+    sourceId?: string
+    title?: string
+    summary?: string
+    collectedAt?: string
+    provenanceHash?: string
+}
+
+async function fetchScraperEvidence(scraperBase: string, query: string): Promise<ScraperEvidenceRow[]> {
+    try {
+        const search = new URL(`${scraperBase}/v1/intel/search`)
+        search.searchParams.set('q', query)
+        search.searchParams.set('limit', '12')
+        const response = await fetch(search)
+        if (!response.ok) return []
+        const body = await response.json() as { rows?: ScraperEvidenceRow[]; results?: ScraperEvidenceRow[] }
+        return (body.rows ?? body.results ?? []).filter(row => row.title || row.summary).slice(0, 12)
+    } catch {
+        return []
+    }
+}
+
+function mergeScraperEvidence(query: string, result: TiSearchResponse, rows: ScraperEvidenceRow[]): TiSearchResponse {
+    const activity = rows.map((row, index) => evidenceRowToActivity(query, row, index)).filter(Boolean) as TiActivity[]
+    if (!activity.length) return result
+    const sources = rows.map((row, index) => ({
+        id: row.sourceId ?? `capture_${index}`,
+        name: row.title ?? row.sourceId ?? 'Captured public source',
+        type: 'captured_public_source',
+        provenance: row.provenanceHash ?? row.id ?? row.sourceId ?? 'captured evidence'
+    }))
+    return {
+        ...result,
+        status: 'partial',
+        confidence: Math.max(result.confidence, 0.68),
+        lastSeen: activity[0]?.lastReportedAt ?? result.lastSeen,
+        recentActivity: [...activity, ...result.recentActivity].slice(0, 8),
+        sources: [...sources, ...result.sources].slice(0, 12),
+        notes: ['Captured public-source evidence is available for this query.', ...result.notes]
+    }
+}
+
+function evidenceRowToActivity(query: string, row: ScraperEvidenceRow, index: number): TiActivity | undefined {
+    const observedAt = row.collectedAt && Number.isFinite(Date.parse(row.collectedAt)) ? row.collectedAt : new Date().toISOString()
+    const title = row.title?.trim() || `${query} captured public source`
+    const detail = truncateSentence(row.summary ?? title, 260)
+    if (!detail) return undefined
+    return {
+        date: observedAt.slice(0, 10),
+        title,
+        detail,
+        confidence: Math.max(0.58, 0.72 - index * 0.03),
+        sourceIds: [row.sourceId ?? row.id ?? `capture_${index}`],
+        claimType: inferClaimType(`${title} ${detail}`),
+        firstReportedAt: observedAt,
+        lastReportedAt: observedAt,
+        publisherCount: 1,
+        impact: inferImpact(`${title} ${detail}`) ?? 'Captured public intelligence signal'
     }
 }
 
