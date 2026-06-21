@@ -58,8 +58,8 @@ try {
     `mode=${mode}`,
     `observedProofImport=${payload.observedProofImport.source}`,
     `externalBlocker=${payload.hostedProofImportPath.externalBlocker ?? "external_marketplace_payout_pricing_not_observed"}`,
-    "paidRowIntegrityGate=hold_until_hosted_second_batch_audit_observed",
-    "This is expected when APIFY_TOKEN, hosted 100-name run metrics, payout, pricing, or Store analytics are unavailable; do not promote paid traffic from local proof alone."
+    "paidRowIntegrityGate=hold_until_hosted500_second_batch_audit_observed",
+    "This is expected when APIFY_TOKEN, hosted 100/300/500 metrics, payout, pricing, or Store analytics are unavailable; do not promote paid traffic from local proof alone."
   ].join("\n"));
   process.exit(0);
 } catch (error) {
@@ -73,7 +73,7 @@ try {
   assertPaidRowIntegrityGate(payload.paidRowIntegrityGate);
   console.log(JSON.stringify(payload, null, 2));
   console.warn([
-    "Hosted Apify paid readiness could not verify a hosted 100-name run.",
+    "Hosted Apify paid readiness could not verify the hosted 100/300/500 proof ladder.",
     `status=${payload.status}`,
     `mode=${mode}`,
     `apiError=${payload.apiError ?? "none"}`,
@@ -314,6 +314,8 @@ function isOkForPaidPromotion(payload: ReturnType<typeof buildPayload>): boolean
   return payload.status === "paid_floor_hosted_proof"
     && payload.marketplaceConversionInputs.payoutEnabled !== "external_unknown"
     && payload.marketplaceConversionInputs.pricingModel !== "external_unknown"
+    && payload.hostedProofOperatorChecklist.gateEffects.hosted500.unlocks === true
+    && payload.conversionPayoutTruth.hosted500.state === "observed"
     && payload.paidProofAcceptance.minimumSellableRows === 100
     && payload.paidProofAcceptance.minimumSellableFindingRows >= 52
     && payload.paidProofAcceptance.sourceProvenanceRowsCountTowardFindingFloor === false

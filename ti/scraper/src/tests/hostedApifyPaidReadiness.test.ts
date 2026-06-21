@@ -34,9 +34,9 @@ function observedProof(overrides: Partial<HostedApifyObservedProofImport> = {}):
     includeHeldRows: false,
     includeDatasets: false,
     datasetItemCount: 607,
-    sellableRows: 320,
-    sellableFindingCount: 160,
-    caveatedRows: 287,
+    sellableRows: 500,
+    sellableFindingCount: 275,
+    caveatedRows: 107,
     averageBuyerValueScore: 0.593,
     runtimeSeconds: 900,
     memoryMbytes: 1024,
@@ -99,6 +99,7 @@ describe("hosted Apify paid readiness operator action board", () => {
     expect(checklist.operatorActionBoard.stillBlockedAfterCommand).toContain("sampleOnly=true cannot unlock hosted or marketplace gates");
     expect(checklist.gateEffects.hosted100.state).toBe("blocked_sample");
     expect(checklist.gateEffects.hosted300.required.sellableFindingRows).toBe(150);
+    expect(checklist.gateEffects.hosted500.required.sellableFindingRows).toBe(275);
   }));
 
   test("production hosted100 proof holds hosted300 below 300-row and 150-finding gate", () => withHostedProofEnv({}, () => {
@@ -120,17 +121,36 @@ describe("hosted Apify paid readiness operator action board", () => {
     expect(checklist.operatorActionBoard.stillBlockedAfterCommand.join(" ")).toContain("300 sellable rows and 150 finding rows");
   }));
 
-  test("production hosted300 proof holds marketplace while listing remains draft", () => withHostedProofEnv({}, () => {
+  test("production hosted300 proof holds hosted500 below 500-row and 275-finding gate", () => withHostedProofEnv({}, () => {
     const proof = buildHostedApifyPaidReadinessProof({
-      observedProof: observedProof({ publicListingStatus: "draft_copy_ready_not_promoted" }),
+      observedProof: observedProof({
+        sellableRows: 320,
+        sellableFindingCount: 160,
+        caveatedRows: 287,
+        publicListingStatus: "draft_copy_ready_not_promoted"
+      }),
       readObservedProofFromEnvironment: false
     });
     const checklist = proof.hostedProofOperatorChecklist;
 
     expect(checklist.unlockSummary).toBe("hosted100_hosted300");
     expect(checklist.gateEffects.hosted300.state).toBe("pass");
+    expect(checklist.gateEffects.hosted500.state).toBe("hold");
+    expect(checklist.operatorActionBoard.stillBlockedAfterCommand.join(" ")).toContain("500 sellable rows and 275 finding rows");
+  }));
+
+  test("production hosted500 proof holds marketplace while listing remains draft", () => withHostedProofEnv({}, () => {
+    const proof = buildHostedApifyPaidReadinessProof({
+      observedProof: observedProof({ publicListingStatus: "draft_copy_ready_not_promoted" }),
+      readObservedProofFromEnvironment: false
+    });
+    const checklist = proof.hostedProofOperatorChecklist;
+
+    expect(checklist.unlockSummary).toBe("hosted100_hosted300_hosted500");
+    expect(checklist.gateEffects.hosted500.state).toBe("pass");
     expect(checklist.gateEffects.marketplacePromotion.state).toBe("hold");
     expect(checklist.operatorActionBoard.stillBlockedAfterCommand).toContain("public listing state remains draft_copy_ready_not_promoted");
+    expect(proof.conversionPayoutTruth.marketplaceListing.state).toBe("blocked");
   }));
 
   test("marketplace observed fields unlock only when complete and safe", () => withHostedProofEnv({}, () => {
@@ -139,7 +159,7 @@ describe("hosted Apify paid readiness operator action board", () => {
       readObservedProofFromEnvironment: false
     });
 
-    expect(proof.hostedProofOperatorChecklist.unlockSummary).toBe("hosted100_hosted300_marketplace_promotion");
+    expect(proof.hostedProofOperatorChecklist.unlockSummary).toBe("hosted100_hosted300_hosted500_marketplace_promotion");
     expect(proof.marketplaceConversionInputs).toMatchObject({
       storeViews: 12,
       runs: 4,
@@ -149,6 +169,18 @@ describe("hosted Apify paid readiness operator action board", () => {
       payoutEnabled: true,
       pricingModel: "pay_per_event_rows",
       publicListingStatus: "public_listed_not_promoted"
+    });
+    expect(proof.localCurrent500Gate).toMatchObject({
+      sellableRows: 500,
+      sellableFindingRows: 275,
+      countsTowardPaidPromotion: false,
+      hostedProofStillRequired: true
+    });
+    expect(proof.conversionPayoutTruth).toMatchObject({
+      pricing: { state: "observed", value: "pay_per_event_rows" },
+      payout: { state: "observed", enabled: true },
+      analytics: { state: "observed", storeViews: 12, runs: 4, paidUsers: 1, refunds: 0 },
+      hosted500: { state: "observed", requiredSellableRows: 500, requiredSellableFindingRows: 275 }
     });
   }));
 
@@ -162,12 +194,15 @@ describe("hosted Apify paid readiness operator action board", () => {
     });
 
     expect(proof.hostedProofOperatorChecklist.missingFields).toEqual(expect.arrayContaining(["pricingModel", "payoutEnabled"]));
-    expect(proof.hostedProofOperatorChecklist.unlockSummary).toBe("hosted100_hosted300");
+    expect(proof.hostedProofOperatorChecklist.unlockSummary).toBe("hosted100_hosted300_hosted500");
     expect(proof.hostedProofOperatorChecklist.gateEffects.hosted100.state).toBe("pass");
     expect(proof.hostedProofOperatorChecklist.gateEffects.hosted300.state).toBe("pass");
+    expect(proof.hostedProofOperatorChecklist.gateEffects.hosted500.state).toBe("pass");
     expect(proof.hostedProofOperatorChecklist.gateEffects.marketplacePromotion.state).toBe("hold");
     expect(proof.marketplaceConversionInputs.payoutEnabled).toBe("external_unknown");
     expect(proof.marketplaceConversionInputs.pricingModel).toBe("external_unknown");
+    expect(proof.conversionPayoutTruth.pricing.state).toBe("external_unknown");
+    expect(proof.conversionPayoutTruth.payout.state).toBe("external_unknown");
   }));
 
   test("unsafe no-leak proof cannot unlock hosted gates", () => withHostedProofEnv({}, () => {

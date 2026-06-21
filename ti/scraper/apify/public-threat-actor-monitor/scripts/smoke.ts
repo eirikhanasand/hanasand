@@ -1520,8 +1520,8 @@ const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, 
 if (
   !graphPublicUnlockCounts
   || Number(graphPublicUnlockCounts.admitted_by_parser) !== 0
-  || Number(graphPublicUnlockCounts.ready_for_parser) !== 500
-  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 500
+  || Number(graphPublicUnlockCounts.ready_for_parser) !== 750
+  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 750
   || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
   || Number(graphPublicUnlockCounts.needs_public_source) !== 6
   || Number(graphPublicUnlockCounts.contradicted) !== 6
@@ -1542,9 +1542,9 @@ const graphPublicNeedsPublicSource = graphPublicUnlockQueue.needs_public_source 
 const graphPublicParserHandoff = graphPublicUnlockQueue.parserAdmissionHandoff as Array<Record<string, unknown>> | undefined;
 if (
   !Array.isArray(graphPublicParserHandoff)
-  || graphPublicParserHandoff.length !== 500
+  || graphPublicParserHandoff.length !== 750
   || !Array.isArray(graphPublicCurrentAdmission)
-  || graphPublicCurrentAdmission.length !== 500
+  || graphPublicCurrentAdmission.length !== 750
   || !graphPublicParserHandoff.every((row) =>
     typeof row.actor === "string"
     && typeof row.victimOrTarget === "string"
@@ -1574,6 +1574,16 @@ if (
     && typeof (row.programDdPriority as Record<string, unknown>).buyerVisibleValue === "string"
     && (row.programDdPriority as Record<string, unknown>).noLeakProof === "hash_only_public_or_metadata_reference"
     && typeof (row.programDdPriority as Record<string, unknown>).nextPivot === "string"
+    && typeof row.programDePriority === "object"
+    && Number((row.programDePriority as Record<string, unknown>).confidenceLift) >= 0
+    && Number((row.programDePriority as Record<string, unknown>).freshnessLift) >= 0
+    && Number((row.programDePriority as Record<string, unknown>).sourceFamilyLift) >= 0
+    && typeof (row.programDePriority as Record<string, unknown>).contradictionRisk === "string"
+    && typeof (row.programDePriority as Record<string, unknown>).sourceProvenanceOnlyRisk === "string"
+    && typeof (row.programDePriority as Record<string, unknown>).buyerVisibleNextPivot === "string"
+    && typeof (row.programDePriority as Record<string, unknown>).gateContribution === "string"
+    && (row.programDePriority as Record<string, unknown>).noLeakProof === "hash_only_public_or_metadata_reference"
+    && typeof (row.programDePriority as Record<string, unknown>).admissionBlocker === "string"
     && Number(row.expectedPaidRowLiftAfterParserAdmission) > 0
     && row.admissionState === "ready_for_parser"
     && row.countsTowardFloorNow === false
@@ -1591,8 +1601,11 @@ if (
 const graphPublicProgramDbRejectionBuckets = graphPublicUnlockQueue.programDbRejectionBuckets as Record<string, unknown> | undefined;
 const graphPublicProgramDcRejectionBuckets = graphPublicUnlockQueue.programDcRejectionBuckets as Record<string, unknown> | undefined;
 const graphPublicProgramDdRejectionBuckets = graphPublicUnlockQueue.programDdRejectionBuckets as Record<string, unknown> | undefined;
+const graphPublicProgramDeRejectionBuckets = graphPublicUnlockQueue.programDeRejectionBuckets as Record<string, unknown> | undefined;
 if (
   graphPublicParserHandoff.filter((row) => (row.programDdPriority as Record<string, unknown>).findingLikely === true).length < 350
+  || graphPublicParserHandoff.filter((row) => (row.programDePriority as Record<string, unknown>).admissionBlocker === "none" && Number((row.programDePriority as Record<string, unknown>).expectedCurrentRowLift) > 0).length < 150
+  || graphPublicParserHandoff.filter((row) => (row.programDePriority as Record<string, unknown>).gateContribution === "current750").length < 150
   || !graphPublicProgramDbRejectionBuckets
   || Number(graphPublicProgramDbRejectionBuckets.stale) !== 4
   || Number(graphPublicProgramDbRejectionBuckets.alias_conflict) !== 4
@@ -1628,8 +1641,22 @@ if (
   || Number(graphPublicProgramDdRejectionBuckets.graph_only_speculation) !== 0
   || Number(graphPublicProgramDdRejectionBuckets.rowsCountTowardFloorNow) !== 0
   || graphPublicProgramDdRejectionBuckets.noLeak !== true
+  || !graphPublicProgramDeRejectionBuckets
+  || Number(graphPublicProgramDeRejectionBuckets.stale) !== 4
+  || Number(graphPublicProgramDeRejectionBuckets.alias_conflict) !== 4
+  || Number(graphPublicProgramDeRejectionBuckets.contradiction) !== 2
+  || Number(graphPublicProgramDeRejectionBuckets.duplicate) !== 0
+  || Number(graphPublicProgramDeRejectionBuckets.generic_source_page) !== 0
+  || Number(graphPublicProgramDeRejectionBuckets.restricted_only) !== 0
+  || Number(graphPublicProgramDeRejectionBuckets.not_enough_source_support) !== 6
+  || Number(graphPublicProgramDeRejectionBuckets.missing_buyer_action) !== 0
+  || Number(graphPublicProgramDeRejectionBuckets.weak_source_family_diversity) !== 0
+  || Number(graphPublicProgramDeRejectionBuckets.graph_only_speculation) !== 0
+  || Number(graphPublicProgramDeRejectionBuckets.unsupported_relationship_padding) !== 0
+  || Number(graphPublicProgramDeRejectionBuckets.rowsCountTowardFloorNow) !== 0
+  || graphPublicProgramDeRejectionBuckets.noLeak !== true
 ) {
-  throw new Error("Program DD graph public handoff must expose 500 rows, 350-plus finding-likely rows, and explicit rejection buckets");
+  throw new Error("Program DE graph public handoff must expose 750 rows, DE priority, 350-plus finding-likely rows, current750 contribution, and explicit rejection buckets");
 }
 const graphPublicPivots = graphPublicCorroborationPivotPacket.candidates as Array<Record<string, unknown>>;
 if (!graphPublicPivots.every((row) => {
@@ -1941,6 +1968,7 @@ const latestHostedProof = hostedPaidReadinessProof?.latestHostedProof as Record<
 const hostedMarketplaceInputs = hostedPaidReadinessProof?.marketplaceConversionInputs as Record<string, unknown> | undefined;
 const hostedPaidAcceptance = hostedPaidReadinessProof?.paidProofAcceptance as Record<string, unknown> | undefined;
 const hostedPaidIntegrityGate = hostedPaidReadinessProof?.paidRowIntegrityGate as Record<string, unknown> | undefined;
+const hostedConversionPayoutTruth = hostedPaidReadinessProof?.conversionPayoutTruth as Record<string, Record<string, unknown>> | undefined;
 const hostedProofImportPath = hostedPaidReadinessProof?.hostedProofImportPath as Record<string, unknown> | undefined;
 const hostedProofObservedFields = hostedProofImportPath?.observedFields as Record<string, unknown> | undefined;
 const hostedProofOperatorChecklist = hostedPaidReadinessProof?.hostedProofOperatorChecklist as Record<string, unknown> | undefined;
@@ -1991,6 +2019,11 @@ if (
   || hostedPaidAcceptance.minimumSellableFindingRows !== 52
   || hostedPaidAcceptance.sourceProvenanceRowsCountTowardFindingFloor !== false
   || hostedPaidAcceptance.falsePositiveInflationFailures !== 0
+  || !hostedConversionPayoutTruth
+  || hostedConversionPayoutTruth.pricing?.state !== "external_unknown"
+  || hostedConversionPayoutTruth.payout?.state !== "external_unknown"
+  || hostedConversionPayoutTruth.analytics?.state !== "external_unknown"
+  || hostedConversionPayoutTruth.hosted500?.state !== "external_unknown"
   || !hostedPaidIntegrityGate
   || hostedPaidIntegrityGate.schemaVersion !== "ti.program_cp_hosted_paid_row_integrity_gate.v1"
   || hostedPaidIntegrityGate.sourceProofField !== "falsePositiveSuppressionGate.programCpHardening.secondBatchAudit"
@@ -2026,16 +2059,18 @@ if (
   || hostedProofChecklistGateEffects.hosted100?.state !== "hold"
   || hostedProofChecklistGateEffects.hosted100?.unlocks !== false
   || hostedProofChecklistGateEffects.hosted300?.state !== "hold"
+  || hostedProofChecklistGateEffects.hosted500?.state !== "hold"
   || hostedProofChecklistGateEffects.marketplacePromotion?.state !== "hold"
   || !hostedProofChecklistExamples?.some((example) => example.name === "sample_proof_rejected_for_promotion" && example.unlockSummary === "none")
   || !hostedProofChecklistExamples.some((example) => example.name === "valid_hosted100_hosted300_hold" && example.unlockSummary === "hosted100")
-  || !hostedProofChecklistExamples.some((example) => example.name === "valid_hosted300_marketplace_hold" && example.unlockSummary === "hosted100_hosted300")
+  || !hostedProofChecklistExamples.some((example) => example.name === "valid_hosted300_hosted500_hold" && example.unlockSummary === "hosted100_hosted300")
+  || !hostedProofChecklistExamples.some((example) => example.name === "valid_hosted500_marketplace_hold" && example.unlockSummary === "hosted100_hosted300_hosted500")
   || !hostedProofChecklistExamples.some((example) => example.name === "invalid_unsafe_no_leak_proof" && example.expectedStatus === "rejected")
 ) {
-  throw new Error("Hosted proof operator checklist must explain operator action state, missing fields, sample rejection, hosted100/hosted300 gate effects, and unsafe proof rejection");
+  throw new Error("Hosted proof operator checklist must explain operator action state, missing fields, sample rejection, hosted100/hosted300/hosted500 gate effects, and unsafe proof rejection");
 }
 const hostedProofCommandExamples = hostedProofImportPath.commandExamples as string[] | undefined;
-if (!hostedProofCommandExamples?.join(" ").includes("TI_APIFY_HOSTED_PROOF_MODE=run") || !hostedProofCommandExamples.join(" ").includes("TI_APIFY_OBSERVED_PROOF_PATH") || !hostedProofCommandExamples.join(" ").includes("hosted-apify-observed-proof.hosted300.template.json")) {
+if (!hostedProofCommandExamples?.join(" ").includes("TI_APIFY_HOSTED_PROOF_MODE=run") || !hostedProofCommandExamples.join(" ").includes("TI_APIFY_OBSERVED_PROOF_PATH") || !hostedProofCommandExamples.join(" ").includes("hosted-apify-observed-proof.hosted300.template.json") || !hostedProofCommandExamples.join(" ").includes("hosted-apify-observed-proof.hosted500.template.json")) {
   throw new Error("Hosted paid-readiness proof must expose copy/paste hosted run and verify commands");
 }
 const hostedRequiredZeroCounts = hostedPaidIntegrityGate.requiredZeroCounts as Record<string, unknown> | undefined;

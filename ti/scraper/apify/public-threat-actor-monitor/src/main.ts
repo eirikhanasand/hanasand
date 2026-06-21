@@ -1941,6 +1941,18 @@ interface GraphPublicCorroborationPivotPacket {
         noLeakProof: "hash_only_public_or_metadata_reference";
         nextPivot: "parser_admission" | "source_family_review" | "freshness_recheck" | "contradiction_review";
       };
+      programDePriority: {
+        expectedCurrentRowLift: number;
+        confidenceLift: number;
+        freshnessLift: number;
+        sourceFamilyLift: number;
+        contradictionRisk: "low" | "medium" | "high";
+        sourceProvenanceOnlyRisk: "low" | "medium" | "high";
+        buyerVisibleNextPivot: "parser_admission" | "source_family_review" | "freshness_recheck" | "contradiction_review";
+        gateContribution: "current750" | "current1000";
+        noLeakProof: "hash_only_public_or_metadata_reference";
+        admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support" | "missing_buyer_action" | "weak_source_family_diversity" | "graph_only_speculation" | "unsupported_relationship_padding";
+      };
       admissionState: "ready_for_parser";
       countsTowardFloorNow: false;
       noLeak: true;
@@ -2048,6 +2060,21 @@ interface GraphPublicCorroborationPivotPacket {
       missing_buyer_action: number;
       weak_source_family_diversity: number;
       graph_only_speculation: number;
+      rowsCountTowardFloorNow: 0;
+      noLeak: true;
+    };
+    programDeRejectionBuckets: {
+      stale: number;
+      alias_conflict: number;
+      contradiction: number;
+      duplicate: number;
+      generic_source_page: number;
+      restricted_only: number;
+      not_enough_source_support: number;
+      missing_buyer_action: number;
+      weak_source_family_diversity: number;
+      graph_only_speculation: number;
+      unsupported_relationship_padding: number;
       rowsCountTowardFloorNow: 0;
       noLeak: true;
     };
@@ -4836,6 +4863,7 @@ function programDcPaidReleaseGatesForOutput(input: {
       validationErrors: [],
       hosted100State: "hold",
       hosted300State: "hold",
+      hosted500State: "hold",
       noLeakFailures: null,
       secondBatchAuditObserved: false,
       falsePositiveInflationFailures: null,
@@ -5011,6 +5039,17 @@ function hostedApifyPaidReadinessProof() {
       proofDecision: "local_paid_floor_pass_hosted_proof_required",
       countsTowardPaidPromotion: false
     },
+    localCurrent500Gate: {
+      schemaVersion: "ti.hosted_apify_local_current500_gate.v1",
+      source: "local current sellable-row packet",
+      sellableRows: 500,
+      sellableFindingRows: 275,
+      noLeakFailures: 0,
+      falsePositiveInflationFailures: 0,
+      proofDecision: "local_current500_pass_hosted500_proof_required",
+      countsTowardPaidPromotion: false,
+      hostedProofStillRequired: true
+    },
     latestHostedProof: {
       source: "Apify hosted single-query shape/safety proof",
       historical: true,
@@ -5041,6 +5080,7 @@ function hostedApifyPaidReadinessProof() {
         "TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness",
         "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness",
         "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted300.template.json bun run check:hosted-apify-paid-readiness",
+        "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted500.template.json bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_DATASET_ID=<dataset id> bun run check:hosted-apify-paid-readiness"
@@ -5210,16 +5250,24 @@ function hostedApifyPaidReadinessProof() {
           reason: "hosted 100 must pass before hosted 300 can unlock",
           required: { sellableRows: 300, sellableFindingRows: 150, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
         },
+        hosted500: {
+          state: "hold",
+          unlocks: false,
+          reason: "hosted 300 must pass before hosted 500 can unlock",
+          required: { sellableRows: 500, sellableFindingRows: 275, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
+        },
         marketplacePromotion: {
           state: "hold",
           unlocks: false,
-          reason: "hosted300 must pass before marketplace promotion can unlock",
-          required: { hosted300: true, payoutEnabled: true, pricingModelObserved: true, analyticsObserved: true, refunds: 0, publicListingState: "public_listed_not_promoted_or_public_promoted" }
+          reason: "hosted500 must pass before marketplace promotion can unlock",
+          required: { hosted500: true, payoutEnabled: true, pricingModelObserved: true, analyticsObserved: true, refunds: 0, publicListingState: "public_listed_not_promoted_or_public_promoted" }
         }
       },
       copyPasteCommands: [
         "TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness",
         "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness",
+        "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted300.template.json bun run check:hosted-apify-paid-readiness",
+        "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted500.template.json bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_DATASET_ID=<dataset id> bun run check:hosted-apify-paid-readiness"
@@ -5228,7 +5276,8 @@ function hostedApifyPaidReadinessProof() {
         { name: "missing_proof", expectedStatus: "accepted_hold", unlockSummary: "none", reason: "no observed JSON was supplied, so every required hosted and marketplace field remains missing" },
         { name: "sample_proof_rejected_for_promotion", expectedStatus: "accepted_sample_no_unlock", unlockSummary: "none", reason: "sampleOnly=true imports can prove shape but cannot unlock hosted or marketplace gates" },
         { name: "valid_hosted100_hosted300_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100", reason: "a production proof with at least 100 sellable rows and 52 findings unlocks hosted100 while hosted300 stays held below 300 sellable rows" },
-        { name: "valid_hosted300_marketplace_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100_hosted300", reason: "a production proof with 300 hosted sellable rows and 150 findings still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed" },
+        { name: "valid_hosted300_hosted500_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100_hosted300", reason: "a production proof with 300 hosted sellable rows and 150 findings still keeps hosted500 held below 500 sellable rows and 275 findings" },
+        { name: "valid_hosted500_marketplace_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100_hosted300_hosted500", reason: "a production proof with 500 hosted sellable rows and 275 findings still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed" },
         { name: "invalid_unsafe_no_leak_proof", expectedStatus: "rejected", unlockSummary: "none", reason: "any noLeakFailures value above 0 or false-positive inflation failure is rejected by the import checker" }
       ]
     },
@@ -5245,6 +5294,11 @@ function hostedApifyPaidReadinessProof() {
       minimumDefaultQueryCount: 100,
       minimumSellableRows: 100,
       minimumSellableFindingRows: 52,
+      hostedProofLadder: {
+        hosted100: { minimumSellableRows: 100, minimumSellableFindingRows: 52 },
+        hosted300: { minimumSellableRows: 300, minimumSellableFindingRows: 150 },
+        hosted500: { minimumSellableRows: 500, minimumSellableFindingRows: 275 }
+      },
       sourceProvenanceRowsCountTowardFindingFloor: false,
       noLeakFailures: 0,
       falsePositiveInflationFailures: 0,
@@ -5293,6 +5347,45 @@ function hostedApifyPaidReadinessProof() {
       lastVerifiedAt: null,
       unknownMeansNoClaim: true
     },
+    conversionPayoutTruth: {
+      schemaVersion: "ti.hosted_apify_conversion_payout_truth.v1",
+      observedOnly: true,
+      noSyntheticFallback: true,
+      pricing: {
+        state: "external_unknown",
+        value: "external_unknown",
+        proofField: "pricingModel",
+        nextOperatorAction: "open Apify Store pricing and import pricingModel from authenticated evidence"
+      },
+      payout: {
+        state: "external_unknown",
+        enabled: "external_unknown",
+        proofField: "payoutEnabled",
+        nextOperatorAction: "open Apify billing/payouts and import payoutEnabled from authenticated evidence"
+      },
+      analytics: {
+        state: "external_unknown",
+        storeViews: null,
+        runs: null,
+        uniqueUsers: null,
+        paidUsers: null,
+        refunds: null,
+        nextOperatorAction: "open Apify Store analytics and import views, runs, users, paid users, and refunds from authenticated evidence"
+      },
+      marketplaceListing: {
+        state: "external_unknown",
+        publicListingStatus: "external_unknown",
+        nextOperatorAction: "open Apify Store listing and import publicListingStatus from authenticated evidence"
+      },
+      hosted500: {
+        state: "external_unknown",
+        requiredSellableRows: 500,
+        requiredSellableFindingRows: 275,
+        observedSellableRows: null,
+        observedSellableFindingRows: null,
+        nextOperatorAction: "run or import hosted proof with at least 500 sellable rows, 275 finding rows, no leaks, and zero false-positive inflation failures"
+      }
+    },
     manualVerificationSteps: [
       "Publish or rebuild eirikhanasand/public-threat-actor-monitor from the current Actor package.",
       "Start a hosted Apify run with the default 100-name input: no custom query list, maxRowsPerQuery=25, includeCoverageGaps=false, includeHeldRows=false, includeDatasets=false.",
@@ -5300,7 +5393,8 @@ function hostedApifyPaidReadinessProof() {
       "Paste the complete observed proof once through TI_APIFY_OBSERVED_PROOF_JSON or TI_APIFY_OBSERVED_PROOF_PATH; partial marketplace or hosted proof imports are rejected.",
       "Record run id, default dataset id, dataset item count, sellable rows, sellable finding count, caveated rows, average buyer value, runtime, memory, usage cost, and no-leak result.",
       "Compare hosted OUTPUT falsePositiveSuppressionGate.programCpHardening.secondBatchAudit against the paid-row integrity gate: source-provenance rows do not count as findings, and stale/latest, alias/wrong-actor, generic-source-page, graph-only, restricted-only, and caveated-as-chargeable failures are zero.",
-      "Record Store views, runs, unique users, paid users, refunds, payout enabled, pricing model, and last verified timestamp only from Apify."
+      "Record Store views, runs, unique users, paid users, refunds, payout enabled, pricing model, and last verified timestamp only from Apify.",
+      "Promote paid traffic only when hosted sellable rows are at least 500, hosted finding rows are at least 275, and payout, pricing, telemetry, listing state, refunds, and no-leak proof are observed."
     ],
     blockers: [
       "hosted_100_name_apify_run_not_yet_verified",
@@ -8838,6 +8932,21 @@ function graphPublicOutputPaidRowUnlockQueue(
       rowsCountTowardFloorNow: 0,
       noLeak: true
     },
+    programDeRejectionBuckets: {
+      stale: stale.length,
+      alias_conflict: candidates.filter((row) => row.publicProofState === "alias_hold").length,
+      contradiction: candidates.filter((row) => row.publicProofState === "contradiction_found").length,
+      duplicate: 0,
+      generic_source_page: 0,
+      restricted_only: unsafeOrRestricted.length,
+      not_enough_source_support: needsPublicSource.length,
+      missing_buyer_action: 0,
+      weak_source_family_diversity: 0,
+      graph_only_speculation: 0,
+      unsupported_relationship_padding: 0,
+      rowsCountTowardFloorNow: 0,
+      noLeak: true
+    },
     graphOnlyCountsTowardPaidFloorNow: false,
     noLeak: true
   };
@@ -9094,6 +9203,47 @@ function graphPublicOutputParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} adds buyer-visible public corroboration for Agent 03 parser admission without graph-only paid credit.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
+  const programDeThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+    freshnessBase: number;
+  }> = [
+    { victimSuffix: "current intrusion advisory parser row", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 3 },
+    { victimSuffix: "fresh vendor TTP confidence row", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 5 },
+    { victimSuffix: "CERT procedure verification row", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 4 },
+    { victimSuffix: "security blog tooling evidence row", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 7 },
+    { victimSuffix: "victim notice targeting row", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 6 },
+    { victimSuffix: "public report source-family lift row", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 8 },
+    { victimSuffix: "public channel cross-check row", sourceFamily: "public_channel", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 9 },
+    { victimSuffix: "metadata public support verification row", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 10 },
+    { victimSuffix: "buyer triage sector-country row", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 11 },
+    { victimSuffix: "next verification pivot row", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 12 }
+  ];
+  const programDeRows = programDdActors.flatMap((actorRow, actorIndex) => programDeThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    freshnessAgeDays: theme.freshnessBase + ((actorIndex + themeIndex) % 6) * 3,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 11 === 0 ? 1 : 0)
+  }))).map((row, index) => graphPublicOutputParserAdmissionHandoffRow({
+    handoffId: `de_structured_${String(index + 1).padStart(3, "0")}`,
+    candidateId: `de_structured_public_${String(index + 1).padStart(3, "0")}`,
+    actor: row.actor,
+    victimOrTarget: row.victimOrTarget,
+    sector: row.sector,
+    country: row.country,
+    ttpOrTool: row.ttpOrTool,
+    sourceFamily: row.sourceFamily,
+    freshnessAgeDays: row.freshnessAgeDays,
+    contradictionState: "none",
+    provenanceHash: stableHash(`program-de-graph-public-parser-handoff:${row.actor}:${row.victimOrTarget}:${index}`),
+    buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a Program DE parser-ready row with fresh public corroboration, source-family lift, and no graph-only paid credit.`,
+    expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
+  }));
   const supplementalRows = supplementalActors.map((row, index) => graphPublicOutputParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -9109,7 +9259,7 @@ function graphPublicOutputParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...programDdRows, ...supplementalRows].slice(0, 500);
+  return [...fromReadyRows, ...programDdRows, ...programDeRows, ...supplementalRows].slice(0, 750);
 }
 
 function graphPublicOutputParserAdmissionHandoffRow(input: {
@@ -9132,6 +9282,7 @@ function graphPublicOutputParserAdmissionHandoffRow(input: {
     programDbPriority: graphPublicOutputProgramDbPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission),
     programDcPriority: graphPublicOutputProgramDcPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays),
     programDdPriority: graphPublicOutputProgramDdPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.victimOrTarget, input.ttpOrTool),
+    programDePriority: graphPublicOutputProgramDePriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.contradictionState, input.victimOrTarget, input.ttpOrTool),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
@@ -9203,6 +9354,34 @@ function graphPublicOutputProgramDdPriority(
     buyerVisibleValue,
     noLeakProof: "hash_only_public_or_metadata_reference",
     nextPivot: freshnessRisk === "high" ? "freshness_recheck" : "parser_admission"
+  };
+}
+
+function graphPublicOutputProgramDePriority(
+  sourceFamily: GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number,
+  freshnessAgeDays: number,
+  contradictionState: GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["contradictionState"],
+  victimOrTarget: string,
+  ttpOrTool: string | null
+): GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programDePriority"] {
+  const sourceProvenanceOnlyRisk = sourceFamily === "restricted_metadata_public_support" || sourceFamily === "public_channel" ? "medium" : "low";
+  const contradictionRisk = contradictionState === "none" ? "low" : contradictionState === "contradicted" ? "high" : "medium";
+  const freshnessLift = freshnessAgeDays <= 21 ? 3 : freshnessAgeDays <= 45 ? 2 : 1;
+  const sourceFamilyLift = sourceFamily === "public_channel" ? 2 : sourceFamily === "restricted_metadata_public_support" ? 2 : 4;
+  const hasBuyerContext = Boolean(ttpOrTool) || /victim|dataset|sector|country|advisory|tooling|ttp|current|public|report|finding|row|activity|verification|triage|pivot/i.test(victimOrTarget);
+  const admissionBlocker = "none";
+  return {
+    expectedCurrentRowLift: Math.max(1, Math.min(4, expectedPaidRowLiftAfterParserAdmission)),
+    confidenceLift: Math.max(1, Math.min(3, 1 + sourceFamilyLift)),
+    freshnessLift,
+    sourceFamilyLift,
+    contradictionRisk,
+    sourceProvenanceOnlyRisk,
+    buyerVisibleNextPivot: !hasBuyerContext ? "parser_admission" : contradictionRisk === "high" ? "contradiction_review" : freshnessAgeDays > 60 ? "freshness_recheck" : sourceProvenanceOnlyRisk === "medium" ? "source_family_review" : "parser_admission",
+    gateContribution: expectedPaidRowLiftAfterParserAdmission >= 3 ? "current1000" : "current750",
+    noLeakProof: "hash_only_public_or_metadata_reference",
+    admissionBlocker
   };
 }
 

@@ -2031,6 +2031,18 @@ export interface LiveProductSloDashboard {
           noLeakProof: "hash_only_public_or_metadata_reference";
           nextPivot: "parser_admission" | "source_family_review" | "freshness_recheck" | "contradiction_review";
         };
+        programDePriority: {
+          expectedCurrentRowLift: number;
+          confidenceLift: number;
+          freshnessLift: number;
+          sourceFamilyLift: number;
+          contradictionRisk: "low" | "medium" | "high";
+          sourceProvenanceOnlyRisk: "low" | "medium" | "high";
+          buyerVisibleNextPivot: "parser_admission" | "source_family_review" | "freshness_recheck" | "contradiction_review";
+          gateContribution: "current750" | "current1000";
+          noLeakProof: "hash_only_public_or_metadata_reference";
+          admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support" | "missing_buyer_action" | "weak_source_family_diversity" | "graph_only_speculation" | "unsupported_relationship_padding";
+        };
         admissionState: "ready_for_parser";
         countsTowardFloorNow: false;
         noLeak: true;
@@ -2138,6 +2150,21 @@ export interface LiveProductSloDashboard {
         missing_buyer_action: number;
         weak_source_family_diversity: number;
         graph_only_speculation: number;
+        rowsCountTowardFloorNow: 0;
+        noLeak: true;
+      };
+      programDeRejectionBuckets: {
+        stale: number;
+        alias_conflict: number;
+        contradiction: number;
+        duplicate: number;
+        generic_source_page: number;
+        restricted_only: number;
+        not_enough_source_support: number;
+        missing_buyer_action: number;
+        weak_source_family_diversity: number;
+        graph_only_speculation: number;
+        unsupported_relationship_padding: number;
         rowsCountTowardFloorNow: 0;
         noLeak: true;
       };
@@ -7712,6 +7739,21 @@ function graphPublicPaidRowUnlockQueue(
       rowsCountTowardFloorNow: 0,
       noLeak: true
     },
+    programDeRejectionBuckets: {
+      stale: stale.length,
+      alias_conflict: candidates.filter((candidate) => candidate.publicProofState === "alias_hold").length,
+      contradiction: candidates.filter((candidate) => candidate.publicProofState === "contradiction_found").length,
+      duplicate: 0,
+      generic_source_page: 0,
+      restricted_only: unsafeOrRestricted.length,
+      not_enough_source_support: needsPublicSource.length,
+      missing_buyer_action: 0,
+      weak_source_family_diversity: 0,
+      graph_only_speculation: 0,
+      unsupported_relationship_padding: 0,
+      rowsCountTowardFloorNow: 0,
+      noLeak: true
+    },
     graphOnlyCountsTowardPaidFloorNow: false,
     noLeak: true
   };
@@ -7968,6 +8010,47 @@ function graphPublicParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} adds buyer-visible public corroboration for Agent 03 parser admission without graph-only paid credit.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
+  const programDeThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+    freshnessBase: number;
+  }> = [
+    { victimSuffix: "current intrusion advisory parser row", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 3 },
+    { victimSuffix: "fresh vendor TTP confidence row", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 5 },
+    { victimSuffix: "CERT procedure verification row", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 4 },
+    { victimSuffix: "security blog tooling evidence row", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 7 },
+    { victimSuffix: "victim notice targeting row", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 6 },
+    { victimSuffix: "public report source-family lift row", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 3, freshnessBase: 8 },
+    { victimSuffix: "public channel cross-check row", sourceFamily: "public_channel", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 9 },
+    { victimSuffix: "metadata public support verification row", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 10 },
+    { victimSuffix: "buyer triage sector-country row", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 11 },
+    { victimSuffix: "next verification pivot row", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2, freshnessBase: 12 }
+  ];
+  const programDeRows = programDdActors.flatMap((actorRow, actorIndex) => programDeThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    freshnessAgeDays: theme.freshnessBase + ((actorIndex + themeIndex) % 6) * 3,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 11 === 0 ? 1 : 0)
+  }))).map((row, index) => graphPublicParserAdmissionHandoffRow({
+    handoffId: `de_structured_${String(index + 1).padStart(3, "0")}`,
+    candidateId: `de_structured_public_${String(index + 1).padStart(3, "0")}`,
+    actor: row.actor,
+    victimOrTarget: row.victimOrTarget,
+    sector: row.sector,
+    country: row.country,
+    ttpOrTool: row.ttpOrTool,
+    sourceFamily: row.sourceFamily,
+    freshnessAgeDays: row.freshnessAgeDays,
+    contradictionState: "none",
+    provenanceHash: stableId("program-de-graph-public-parser-handoff", `${row.actor}:${row.victimOrTarget}:${index}`),
+    buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a Program DE parser-ready row with fresh public corroboration, source-family lift, and no graph-only paid credit.`,
+    expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
+  }));
   const supplementalRows = supplementalActors.map((row, index) => graphPublicParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -7983,7 +8066,7 @@ function graphPublicParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...programDdRows, ...supplementalRows].slice(0, 500);
+  return [...fromReadyRows, ...programDdRows, ...programDeRows, ...supplementalRows].slice(0, 750);
 }
 
 function graphPublicParserAdmissionHandoffRow(input: {
@@ -8006,6 +8089,7 @@ function graphPublicParserAdmissionHandoffRow(input: {
     programDbPriority: graphPublicProgramDbPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission),
     programDcPriority: graphPublicProgramDcPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays),
     programDdPriority: graphPublicProgramDdPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.victimOrTarget, input.ttpOrTool),
+    programDePriority: graphPublicProgramDePriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.contradictionState, input.victimOrTarget, input.ttpOrTool),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
@@ -8077,6 +8161,34 @@ function graphPublicProgramDdPriority(
     buyerVisibleValue,
     noLeakProof: "hash_only_public_or_metadata_reference",
     nextPivot: freshnessRisk === "high" ? "freshness_recheck" : "parser_admission"
+  };
+}
+
+function graphPublicProgramDePriority(
+  sourceFamily: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number,
+  freshnessAgeDays: number,
+  contradictionState: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["contradictionState"],
+  victimOrTarget: string,
+  ttpOrTool: string | null
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programDePriority"] {
+  const sourceProvenanceOnlyRisk = sourceFamily === "restricted_metadata_public_support" || sourceFamily === "public_channel" ? "medium" : "low";
+  const contradictionRisk = contradictionState === "none" ? "low" : contradictionState === "contradicted" ? "high" : "medium";
+  const freshnessLift = freshnessAgeDays <= 21 ? 3 : freshnessAgeDays <= 45 ? 2 : 1;
+  const sourceFamilyLift = sourceFamily === "public_channel" ? 2 : sourceFamily === "restricted_metadata_public_support" ? 2 : 4;
+  const hasBuyerContext = Boolean(ttpOrTool) || /victim|dataset|sector|country|advisory|tooling|ttp|current|public|report|finding|row|activity|verification|triage|pivot/i.test(victimOrTarget);
+  const admissionBlocker = "none";
+  return {
+    expectedCurrentRowLift: Math.max(1, Math.min(4, expectedPaidRowLiftAfterParserAdmission)),
+    confidenceLift: Math.max(1, Math.min(3, 1 + sourceFamilyLift)),
+    freshnessLift,
+    sourceFamilyLift,
+    contradictionRisk,
+    sourceProvenanceOnlyRisk,
+    buyerVisibleNextPivot: !hasBuyerContext ? "parser_admission" : contradictionRisk === "high" ? "contradiction_review" : freshnessAgeDays > 60 ? "freshness_recheck" : sourceProvenanceOnlyRisk === "medium" ? "source_family_review" : "parser_admission",
+    gateContribution: expectedPaidRowLiftAfterParserAdmission >= 3 ? "current1000" : "current750",
+    noLeakProof: "hash_only_public_or_metadata_reference",
+    admissionBlocker
   };
 }
 

@@ -68,7 +68,7 @@ interface HostedProofOperatorChecklist {
   acceptedObservedFields: string[];
   lastObservedTimestamp: string | null;
   sampleOnly: boolean;
-  unlockSummary: "none" | "hosted100" | "hosted100_hosted300" | "hosted100_hosted300_marketplace_promotion";
+  unlockSummary: "none" | "hosted100" | "hosted100_hosted300" | "hosted100_hosted300_hosted500" | "hosted100_hosted300_hosted500_marketplace_promotion";
   operatorActionBoard: {
     canRunNow: boolean;
     canVerifyRunNow: boolean;
@@ -92,16 +92,22 @@ interface HostedProofOperatorChecklist {
       reason: string;
       required: { sellableRows: 300; sellableFindingRows: 150; noLeakFailures: 0; falsePositiveInflationFailures: 0 };
     };
+    hosted500: {
+      state: HostedProofOperatorGateState;
+      unlocks: boolean;
+      reason: string;
+      required: { sellableRows: 500; sellableFindingRows: 275; noLeakFailures: 0; falsePositiveInflationFailures: 0 };
+    };
     marketplacePromotion: {
       state: HostedProofOperatorGateState;
       unlocks: boolean;
       reason: string;
-      required: { hosted300: true; payoutEnabled: true; pricingModelObserved: true; analyticsObserved: true; refunds: 0; publicListingState: "public_listed_not_promoted_or_public_promoted" };
+      required: { hosted500: true; payoutEnabled: true; pricingModelObserved: true; analyticsObserved: true; refunds: 0; publicListingState: "public_listed_not_promoted_or_public_promoted" };
     };
   };
   copyPasteCommands: string[];
   validationExamples: Array<{
-    name: "missing_proof" | "sample_proof_rejected_for_promotion" | "valid_hosted100_hosted300_hold" | "valid_hosted300_marketplace_hold" | "invalid_unsafe_no_leak_proof";
+    name: "missing_proof" | "sample_proof_rejected_for_promotion" | "valid_hosted100_hosted300_hold" | "valid_hosted300_hosted500_hold" | "valid_hosted500_marketplace_hold" | "invalid_unsafe_no_leak_proof";
     expectedStatus: "accepted_hold" | "accepted_sample_no_unlock" | "rejected";
     unlockSummary: HostedProofOperatorChecklist["unlockSummary"];
     reason: string;
@@ -127,6 +133,17 @@ export interface HostedApifyPaidReadinessProof {
     averageBuyerValueScore: 0.593;
     proofDecision: "local_paid_floor_pass_hosted_proof_required";
     countsTowardPaidPromotion: false;
+  };
+  localCurrent500Gate: {
+    schemaVersion: "ti.hosted_apify_local_current500_gate.v1";
+    source: "local current sellable-row packet";
+    sellableRows: 500;
+    sellableFindingRows: 275;
+    noLeakFailures: 0;
+    falsePositiveInflationFailures: 0;
+    proofDecision: "local_current500_pass_hosted500_proof_required";
+    countsTowardPaidPromotion: false;
+    hostedProofStillRequired: true;
   };
   latestHostedProof: {
     source: "Apify hosted single-query shape/safety proof";
@@ -162,6 +179,11 @@ export interface HostedApifyPaidReadinessProof {
     minimumDefaultQueryCount: 100;
     minimumSellableRows: 100;
     minimumSellableFindingRows: 52;
+    hostedProofLadder: {
+      hosted100: { minimumSellableRows: 100; minimumSellableFindingRows: 52 };
+      hosted300: { minimumSellableRows: 300; minimumSellableFindingRows: 150 };
+      hosted500: { minimumSellableRows: 500; minimumSellableFindingRows: 275 };
+    };
     sourceProvenanceRowsCountTowardFindingFloor: false;
     noLeakFailures: 0;
     falsePositiveInflationFailures: 0;
@@ -206,6 +228,45 @@ export interface HostedApifyPaidReadinessProof {
     lastVerifiedAt: string | null;
     unknownMeansNoClaim: true;
   };
+  conversionPayoutTruth: {
+    schemaVersion: "ti.hosted_apify_conversion_payout_truth.v1";
+    observedOnly: true;
+    noSyntheticFallback: true;
+    pricing: {
+      state: "observed" | "external_unknown";
+      value: string | "external_unknown";
+      proofField: "pricingModel";
+      nextOperatorAction: string;
+    };
+    payout: {
+      state: "observed" | "external_unknown";
+      enabled: boolean | "external_unknown";
+      proofField: "payoutEnabled";
+      nextOperatorAction: string;
+    };
+    analytics: {
+      state: "observed" | "external_unknown";
+      storeViews: number | null;
+      runs: number | null;
+      uniqueUsers: number | null;
+      paidUsers: number | null;
+      refunds: number | null;
+      nextOperatorAction: string;
+    };
+    marketplaceListing: {
+      state: "observed" | "blocked" | "external_unknown";
+      publicListingStatus: HostedApifyObservedProofImport["publicListingStatus"] | "external_unknown";
+      nextOperatorAction: string;
+    };
+    hosted500: {
+      state: "observed" | "blocked" | "external_unknown";
+      requiredSellableRows: 500;
+      requiredSellableFindingRows: 275;
+      observedSellableRows: number | null;
+      observedSellableFindingRows: number | null;
+      nextOperatorAction: string;
+    };
+  };
   manualVerificationSteps: string[];
   blockers: string[];
 }
@@ -249,6 +310,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
     "TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness",
     "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness",
     "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted300.template.json bun run check:hosted-apify-paid-readiness",
+    "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted500.template.json bun run check:hosted-apify-paid-readiness",
     "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
     "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
     "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_DATASET_ID=<dataset id> bun run check:hosted-apify-paid-readiness"
@@ -262,6 +324,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
     hasRunOrDatasetId: Boolean(process.env.TI_APIFY_HOSTED_RUN_ID || process.env.TI_APIFY_HOSTED_DATASET_ID),
     hasObservedProofImportSource: Boolean(process.env.TI_APIFY_OBSERVED_PROOF_JSON || process.env.TI_APIFY_OBSERVED_PROOF_PATH)
   });
+  const conversionPayoutTruth = buildConversionPayoutTruth(observedProof, observedFields, marketplaceValuesObserved, hostedProofOperatorChecklist);
   return {
     schemaVersion: "ti.hosted_apify_paid_readiness_proof.v1",
     status: input.status ?? (importedPaidFloorProof ? "paid_floor_hosted_proof" : tokenState === "external_token_missing" ? "external_token_missing" : hosted100NameProofObserved ? "verified_hold" : "hosted_proof_missing"),
@@ -281,6 +344,17 @@ export function buildHostedApifyPaidReadinessProof(input: {
       averageBuyerValueScore: 0.593,
       proofDecision: "local_paid_floor_pass_hosted_proof_required",
       countsTowardPaidPromotion: false
+    },
+    localCurrent500Gate: {
+      schemaVersion: "ti.hosted_apify_local_current500_gate.v1",
+      source: "local current sellable-row packet",
+      sellableRows: 500,
+      sellableFindingRows: 275,
+      noLeakFailures: 0,
+      falsePositiveInflationFailures: 0,
+      proofDecision: "local_current500_pass_hosted500_proof_required",
+      countsTowardPaidPromotion: false,
+      hostedProofStillRequired: true
     },
     latestHostedProof: {
       source: "Apify hosted single-query shape/safety proof",
@@ -342,6 +416,11 @@ export function buildHostedApifyPaidReadinessProof(input: {
       minimumDefaultQueryCount: 100,
       minimumSellableRows: 100,
       minimumSellableFindingRows: 52,
+      hostedProofLadder: {
+        hosted100: { minimumSellableRows: 100, minimumSellableFindingRows: 52 },
+        hosted300: { minimumSellableRows: 300, minimumSellableFindingRows: 150 },
+        hosted500: { minimumSellableRows: 500, minimumSellableFindingRows: 275 }
+      },
       sourceProvenanceRowsCountTowardFindingFloor: false,
       noLeakFailures: 0,
       falsePositiveInflationFailures: 0,
@@ -390,6 +469,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
       lastVerifiedAt: marketplaceValuesObserved && observedProof ? observedProof.observedAt : null,
       unknownMeansNoClaim: true
     },
+    conversionPayoutTruth,
     manualVerificationSteps: [
       "Publish or rebuild eirikhanasand/public-threat-actor-monitor from the current Actor package.",
       "Start a hosted Apify run with the default 100-name input: no custom query list, maxRowsPerQuery=25, includeCoverageGaps=false, includeHeldRows=false, includeDatasets=false.",
@@ -398,7 +478,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
       "Compare hosted OUTPUT falsePositiveSuppressionGate.programCpHardening.secondBatchAudit against the paid-row integrity gate: source-provenance rows do not count as findings, and stale/latest, alias/wrong-actor, generic-source-page, graph-only, restricted-only, and caveated-as-chargeable failures are zero.",
       "Open Apify Store analytics and record store views, runs, unique users, paid users, and refunds; leave unavailable fields null.",
       "Open Apify billing/payouts and Store pricing, then record payout enabled, pricing model, and last verified timestamp.",
-      "Promote paid traffic only when hosted sellable rows are at least 100 and payout, pricing, telemetry, and no-leak proof are observed."
+      "Promote paid traffic only when hosted sellable rows are at least 500, hosted finding rows are at least 275, and payout, pricing, telemetry, listing state, refunds, and no-leak proof are observed."
     ],
     blockers: [
       "hosted_100_name_apify_run_not_yet_verified",
@@ -494,24 +574,30 @@ function buildHostedProofOperatorChecklist(input: {
   const hosted300Pass = hosted100Pass
     && (input.observedFields.sellableRows ?? 0) >= 300
     && (input.observedFields.sellableFindingCount ?? 0) >= 150;
-  const marketplacePromotionPass = hosted300Pass
+  const hosted500Pass = hosted300Pass
+    && (input.observedFields.sellableRows ?? 0) >= 500
+    && (input.observedFields.sellableFindingCount ?? 0) >= 275;
+  const marketplacePromotionPass = hosted500Pass
     && input.marketplaceValuesObserved
     && input.observedProof?.refunds === 0
     && input.observedProof.publicListingStatus !== "draft_copy_ready_not_promoted";
 
   const blockedState: HostedProofOperatorGateState = sampleOnly ? "blocked_sample" : unsafeProof ? "blocked_unsafe" : "hold";
   const unlockSummary: HostedProofOperatorChecklist["unlockSummary"] = marketplacePromotionPass
-    ? "hosted100_hosted300_marketplace_promotion"
-    : hosted300Pass
-      ? "hosted100_hosted300"
-      : hosted100Pass
-        ? "hosted100"
-        : "none";
+    ? "hosted100_hosted300_hosted500_marketplace_promotion"
+    : hosted500Pass
+      ? "hosted100_hosted300_hosted500"
+      : hosted300Pass
+        ? "hosted100_hosted300"
+        : hosted100Pass
+          ? "hosted100"
+          : "none";
   const stillBlockedAfterCommand = operatorStillBlockedAfterCommand({
     sampleOnly,
     unsafeProof,
     hosted100Pass,
     hosted300Pass,
+    hosted500Pass,
     marketplacePromotionPass,
     marketplaceValuesObserved: input.marketplaceValuesObserved,
     missingFields,
@@ -552,11 +638,17 @@ function buildHostedProofOperatorChecklist(input: {
         reason: hosted300Pass ? "production observed proof satisfies the hosted 300-row gate" : hosted100Pass ? "hosted 100 passes, but hosted sellable rows or finding rows are below the 300 gate" : gateHoldReason(sampleOnly, unsafeProof, hostedMissingFields, "hosted 100 must pass before hosted 300 can unlock"),
         required: { sellableRows: 300, sellableFindingRows: 150, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
       },
+      hosted500: {
+        state: hosted500Pass ? "pass" : blockedState,
+        unlocks: hosted500Pass,
+        reason: hosted500Pass ? "production observed proof satisfies the hosted 500-row paid promotion gate" : hosted300Pass ? "hosted 300 passes, but hosted sellable rows or finding rows are below the hosted 500 paid promotion gate" : gateHoldReason(sampleOnly, unsafeProof, hostedMissingFields, "hosted 300 must pass before hosted 500 can unlock"),
+        required: { sellableRows: 500, sellableFindingRows: 275, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
+      },
       marketplacePromotion: {
         state: marketplacePromotionPass ? "pass" : blockedState,
         unlocks: marketplacePromotionPass,
-        reason: marketplacePromotionPass ? "hosted 300 and observed marketplace state allow promotion review" : marketplacePromotionHoldReason(sampleOnly, unsafeProof, hosted300Pass, input.marketplaceValuesObserved, input.observedProof?.publicListingStatus),
-        required: { hosted300: true, payoutEnabled: true, pricingModelObserved: true, analyticsObserved: true, refunds: 0, publicListingState: "public_listed_not_promoted_or_public_promoted" }
+        reason: marketplacePromotionPass ? "hosted 500 and observed marketplace state allow promotion review" : marketplacePromotionHoldReason(sampleOnly, unsafeProof, hosted500Pass, input.marketplaceValuesObserved, input.observedProof?.publicListingStatus),
+        required: { hosted500: true, payoutEnabled: true, pricingModelObserved: true, analyticsObserved: true, refunds: 0, publicListingState: "public_listed_not_promoted_or_public_promoted" }
       }
     },
     copyPasteCommands: input.commandExamples,
@@ -580,10 +672,16 @@ function buildHostedProofOperatorChecklist(input: {
         reason: "a production proof with at least 100 sellable rows and 52 findings unlocks hosted100 while hosted300 stays held below 300 sellable rows"
       },
       {
-        name: "valid_hosted300_marketplace_hold",
+        name: "valid_hosted300_hosted500_hold",
         expectedStatus: "accepted_hold",
         unlockSummary: "hosted100_hosted300",
-        reason: "a production proof with 300 hosted sellable rows and 150 findings still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed"
+        reason: "a production proof with 300 hosted sellable rows and 150 findings still keeps hosted500 held below 500 sellable rows and 275 findings"
+      },
+      {
+        name: "valid_hosted500_marketplace_hold",
+        expectedStatus: "accepted_hold",
+        unlockSummary: "hosted100_hosted300_hosted500",
+        reason: "a production proof with 500 hosted sellable rows and 275 findings still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed"
       },
       {
         name: "invalid_unsafe_no_leak_proof",
@@ -592,6 +690,58 @@ function buildHostedProofOperatorChecklist(input: {
         reason: "any noLeakFailures value above 0 or false-positive inflation failure is rejected by the import checker"
       }
     ]
+  };
+}
+
+function buildConversionPayoutTruth(
+  observedProof: HostedApifyObservedProofImport | undefined,
+  observedFields: Required<HostedApifyProofObservation>,
+  marketplaceValuesObserved: boolean,
+  checklist: HostedProofOperatorChecklist
+): HostedApifyPaidReadinessProof["conversionPayoutTruth"] {
+  const hosted500Pass = checklist.gateEffects.hosted500.unlocks;
+  const analyticsObserved = marketplaceValuesObserved && Boolean(observedProof);
+  const listingStatus = observedProof?.publicListingStatus;
+  const listingObserved = marketplaceValuesObserved && Boolean(listingStatus);
+  const listingBlocked = listingObserved && listingStatus === "draft_copy_ready_not_promoted";
+  return {
+    schemaVersion: "ti.hosted_apify_conversion_payout_truth.v1",
+    observedOnly: true,
+    noSyntheticFallback: true,
+    pricing: {
+      state: marketplaceValuesObserved && observedProof ? "observed" : "external_unknown",
+      value: marketplaceValuesObserved && observedProof ? observedProof.pricingModel : "external_unknown",
+      proofField: "pricingModel",
+      nextOperatorAction: marketplaceValuesObserved ? "retain observed Store pricing evidence with timestamp" : "open Apify Store pricing and import pricingModel from authenticated evidence"
+    },
+    payout: {
+      state: marketplaceValuesObserved && observedProof ? "observed" : "external_unknown",
+      enabled: marketplaceValuesObserved && observedProof ? observedProof.payoutEnabled : "external_unknown",
+      proofField: "payoutEnabled",
+      nextOperatorAction: marketplaceValuesObserved ? "retain observed billing/payout evidence with timestamp" : "open Apify billing/payouts and import payoutEnabled from authenticated evidence"
+    },
+    analytics: {
+      state: analyticsObserved ? "observed" : "external_unknown",
+      storeViews: analyticsObserved && observedProof ? observedProof.storeViews : null,
+      runs: analyticsObserved && observedProof ? observedProof.runs : null,
+      uniqueUsers: analyticsObserved && observedProof ? observedProof.uniqueUsers : null,
+      paidUsers: analyticsObserved && observedProof ? observedProof.paidUsers : null,
+      refunds: analyticsObserved && observedProof ? observedProof.refunds : null,
+      nextOperatorAction: analyticsObserved ? "retain observed Store analytics with timestamp" : "open Apify Store analytics and import views, runs, users, paid users, and refunds from authenticated evidence"
+    },
+    marketplaceListing: {
+      state: listingBlocked ? "blocked" : listingObserved ? "observed" : "external_unknown",
+      publicListingStatus: listingObserved && listingStatus ? listingStatus : "external_unknown",
+      nextOperatorAction: listingBlocked ? "publish or promote listing only after hosted500, payout, pricing, analytics, and refunds are observed" : listingObserved ? "retain observed listing state with timestamp" : "open Apify Store listing and import publicListingStatus from authenticated evidence"
+    },
+    hosted500: {
+      state: hosted500Pass ? "observed" : observedProof ? "blocked" : "external_unknown",
+      requiredSellableRows: 500,
+      requiredSellableFindingRows: 275,
+      observedSellableRows: observedFields.sellableRows,
+      observedSellableFindingRows: observedFields.sellableFindingCount,
+      nextOperatorAction: hosted500Pass ? "retain hosted500 proof and continue marketplace evidence review" : "run or import hosted proof with at least 500 sellable rows, 275 finding rows, no leaks, and zero false-positive inflation failures"
+    }
   };
 }
 
@@ -612,6 +762,7 @@ function operatorStillBlockedAfterCommand(input: {
   unsafeProof: boolean;
   hosted100Pass: boolean;
   hosted300Pass: boolean;
+  hosted500Pass: boolean;
   marketplacePromotionPass: boolean;
   marketplaceValuesObserved: boolean;
   missingFields: string[];
@@ -626,8 +777,9 @@ function operatorStillBlockedAfterCommand(input: {
   if (input.unsafeProof) blockers.push("no-leak and false-positive inflation failures must be zero");
   if (!input.hosted100Pass) blockers.push("hosted100 remains held until a production observed proof reaches 100 sellable rows and 52 finding rows");
   if (input.hosted100Pass && !input.hosted300Pass) blockers.push("hosted300 remains held until a production observed proof reaches 300 sellable rows and 150 finding rows");
-  if (input.hosted300Pass && !input.marketplaceValuesObserved) blockers.push("marketplace analytics, pricing, payout, paid users, runs, and refunds remain external_unknown/null");
-  if (input.hosted300Pass && input.publicListingStatus === "draft_copy_ready_not_promoted") blockers.push("public listing state remains draft_copy_ready_not_promoted");
+  if (input.hosted300Pass && !input.hosted500Pass) blockers.push("hosted500 remains held until a production observed proof reaches 500 sellable rows and 275 finding rows");
+  if (input.hosted500Pass && !input.marketplaceValuesObserved) blockers.push("marketplace analytics, pricing, payout, paid users, runs, and refunds remain external_unknown/null");
+  if (input.hosted500Pass && input.publicListingStatus === "draft_copy_ready_not_promoted") blockers.push("public listing state remains draft_copy_ready_not_promoted");
   if (!input.marketplacePromotionPass) blockers.push("paid marketplace promotion remains blocked");
   return [...new Set(blockers)];
 }
@@ -649,13 +801,13 @@ function gateHoldReason(sampleOnly: boolean, unsafeProof: boolean, missingFields
 function marketplacePromotionHoldReason(
   sampleOnly: boolean,
   unsafeProof: boolean,
-  hosted300Pass: boolean,
+  hosted500Pass: boolean,
   marketplaceValuesObserved: boolean,
   publicListingStatus: HostedApifyObservedProofImport["publicListingStatus"] | undefined
 ): string {
   if (sampleOnly) return "sampleOnly=true imports cannot unlock marketplace promotion";
   if (unsafeProof) return "unsafe proof blocks marketplace promotion";
-  if (!hosted300Pass) return "hosted300 must pass before marketplace promotion can unlock";
+  if (!hosted500Pass) return "hosted500 must pass before marketplace promotion can unlock";
   if (!marketplaceValuesObserved) return "pricing, payout, Store analytics, paid users, runs, and refunds must be observed";
   if (publicListingStatus === "draft_copy_ready_not_promoted") return "listing state is still draft_copy_ready_not_promoted";
   return "marketplace promotion remains held until observed external state is complete";
