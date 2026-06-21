@@ -1,12 +1,13 @@
 import type { ApiServerOptions } from "./serverTypes.ts";
 import { json, numberQuery, readJson } from "./http.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
+import { findSearchCaptures } from "./searchCaptureIndex.ts";
 
 export async function searchResponse(request: Request, options: ApiServerOptions, url: URL): Promise<Response> {
   const body = request.method === "POST" ? await readJson(request) : {};
   const query = String(body.q ?? body.query ?? url.searchParams.get("q") ?? "").trim();
-  const captures = options.store.listCaptures().filter((capture: any) => JSON.stringify(capture).toLowerCase().includes(query.toLowerCase()));
-  const rows = captures.slice(0, numberQuery(url.searchParams.get("limit")) ?? 50).map((capture: any) => rowFromCapture(capture));
+  const captures = findSearchCaptures(options.store, query, numberQuery(url.searchParams.get("limit")) ?? 50);
+  const rows = captures.map((capture: any) => rowFromCapture(capture));
   const provenance = rows.map((row) => ({ evidenceStage: "captured_page", evidenceId: row.id, sourceId: row.sourceId }));
   const status = rows.length ? "ready" : "searching";
   const actorProfile = { query, actor: query, datasets: { evidenceStageCounts: { captured_page: rows.length }, sourceCount: new Set(rows.map((r) => r.sourceId)).size }, provenance };
