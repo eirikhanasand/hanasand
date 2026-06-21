@@ -1,20 +1,12 @@
-Status: active_program_cw_apify_hosted_100_name_run_execution
+Status: ready_for_next_task
 
-# Agent 09 Program CW - Hosted 100-Name Apify Run Execution
+# Agent 09 Summary
 
-You are no longer ready. The next monetization blocker is external proof, not more local contract shape. Own the hosted 100-name run execution/verification lane.
+- Program CW hosted 100-name Apify run execution lane is implemented in the contract and CLI.
+- `bun run check:hosted-apify-paid-readiness` now supports observed-only `plan`, `run`, and `verify` modes, with exact copy/paste commands and `external_token_missing` when `APIFY_TOKEN` is unavailable.
+- `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo`, and Actor `OUTPUT` expose `hostedProofImportPath` with null observed fields until a real hosted run is verified.
+- The old hosted single-query proof is marked historical/shape-safety-only and does not count toward paid promotion.
+- README, launch checklist, API/ops tests, Actor smoke, publication checks, contract index, API regression, and full Bun tests were updated and verified.
+- External blocker remains: run or verify the hosted 100-name Apify Actor with `APIFY_TOKEN`, then separately copy Apify Store analytics, payout, pricing, and refund state before paid promotion.
 
-Target:
-- Produce a real Apify-hosted 100-name run id and dataset id if credentials are available, or a single explicit `external_token_missing` blocker with exact copy/paste commands for the user.
-- Capture hosted row count, sellable count, sellable finding count, caveated count, average buyer value, runtime, memory, usage cost, and no-leak proof.
-- Do not infer marketplace views, paid users, revenue, or payout readiness.
-
-Implement:
-- Extend `bun run check:hosted-apify-paid-readiness` so it can optionally run or verify the hosted Actor using environment-provided credentials and otherwise remains fail-honest.
-- Add a compact hosted proof import path to `/v1/contracts#apifyStoreReadiness` and `/v1/ops/product-slo`: observed fields only, timestamped, with old proof marked historical.
-- Update README/launch checklist only with commands and observed-proof wording, not projections.
-- Ensure the Actor's default input used for hosted proof is the 100-name paid preset with `includeCoverageGaps=false` and no held rows by default.
-
-Verification:
-- Run hosted-readiness check, publication check, Actor check/smoke, API/ops tests, contract index, API regression, and full `bun test` if contracts change.
-- Commit and push. If credentials are missing, leave the repo green with a precise external blocker.
+Requesting the next Agent 09 API/product-surface task.

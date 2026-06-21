@@ -1647,6 +1647,8 @@ const latestHostedProof = hostedPaidReadinessProof?.latestHostedProof as Record<
 const hostedMarketplaceInputs = hostedPaidReadinessProof?.marketplaceConversionInputs as Record<string, unknown> | undefined;
 const hostedPaidAcceptance = hostedPaidReadinessProof?.paidProofAcceptance as Record<string, unknown> | undefined;
 const hostedPaidIntegrityGate = hostedPaidReadinessProof?.paidRowIntegrityGate as Record<string, unknown> | undefined;
+const hostedProofImportPath = hostedPaidReadinessProof?.hostedProofImportPath as Record<string, unknown> | undefined;
+const hostedProofObservedFields = hostedProofImportPath?.observedFields as Record<string, unknown> | undefined;
 if (
   !hostedPaidReadinessProof
   || hostedPaidReadinessProof.schemaVersion !== "ti.hosted_apify_paid_readiness_proof.v1"
@@ -1659,10 +1661,25 @@ if (
   || hostedPaidLocalProof.sellableRows !== 187
   || hostedPaidLocalProof.countsTowardPaidPromotion !== false
   || !latestHostedProof
+  || latestHostedProof.historical !== true
   || latestHostedProof.runId !== "OThlfd0uzSCNnedAO"
   || latestHostedProof.querySetCount !== 1
   || latestHostedProof.sellableRows !== 4
+  || latestHostedProof.paidFloorProof !== false
   || latestHostedProof.countsTowardPaidPromotion !== false
+  || !hostedProofImportPath
+  || hostedProofImportPath.schemaVersion !== "ti.hosted_apify_proof_import_path.v1"
+  || hostedProofImportPath.mode !== "run_or_verify_with_apify_token"
+  || hostedProofImportPath.observedOnly !== true
+  || hostedProofImportPath.noSyntheticFallback !== true
+  || hostedProofImportPath.oldProofTreatment !== "historical_shape_safety_only"
+  || hostedProofImportPath.externalBlocker !== "external_token_missing"
+  || !hostedProofObservedFields
+  || hostedProofObservedFields.runId !== null
+  || hostedProofObservedFields.datasetId !== null
+  || hostedProofObservedFields.sellableRows !== null
+  || hostedProofObservedFields.sellableFindingCount !== null
+  || hostedProofObservedFields.secondBatchAuditObserved !== false
   || !hostedMarketplaceInputs
   || hostedMarketplaceInputs.storeViews !== null
   || hostedMarketplaceInputs.runs !== null
@@ -1686,6 +1703,10 @@ if (
   || hostedPaidIntegrityGate.caveatedRowsCountTowardChargeable !== false
 ) {
   throw new Error("Hosted paid-readiness proof must keep local and single-query hosted proof out of paid promotion until 100-name hosted Apify metrics are observed");
+}
+const hostedProofCommandExamples = hostedProofImportPath.commandExamples as string[] | undefined;
+if (!hostedProofCommandExamples?.join(" ").includes("TI_APIFY_HOSTED_PROOF_MODE=run")) {
+  throw new Error("Hosted paid-readiness proof must expose copy/paste hosted run and verify commands");
 }
 const hostedRequiredZeroCounts = hostedPaidIntegrityGate.requiredZeroCounts as Record<string, unknown> | undefined;
 for (const field of [

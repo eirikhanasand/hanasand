@@ -662,11 +662,38 @@ describe("api v1", () => {
         countsTowardPaidPromotion: false
       },
       latestHostedProof: {
+        historical: true,
         runId: "OThlfd0uzSCNnedAO",
         querySetCount: 1,
         sellableRows: 4,
         proofDecision: "shape_safety_proof",
+        paidFloorProof: false,
         countsTowardPaidPromotion: false
+      },
+      hostedProofImportPath: {
+        schemaVersion: "ti.hosted_apify_proof_import_path.v1",
+        mode: "run_or_verify_with_apify_token",
+        observedOnly: true,
+        noSyntheticFallback: true,
+        oldProofTreatment: "historical_shape_safety_only",
+        externalBlocker: "external_token_missing",
+        observedFields: {
+          runId: null,
+          datasetId: null,
+          datasetItemCount: null,
+          sellableRows: null,
+          sellableFindingCount: null,
+          caveatedRows: null,
+          averageBuyerValueScore: null,
+          runtimeSeconds: null,
+          memoryMbytes: null,
+          usageUsd: null,
+          costUsd: null,
+          noLeakFailures: null,
+          secondBatchAuditObserved: false,
+          falsePositiveInflationFailures: null,
+          lastVerifiedAt: null
+        }
       },
       paidProofAcceptance: {
         minimumSellableRows: 100,
@@ -704,6 +731,12 @@ describe("api v1", () => {
     expect(hostedPaidReadinessProof.paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
     expect(hostedPaidReadinessProof.paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
     expect(hostedPaidReadinessProof.paidRowIntegrityGate.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, actorInteractionContentExposed: false });
+    const hostedProofImportPath = (hostedPaidReadinessProof as unknown as { hostedProofImportPath: { commandExamples: string[]; requiredEnvironment: string[] } }).hostedProofImportPath;
+    expect(hostedProofImportPath.commandExamples).toEqual(expect.arrayContaining([
+      "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
+      "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness"
+    ]));
+    expect(hostedProofImportPath.requiredEnvironment).toEqual(expect.arrayContaining(["APIFY_TOKEN", "TI_APIFY_HOSTED_PROOF_MODE=run|verify"]));
     expect(hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("100-name");
     expect(hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("secondBatchAudit");
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
@@ -4781,10 +4814,27 @@ describe("api v1", () => {
         countsTowardPaidPromotion: false
       },
       latestHostedProof: {
+        historical: true,
         runId: "OThlfd0uzSCNnedAO",
         querySetCount: 1,
         sellableRows: 4,
+        paidFloorProof: false,
         countsTowardPaidPromotion: false
+      },
+      hostedProofImportPath: {
+        schemaVersion: "ti.hosted_apify_proof_import_path.v1",
+        observedOnly: true,
+        noSyntheticFallback: true,
+        oldProofTreatment: "historical_shape_safety_only",
+        externalBlocker: "external_token_missing",
+        observedFields: {
+          runId: null,
+          datasetId: null,
+          sellableRows: null,
+          sellableFindingCount: null,
+          secondBatchAuditObserved: false,
+          lastVerifiedAt: null
+        }
       },
       paidProofAcceptance: {
         minimumSellableRows: 100,
@@ -4821,6 +4871,7 @@ describe("api v1", () => {
     });
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { requiredSignals: string[]; blockers: string[]; noLeakProof: Record<string, boolean> } }).paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { blockers: string[] } }).paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
+    expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofImportPath: { commandExamples: string[] } }).hostedProofImportPath.commandExamples.join(" ")).toContain("TI_APIFY_HOSTED_PROOF_MODE=run");
     const readinessStoreReadiness = apifyStoreReadiness.storeReadiness as typeof apifyStoreReadiness.storeReadiness & {
       hostedPaidReadinessProof: Record<string, unknown>;
     };
@@ -4830,6 +4881,12 @@ describe("api v1", () => {
       command: "bun run check:hosted-apify-paid-readiness",
       paidTrafficAllowed: false,
       countsTowardPaidPromotion: false,
+      hostedProofImportPath: {
+        schemaVersion: "ti.hosted_apify_proof_import_path.v1",
+        observedOnly: true,
+        oldProofTreatment: "historical_shape_safety_only",
+        externalBlocker: "external_token_missing"
+      },
       paidRowIntegrityGate: {
         schemaVersion: "ti.program_cp_hosted_paid_row_integrity_gate.v1",
         sourceProofField: "falsePositiveSuppressionGate.programCpHardening.secondBatchAudit",

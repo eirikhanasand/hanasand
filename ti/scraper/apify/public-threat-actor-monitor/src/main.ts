@@ -4386,6 +4386,7 @@ function hostedApifyPaidReadinessProof() {
     },
     latestHostedProof: {
       source: "Apify hosted single-query shape/safety proof",
+      historical: true,
       runId: "OThlfd0uzSCNnedAO",
       datasetId: "LSen2fYtwFTtOr7vK",
       querySetCount: 1,
@@ -4399,7 +4400,45 @@ function hostedApifyPaidReadinessProof() {
       usageUsd: null,
       costUsd: null,
       proofDecision: "shape_safety_proof",
+      paidFloorProof: false,
       countsTowardPaidPromotion: false
+    },
+    hostedProofImportPath: {
+      schemaVersion: "ti.hosted_apify_proof_import_path.v1",
+      mode: "run_or_verify_with_apify_token",
+      observedOnly: true,
+      noSyntheticFallback: true,
+      oldProofTreatment: "historical_shape_safety_only",
+      externalBlocker: tokenState === "external_token_missing" ? "external_token_missing" : "hosted_100_name_run_not_observed",
+      commandExamples: [
+        "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
+        "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
+        "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_DATASET_ID=<dataset id> bun run check:hosted-apify-paid-readiness"
+      ],
+      requiredEnvironment: [
+        "APIFY_TOKEN",
+        "TI_APIFY_ACTOR_ID=eirikhanasand/public-threat-actor-monitor",
+        "TI_APIFY_HOSTED_PROOF_MODE=run|verify",
+        "TI_APIFY_HOSTED_RUN_ID=<run id for verify mode>",
+        "TI_APIFY_HOSTED_DATASET_ID=<dataset id when run metadata is unavailable>"
+      ],
+      observedFields: {
+        runId: null,
+        datasetId: null,
+        datasetItemCount: null,
+        sellableRows: null,
+        sellableFindingCount: null,
+        caveatedRows: null,
+        averageBuyerValueScore: null,
+        runtimeSeconds: null,
+        memoryMbytes: null,
+        usageUsd: null,
+        costUsd: null,
+        noLeakFailures: null,
+        secondBatchAuditObserved: false,
+        falsePositiveInflationFailures: null,
+        lastVerifiedAt: null
+      }
     },
     requiredHostedPreset: {
       defaultQueryCount: 100,
@@ -4465,6 +4504,7 @@ function hostedApifyPaidReadinessProof() {
     manualVerificationSteps: [
       "Publish or rebuild eirikhanasand/public-threat-actor-monitor from the current Actor package.",
       "Start a hosted Apify run with the default 100-name input: no custom query list, maxRowsPerQuery=25, includeCoverageGaps=false, includeHeldRows=false, includeDatasets=false.",
+      "Use APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness to run the hosted proof, or TI_APIFY_HOSTED_PROOF_MODE=verify with TI_APIFY_HOSTED_RUN_ID=<run id> to import observed fields.",
       "Record run id, default dataset id, dataset item count, sellable rows, sellable finding count, caveated rows, average buyer value, runtime, memory, usage cost, and no-leak result.",
       "Compare hosted OUTPUT falsePositiveSuppressionGate.programCpHardening.secondBatchAudit against the paid-row integrity gate: source-provenance rows do not count as findings, and stale/latest, alias/wrong-actor, generic-source-page, graph-only, restricted-only, and caveated-as-chargeable failures are zero.",
       "Record Store views, runs, unique users, paid users, refunds, payout enabled, pricing model, and last verified timestamp only from Apify."
