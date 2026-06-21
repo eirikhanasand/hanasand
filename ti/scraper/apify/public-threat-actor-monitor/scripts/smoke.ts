@@ -10,7 +10,7 @@ await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify
   includeDatasets: true,
   includeCoverageGaps: true,
   includeHeldRows: true,
-  maxRowsPerQuery: 22
+  maxRowsPerQuery: 23
 }, null, 2));
 
 const proc = Bun.spawn({
@@ -85,17 +85,17 @@ if (
 ) {
   throw new Error("OUTPUT record must expose paid-row quality counts");
 }
-if (Number(paidRowQuality.sellable) < 18 || Number(paidRowQuality.usefulForBuyer) < 19) {
-  throw new Error("APT42 daily collection smoke must keep at least 18 sellable and 19 buyer-useful candidate rows after row prioritization");
+if (Number(paidRowQuality.sellable) < 19 || Number(paidRowQuality.usefulForBuyer) < 20) {
+  throw new Error("APT42 daily collection smoke must keep at least 19 sellable and 20 buyer-useful candidate rows after row prioritization");
 }
 const dailyCollectionRun = outputRecord.dailyCollectionRun as Record<string, unknown> | undefined;
 if (
   !dailyCollectionRun
   || dailyCollectionRun.schemaVersion !== "ti.apify_daily_collection_run.v1"
   || dailyCollectionRun.preset !== "100-name-default-watchlist"
-  || Number(dailyCollectionRun.candidateRowsProduced) < 19
-  || Number(dailyCollectionRun.freshCandidateRowsProduced) < 19
-  || Number(dailyCollectionRun.sellableRowsProduced) < 18
+  || Number(dailyCollectionRun.candidateRowsProduced) < 20
+  || Number(dailyCollectionRun.freshCandidateRowsProduced) < 20
+  || Number(dailyCollectionRun.sellableRowsProduced) < 19
   || !Array.isArray(dailyCollectionRun.refreshedSources)
   || dailyCollectionRun.refreshedSources.length < 3
 ) {

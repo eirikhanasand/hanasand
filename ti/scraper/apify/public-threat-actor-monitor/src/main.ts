@@ -3037,6 +3037,15 @@ function parserLiveCurrentAdmissionRows(
       affectedSectors: [sector],
       countries: [country],
       impact: `${impact}; defender follow-up candidate`
+    },
+    {
+      id: "dataset-claim",
+      title: `${response.query} dataset-claim current parser admission`,
+      summary: `The hosted caveated dataset signal becomes a chargeable finding because the parser attaches ${response.query}, ${sector}, ${country}, ${ttp.name}, public source support, reporting dates, confidence, and a buyer follow-up action.`,
+      victimName: `${sector} dataset claim reviewers`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; dataset claim converted from caveated hosted row`
     }
   ];
 
