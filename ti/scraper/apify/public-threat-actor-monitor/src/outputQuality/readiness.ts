@@ -1,13 +1,13 @@
 import type { MarketplaceRow } from "../types.ts";
 import type { paidRowQualitySummary } from "../outputQuality.ts";
 
-export const PRODUCTION_SELLABLE_ROW_FLOOR = 100;
+export const PRODUCTION_SELLABLE_ROW_FLOOR = 400;
 
 export function monetizationReadinessForRows(rows: MarketplaceRow[], quality: ReturnType<typeof paidRowQualitySummary>) {
   const rateTargetSellableRows = Math.ceil(rows.length * 0.25);
   const targetSellableRows = Math.max(PRODUCTION_SELLABLE_ROW_FLOOR, rateTargetSellableRows);
   const blockers = [
-    quality.sellable < PRODUCTION_SELLABLE_ROW_FLOOR ? "sellable_rows_below_100_production_floor" : null,
+    quality.sellable < PRODUCTION_SELLABLE_ROW_FLOOR ? "sellable_rows_below_400_production_floor" : null,
     quality.sellable < targetSellableRows ? "sellable_rows_below_paid_traffic_floor" : null,
     quality.averageBuyerValueScore < 0.55 ? "average_buyer_value_below_listing_floor" : null,
     quality.usefulForBuyer === 0 ? "no_buyer_useful_rows" : null
@@ -23,7 +23,7 @@ export function monetizationReadinessForRows(rows: MarketplaceRow[], quality: Re
     blockers,
     currentProductionFloorProgress: Number((quality.sellable / PRODUCTION_SELLABLE_ROW_FLOOR).toFixed(3)),
     nextRevenueAction: blockers.includes("sellable_rows_below_paid_traffic_floor")
-      ? "add_or_repair live corroborating sources until at least 100 output rows are chargeable findings and at least 25 percent of rows are sellable"
+      ? "add or repair live sources until at least 400 output rows are chargeable findings and at least 25 percent of rows are sellable"
       : "send paid traffic and measure Apify views, starts, dataset rows, and repeat runs"
   };
 }
