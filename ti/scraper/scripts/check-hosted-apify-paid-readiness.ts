@@ -66,7 +66,8 @@ try {
   const message = errorMessage(error);
   const proof = buildHostedApifyPaidReadinessProof({
     hasToken: Boolean(token),
-    status: token ? "hosted_proof_missing" : "external_token_missing"
+    status: token ? "hosted_proof_missing" : "external_token_missing",
+    readObservedProofFromEnvironment: false
   });
   const payload = buildPayload(proof, actorId, runId, datasetId, mode, undefined, message);
   assertPaidRowIntegrityGate(payload.paidRowIntegrityGate);

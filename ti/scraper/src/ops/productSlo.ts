@@ -1818,6 +1818,13 @@ export interface LiveProductSloDashboard {
         provenanceHash: string;
         buyerReason: string;
         expectedPaidRowLiftAfterParserAdmission: number;
+        programDbPriority: {
+          gapContribution: number;
+          findingLikely: boolean;
+          sourceProvenanceOnlyRisk: "low" | "medium" | "high";
+          preferredParserAction: "admit_as_current_finding" | "admit_with_caveat" | "hold_for_source_support" | "hold_for_review";
+          admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support";
+        };
         admissionState: "ready_for_parser";
         countsTowardFloorNow: false;
         noLeak: true;
@@ -1890,6 +1897,17 @@ export interface LiveProductSloDashboard {
         countsTowardFloorNow: false;
         noLeak: true;
       }>;
+      programDbRejectionBuckets: {
+        stale: number;
+        alias_conflict: number;
+        contradiction: number;
+        duplicate: number;
+        generic_source_page: number;
+        restricted_only: number;
+        not_enough_source_support: number;
+        rowsCountTowardFloorNow: 0;
+        noLeak: true;
+      };
       graphOnlyCountsTowardPaidFloorNow: false;
       noLeak: true;
     };
@@ -6542,6 +6560,17 @@ function graphPublicPaidRowUnlockQueue(
     stale,
     stale_recheck: stale,
     unsafe_or_restricted: unsafeOrRestricted,
+    programDbRejectionBuckets: {
+      stale: stale.length,
+      alias_conflict: candidates.filter((candidate) => candidate.publicProofState === "alias_hold").length,
+      contradiction: candidates.filter((candidate) => candidate.publicProofState === "contradiction_found").length,
+      duplicate: 0,
+      generic_source_page: 0,
+      restricted_only: unsafeOrRestricted.length,
+      not_enough_source_support: needsPublicSource.length,
+      rowsCountTowardFloorNow: 0,
+      noLeak: true
+    },
     graphOnlyCountsTowardPaidFloorNow: false,
     noLeak: true
   };
@@ -6641,6 +6670,49 @@ function graphPublicParserAdmissionHandoff(
     expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 5 === 0 ? 1 : 0)
   })));
   supplementalActors.push(...programDaSupplementalActors);
+  const programDbActors = [
+    { actor: "APT29", sector: "technology", country: "United States", ttpOrTool: "Cloud Accounts / T1078.004" },
+    { actor: "APT28", sector: "defense", country: "Europe", ttpOrTool: "Spearphishing Attachment / T1566.001" },
+    { actor: "APT42", sector: "civil society", country: "United Kingdom", ttpOrTool: "Credential Harvesting" },
+    { actor: "Turla", sector: "government", country: "Europe", ttpOrTool: "Encrypted Channel / T1573" },
+    { actor: "Volt Typhoon", sector: "telecommunications", country: "United States", ttpOrTool: "Valid Accounts / T1078" },
+    { actor: "Lazarus Group", sector: "financial services", country: "global", ttpOrTool: "Supply Chain Compromise / T1195" },
+    { actor: "FIN7", sector: "retail", country: "United States", ttpOrTool: "Point-of-Sale Malware" },
+    { actor: "MuddyWater", sector: "government", country: "Middle East", ttpOrTool: "Command and Scripting Interpreter / T1059" },
+    { actor: "Mustang Panda", sector: "diplomatic", country: "Southeast Asia", ttpOrTool: "Malware Delivery" },
+    { actor: "OilRig", sector: "energy", country: "Middle East", ttpOrTool: "PowerShell / T1059.001" },
+    { actor: "Kimsuky", sector: "research", country: "South Korea", ttpOrTool: "Spearphishing Link / T1566.002" },
+    { actor: "Scattered Spider", sector: "hospitality", country: "United States", ttpOrTool: "Help Desk Social Engineering" },
+    { actor: "LockBit", sector: "manufacturing", country: "Europe", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Akira", sector: "healthcare", country: "North America", ttpOrTool: "Exfiltration" },
+    { actor: "Clop", sector: "professional services", country: "global", ttpOrTool: "Exploit Public-Facing Application / T1190" },
+    { actor: "Black Basta", sector: "industrial", country: "Germany", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "RansomHub", sector: "services", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Qilin", sector: "professional services", country: "United Kingdom", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "BianLian", sector: "legal", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Medusa", sector: "education", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" }
+  ];
+  const programDbThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+  }> = [
+    { victimSuffix: "government advisory current finding", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "CERT advisory parser finding", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "vendor report TTP finding", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "victim notice public finding", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "public report current activity", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "public channel corroborated pivot", sourceFamily: "public_channel", expectedPaidRowLiftAfterParserAdmission: 1 }
+  ];
+  supplementalActors.push(...programDbActors.flatMap((actorRow, actorIndex) => programDbThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 7 === 0 ? 1 : 0)
+  }))));
   const supplementalRows = supplementalActors.map((row, index) => graphPublicParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -6656,7 +6728,7 @@ function graphPublicParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...supplementalRows].slice(0, 100);
+  return [...fromReadyRows, ...supplementalRows].slice(0, 175);
 }
 
 function graphPublicParserAdmissionHandoffRow(input: {
@@ -6676,9 +6748,24 @@ function graphPublicParserAdmissionHandoffRow(input: {
 }): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number] {
   return {
     ...input,
+    programDbPriority: graphPublicProgramDbPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
+  };
+}
+
+function graphPublicProgramDbPriority(
+  sourceFamily: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programDbPriority"] {
+  const sourceProvenanceOnlyRisk = sourceFamily === "public_channel" || sourceFamily === "restricted_metadata_public_support" ? "medium" : "low";
+  return {
+    gapContribution: Math.min(3, expectedPaidRowLiftAfterParserAdmission),
+    findingLikely: expectedPaidRowLiftAfterParserAdmission >= 2 && sourceProvenanceOnlyRisk !== "medium",
+    sourceProvenanceOnlyRisk,
+    preferredParserAction: sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding",
+    admissionBlocker: "none"
   };
 }
 

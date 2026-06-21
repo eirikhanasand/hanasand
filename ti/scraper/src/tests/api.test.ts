@@ -646,6 +646,20 @@ describe("api v1", () => {
           noLeakProof: Record<string, boolean>;
         };
         marketplaceConversionInputs: Record<string, null | string | boolean>;
+        hostedProofOperatorChecklist: {
+          schemaVersion: string;
+          status: string;
+          missingFields: string[];
+          acceptedObservedFields: string[];
+          sampleOnly: boolean;
+          unlockSummary: string;
+          gateEffects: {
+            hosted100: { state: string; unlocks: boolean };
+            hosted300: { state: string; unlocks: boolean };
+            marketplacePromotion: { state: string; unlocks: boolean };
+          };
+          validationExamples: Array<{ name: string; unlockSummary: string; expectedStatus: string }>;
+        };
         manualVerificationSteps: string[];
       };
     }).hostedPaidReadinessProof;
@@ -734,8 +748,23 @@ describe("api v1", () => {
         pricingModel: "external_unknown",
         publicListingStatus: "draft_copy_ready_not_promoted",
         unknownMeansNoClaim: true
+      },
+      hostedProofOperatorChecklist: {
+        schemaVersion: "ti.hosted_apify_proof_operator_checklist.v1",
+        status: "missing_proof",
+        acceptedObservedFields: [],
+        sampleOnly: false,
+        unlockSummary: "none",
+        gateEffects: {
+          hosted100: { state: "hold", unlocks: false },
+          hosted300: { state: "hold", unlocks: false },
+          marketplacePromotion: { state: "hold", unlocks: false }
+        }
       }
     });
+    expect(hostedPaidReadinessProof.hostedProofOperatorChecklist.missingFields).toEqual(expect.arrayContaining(["runId", "datasetId", "sellableRows", "pricingModel", "payoutEnabled", "observedAt"]));
+    expect(hostedPaidReadinessProof.hostedProofOperatorChecklist.validationExamples.map((example) => example.name)).toEqual(expect.arrayContaining(["missing_proof", "sample_proof_rejected_for_promotion", "valid_hosted100_hosted300_hold", "valid_hosted300_marketplace_hold", "invalid_unsafe_no_leak_proof"]));
+    expect(hostedPaidReadinessProof.hostedProofOperatorChecklist.validationExamples.find((example) => example.name === "sample_proof_rejected_for_promotion")).toMatchObject({ expectedStatus: "accepted_sample_no_unlock", unlockSummary: "none" });
     expect(hostedPaidReadinessProof.paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
     expect(hostedPaidReadinessProof.paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
     expect(hostedPaidReadinessProof.paidRowIntegrityGate.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, actorInteractionContentExposed: false });
@@ -1748,11 +1777,13 @@ describe("api v1", () => {
     expect(graphPublicPivots.filter((row) => row.publicProofState === "public_proof_found").every((row) => row.countsTowardProductionSellableRowsAfterParserAdmission === true)).toBe(true);
     expect(graphPublicPivots.filter((row) => row.publicProofState === "queued_for_search").every((row) => row.measuredRowsUnlockedForParserAdmission === 0)).toBe(true);
     expect(graphPublicPivots.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) => row.expectedSellableRowsUnlockedAfterPublicProof === 0 && ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) && ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk))).toBe(true);
-    const graphPublicUnlockQueue = (response.graphPublicCorroborationPivotPacket as { paidRowUnlockQueue: { counts: { admitted_by_parser: number; ready_for_parser: number; ready_for_current_admission: number; ready_for_parser_admission: number; needs_public_source: number; contradicted: number; contradicted_or_alias_hold: number; stale: number; stale_recheck: number; unsafe_or_restricted: number; rowsCountTowardFloorNow: number; rowsReadyAfterParserAdmission: number }; parserAdmissionHandoff: Array<{ actor: string; victimOrTarget: string; sourceFamily: string; freshnessAgeDays: number; contradictionState: string; provenanceHash: string; buyerReason: string; expectedPaidRowLiftAfterParserAdmission: number; admissionState: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_current_admission: Array<{ actor: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_parser_admission: Array<{ expectedRowsUnlockedAfterParserAdmission: number; countsTowardFloorNow: boolean; proofUrlHash: string; noLeak: boolean }>; needs_public_source: Array<{ sourceClass: string; countsTowardFloorNow: boolean; noLeak: boolean }>; contradicted_or_alias_hold: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; stale_recheck: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; graphOnlyCountsTowardPaidFloorNow: boolean; noLeak: boolean } }).paidRowUnlockQueue;
-    expect(graphPublicUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 100, ready_for_current_admission: 100, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
-    expect(graphPublicUnlockQueue.parserAdmissionHandoff).toHaveLength(100);
-    expect(graphPublicUnlockQueue.ready_for_current_admission).toHaveLength(100);
-    expect(graphPublicUnlockQueue.parserAdmissionHandoff.every((row) => row.actor.length > 0 && row.victimOrTarget.length > 0 && row.sourceFamily.length > 0 && row.freshnessAgeDays >= 0 && row.contradictionState.length > 0 && row.provenanceHash.length > 0 && row.buyerReason.length > 0 && row.expectedPaidRowLiftAfterParserAdmission > 0 && row.admissionState === "ready_for_parser" && row.countsTowardFloorNow === false && row.noLeak)).toBe(true);
+    const graphPublicUnlockQueue = (response.graphPublicCorroborationPivotPacket as { paidRowUnlockQueue: { counts: { admitted_by_parser: number; ready_for_parser: number; ready_for_current_admission: number; ready_for_parser_admission: number; needs_public_source: number; contradicted: number; contradicted_or_alias_hold: number; stale: number; stale_recheck: number; unsafe_or_restricted: number; rowsCountTowardFloorNow: number; rowsReadyAfterParserAdmission: number }; parserAdmissionHandoff: Array<{ actor: string; victimOrTarget: string; sourceFamily: string; freshnessAgeDays: number; contradictionState: string; provenanceHash: string; buyerReason: string; expectedPaidRowLiftAfterParserAdmission: number; programDbPriority: { gapContribution: number; findingLikely: boolean; sourceProvenanceOnlyRisk: string; preferredParserAction: string; admissionBlocker: string }; admissionState: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_current_admission: Array<{ actor: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_parser_admission: Array<{ expectedRowsUnlockedAfterParserAdmission: number; countsTowardFloorNow: boolean; proofUrlHash: string; noLeak: boolean }>; needs_public_source: Array<{ sourceClass: string; countsTowardFloorNow: boolean; noLeak: boolean }>; contradicted_or_alias_hold: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; stale_recheck: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; programDbRejectionBuckets: Record<string, number | boolean>; graphOnlyCountsTowardPaidFloorNow: boolean; noLeak: boolean } }).paidRowUnlockQueue;
+    expect(graphPublicUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 175, ready_for_current_admission: 175, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
+    expect(graphPublicUnlockQueue.parserAdmissionHandoff).toHaveLength(175);
+    expect(graphPublicUnlockQueue.ready_for_current_admission).toHaveLength(175);
+    expect(graphPublicUnlockQueue.parserAdmissionHandoff.every((row) => row.actor.length > 0 && row.victimOrTarget.length > 0 && row.sourceFamily.length > 0 && row.freshnessAgeDays >= 0 && row.contradictionState.length > 0 && row.provenanceHash.length > 0 && row.buyerReason.length > 0 && row.expectedPaidRowLiftAfterParserAdmission > 0 && row.programDbPriority.gapContribution > 0 && row.programDbPriority.admissionBlocker === "none" && row.admissionState === "ready_for_parser" && row.countsTowardFloorNow === false && row.noLeak)).toBe(true);
+    expect(graphPublicUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDbPriority.findingLikely)).toHaveLength(95);
+    expect(graphPublicUnlockQueue.programDbRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, rowsCountTowardFloorNow: 0, noLeak: true });
     expect(graphPublicUnlockQueue.ready_for_parser_admission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(25);
     expect(graphPublicUnlockQueue.ready_for_parser_admission.every((row) => row.countsTowardFloorNow === false && row.proofUrlHash.length > 0 && row.noLeak)).toBe(true);
     expect(graphPublicUnlockQueue.needs_public_source.some((row) => row.sourceClass === "restricted_metadata_public_support")).toBe(true);
@@ -4960,12 +4991,25 @@ describe("api v1", () => {
         pricingModel: "external_unknown",
         publicListingStatus: "draft_copy_ready_not_promoted",
         unknownMeansNoClaim: true
+      },
+      hostedProofOperatorChecklist: {
+        schemaVersion: "ti.hosted_apify_proof_operator_checklist.v1",
+        status: "missing_proof",
+        sampleOnly: false,
+        unlockSummary: "none",
+        gateEffects: {
+          hosted100: { state: "hold", unlocks: false },
+          hosted300: { state: "hold", unlocks: false },
+          marketplacePromotion: { state: "hold", unlocks: false }
+        }
       }
     });
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { requiredSignals: string[]; blockers: string[]; noLeakProof: Record<string, boolean> } }).paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { blockers: string[] } }).paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofImportPath: { commandExamples: string[]; observedProofImport: { validationState: string } } }).hostedProofImportPath.commandExamples.join(" ")).toContain("TI_APIFY_OBSERVED_PROOF_PATH");
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofImportPath: { observedProofImport: { validationState: string } } }).hostedProofImportPath.observedProofImport.validationState).toBe("missing");
+    expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofOperatorChecklist: { missingFields: string[]; validationExamples: Array<{ name: string }> } }).hostedProofOperatorChecklist.missingFields).toEqual(expect.arrayContaining(["runId", "datasetId", "pricingModel", "payoutEnabled", "observedAt"]));
+    expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofOperatorChecklist: { validationExamples: Array<{ name: string }> } }).hostedProofOperatorChecklist.validationExamples.map((example) => example.name)).toEqual(expect.arrayContaining(["sample_proof_rejected_for_promotion", "valid_hosted100_hosted300_hold", "valid_hosted300_marketplace_hold", "invalid_unsafe_no_leak_proof"]));
     const readinessStoreReadiness = apifyStoreReadiness.storeReadiness as typeof apifyStoreReadiness.storeReadiness & {
       hostedPaidReadinessProof: Record<string, unknown>;
     };
@@ -4982,6 +5026,16 @@ describe("api v1", () => {
         externalBlocker: "external_token_missing",
         observedProofImport: {
           validationState: "missing"
+        }
+      },
+      hostedProofOperatorChecklist: {
+        schemaVersion: "ti.hosted_apify_proof_operator_checklist.v1",
+        status: "missing_proof",
+        unlockSummary: "none",
+        gateEffects: {
+          hosted100: { state: "hold", unlocks: false },
+          hosted300: { state: "hold", unlocks: false },
+          marketplacePromotion: { state: "hold", unlocks: false }
         }
       },
       paidRowIntegrityGate: {

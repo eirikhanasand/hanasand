@@ -1746,6 +1746,13 @@ interface GraphPublicCorroborationPivotPacket {
       provenanceHash: string;
       buyerReason: string;
       expectedPaidRowLiftAfterParserAdmission: number;
+      programDbPriority: {
+        gapContribution: number;
+        findingLikely: boolean;
+        sourceProvenanceOnlyRisk: "low" | "medium" | "high";
+        preferredParserAction: "admit_as_current_finding" | "admit_with_caveat" | "hold_for_source_support" | "hold_for_review";
+        admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support";
+      };
       admissionState: "ready_for_parser";
       countsTowardFloorNow: false;
       noLeak: true;
@@ -1818,6 +1825,17 @@ interface GraphPublicCorroborationPivotPacket {
       countsTowardFloorNow: false;
       noLeak: true;
     }>;
+    programDbRejectionBuckets: {
+      stale: number;
+      alias_conflict: number;
+      contradiction: number;
+      duplicate: number;
+      generic_source_page: number;
+      restricted_only: number;
+      not_enough_source_support: number;
+      rowsCountTowardFloorNow: 0;
+      noLeak: true;
+    };
     graphOnlyCountsTowardPaidFloorNow: false;
     noLeak: true;
   };
@@ -4601,6 +4619,112 @@ function hostedApifyPaidReadinessProof() {
         validationState: "missing",
         validationErrors: []
       }
+    },
+    hostedProofOperatorChecklist: {
+      schemaVersion: "ti.hosted_apify_proof_operator_checklist.v1",
+      status: "missing_proof",
+      requiredFields: [
+        "schemaVersion",
+        "runId",
+        "datasetId",
+        "proofPreset",
+        "defaultQueryCount",
+        "maxRowsPerQuery",
+        "includeCoverageGaps",
+        "includeHeldRows",
+        "includeDatasets",
+        "datasetItemCount",
+        "sellableRows",
+        "sellableFindingCount",
+        "caveatedRows",
+        "averageBuyerValueScore",
+        "runtimeSeconds",
+        "memoryMbytes",
+        "usageUsd",
+        "costUsd",
+        "noLeakFailures",
+        "secondBatchAuditObserved",
+        "falsePositiveInflationFailures",
+        "storeViews",
+        "runs",
+        "uniqueUsers",
+        "paidUsers",
+        "refunds",
+        "pricingModel",
+        "payoutEnabled",
+        "publicListingStatus",
+        "observedAt"
+      ],
+      missingFields: [
+        "schemaVersion",
+        "runId",
+        "datasetId",
+        "proofPreset",
+        "defaultQueryCount",
+        "maxRowsPerQuery",
+        "includeCoverageGaps",
+        "includeHeldRows",
+        "includeDatasets",
+        "datasetItemCount",
+        "sellableRows",
+        "sellableFindingCount",
+        "caveatedRows",
+        "averageBuyerValueScore",
+        "runtimeSeconds",
+        "memoryMbytes",
+        "usageUsd",
+        "costUsd",
+        "noLeakFailures",
+        "secondBatchAuditObserved",
+        "falsePositiveInflationFailures",
+        "storeViews",
+        "runs",
+        "uniqueUsers",
+        "paidUsers",
+        "refunds",
+        "pricingModel",
+        "payoutEnabled",
+        "publicListingStatus",
+        "observedAt"
+      ],
+      acceptedObservedFields: [],
+      lastObservedTimestamp: null,
+      sampleOnly: false,
+      unlockSummary: "none",
+      gateEffects: {
+        hosted100: {
+          state: "hold",
+          unlocks: false,
+          reason: "missing required fields: schemaVersion, runId, datasetId, proofPreset, defaultQueryCount, maxRowsPerQuery, includeCoverageGaps, includeHeldRows, includeDatasets, datasetItemCount, sellableRows, sellableFindingCount, caveatedRows, averageBuyerValueScore, runtimeSeconds, memoryMbytes, usageUsd, costUsd, noLeakFailures, secondBatchAuditObserved, falsePositiveInflationFailures, storeViews, runs, uniqueUsers, paidUsers, refunds, pricingModel, payoutEnabled, publicListingStatus, observedAt",
+          required: { defaultQueryCount: 100, sellableRows: 100, sellableFindingRows: 52, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
+        },
+        hosted300: {
+          state: "hold",
+          unlocks: false,
+          reason: "hosted 100 must pass before hosted 300 can unlock",
+          required: { sellableRows: 300, sellableFindingRows: 120, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
+        },
+        marketplacePromotion: {
+          state: "hold",
+          unlocks: false,
+          reason: "hosted300 must pass before marketplace promotion can unlock",
+          required: { hosted300: true, payoutEnabled: true, pricingModelObserved: true, analyticsObserved: true, refunds: 0, publicListingState: "public_listed_not_promoted_or_public_promoted" }
+        }
+      },
+      copyPasteCommands: [
+        "TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness",
+        "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness",
+        "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
+        "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
+        "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_DATASET_ID=<dataset id> bun run check:hosted-apify-paid-readiness"
+      ],
+      validationExamples: [
+        { name: "missing_proof", expectedStatus: "accepted_hold", unlockSummary: "none", reason: "no observed JSON was supplied, so every required hosted and marketplace field remains missing" },
+        { name: "sample_proof_rejected_for_promotion", expectedStatus: "accepted_sample_no_unlock", unlockSummary: "none", reason: "sampleOnly=true imports can prove shape but cannot unlock hosted or marketplace gates" },
+        { name: "valid_hosted100_hosted300_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100", reason: "a production proof with at least 100 sellable rows and 52 findings unlocks hosted100 while hosted300 stays held below 300 sellable rows" },
+        { name: "valid_hosted300_marketplace_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100_hosted300", reason: "a production proof with 300 hosted sellable rows still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed" },
+        { name: "invalid_unsafe_no_leak_proof", expectedStatus: "rejected", unlockSummary: "none", reason: "any noLeakFailures value above 0 or false-positive inflation failure is rejected by the import checker" }
+      ]
     },
     requiredHostedPreset: {
       defaultQueryCount: 100,
@@ -7936,6 +8060,17 @@ function graphPublicOutputPaidRowUnlockQueue(
     stale,
     stale_recheck: stale,
     unsafe_or_restricted: unsafeOrRestricted,
+    programDbRejectionBuckets: {
+      stale: stale.length,
+      alias_conflict: candidates.filter((row) => row.publicProofState === "alias_hold").length,
+      contradiction: candidates.filter((row) => row.publicProofState === "contradiction_found").length,
+      duplicate: 0,
+      generic_source_page: 0,
+      restricted_only: unsafeOrRestricted.length,
+      not_enough_source_support: needsPublicSource.length,
+      rowsCountTowardFloorNow: 0,
+      noLeak: true
+    },
     graphOnlyCountsTowardPaidFloorNow: false,
     noLeak: true
   };
@@ -8035,6 +8170,49 @@ function graphPublicOutputParserAdmissionHandoff(
     expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 5 === 0 ? 1 : 0)
   })));
   supplementalActors.push(...programDaSupplementalActors);
+  const programDbActors = [
+    { actor: "APT29", sector: "technology", country: "United States", ttpOrTool: "Cloud Accounts / T1078.004" },
+    { actor: "APT28", sector: "defense", country: "Europe", ttpOrTool: "Spearphishing Attachment / T1566.001" },
+    { actor: "APT42", sector: "civil society", country: "United Kingdom", ttpOrTool: "Credential Harvesting" },
+    { actor: "Turla", sector: "government", country: "Europe", ttpOrTool: "Encrypted Channel / T1573" },
+    { actor: "Volt Typhoon", sector: "telecommunications", country: "United States", ttpOrTool: "Valid Accounts / T1078" },
+    { actor: "Lazarus Group", sector: "financial services", country: "global", ttpOrTool: "Supply Chain Compromise / T1195" },
+    { actor: "FIN7", sector: "retail", country: "United States", ttpOrTool: "Point-of-Sale Malware" },
+    { actor: "MuddyWater", sector: "government", country: "Middle East", ttpOrTool: "Command and Scripting Interpreter / T1059" },
+    { actor: "Mustang Panda", sector: "diplomatic", country: "Southeast Asia", ttpOrTool: "Malware Delivery" },
+    { actor: "OilRig", sector: "energy", country: "Middle East", ttpOrTool: "PowerShell / T1059.001" },
+    { actor: "Kimsuky", sector: "research", country: "South Korea", ttpOrTool: "Spearphishing Link / T1566.002" },
+    { actor: "Scattered Spider", sector: "hospitality", country: "United States", ttpOrTool: "Help Desk Social Engineering" },
+    { actor: "LockBit", sector: "manufacturing", country: "Europe", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Akira", sector: "healthcare", country: "North America", ttpOrTool: "Exfiltration" },
+    { actor: "Clop", sector: "professional services", country: "global", ttpOrTool: "Exploit Public-Facing Application / T1190" },
+    { actor: "Black Basta", sector: "industrial", country: "Germany", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "RansomHub", sector: "services", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Qilin", sector: "professional services", country: "United Kingdom", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "BianLian", sector: "legal", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Medusa", sector: "education", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" }
+  ];
+  const programDbThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+  }> = [
+    { victimSuffix: "government advisory current finding", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "CERT advisory parser finding", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "vendor report TTP finding", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "victim notice public finding", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "public report current activity", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "public channel corroborated pivot", sourceFamily: "public_channel", expectedPaidRowLiftAfterParserAdmission: 1 }
+  ];
+  supplementalActors.push(...programDbActors.flatMap((actorRow, actorIndex) => programDbThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 7 === 0 ? 1 : 0)
+  }))));
   const supplementalRows = supplementalActors.map((row, index) => graphPublicOutputParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -8050,7 +8228,7 @@ function graphPublicOutputParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...supplementalRows].slice(0, 100);
+  return [...fromReadyRows, ...supplementalRows].slice(0, 175);
 }
 
 function graphPublicOutputParserAdmissionHandoffRow(input: {
@@ -8070,9 +8248,24 @@ function graphPublicOutputParserAdmissionHandoffRow(input: {
 }): GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number] {
   return {
     ...input,
+    programDbPriority: graphPublicOutputProgramDbPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
+  };
+}
+
+function graphPublicOutputProgramDbPriority(
+  sourceFamily: GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number
+): GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programDbPriority"] {
+  const sourceProvenanceOnlyRisk = sourceFamily === "public_channel" || sourceFamily === "restricted_metadata_public_support" ? "medium" : "low";
+  return {
+    gapContribution: Math.min(3, expectedPaidRowLiftAfterParserAdmission),
+    findingLikely: expectedPaidRowLiftAfterParserAdmission >= 2 && sourceProvenanceOnlyRisk !== "medium",
+    sourceProvenanceOnlyRisk,
+    preferredParserAction: sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding",
+    admissionBlocker: "none"
   };
 }
 

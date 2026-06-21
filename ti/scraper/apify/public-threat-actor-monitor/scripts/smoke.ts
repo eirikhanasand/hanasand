@@ -1447,8 +1447,8 @@ const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, 
 if (
   !graphPublicUnlockCounts
   || Number(graphPublicUnlockCounts.admitted_by_parser) !== 0
-  || Number(graphPublicUnlockCounts.ready_for_parser) !== 100
-  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 100
+  || Number(graphPublicUnlockCounts.ready_for_parser) !== 175
+  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 175
   || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
   || Number(graphPublicUnlockCounts.needs_public_source) !== 6
   || Number(graphPublicUnlockCounts.contradicted) !== 6
@@ -1469,9 +1469,9 @@ const graphPublicNeedsPublicSource = graphPublicUnlockQueue.needs_public_source 
 const graphPublicParserHandoff = graphPublicUnlockQueue.parserAdmissionHandoff as Array<Record<string, unknown>> | undefined;
 if (
   !Array.isArray(graphPublicParserHandoff)
-  || graphPublicParserHandoff.length !== 100
+  || graphPublicParserHandoff.length !== 175
   || !Array.isArray(graphPublicCurrentAdmission)
-  || graphPublicCurrentAdmission.length !== 100
+  || graphPublicCurrentAdmission.length !== 175
   || !graphPublicParserHandoff.every((row) =>
     typeof row.actor === "string"
     && typeof row.victimOrTarget === "string"
@@ -1482,6 +1482,9 @@ if (
     && row.provenanceHash.length > 0
     && typeof row.buyerReason === "string"
     && row.buyerReason.length > 0
+    && typeof row.programDbPriority === "object"
+    && Number((row.programDbPriority as Record<string, unknown>).gapContribution) > 0
+    && (row.programDbPriority as Record<string, unknown>).admissionBlocker === "none"
     && Number(row.expectedPaidRowLiftAfterParserAdmission) > 0
     && row.admissionState === "ready_for_parser"
     && row.countsTowardFloorNow === false
@@ -1495,6 +1498,22 @@ if (
   || !graphPublicNeedsPublicSource.some((row) => row.sourceClass === "restricted_metadata_public_support")
 ) {
   throw new Error("Program CY paid row unlock queue must expose hash-only parser and public-support handoff rows");
+}
+const graphPublicProgramDbRejectionBuckets = graphPublicUnlockQueue.programDbRejectionBuckets as Record<string, unknown> | undefined;
+if (
+  graphPublicParserHandoff.filter((row) => (row.programDbPriority as Record<string, unknown>).findingLikely === true).length !== 95
+  || !graphPublicProgramDbRejectionBuckets
+  || Number(graphPublicProgramDbRejectionBuckets.stale) !== 4
+  || Number(graphPublicProgramDbRejectionBuckets.alias_conflict) !== 4
+  || Number(graphPublicProgramDbRejectionBuckets.contradiction) !== 2
+  || Number(graphPublicProgramDbRejectionBuckets.duplicate) !== 0
+  || Number(graphPublicProgramDbRejectionBuckets.generic_source_page) !== 0
+  || Number(graphPublicProgramDbRejectionBuckets.restricted_only) !== 0
+  || Number(graphPublicProgramDbRejectionBuckets.not_enough_source_support) !== 6
+  || Number(graphPublicProgramDbRejectionBuckets.rowsCountTowardFloorNow) !== 0
+  || graphPublicProgramDbRejectionBuckets.noLeak !== true
+) {
+  throw new Error("Program DB graph public handoff must expose 175 rows, 75-plus finding-likely rows, and explicit rejection buckets");
 }
 const graphPublicPivots = graphPublicCorroborationPivotPacket.candidates as Array<Record<string, unknown>>;
 if (!graphPublicPivots.every((row) => {
@@ -1808,6 +1827,7 @@ const hostedPaidAcceptance = hostedPaidReadinessProof?.paidProofAcceptance as Re
 const hostedPaidIntegrityGate = hostedPaidReadinessProof?.paidRowIntegrityGate as Record<string, unknown> | undefined;
 const hostedProofImportPath = hostedPaidReadinessProof?.hostedProofImportPath as Record<string, unknown> | undefined;
 const hostedProofObservedFields = hostedProofImportPath?.observedFields as Record<string, unknown> | undefined;
+const hostedProofOperatorChecklist = hostedPaidReadinessProof?.hostedProofOperatorChecklist as Record<string, unknown> | undefined;
 if (
   !hostedPaidReadinessProof
   || hostedPaidReadinessProof.schemaVersion !== "ti.hosted_apify_paid_readiness_proof.v1"
@@ -1864,6 +1884,29 @@ if (
   || hostedPaidIntegrityGate.caveatedRowsCountTowardChargeable !== false
 ) {
   throw new Error("Hosted paid-readiness proof must keep local and single-query hosted proof out of paid promotion until 100-name hosted Apify metrics are observed");
+}
+const hostedProofChecklistGateEffects = hostedProofOperatorChecklist?.gateEffects as Record<string, Record<string, unknown>> | undefined;
+const hostedProofChecklistExamples = hostedProofOperatorChecklist?.validationExamples as Array<Record<string, unknown>> | undefined;
+if (
+  !hostedProofOperatorChecklist
+  || hostedProofOperatorChecklist.schemaVersion !== "ti.hosted_apify_proof_operator_checklist.v1"
+  || hostedProofOperatorChecklist.status !== "missing_proof"
+  || hostedProofOperatorChecklist.sampleOnly !== false
+  || hostedProofOperatorChecklist.unlockSummary !== "none"
+  || !Array.isArray(hostedProofOperatorChecklist.missingFields)
+  || !(hostedProofOperatorChecklist.missingFields as string[]).includes("runId")
+  || !(hostedProofOperatorChecklist.missingFields as string[]).includes("pricingModel")
+  || !hostedProofChecklistGateEffects
+  || hostedProofChecklistGateEffects.hosted100?.state !== "hold"
+  || hostedProofChecklistGateEffects.hosted100?.unlocks !== false
+  || hostedProofChecklistGateEffects.hosted300?.state !== "hold"
+  || hostedProofChecklistGateEffects.marketplacePromotion?.state !== "hold"
+  || !hostedProofChecklistExamples?.some((example) => example.name === "sample_proof_rejected_for_promotion" && example.unlockSummary === "none")
+  || !hostedProofChecklistExamples.some((example) => example.name === "valid_hosted100_hosted300_hold" && example.unlockSummary === "hosted100")
+  || !hostedProofChecklistExamples.some((example) => example.name === "valid_hosted300_marketplace_hold" && example.unlockSummary === "hosted100_hosted300")
+  || !hostedProofChecklistExamples.some((example) => example.name === "invalid_unsafe_no_leak_proof" && example.expectedStatus === "rejected")
+) {
+  throw new Error("Hosted proof operator checklist must explain missing fields, sample rejection, hosted100/hosted300 gate effects, and unsafe proof rejection");
 }
 const hostedProofCommandExamples = hostedProofImportPath.commandExamples as string[] | undefined;
 if (!hostedProofCommandExamples?.join(" ").includes("TI_APIFY_HOSTED_PROOF_MODE=run") || !hostedProofCommandExamples.join(" ").includes("TI_APIFY_OBSERVED_PROOF_PATH")) {
