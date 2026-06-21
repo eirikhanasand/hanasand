@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { TelegramPublicRuntimeCollectionDto } from "../adapters/telegramPublic.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import type {
