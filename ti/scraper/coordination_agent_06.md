@@ -211,6 +211,13 @@ Progress update 2026-06-21 04:40 CEST:
 - The repository status persists zero rows, promotes zero Actor rows, writes zero public-answer cache entries, activates zero sources, and exposes only ids/counts/replay gates/no-leak flags so restricted/leak metadata remains metadata-only.
 - Continue next with completed-repair replay receipts once Agent 01/04/05/07 emit completed repair rows, or with the next direct searchable read-model path for real source/dark metadata rows.
 
+Progress update 2026-06-21 05:22 CEST:
+- Continued with a direct searchable read-model catalog for real source/dark metadata rows.
+- Added `ti.evidence_searchable_source_metadata_catalog.v1` on `/v1/evidence/cutover-report.readModelCutover.searchableSourceMetadataCatalog`.
+- The catalog is derived from safe Postgres read-model rows and shows public rows eligible for direct Actor/public-answer support plus restricted/dark metadata rows that are searchable only as caveated defensive context.
+- It surfaces buyer-visible metadata fields when present, including victim/company, account count, dataset size, timestamp, actor demand, hash/provenance, actor, and TTP/CVE, while keeping restricted rows non-vectorized and no-leak.
+- Continue next with completed repair receipts or with the next searchable source/dark metadata path that moves caveated context toward fresh public-supported Actor rows.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

@@ -65,6 +65,7 @@ import {
   buildEvidenceActorProductImpactReplay,
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
+  buildEvidenceSearchableSourceMetadataCatalog,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   createEvidenceSearchReadModelRepository,
@@ -1923,6 +1924,70 @@ describe("evidence storage cutover", () => {
     expect(backendWriteSet.pgvectorCandidates.every((row) => !row.restricted_metadata && !row.metadata_only && !row.raw_text_present)).toBe(true);
     expect(backendWriteSet.openSearchDocuments.some((document) => document.restrictedMetadata && !document.embeddingEligible && document.embeddingInputHash === undefined)).toBe(true);
     expect(backendWriteSet.postgresDocuments.some((row) => row.restricted_metadata && row.embedding_input_hash === undefined)).toBe(true);
+
+    const searchableSourceMetadataCatalog = buildEvidenceSearchableSourceMetadataCatalog(backendWriteSet, {
+      generatedAt: "2026-05-24T21:44:35.000Z"
+    });
+    expect(searchableSourceMetadataCatalog).toMatchObject({
+      schemaVersion: "ti.evidence_searchable_source_metadata_catalog.v1",
+      handoffId: backendWriteSet.handoffId,
+      productSurface: "apify_public_threat_actor_monitor",
+      sourceWriteSet: "ti.evidence_search_read_model_backend_write_set.v1",
+      searchableNow: true,
+      vectorPolicy: {
+        publicRowsMayEmbedByHash: true,
+        restrictedMetadataRowsNeverEmbed: true,
+        rawTextStoredForEmbedding: false
+      },
+      counts: {
+        searchableRows: backendWriteSet.postgresDocuments.length,
+        darkMetadataRows: expect.any(Number),
+        metadataOnlyRows: expect.any(Number),
+        actorSupportEligibleRows: expect.any(Number),
+        searchOnlyContextRows: expect.any(Number)
+      },
+      noLeakGuarantees: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false,
+        restrictedEmbeddingsCreated: false
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(searchableSourceMetadataCatalog.rows.filter((row) =>
+      row.sourceFamily === "dark_metadata" || row.sourceFamily === "restricted_metadata"
+    ).length).toBeGreaterThan(0);
+    expect(searchableSourceMetadataCatalog.rows.some((row) =>
+      row.restrictedMetadata &&
+      row.metadataOnly &&
+      row.embeddingEligible === false &&
+      row.canSupportActorDatasetRow === false &&
+      row.publicAnswerUse === "caveated_defensive_context" &&
+      row.buyerVisibleFields.includes("victim_or_company") &&
+      row.buyerVisibleFields.includes("account_count") &&
+      row.buyerVisibleFields.includes("dataset_size") &&
+      row.buyerVisibleFields.includes("actor_demand")
+    )).toBe(true);
+    expect(searchableSourceMetadataCatalog.rows.some((row) =>
+      !row.restrictedMetadata &&
+      row.embeddingEligible &&
+      row.canSupportActorDatasetRow &&
+      row.publicAnswerUse === "direct_support"
+    )).toBe(true);
+    const searchableSourceMetadataCatalogSerialized = JSON.stringify(searchableSourceMetadataCatalog);
+    expect(searchableSourceMetadataCatalogSerialized).not.toContain(restrictedRaw);
+    expect(searchableSourceMetadataCatalogSerialized).not.toContain("tenant/source/private-key");
+    expect(searchableSourceMetadataCatalogSerialized).not.toContain(".onion");
 
     const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(backendWriteSet, {
       query: "APT29",

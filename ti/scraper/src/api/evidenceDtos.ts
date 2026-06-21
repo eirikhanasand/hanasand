@@ -34,6 +34,7 @@ import {
   createEvidenceActorDatasetConsumerAuditRepository,
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
+  buildEvidenceSearchableSourceMetadataCatalog,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   evidenceActorDatasetConsumerExecutionToPostgresRows,
@@ -58,6 +59,7 @@ import {
   type EvidencePromotionTransactionAuditReplay,
   type EvidencePromotionTransactionExecutionReceipt,
   type EvidencePromotionTransactionPlan,
+  type EvidenceSearchableSourceMetadataCatalog,
   type EvidenceSearchReadModelBackendWriteSet,
   type EvidenceSearchReadModelPromotionReplay,
   type EvidenceSearchReadModelReadiness
@@ -200,6 +202,7 @@ export interface EvidenceSearchReadModelCutoverDto {
     legalHoldDocuments: number;
     unsafeDocumentsSkipped: number;
   };
+  searchableSourceMetadataCatalog: EvidenceSearchableSourceMetadataCatalog;
   readiness: {
     embedded: EvidenceSearchReadModelReadiness;
     postgres: EvidenceSearchReadModelReadiness;
@@ -450,6 +453,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     generatedAt
   });
   const writeSet = buildEvidenceSearchReadModelBackendWriteSet(handoff, { generatedAt });
+  const searchableSourceMetadataCatalog = buildEvidenceSearchableSourceMetadataCatalog(writeSet, { generatedAt });
   const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(writeSet, {
     query,
     normalizedQuery: handoff.normalizedQuery,
@@ -513,6 +517,7 @@ function buildEvidenceSearchReadModelCutoverDto(
       legalHoldDocuments: writeSet.counts.legalHoldDocuments,
       unsafeDocumentsSkipped: writeSet.counts.unsafeDocumentsSkipped
     },
+    searchableSourceMetadataCatalog,
     readiness: {
       embedded,
       postgres,

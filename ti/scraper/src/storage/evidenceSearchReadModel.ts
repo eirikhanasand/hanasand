@@ -232,6 +232,61 @@ export interface EvidenceSearchReadModelBackendWriteSet {
   safeOutput: EvidenceSearchReadModelSafety;
 }
 
+export interface EvidenceSearchableSourceMetadataCatalog {
+  schemaVersion: "ti.evidence_searchable_source_metadata_catalog.v1";
+  generatedAt: string;
+  handoffId: string;
+  productSurface: "apify_public_threat_actor_monitor";
+  sourceWriteSet: EvidenceSearchReadModelBackendWriteSet["schemaVersion"];
+  searchableNow: true;
+  vectorPolicy: {
+    publicRowsMayEmbedByHash: true;
+    restrictedMetadataRowsNeverEmbed: true;
+    rawTextStoredForEmbedding: false;
+  };
+  counts: {
+    searchableRows: number;
+    publicSourceRows: number;
+    darkMetadataRows: number;
+    metadataOnlyRows: number;
+    actorSupportEligibleRows: number;
+    searchOnlyContextRows: number;
+  };
+  rows: EvidenceSearchableSourceMetadataCatalogRow[];
+  noLeakGuarantees: {
+    rawBodiesExposed: false;
+    objectKeysExposed: false;
+    unsafeUrlsExposed: false;
+    credentialsExposed: false;
+    restrictedRawContentExposed: false;
+    actorInteractionExposed: false;
+    restrictedEmbeddingsCreated: false;
+  };
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceSearchableSourceMetadataCatalogRow {
+  rowId: string;
+  documentId: string;
+  kind: EvidenceSearchIndexDocument["kind"];
+  sourceId?: string;
+  captureId?: string;
+  claimLedgerEntryId?: string;
+  sourceFamily: "public_source" | "dark_metadata" | "restricted_metadata" | "claim_metadata" | "graph_metadata" | "other";
+  title: string;
+  safeSummary: string;
+  searchableTerms: string[];
+  replayId: string;
+  retentionClass?: RetentionClass;
+  restrictedMetadata: boolean;
+  metadataOnly: boolean;
+  embeddingEligible: boolean;
+  canSupportActorDatasetRow: boolean;
+  publicAnswerUse: "direct_support" | "caveated_defensive_context" | "suppressed_or_gap_context";
+  buyerVisibleFields: Array<"actor" | "victim_or_company" | "account_count" | "dataset_size" | "timestamp" | "actor_demand" | "hash_or_provenance" | "ttp_or_cve">;
+  noLeak: true;
+}
+
 export interface EvidenceSearchReadModelPromotionReplay {
   schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
   generatedAt: string;
@@ -1428,6 +1483,120 @@ export function buildEvidenceSearchReadModelBackendWriteSet(
       metadataOnlyDocuments: postgresDocuments.filter((row) => row.metadata_only).length,
       legalHoldDocuments: postgresDocuments.filter((row) => row.legal_hold).length,
       unsafeDocumentsSkipped: skippedDocuments.length
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+function catalogSourceFamily(row: EvidenceSearchReadModelPostgresDocumentRow): EvidenceSearchableSourceMetadataCatalogRow["sourceFamily"] {
+  if (row.restricted_metadata && row.retention_class === "darknet_metadata") return "dark_metadata";
+  if (row.restricted_metadata || row.metadata_only) return "restricted_metadata";
+  if (row.kind === "source") return "public_source";
+  if (row.kind === "claim") return "claim_metadata";
+  if (row.kind === "graph_relationship") return "graph_metadata";
+  return "other";
+}
+
+function catalogBuyerVisibleFields(row: EvidenceSearchReadModelPostgresDocumentRow): EvidenceSearchableSourceMetadataCatalogRow["buyerVisibleFields"] {
+  const text = `${row.title} ${row.summary} ${row.search_text} ${row.tags.join(" ")}`.toLowerCase();
+  const fields: EvidenceSearchableSourceMetadataCatalogRow["buyerVisibleFields"] = [];
+  if (/\b(apt|actor|threat|ransom|group)\b/.test(text)) fields.push("actor");
+  if (/\b(victim|company|target|customer|sector|energy|bank|hospital|government)\b/.test(text)) fields.push("victim_or_company");
+  if (/\b(account|accounts|user|users|employee|employees)\b/.test(text)) fields.push("account_count");
+  if (/\b(dataset|records|gb|tb|leak size|sample)\b/.test(text)) fields.push("dataset_size");
+  if (row.freshness.observedAt || row.freshness.collectedAt || row.freshness.publishedAt || /\b(20\d{2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/.test(text)) fields.push("timestamp");
+  if (/\b(demand|ransom|price|bitcoin|payment|deadline)\b/.test(text)) fields.push("actor_demand");
+  if (row.replay.contentHash || /\b(hash|sha|provenance|source)\b/.test(text)) fields.push("hash_or_provenance");
+  if (/\b(t\d{4}|cve-\d{4}-\d+|ttp|malware|phishing|exploit)\b/.test(text)) fields.push("ttp_or_cve");
+  return uniqueStrings(fields) as EvidenceSearchableSourceMetadataCatalogRow["buyerVisibleFields"];
+}
+
+function catalogSearchableTerms(row: EvidenceSearchReadModelPostgresDocumentRow): string[] {
+  const values = [
+    row.kind,
+    row.source_id,
+    row.capture_id,
+    row.claim_ledger_entry_id,
+    row.retention_class,
+    ...row.tags,
+    ...row.title.split(/\s+/),
+    ...row.summary.split(/\s+/)
+  ];
+  return uniqueStrings(values
+    .map((value) => value?.toString().trim().toLowerCase().replace(/[^a-z0-9_.:-]/g, ""))
+    .filter((value): value is string => Boolean(value && value.length >= 3))
+  ).slice(0, 16);
+}
+
+export function buildEvidenceSearchableSourceMetadataCatalog(
+  writeSet: EvidenceSearchReadModelBackendWriteSet,
+  input: { generatedAt?: string } = {}
+): EvidenceSearchableSourceMetadataCatalog {
+  const generatedAt = input.generatedAt ?? writeSet.generatedAt;
+  const rows = writeSet.postgresDocuments
+    .filter((row) => !row.tombstoned_at)
+    .map((row) => {
+      const sourceFamily = catalogSourceFamily(row);
+      const restrictedOrMetadataOnly = row.restricted_metadata || row.metadata_only;
+      const buyerVisibleFields = catalogBuyerVisibleFields(row);
+      const publicAnswerUse: EvidenceSearchableSourceMetadataCatalogRow["publicAnswerUse"] = restrictedOrMetadataOnly
+        ? "caveated_defensive_context"
+        : row.citation_spans.length > 0
+          ? "direct_support"
+          : "suppressed_or_gap_context";
+      return {
+        rowId: stableId("evidence-searchable-source-metadata", `${writeSet.handoffId}:${row.document_id}`),
+        documentId: row.document_id,
+        kind: row.kind,
+        sourceId: row.source_id,
+        captureId: row.capture_id,
+        claimLedgerEntryId: row.claim_ledger_entry_id,
+        sourceFamily,
+        title: row.title,
+        safeSummary: row.summary,
+        searchableTerms: catalogSearchableTerms(row),
+        replayId: row.replay.replayId,
+        retentionClass: row.retention_class,
+        restrictedMetadata: row.restricted_metadata,
+        metadataOnly: row.metadata_only,
+        embeddingEligible: Boolean(row.embedding_input_hash) && !restrictedOrMetadataOnly,
+        canSupportActorDatasetRow: !restrictedOrMetadataOnly && row.citation_spans.length > 0,
+        publicAnswerUse,
+        buyerVisibleFields,
+        noLeak: true as const
+      };
+    });
+  const darkMetadataRows = rows.filter((row) => row.sourceFamily === "dark_metadata" || row.sourceFamily === "restricted_metadata");
+
+  return {
+    schemaVersion: "ti.evidence_searchable_source_metadata_catalog.v1",
+    generatedAt,
+    handoffId: writeSet.handoffId,
+    productSurface: "apify_public_threat_actor_monitor",
+    sourceWriteSet: writeSet.schemaVersion,
+    searchableNow: true,
+    vectorPolicy: {
+      publicRowsMayEmbedByHash: true,
+      restrictedMetadataRowsNeverEmbed: true,
+      rawTextStoredForEmbedding: false
+    },
+    counts: {
+      searchableRows: rows.length,
+      publicSourceRows: rows.filter((row) => row.sourceFamily === "public_source" || (!row.restrictedMetadata && !row.metadataOnly)).length,
+      darkMetadataRows: darkMetadataRows.length,
+      metadataOnlyRows: rows.filter((row) => row.metadataOnly).length,
+      actorSupportEligibleRows: rows.filter((row) => row.canSupportActorDatasetRow).length,
+      searchOnlyContextRows: rows.filter((row) => row.publicAnswerUse !== "direct_support").length
+    },
+    rows,
+    noLeakGuarantees: {
+      rawBodiesExposed: false,
+      objectKeysExposed: false,
+      unsafeUrlsExposed: false,
+      credentialsExposed: false,
+      restrictedRawContentExposed: false,
+      actorInteractionExposed: false,
+      restrictedEmbeddingsCreated: false
     },
     safeOutput: SAFE_OUTPUT
   };
