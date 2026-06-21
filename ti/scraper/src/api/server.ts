@@ -74,6 +74,7 @@ import {
 } from "../storage/sourceRegistryPostgres.ts";
 import type { SeedSourceBundle } from "../registry/sourceSeeds.ts";
 import { buildSourceActivationBatchApiResponse, buildSourceActivationReport, buildSourceCoverageCloseoutApiResponse, buildSourceCoveragePlanApiResponse, buildSourceMarketplaceApiResponse, buildSourcePortfolioApiResponse, buildSourceRuntimeSlaApiResponse, buildTiSourceAtlasApiResponse, buildTiSourceAtlasExportManifestApiResponse, importSeedBundle } from "../registry/sourceSeeds.ts";
+import type { TiSourceAtlasReliabilityEconomicsPacket } from "../registry/sourceSeedTypes.ts";
 import type {
   AnalystClaimLedgerEntry,
   AnalystLoopSnapshot,
@@ -5475,6 +5476,8 @@ function safeSourceAtlasActivationApprovalReceiptDto(packet: AnalystSourceActiva
 
 function buildSourceAtlasSourcePackCandidateReviewReadModel(input: { tenantId?: string; limit: number }) {
   const atlas = buildTiSourceAtlasApiResponse({ tenantId: input.tenantId, recordLimit: 4000 });
+  const paidActorGate = atlas.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization;
+  const paidActorGateByPackId = new Map(paidActorGate.reviewRows.map((row) => [row.packId, row]));
   const rows = tiSourceAtlasSourcePackCandidatesToPostgresRows(atlas.sourceEconomics.sourcePackCandidates, {
     tenantId: input.tenantId,
     generatedAt: atlas.generatedAt
@@ -5503,6 +5506,16 @@ function buildSourceAtlasSourcePackCandidateReviewReadModel(input: { tenantId?: 
       expectedSchedulerTasksPerDay: round1(rows.reduce((sum, row) => sum + row.expected_scheduler_tasks_per_day, 0)),
       byFamily,
       byAcquisitionMode,
+      paidActorGatePrioritization: {
+        schemaVersion: paidActorGate.schemaVersion,
+        gate: paidActorGate.gate,
+        projectedRowsAfterParserAdmission: paidActorGate.projectedRowsAfterParserAdmission,
+        nextSellableRowGate: paidActorGate.nextSellableRowGate,
+        remainingSellableRowsAfterParserAdmission: paidActorGate.remainingSellableRowsAfterParserAdmission,
+        prioritizedReviewRows: paidActorGate.reviewRows.length,
+        projectedSourcePackRowsCountNow: paidActorGate.projectedSourcePackRowsCountNow,
+        countsTowardPaidGateNow: paidActorGate.countsTowardPaidGateNow
+      },
       dryRun: true,
       willMutate: false,
       willImportSourcePacks: false,
@@ -5511,11 +5524,19 @@ function buildSourceAtlasSourcePackCandidateReviewReadModel(input: { tenantId?: 
       sourceActivationApplied: false,
       executableApprovalPacketsCreated: false
     },
-    packets: rows.slice(0, input.limit).map(safeSourceAtlasSourcePackCandidateReviewPacketDto)
+    packets: rows.slice(0, input.limit).map((row) =>
+      safeSourceAtlasSourcePackCandidateReviewPacketDto(row, paidActorGateByPackId.get(row.pack_id))
+    )
   };
 }
 
-function safeSourceAtlasSourcePackCandidateReviewPacketDto(row: SourceAtlasSourcePackCandidateReviewRow) {
+type SourcePackPaidActorGateReviewRow =
+  TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["paidActorGatePrioritization"]["reviewRows"][number];
+
+function safeSourceAtlasSourcePackCandidateReviewPacketDto(
+  row: SourceAtlasSourcePackCandidateReviewRow,
+  paidActorGate?: SourcePackPaidActorGateReviewRow
+) {
   return {
     packId: row.pack_id,
     tenantId: row.tenant_id,
@@ -5532,6 +5553,18 @@ function safeSourceAtlasSourcePackCandidateReviewPacketDto(row: SourceAtlasSourc
     estimatedCostUnitsPerUsefulEvidence: row.estimated_cost_units_per_useful_evidence,
     buyerVisibleUseCase: row.buyer_visible_use_case,
     requiredProof: row.required_proof,
+    paidActorGatePriority: paidActorGate
+      ? {
+          gate: "daily_100_name_paid_actor_300_row_gate",
+          priority: paidActorGate.priority,
+          expectedSourceFamilyDiversityLift: paidActorGate.expectedSourceFamilyDiversityLift,
+          actorGateReason: paidActorGate.actorGateReason,
+          ownerHandoff: paidActorGate.ownerHandoff,
+          countsTowardPaidGateNow: paidActorGate.countsTowardPaidGateNow,
+          projectedSourcePackRowsCountNow: false,
+          noActivationBoundary: paidActorGate.noActivationBoundary
+        }
+      : undefined,
     ownerHandoffs: {
       agent01SourceRegistry: row.agent01_source_registry_handoff,
       agent03Parser: row.agent03_parser_handoff,

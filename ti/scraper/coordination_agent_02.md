@@ -52,6 +52,13 @@ Side-tool support priority:
 - Kept the lower-level `applyPlan.sourceGapEnqueueRehearsal` intact and added the new request flag to the public dry-run contract.
 - Next: continue toward a real disabled worker runner only after current paid-row/source-pack gate edits are committed and checks stay green.
 
+## Progress - 2026-06-21 07:58 CEST
+
+- Added `runSchedulerSourceGapWorkerRunner`, the disabled runner boundary around the source-gap loop.
+- The runner stops after a blocked preview or one explicit repository handoff, reports daily Actor freshness product effect, visible states, worker partitions, and next operator action, and preserves the same forbidden operations as the worker entry.
+- Tests cover blocked/no-mutation runner behavior and explicit single-handoff behavior without duplicate enqueue loops.
+- Next: expose the runner receipt through an operations surface only if it helps daily Actor/source-gap operators, otherwise keep moving toward paid-row cadence inputs.
+
 ## Progress - 2026-06-21 01:13 CEST
 
 - Added a disabled-by-default source-gap enqueue adapter preview under `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness.enqueueAdapterPreview`.

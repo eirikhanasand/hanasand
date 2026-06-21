@@ -11978,7 +11978,19 @@ describe("api v1", () => {
       sourceAtlasAuditPackets: unknown[];
       sourceAtlasApprovalReceiptSummary: { receipts: number; matchedAuditRows: number; pendingAuditLinks: number };
       sourceAtlasApprovalReceipts: unknown[];
-      sourcePackReviewSummary: { sourceTable: string; reviewRows: number };
+      sourcePackReviewSummary: {
+        sourceTable: string;
+        reviewRows: number;
+        paidActorGatePrioritization: {
+          schemaVersion: string;
+          gate: string;
+          nextSellableRowGate: number;
+          remainingSellableRowsAfterParserAdmission: number;
+          prioritizedReviewRows: number;
+          projectedSourcePackRowsCountNow: boolean;
+          countsTowardPaidGateNow: boolean;
+        };
+      };
       sourcePackReviewPackets: unknown[];
       packets: unknown[];
     };
@@ -12011,6 +12023,14 @@ describe("api v1", () => {
     expect(sourceActivationPackets.sourceAtlasAuditSummary.auditRows).toBe(sourceActivationPackets.runStatusClarity.sourceAtlasAuditRows);
     expect(sourceActivationPackets.sourcePackReviewSummary).toMatchObject({
       sourceTable: "source_atlas_source_pack_candidate_review",
+      paidActorGatePrioritization: {
+        schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1",
+        gate: "daily_100_name_paid_actor_300_row_gate",
+        nextSellableRowGate: 300,
+        remainingSellableRowsAfterParserAdmission: 50,
+        projectedSourcePackRowsCountNow: false,
+        countsTowardPaidGateNow: false
+      },
       dryRun: true,
       willMutate: false,
       willImportSourcePacks: false,
@@ -12020,6 +12040,7 @@ describe("api v1", () => {
       executableApprovalPacketsCreated: false
     });
     expect(sourceActivationPackets.sourcePackReviewSummary.reviewRows).toBe(sourceActivationPackets.runStatusClarity.sourcePackCandidateReviewRows);
+    expect(sourceActivationPackets.sourcePackReviewSummary.paidActorGatePrioritization.prioritizedReviewRows).toBeGreaterThan(0);
     const sourcePackReviewPacket = (sourceActivationPackets.sourcePackReviewPackets as Array<{
       packId: string;
       safeSourceHashes: string[];
@@ -12054,6 +12075,36 @@ describe("api v1", () => {
     expect(sourcePackReviewPacket.expectedPayworthyLift).toBeGreaterThan(0);
     expect(sourcePackReviewPacket.requiredProof.length).toBeGreaterThan(0);
     expect(sourcePackReviewPacket.safeSourceHashes.every((hash) => hash.startsWith("ti_source_atlas_source_"))).toBe(true);
+    const sourcePackPaidGatePackets = (sourceActivationPackets.sourcePackReviewPackets as Array<{
+      paidActorGatePriority?: {
+        gate: string;
+        priority: "p0" | "p1" | "p2";
+        actorGateReason: string;
+        countsTowardPaidGateNow: boolean;
+        projectedSourcePackRowsCountNow: boolean;
+        noActivationBoundary: {
+          sourcePackImported: boolean;
+          sourceActivationApplied: boolean;
+          registryMutationPlanned: boolean;
+          crawlEnqueued: boolean;
+          rawUrlsExposed: boolean;
+          rawPayloadsExposed: boolean;
+        };
+      };
+    }>).filter((packet) => packet.paidActorGatePriority);
+    expect(sourcePackPaidGatePackets.length).toBeGreaterThan(0);
+    expect(sourcePackPaidGatePackets.every((packet) =>
+      packet.paidActorGatePriority?.gate === "daily_100_name_paid_actor_300_row_gate" &&
+      packet.paidActorGatePriority.countsTowardPaidGateNow === false &&
+      packet.paidActorGatePriority.projectedSourcePackRowsCountNow === false &&
+      packet.paidActorGatePriority.actorGateReason.length > 0 &&
+      packet.paidActorGatePriority.noActivationBoundary.sourcePackImported === false &&
+      packet.paidActorGatePriority.noActivationBoundary.sourceActivationApplied === false &&
+      packet.paidActorGatePriority.noActivationBoundary.registryMutationPlanned === false &&
+      packet.paidActorGatePriority.noActivationBoundary.crawlEnqueued === false &&
+      packet.paidActorGatePriority.noActivationBoundary.rawUrlsExposed === false &&
+      packet.paidActorGatePriority.noActivationBoundary.rawPayloadsExposed === false
+    )).toBe(true);
     expect(JSON.stringify(sourceActivationPackets.sourcePackReviewPackets)).not.toContain("https://");
     const atlasAuditPacket = (sourceActivationPackets.sourceAtlasAuditPackets as Array<{
       packetId: string;

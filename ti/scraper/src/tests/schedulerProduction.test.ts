@@ -39,6 +39,7 @@ import {
   schedulerApplyPlanApiContract,
   executeSchedulerSourceGapWorkerEntry,
   runSchedulerSourceGapWorkerLoop,
+  runSchedulerSourceGapWorkerRunner,
   rehearseSchedulerSourceGapEnqueue,
   simulateSchedulerExecution,
   simulateFairnessEnforcement,
@@ -1994,6 +1995,70 @@ describe("scheduler production readiness", () => {
     });
     expect(loopAppliedRepository.runs()).toHaveLength(queueTaskSpecs.length);
     expect(loopAppliedRepository.tasks()).toHaveLength(queueTaskSpecs.length);
+
+    const runnerBlockedRepository = new InMemorySchedulerQueueRepository();
+    const runnerBlockedReceipt = runSchedulerSourceGapWorkerRunner(daily, runnerBlockedRepository, {
+      runnerId: "source_gap_runner_01",
+      loopId: "source_gap_runner_loop",
+      workerId: "worker_source_gap_runner_01",
+      workerPartition: "background_source_sweep",
+      maxIterations: 2,
+      now
+    });
+    expect(runnerBlockedReceipt).toMatchObject({
+      schemaVersion: "ti.scheduler_source_gap_worker_runner.v1",
+      runnerId: "source_gap_runner_01",
+      disabledByDefault: true,
+      willMutate: false,
+      maxIterations: 2,
+      loopCount: 1,
+      stopReason: "disabled_preview_complete",
+      productEffect: {
+        dailyActorPreset: "source_gap_freshness_support",
+        nextOperatorAction: "wait_for_next_poll"
+      }
+    });
+    expect(runnerBlockedReceipt.productEffect.workerPartitions).toEqual(expect.arrayContaining([
+      "interactive_actor_search",
+      "public_channel_window",
+      "restricted_metadata_approval"
+    ]));
+    expect(runnerBlockedReceipt.productEffect.visibleStates).toEqual(expect.arrayContaining(["searching", "partial", "metadata_review"]));
+    expect(runnerBlockedReceipt.forbiddenOperations).toEqual(expect.arrayContaining(["network_fetch", "lease_task", "ack_task"]));
+    expect(runnerBlockedRepository.runs()).toEqual([]);
+    expect(runnerBlockedRepository.tasks()).toEqual([]);
+
+    const runnerAppliedRepository = new InMemorySchedulerQueueRepository();
+    const runnerAppliedReceipt = runSchedulerSourceGapWorkerRunner(daily, runnerAppliedRepository, {
+      runnerId: "source_gap_runner_02",
+      workerMutationEnabled: true,
+      apply: true,
+      sourceGapEnqueueEnabled: true,
+      postgresQueueEnabled: true,
+      postgresDsnConfigured: true,
+      executorAvailable: true,
+      sourcePolicyCurrent: true,
+      paidRowGateOpen: true,
+      metadataReviewCurrent: true,
+      maxIterations: 3,
+      now
+    });
+    expect(runnerAppliedReceipt).toMatchObject({
+      willMutate: true,
+      loopCount: 1,
+      stopReason: "ready_handoff_prepared",
+      productEffect: {
+        nextOperatorAction: "approve_repository_handoff"
+      },
+      loops: [
+        expect.objectContaining({
+          commitPolicy: "single_repository_handoff_after_all_gates",
+          nextLoopAction: "handoff_to_repository_adapter"
+        })
+      ]
+    });
+    expect(runnerAppliedRepository.runs()).toHaveLength(queueTaskSpecs.length);
+    expect(runnerAppliedRepository.tasks()).toHaveLength(queueTaskSpecs.length);
     expect(daily.sourceGapExecutionReadiness.drainExecution).toEqual(expect.arrayContaining([
       expect.objectContaining({
         step: "finish_active_dataset_emit",
