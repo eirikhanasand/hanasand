@@ -15,6 +15,8 @@ Status: active_program_cp_release_integrity_drift_audit
 - Hosted paid promotion now requires Program CP `secondBatchAudit` proof, 52 sellable findings, zero false-positive inflation buckets, source-provenance rows excluded from the finding floor, caveated rows excluded from chargeable counts, required buyer/provenance/no-leak signals, and observed external marketplace/payout/pricing data.
 - Preserved adjacent dark-metadata public support expansion: `publicSupportSellable250` exposes 250 metadata-only candidates, current/projected/blocked counters, parser handoff rows, route-visible SLO fields, and no-leak serialization.
 - Verification passed: `bun run check`, focused API/ops/darkweb tests, hosted readiness check, Apify check/smoke/publication, route inventory, contract index, and full `bun test` (529 pass).
+- 2026-06-21 watchdog check: canary proof path, hosted Apify readiness, contract index, route inventory, Apify Actor check/smoke, typecheck, and full test suite remain green; paid release audit correctly holds on observed hosted/marketplace proof and will fail only when the worktree is dirty.
+- Current Program DC surfaces preserve the critical paid-count exclusions: dark metadata has 198 current chargeable rows with 52 remaining to the 250-current dark lane, graph/public proof has 300 parser-ready rows with zero current paid-floor credit, and Program DC 500 lift rows remain candidate-only until admitted.
 
 # Current Task: Program CP Release Integrity Drift Audit
 
