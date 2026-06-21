@@ -1,9 +1,9 @@
 // @ts-nocheck
 import { ADVISORY_CANARY_FEEDS } from "./canaryPortfolioAdvisoryFeeds.ts";
 import { CLOUD_CANARY_FEEDS } from "./canaryPortfolioCloudFeeds.ts";
+import { EXPLOIT_CANARY_FEEDS } from "./canaryPortfolioExploitFeeds.ts";
 import { INCIDENT_CANARY_FEEDS } from "./canaryPortfolioIncidentFeeds.ts";
 import { REVENUE_CANARY_FEEDS } from "./canaryPortfolioRevenueFeeds.ts";
-
 export const canaryQueries = ["APT29", "APT42", "Turla", "Volt Typhoon", "Scattered Spider", "Akira", "CVE"];
 
 export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
@@ -51,6 +51,7 @@ export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   ...REVENUE_CANARY_FEEDS,
   ...ADVISORY_CANARY_FEEDS,
   ...INCIDENT_CANARY_FEEDS,
+  ...EXPLOIT_CANARY_FEEDS,
   ...CLOUD_CANARY_FEEDS
 ];
 
