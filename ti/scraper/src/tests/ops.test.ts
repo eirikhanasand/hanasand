@@ -651,6 +651,11 @@ describe("ops controls", () => {
           sellableFindingCount: null,
           secondBatchAuditObserved: false,
           lastVerifiedAt: null
+        },
+        observedProofImport: {
+          schemaVersion: "ti.hosted_apify_observed_proof_import_path.v1",
+          validationState: "missing",
+          validationErrors: []
         }
       },
       paidProofAcceptance: {
@@ -689,7 +694,7 @@ describe("ops controls", () => {
     expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
     expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
     expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.paidRowIntegrityGate.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, actorInteractionContentExposed: false });
-    expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.hostedProofImportPath.commandExamples.join(" ")).toContain("TI_APIFY_HOSTED_PROOF_MODE=run");
+    expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.hostedProofImportPath.commandExamples.join(" ")).toContain("TI_APIFY_OBSERVED_PROOF_PATH");
     expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("100-name");
     expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("secondBatchAudit");
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
