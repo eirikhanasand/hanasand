@@ -7,5 +7,7 @@ export const COMMERCIAL_LIFT_QUERIES = [
   "MedusaLocker", "Space Bears ransomware", "Yanluowang ransomware", "RedLine malware", "ValleyRAT",
   "ClickFix", "Karakurt extortion", "BERT", "Stormous ransomware", "World Leaks",
   "DragonForce leak", "SafePay leak", "XWorm RAT", "RansomHouse extortion", "StealC malware",
-  "ClearFake", "FakeUpdates", "ShadowPad malware"
+  "ClearFake", "FakeUpdates", "ShadowPad malware", "UAC-0184", "Anubis ransomware",
+  "Nitrogen ransomware", "Kairos ransomware", "Nova ransomware", "BianLian ransomware", "Crypto24",
+  "Cloud Atlas", "BlackBasta ransomware", "The Gentlemen ransomware"
 ];

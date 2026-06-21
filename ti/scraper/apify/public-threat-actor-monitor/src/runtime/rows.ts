@@ -1,6 +1,7 @@
 import type { MarketplaceRow, PaidRowDecision } from "../types.ts";
 import type { NormalizedInput } from "./input.ts";
 import { liveDataRealScore } from "../dataReality.ts";
+import { normalizeResponse } from "../responseRows.ts";
 
 export function filterOutputRows(rows: MarketplaceRow[], input: NormalizedInput): MarketplaceRow[] {
   return rows.filter((row) => {
@@ -15,6 +16,14 @@ export function prioritizeDailyCollectionRows(rows: MarketplaceRow[]): Marketpla
     .map((row, index) => ({ row, index }))
     .sort((left, right) => compareRows(left, right))
     .map((entry) => entry.row);
+}
+
+export function outputRowsFor(response: Parameters<typeof normalizeResponse>[0], input: NormalizedInput): MarketplaceRow[] {
+  return prioritizeDailyCollectionRows(filterOutputRows(normalizeResponse(response, input), input));
+}
+
+export function needsNewsFallback(rows: MarketplaceRow[]): boolean {
+  return rows.filter((row) => row.paidRowDecision === "sellable").length < 3;
 }
 
 type RankedRow = { row: MarketplaceRow; index: number };

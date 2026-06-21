@@ -11,7 +11,7 @@ export function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
     .sort(sortSources).slice(0, 8).map((source) => ({ ...source, queries: [...source.queries].sort() }));
   return {
     schemaVersion: "ti.apify_daily_collection_run.v1",
-    preset: "361-name-default-watchlist",
+    preset: "371-name-default-watchlist",
     refreshedSourceCount: refreshedSources.length,
     candidateRowsProduced: candidateRows.length,
     freshCandidateRowsProduced: freshCandidateRows.length,
