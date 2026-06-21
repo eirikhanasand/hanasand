@@ -1634,7 +1634,7 @@ function buildHighValueReplacementBatch(
     actorPlans: buildHighValueReplacementActorPlans(replacementRows, weakRecords, minimumSourceValueScore),
     activationRunbook: buildHighValueReplacementActivationRunbook(replacementRows),
     freshnessPriorityQueue,
-    dailyActorPresetCanaryPacket: buildDailyActorPresetCanaryPacket(freshnessPriorityQueue),
+    dailyActorPresetCanaryPacket: buildDailyActorPresetCanaryPacket(freshnessPriorityQueue, replacementRows),
     aggregate: {
       sampledReplacementCount: replacementRows.length,
       projectedAdditionalPayworthySources,
@@ -1649,7 +1649,8 @@ function buildHighValueReplacementBatch(
 }
 
 function buildDailyActorPresetCanaryPacket(
-  queue: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]
+  queue: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"],
+  replacementRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"]
 ): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"] {
   const eligibleRows = queue.rows.filter((row) => row.priority !== "p2_hold_until_review");
   const rows = HIGH_VALUE_REPLACEMENT_ACTORS
@@ -1740,6 +1741,7 @@ function buildDailyActorPresetCanaryPacket(
     };
   });
   const sourceFamilyGapRows = dailyActorPresetSourceFamilyGapRows(actorSpecificGapRows);
+  const sourceFamilyAcquisitionRows = dailyActorPresetSourceFamilyAcquisitionRows(sourceFamilyGapRows, queue.rows, replacementRows);
 
   return {
     schemaVersion: "ti.source_atlas.daily_actor_preset_canary_packet.v1",
@@ -1762,9 +1764,10 @@ function buildDailyActorPresetCanaryPacket(
     rows,
     actorSpecificGapRows,
     sourceFamilyGapRows,
+    sourceFamilyAcquisitionRows,
     ownerHandoffs: {
       agent02Scheduler: ["Use rows[].atlasSourceIds and schedulerCadenceSeconds to stage approval-only canary packets for the daily 100-name Actor preset after operator approval."],
-      agent07Quality: ["Gate each actor row on canaryAcceptance before counting useful/fresh row lift or source-family diversity in paid output."],
+      agent07Quality: ["Gate each actor row and sourceFamilyAcquisitionRows candidate set on canaryAcceptance before counting useful/fresh row lift or source-family diversity in paid output."],
       agent09Apify: ["Expose dailyActorPresetCanaryPacket in /v1/sources/atlas so the Apify Actor can explain which reviewed sources support the daily paid preset and which actor/source-family acquisition gaps remain."],
       agent10Revenue: ["Measure expectedUsefulRowsPerDay against cost per useful row before increasing source-tier marketplace claims."]
     }
@@ -1813,6 +1816,143 @@ function dailyActorPresetSourceFamilyGapRows(
       right.expectedFreshRowsPerDayNeeded - left.expectedFreshRowsPerDayNeeded ||
       left.family.localeCompare(right.family)
     );
+}
+
+function dailyActorPresetSourceFamilyAcquisitionRows(
+  sourceFamilyGapRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyGapRows"],
+  queueRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"],
+  replacementRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyAcquisitionRows"] {
+  const actorSet = new Set<string>(HIGH_VALUE_REPLACEMENT_ACTORS);
+  return sourceFamilyGapRows
+    .map((gap) => {
+      const wantedActors = new Set<string>(gap.actors);
+      const sameFamilyCandidates = dailyActorPresetRankedAcquisitionCandidates(
+        dailyActorPresetAcquisitionCandidateRows(gap.family, queueRows, replacementRows),
+        wantedActors
+      );
+      const actorOverlapFallbackCandidates = sameFamilyCandidates.length > 0
+        ? []
+        : dailyActorPresetRankedAcquisitionCandidates(
+          dailyActorPresetAcquisitionCandidateRows(undefined, queueRows, replacementRows).filter((row) => dailyActorPresetCandidateOverlap(row, wantedActors) > 0),
+          wantedActors
+        );
+      const reviewedQueueFallbackCandidates = sameFamilyCandidates.length > 0 || actorOverlapFallbackCandidates.length > 0
+        ? []
+        : dailyActorPresetRankedAcquisitionCandidates(queueRows, wantedActors);
+      const candidates = (
+        sameFamilyCandidates.length > 0
+          ? sameFamilyCandidates
+          : actorOverlapFallbackCandidates.length > 0
+            ? actorOverlapFallbackCandidates
+            : reviewedQueueFallbackCandidates
+      ).slice(0, 6);
+      const observedActorCoverage = uniqueStrings(candidates
+        .flatMap((row) => [...row.actors, ...row.ransomwareGroups])
+        .filter((actor) => actorSet.has(actor))) as TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyAcquisitionRows"][number]["actorCoverage"];
+      const actorCoverage = observedActorCoverage.length > 0
+        ? observedActorCoverage
+        : gap.actors;
+      const expectedFreshRowsPerDay = roundScore(candidates.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
+      const expectedUsefulRowsPerDay = roundScore(candidates.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0));
+      return {
+        family: gap.family,
+        acquisitionPriority: gap.acquisitionPriority,
+        candidateSourceIds: uniqueStrings(candidates.map((row) => row.atlasSourceId)),
+        candidateCount: candidates.length,
+        actorCoverage,
+        expectedFreshRowsPerDay,
+        expectedUsefulRowsPerDay,
+        schedulerCadenceSeconds: candidates.length > 0 ? Math.min(...candidates.map((row) => row.schedulerCadenceSeconds)) : 86_400,
+        sourceActions: uniqueStrings(candidates.map((row) => row.sourceAction)) as TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyAcquisitionRows"][number]["sourceActions"],
+        measurementGate: `After operator approval, stage these reviewed ${gap.family} candidates only if daily Actor rows show fresh safe metadata for ${gap.actors.slice(0, 4).join(", ")} without raw URL, payload, private/auth/CAPTCHA, or actor-interaction exposure.`,
+        noLeakBoundary: {
+          rawUrlExposed: false as const,
+          rawPayloadExposed: false as const,
+          privateAuthCaptchaRequired: false as const,
+          crawlStarted: false as const,
+          actorInteractionRequired: false as const,
+          sourceActivationApplied: false as const
+        }
+      };
+    })
+    .filter((row) => row.candidateCount > 0)
+    .sort((left, right) =>
+      (left.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1) - (right.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1) ||
+      right.actorCoverage.length - left.actorCoverage.length ||
+      right.expectedUsefulRowsPerDay - left.expectedUsefulRowsPerDay ||
+      left.family.localeCompare(right.family)
+    );
+}
+
+function dailyActorPresetRankedAcquisitionCandidates(
+  rows: DailyActorPresetAcquisitionCandidate[],
+  wantedActors: Set<string>
+): DailyActorPresetAcquisitionCandidate[] {
+  return [...rows].sort((left, right) =>
+    dailyActorPresetCandidateOverlap(right, wantedActors) - dailyActorPresetCandidateOverlap(left, wantedActors) ||
+    dailyActorPresetQueuePriorityScore(right.priority) - dailyActorPresetQueuePriorityScore(left.priority) ||
+    right.expectedUsefulRowsPerDay - left.expectedUsefulRowsPerDay ||
+    right.expectedFreshRowsPerDay - left.expectedFreshRowsPerDay ||
+    left.atlasSourceId.localeCompare(right.atlasSourceId)
+  );
+}
+
+type DailyActorPresetAcquisitionCandidate = Pick<
+  TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"][number],
+  "priority" | "atlasSourceId" | "sourceFamily" | "actors" | "ransomwareGroups" | "expectedFreshRowsPerDay" | "expectedUsefulRowsPerDay" | "sourceAction" | "schedulerCadenceSeconds"
+>;
+
+function dailyActorPresetAcquisitionCandidateRows(
+  family: TiSourceAtlasFamily | undefined,
+  queueRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"],
+  replacementRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"]
+): DailyActorPresetAcquisitionCandidate[] {
+  const bySourceId = new Map<string, DailyActorPresetAcquisitionCandidate>();
+  for (const row of queueRows.filter((candidate) => family === undefined || candidate.sourceFamily === family)) {
+    bySourceId.set(row.atlasSourceId, row);
+  }
+  for (const row of replacementRows.filter((candidate) => family === undefined || candidate.family === family)) {
+    if (bySourceId.has(row.atlasSourceId)) continue;
+    bySourceId.set(row.atlasSourceId, {
+      priority: row.canImprovePaidRowsWithin1To3Days || row.activationPriority === "urgent" || row.activationPriority === "high"
+        ? "p0_fresh_paid_row_lift"
+        : row.activationPriority === "normal" ? "p1_actor_or_ransomware_gap" : "p2_hold_until_review",
+      atlasSourceId: row.atlasSourceId,
+      sourceFamily: row.family,
+      actors: row.expectedActorCoverage,
+      ransomwareGroups: row.expectedRansomwareCoverage,
+      expectedFreshRowsPerDay: row.expectedFreshRowsPerDay,
+      expectedUsefulRowsPerDay: roundScore(row.expectedFreshRowsPerDay * row.expectedEvidenceYield),
+      sourceAction: dailyActorPresetReplacementSourceAction(row),
+      schedulerCadenceSeconds: row.activationPriority === "urgent" ? 3600 : row.activationPriority === "high" ? 21_600 : 86_400
+    });
+  }
+  return [...bySourceId.values()];
+}
+
+function dailyActorPresetReplacementSourceAction(
+  row: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["replacementRows"][number]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyAcquisitionRows"][number]["sourceActions"][number] {
+  if (row.canImprovePaidRowsWithin1To3Days) return "stage_day1_canary_packet";
+  if (row.parserReadiness !== "certified") return "repair_parser_then_stage";
+  if (row.legalReview !== "current" || (row.robotsReview !== "current" && row.robotsReview !== "not_required")) return "refresh_legal_or_robots_review";
+  return "hold_for_replacement";
+}
+
+function dailyActorPresetCandidateOverlap(
+  row: DailyActorPresetAcquisitionCandidate,
+  wantedActors: Set<string>
+): number {
+  return uniqueStrings([...row.actors, ...row.ransomwareGroups]).filter((actor) => wantedActors.has(actor)).length;
+}
+
+function dailyActorPresetQueuePriorityScore(
+  priority: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"][number]["priority"]
+): number {
+  if (priority === "p0_fresh_paid_row_lift") return 2;
+  if (priority === "p1_actor_or_ransomware_gap") return 1;
+  return 0;
 }
 
 function dailyActorPresetFamilySourceCriteria(

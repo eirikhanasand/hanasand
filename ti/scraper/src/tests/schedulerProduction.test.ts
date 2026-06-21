@@ -1554,10 +1554,10 @@ describe("scheduler production readiness", () => {
       schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1",
       routeVisible: true,
       paidActorFloor: {
-        gate: "current_750_sellable_rows",
-        previousLocalGate: "current_500_sellable_rows",
-        targetSellableRows: 750,
-        currentLocalSellableRows: 500,
+        gate: "current_1000_local_sellable_rows",
+        previousLocalGate: "current_750_sellable_rows",
+        targetSellableRows: 1000,
+        currentLocalSellableRows: 750,
         currentLocalGapRows: 250,
         targetUsefulRows: 1000,
         currentUsefulRows: 607,
@@ -1570,12 +1570,12 @@ describe("scheduler production readiness", () => {
         defaultQueryCount: 100,
         usefulRows: 607,
         sellableRowsBeforeCurrentLift: 187,
-        sellableRowsAfterCurrentLift: 500,
+        sellableRowsAfterCurrentLift: 750,
         promotionState: "local_gate_ready_hosted_gate_held"
       },
       nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
       uiSummary: {
-        headline: "current_750_sellable_gate_active_current_1000_useful_gate_next",
+        headline: "current_750_passed_current_1000_sellable_and_useful_gates_active",
         suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
       }
     });
@@ -1596,10 +1596,20 @@ describe("scheduler production readiness", () => {
         owner: "agent_03",
         rows: 250,
         targetRows: 750,
-        currentRows: 500,
+        currentRows: 750,
+        gapRows: 0,
+        countsTowardLocalFloorNow: true,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "run_100_name_preset_after_source_sweeps"
+      }),
+      expect.objectContaining({
+        inputId: "parser_current_1000_lift",
+        owner: "agent_03",
+        rows: 250,
+        targetRows: 1000,
+        currentRows: 750,
         gapRows: 250,
         countsTowardLocalFloorNow: false,
-        countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "run_100_name_preset_after_source_sweeps"
       }),
       expect.objectContaining({
@@ -1617,8 +1627,18 @@ describe("scheduler production readiness", () => {
         owner: "agent_05",
         rows: 250,
         targetRows: 500,
-        currentRows: 250,
-        gapRows: 250,
+        currentRows: 500,
+        gapRows: 0,
+        countsTowardLocalFloorNow: false,
+        nextCadenceAction: "schedule_metadata_review_before_emit"
+      }),
+      expect.objectContaining({
+        inputId: "dark_metadata_750_chargeable_support",
+        owner: "agent_05",
+        rows: 250,
+        targetRows: 750,
+        currentRows: 750,
+        gapRows: 0,
         countsTowardLocalFloorNow: false,
         nextCadenceAction: "schedule_metadata_review_before_emit"
       }),
@@ -1627,8 +1647,18 @@ describe("scheduler production readiness", () => {
         owner: "agent_08",
         rows: 200,
         targetRows: 500,
-        currentRows: 300,
-        gapRows: 200,
+        currentRows: 500,
+        gapRows: 0,
+        countsTowardLocalFloorNow: false,
+        nextCadenceAction: "schedule_public_corroboration_before_emit"
+      }),
+      expect.objectContaining({
+        inputId: "graph_public_750_corroboration_handoff",
+        owner: "agent_08",
+        rows: 250,
+        targetRows: 750,
+        currentRows: 750,
+        gapRows: 0,
         countsTowardLocalFloorNow: false,
         nextCadenceAction: "schedule_public_corroboration_before_emit"
       }),
@@ -1673,7 +1703,7 @@ describe("scheduler production readiness", () => {
         protectedBy: expect.arrayContaining(["duplicate_run_reuse", "paid_row_gate", "hosted_proof_gate"])
       }),
       expect.objectContaining({
-        actionId: "current750_sellable_gap_sweeps",
+        actionId: "current1000_sellable_gap_sweeps",
         visibleState: "partial",
         cadence: "daily",
         protectedBy: expect.arrayContaining(["metadata_review", "source_policy", "no_leak_gate"])

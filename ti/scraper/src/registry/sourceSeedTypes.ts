@@ -2015,6 +2015,26 @@ export interface TiSourceAtlasProductSourceLadderPacket {
           nextSourceCriteria: string;
           ownerHandoff: "agent_04_source_acquisition";
         }>;
+        sourceFamilyAcquisitionRows: Array<{
+          family: TiSourceAtlasFamily;
+          acquisitionPriority: "p0_actor_specific_gap" | "p1_diversity_gap";
+          candidateSourceIds: string[];
+          candidateCount: number;
+          actorCoverage: Array<"APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira">;
+          expectedFreshRowsPerDay: number;
+          expectedUsefulRowsPerDay: number;
+          schedulerCadenceSeconds: number;
+          sourceActions: Array<"stage_day1_canary_packet" | "repair_parser_then_stage" | "refresh_legal_or_robots_review" | "hold_for_replacement">;
+          measurementGate: string;
+          noLeakBoundary: {
+            rawUrlExposed: false;
+            rawPayloadExposed: false;
+            privateAuthCaptchaRequired: false;
+            crawlStarted: false;
+            actorInteractionRequired: false;
+            sourceActivationApplied: false;
+          };
+        }>;
         ownerHandoffs: {
           agent02Scheduler: string[];
           agent07Quality: string[];

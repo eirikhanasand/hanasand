@@ -2077,6 +2077,34 @@ describe("source seed bundles", () => {
       row.nextSourceCriteria.includes("no private/auth/CAPTCHA access") &&
       row.ownerHandoff === "agent_04_source_acquisition"
     )).toBe(true);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionRows.length).toBeGreaterThan(0);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionRows).toEqual([...dailyPresetPacket.sourceFamilyAcquisitionRows].sort((left, right) =>
+      (left.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1) - (right.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1) ||
+      right.actorCoverage.length - left.actorCoverage.length ||
+      right.expectedUsefulRowsPerDay - left.expectedUsefulRowsPerDay ||
+      left.family.localeCompare(right.family)
+    ));
+    expect(dailyPresetPacket.sourceFamilyAcquisitionRows.map((row) => row.family)).toEqual(expect.arrayContaining(
+      dailyPresetPacket.sourceFamilyGapRows.slice(0, 1).map((row) => row.family)
+    ));
+    expect(dailyPresetPacket.sourceFamilyAcquisitionRows.every((row) =>
+      row.candidateCount === row.candidateSourceIds.length &&
+      row.candidateCount > 0 &&
+      row.candidateSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.actorCoverage.length > 0 &&
+      row.expectedFreshRowsPerDay > 0 &&
+      row.expectedUsefulRowsPerDay > 0 &&
+      row.schedulerCadenceSeconds > 0 &&
+      row.sourceActions.length > 0 &&
+      row.measurementGate.includes("fresh safe metadata") &&
+      row.measurementGate.includes("without raw URL") &&
+      row.noLeakBoundary.rawUrlExposed === false &&
+      row.noLeakBoundary.rawPayloadExposed === false &&
+      row.noLeakBoundary.privateAuthCaptchaRequired === false &&
+      row.noLeakBoundary.crawlStarted === false &&
+      row.noLeakBoundary.actorInteractionRequired === false &&
+      row.noLeakBoundary.sourceActivationApplied === false
+    )).toBe(true);
     expect(dailyPresetPacket.ownerHandoffs.agent02Scheduler.join(" ")).toContain("daily 100-name Actor preset");
     expect(dailyPresetPacket.ownerHandoffs.agent09Apify.join(" ")).toContain("/v1/sources/atlas");
     expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.aggregate.projectedPayworthySourceCount).toBeGreaterThan(
