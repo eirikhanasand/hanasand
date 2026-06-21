@@ -89,6 +89,8 @@ import type {
   SchedulerSourceGapWorkerLoopOptions,
   SchedulerSourceGapWorkerLoopReceipt,
   SchedulerSourceGapWorkerPartition,
+  SchedulerSourceGapWorkerRunnerOptions,
+  SchedulerSourceGapWorkerRunnerReceipt,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -195,6 +197,8 @@ export type {
   SchedulerSourceGapWorkerLoopOptions,
   SchedulerSourceGapWorkerLoopReceipt,
   SchedulerSourceGapWorkerPartition,
+  SchedulerSourceGapWorkerRunnerOptions,
+  SchedulerSourceGapWorkerRunnerReceipt,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -2821,6 +2825,57 @@ export function runSchedulerSourceGapWorkerLoop(
     commitPolicy: entry.rehearsal.willMutate ? "single_repository_handoff_after_all_gates" : "return_blocked_receipt",
     nextLoopAction: entry.rehearsal.willMutate ? "handoff_to_repository_adapter" : "sleep_until_next_poll",
     forbiddenOperations: entry.forbiddenOperations
+  };
+}
+
+export function runSchedulerSourceGapWorkerRunner(
+  plan: SchedulerDailyActorRunPlanDto,
+  repository: SchedulerQueueRepository,
+  options: SchedulerSourceGapWorkerRunnerOptions = {}
+): SchedulerSourceGapWorkerRunnerReceipt {
+  const now = options.now ?? new Date();
+  const maxIterations = Math.max(1, Math.min(options.maxIterations ?? 1, 3));
+  const loops: SchedulerSourceGapWorkerLoopReceipt[] = [];
+
+  for (let index = 0; index < maxIterations; index += 1) {
+    const loop = runSchedulerSourceGapWorkerLoop(plan, repository, {
+      ...options,
+      loopId: `${options.loopId ?? "source_gap_worker_loop"}_${index + 1}`,
+      now
+    });
+    loops.push(loop);
+    if (!loop.willMutate || loop.nextLoopAction === "handoff_to_repository_adapter") {
+      break;
+    }
+  }
+
+  const latestLoop = loops[loops.length - 1];
+  const willMutate = loops.some((loop) => loop.willMutate);
+  const visibleStates = uniqueStrings(loops.flatMap((loop) => loop.partitionPlan.flatMap((partition) => partition.visibleStates))) as SchedulerSourceGapWorkerRunnerReceipt["productEffect"]["visibleStates"];
+  const workerPartitions = uniqueStrings(loops.flatMap((loop) => loop.partitionPlan.map((partition) => partition.workerPartition))) as SchedulerSourceGapWorkerPartition[];
+  const stopReason: SchedulerSourceGapWorkerRunnerReceipt["stopReason"] = willMutate
+    ? "ready_handoff_prepared"
+    : latestLoop?.nextLoopAction === "sleep_until_next_poll"
+      ? "disabled_preview_complete"
+      : "max_iterations_reached";
+
+  return {
+    schemaVersion: "ti.scheduler_source_gap_worker_runner.v1",
+    generatedAt: now.toISOString(),
+    runnerId: options.runnerId ?? "source_gap_worker_runner_dry_run",
+    disabledByDefault: true,
+    willMutate,
+    maxIterations,
+    loopCount: loops.length,
+    stopReason,
+    loops,
+    productEffect: {
+      dailyActorPreset: "source_gap_freshness_support",
+      visibleStates,
+      workerPartitions,
+      nextOperatorAction: latestLoop?.nextLoopAction === "handoff_to_repository_adapter" ? "approve_repository_handoff" : "wait_for_next_poll"
+    },
+    forbiddenOperations: latestLoop?.forbiddenOperations ?? ["network_fetch", "lease_task", "ack_task", "raw_url_output", "payload_download", "credential_access", "actor_interaction"]
   };
 }
 

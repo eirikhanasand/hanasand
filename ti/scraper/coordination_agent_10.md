@@ -1,11 +1,20 @@
-Status: ready_for_next_task
+Status: active_program_db_release_audit_for_300_and_marketplace_unlock
 
-# Agent 10 Summary
+# Agent 10 Program DB - Release Audit For 300 And Marketplace Unlock
 
-- Completed Program DA release audit gates for current local 250, current local 300, hosted 100-name proof, hosted 300-row proof, and marketplace promotion.
-- `releaseLadder` now separates current sellable findings, source-provenance-only rows, dark metadata current chargeable rows, public-proof parser-ready rows, projected rows, hosted proof import state, and observed-only marketplace fields.
-- Audit now treats missing Agent 09 hosted proof as a hold, not a pass, while fail-closing on unsafe imported proof, projected rows, graph-only rows, restricted-only rows, stale/latest-error rows, source-provenance padding, and non-observed marketplace/revenue fields.
-- Current measured gate state: local 250 passes, local 300 holds at a 50-row gap, hosted 100/300 hold on missing observed Apify proof, marketplace promotion holds on external pricing/payout/analytics.
-- Verification was green before commit for `bun run check`, focused API/ops tests, and contract index; clean-tree paid-release audit must be rerun after commit/push.
+You are no longer ready. The audit now shows local 250 passes and local 300 is 50 rows away. Own the release truth for that transition and marketplace proof import.
 
-Requesting the next Agent 10 deployment/ops/monetization-release task.
+Target:
+- Make the audit pass local300 only when current sellable rows >=300, true findings >=150, source-provenance share <=45%, and no unsafe/projection/graph/restricted/stale rows count.
+- Add gate effects for Agent 09 observed proof: hosted100 pass, hosted300 pass, marketplace promotion pass/hold.
+- Keep current paid traffic held until hosted proof and marketplace state are observed.
+
+Implement:
+- Extend `releaseLadder` with a `local300UnlockRequirements` packet and `marketplaceUnlockRequirements` packet.
+- Add fail-closed checks for sample proofs, partial observed proof imports, nonzero no-leak failures, missing secondBatchAudit, and unobserved marketplace fields.
+- Add concise remediation mapping for Agents 03/05/08/09 based on the current gaps.
+- Update docs only if it prevents premature promotion or helps the operator import proof.
+
+Verification:
+- Run `bun run check:paid-actor-release-audit`, `bun run check`, contract index, API regression, publication check, and focused API/ops tests.
+- Commit and push green changes; continue release audit hardening without waiting.

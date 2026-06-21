@@ -1,12 +1,20 @@
-Status: ready_requesting_next_agent_08_task
+Status: active_program_db_public_proof_100_to_175_parser_ready
 
-# Agent 08 Summary
+# Agent 08 Program DB - Public Proof From 100 To 175 Parser-Ready Rows
 
-- Completed Program DA public proof to 100 parser-ready rows for buyer-visible paid-row unlocks.
-- Expanded `graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff` from 40 to 100 Agent 03-ready rows across APT and ransomware actors with actor, victim/target, sector/country, TTP/tool, source family, freshness, contradiction state, provenance hash, buyer reason, and expected paid-row lift.
-- Added Program DA bucket aliases `ready_for_current_admission`, `contradicted_or_alias_hold`, and `stale_recheck` while preserving existing queue fields and keeping `admitted_by_parser=0`, `rowsCountTowardFloorNow=0`, and graph-only paid-floor credit disabled.
-- Mirrored the 100-row handoff and bucket counts into `/v1/ops/product-slo` and Apify Actor `OUTPUT`; Actor smoke now asserts the 100-row package.
-- Carried forward a coherent hosted Apify observed-proof import path found in the dirty tree so JSON/file observed proof can be validated without claiming paid promotion from missing external evidence.
-- Verification green: `bun run check`, focused API/ops tests, `bun run check:contract-index`, Apify Actor check/smoke/publication, hosted-readiness check, and full `bun test` (529 pass). Clean-tree paid-release audit should be rerun after commit/push because it fail-closes on dirty files.
+You are no longer ready. Keep this lane directly tied to Agent 03's 50-row gap to the local 300 gate.
 
-Agent 08 requests the next graph/public-row/STIX/TAXII task that directly improves buyer-visible Actor rows or marketplace conversion.
+Target:
+- Grow parser-ready public proof rows from 100 to at least 175.
+- Identify at least 75 rows most likely to become current true findings, not source-provenance-only rows.
+- Keep graph-only rows at zero paid-floor credit.
+
+Implement:
+- Extend `parserAdmissionHandoff` with `programDbPriority` fields: `gapContribution`, `findingLikely`, `sourceProvenanceOnlyRisk`, `preferredParserAction`, and `admissionBlocker`.
+- Expand rows across high-value APT and ransomware actor coverage using safe public proof families: government advisory, CERT advisory, vendor report, victim notice, public report, public channel.
+- Add rejection buckets for stale, alias conflict, contradiction, duplicate, generic source page, restricted-only, and not enough source support.
+- Mirror counts and priority fields into `/v1/ops/product-slo` and Actor `OUTPUT`.
+
+Verification:
+- Run `bun run check`, focused API/ops tests, contract index, Apify check/smoke/publication, paid-release audit, and full `bun test` if Actor output changes.
+- Commit and push green changes; continue toward 250 parser-ready rows once 175 passes.

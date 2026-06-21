@@ -1,10 +1,20 @@
-Status: ready_for_next_task
+Status: active_program_db_hosted_proof_import_operator_surface
 
-- Added hosted Apify observed-proof import support through `TI_APIFY_OBSERVED_PROOF_JSON` and `TI_APIFY_OBSERVED_PROOF_PATH` for the paid-readiness checker.
-- Added a strict observed proof schema for hosted run metrics, 100-name preset proof, no-leak/inflation state, pricing, payout, listing state, Store analytics, refunds, and observed timestamp.
-- Surfaced the import path and accepted/missing state through `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo`, Apify Actor `OUTPUT`, and `bun run check:paid-actor-release-audit`.
-- Added a `sampleOnly=true` redacted sample JSON file and updated Actor README/checklist copy so sample imports cannot count as production proof.
-- Verification is green: hosted-readiness no-token/sample paths, Actor check/smoke/publication, API/ops tests, contract index, API regression, full `bun test`, and clean-tree paid release audit.
-- Current blocker is external only: real Apify hosted 100-name proof plus observed Store analytics, payout, pricing, refunds, and listing state must still be imported before paid promotion.
+# Agent 09 Program DB - Hosted Proof Import Operator Surface
 
-Agent 09 requests the next API/product-surface task.
+You are no longer ready. The import path exists; now make it operationally easy and hard to misuse.
+
+Target:
+- Add an operator-facing hosted proof import checklist/status packet that shows exactly what is missing and whether a pasted proof would unlock hosted100, hosted300, marketplace promotion, or none.
+- Keep sample proofs impossible to count as production.
+- Do not infer payout, analytics, or revenue.
+
+Implement:
+- Add `hostedProofOperatorChecklist` to `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo`, and Actor `OUTPUT`.
+- Include required fields, missing fields, accepted observed fields, last observed timestamp, sampleOnly state, gate effects, and copy/paste commands.
+- Add validation examples for: missing proof, sample proof rejected for promotion, valid hosted100 but hosted300 hold, valid hosted300 but marketplace hold, invalid unsafe/no-leak proof.
+- Keep `bun run check:hosted-apify-paid-readiness` and `bun run check:paid-actor-release-audit` aligned.
+
+Verification:
+- Run hosted-readiness no-token/sample/import fixture checks, paid-release audit, publication check, Actor check/smoke, API/ops tests, contract index, API regression, and full `bun test` if contracts change.
+- Commit and push green changes. The external blocker should be clear enough that the user can paste one observed JSON later.

@@ -1601,6 +1601,30 @@ export interface SchedulerSourceGapWorkerLoopReceipt {
   forbiddenOperations: SchedulerSourceGapWorkerEntryReceipt["forbiddenOperations"];
 }
 
+export interface SchedulerSourceGapWorkerRunnerOptions extends SchedulerSourceGapWorkerLoopOptions {
+  runnerId?: string;
+  maxIterations?: number;
+}
+
+export interface SchedulerSourceGapWorkerRunnerReceipt {
+  schemaVersion: "ti.scheduler_source_gap_worker_runner.v1";
+  generatedAt: string;
+  runnerId: string;
+  disabledByDefault: true;
+  willMutate: boolean;
+  maxIterations: number;
+  loopCount: number;
+  stopReason: "disabled_preview_complete" | "ready_handoff_prepared" | "max_iterations_reached";
+  loops: SchedulerSourceGapWorkerLoopReceipt[];
+  productEffect: {
+    dailyActorPreset: "source_gap_freshness_support";
+    visibleStates: Array<"searching" | "partial" | "metadata_review">;
+    workerPartitions: SchedulerSourceGapWorkerPartition[];
+    nextOperatorAction: "wait_for_next_poll" | "approve_repository_handoff";
+  };
+  forbiddenOperations: SchedulerSourceGapWorkerEntryReceipt["forbiddenOperations"];
+}
+
 export interface SchedulerInteractiveSearchFreshnessDto {
   generatedAt: string;
   apiTargets: Array<"/v1/frontier/status" | "/v1/intel/search.scheduler" | "/v1/intel/runs/{id}" | "/v1/contracts" | "frontend_ti_progressive_update">;

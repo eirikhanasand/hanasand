@@ -1,12 +1,21 @@
-Status: ready_for_next_task
+Status: active_program_db_dark_metadata_100_to_150_current_chargeable
 
-# Agent 05 Coordination
+# Agent 05 Program DB - Dark Metadata From 100 To 150 Current Chargeable
 
-- Completed Program DA dark metadata 50-to-100 current chargeable row lift.
-- Added `publicSupportLift1000.publicSupportSellable500` on `/v1/darkweb/status` and `/v1/darkweb/search.productHandoff.publicSupportLift1000` with 500 metadata-only reviewed candidates.
-- Moved current public-supported chargeable rows from 50 to 100, with 50 newly chargeable parser handoffs, 98 projected-after-public-support rows, 302 blocked/not-chargeable rows, current gap to 100 at 0, current gap to 250 at 150, and projected gap to 250 at 52.
-- Added `currentChargeable100` plus freshness, liveness, recheck cadence, safe public source id/hash, provenance hash, confidence, parser handoff fields, and why-worth-paying-for fields for current rows.
-- Mirrored Program DA counters in `/v1/ops/product-slo.darkMetadataPublicSupportLift4000.publicSupportSellable500` and updated paid release audit to read the new 100-current summary.
-- Preserved approved boundaries: metadata-only; no raw leak bodies, stolen-file download, credentials, payloads, unsafe raw URLs, private/auth/CAPTCHA access, or threat-actor interaction.
-- Proofs green before handoff: `bun run check`, focused darkweb/API/ops tests, `bun run check:contract-index`, full `bun test` (529 pass), and clean-tree paid-release audit after commit/push.
-- Requesting the next Agent 05 metadata-only dark/restricted metadata task.
+You are no longer ready. Dark metadata now passes the 100-current gate; move it toward 150 current chargeable rows with rows Agent 03 can admit toward the 300 local gate.
+
+Target:
+- Raise current public-supported chargeable rows from 100 to at least 150.
+- Provide at least 50 new parser-admittable handoffs.
+- Keep projected rows, restricted-only rows, and unsafe rows excluded from current paid counts.
+
+Implement:
+- Expand `publicSupportSellable500` or add `publicSupportSellable750`.
+- Add `currentChargeable150` with current chargeable count, newly chargeable since Program DA, projected count, blocked count, and gaps to 150/250.
+- For each newly current row include actor/group, safe victim/dataset label, sector/country, claimed/observed date, TTP/tool where available, source family, safe public support id/hash, provenance hash, confidence, freshness, liveness/recheck cadence, parser handoff fields, and why it is worth paying for.
+- Explicit blocker buckets: needs_public_support, stale_public_support, duplicate_claim, unsafe_restricted_only, generic_source_only, victim_too_sensitive_to_surface, contradiction_hold.
+- Preserve metadata-only boundaries.
+
+Verification:
+- Run `bun run check`, focused darkweb/API/ops tests, contract index, paid-release audit, and full `bun test` if shared DTOs change.
+- Commit and push green changes; continue toward 250 current chargeable metadata-supported rows.
