@@ -286,7 +286,9 @@ function checkStaleLatestActivityProof(productSlo: Record<string, unknown>, paid
   const gates = Array.isArray(runbook.gates) ? runbook.gates.filter(isRecord) : [];
   const staleGate = gates.find((gate) => gate.gate === "stale_latest_activity_errors");
   const admittedInflation = numberValue(secondBatch.staleLatestActivitySellableFindingInflation);
-  const ok = staleGate?.state === "pass" && staleGate.observed === 0 && admittedInflation === 0;
+  const staleSellableRows = numberValue(secondBatch.staleLatestActivitySellableRows);
+  const staleProofCount = Number.isFinite(admittedInflation) ? admittedInflation : staleSellableRows;
+  const ok = staleGate?.state === "pass" && staleGate.observed === 0 && staleProofCount === 0;
   return {
     name: "stale_latest_activity_proof",
     status: ok ? "pass" : "fail",
@@ -297,7 +299,11 @@ function checkStaleLatestActivityProof(productSlo: Record<string, unknown>, paid
       "Repair falsePositiveSuppressionGate.programCpHardening.secondBatchAudit so stale latest-activity inflation is zero.",
       "Keep stale rows held/suppressed until fresh public evidence exists."
     ],
-    details: { runbookGate: staleGate, staleLatestActivitySellableFindingInflation: secondBatch.staleLatestActivitySellableFindingInflation }
+    details: {
+      runbookGate: staleGate,
+      staleLatestActivitySellableFindingInflation: secondBatch.staleLatestActivitySellableFindingInflation,
+      staleLatestActivitySellableRows: secondBatch.staleLatestActivitySellableRows
+    }
   };
 }
 
