@@ -1225,6 +1225,8 @@ const graphPublicUnlockQueue = graphPublicCorroborationPivotPacket.paidRowUnlock
 const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, unknown> | undefined;
 if (
   !graphPublicUnlockCounts
+  || Number(graphPublicUnlockCounts.admitted_by_parser) !== 0
+  || Number(graphPublicUnlockCounts.ready_for_parser) !== 40
   || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
   || Number(graphPublicUnlockCounts.needs_public_source) !== 6
   || Number(graphPublicUnlockCounts.contradicted) !== 6
@@ -1239,7 +1241,26 @@ if (
 }
 const graphPublicReadyUnlocks = graphPublicUnlockQueue.ready_for_parser_admission as Array<Record<string, unknown>> | undefined;
 const graphPublicNeedsPublicSource = graphPublicUnlockQueue.needs_public_source as Array<Record<string, unknown>> | undefined;
+const graphPublicParserHandoff = graphPublicUnlockQueue.parserAdmissionHandoff as Array<Record<string, unknown>> | undefined;
 if (
+  !Array.isArray(graphPublicParserHandoff)
+  || graphPublicParserHandoff.length !== 40
+  || !graphPublicParserHandoff.every((row) =>
+    typeof row.actor === "string"
+    && typeof row.victimOrTarget === "string"
+    && typeof row.sourceFamily === "string"
+    && Number(row.freshnessAgeDays) >= 0
+    && typeof row.contradictionState === "string"
+    && typeof row.provenanceHash === "string"
+    && row.provenanceHash.length > 0
+    && typeof row.buyerReason === "string"
+    && row.buyerReason.length > 0
+    && Number(row.expectedPaidRowLiftAfterParserAdmission) > 0
+    && row.admissionState === "ready_for_parser"
+    && row.countsTowardFloorNow === false
+    && row.noLeak === true
+  )
+  ||
   !Array.isArray(graphPublicReadyUnlocks)
   || graphPublicReadyUnlocks.reduce((sum, row) => sum + Number(row.expectedRowsUnlockedAfterParserAdmission ?? 0), 0) !== 25
   || !graphPublicReadyUnlocks.every((row) => row.countsTowardFloorNow === false && typeof row.proofUrlHash === "string" && row.proofUrlHash.length > 0 && row.noLeak === true)
