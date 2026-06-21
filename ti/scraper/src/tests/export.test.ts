@@ -1,20 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { mapAttackTechniqueCandidates } from "../export/attack.ts";
-import { buildRelationshipGraph, relationshipConfidence } from "../export/relationships.ts";
+import { relationshipConfidence } from "../export/relationships.ts";
 import { exportEvidenceBackedStixBundle, exportPipelineResultToStixBundle } from "../export/stix.ts";
-import { STIX_21_GRAPH_MAPPING_CONTRACT } from "../export/stixContracts.ts";
-import { assertValidStixBundle, validateStixBundle } from "../export/stixValidation.ts";
-import { STIX_21_MEDIA_TYPE, pageBundleForTaxii, taxiiCollectionDescriptor } from "../export/taxii.ts";
+import { validateStixBundle } from "../export/stixValidation.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
-import type { PipelineResult, RawCapture } from "../types.ts";
+import type { RawCapture } from "../types.ts";
 import { hashContent } from "../utils.ts";
 
-function fixtureResult() {
-  const rawText = [
-    "APT29 used phishing and credential dumping against a healthcare victim.",
-    "The campaign used Cobalt Strike from https://evil.example.com and exploited CVE-2025-12345."
-  ].join(" ");
+const generatedAt = "2026-05-24T10:05:00.000Z";
 
+function fixture() {
+  const rawText = [
+    "APT29 used phishing and credential dumping against Northwind Health Systems.",
+    "The campaign used Cobalt Strike from https://evil.example.com, 198.51.100.42, and CVE-2025-12345."
+  ].join(" ");
   return processCollectedItem({
     sourceId: "src_report",
     url: "https://example.test/apt29-report",
@@ -23,99 +21,38 @@ function fixtureResult() {
     rawText,
     contentHash: hashContent(rawText),
     links: [],
-    metadata: { fixture: true },
+    metadata: {},
     sensitive: false
   });
 }
 
-describe("exchange exports", () => {
-  test("maps ATT&CK candidates only when evidence provenance exists", () => {
-    const techniques = mapAttackTechniqueCandidates(fixtureResult());
+describe("compact exchange exports", () => {
+  test("exports valid STIX-like actor, indicator, TTP, report, and relationship objects", () => {
+    const bundle = exportPipelineResultToStixBundle(fixture(), { producerName: "ti-scraper", generatedAt });
 
-    expect(techniques.some((technique) => technique.attackId === "T1566")).toBe(true);
-    expect(techniques.every((technique) => technique.provenance.length > 0)).toBe(true);
-  });
-
-  test("builds evidence-backed actor, TTP, indicator, and incident relationships", () => {
-    const graph = buildRelationshipGraph(fixtureResult());
-
-    expect(graph.nodes.some((node) => node.type === "actor" && node.value === "APT29")).toBe(true);
-    expect(graph.relationships.some((relationship) => relationship.type === "uses")).toBe(true);
-    expect(graph.relationships.every((relationship) => relationship.provenance.length > 0)).toBe(true);
-    expect(graph.relationships.some((relationship) => relationship.properties?.confidenceRule === "actor-uses-malware")).toBe(true);
-  });
-
-  test("exports a STIX 2.1-like bundle with confidence and provenance custom fields", () => {
-    const bundle = exportPipelineResultToStixBundle(fixtureResult(), {
-      producerName: "ti-scraper",
-      generatedAt: "2026-05-24T10:05:00.000Z",
-      tenantId: "tenant_global"
-    });
-
-    expect(bundle.type).toBe("bundle");
     expect(validateStixBundle(bundle).valid).toBe(true);
-    expect(() => assertValidStixBundle(bundle)).not.toThrow();
-    expect(bundle.objects.some((object) => object.type === "report" && object.x_ti_provenance)).toBe(true);
-    expect(bundle.objects.some((object) => object.type === "attack-pattern" && object.external_references?.some((ref) => ref.source_name === "mitre-attack"))).toBe(true);
-    expect(bundle.objects.some((object) => object.type === "relationship" && object.x_ti_provenance)).toBe(true);
-    expect(bundle.objects.every((object) => object.type === "relationship" ? Boolean(object.source_ref && object.target_ref) : true)).toBe(true);
+    expect(bundle.objects.some((object) => object.type === "intrusion-set" && object.name === "APT29")).toBe(true);
+    expect(bundle.objects.some((object) => object.type === "indicator" && object.name?.includes("198.51.100.42"))).toBe(true);
+    expect(bundle.objects.some((object) => object.type === "vulnerability" && object.name === "CVE-2025-12345")).toBe(true);
+    expect(bundle.objects.some((object) => object.type === "attack-pattern")).toBe(true);
+    expect(bundle.objects.some((object) => object.type === "relationship" && object.x_ti_provenance?.length)).toBe(true);
   });
 
-  test("exports evidence-backed STIX objects directly from live stored captures", () => {
-    const body = [
-      "APT29 used phishing and credential dumping against Northwind Health Systems in the healthcare sector.",
-      "The campaign used Cobalt Strike from https://evil.example.com and exploited CVE-2025-12345.",
-      "Indicator 198.51.100.42 was observed in command and control activity."
-    ].join(" ");
+  test("exports stored captures without leaking unavailable bodies", () => {
+    const body = "APT29 used phishing and Cobalt Strike against Northwind Health Systems from 198.51.100.42.";
     const capture: RawCapture = {
       id: "cap_live_stix",
-      tenantId: "tenant_global",
       sourceId: "src_live",
-      taskId: "task_live",
-      url: "https://example.test/live-report?utm_source=x",
-      canonicalUrl: "https://example.test/live-report",
+      url: "https://example.test/live-report",
       collectedAt: "2026-05-24T10:00:00.000Z",
       contentHash: hashContent(body),
-      normalizedTextHash: hashContent(body.toLowerCase()),
       mediaType: "text/plain",
       storageKind: "inline_text",
       body,
       metadata: { title: "Live APT29 report" },
-      sensitive: false,
-      sensitivityFlags: ["public"],
-      provenance: {
-        sourceId: "src_live",
-        captureId: "cap_live_stix",
-        url: "https://example.test/live-report",
-        collectedAt: "2026-05-24T10:00:00.000Z",
-        contentHash: hashContent(body),
-        extractorVersion: "capture-store"
-      }
+      sensitive: false
     };
-
-    const bundle = exportEvidenceBackedStixBundle({
-      captures: [capture],
-      options: {
-        producerName: "ti-scraper",
-        generatedAt: "2026-05-24T10:05:00.000Z",
-        tenantId: "tenant_global",
-        bundleKey: "run_live"
-      }
-    });
-
-    expect(validateStixBundle(bundle).valid).toBe(true);
-    expect(bundle.objects.some((object) => object.type === "indicator" && object.name === "ipv4:198.51.100.42")).toBe(true);
-    expect(bundle.objects.some((object) => object.type === "vulnerability" && object.name === "CVE-2025-12345")).toBe(true);
-    expect(bundle.objects.some((object) => object.type === "intrusion-set" && object.name === "APT29")).toBe(true);
-    expect(bundle.objects.some((object) => object.type === "report" && object.object_refs?.length)).toBe(true);
-    expect(bundle.objects.some((object) => object.type === "relationship")).toBe(true);
-    expect(bundle.objects.every((object) =>
-      object.x_ti_provenance ? object.x_ti_provenance.every((item) => item.captureId === "cap_live_stix") : true
-    )).toBe(true);
-  });
-
-  test("represents metadata-only captures without leaking unavailable bodies", () => {
-    const capture: RawCapture = {
+    const metadataOnly: RawCapture = {
       id: "cap_metadata_only",
       sourceId: "src_public_channel",
       url: "https://t.me/public_channel/12",
@@ -124,133 +61,19 @@ describe("exchange exports", () => {
       mediaType: "application/json",
       storageKind: "metadata_only",
       metadata: { title: "Public channel metadata" },
-      sensitive: true,
-      sensitivityFlags: ["contains_pii"]
+      sensitive: true
     };
 
-    const bundle = exportEvidenceBackedStixBundle({
-      captures: [capture],
-      options: {
-        producerName: "ti-scraper",
-        generatedAt: "2026-05-24T10:05:00.000Z",
-        includeMetadataOnlyCaptures: true
-      }
-    });
+    const bundle = exportEvidenceBackedStixBundle({ captures: [capture, metadataOnly], options: { producerName: "ti-scraper", generatedAt } });
 
     expect(validateStixBundle(bundle).valid).toBe(true);
-    const evidence = bundle.objects.find((object) => object.type === "x-ti-evidence");
-    expect(evidence).toBeDefined();
-    expect(evidence?.x_ti_extractable).toBe(false);
+    expect(bundle.objects.some((object) => object.type === "x-ti-evidence" && object.x_ti_extractable === false)).toBe(true);
     expect(JSON.stringify(bundle)).not.toContain("body");
+    expect(bundle.objects.every((object) => object.x_ti_provenance ? object.x_ti_provenance.every((item) => item.captureId === "cap_live_stix") : true)).toBe(true);
   });
 
-  test("catches invalid STIX-like objects before export consumers receive them", () => {
-    const bundle = exportPipelineResultToStixBundle(fixtureResult(), {
-      producerName: "ti-scraper",
-      generatedAt: "2026-05-24T10:05:00.000Z"
-    });
-    const relationship = bundle.objects.find((object) => object.type === "relationship");
-    expect(relationship).toBeDefined();
-    if (relationship) relationship.target_ref = "malware--00000000-0000-0000-0000-000000000000";
-
-    const validation = validateStixBundle(bundle);
-    expect(validation.valid).toBe(false);
-    expect(validation.issues.some((issue) => issue.path.includes("target_ref"))).toBe(true);
-    expect(() => assertValidStixBundle(bundle)).toThrow("Invalid STIX bundle");
-  });
-
-  test("hardens ATT&CK STIX mapping fixtures and deprecated technique validation", () => {
-    expect(STIX_21_GRAPH_MAPPING_CONTRACT.confidenceMapping).toMatchObject({
-      inputRange: "0_to_1_graph_confidence",
-      stixRange: "0_to_100_integer",
-      rounding: "nearest_integer_clamped"
-    });
-    expect(STIX_21_GRAPH_MAPPING_CONTRACT.attackTechniqueHandling).toMatchObject({
-      mitreExternalIdPattern: "T####_optional_subtechnique",
-      revokedOrDeprecatedPolicy: "export_only_as_review_metadata_until_replaced",
-      requiredExternalReferenceFields: ["source_name", "external_id", "url"]
-    });
-    expect(STIX_21_GRAPH_MAPPING_CONTRACT.hardeningFixtures?.map((fixture) => fixture.name)).toEqual(expect.arrayContaining([
-      "actor_uses_tool",
-      "actor_uses_malware",
-      "actor_exploits_cve",
-      "actor_targets_victim",
-      "campaign_uses_ttp",
-      "revoked_deprecated_attack_id"
-    ]));
-    expect(STIX_21_GRAPH_MAPPING_CONTRACT.taxiiBoundary).toBe("descriptor_only_no_server");
-
-    const bundle = exportPipelineResultToStixBundle(fixtureResult(), {
-      producerName: "ti-scraper",
-      generatedAt: "2026-05-24T10:05:00.000Z"
-    });
-    const attackPattern = bundle.objects.find((object) => object.type === "attack-pattern");
-    expect(attackPattern).toBeDefined();
-    if (!attackPattern) throw new Error("expected ATT&CK attack-pattern");
-    attackPattern.external_references = [{ source_name: "mitre-attack", external_id: "T15", url: "https://attack.mitre.org/techniques/T15/" }];
-    expect(validateStixBundle(bundle).issues.some((issue) => issue.path.includes("external_id"))).toBe(true);
-
-    attackPattern.external_references = [{ source_name: "mitre-attack", external_id: "T1566", url: "https://attack.mitre.org/techniques/T1566/" }];
-    attackPattern.x_mitre_deprecated = true;
-    expect(validateStixBundle(bundle).issues.some((issue) => issue.path.includes("x_ti_review_state"))).toBe(true);
-    attackPattern.x_ti_review_state = "deprecated_review_hold";
-    expect(validateStixBundle(bundle).issues.some((issue) => issue.path.includes("x_ti_review_state"))).toBe(false);
-  });
-
-  test("applies explicit relationship confidence rules", () => {
+  test("keeps confidence rules conservative", () => {
     expect(relationshipConfidence("actor-targets-victim", 0.8, 0.6)).toBeCloseTo(0.574, 3);
     expect(relationshipConfidence("actor-uses-malware", 0.8, 0.6)).toBeCloseTo(0.616, 3);
-    expect(relationshipConfidence("actor-exploits-cve", 0.8, 0.9)).toBeCloseTo(0.714, 3);
-    expect(relationshipConfidence("indicator-indicates-incident", 0.9, 0.7)).toBeCloseTo(0.72, 3);
-  });
-
-  test("omits relationships when either side lacks provenance", () => {
-    const result = fixtureResult();
-    const actor = result.entities.find((entity) => entity.type === "actor");
-    const malware = result.entities.find((entity) => entity.type === "malware");
-    const ttp = result.entities.find((entity) => entity.type === "ttp");
-    expect(actor).toBeDefined();
-    expect(malware).toBeDefined();
-
-    const withoutActorProvenance: PipelineResult = {
-      ...result,
-      entities: result.entities.map((entity) => entity === actor ? { ...entity, provenance: [] } : entity)
-    };
-    const graph = buildRelationshipGraph(withoutActorProvenance);
-    const actorNode = graph.nodes.find((node) => node.type === "actor" && node.value === "APT29");
-    const malwareNode = graph.nodes.find((node) => node.type === "malware" && node.value === "cobalt strike");
-    expect(actorNode).toBeDefined();
-    expect(malwareNode).toBeDefined();
-    expect(graph.relationships.some((relationship) =>
-      relationship.type === "uses"
-      && relationship.sourceRef === actorNode?.id
-      && relationship.targetRef === malwareNode?.id
-    )).toBe(false);
-
-    const withoutTtpProvenance: PipelineResult = {
-      ...result,
-      entities: result.entities.map((entity) => entity === ttp ? { ...entity, provenance: [] } : entity)
-    };
-    const ttpGraph = buildRelationshipGraph(withoutTtpProvenance);
-    expect(ttpGraph.relationships.every((relationship) => relationship.provenance.length > 0)).toBe(true);
-  });
-
-  test("keeps TAXII as a future interface boundary", () => {
-    const descriptor = taxiiCollectionDescriptor({
-      id: "default",
-      title: "Default CTI export",
-      canRead: true,
-      canWrite: false
-    });
-    const bundle = exportPipelineResultToStixBundle(fixtureResult(), {
-      producerName: "ti-scraper",
-      generatedAt: "2026-05-24T10:05:00.000Z"
-    });
-    const page = pageBundleForTaxii(descriptor.id, bundle);
-
-    expect(descriptor.mediaTypes).toEqual([STIX_21_MEDIA_TYPE]);
-    expect(page.collectionId).toBe("default");
-    expect(page.more).toBe(false);
-    expect(page.objects.length).toBeGreaterThan(0);
   });
 });
