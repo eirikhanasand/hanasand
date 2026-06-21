@@ -1,3 +1,5 @@
+import { buildHostedDefaultParserLift, type ProgramFhHostedDefaultParserLift } from "./hostedDefaultParserLift.ts";
+
 interface ActorInput {
   query?: string;
   queries?: string[];
