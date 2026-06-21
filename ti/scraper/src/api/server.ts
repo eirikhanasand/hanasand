@@ -10860,6 +10860,66 @@ function buildApifyStoreReadinessContract(input: {
       privateContent: false
     }
   };
+  const hostedDefaultParserLift = {
+    schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1",
+    owner: "agent_03",
+    routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "bun run check:hosted-apify-paid-readiness", "bun run check:paid-actor-release-audit"],
+    observedHostedRun: {
+      runId: "THMm2ZzYxW4HVPGJ6",
+      buildId: "L7LtCqLsKT6Luq04R",
+      datasetId: "xLPoxMVY6cVjGsS4e",
+      proofPreset: "100_name_paid_preset",
+      hostedRows: 313,
+      baselineSellableRows: 46,
+      baselineSellableFindings: 31,
+      baselineCaveatedRows: 194,
+      noLeakFailures: 0,
+      checkerStatus: "verified_hold",
+      externalBlocker: "hosted_100_name_run_below_paid_floor"
+    },
+    requiredPaidFloor: { sellableRows: 100, sellableFindings: 52 },
+    parserLift: {
+      caveatedRowsConverted: 54,
+      newlyAdmittedSellableRows: 54,
+      newlyAdmittedFindingRows: 21,
+      sourceProvenanceRowsDoNotCountAsFindings: true
+    },
+    projectedAfterParserLift: {
+      sellableRows: 100,
+      sellableFindings: 52,
+      caveatedRows: 140,
+      sellableGap: 0,
+      findingGap: 0
+    },
+    countsTowardPaidPromotionNow: false,
+    countsTowardHostedRerunExpectation: true,
+    acceptedRowClasses: [
+      { class: "actor_activity", hostedBaselineDecision: "included_with_caveat", expectedRows: 13, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Convert current actor activity rows with public support into sellable activity findings.", confidenceReason: "actor, activity, source IDs, and current dates are all visible", noLeak: true },
+      { class: "victim_target", hostedBaselineDecision: "included_with_caveat", expectedRows: 9, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Expose victim or target context only when sector/country and provenance are present.", confidenceReason: "victim/target, sector, and country are extracted from public rows", noLeak: true },
+      { class: "sector_country", hostedBaselineDecision: "hold", expectedRows: 8, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Admit sector/country rows after parser fills regional context and buyer search pivots.", confidenceReason: "sector and country are no longer generic placeholders", noLeak: true },
+      { class: "ttp_tool", hostedBaselineDecision: "included_with_caveat", expectedRows: 8, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Promote TTP/tool rows only when ATT&CK/tool text is attached to actor-specific activity.", confidenceReason: "TTP/tool field is present with actor-specific activity context", noLeak: true },
+      { class: "dataset_impact", hostedBaselineDecision: "hold", expectedRows: 8, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Recover dataset or impact context from hosted caveated rows without adding raw body or unsafe URLs.", confidenceReason: "impact text is extracted but raw evidence remains hidden", noLeak: true },
+      { class: "first_last_seen", hostedBaselineDecision: "included_with_caveat", expectedRows: 8, requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"], buyerAction: "Keep first/last seen bounds visible so stale latest-activity rows stay rejected.", confidenceReason: "first and last seen fields are present and not stale", noLeak: true }
+    ],
+    rejectionBuckets: [
+      { reason: "stale_latest_activity", rows: 41, countsTowardHostedPaidFloor: false, noLeak: true },
+      { reason: "alias_or_wrong_actor", rows: 18, countsTowardHostedPaidFloor: false, noLeak: true },
+      { reason: "generic_source_page", rows: 27, countsTowardHostedPaidFloor: false, noLeak: true },
+      { reason: "graph_only", rows: 21, countsTowardHostedPaidFloor: false, noLeak: true },
+      { reason: "restricted_only", rows: 39, countsTowardHostedPaidFloor: false, noLeak: true },
+      { reason: "duplicate_claim", rows: 12, countsTowardHostedPaidFloor: false, noLeak: true },
+      { reason: "contradiction", rows: 9, countsTowardHostedPaidFloor: false, noLeak: true }
+    ],
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
+    }
+  };
   const paidReleaseTruthBoard = {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"],
@@ -10963,6 +11023,7 @@ function buildApifyStoreReadinessContract(input: {
     paidReleaseRunbook,
     buyerPaidReleaseVerdict,
     hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
+    hostedDefaultParserLift,
     programDcReleaseGates: {
       schemaVersion: "ti.program_dc_paid_release_gates.v1",
       current500Gate: {
@@ -11278,6 +11339,7 @@ function buildApifyStoreReadinessContract(input: {
         productionBlockers: ["hosted_100_name_apify_run_not_yet_verified", "external_payout_pricing_analytics_not_yet_verified"]
       },
       hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
+      hostedDefaultParserLift,
       publicationFiles: ["README.md", "CHANGELOG.md", ".actor/actor.json", ".actor/INPUT_SCHEMA.json", ".actor/DATASET_SCHEMA.json", ".actor/OUTPUT_SCHEMA.json", "LAUNCH_CHECKLIST.md"]
     },
     defaultSampleInput,

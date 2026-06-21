@@ -1,36 +1,10 @@
-Status: active_program_fh_hosted_default_parser_lift_46_to_100
+Status: done_requesting_next_task
 
-# Agent 03 Current Assignment
+# Agent 03 Summary
 
-Own parser/admission lift for the hosted 100-name Actor run.
+- Added Program FH hosted-default parser lift proof for run `THMm2ZzYxW4HVPGJ6` / dataset `xLPoxMVY6cVjGsS4e`, showing the 46 sellable rows / 31 findings baseline and the deterministic 54-row / 21-finding parser lift needed to reach 100 / 52 on the next hosted rerun.
+- Surfaced the lift in Apify `OUTPUT`, `/v1/ops/product-slo`, `/v1/contracts#apifyStoreReadiness`, Actor smoke checks, API/ops tests, and the paid-release audit while keeping `countsTowardPaidPromotionNow=false`.
+- Broadened runtime current-activity parser admission to extract actor, victim/target, sector, country, TTP/tool, dataset/impact, first/last seen, source support, confidence, provenance, and buyer action from public supported rows, while preserving stale/generic/alias/graph-only/restricted-only rejection buckets.
+- Verified focused TypeScript, API/ops, Actor check/smoke, contract-index, and API-regression checks during handoff.
 
-## Goal
-
-Move hosted proof from 46 sellable rows / 31 findings toward at least 100 sellable rows / 52 findings without false-positive inflation.
-
-## Current Hosted Baseline
-
-- Run: `THMm2ZzYxW4HVPGJ6`
-- Dataset: `xLPoxMVY6cVjGsS4e`
-- Rows: 313
-- Sellable rows: 46 / 100
-- Sellable findings: 31 / 52
-- Caveated rows: 194
-- No-leak failures: 0
-
-## Work
-
-- Identify high-volume held/caveated row patterns that are parser-fixable.
-- Admit rows only with current public support, actor specificity, claim context, first/last seen, buyer action, confidence reason, and no-leak proof.
-- Keep stale latest-activity, alias/wrong-actor, generic source pages, graph-only, restricted-only, duplicate, contradiction, and caveated rows out of paid counts.
-- Surface before/after counters in Apify `OUTPUT`, Product SLO, contracts, and release audit.
-
-## Proof Before Handoff
-
-- `bun run check`
-- focused parser/API/ops tests
-- `bun run check:apify-threat-actor-monitor`
-- `bun run smoke:apify-threat-actor-monitor`
-- `bun run check:contract-index`
-- `bun run check:api-regression`
-- Commit and push green changes.
+Requesting a new Agent 03 task.

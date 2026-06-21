@@ -1210,6 +1210,13 @@ function checkPaidCountIntegrity(
   const currentSellable500Lift = record(parserLedger.currentSellable500Lift);
   const currentSellable750Lift = record(parserLedger.currentSellable750Lift);
   const currentSellable1000Lift = record(parserLedger.currentSellable1000Lift);
+  const hostedDefaultParserLift = record(record(productSlo.parserRealSellableLift).hostedDefaultParserLift);
+  const hostedDefaultObservedRun = record(hostedDefaultParserLift.observedHostedRun);
+  const hostedDefaultRequiredFloor = record(hostedDefaultParserLift.requiredPaidFloor);
+  const hostedDefaultLift = record(hostedDefaultParserLift.parserLift);
+  const hostedDefaultProjected = record(hostedDefaultParserLift.projectedAfterParserLift);
+  const hostedDefaultAcceptedRows = Array.isArray(hostedDefaultParserLift.acceptedRowClasses) ? hostedDefaultParserLift.acceptedRowClasses.filter(isRecord) : [];
+  const hostedDefaultRejections = Array.isArray(hostedDefaultParserLift.rejectionBuckets) ? hostedDefaultParserLift.rejectionBuckets.filter(isRecord) : [];
   const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
   const graphCounts = record(graphQueue.counts);
   const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
@@ -1309,6 +1316,29 @@ function checkPaidCountIntegrity(
       if (current1000AcceptedRows.length < 250) failures.push("current_sellable_1000_lift_too_few_accepted_rows");
       if (current1000ConvertedRows.length < 20) failures.push("current_sellable_1000_lift_too_few_source_rows_converted");
     }
+  }
+  if (hostedDefaultParserLift.schemaVersion !== "ti.program_fh_hosted_default_parser_lift.v1") failures.push("hosted_default_parser_lift_missing");
+  if (hostedDefaultObservedRun.runId !== "THMm2ZzYxW4HVPGJ6" || hostedDefaultObservedRun.datasetId !== "xLPoxMVY6cVjGsS4e") failures.push("hosted_default_parser_lift_wrong_run");
+  if (numberValue(hostedDefaultObservedRun.baselineSellableRows) !== 46) failures.push("hosted_default_parser_lift_wrong_baseline_sellable");
+  if (numberValue(hostedDefaultObservedRun.baselineSellableFindings) !== 31) failures.push("hosted_default_parser_lift_wrong_baseline_findings");
+  if (numberValue(hostedDefaultRequiredFloor.sellableRows) !== 100 || numberValue(hostedDefaultRequiredFloor.sellableFindings) !== 52) failures.push("hosted_default_parser_lift_wrong_floor");
+  if (numberValue(hostedDefaultLift.newlyAdmittedSellableRows) < 54) failures.push("hosted_default_parser_lift_sellable_delta_below_54");
+  if (numberValue(hostedDefaultLift.newlyAdmittedFindingRows) < 21) failures.push("hosted_default_parser_lift_finding_delta_below_21");
+  if (hostedDefaultLift.sourceProvenanceRowsDoNotCountAsFindings !== true) failures.push("hosted_default_parser_lift_source_rows_count_as_findings");
+  if (numberValue(hostedDefaultProjected.sellableRows) < 100 || numberValue(hostedDefaultProjected.sellableFindings) < 52) failures.push("hosted_default_parser_lift_projected_below_floor");
+  if (hostedDefaultParserLift.countsTowardPaidPromotionNow !== false) failures.push("hosted_default_parser_lift_unlocked_paid_promotion");
+  if (hostedDefaultParserLift.countsTowardHostedRerunExpectation !== true) failures.push("hosted_default_parser_lift_missing_rerun_expectation");
+  if (hostedDefaultAcceptedRows.length < 6) failures.push("hosted_default_parser_lift_missing_accepted_classes");
+  for (const row of hostedDefaultAcceptedRows) {
+    const requiredFields = Array.isArray(row.requiredFields) ? row.requiredFields : [];
+    for (const field of ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]) {
+      if (!requiredFields.includes(field)) failures.push(`hosted_default_parser_lift_missing_${field}`);
+    }
+    if (row.noLeak !== true) failures.push("hosted_default_parser_lift_accepted_row_missing_no_leak");
+  }
+  for (const row of hostedDefaultRejections) {
+    if (row.countsTowardHostedPaidFloor !== false) failures.push(`hosted_default_rejection_${row.reason}_counts_now`);
+    if (row.noLeak !== true) failures.push(`hosted_default_rejection_${row.reason}_missing_no_leak`);
   }
   if (projected300Effect.countsProjectedRowsAsPaid !== false) failures.push("public_support_admission_counts_projected_rows_as_paid");
   for (const row of publicSupportAcceptedRows) {

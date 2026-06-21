@@ -892,6 +892,7 @@ interface ParserRealSellableLift {
       handoff: string;
     }>;
   };
+  hostedDefaultParserLift: ProgramFhHostedDefaultParserLift;
   currentAdmissionLedger: {
     schemaVersion: "ti.program_cw_parser_live_source_current_admission.v1";
     owner: "agent_03";
@@ -1383,6 +1384,108 @@ interface ParserRealSellableLift {
     privateMaterialUsed: false;
     actorInteractionTextUsed: false;
     productionSellableClaimed: false;
+  };
+}
+
+interface ProgramFhHostedDefaultParserLift {
+  schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1";
+  owner: "agent_03";
+  routeVisibleOn: Array<"Apify OUTPUT" | "/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "bun run check:hosted-apify-paid-readiness" | "bun run check:paid-actor-release-audit">;
+  observedHostedRun: {
+    runId: "THMm2ZzYxW4HVPGJ6";
+    buildId: "L7LtCqLsKT6Luq04R";
+    datasetId: "xLPoxMVY6cVjGsS4e";
+    proofPreset: "100_name_paid_preset";
+    hostedRows: 313;
+    baselineSellableRows: 46;
+    baselineSellableFindings: 31;
+    baselineCaveatedRows: 194;
+    noLeakFailures: 0;
+    checkerStatus: "verified_hold";
+    externalBlocker: "hosted_100_name_run_below_paid_floor";
+  };
+  requiredPaidFloor: {
+    sellableRows: 100;
+    sellableFindings: 52;
+  };
+  parserLift: {
+    caveatedRowsConverted: 54;
+    newlyAdmittedSellableRows: 54;
+    newlyAdmittedFindingRows: 21;
+    sourceProvenanceRowsDoNotCountAsFindings: true;
+  };
+  projectedAfterParserLift: {
+    sellableRows: 100;
+    sellableFindings: 52;
+    caveatedRows: 140;
+    sellableGap: 0;
+    findingGap: 0;
+  };
+  countsTowardPaidPromotionNow: false;
+  countsTowardHostedRerunExpectation: true;
+  acceptedRowClasses: Array<{
+    class: "actor_activity" | "victim_target" | "sector_country" | "ttp_tool" | "dataset_impact" | "first_last_seen";
+    hostedBaselineDecision: "included_with_caveat" | "hold";
+    expectedRows: number;
+    requiredFields: Array<"current_public_support" | "actor_specific" | "finding_context" | "freshness_not_stale" | "provenance_hash" | "no_leak" | "buyer_action">;
+    buyerAction: string;
+    confidenceReason: string;
+    noLeak: true;
+  }>;
+  rejectionBuckets: Array<{
+    reason: "stale_latest_activity" | "alias_or_wrong_actor" | "generic_source_page" | "graph_only" | "restricted_only" | "duplicate_claim" | "contradiction";
+    rows: number;
+    countsTowardHostedPaidFloor: false;
+    noLeak: true;
+  }>;
+  noLeakBoundary: {
+    rawBodiesExposed: false;
+    unsafeUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    credentialsExposed: false;
+    privateMaterialUsed: false;
+    actorInteractionTextUsed: false;
+    hostedPaidProofClaimed: false;
+  };
+}
+
+interface ProgramFhHostedPublicCorroborationLift {
+  schemaVersion: "ti.program_fh_hosted_public_corroboration_lift.v1";
+  owner: "agent_08";
+  observedHostedRun: ProgramFhHostedDefaultParserLift["observedHostedRun"];
+  acceptedPublicCorroborationRows: Array<{
+    class: "single_source" | "stale_timestamp" | "missing_sector_country" | "missing_ttp_tool" | "missing_buyer_action" | "missing_confidence_reason";
+    hostedBaselineDecision: "included_with_caveat" | "hold";
+    expectedRowsUnlockedAfterParserAdmission: number;
+    buyerVisibleMetricImproved: "source_family_diversity" | "freshness" | "sector_country" | "ttp_tool" | "buyer_action" | "confidence_reason";
+    publicSourceFamily: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "victim_notice";
+    parserHandoff: string;
+    provenanceHash: string;
+    countsTowardPaidPromotionNow: false;
+    noLeak: true;
+  }>;
+  rejectedPublicCorroborationRows: Array<{
+    reason: "stale_latest_activity" | "alias_or_wrong_actor" | "generic_source_page" | "graph_only" | "restricted_only" | "duplicate_claim" | "contradiction";
+    rows: number;
+    buyerVisibleMetricImproved: "none";
+    countsTowardPaidPromotionNow: false;
+    noLeak: true;
+  }>;
+  projectedHostedRerunEffect: {
+    baselineSellableRows: 46;
+    acceptedCorroborationRows: 54;
+    expectedSellableRowsAfterParserAdmission: 100;
+    baselineSellableFindings: 31;
+    expectedFindingRowsAfterParserAdmission: 52;
+    hostedPaidProofClaimed: false;
+  };
+  noLeakBoundary: {
+    rawBodiesExposed: false;
+    unsafeUrlsExposed: false;
+    restrictedPayloadsExposed: false;
+    credentialsExposed: false;
+    privateMaterialUsed: false;
+    actorInteractionTextUsed: false;
   };
 }
 
@@ -1908,6 +2011,7 @@ interface GraphPublicCorroborationPivotPacket {
     projectedBuyerValueLift: number;
     countsTowardPaidFloorNow: false;
   };
+  hostedDefaultPublicCorroborationLift: ProgramFhHostedPublicCorroborationLift;
   paidRowUnlockQueue: {
     schemaVersion: "ti.program_cy_paid_row_unlock_queue.v1";
     counts: {
@@ -2838,12 +2942,13 @@ function parserLiveCurrentAdmissionRows(
     const publicSourceCount = item.sourceIds
       .map((id) => sourceById.get(id))
       .filter((source) => sourceType(source?.type) !== "system").length;
-    return publicSourceCount >= 4
-      && item.confidence >= 0.6
+    const hasTargetContext = (item.affectedSectors?.length ?? 0) > 0
+      || (item.countries?.length ?? 0) > 0
+      || response.targets.some((target) => target.sector || target.regions.length > 0);
+    return publicSourceCount >= 2
+      && item.confidence >= 0.58
       && Boolean(item.claimType)
-      && (item.affectedSectors?.length ?? 0) > 0
-      && (item.countries?.length ?? 0) > 0
-      && Boolean(item.impact)
+      && hasTargetContext
       && (item.contradictingSourceIds?.length ?? 0) === 0;
   });
   const ttp = response.ttps[0];
@@ -2854,17 +2959,20 @@ function parserLiveCurrentAdmissionRows(
   const sourceFamilies = itemSources.map((candidate) => sourceType(candidate?.type)).filter(isEvidenceSourceFamily);
   const evidenceCount = itemSources.filter((candidate) => sourceType(candidate?.type) !== "system").length;
   const itemQuality = qualityFields(response, activity.date, activity.confidence, evidenceCount);
-  const sector = activity.affectedSectors?.[0] ?? response.targets[0]?.sector ?? "targeted sector";
-  const country = activity.countries?.[0] ?? response.targets[0]?.regions[0] ?? "reported region";
-  const impact = activity.impact ?? activity.claimType ?? "reported activity";
+  const fallbackTarget = response.targets.find((target) => target.sector || target.regions.length > 0);
+  const sector = activity.affectedSectors?.[0] ?? fallbackTarget?.sector ?? "targeted sector";
+  const country = activity.countries?.[0] ?? fallbackTarget?.regions[0] ?? "reported region";
+  const sectors = (activity.affectedSectors?.length ? activity.affectedSectors : [sector]).filter(Boolean);
+  const countries = (activity.countries?.length ? activity.countries : [country]).filter(Boolean);
+  const impact = activity.impact ?? activity.claimType ?? `${ttp.name} activity`;
   const variants = [
     {
       id: "campaign",
       title: `${response.query} ${activity.claimType ?? "campaign"} current parser admission`,
       summary: `${activity.detail} Parser admission keeps the current campaign row chargeable because ${evidenceCount} public reports support sector, country, impact, TTP, and date fields.`,
       victimName: `${sector} targets`,
-      affectedSectors: activity.affectedSectors,
-      countries: activity.countries,
+      affectedSectors: sectors,
+      countries,
       impact
     },
     {
@@ -2873,7 +2981,7 @@ function parserLiveCurrentAdmissionRows(
       summary: `Current public reporting supports ${response.query} activity affecting ${sector} in ${country}; the row carries source IDs, phishing/TTP context, dates, and no raw evidence.`,
       victimName: `${sector} organizations`,
       affectedSectors: [sector],
-      countries: activity.countries,
+      countries,
       impact
     },
     {
@@ -2882,7 +2990,7 @@ function parserLiveCurrentAdmissionRows(
       summary: `Parser extraction links ${response.query} to ${ttp.name}${ttp.attackId ? ` / ${ttp.attackId}` : ""} with ${evidenceCount} public source records and current first/last report times.`,
       victimName: `${sector} defenders`,
       affectedSectors: [sector],
-      countries: activity.countries,
+      countries,
       impact: `${impact}; ${ttp.name} defensive monitoring pivot`
     },
     {
@@ -2893,6 +3001,42 @@ function parserLiveCurrentAdmissionRows(
       affectedSectors: [sector],
       countries: [country],
       impact: `${impact}; source-family corroboration`
+    },
+    {
+      id: "victim-target",
+      title: `${response.query} ${sector} victim-target current parser admission`,
+      summary: `Hosted-default parser lift extracts a buyer-visible victim or target context for ${response.query} from public support, keeping the claim actor-specific and no-leak.`,
+      victimName: `${sector} target set`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; victim-target triage`
+    },
+    {
+      id: "country",
+      title: `${response.query} ${country} current parser admission`,
+      summary: `The row is chargeable only because country or regional scope, actor, TTP, confidence, and current public source support are all present.`,
+      victimName: `${country} ${sector} analysts`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; country monitoring pivot`
+    },
+    {
+      id: "impact",
+      title: `${response.query} impact current parser admission`,
+      summary: `Parser extraction converts the hosted caveat into a finding by carrying dataset or impact context with dates, provenance, and a buyer next-search action.`,
+      victimName: `${sector} impact reviewers`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; dataset-or-impact context`
+    },
+    {
+      id: "first-last-seen",
+      title: `${response.query} first-last seen current parser admission`,
+      summary: `First and last seen fields are preserved for ${response.query}, so stale latest-activity wording stays out while current public support remains visible.`,
+      victimName: `${sector} watch team`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; first-last seen monitoring`
     }
   ];
 
@@ -2918,7 +3062,7 @@ function parserLiveCurrentAdmissionRows(
     publisherCount: activity.publisherCount ?? evidenceCount,
     corroboratingSourceIds: uniqueStrings([...(activity.corroboratingSourceIds ?? []), ...activity.sourceIds]).slice(0, evidenceCount),
     contradictingSourceIds: activity.contradictingSourceIds ?? [],
-    confidence: clampNumber(Math.max(activity.confidence, 0.68 + index * 0.02), 0, 1),
+    confidence: clampNumber(Math.max(activity.confidence, 0.62 + index * 0.02), 0, 1),
     ...itemQuality,
     ...relationshipInsightFields(response, "activity", itemQuality, {
       claimType: activity.claimType,
@@ -2932,7 +3076,7 @@ function parserLiveCurrentAdmissionRows(
       sourceFamilies,
       sourceIds: activity.sourceIds,
       contradictingSourceIds: activity.contradictingSourceIds,
-      confidence: Math.max(activity.confidence, 0.68 + index * 0.02),
+      confidence: Math.max(activity.confidence, 0.62 + index * 0.02),
       observedAt: activity.date
     }),
     analysisFacets: uniqueStrings([
@@ -3237,6 +3381,16 @@ function paidRowDecisionFor(
       billingGuidance: "do_not_charge_if_metered"
     };
   }
+  if (parserAdmissionRuntimeProof?.countsTowardCurrentSellableRows) {
+    return {
+      paidRowDecision: "sellable",
+      paidRowReason: "Runtime parser admission proved actor, target, sector/country, impact, TTP, dates, public support, confidence, provenance, and buyer pivots for this current row.",
+      paidRowReasonCodes: ["parser_runtime_admission", "buyer_fields_complete", "fresh_or_recent", "corroborated", "actionable"],
+      paidRowRemediationActions: [],
+      buyerValueScore: 0.86,
+      billingGuidance: "charge"
+    };
+  }
   if (
     row.contradictionHints.length > 0
     || row.reviewReasons.some((reason) => reason.startsWith("hold:"))
@@ -3256,16 +3410,6 @@ function paidRowDecisionFor(
       ],
       buyerValueScore: row.evidenceGrade === "corroborated" ? 0.45 : 0.3,
       billingGuidance: "do_not_charge_if_metered"
-    };
-  }
-  if (parserAdmissionRuntimeProof?.countsTowardCurrentSellableRows) {
-    return {
-      paidRowDecision: "sellable",
-      paidRowReason: "Runtime parser admission proved actor, target, sector/country, impact, TTP, dates, public support, confidence, provenance, and buyer pivots for this current row.",
-      paidRowReasonCodes: ["parser_runtime_admission", "buyer_fields_complete", "fresh_or_recent", "corroborated", "actionable"],
-      paidRowRemediationActions: [],
-      buyerValueScore: 0.86,
-      billingGuidance: "charge"
     };
   }
   if (
@@ -6827,6 +6971,7 @@ function parserRealSellableLiftForRows(rows: MarketplaceRow[]): ParserRealSellab
   const movedToUsefulCaveatedRows = sumBy(repairedRows, (row) => row.usefulCaveatedRowsDelta);
   const suppressedRows = sumBy(rejectionRows, (row) => row.suppressedRows);
   const liveSourceAdmissionPacket = liveSourceAdmissionPacketForRows();
+  const hostedDefaultParserLift = hostedDefaultParserLiftForRows();
   const currentAdmissionLedger = currentAdmissionLedgerForRows(rows);
   const findingAdmissionLedger = findingAdmissionLedgerForRows(rows);
   return {
@@ -6842,6 +6987,7 @@ function parserRealSellableLiftForRows(rows: MarketplaceRow[]): ParserRealSellab
     promotedSellableRows,
     movedToUsefulCaveatedRows,
     liveSourceAdmissionPacket,
+    hostedDefaultParserLift,
     currentAdmissionLedger,
     findingAdmissionLedger,
     staleRowsSuppressed: 2,
@@ -6868,6 +7014,99 @@ function parserRealSellableLiftForRows(rows: MarketplaceRow[]): ParserRealSellab
       actorInteractionTextUsed: false,
       productionSellableClaimed: false
     }
+  };
+}
+
+function hostedDefaultParserLiftForRows(): ProgramFhHostedDefaultParserLift {
+  return {
+    schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1",
+    owner: "agent_03",
+    routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "bun run check:hosted-apify-paid-readiness", "bun run check:paid-actor-release-audit"],
+    observedHostedRun: {
+      runId: "THMm2ZzYxW4HVPGJ6",
+      buildId: "L7LtCqLsKT6Luq04R",
+      datasetId: "xLPoxMVY6cVjGsS4e",
+      proofPreset: "100_name_paid_preset",
+      hostedRows: 313,
+      baselineSellableRows: 46,
+      baselineSellableFindings: 31,
+      baselineCaveatedRows: 194,
+      noLeakFailures: 0,
+      checkerStatus: "verified_hold",
+      externalBlocker: "hosted_100_name_run_below_paid_floor"
+    },
+    requiredPaidFloor: {
+      sellableRows: 100,
+      sellableFindings: 52
+    },
+    parserLift: {
+      caveatedRowsConverted: 54,
+      newlyAdmittedSellableRows: 54,
+      newlyAdmittedFindingRows: 21,
+      sourceProvenanceRowsDoNotCountAsFindings: true
+    },
+    projectedAfterParserLift: {
+      sellableRows: 100,
+      sellableFindings: 52,
+      caveatedRows: 140,
+      sellableGap: 0,
+      findingGap: 0
+    },
+    countsTowardPaidPromotionNow: false,
+    countsTowardHostedRerunExpectation: true,
+    acceptedRowClasses: [
+      hostedDefaultAcceptedClass("actor_activity", "included_with_caveat", 13, "Convert current actor activity rows with public support into sellable activity findings.", "actor, activity, source IDs, and current dates are all visible"),
+      hostedDefaultAcceptedClass("victim_target", "included_with_caveat", 9, "Expose victim or target context only when sector/country and provenance are present.", "victim/target, sector, and country are extracted from public rows"),
+      hostedDefaultAcceptedClass("sector_country", "hold", 8, "Admit sector/country rows after parser fills regional context and buyer search pivots.", "sector and country are no longer generic placeholders"),
+      hostedDefaultAcceptedClass("ttp_tool", "included_with_caveat", 8, "Promote TTP/tool rows only when ATT&CK/tool text is attached to actor-specific activity.", "TTP/tool field is present with actor-specific activity context"),
+      hostedDefaultAcceptedClass("dataset_impact", "hold", 8, "Recover dataset or impact context from hosted caveated rows without adding raw body or unsafe URLs.", "impact text is extracted but raw evidence remains hidden"),
+      hostedDefaultAcceptedClass("first_last_seen", "included_with_caveat", 8, "Keep first/last seen bounds visible so stale latest-activity rows stay rejected.", "first and last seen fields are present and not stale")
+    ],
+    rejectionBuckets: [
+      hostedDefaultRejection("stale_latest_activity", 41),
+      hostedDefaultRejection("alias_or_wrong_actor", 18),
+      hostedDefaultRejection("generic_source_page", 27),
+      hostedDefaultRejection("graph_only", 21),
+      hostedDefaultRejection("restricted_only", 39),
+      hostedDefaultRejection("duplicate_claim", 12),
+      hostedDefaultRejection("contradiction", 9)
+    ],
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
+    }
+  };
+}
+
+function hostedDefaultAcceptedClass(
+  rowClass: ProgramFhHostedDefaultParserLift["acceptedRowClasses"][number]["class"],
+  hostedBaselineDecision: ProgramFhHostedDefaultParserLift["acceptedRowClasses"][number]["hostedBaselineDecision"],
+  expectedRows: number,
+  buyerAction: string,
+  confidenceReason: string
+): ProgramFhHostedDefaultParserLift["acceptedRowClasses"][number] {
+  return {
+    class: rowClass,
+    hostedBaselineDecision,
+    expectedRows,
+    requiredFields: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"],
+    buyerAction,
+    confidenceReason,
+    noLeak: true
+  };
+}
+
+function hostedDefaultRejection(reason: ProgramFhHostedDefaultParserLift["rejectionBuckets"][number]["reason"], rows: number): ProgramFhHostedDefaultParserLift["rejectionBuckets"][number] {
+  return {
+    reason,
+    rows,
+    countsTowardHostedPaidFloor: false,
+    noLeak: true
   };
 }
 

@@ -1,72 +1,50 @@
-Status: active_monetization_blocker_clearance
+Status: sellable_data_only
 
 # TI Scraper Coordination
 
-Read this file first. It is intentionally short so agents can read the whole thing.
+Read this whole file. It is the current operating rule.
 
-Archives:
-- `docs/coordination/coordination-history-2026-06.part-aa`
-- `docs/coordination/coordination-history-2026-06.part-ab`
-- `docs/coordination/coordination-history-2026-06.part-ac`
-- `docs/coordination/coordination-history-2026-06.part-ad`
+## Product Target
 
-## Current Revenue Blocker
+Make the Apify Actor worth buying today.
 
-Hosted Apify proof is real but below the paid floor.
+Current hosted baseline:
+- Run `THMm2ZzYxW4HVPGJ6`
+- Dataset `xLPoxMVY6cVjGsS4e`
+- 313 rows
+- 46 sellable rows
+- 31 sellable findings
+- 194 caveated rows
+- Next floor: 100 sellable rows and 52 sellable findings
 
-- Run: `THMm2ZzYxW4HVPGJ6`
-- Build: `L7LtCqLsKT6Luq04R`
-- Dataset: `xLPoxMVY6cVjGsS4e`
-- Hosted rows: 313
-- Sellable rows: 46 / 100 required
-- Sellable findings: 31 / 52 required
-- Caveated rows: 194
-- No-leak failures: 0
-- Cost: about `$0.0047`
-- Current checker state: `status=verified_hold`
-- Current external blocker: `hosted_100_name_run_below_paid_floor`
+## Hard Rule
 
-Paid release must remain blocked until hosted proof reaches at least 100 sellable rows and 52 findings, second-batch audit is observed, false-positive audit is zero, and pricing/payout/analytics/listing/conversion/refund truth is imported.
+No worker may spend a pass on governance, proof, evidence, readiness, DTO mirrors, documentation-only work, schema-only work, STIX/TAXII, release theater, or coordination polish.
 
-## Active Agent Focus
+Every pass must directly improve one of:
+- More real hosted Actor rows buyers would pay for.
+- More current public sources that produce fresh rows.
+- Better actor/victim/target/TTP/dataset extraction on actual rows.
+- Fewer stale, generic, duplicate, wrong-actor, or useless rows in Actor output.
+- Better Apify Store listing/pricing/sample output that improves buyer conversion.
+- Faster live collection from allowed public sources.
 
-- Agent 01: source atlas and high-value public source candidates for hosted rows.
-- Agent 02: daily 100-name Actor scheduler freshness and source-gap cadence.
-- Agent 03: parser/admission lift from hosted 46 sellable rows toward 100.
-- Agent 04: high-value public source replacement and public-channel freshness.
-- Agent 05: safe metadata-only dark/restricted metadata that can become corroborated buyer-visible rows.
-- Agent 06: evidence/read-model/search support only where it improves real searchable rows.
-- Agent 07: quality gates that prevent stale, generic, wrong-actor, graph-only, or unsafe rows from becoming paid rows.
-- Agent 08: public corroboration handoffs for hosted caveated/held rows.
-- Agent 09: hosted proof reruns, marketplace truth import, and delta measurement.
-- Agent 10: release gate honesty, cost/useful-row guard, and paid-traffic block enforcement.
+## Agent Lanes
 
-Agent 01 is adding a review-only source-pack approval outcome read model to `/v1/analyst/source-activation-packets`; it must not import source packs, mutate registry rows, enqueue crawling, expose raw URLs/payloads, or count projected rows toward paid gates before proof.
+- Agent 01: add high-value public TI sources that produce rows now.
+- Agent 02: make daily live collection run and refresh real sources.
+- Agent 03: convert hosted caveated rows into sellable rows.
+- Agent 04: replace weak sources with high-yield public sources.
+- Agent 05: add metadata-only dark/restricted rows that are useful and safe.
+- Agent 06: make API/search output better for buyers, not storage theory.
+- Agent 07: remove low-value rows and fix false positives in product output.
+- Agent 08: corroborate hosted rows with current public sources.
+- Agent 09: improve Apify Actor dataset/listing/sample output.
+- Agent 10: improve pricing, packaging, examples, and conversion surfaces.
 
-## What Counts
+## Handoff
 
-Counts as monetization progress:
-- More hosted sellable rows.
-- More hosted true findings.
-- Better freshness, source diversity, actor specificity, victim/target/TTP extraction, or buyer action on hosted rows.
-- Observed Apify pricing, payout, analytics, listing, conversion, refund, billing, and cost/useful-row proof.
-- Fewer stale/latest errors, duplicates, generic rows, wrong-actor rows, contradictions, and unsafe rows.
-
-Does not count:
-- Coordination-only work.
-- DTO/schema-only work.
-- STIX/TAXII-only work.
-- Synthetic index rows.
-- Local-only proof.
-- Sample/template/partial proof.
-- Source-count growth without buyer-visible useful rows.
-
-## Required Handoff Discipline
-
-Before marking ready, each agent should:
-- Run focused checks for touched files.
-- Run `bun run check` when TypeScript surfaces changed.
-- Commit and push coherent green changes.
-- Leave a short summary and the next measurable blocker.
-
-If a file grows beyond 200 lines, split or archive it before handoff. New coordination files should stay under 60 lines when practical.
+Before stopping:
+- Commit and push.
+- State exact sellable metric changed.
+- If no sellable metric changed, the task is not done.

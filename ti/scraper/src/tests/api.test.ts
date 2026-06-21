@@ -1376,6 +1376,67 @@ describe("api v1", () => {
     expect(liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "useful_caveated")).toHaveLength(6);
     expect(liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "suppress")).toHaveLength(4);
     expect(liveSourceAdmissionPacket.suppressedClasses.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_actor_summary", "stale_repost_as_current", "alias_collision", "restricted_only_without_public_support"]));
+    const hostedDefaultParserLift = (response.parserRealSellableLift as {
+      hostedDefaultParserLift: {
+        schemaVersion: string;
+        owner: string;
+        routeVisibleOn: string[];
+        observedHostedRun: { runId: string; buildId: string; datasetId: string; hostedRows: number; baselineSellableRows: number; baselineSellableFindings: number; baselineCaveatedRows: number; noLeakFailures: number; checkerStatus: string };
+        requiredPaidFloor: { sellableRows: number; sellableFindings: number };
+        parserLift: { caveatedRowsConverted: number; newlyAdmittedSellableRows: number; newlyAdmittedFindingRows: number; sourceProvenanceRowsDoNotCountAsFindings: boolean };
+        projectedAfterParserLift: { sellableRows: number; sellableFindings: number; caveatedRows: number; sellableGap: number; findingGap: number };
+        countsTowardPaidPromotionNow: boolean;
+        countsTowardHostedRerunExpectation: boolean;
+        acceptedRowClasses: Array<{ class: string; requiredFields: string[]; buyerAction: string; confidenceReason: string; noLeak: boolean }>;
+        rejectionBuckets: Array<{ reason: string; countsTowardHostedPaidFloor: boolean; noLeak: boolean }>;
+        noLeakBoundary: Record<string, boolean>;
+      };
+    }).hostedDefaultParserLift;
+    expect(hostedDefaultParserLift).toMatchObject({
+      schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1",
+      owner: "agent_03",
+      routeVisibleOn: expect.arrayContaining(["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "bun run check:hosted-apify-paid-readiness", "bun run check:paid-actor-release-audit"]) as unknown as string[],
+      observedHostedRun: {
+        runId: "THMm2ZzYxW4HVPGJ6",
+        buildId: "L7LtCqLsKT6Luq04R",
+        datasetId: "xLPoxMVY6cVjGsS4e",
+        hostedRows: 313,
+        baselineSellableRows: 46,
+        baselineSellableFindings: 31,
+        baselineCaveatedRows: 194,
+        noLeakFailures: 0,
+        checkerStatus: "verified_hold"
+      },
+      requiredPaidFloor: { sellableRows: 100, sellableFindings: 52 },
+      parserLift: { caveatedRowsConverted: 54, newlyAdmittedSellableRows: 54, newlyAdmittedFindingRows: 21, sourceProvenanceRowsDoNotCountAsFindings: true },
+      projectedAfterParserLift: { sellableRows: 100, sellableFindings: 52, caveatedRows: 140, sellableGap: 0, findingGap: 0 },
+      countsTowardPaidPromotionNow: false,
+      countsTowardHostedRerunExpectation: true
+    });
+    expect(hostedDefaultParserLift.acceptedRowClasses.map((row) => row.class)).toEqual(expect.arrayContaining(["actor_activity", "victim_target", "sector_country", "ttp_tool", "dataset_impact", "first_last_seen"]));
+    expect(hostedDefaultParserLift.acceptedRowClasses.every((row) =>
+      row.requiredFields.includes("current_public_support") &&
+      row.requiredFields.includes("actor_specific") &&
+      row.requiredFields.includes("finding_context") &&
+      row.requiredFields.includes("freshness_not_stale") &&
+      row.requiredFields.includes("provenance_hash") &&
+      row.requiredFields.includes("no_leak") &&
+      row.requiredFields.includes("buyer_action") &&
+      row.buyerAction.length > 0 &&
+      row.confidenceReason.length > 0 &&
+      row.noLeak
+    )).toBe(true);
+    expect(hostedDefaultParserLift.rejectionBuckets.map((row) => row.reason)).toEqual(expect.arrayContaining(["stale_latest_activity", "alias_or_wrong_actor", "generic_source_page", "graph_only", "restricted_only", "duplicate_claim", "contradiction"]));
+    expect(hostedDefaultParserLift.rejectionBuckets.every((row) => row.countsTowardHostedPaidFloor === false && row.noLeak)).toBe(true);
+    expect(hostedDefaultParserLift.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
+    });
     expect((response.darkMetadataPublicSupportLift4000 as {
       first100RepairQueue: Array<{ countsTowardSellableFloorNow: boolean; noLeakProof: string }>;
       tier10000Preview: { evaluatedCandidateCount: number; projectedSellableAfterPublicSupport: number; usefulWithCaveat: number; acceptedValueDensity: number; expansionDecision: string; countsTowardSellableFloorNow: boolean };
@@ -5053,6 +5114,7 @@ describe("api v1", () => {
         operatorRecordingRule: { externalValuesStayUnknownUntilObserved: boolean; recordOnlyObservedApifyValues: string[] };
       };
       hostedPaidReadinessProof: Record<string, unknown>;
+      hostedDefaultParserLift: Record<string, unknown>;
       programDcReleaseGates: Record<string, unknown>;
     };
     expect(readinessPaidReleaseTruthBoard.observedMarketplaceTelemetry).toMatchObject({
@@ -5190,6 +5252,40 @@ describe("api v1", () => {
         }
       }
     });
+    expect(readinessPaidReleaseTruthBoard.hostedDefaultParserLift).toMatchObject({
+      schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1",
+      owner: "agent_03",
+      observedHostedRun: {
+        runId: "THMm2ZzYxW4HVPGJ6",
+        buildId: "L7LtCqLsKT6Luq04R",
+        datasetId: "xLPoxMVY6cVjGsS4e",
+        hostedRows: 313,
+        baselineSellableRows: 46,
+        baselineSellableFindings: 31,
+        baselineCaveatedRows: 194,
+        noLeakFailures: 0,
+        checkerStatus: "verified_hold"
+      },
+      parserLift: {
+        caveatedRowsConverted: 54,
+        newlyAdmittedSellableRows: 54,
+        newlyAdmittedFindingRows: 21,
+        sourceProvenanceRowsDoNotCountAsFindings: true
+      },
+      projectedAfterParserLift: { sellableRows: 100, sellableFindings: 52, sellableGap: 0, findingGap: 0 },
+      countsTowardPaidPromotionNow: false,
+      countsTowardHostedRerunExpectation: true
+    });
+    expect(((readinessPaidReleaseTruthBoard.hostedDefaultParserLift as { acceptedRowClasses: Array<{ requiredFields: string[]; noLeak: boolean }> }).acceptedRowClasses).every((row) =>
+      row.requiredFields.includes("current_public_support") &&
+      row.requiredFields.includes("actor_specific") &&
+      row.requiredFields.includes("finding_context") &&
+      row.requiredFields.includes("buyer_action") &&
+      row.noLeak
+    )).toBe(true);
+    expect(((readinessPaidReleaseTruthBoard.hostedDefaultParserLift as { rejectionBuckets: Array<{ countsTowardHostedPaidFloor: boolean; noLeak: boolean }> }).rejectionBuckets).every((row) =>
+      row.countsTowardHostedPaidFloor === false && row.noLeak
+    )).toBe(true);
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { requiredSignals: string[]; blockers: string[]; noLeakProof: Record<string, boolean> } }).paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { blockers: string[] } }).paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofImportPath: { commandExamples: string[]; observedProofImport: { validationState: string } } }).hostedProofImportPath.commandExamples.join(" ")).toContain("TI_APIFY_OBSERVED_PROOF_PATH");

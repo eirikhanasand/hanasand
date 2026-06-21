@@ -1,33 +1,18 @@
-Status: active_hosted_public_corroboration_lift
+Status: active_public_corroboration
 
-# Agent 08 Current Assignment
+# Agent 08 Task
 
-Own public corroboration for hosted held/caveated rows.
+Corroborate hosted held rows with current public sources.
 
-## Goal
+Deliver:
+- Pick hosted caveated rows closest to sellable.
+- Find or wire existing public support for actor-specific claims, victims/targets, TTPs/tools, sectors/countries, and freshness.
+- Produce rows Agent 03 can admit, not graph/STIX decorations.
+- Reject rows when support is stale, generic, contradictory, or not buyer-useful.
 
-Turn the best hosted caveated rows into parser-ready public corroboration handoffs that Agent 03 can admit as sellable findings.
+Success metric:
+- More hosted rows become eligible sellable findings.
 
-## Current Hosted Baseline
-
-- Run: `THMm2ZzYxW4HVPGJ6`
-- Dataset: `xLPoxMVY6cVjGsS4e`
-- Sellable rows: 46 / 100
-- Sellable findings: 31 / 52
-- Caveated rows: 194
-
-## Work
-
-- Build a corroboration packet keyed to the hosted run/dataset.
-- Prioritize rows failing single-source, stale timestamp, missing sector/country, missing TTP/tool, missing buyer action, or missing confidence reason.
-- Include accepted and rejected examples with the exact buyer-visible metric improved.
-- Do not work on graph decoration, STIX/TAXII, DTO-only mirrors, or source-family counts unless they directly help hosted rows become sellable.
-
-## Proof Before Handoff
-
-- `bun run check`
-- focused API/ops/graph-public tests
-- `bun run check:apify-threat-actor-monitor`
-- `bun run smoke:apify-threat-actor-monitor`
-- `bun run check:contract-index`
-- Commit and push green changes.
+Before stopping:
+- Run focused public-signal/API checks.
+- Commit and push.

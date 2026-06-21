@@ -1,33 +1,20 @@
-Status: active_release_gate_after_hosted_floor_lift
+Status: active_marketplace_conversion
 
-# Agent 10 Current Assignment
+# Agent 10 Task
 
-Own release-gate honesty after the next hosted proof lift.
+Stop release-gate/proof work.
 
-## Goal
+Improve monetization surfaces buyers see.
 
-Keep paid release blocked until hosted proof and marketplace truth are real, observed, and safe.
+Deliver:
+- Clean Apify Store title, description, examples, pricing explanation, and sample dataset.
+- Remove internal terms like proof, governance, readiness, DTO, blocker, or gate from buyer-facing text.
+- Make the product promise specific: fresh public threat actor and ransomware activity metadata.
+- Add one clear “what you get” example for SOC, CTI analyst, brand monitoring, and incident response users.
 
-## Current Blocker
+Success metric:
+- Better Store conversion likelihood.
 
-- Hosted baseline: 46 sellable rows / 31 findings.
-- Required floor: 100 sellable rows / 52 findings.
-- Also required: second-batch audit, false-positive audit, pricing, payout, analytics, listing, conversion/refunds, and cost/useful-row truth.
-
-## Work
-
-- Consume existing hosted proof, private-beta decision, and observed marketplace evidence; do not duplicate proof logic.
-- Keep release output short: one ordered blocker list and one next safe command.
-- Add regression coverage for the 46/31 baseline staying blocked.
-- Add regression coverage for a hypothetical 100/52 hosted proof still requiring audit and marketplace fields.
-- Reject local-only, coordination-only, DTO-only, source-count-only, sample, partial, and synthetic proof as release progress.
-
-## Proof Before Handoff
-
-- `bun run check`
-- focused ops/API/release-audit tests
-- `bun run check:paid-actor-release-audit`
-- `bun run check:apify-threat-actor-monitor`
-- `bun run smoke:apify-threat-actor-monitor`
-- `bun run check:contract-index`
-- Commit and push green changes.
+Before stopping:
+- Run publication/Actor checks.
+- Commit and push.

@@ -1,11 +1,21 @@
-Status: ready_for_next_agent01_task
+Status: active_sellable_source_acquisition
 
-# Agent 01 Summary
+# Agent 01 Task
 
-- Added review-only source-pack approval outcome rows to `/v1/analyst/source-activation-packets`.
-- Outcome summary now tracks approved, held, rejected, duplicate, legal-review, parser-needed, and scheduler-needed buckets without applying approval, importing source packs, mutating the registry, enqueueing crawls, or exposing raw URLs/payloads.
-- Outcome rows include pack/source ids, safe source hashes, expected fresh/useful/payworthy lift, owner handoff, proof still needed, rollback reason, provenance, and no-activation delivery boundaries.
-- Updated source registry docs and route inventory metadata for the new approval outcome read model.
-- Proof run: `bun run check`; `bun test src/tests/sourceSeeds.test.ts`; focused `/v1/analyst/source-activation-packets` API test; `bun run check:route-inventory`; `bun run check:contract-index`; full `bun test`.
+Stop all approval/governance work.
 
-Requesting the next Agent 01 task.
+Add real public TI sources that can produce buyer-useful Actor rows within 24 hours.
+
+Deliver:
+- 50 new high-yield public source candidates, not generic blogs.
+- Each source must map to actors/groups, expected row type, freshness cadence, parser path, and buyer use.
+- Prioritize ransomware trackers, CERT/government feeds, vendor CTI, exploit/advisory feeds, malware reports, and public Telegram/channel descriptors where allowed.
+- No private/auth/CAPTCHA sources.
+- No raw leaked data.
+
+Success metric:
+- More source rows that can become sellable Actor output, not more review packets.
+
+Before stopping:
+- Add tests for changed source data.
+- Commit and push.

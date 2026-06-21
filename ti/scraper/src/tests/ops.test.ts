@@ -1431,6 +1431,55 @@ describe("ops controls", () => {
     expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "useful_caveated")).toHaveLength(6);
     expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.candidateRows.filter((row) => row.admissionDecision === "suppress")).toHaveLength(4);
     expect(dashboard.parserRealSellableLift.liveSourceAdmissionPacket.suppressedClasses.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_actor_summary", "stale_repost_as_current", "alias_collision", "restricted_only_without_public_support"]));
+    expect(dashboard.parserRealSellableLift.hostedDefaultParserLift).toMatchObject({
+      schemaVersion: "ti.program_fh_hosted_default_parser_lift.v1",
+      owner: "agent_03",
+      observedHostedRun: {
+        runId: "THMm2ZzYxW4HVPGJ6",
+        buildId: "L7LtCqLsKT6Luq04R",
+        datasetId: "xLPoxMVY6cVjGsS4e",
+        hostedRows: 313,
+        baselineSellableRows: 46,
+        baselineSellableFindings: 31,
+        baselineCaveatedRows: 194,
+        noLeakFailures: 0,
+        checkerStatus: "verified_hold"
+      },
+      requiredPaidFloor: { sellableRows: 100, sellableFindings: 52 },
+      parserLift: {
+        caveatedRowsConverted: 54,
+        newlyAdmittedSellableRows: 54,
+        newlyAdmittedFindingRows: 21,
+        sourceProvenanceRowsDoNotCountAsFindings: true
+      },
+      projectedAfterParserLift: { sellableRows: 100, sellableFindings: 52, caveatedRows: 140, sellableGap: 0, findingGap: 0 },
+      countsTowardPaidPromotionNow: false,
+      countsTowardHostedRerunExpectation: true
+    });
+    expect(dashboard.parserRealSellableLift.hostedDefaultParserLift.acceptedRowClasses.map((row) => row.class)).toEqual(expect.arrayContaining(["actor_activity", "victim_target", "sector_country", "ttp_tool", "dataset_impact", "first_last_seen"]));
+    expect(dashboard.parserRealSellableLift.hostedDefaultParserLift.acceptedRowClasses.every((row) =>
+      row.requiredFields.includes("current_public_support") &&
+      row.requiredFields.includes("actor_specific") &&
+      row.requiredFields.includes("finding_context") &&
+      row.requiredFields.includes("freshness_not_stale") &&
+      row.requiredFields.includes("provenance_hash") &&
+      row.requiredFields.includes("no_leak") &&
+      row.requiredFields.includes("buyer_action") &&
+      row.buyerAction.length > 0 &&
+      row.confidenceReason.length > 0 &&
+      row.noLeak
+    )).toBe(true);
+    expect(dashboard.parserRealSellableLift.hostedDefaultParserLift.rejectionBuckets.map((row) => row.reason)).toEqual(expect.arrayContaining(["stale_latest_activity", "alias_or_wrong_actor", "generic_source_page", "graph_only", "restricted_only", "duplicate_claim", "contradiction"]));
+    expect(dashboard.parserRealSellableLift.hostedDefaultParserLift.rejectionBuckets.every((row) => row.countsTowardHostedPaidFloor === false && row.noLeak)).toBe(true);
+    expect(dashboard.parserRealSellableLift.hostedDefaultParserLift.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
+    });
     expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay).toMatchObject({
       schemaVersion: "ti.program_cv_parser_runtime_admission_replay.v1",
       owner: "agent_03",
