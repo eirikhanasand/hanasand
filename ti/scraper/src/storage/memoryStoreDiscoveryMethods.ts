@@ -3,6 +3,8 @@ import { stableId } from "../utils.ts";
 import { deltaForSnapshot, evidenceCursor, evidenceMetadata, readPromotionMetadata } from "./memoryStoreHelpers.ts";
 
 const put = (map: Map<string, any>, item: any) => (map.set(item.id, item), item);
+const ids = (value: any) => JSON.stringify(value ?? []);
+const sameDelta = (a: any, b: any) => a.kind === b.kind && a.subjectType === b.subjectType && a.subjectId === b.subjectId && a.observedAt === b.observedAt && ids(a.captureIds) === ids(b.captureIds) && ids(a.incidentIds) === ids(b.incidentIds) && ids(a.relationshipIds) === ids(b.relationshipIds) && ids(a.policyEventIds) === ids(b.policyEventIds);
 
 export function installMemoryStoreDiscoveryMethods(Store: any) {
   Store.prototype.saveDiscoveryEvidence = function (evidence: any) {
@@ -27,7 +29,7 @@ export function installMemoryStoreDiscoveryMethods(Store: any) {
   Store.prototype.saveEvidenceDelta = function (delta: any) { return this.storeDelta(delta, true); };
   Store.prototype.storeDelta = function (delta: any, immutable: boolean) {
     const prepared = { ...delta, cursor: delta.cursor || evidenceCursor(delta.observedAt, ++this.sequence, delta.id) }, previous = this.evidenceDeltas.get(prepared.id);
-    if (immutable && previous && JSON.stringify(previous) !== JSON.stringify(prepared)) throw new Error(`Evidence delta is immutable: ${prepared.id}`);
+    if (immutable && previous && !sameDelta(previous, prepared)) throw new Error(`Evidence delta is immutable: ${prepared.id}`);
     const owner = this.cursorOwners.get(prepared.cursor); if (owner && owner !== prepared.id) throw new Error(`Evidence delta cursor must be unique: ${prepared.cursor}`);
     this.cursorOwners.set(prepared.cursor, prepared.id); return put(this.evidenceDeltas, prepared);
   };

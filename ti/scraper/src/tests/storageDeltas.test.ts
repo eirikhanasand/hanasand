@@ -39,7 +39,9 @@ describe("storage evidence deltas", () => {
     for (const [index, kind] of deltaKinds.entries()) {
       store.saveEvidenceDelta(fixtureEvidenceDelta({ id: `delta_${kind}`, kind, subjectType: kind === "blocked" || kind === "expired" ? "policy_event" : "relationship", subjectId: `${kind}_subject`, observedAt: `2026-05-24T17:0${index}:00.000Z`, policyEventIds: kind === "blocked" || kind === "expired" ? [`policy_${kind}`] : [] }));
     }
-    expect(() => store.saveEvidenceDelta({ ...fixtureEvidenceDelta({ id: "delta_blocked", kind: "blocked" }), metadata: { changed: true } })).toThrow("Evidence delta is immutable");
+    const blocked = fixtureEvidenceDelta({ id: "delta_blocked", kind: "blocked", subjectType: "policy_event", subjectId: "blocked_subject", observedAt: "2026-05-24T17:01:00.000Z", policyEventIds: ["policy_blocked"] });
+    expect(store.saveEvidenceDelta({ ...blocked, metadata: { changed: true } })).toMatchObject({ id: "delta_blocked", kind: "blocked" });
+    expect(() => store.saveEvidenceDelta({ ...blocked, subjectId: "changed_subject" })).toThrow("Evidence delta is immutable");
     expect(store.queries().getEvidenceTimeline("APT29", { tenantId: "tenant_live" }).map((delta) => delta.kind)).toEqual(deltaKinds);
   });
 });
