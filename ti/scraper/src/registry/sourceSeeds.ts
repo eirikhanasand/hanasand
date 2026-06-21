@@ -1715,7 +1715,12 @@ function buildDailyActorPresetCanaryPacket(
       sourceCount: uniqueStrings(familyRows.flatMap((row) => row.atlasSourceIds)).length,
       expectedUsefulRowsPerDay: roundScore(familyRows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0))
     };
-  });
+  }).sort((left, right) =>
+    right.actorCount - left.actorCount ||
+    right.sourceCount - left.sourceCount ||
+    right.expectedUsefulRowsPerDay - left.expectedUsefulRowsPerDay ||
+    left.family.localeCompare(right.family)
+  );
   const actorSpecificGapRows = rows.map((row) => {
     const currentDirectSourceCount = row.supportMode === "direct_actor_sources" ? row.atlasSourceIds.length : 0;
     const fallbackSourceCount = row.supportMode === "default_watchlist_freshness_fallback" ? row.atlasSourceIds.length : 0;
@@ -1734,6 +1739,7 @@ function buildDailyActorPresetCanaryPacket(
       ownerHandoff: acquisitionPriority === "p2_monitor" ? "agent_03_parser_repair" as const : "agent_04_source_acquisition" as const
     };
   });
+  const sourceFamilyGapRows = dailyActorPresetSourceFamilyGapRows(actorSpecificGapRows);
 
   return {
     schemaVersion: "ti.source_atlas.daily_actor_preset_canary_packet.v1",
@@ -1755,13 +1761,69 @@ function buildDailyActorPresetCanaryPacket(
     sourceFamilyCoverage,
     rows,
     actorSpecificGapRows,
+    sourceFamilyGapRows,
     ownerHandoffs: {
       agent02Scheduler: ["Use rows[].atlasSourceIds and schedulerCadenceSeconds to stage approval-only canary packets for the daily 100-name Actor preset after operator approval."],
       agent07Quality: ["Gate each actor row on canaryAcceptance before counting useful/fresh row lift or source-family diversity in paid output."],
-      agent09Apify: ["Expose dailyActorPresetCanaryPacket in /v1/sources/atlas so the Apify Actor can explain which reviewed sources support the daily paid preset and which actor-specific gaps remain."],
+      agent09Apify: ["Expose dailyActorPresetCanaryPacket in /v1/sources/atlas so the Apify Actor can explain which reviewed sources support the daily paid preset and which actor/source-family acquisition gaps remain."],
       agent10Revenue: ["Measure expectedUsefulRowsPerDay against cost per useful row before increasing source-tier marketplace claims."]
     }
   };
+}
+
+function dailyActorPresetSourceFamilyGapRows(
+  actorSpecificGapRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["actorSpecificGapRows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyGapRows"] {
+  const grouped = new Map<TiSourceAtlasFamily, {
+    actors: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyGapRows"][number]["actors"];
+    priorityRank: number;
+    expectedFreshRowsPerDayNeeded: number;
+  }>();
+  for (const gap of actorSpecificGapRows) {
+    if (gap.ownerHandoff !== "agent_04_source_acquisition") continue;
+    for (const family of gap.requiredFamilies) {
+      const existing = grouped.get(family) ?? {
+        actors: [],
+        priorityRank: 2,
+        expectedFreshRowsPerDayNeeded: 0
+      };
+      if (!existing.actors.includes(gap.actor)) existing.actors.push(gap.actor);
+      existing.priorityRank = Math.min(existing.priorityRank, gap.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1);
+      existing.expectedFreshRowsPerDayNeeded = roundScore(existing.expectedFreshRowsPerDayNeeded + gap.expectedFreshRowsPerDayNeeded);
+      grouped.set(family, existing);
+    }
+  }
+  return [...grouped.entries()]
+    .map(([family, row]) => {
+      const acquisitionPriority = row.priorityRank === 0 ? "p0_actor_specific_gap" as const : "p1_diversity_gap" as const;
+      const actors = [...row.actors].sort((left, right) => left.localeCompare(right));
+      return {
+        family,
+        actorCount: actors.length,
+        actors,
+        acquisitionPriority,
+        expectedFreshRowsPerDayNeeded: roundScore(row.expectedFreshRowsPerDayNeeded),
+        nextSourceCriteria: dailyActorPresetFamilySourceCriteria(family, actors, acquisitionPriority),
+        ownerHandoff: "agent_04_source_acquisition" as const
+      };
+    })
+    .sort((left, right) =>
+      (left.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1) - (right.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1) ||
+      right.actorCount - left.actorCount ||
+      right.expectedFreshRowsPerDayNeeded - left.expectedFreshRowsPerDayNeeded ||
+      left.family.localeCompare(right.family)
+    );
+}
+
+function dailyActorPresetFamilySourceCriteria(
+  family: TiSourceAtlasFamily,
+  actors: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyGapRows"][number]["actors"],
+  acquisitionPriority: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyGapRows"][number]["acquisitionPriority"]
+): string {
+  const actorText = actors.slice(0, 5).join(", ");
+  const moreActors = actors.length > 5 ? ` and ${actors.length - 5} more` : "";
+  const priorityText = acquisitionPriority === "p0_actor_specific_gap" ? "first for actors with no direct reviewed source support" : "next to reduce single-family fallback dependence";
+  return `Acquire public ${family} sources ${priorityText} for ${actorText}${moreActors}; require current legal/robots review, parser-certifiable actor/victim/TTP fields, official/public access only, and no private/auth/CAPTCHA access.`;
 }
 
 function dailyActorPresetRequiredFamilies(

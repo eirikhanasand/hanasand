@@ -23,6 +23,9 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Added `dailyActorPresetCanaryPacket.sourceFamilyGapRows`, deriving a family-level Agent 04 acquisition queue from actor-specific daily paid Actor gaps with prioritized families, affected actors, fresh-row need, public/legal/parser criteria, and no private/auth/CAPTCHA boundaries.
+- Sorted daily Actor source-family coverage deterministically by actor reach, source count, useful-row estimate, and family name so downstream Apify/SLO views can consume stable buyer-visible diversity rankings.
+- Verification is green for this pass: `bun test src/tests/sourceSeeds.test.ts`, `bun run check`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 537 passing tests.
 - Added daily Actor preset source-family coverage rollups for the Agent 04 canary packet, exposing per-family actor count, source count, useful-row estimate, and diversity count so Agent 09/10 can evaluate buyer-visible source-family spread without recomputing rows.
 - Verification for the Agent 04 source-atlas path is green: `bun test src/tests/sourceSeeds.test.ts`, `bun run check`, `bun run check:route-inventory`, and `bun run check:contract-index`; full `bun test` is currently blocked by unrelated Agent 10/product SLO edits in `src/ops/productSlo.ts` / `src/tests/ops.test.ts` / `src/tests/api.test.ts`.
 - Improved daily Actor preset fallback source selection to prefer missing high-value source families before pure row yield, so fallback canary rows now include less-common government/regional freshness support when available instead of clustering on adjacent advisory sources.

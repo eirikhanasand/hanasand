@@ -1999,6 +1999,12 @@ describe("source seed bundles", () => {
       "cve_advisory",
       "cert_government"
     ]));
+    expect(dailyPresetPacket.sourceFamilyCoverage).toEqual([...dailyPresetPacket.sourceFamilyCoverage].sort((left, right) =>
+      right.actorCount - left.actorCount ||
+      right.sourceCount - left.sourceCount ||
+      right.expectedUsefulRowsPerDay - left.expectedUsefulRowsPerDay ||
+      left.family.localeCompare(right.family)
+    ));
     expect(dailyPresetPacket.rows.map((row) => row.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",
@@ -2049,6 +2055,27 @@ describe("source seed bundles", () => {
       row.expectedFreshRowsPerDayNeeded >= 0 &&
       (row.nextSourceCriteria.includes("current legal/robots review") || row.nextSourceCriteria.includes("parser fixtures")) &&
       ["agent_04_source_acquisition", "agent_03_parser_repair"].includes(row.ownerHandoff)
+    )).toBe(true);
+    expect(dailyPresetPacket.sourceFamilyGapRows.length).toBeGreaterThan(0);
+    expect(dailyPresetPacket.sourceFamilyGapRows).toEqual([...dailyPresetPacket.sourceFamilyGapRows].sort((left, right) =>
+      (left.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1) - (right.acquisitionPriority === "p0_actor_specific_gap" ? 0 : 1) ||
+      right.actorCount - left.actorCount ||
+      right.expectedFreshRowsPerDayNeeded - left.expectedFreshRowsPerDayNeeded ||
+      left.family.localeCompare(right.family)
+    ));
+    expect(dailyPresetPacket.sourceFamilyGapRows.map((row) => row.family)).toEqual(expect.arrayContaining([
+      "public_channel_descriptor",
+      "vendor_threat_blog"
+    ]));
+    expect(dailyPresetPacket.sourceFamilyGapRows.some((row) => row.acquisitionPriority === "p0_actor_specific_gap")).toBe(true);
+    expect(dailyPresetPacket.sourceFamilyGapRows.every((row) =>
+      row.actorCount === row.actors.length &&
+      row.actors.length > 0 &&
+      row.expectedFreshRowsPerDayNeeded >= 0 &&
+      row.nextSourceCriteria.includes("public") &&
+      row.nextSourceCriteria.includes("current legal/robots review") &&
+      row.nextSourceCriteria.includes("no private/auth/CAPTCHA access") &&
+      row.ownerHandoff === "agent_04_source_acquisition"
     )).toBe(true);
     expect(dailyPresetPacket.ownerHandoffs.agent02Scheduler.join(" ")).toContain("daily 100-name Actor preset");
     expect(dailyPresetPacket.ownerHandoffs.agent09Apify.join(" ")).toContain("/v1/sources/atlas");

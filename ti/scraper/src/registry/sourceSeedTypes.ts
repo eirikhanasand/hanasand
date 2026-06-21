@@ -2006,6 +2006,15 @@ export interface TiSourceAtlasProductSourceLadderPacket {
           nextSourceCriteria: string;
           ownerHandoff: "agent_04_source_acquisition" | "agent_03_parser_repair";
         }>;
+        sourceFamilyGapRows: Array<{
+          family: TiSourceAtlasFamily;
+          actorCount: number;
+          actors: Array<"APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira">;
+          acquisitionPriority: "p0_actor_specific_gap" | "p1_diversity_gap";
+          expectedFreshRowsPerDayNeeded: number;
+          nextSourceCriteria: string;
+          ownerHandoff: "agent_04_source_acquisition";
+        }>;
         ownerHandoffs: {
           agent02Scheduler: string[];
           agent07Quality: string[];
