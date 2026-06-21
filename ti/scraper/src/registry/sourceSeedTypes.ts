@@ -1200,6 +1200,9 @@ export interface TiSourceAtlasPublicMonitorSourceGapHandoff {
     publicMonitorState: "coverage_gap" | "partial" | "ready";
     missingFamilies: TiSourceAtlasFamily[];
     recommendedAtlasSourceIds: string[];
+    freshnessCanarySourceIds: string[];
+    expectedFreshRowsPerDay: number;
+    expectedUsefulRowsPerDay: number;
     candidateSourceCount: number;
     expectedPublicMonitorEffect: "more_recent_activity" | "more_source_diversity" | "victim_claim_context" | "cve_advisory_context" | "no_effect_until_review";
     schedulerDryRun: {

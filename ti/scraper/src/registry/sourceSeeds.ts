@@ -817,6 +817,18 @@ function buildTiSourceAtlasPublicMonitorSourceGapHandoff(input: { records: TiSou
     const recommended = candidates
       .filter((record) => record.activationReadiness.state === "ready_for_dry_run" && record.sourceValueScore >= 0.62)
       .slice(0, 8);
+    const freshnessCanary = candidates
+      .filter((record) =>
+        record.activationReadiness.state === "ready_for_dry_run" &&
+        record.legalRobotsState.legalReview === "current" &&
+        record.freshness >= 0.62 &&
+        record.evidenceYield >= 0.5
+      )
+      .sort((left, right) =>
+        tiSourceAtlasPublicMonitorFreshnessCanaryScore(right) - tiSourceAtlasPublicMonitorFreshnessCanaryScore(left) ||
+        left.id.localeCompare(right.id)
+      )
+      .slice(0, 5);
     const parserHoldCount = candidates.filter((record) => record.activationReadiness.state === "needs_parser_certification").length;
     const descriptorHoldCount = candidates.filter((record) => record.activationReadiness.state === "descriptor_only_hold").length;
     const missingFamilies = matrixRow?.gapFamilies ?? [];
@@ -835,6 +847,9 @@ function buildTiSourceAtlasPublicMonitorSourceGapHandoff(input: { records: TiSou
       publicMonitorState,
       missingFamilies,
       recommendedAtlasSourceIds: recommended.map((record) => record.id),
+      freshnessCanarySourceIds: freshnessCanary.map((record) => record.id),
+      expectedFreshRowsPerDay: roundScore(freshnessCanary.reduce((sum, record) => sum + record.evidenceEstimate.expectedItemsPerDay * record.freshness, 0)),
+      expectedUsefulRowsPerDay: roundScore(freshnessCanary.reduce((sum, record) => sum + record.evidenceEstimate.expectedItemsPerDay * record.freshness * record.evidenceYield, 0)),
       candidateSourceCount: candidates.length,
       expectedPublicMonitorEffect: tiSourceAtlasPublicMonitorEffect(queryClass),
       schedulerDryRun: {
@@ -873,11 +888,15 @@ function buildTiSourceAtlasPublicMonitorSourceGapHandoff(input: { records: TiSou
       agent01SourceReview: ["queryRows.recommendedAtlasSourceIds", "queryRows.analystAction", "summary"],
       agent02SchedulerDryRun: ["queryRows.schedulerDryRun", "queryRows.publicMonitorState"],
       agent03ParserCertification: ["summary.parserCertificationHoldCount", "queryRows.analystAction"],
-      agent04CoverageValue: ["queryRows.expectedPublicMonitorEffect", "queryRows.missingFamilies"],
+      agent04CoverageValue: ["queryRows.expectedPublicMonitorEffect", "queryRows.missingFamilies", "queryRows.freshnessCanarySourceIds"],
       agent09PublicMonitorApi: ["publicMonitorSourceGapHandoff.queryRows", "publicMonitorSourceGapHandoff.summary"],
       agent10ProductSlo: ["queryRows.publicMonitorState", "summary.coverageGapCount", "guardrails"]
     }
   };
+}
+
+function tiSourceAtlasPublicMonitorFreshnessCanaryScore(record: TiSourceAtlasRecord): number {
+  return roundScore(record.freshness * 0.36 + record.evidenceYield * 0.28 + record.sourceValueScore * 0.22 + Math.min(0.14, record.evidenceEstimate.expectedItemsPerDay * 0.02));
 }
 
 function tiSourceAtlasPublicMonitorEffect(queryClass: SourceCoverageCloseoutQueryClass): TiSourceAtlasPublicMonitorSourceGapHandoff["queryRows"][number]["expectedPublicMonitorEffect"] {

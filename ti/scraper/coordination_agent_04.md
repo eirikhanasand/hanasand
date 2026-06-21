@@ -23,6 +23,8 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Added per-query `freshnessCanarySourceIds`, expected fresh rows/day, and expected useful rows/day to `publicMonitorSourceGapHandoff` so Apify/public-monitor gap rows can prefer ready, current-review sources that should improve buyer-visible freshness first.
+- Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.
 - Added freshness-first activation canary fields to `/v1/sources/atlas`: 25 p0 source ids, expected fresh/useful rows per day, acceptance criteria, and rollback triggers derived from the high-value freshness queue without starting crawls or mutating registry state.
 - Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.
 - Added `paidSourceTierPlan.highValueReplacementBatch.freshnessPriorityQueue` for the 4,000-source monetization gate, ranking concrete atlas source ids by p0/p1 freshness lift, expected useful/fresh rows per day, scheduler cadence, actor/ransomware coverage, parser/legal action, measurement gates, and no-leak boundaries.

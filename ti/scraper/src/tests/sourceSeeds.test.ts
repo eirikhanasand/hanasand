@@ -1368,6 +1368,10 @@ describe("source seed bundles", () => {
     expect(atlas.publicMonitorSourceGapHandoff.queryRows.every((row) =>
       row.candidateSourceCount > 0 &&
       row.recommendedAtlasSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.freshnessCanarySourceIds.length > 0 &&
+      row.freshnessCanarySourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
+      row.expectedFreshRowsPerDay > 0 &&
+      row.expectedUsefulRowsPerDay > 0 &&
       row.schedulerDryRun.duplicateRunReuse &&
       row.noLeakBoundary.metadataOnly &&
       row.noLeakBoundary.rawContentIncluded === false &&
@@ -1375,6 +1379,7 @@ describe("source seed bundles", () => {
       row.noLeakBoundary.sourceActivationApplied === false
     )).toBe(true);
     expect(atlas.publicMonitorSourceGapHandoff.summary.queryCount).toBe(atlas.publicMonitorSourceGapHandoff.queryRows.length);
+    expect(atlas.publicMonitorSourceGapHandoff.handoffs.agent04CoverageValue).toContain("queryRows.freshnessCanarySourceIds");
     expect(atlas.publicMonitorSourceGapHandoff.handoffs.agent09PublicMonitorApi).toContain("publicMonitorSourceGapHandoff.queryRows");
     expect(JSON.stringify(atlas.publicMonitorSourceGapHandoff)).not.toContain("https://");
     expect(atlas.lifecycleReview).toMatchObject({
