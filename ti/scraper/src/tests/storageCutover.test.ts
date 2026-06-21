@@ -66,6 +66,7 @@ import {
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
+  buildEvidenceSearchableSourceMetadataPublicSupportQueue,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   createEvidenceSearchReadModelRepository,
@@ -1988,6 +1989,65 @@ describe("evidence storage cutover", () => {
     expect(searchableSourceMetadataCatalogSerialized).not.toContain(restrictedRaw);
     expect(searchableSourceMetadataCatalogSerialized).not.toContain("tenant/source/private-key");
     expect(searchableSourceMetadataCatalogSerialized).not.toContain(".onion");
+
+    const searchableSourceMetadataPublicSupportQueue = buildEvidenceSearchableSourceMetadataPublicSupportQueue(searchableSourceMetadataCatalog, {
+      generatedAt: "2026-05-24T21:44:40.000Z"
+    });
+    expect(searchableSourceMetadataPublicSupportQueue).toMatchObject({
+      schemaVersion: "ti.evidence_searchable_source_metadata_public_support_queue.v1",
+      sourceCatalog: "ti.evidence_searchable_source_metadata_catalog.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      dryRun: true,
+      willMutateQueues: false,
+      willActivateSources: false,
+      willStartCrawling: false,
+      counts: {
+        supportCandidates: expect.any(Number),
+        restrictedMetadataCandidates: expect.any(Number),
+        likelyActorRowUnlocks: expect.any(Number)
+      },
+      guardrails: {
+        explicitOperatorApprovalRequired: true,
+        publicSupportRequiredBeforePaidRow: true,
+        restrictedRowsMetadataOnly: true,
+        sourceActivationNotApplied: true,
+        crawlingNotStarted: true,
+        restrictedEmbeddingsDisabled: true
+      },
+      noLeakGuarantees: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false,
+        restrictedEmbeddingsCreated: false
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(searchableSourceMetadataPublicSupportQueue.candidates.length).toBeGreaterThan(0);
+    expect(searchableSourceMetadataPublicSupportQueue.candidates.some((candidate) =>
+      candidate.currentUse === "caveated_defensive_context" &&
+      candidate.targetUse === "public_supported_actor_row" &&
+      candidate.ownerAgents.includes("agent_01") &&
+      candidate.ownerAgents.includes("agent_04") &&
+      candidate.requiredPublicSupport.includes("public_report_source") &&
+      candidate.requiredPublicSupport.includes("public_channel_corroboration") &&
+      candidate.requiredPublicSupport.includes("freshness_timestamp") &&
+      candidate.promotionGate === "blocked_until_public_support_replay" &&
+      candidate.noLeak === true
+    )).toBe(true);
+    const searchableSourceMetadataPublicSupportQueueSerialized = JSON.stringify(searchableSourceMetadataPublicSupportQueue);
+    expect(searchableSourceMetadataPublicSupportQueueSerialized).not.toContain(restrictedRaw);
+    expect(searchableSourceMetadataPublicSupportQueueSerialized).not.toContain("tenant/source/private-key");
+    expect(searchableSourceMetadataPublicSupportQueueSerialized).not.toContain(".onion");
 
     const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(backendWriteSet, {
       query: "APT29",

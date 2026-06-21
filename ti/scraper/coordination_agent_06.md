@@ -218,6 +218,13 @@ Progress update 2026-06-21 05:22 CEST:
 - It surfaces buyer-visible metadata fields when present, including victim/company, account count, dataset size, timestamp, actor demand, hash/provenance, actor, and TTP/CVE, while keeping restricted rows non-vectorized and no-leak.
 - Continue next with completed repair receipts or with the next searchable source/dark metadata path that moves caveated context toward fresh public-supported Actor rows.
 
+Progress update 2026-06-21 06:03 CEST:
+- Continued by turning searchable caveated restricted/dark metadata rows into public-support repair work.
+- Added `ti.evidence_searchable_source_metadata_public_support_queue.v1` on `/v1/evidence/cutover-report.readModelCutover.searchableSourceMetadataPublicSupportQueue`.
+- The queue derives candidates from `searchableSourceMetadataCatalog`, routes public report support to Agent 01, public-channel corroboration to Agent 04, and advisory/vendor references to Agent 07.
+- Metadata-only candidates stay blocked from paid Actor rows until public support replays through the read model; the queue does not mutate queues, activate sources, crawl, embed restricted rows, or expose raw leak material.
+- Continue next with completed public-support replay receipts or a repository/audit mapper for these public-support candidates if cross-agent rows are still pending.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

@@ -287,6 +287,54 @@ export interface EvidenceSearchableSourceMetadataCatalogRow {
   noLeak: true;
 }
 
+export interface EvidenceSearchableSourceMetadataPublicSupportQueue {
+  schemaVersion: "ti.evidence_searchable_source_metadata_public_support_queue.v1";
+  generatedAt: string;
+  queueId: string;
+  sourceCatalog: EvidenceSearchableSourceMetadataCatalog["schemaVersion"];
+  productSurface: "apify_public_threat_actor_monitor";
+  dryRun: true;
+  willMutateQueues: false;
+  willActivateSources: false;
+  willStartCrawling: false;
+  counts: {
+    supportCandidates: number;
+    restrictedMetadataCandidates: number;
+    darkMetadataCandidates: number;
+    likelyActorRowUnlocks: number;
+    caveatedContextRows: number;
+  };
+  candidates: EvidenceSearchableSourceMetadataPublicSupportCandidate[];
+  guardrails: {
+    explicitOperatorApprovalRequired: true;
+    publicSupportRequiredBeforePaidRow: true;
+    restrictedRowsMetadataOnly: true;
+    sourceActivationNotApplied: true;
+    crawlingNotStarted: true;
+    restrictedEmbeddingsDisabled: true;
+  };
+  noLeakGuarantees: EvidenceSearchableSourceMetadataCatalog["noLeakGuarantees"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportCandidate {
+  candidateId: string;
+  sourceCatalogRowId: string;
+  documentId: string;
+  sourceId?: string;
+  captureId?: string;
+  claimLedgerEntryId?: string;
+  sourceFamily: EvidenceSearchableSourceMetadataCatalogRow["sourceFamily"];
+  currentUse: "caveated_defensive_context";
+  targetUse: "public_supported_actor_row" | "stronger_caveated_context";
+  ownerAgents: Array<"agent_01" | "agent_04" | "agent_07">;
+  requiredPublicSupport: Array<"public_report_source" | "public_channel_corroboration" | "advisory_or_vendor_reference" | "freshness_timestamp">;
+  buyerVisibleFields: EvidenceSearchableSourceMetadataCatalogRow["buyerVisibleFields"];
+  buyerVisibleEffect: string;
+  promotionGate: "blocked_until_public_support_replay";
+  noLeak: true;
+}
+
 export interface EvidenceSearchReadModelPromotionReplay {
   schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
   generatedAt: string;
@@ -1598,6 +1646,97 @@ export function buildEvidenceSearchableSourceMetadataCatalog(
       actorInteractionExposed: false,
       restrictedEmbeddingsCreated: false
     },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+function publicSupportRequirements(
+  row: EvidenceSearchableSourceMetadataCatalogRow
+): EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"] {
+  const requirements: EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"] = [
+    "public_report_source",
+    "freshness_timestamp"
+  ];
+  if (row.buyerVisibleFields.includes("actor_demand") || row.buyerVisibleFields.includes("victim_or_company")) {
+    requirements.push("public_channel_corroboration");
+  }
+  if (row.buyerVisibleFields.includes("ttp_or_cve")) {
+    requirements.push("advisory_or_vendor_reference");
+  }
+  return uniqueStrings(requirements) as EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"];
+}
+
+function publicSupportOwners(
+  requirements: EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"]
+): EvidenceSearchableSourceMetadataPublicSupportCandidate["ownerAgents"] {
+  const owners: EvidenceSearchableSourceMetadataPublicSupportCandidate["ownerAgents"] = ["agent_01"];
+  if (requirements.includes("public_channel_corroboration")) owners.push("agent_04");
+  if (requirements.includes("advisory_or_vendor_reference")) owners.push("agent_07");
+  return uniqueStrings(owners) as EvidenceSearchableSourceMetadataPublicSupportCandidate["ownerAgents"];
+}
+
+export function buildEvidenceSearchableSourceMetadataPublicSupportQueue(
+  catalog: EvidenceSearchableSourceMetadataCatalog,
+  input: { generatedAt?: string } = {}
+): EvidenceSearchableSourceMetadataPublicSupportQueue {
+  const generatedAt = input.generatedAt ?? catalog.generatedAt;
+  const supportRows = catalog.rows.filter((row) =>
+    row.publicAnswerUse === "caveated_defensive_context" &&
+    row.buyerVisibleFields.length > 0
+  );
+  const candidates = supportRows.map((row) => {
+    const requiredPublicSupport = publicSupportRequirements(row);
+    const targetUse: EvidenceSearchableSourceMetadataPublicSupportCandidate["targetUse"] = row.buyerVisibleFields.includes("victim_or_company") && row.buyerVisibleFields.includes("timestamp")
+      ? "public_supported_actor_row"
+      : "stronger_caveated_context";
+    return {
+      candidateId: stableId("evidence-searchable-source-public-support", `${catalog.handoffId}:${row.rowId}`),
+      sourceCatalogRowId: row.rowId,
+      documentId: row.documentId,
+      sourceId: row.sourceId,
+      captureId: row.captureId,
+      claimLedgerEntryId: row.claimLedgerEntryId,
+      sourceFamily: row.sourceFamily,
+      currentUse: "caveated_defensive_context" as const,
+      targetUse,
+      ownerAgents: publicSupportOwners(requiredPublicSupport),
+      requiredPublicSupport,
+      buyerVisibleFields: [...row.buyerVisibleFields],
+      buyerVisibleEffect: targetUse === "public_supported_actor_row"
+        ? "can move metadata-only context toward a fresh public-supported Actor row after replay"
+        : "can strengthen caveated defensive context after public corroboration replay",
+      promotionGate: "blocked_until_public_support_replay" as const,
+      noLeak: true as const
+    };
+  });
+
+  return {
+    schemaVersion: "ti.evidence_searchable_source_metadata_public_support_queue.v1",
+    generatedAt,
+    queueId: stableId("evidence-searchable-source-public-support", `${catalog.handoffId}:${catalog.generatedAt}:${candidates.length}`),
+    sourceCatalog: catalog.schemaVersion,
+    productSurface: catalog.productSurface,
+    dryRun: true,
+    willMutateQueues: false,
+    willActivateSources: false,
+    willStartCrawling: false,
+    counts: {
+      supportCandidates: candidates.length,
+      restrictedMetadataCandidates: candidates.filter((candidate) => candidate.sourceFamily === "restricted_metadata").length,
+      darkMetadataCandidates: candidates.filter((candidate) => candidate.sourceFamily === "dark_metadata").length,
+      likelyActorRowUnlocks: candidates.filter((candidate) => candidate.targetUse === "public_supported_actor_row").length,
+      caveatedContextRows: candidates.filter((candidate) => candidate.targetUse === "stronger_caveated_context").length
+    },
+    candidates,
+    guardrails: {
+      explicitOperatorApprovalRequired: true,
+      publicSupportRequiredBeforePaidRow: true,
+      restrictedRowsMetadataOnly: true,
+      sourceActivationNotApplied: true,
+      crawlingNotStarted: true,
+      restrictedEmbeddingsDisabled: true
+    },
+    noLeakGuarantees: { ...catalog.noLeakGuarantees },
     safeOutput: SAFE_OUTPUT
   };
 }

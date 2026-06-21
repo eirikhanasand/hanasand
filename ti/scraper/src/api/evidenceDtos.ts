@@ -35,6 +35,7 @@ import {
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
+  buildEvidenceSearchableSourceMetadataPublicSupportQueue,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   evidenceActorDatasetConsumerExecutionToPostgresRows,
@@ -60,6 +61,7 @@ import {
   type EvidencePromotionTransactionExecutionReceipt,
   type EvidencePromotionTransactionPlan,
   type EvidenceSearchableSourceMetadataCatalog,
+  type EvidenceSearchableSourceMetadataPublicSupportQueue,
   type EvidenceSearchReadModelBackendWriteSet,
   type EvidenceSearchReadModelPromotionReplay,
   type EvidenceSearchReadModelReadiness
@@ -203,6 +205,7 @@ export interface EvidenceSearchReadModelCutoverDto {
     unsafeDocumentsSkipped: number;
   };
   searchableSourceMetadataCatalog: EvidenceSearchableSourceMetadataCatalog;
+  searchableSourceMetadataPublicSupportQueue: EvidenceSearchableSourceMetadataPublicSupportQueue;
   readiness: {
     embedded: EvidenceSearchReadModelReadiness;
     postgres: EvidenceSearchReadModelReadiness;
@@ -454,6 +457,7 @@ function buildEvidenceSearchReadModelCutoverDto(
   });
   const writeSet = buildEvidenceSearchReadModelBackendWriteSet(handoff, { generatedAt });
   const searchableSourceMetadataCatalog = buildEvidenceSearchableSourceMetadataCatalog(writeSet, { generatedAt });
+  const searchableSourceMetadataPublicSupportQueue = buildEvidenceSearchableSourceMetadataPublicSupportQueue(searchableSourceMetadataCatalog, { generatedAt });
   const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(writeSet, {
     query,
     normalizedQuery: handoff.normalizedQuery,
@@ -518,6 +522,7 @@ function buildEvidenceSearchReadModelCutoverDto(
       unsafeDocumentsSkipped: writeSet.counts.unsafeDocumentsSkipped
     },
     searchableSourceMetadataCatalog,
+    searchableSourceMetadataPublicSupportQueue,
     readiness: {
       embedded,
       postgres,
