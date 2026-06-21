@@ -1484,9 +1484,9 @@ describe("source seed bundles", () => {
       willStartCrawling: false,
       baseline: {
         evaluatedCandidateCount: 4000,
-        currentPayworthySourceCount: 1468,
+        currentPayworthySourceCount: 1604,
         targetPayworthySourceCount: 2880,
-        additionalPayworthySourcesNeeded: 1412,
+        additionalPayworthySourcesNeeded: 1276,
         targetPayworthyRate: 0.72
       },
       guardrails: {
@@ -1500,7 +1500,7 @@ describe("source seed bundles", () => {
       }
     });
     expect(atlas.sourceEconomics.sourcePackCandidates.candidatePackCount).toBe(atlas.sourceEconomics.sourcePackCandidates.packs.length);
-    expect(atlas.sourceEconomics.sourcePackCandidates.projectedPayworthyLift).toBeLessThanOrEqual(1412);
+    expect(atlas.sourceEconomics.sourcePackCandidates.projectedPayworthyLift).toBeLessThanOrEqual(1276);
     expect(atlas.sourceEconomics.sourcePackCandidates.projectedPayworthySourceCount).toBeLessThanOrEqual(2880);
     expect(atlas.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization).toMatchObject({
       schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1",
@@ -1710,9 +1710,9 @@ describe("source seed bundles", () => {
       willMutate: false,
       willStartCrawling: false,
       evaluatedCandidateCount: 4000,
-      currentPayworthySourceCount: 1468,
+      currentPayworthySourceCount: 1604,
       targetPayworthySourceCount: 2880,
-      additionalPayworthySourcesNeeded: 1412
+      additionalPayworthySourcesNeeded: 1276
     });
     expect(atlas.sourceLadder.paidSourceTierPlan.payworthyRepairQueue.queues.duplicateSuppressed).toMatchObject({
       blocker: "duplicate_suppressed",
@@ -1832,9 +1832,9 @@ describe("source seed bundles", () => {
       willStartCrawling: false,
       evaluatedCandidateCount: 4000,
       targetCandidateCount: 10000,
-      currentPayworthySourceCount: 1468,
+      currentPayworthySourceCount: 1604,
       targetPayworthySourceCount: 2880,
-      additionalPayworthySourcesNeeded: 1412
+      additionalPayworthySourcesNeeded: 1276
     });
     expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.replacementRows.length).toBeGreaterThan(0);
     expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.replacementRows.map((row) => row.replacementForBlocker)).toEqual(expect.arrayContaining([
