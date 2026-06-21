@@ -1,15 +1,8 @@
 // @ts-nocheck
 import { clampScore, stableId } from "../utils.ts";
-
-export type FocusedFrontierOptions = any; export type QueuedFrontierItem = any; export type CrawlBudgetPolicy = any;
-export type CrawlBudgetState = any; export type FrontierAckStatus = any; export type FrontierAck = any;
-export type FrontierGroupSummary = any; export type FrontierSchedulingMetrics = any;
-
-const cti = ["apt", "actor", "campaign", "cve", "exploit", "indicator", "ioc", "malware", "ransomware", "threat", "ttp", "victim", "vulnerability"];
-const actors = ["apt29", "cozy bear", "nobelium", "scattered spider", "akira", "lockbit", "turla", "volt typhoon"];
-const actions = ["breach", "compromise", "exfiltration", "intrusion", "phishing", "backdoor", "credential", "initial access", "zero-day"];
-const noise = ["weekly roundup", "sponsored", "press release", "webinar", "marketing", "job opening", "product launch"];
-const workRank: any = { background_refresh: 0, analyst_deep_dive: 1, source_health_probe: 2, interactive_live_search: 3 };
+import { buildFrontierGroupedSnapshot, buildFrontierMetrics } from "./frontierMetrics.ts";
+import { classifierFor, classify, fallbackScore, taskToCandidate, textOf, threshold, totalScore, workRank } from "./frontierScoring.ts";
+export type * from "./frontierTypes.ts";
 
 export class FocusedFrontier {
   private queue = new Map<string, any>(); private leased = new Map<string, any>(); private dead: any[] = []; private running = new Map<string, number>();
@@ -54,15 +47,9 @@ export class FocusedFrontier {
     const item = this.enqueueTask(retry); this.counters.retryScheduled++; return reason === undefined ? item : { status: "retry_scheduled", taskId: task.id, task, retry: item, reason };
   }
   requeueExpiredLeases(now = this.o.now()) { const out: any[] = []; for (const [id, lease] of this.leased) if (lease.leasedUntil <= +now) { this.leased.delete(id); this.release(lease.item, false); this.queue.set(id, lease.item); out.push(lease.item); } return out; }
-  snapshot() { return [...this.queue.values()]; }
-  leasedSnapshot() { return [...this.leased.values()].map((l) => l.item.task ?? l.item); }
-  deadLetterSnapshot() { return [...this.dead]; }
-  size() { return this.queue.size; }
-  metrics(now = this.o.now()) { return this.buildMetrics(now, [...this.snapshot(), ...this.leasedSnapshot()]); }
-  groupedSnapshot(now = this.o.now()) {
-    const all = [...this.snapshot(), ...this.leasedSnapshot()], queued = this.snapshot();
-    return { total: all.length, queued: queued.length, leased: this.leased.size, groups: { tenants: countBy(all, (t) => t.tenantId ?? "global"), sources: countBy(all, (t) => t.sourceId), adapterTypes: countBy(all, (t) => t.sourceType), priorityBuckets: countBy(all, bucket), ageBuckets: countBy(all, (t) => ageBucket(t, now)) }, budgets: Object.fromEntries([...this.budgets].map(([k, b]) => [k, { ...b, tasksRemaining: Math.max(0, b.taskLimit - b.tasksLeased), bytesRemaining: Math.max(0, b.byteLimit - b.bytesReserved), expired: b.deadlineAt ? Date.parse(b.deadlineAt) < +now : false }])), metrics: this.metrics(now) };
-  }
+  snapshot() { return [...this.queue.values()]; } leasedSnapshot() { return [...this.leased.values()].map((l) => l.item.task ?? l.item); }
+  deadLetterSnapshot() { return [...this.dead]; } size() { return this.queue.size; }
+  metrics(now = this.o.now()) { return buildFrontierMetrics(this, now); } groupedSnapshot(now = this.o.now()) { return buildFrontierGroupedSnapshot(this, now); }
   private toTask(c: any, score: any) { return { id: stableId("task", `${c.source.id}:${c.url}:${c.discoveredAt}`), tenantId: c.tenantId, sourceId: c.source.id, sourceType: c.source.type, targetUrl: c.url, queuedAt: c.discoveredAt, availableAt: c.availableAt, deadlineAt: c.deadlineAt, priority: score.total, reason: score.reason, retryCount: 0, maxBytes: c.maxBytes, crawlBudgetKey: c.budgetKey, planning: c.planning, scoreBreakdown: score, fairnessKey: c.fairnessKey, intelRequestId: c.intelRequestId }; }
   private scoreObj(c: any, total: number, decision: string, reason: string, safetyPenalty = 0) { const classifier = classifierFor(c, this.o.strategy); return { total: clampScore(total), decision, reason, strategy: this.o.strategy, relevance: classifier.relevance, novelty: c.novelty ?? 0.5, freshness: c.freshness ?? 0.5, sourceTrust: c.source?.trustScore ?? 0.5, safetyPenalty, classifier }; }
   private sorted(now: Date) { return this.snapshot().sort((a, b) => workRank[(a.task?.planning ?? a.planning)?.budgetClass] - workRank[(b.task?.planning ?? b.planning)?.budgetClass] || Number((a.tenantId ?? "") === this.lastTenant) - Number((b.tenantId ?? "") === this.lastTenant) || b.priority - a.priority || a.queuedAt.localeCompare(b.queuedAt)); }
@@ -70,18 +57,4 @@ export class FocusedFrontier {
   private ack(task: any, status: string, reason: string) { this.release(task); this.counters[status]++; return { status, taskId: task.id, task, reason }; }
   private release(task: any, removeLease = true) { if (removeLease) this.leased.delete(task.id); this.running.set(task.sourceId, Math.max(0, (this.running.get(task.sourceId) ?? 1) - 1)); }
   private trim() { while (this.queue.size > this.o.maxQueueSize) this.queue.delete(this.sorted(this.o.now()).at(-1)?.id); }
-  private buildMetrics(now: Date, all: any[]) { const ages = all.map((t) => Math.max(0, (+now - Date.parse(t.queuedAt ?? now.toISOString())) / 1000)); return { queueAgeSeconds: { max: Math.max(0, ...ages), average: ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 0, highPriorityMax: Math.max(0, ...all.filter((t) => t.priority >= 0.7).map((t) => Math.max(0, (+now - Date.parse(t.queuedAt ?? now.toISOString())) / 1000))) }, throughput: { ...this.counters }, retryPressure: rate(this.counters.retryScheduled + this.counters.retryExhausted, all.length + this.counters.failed), budgetExhaustion: [...this.budgets.values()].filter((b) => b.tasksLeased >= b.taskLimit || b.bytesReserved >= b.byteLimit).length, sourceStarvation: 0, tenantStarvation: 0, adapterSaturation: countBy(this.leasedSnapshot(), (t) => t.sourceType) }; }
 }
-
-function classifierFor(c: any, strategy: string) { const link = classify(textOf(c, "link")), parent = classify(`${c.parentTitle ?? ""} ${c.parentText ?? c.surroundingText ?? ""}`), destination = classify(`${c.destinationTitle ?? ""} ${c.destinationText ?? ""}`); const weights = weightsFor(strategy, Boolean(c.destinationText || c.destinationTitle)); const relevance = clampScore(link.score * weights.link + parent.score * weights.parent + destination.score * weights.destination); return { selectedStrategy: strategy === "hybrid_dynamic" ? "hybrid_dynamic_classifier" : strategy, tradeoff: ["precision", "recall", "efficiency"].includes(strategy) ? strategy : "balanced", weights, link, parent, destination, relevance, coverage: { hasLinkContext: Boolean(c.anchorText || c.surroundingText), hasParentPage: Boolean(c.parentTitle || c.parentText || c.parentRelevance), hasDestinationPage: Boolean(c.destinationTitle || c.destinationText || c.destinationRelevance) } }; }
-function classify(text: string) { const lower = text.toLowerCase(), terms = [...cti, ...actors, ...actions, ...(lower.match(/cve-\d{4}-\d+/g) ?? [])].filter((term, i, a) => lower.includes(term) && a.indexOf(term) === i); const penalty = noise.some((term) => lower.includes(term)) ? 0.2 : 0; return { score: clampScore(terms.length / 8 - penalty), matchedTerms: terms }; }
-function totalScore(c: any, strategy: string) { const cls = classifierFor(c, strategy), sourceTrust = c.source?.trustScore ?? 0.5; return clampScore(cls.relevance * 0.55 + (c.parentRelevance ?? c.destinationRelevance ?? 0.5) * 0.15 + (c.novelty ?? 0.5) * 0.12 + (c.freshness ?? 0.5) * 0.12 + sourceTrust * 0.06); }
-function weightsFor(strategy: string, hasDestination: boolean) { const m: any = { link_only: [0.8, 0.1, 0.1], parent_only: [0.1, 0.8, 0.1], destination_only: [0.1, 0.1, 0.8], link_parent: [0.45, 0.45, 0.1], link_destination: [0.45, 0.1, 0.45], parent_destination: [0.1, 0.45, 0.45], precision: [0.25, 0.25, 0.5], recall: [0.45, 0.35, 0.2], efficiency: [0.65, 0.25, 0.1], hybrid_dynamic: hasDestination ? [0.33, 0.27, 0.4] : [0.52, 0.38, 0.1] }; const [link, parent, destination] = m[strategy] ?? [0.34, 0.33, 0.33]; return { link, parent, destination }; }
-const threshold = (strategy: string) => strategy === "precision" || strategy === "destination_only" ? 0.58 : strategy === "recall" ? 0.36 : 0.45;
-const textOf = (c: any, _: string) => `${c.anchorText ?? ""} ${c.surroundingText ?? ""} ${c.url ?? ""}`;
-const taskToCandidate = (task: any) => ({ source: { id: task.sourceId, type: task.sourceType, status: "active", trustScore: 0.5 }, url: task.targetUrl, discoveredAt: task.queuedAt, anchorText: task.reason });
-const fallbackScore = (task: any, strategy: string) => ({ total: task.priority ?? 0.5, decision: "enqueue", reason: task.reason, strategy });
-const countBy = (items: any[], fn: (x: any) => string) => items.reduce((a, x) => ({ ...a, [fn(x)]: (a[fn(x)] ?? 0) + 1 }), {});
-const bucket = (t: any) => t.priority >= 0.45 ? "critical" : t.priority >= 0.35 ? "high" : t.priority >= 0.2 ? "normal" : "low";
-const ageBucket = (t: any, now: Date) => (+now - Date.parse(t.queuedAt ?? now.toISOString())) < 300_000 ? "lt_5m" : "gte_5m";
-const rate = (n: number, d: number) => d ? n / d : 0;
