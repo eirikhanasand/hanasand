@@ -1,5 +1,6 @@
 import type { MarketplaceRow } from "../types.ts";
 import { liveDataMetrics } from "../liveDataMetrics.ts";
+import { PRODUCTION_SELLABLE_ROW_FLOOR } from "./readiness.ts";
 
 type SourceStats = { sourceName: string; sourceType: MarketplaceRow["sourceType"]; candidateRowsProduced: number; sellableRowsProduced: number; freshCandidateRowsProduced: number; queries: Set<string>; };
 
@@ -11,7 +12,7 @@ export function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
     .sort(sortSources).slice(0, 8).map((source) => ({ ...source, queries: [...source.queries].sort() }));
   return {
     schemaVersion: "ti.apify_daily_collection_run.v1",
-    preset: "371-name-default-watchlist",
+    preset: "389-name-default-watchlist",
     refreshedSourceCount: refreshedSources.length,
     candidateRowsProduced: candidateRows.length,
     freshCandidateRowsProduced: freshCandidateRows.length,
@@ -21,7 +22,7 @@ export function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
     distinctHostedSourceFindings: live.distinctHostedSourceFindingCount,
     caveatedCandidateRowsProduced: rows.filter((row) => row.paidRowDecision === "included_with_caveat").length,
     refreshedSources,
-    nextCollectionAction: live.sellableLiveDataRealRowCount >= 1000
+    nextCollectionAction: live.sellableLiveDataRealRowCount >= PRODUCTION_SELLABLE_ROW_FLOOR
       ? "keep daily refresh cadence and measure hosted conversion"
       : "replace fixture and default-watchlist rows with hosted live-collected distinct public-source findings"
   };

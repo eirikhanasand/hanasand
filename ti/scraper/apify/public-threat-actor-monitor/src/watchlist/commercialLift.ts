@@ -9,5 +9,8 @@ export const COMMERCIAL_LIFT_QUERIES = [
   "DragonForce leak", "SafePay leak", "XWorm RAT", "RansomHouse extortion", "StealC malware",
   "ClearFake", "FakeUpdates", "ShadowPad malware", "UAC-0184", "Anubis ransomware",
   "Nitrogen ransomware", "Kairos ransomware", "Nova ransomware", "BianLian ransomware", "Crypto24",
-  "Cloud Atlas", "BlackBasta ransomware", "The Gentlemen ransomware"
+  "Cloud Atlas", "BlackBasta ransomware", "The Gentlemen ransomware", "INC Ransom leak site", "Clop leak site",
+  "UNC3944 cyber", "GLOBAL GROUP ransomware", "Everest leak site", "RansomHub leak site", "Warlock ransomware",
+  "Pear ransomware", "SafePay ransomware group", "Star Blizzard", "Morpheus ransomware", "Gunra ransomware",
+  "Lynx ransomware group", "DragonForce leak site", "BADBOX", "Hunters International leak site", "APT-C-36", "Cloud Atlas APT"
 ];

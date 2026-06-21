@@ -5,6 +5,15 @@ export async function fetchThreatIntel(apiBaseUrl: string, query: string): Promi
     const fixture = await Bun.file(process.env.TI_ACTOR_FIXTURE_PATH).json() as TiSearchResponse;
     return retargetFixtureResponse(fixture, query);
   }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetchOnce(apiBaseUrl, query).catch(() => undefined);
+    if (response) return response;
+    await Bun.sleep(1_500 + attempt * 1_500);
+  }
+  return unavailableResponse(query);
+}
+
+async function fetchOnce(apiBaseUrl: string, query: string): Promise<TiSearchResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
@@ -19,6 +28,16 @@ export async function fetchThreatIntel(apiBaseUrl: string, query: string): Promi
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function unavailableResponse(query: string): TiSearchResponse {
+  const generatedAt = new Date().toISOString();
+  return {
+    query, generatedAt, mode: "live_api_unavailable", status: "searching",
+    summary: "searching", confidence: 0, lastSeen: generatedAt, aliases: [],
+    recentActivity: [], targets: [], ttps: [], datasets: [], sources: [],
+    notes: ["transient_api_unavailable"]
+  };
 }
 
 export function retargetFixtureResponse(response: TiSearchResponse, query: string): TiSearchResponse {

@@ -10,8 +10,8 @@ async function main() {
   let newsFallbackAttempts = 0;
   let newsFallbacksUsed = 0;
 
-  for (let index = 0; index < input.queries.length; index += 5) {
-    const batch = input.queries.slice(index, index + 5);
+  for (let index = 0; index < input.queries.length; index += 3) {
+    const batch = input.queries.slice(index, index + 3);
     const responses = await Promise.all(batch.map((query) => fetchThreatIntel(input.apiBaseUrl, query)));
     for (const response of responses) {
       let outputRows = outputRowsFor(response, input);
@@ -25,6 +25,7 @@ async function main() {
       }
       rows.push(...outputRows.slice(0, input.maxRowsPerQuery));
     }
+    await Bun.sleep(250);
   }
 
   const monetizationSummary = monetizationForRows(rows);

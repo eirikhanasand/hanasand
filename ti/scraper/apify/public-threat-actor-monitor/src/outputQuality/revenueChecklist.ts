@@ -24,7 +24,7 @@ function checks(rows: MarketplaceRow[], quality: ReturnType<typeof paidRowQualit
   return [
     { id: "listing_copy", state: "ready" },
     { id: "sample_rows", state: rows.length >= 12 ? "ready" : "blocked", blocker: rows.length >= 12 ? undefined : "smoke/default run should expose at least 12 safe buyer examples" },
-    { id: "production_sellable_rows", state: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready" : "blocked", proofField: "OUTPUT.monetizationReadiness.sellableRows", blocker: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? undefined : "production paid traffic requires at least 1000 sellable rows" },
+    { id: "production_sellable_rows", state: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "ready" : "blocked", proofField: "OUTPUT.monetizationReadiness.sellableRows", blocker: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? undefined : `production paid traffic requires at least ${PRODUCTION_SELLABLE_ROW_FLOOR} sellable rows` },
     { id: "pricing_shape", state: "ready" },
     { id: "marketplace_telemetry", state: "missing", proofField: "OUTPUT.monetization", blocker: "Apify analytics not externally copied into this run" },
     { id: "payout_setup", state: "missing", blocker: "beneficiary, payout method, and withdrawal readiness require external billing verification" },
