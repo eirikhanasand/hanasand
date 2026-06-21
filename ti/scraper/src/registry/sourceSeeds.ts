@@ -1742,6 +1742,7 @@ function buildDailyActorPresetCanaryPacket(
   });
   const sourceFamilyGapRows = dailyActorPresetSourceFamilyGapRows(actorSpecificGapRows);
   const sourceFamilyAcquisitionRows = dailyActorPresetSourceFamilyAcquisitionRows(sourceFamilyGapRows, queue.rows, replacementRows);
+  const sourceFamilyAcquisitionSummary = dailyActorPresetSourceFamilyAcquisitionSummary(sourceFamilyGapRows, sourceFamilyAcquisitionRows);
 
   return {
     schemaVersion: "ti.source_atlas.daily_actor_preset_canary_packet.v1",
@@ -1765,10 +1766,11 @@ function buildDailyActorPresetCanaryPacket(
     actorSpecificGapRows,
     sourceFamilyGapRows,
     sourceFamilyAcquisitionRows,
+    sourceFamilyAcquisitionSummary,
     ownerHandoffs: {
       agent02Scheduler: ["Use rows[].atlasSourceIds and schedulerCadenceSeconds to stage approval-only canary packets for the daily 100-name Actor preset after operator approval."],
       agent07Quality: ["Gate each actor row and sourceFamilyAcquisitionRows candidate set on canaryAcceptance before counting useful/fresh row lift or source-family diversity in paid output."],
-      agent09Apify: ["Expose dailyActorPresetCanaryPacket in /v1/sources/atlas so the Apify Actor can explain which reviewed sources support the daily paid preset and which actor/source-family acquisition gaps remain."],
+      agent09Apify: ["Expose dailyActorPresetCanaryPacket in /v1/sources/atlas so the Apify Actor can explain which reviewed sources support the daily paid preset, which actor/source-family acquisition gaps remain, and which candidate ids are stageable next."],
       agent10Revenue: ["Measure expectedUsefulRowsPerDay against cost per useful row before increasing source-tier marketplace claims."]
     }
   };
@@ -1816,6 +1818,39 @@ function dailyActorPresetSourceFamilyGapRows(
       right.expectedFreshRowsPerDayNeeded - left.expectedFreshRowsPerDayNeeded ||
       left.family.localeCompare(right.family)
     );
+}
+
+function dailyActorPresetSourceFamilyAcquisitionSummary(
+  sourceFamilyGapRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyGapRows"],
+  sourceFamilyAcquisitionRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyAcquisitionRows"]
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["sourceFamilyAcquisitionSummary"] {
+  const candidateFamilies = new Set(sourceFamilyAcquisitionRows.map((row) => row.family));
+  const stageableRows = sourceFamilyAcquisitionRows.filter((row) => row.sourceActions.includes("stage_day1_canary_packet"));
+  const stageableSourceIds = uniqueStrings(stageableRows.flatMap((row) => row.candidateSourceIds)).slice(0, 25);
+  const familiesWithoutCandidates = sourceFamilyGapRows
+    .map((row) => row.family)
+    .filter((family) => !candidateFamilies.has(family));
+  return {
+    candidateFamilyCount: sourceFamilyAcquisitionRows.length,
+    candidateSourceCount: uniqueStrings(sourceFamilyAcquisitionRows.flatMap((row) => row.candidateSourceIds)).length,
+    p0CandidateFamilyCount: sourceFamilyAcquisitionRows.filter((row) => row.acquisitionPriority === "p0_actor_specific_gap").length,
+    stageableSourceIds,
+    stageableSourceCount: stageableSourceIds.length,
+    familiesWithoutCandidates,
+    expectedFreshRowsPerDay: roundScore(sourceFamilyAcquisitionRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0)),
+    expectedUsefulRowsPerDay: roundScore(sourceFamilyAcquisitionRows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0)),
+    nextAction: familiesWithoutCandidates.length > 0
+      ? `Acquire reviewed public candidates for ${familiesWithoutCandidates.slice(0, 4).join(", ")} before claiming complete daily Actor source-family closure.`
+      : "Stage reviewed sourceFamilyAcquisitionRows candidate ids as approval-only daily Actor canaries, then count lift only after fresh useful rows land.",
+    noLeakBoundary: {
+      rawUrlExposed: false as const,
+      rawPayloadExposed: false as const,
+      privateAuthCaptchaRequired: false as const,
+      crawlStarted: false as const,
+      actorInteractionRequired: false as const,
+      sourceActivationApplied: false as const
+    }
+  };
 }
 
 function dailyActorPresetSourceFamilyAcquisitionRows(

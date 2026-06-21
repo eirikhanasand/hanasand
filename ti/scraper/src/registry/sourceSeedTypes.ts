@@ -2035,6 +2035,25 @@ export interface TiSourceAtlasProductSourceLadderPacket {
             sourceActivationApplied: false;
           };
         }>;
+        sourceFamilyAcquisitionSummary: {
+          candidateFamilyCount: number;
+          candidateSourceCount: number;
+          p0CandidateFamilyCount: number;
+          stageableSourceIds: string[];
+          stageableSourceCount: number;
+          familiesWithoutCandidates: TiSourceAtlasFamily[];
+          expectedFreshRowsPerDay: number;
+          expectedUsefulRowsPerDay: number;
+          nextAction: string;
+          noLeakBoundary: {
+            rawUrlExposed: false;
+            rawPayloadExposed: false;
+            privateAuthCaptchaRequired: false;
+            crawlStarted: false;
+            actorInteractionRequired: false;
+            sourceActivationApplied: false;
+          };
+        };
         ownerHandoffs: {
           agent02Scheduler: string[];
           agent07Quality: string[];
