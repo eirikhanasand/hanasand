@@ -1356,11 +1356,14 @@ export interface SchedulerDailyActorRunPlanDto {
     schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1";
     routeVisible: true;
     paidActorFloor: {
-      gate: "current_500_sellable_rows";
-      previousLocalGate: "current_300_sellable_rows";
+      gate: "current_1000_useful_rows";
+      previousLocalGate: "current_500_sellable_rows";
       targetSellableRows: 500;
       currentLocalSellableRows: number;
       currentLocalGapRows: number;
+      targetUsefulRows: 1000;
+      currentUsefulRows: number;
+      currentUsefulGapRows: number;
       hostedObservedSellableRows: number | null;
       hostedProofRequired: true;
       countsTowardHostedPaidGateNow: false;
@@ -1374,19 +1377,19 @@ export interface SchedulerDailyActorRunPlanDto {
       promotionState: "local_gate_ready_hosted_gate_held";
     };
     admissionInputs: Array<{
-      inputId: "parser_current_500_lift" | "dark_metadata_250_chargeable_support" | "graph_public_300_corroboration_handoff" | "source_pack_gate_alignment" | "hosted_observed_proof";
-      owner: "agent_01" | "agent_03" | "agent_05" | "agent_08" | "agent_09" | "agent_02";
-      schedulerUse: "raise_daily_actor_cadence" | "reserve_metadata_review" | "reserve_public_corroboration" | "hold_as_review_only" | "hold_until_external_proof";
+      inputId: "parser_current_500_lift" | "dark_metadata_250_chargeable_support" | "graph_public_300_corroboration_handoff" | "current1000_useful_density_proof" | "source_pack_gate_alignment" | "hosted_observed_proof";
+      owner: "agent_01" | "agent_02" | "agent_03" | "agent_05" | "agent_08" | "agent_09" | "agent_10";
+      schedulerUse: "raise_daily_actor_cadence" | "reserve_metadata_review" | "reserve_public_corroboration" | "measure_useful_density" | "hold_as_review_only" | "hold_until_external_proof";
       rows: number;
       targetRows: number;
       currentRows: number;
       gapRows: number;
       countsTowardLocalFloorNow: boolean;
       countsTowardHostedPaidGateNow: boolean;
-      nextCadenceAction: "run_100_name_preset_after_source_sweeps" | "schedule_metadata_review_before_emit" | "schedule_public_corroboration_before_emit" | "keep_review_only_no_enqueue" | "wait_for_hosted_proof_import";
+      nextCadenceAction: "run_100_name_preset_after_source_sweeps" | "measure_useful_density_before_promotion" | "schedule_metadata_review_before_emit" | "schedule_public_corroboration_before_emit" | "keep_review_only_no_enqueue" | "wait_for_hosted_proof_import";
     }>;
     schedulerActions: Array<{
-      actionId: "daily_actor_100_name_preset" | "public_corroboration_before_emit" | "dark_metadata_review_before_emit" | "source_pack_review_hold" | "hosted_proof_hold";
+      actionId: "daily_actor_100_name_preset" | "current1000_useful_density_measurement" | "public_corroboration_before_emit" | "dark_metadata_review_before_emit" | "source_pack_review_hold" | "hosted_proof_hold";
       visibleState: "searching" | "partial" | "metadata_review" | "queued";
       cadence: "daily" | "hourly" | "four_hourly" | "on_external_proof";
       reason: string;
@@ -1394,7 +1397,7 @@ export interface SchedulerDailyActorRunPlanDto {
     }>;
     nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps";
     uiSummary: {
-      headline: "local_300_gate_passed_current_500_gate_next";
+      headline: "local_500_gate_passed_current_1000_useful_gate_next";
       operatorMessage: string;
       suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid";
     };

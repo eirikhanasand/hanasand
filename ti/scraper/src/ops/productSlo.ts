@@ -1925,6 +1925,20 @@ export interface LiveProductSloDashboard {
           corroborationStrength: "single_source" | "cross_family" | "multi_family_strong";
           freshnessRisk: "low" | "medium" | "high";
         };
+        programDdPriority: {
+          gapContribution: number;
+          findingLikely: boolean;
+          sourceProvenanceOnlyRisk: "low" | "medium" | "high";
+          preferredParserAction: "admit_as_current_finding" | "admit_with_caveat" | "hold_for_source_support" | "hold_for_review";
+          admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support" | "missing_buyer_action" | "weak_source_family_diversity" | "graph_only_speculation";
+          sourceFamilyDiversityLift: number;
+          corroborationStrength: "single_source" | "cross_family" | "multi_family_strong";
+          contradictionRisk: "low" | "medium" | "high";
+          freshnessRisk: "low" | "medium" | "high";
+          buyerVisibleValue: "fresh_activity" | "victim_or_target_context" | "sector_country_context" | "ttp_or_tool_context" | "source_family_diversity" | "alias_or_contradiction_review";
+          noLeakProof: "hash_only_public_or_metadata_reference";
+          nextPivot: "parser_admission" | "source_family_review" | "freshness_recheck" | "contradiction_review";
+        };
         admissionState: "ready_for_parser";
         countsTowardFloorNow: false;
         noLeak: true;

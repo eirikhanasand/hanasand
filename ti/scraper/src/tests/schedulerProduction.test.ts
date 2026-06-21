@@ -1554,11 +1554,14 @@ describe("scheduler production readiness", () => {
       schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1",
       routeVisible: true,
       paidActorFloor: {
-        gate: "current_500_sellable_rows",
-        previousLocalGate: "current_300_sellable_rows",
+        gate: "current_1000_useful_rows",
+        previousLocalGate: "current_500_sellable_rows",
         targetSellableRows: 500,
-        currentLocalSellableRows: 300,
-        currentLocalGapRows: 200,
+        currentLocalSellableRows: 500,
+        currentLocalGapRows: 0,
+        targetUsefulRows: 1000,
+        currentUsefulRows: 607,
+        currentUsefulGapRows: 393,
         hostedObservedSellableRows: null,
         hostedProofRequired: true,
         countsTowardHostedPaidGateNow: false
@@ -1567,12 +1570,12 @@ describe("scheduler production readiness", () => {
         defaultQueryCount: 100,
         usefulRows: 607,
         sellableRowsBeforeCurrentLift: 187,
-        sellableRowsAfterCurrentLift: 300,
+        sellableRowsAfterCurrentLift: 500,
         promotionState: "local_gate_ready_hosted_gate_held"
       },
       nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
       uiSummary: {
-        headline: "local_300_gate_passed_current_500_gate_next",
+        headline: "local_500_gate_passed_current_1000_useful_gate_next",
         suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
       }
     });
@@ -1582,9 +1585,9 @@ describe("scheduler production readiness", () => {
         owner: "agent_03",
         rows: 200,
         targetRows: 500,
-        currentRows: 300,
-        gapRows: 200,
-        countsTowardLocalFloorNow: false,
+        currentRows: 500,
+        gapRows: 0,
+        countsTowardLocalFloorNow: true,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "run_100_name_preset_after_source_sweeps"
       }),
@@ -1593,10 +1596,22 @@ describe("scheduler production readiness", () => {
         owner: "agent_08",
         rows: 125,
         targetRows: 300,
-        currentRows: 175,
-        gapRows: 125,
+        currentRows: 300,
+        gapRows: 0,
         countsTowardLocalFloorNow: false,
         nextCadenceAction: "schedule_public_corroboration_before_emit"
+      }),
+      expect.objectContaining({
+        inputId: "current1000_useful_density_proof",
+        owner: "agent_10",
+        schedulerUse: "measure_useful_density",
+        rows: 393,
+        targetRows: 1000,
+        currentRows: 607,
+        gapRows: 393,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "measure_useful_density_before_promotion"
       }),
       expect.objectContaining({
         inputId: "hosted_observed_proof",
@@ -1615,6 +1630,12 @@ describe("scheduler production readiness", () => {
         visibleState: "searching",
         cadence: "daily",
         protectedBy: expect.arrayContaining(["duplicate_run_reuse", "paid_row_gate", "hosted_proof_gate"])
+      }),
+      expect.objectContaining({
+        actionId: "current1000_useful_density_measurement",
+        visibleState: "partial",
+        cadence: "daily",
+        protectedBy: expect.arrayContaining(["source_policy", "no_leak_gate"])
       }),
       expect.objectContaining({
         actionId: "dark_metadata_review_before_emit",
