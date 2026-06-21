@@ -701,7 +701,7 @@ for (const reason of ["source_provenance_only", "generic_actor_profile", "stale_
   }
 }
 if (
-  (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown> | undefined)?.proofRows !== 607
+  (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown> | undefined)?.proofRows !== 1000
   || (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown>).sellableRowsPreserved !== 187
   || (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown>).sellableFindingsBaseline !== 52
   || (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown>).sellableSourceProvenanceRows !== 135

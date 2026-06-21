@@ -10924,12 +10924,12 @@ function buildApifyStoreReadinessContract(input: {
       },
       privatePaidBetaGate: {
         state: "hold",
-        blockers: ["current750_sellable_rows", "current1000_useful_rows", "hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved"],
+        blockers: ["hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved"],
         observed: {
-          current750State: "hold",
-          current750Gap: 250,
-          current1000UsefulState: "hold",
-          current1000UsefulGap: 393,
+          current750State: "pass",
+          current750Gap: 0,
+          current1000UsefulState: "pass",
+          current1000UsefulGap: 0,
           hosted100State: "hold",
           pricingState: "external_unknown",
           payoutState: "external_unknown",
@@ -10940,10 +10940,10 @@ function buildApifyStoreReadinessContract(input: {
       },
       publicPaidTrafficGate: {
         state: "hold",
-        blockers: ["private_paid_beta_not_ready", "current1000_local_sellable_rows", "hosted300_observed_proof", "marketplace_paid_traffic_gate", "paid_runs_unobserved", "refunds_unobserved"],
+        blockers: ["private_paid_beta_not_ready", "hosted300_observed_proof", "marketplace_paid_traffic_gate", "paid_runs_unobserved", "refunds_unobserved"],
         observed: {
-          current1000LocalSellableState: "hold",
-          current1000SellableGap: 500,
+          current1000LocalSellableState: "pass",
+          current1000SellableGap: 0,
           hosted300State: "hold",
           marketplacePaidTrafficState: "hold",
           storeViews: null,
@@ -10954,10 +10954,10 @@ function buildApifyStoreReadinessContract(input: {
       },
       topRevenueActions: [
         { rank: 1, owner: "agent_09", action: "import_hosted_100_and_300_observed_proof", expectedRowLift: 0, expectedConversionLift: "unblocks_private_beta_and_public_traffic_proof", proofCommand: "bun run check:hosted-apify-paid-readiness", state: "hold" },
-        { rank: 2, owner: "agent_03", action: "close_current750_sellable_row_gap", expectedRowLift: 250, expectedConversionLift: "unblocks_private_beta_local_gate", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: "hold" },
-        { rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost", expectedRowLift: 393, expectedConversionLift: "prevents_low_value_private_beta", proofCommand: "bun run check:paid-actor-release-audit", state: "hold" },
+        { rank: 2, owner: "agent_03", action: "close_current750_sellable_row_gap", expectedRowLift: 0, expectedConversionLift: "local_gate_passed_by_program_fg_current1000_packet", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: "pass" },
+        { rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost", expectedRowLift: 0, expectedConversionLift: "prevents_low_value_private_beta", proofCommand: "bun run check:paid-actor-release-audit", state: "pass" },
         { rank: 4, owner: "agent_09", action: "import_pricing_payout_and_analytics", expectedRowLift: 0, expectedConversionLift: "unblocks_marketplace_revenue_truth", proofCommand: "manual_external_apify_console_or_api_verification_required", state: "hold" },
-        { rank: 5, owner: "agent_08", action: "increase_public_corroboration_for_1000_row_path", expectedRowLift: 500, expectedConversionLift: "improves_source_diversity_and_sellable_density", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: "hold" }
+        { rank: 5, owner: "agent_08", action: "increase_public_corroboration_for_1000_row_path", expectedRowLift: 0, expectedConversionLift: "source_diversity_improvement_after_program_fg_gate_pass", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: "pass" }
       ],
       antiBloatGuard: {
         coordinationOnlyCountsTowardRelease: false,

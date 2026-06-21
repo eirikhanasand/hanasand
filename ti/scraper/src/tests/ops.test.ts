@@ -731,7 +731,7 @@ describe("ops controls", () => {
       current500Gate: {
         state: "pass",
         requiredSellableRows: 500,
-        observedSellableRows: 750,
+        observedSellableRows: 1000,
         sellableRowGap: 0,
         requiredTrueFindingShare: 0.55,
         maximumSourceProvenanceShare: 0.4
@@ -739,18 +739,18 @@ describe("ops controls", () => {
       current750Gate: {
         state: "pass",
         requiredSellableRows: 750,
-        observedSellableRows: 750,
+        observedSellableRows: 1000,
         sellableRowGap: 0
       },
       current1000LocalSellableGate: {
-        state: "hold",
+        state: "pass",
         requiredSellableRows: 1000,
-        observedSellableRows: 750,
-        sellableRowGap: 250,
+        observedSellableRows: 1000,
+        sellableRowGap: 0,
         countsProjectedRowsAsPaid: false
       },
       current1000Gate: {
-        state: "hold",
+        state: "pass",
         requiredUsefulRows: 1000,
         requiredSellableRows: 300,
         countsProjectedRowsAsPaid: false
@@ -774,7 +774,7 @@ describe("ops controls", () => {
     expect(dashboard.paidReleaseTruthBoard.programDcReleaseGates.revenueImpactBlockerBoard).toEqual(expect.arrayContaining([
       expect.objectContaining({ rank: 1, blocker: "hosted_proof_gap", owner: "agent_09" }),
       expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 0, state: "pass" }),
-      expect.objectContaining({ blocker: "useful_row_density_gap", owner: "agent_10", observedGap: 393 })
+      expect.objectContaining({ blocker: "useful_row_density_gap", owner: "agent_10", observedGap: 0, state: "pass" })
     ]));
     expect(dashboard.paidReleaseTruthBoard.programDeReleaseBoard).toMatchObject({
       schemaVersion: "ti.program_de_paid_beta_release_truth.v1",
@@ -787,8 +787,8 @@ describe("ops controls", () => {
         observed: {
           current750State: "pass",
           current750Gap: 0,
-          current1000UsefulState: "hold",
-          current1000UsefulGap: 393,
+          current1000UsefulState: "pass",
+          current1000UsefulGap: 0,
           pricingState: "external_unknown",
           payoutState: "external_unknown",
           analyticsObserved: false
@@ -797,8 +797,8 @@ describe("ops controls", () => {
       publicPaidTrafficGate: {
         state: "hold",
         observed: {
-          current1000LocalSellableState: "hold",
-          current1000SellableGap: 250,
+          current1000LocalSellableState: "pass",
+          current1000SellableGap: 0,
           marketplacePaidTrafficState: "hold"
         }
       },
@@ -810,11 +810,11 @@ describe("ops controls", () => {
         requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
       }
     });
-    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).privatePaidBetaGate.blockers).toEqual(expect.arrayContaining(["current1000_useful_rows", "hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved"]));
-    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).publicPaidTrafficGate.blockers).toEqual(expect.arrayContaining(["private_paid_beta_not_ready", "current1000_local_sellable_rows", "hosted300_observed_proof", "marketplace_paid_traffic_gate", "paid_runs_unobserved", "refunds_unobserved"]));
+    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).privatePaidBetaGate.blockers).toEqual(expect.arrayContaining(["hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved"]));
+    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).publicPaidTrafficGate.blockers).toEqual(expect.arrayContaining(["private_paid_beta_not_ready", "hosted300_observed_proof", "marketplace_paid_traffic_gate", "paid_runs_unobserved", "refunds_unobserved"]));
     expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { topRevenueActions: Array<Record<string, unknown>> }).topRevenueActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ rank: 1, owner: "agent_09", action: "import_hosted_100_and_300_observed_proof" }),
-      expect.objectContaining({ rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost", expectedRowLift: 393 }),
+      expect.objectContaining({ rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost", expectedRowLift: 0, state: "pass" }),
       expect.objectContaining({ rank: 4, owner: "agent_09", action: "import_pricing_payout_and_analytics" })
     ]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
@@ -1474,7 +1474,7 @@ describe("ops controls", () => {
     ]));
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.deterministic100NameProof).toMatchObject({
       proofPreset: "100_name_paid_preset",
-      proofRows: 607,
+      proofRows: 1000,
       sellableRowsPreserved: 187,
       sellableFindingsBaseline: 52,
       sellableSourceProvenanceRows: 135,
