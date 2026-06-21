@@ -1562,7 +1562,7 @@ describe("scheduler production readiness", () => {
         targetUsefulRows: 1000,
         currentUsefulRows: 607,
         currentUsefulGapRows: 393,
-        hostedObservedSellableRows: null,
+        hostedObservedSellableRows: 46,
         hostedProofRequired: true,
         countsTowardHostedPaidGateNow: false
       },
@@ -1677,10 +1677,10 @@ describe("scheduler production readiness", () => {
       expect.objectContaining({
         inputId: "hosted_observed_proof",
         owner: "agent_09",
-        rows: 0,
-        targetRows: 300,
-        currentRows: 0,
-        gapRows: 300,
+        rows: 46,
+        targetRows: 100,
+        currentRows: 46,
+        gapRows: 54,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "wait_for_hosted_proof_import"
       }),
@@ -1713,6 +1713,12 @@ describe("scheduler production readiness", () => {
         visibleState: "partial",
         cadence: "daily",
         protectedBy: expect.arrayContaining(["source_policy", "no_leak_gate"])
+      }),
+      expect.objectContaining({
+        actionId: "hosted_proof_hold",
+        visibleState: "queued",
+        reason: expect.stringContaining("46 sellable rows"),
+        protectedBy: expect.arrayContaining(["hosted_proof_gate", "paid_row_gate"])
       }),
       expect.objectContaining({
         actionId: "dark_metadata_review_before_emit",

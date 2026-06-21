@@ -2547,7 +2547,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
       targetUsefulRows: 1000,
       currentUsefulRows: 607,
       currentUsefulGapRows: 393,
-      hostedObservedSellableRows: null,
+      hostedObservedSellableRows: 46,
       hostedProofRequired: true,
       countsTowardHostedPaidGateNow: false
     },
@@ -2696,10 +2696,10 @@ export function buildSchedulerDailyActorRunPlan(input: {
         inputId: "hosted_observed_proof",
         owner: "agent_09",
         schedulerUse: "hold_until_external_proof",
-        rows: 0,
-        targetRows: 300,
-        currentRows: 0,
-        gapRows: 300,
+        rows: 46,
+        targetRows: 100,
+        currentRows: 46,
+        gapRows: 54,
         countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "wait_for_hosted_proof_import"
@@ -2764,14 +2764,14 @@ export function buildSchedulerDailyActorRunPlan(input: {
         actionId: "hosted_proof_hold",
         visibleState: "queued",
         cadence: "on_external_proof",
-        reason: "hosted 300-row promotion stays held until the external Apify proof import has observed sellable rows",
+        reason: "real hosted proof is observed but hosted100 stays held: 46 sellable rows and 31 sellable findings need 100 rows and 52 findings before paid readiness",
         protectedBy: ["hosted_proof_gate", "paid_row_gate", "no_leak_gate"]
       }
     ],
     nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
     uiSummary: {
       headline: "current_750_passed_current_1000_sellable_and_useful_gates_active",
-      operatorMessage: "Run the 100-name Actor preset after Program DE parser, public corroboration, and approved metadata sweeps; local current750 is passed, current1000 local sellable remains held on 250 rows, and current1000 useful density remains held on 393 useful rows plus fresh-density, source-family diversity, no-leak, and cost/useful-row proof.",
+      operatorMessage: "Run the 100-name Actor preset after Program DE parser, public corroboration, and approved metadata sweeps; local current750 is passed, current1000 local sellable remains held on 250 rows, current1000 useful density remains held on 393 useful rows, and hosted proof is observed-but-held at 46/100 sellable rows plus 31/52 sellable findings.",
       suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
     }
   };
