@@ -1,17 +1,20 @@
 // @ts-nocheck
 import { hashContent, stableId } from "../utils.ts";
 import type { CanaryFetch, CanaryLoopState } from "./canaryCollectionTypes.ts";
+import { feedItems } from "./canaryFeedItems.ts";
 
 export function taskFor(source: any, at: string, runId: string, maxBytes: number) {
   return { id: stableId("task", `${source.id}:${at}`), sourceId: source.id, targetUrl: source.url, sourceType: source.type, queuedAt: at, priority: source.trustScore ?? 0.5, reason: "public_canary", retryCount: 0, maxBytes, runId };
 }
 
-export async function fetchItem(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000) {
+export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000) {
   const started = Date.now(), res = await fetcher(task.targetUrl, { headers: { "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" }, signal: AbortSignal.timeout(timeoutMs) });
-  const fetched = (await res.text()).slice(0, maxBytes), text = `${source.name}\n${fetched}`;
+  const fetched = (await res.text()).slice(0, maxBytes);
   const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(res.url || task.targetUrl), responseBytes: fetched.length, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v1", requestedUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(res.url || task.targetUrl), httpStatus: res.status, ok: res.ok, contentType: res.headers.get("content-type") ?? undefined, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: fetched.length, maxBytes, truncated: fetched.length >= maxBytes, bounded: true, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
-  return { source, task, url: task.targetUrl, title: source.name, rawText: text, body: text, collectedAt: at, contentHash: hashContent(`${source.id}:${text}`), metadata };
+  return feedItems(source, task, fetched, at, metadata);
 }
+
+export const fetchItem = async (...args: any[]) => (await fetchItems(...args))[0];
 
 export function externalize(capture: any, objectStore: any) {
   const body = capture.body ?? "";

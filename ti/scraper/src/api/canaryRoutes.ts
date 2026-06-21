@@ -15,7 +15,14 @@ export async function canaryActivation(request: Request, options: ApiServerOptio
 
 export async function canaryRun(request: Request, options: ApiServerOptions): Promise<Response> {
   const input = await readJson(request);
-  const canaryRun = await runCanaryCollectionCycle({ store: options.store, frontier: options.frontier, objectStore: options.objectStore, fetch: options.canaryFetch as any, activateSources: false, maxSources: input.maxSources, maxTasks: input.maxTasks, now: () => input.generatedAt ?? nowIso() });
+  const canaryRun = await runCanaryCollectionCycle({
+    store: options.store, frontier: options.frontier, objectStore: options.objectStore,
+    fetch: options.canaryFetch as any, activateSources: false,
+    maxSources: input.maxSources, maxTasks: input.maxTasks,
+    maxItemsPerTask: input.maxItemsPerTask, timeoutMs: input.timeoutMs,
+    maxConcurrentTasks: input.maxConcurrentTasks,
+    now: () => input.generatedAt ?? nowIso()
+  });
   return json({ canaryRun });
 }
 

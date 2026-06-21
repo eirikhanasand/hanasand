@@ -22,11 +22,18 @@ function rowFromCapture(capture: any) {
     id: capture.id,
     sourceId: capture.sourceId,
     title: capture.title,
-    summary: String(capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "").slice(0, 500),
+    summary: cleanSummary(capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "").slice(0, 500),
     collectedAt: capture.collectedAt,
     provenanceHash: hashContent(capture.id),
     metadataOnly: capture.storageKind === "metadata_only" || capture.metadata?.adapter === "darknet_metadata"
   };
+}
+
+function cleanSummary(value: unknown) {
+  return String(value ?? "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));
 }
 
 function qualityFromRows(query: string, rows: Array<{ id: string }>) {

@@ -26,10 +26,10 @@ export class FocusedFrontier {
     const decision = total >= this.o.enqueueThreshold ? "enqueue" : total >= this.o.reviewThreshold ? "review" : "drop";
     return this.scoreObj(candidate, total, decision, decision === "enqueue" ? "candidate is relevant and collectable" : "candidate needs more evidence", safety);
   }
-  next(now = this.o.now()) {
+  next(now = this.o.now(), predicate = (_task: any) => true) {
     this.requeueExpiredLeases(now);
     for (const item of this.sorted(now)) {
-      if (item.availableAt && Date.parse(item.availableAt) > +now) continue;
+      if ((item.availableAt && Date.parse(item.availableAt) > +now) || !predicate(item.task ?? item)) continue;
       if ((this.running.get(item.sourceId) ?? 0) >= this.o.defaultPerSourceConcurrency) continue;
       if (!this.reserveBudget(item, now)) continue;
       this.queue.delete(item.id); this.leased.set(item.id, { item, leasedUntil: +now + this.o.taskLeaseMs });
