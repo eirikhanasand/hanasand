@@ -934,6 +934,79 @@ if (
 ) {
   throw new Error("Program DB current sellable 300 lift must not claim hosted proof or expose restricted payloads");
 }
+const currentSellable500Lift = findingAdmissionLedger.currentSellable500Lift as Record<string, unknown> | undefined;
+if (
+  !currentSellable500Lift
+  || currentSellable500Lift.schemaVersion !== "ti.program_dc_current_sellable_500_lift.v1"
+  || currentSellable500Lift.owner !== "agent_03"
+  || Number(currentSellable500Lift.acceptedCurrentRowsCount) !== 200
+  || Number(currentSellable500Lift.sourceProvenanceRowsConvertedToFindings) !== 10
+  || Number(currentSellable500Lift.rejectedRowsCount) !== 282
+  || Number(currentSellable500Lift.currentSellableRowsAfterAdmission) !== 500
+  || Number(currentSellable500Lift.currentSellableFindingsAfterAdmission) !== 403
+  || Number(currentSellable500Lift.currentSellableSourceProvenanceRowsAfterAdmission) !== 97
+  || Number(currentSellable500Lift.sourceProvenanceShareAfterAdmission) !== 0.194
+  || Number(currentSellable500Lift.trueFindingShareAfterAdmission) !== 0.806
+  || currentSellable500Lift.countsTowardLocalCurrentPaidPreset !== true
+  || currentSellable500Lift.countsTowardHostedPaidProof !== false
+  || !Array.isArray(currentSellable500Lift.acceptedRows)
+  || !Array.isArray(currentSellable500Lift.convertedSourceProvenanceRows)
+  || !Array.isArray(currentSellable500Lift.rejectedRows)
+) {
+  throw new Error("Program DC current sellable 500 lift must expose a local-countable 500-row packet");
+}
+const current500AcceptedRows = currentSellable500Lift.acceptedRows as Array<Record<string, unknown>>;
+if (
+  current500AcceptedRows.length !== 200
+  || current500AcceptedRows.filter((row) => row.sourcePacket === "agent05_current_chargeable250").length !== 100
+  || current500AcceptedRows.filter((row) => row.sourcePacket === "agent08_parser_ready_public_proof").length !== 60
+  || current500AcceptedRows.filter((row) => row.sourcePacket === "agent04_high_value_public_source_replacement").length !== 25
+  || current500AcceptedRows.filter((row) => row.sourcePacket === "existing_public_source_row").length !== 15
+) {
+  throw new Error("Program DC current sellable 500 lift must draw from Agent 05, Agent 08, Agent 04, and existing public rows");
+}
+for (const row of current500AcceptedRows) {
+  if (
+    typeof row.actor !== "string"
+    || typeof row.victimOrTarget !== "string"
+    || typeof row.sector !== "string"
+    || typeof row.countryOrRegion !== "string"
+    || typeof row.ttpToolOrCampaign !== "string"
+    || typeof row.datasetOrImpactClaim !== "string"
+    || typeof row.firstSeen !== "string"
+    || typeof row.lastSeen !== "string"
+    || Number(row.confidence) < 0.835
+    || typeof row.freshnessState !== "string"
+    || typeof row.provenanceHash !== "string"
+    || typeof row.whyWorthPayingFor !== "string"
+    || row.countsTowardCurrentSellableRows !== true
+    || row.countsTowardHostedPaidProof !== false
+    || row.noLeakProof !== "hash_only_no_raw_locator_no_payload_no_credentials"
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program DC accepted rows must be current, buyer-actionable, provenance-backed, and local-only");
+  }
+}
+for (const reason of ["low_value", "stale", "generic", "source_provenance_only_risk", "graph_only", "restricted_only", "contradicted", "duplicate", "missing_victim_or_context", "missing_source_family", "missing_buyer_action"]) {
+  if (!(currentSellable500Lift.rejectedRows as Array<Record<string, unknown>>).some((row) => row.reason === reason && row.countsTowardCurrentSellableRows === false)) {
+    throw new Error(`Program DC current sellable 500 lift must reject ${reason}`);
+  }
+}
+const current500LiftProgress = currentSellable500Lift.targetProgress as Record<string, unknown> | undefined;
+const current500Next750 = current500LiftProgress?.next750Plan as Record<string, unknown> | undefined;
+if (
+  !current500LiftProgress
+  || Number(current500LiftProgress.remainingGapTo500) !== 0
+  || Number(current500LiftProgress.minimumTrueFindingShare) !== 0.55
+  || Number(current500LiftProgress.remainingFindingGapTo55Percent) !== 0
+  || Number(current500LiftProgress.maximumSourceProvenanceShare) !== 0.4
+  || Number(current500LiftProgress.remainingGapTo750) !== 250
+  || !current500Next750
+  || Number(current500Next750.additionalRowsNeeded) !== 250
+  || current500Next750.projectedRowsCountTowardCurrent !== false
+) {
+  throw new Error("Program DC current sellable 500 lift must pass 500 and carry a gated 750 plan");
+}
 for (const row of findingAdmissionLedger.remainingBlockers as Array<Record<string, unknown>>) {
   if (row.countsTowardCurrentSellableRows !== false) throw new Error("Program CX remaining blockers must not count toward sellable rows");
 }
@@ -1447,8 +1520,8 @@ const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, 
 if (
   !graphPublicUnlockCounts
   || Number(graphPublicUnlockCounts.admitted_by_parser) !== 0
-  || Number(graphPublicUnlockCounts.ready_for_parser) !== 175
-  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 175
+  || Number(graphPublicUnlockCounts.ready_for_parser) !== 300
+  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 300
   || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
   || Number(graphPublicUnlockCounts.needs_public_source) !== 6
   || Number(graphPublicUnlockCounts.contradicted) !== 6
@@ -1469,9 +1542,9 @@ const graphPublicNeedsPublicSource = graphPublicUnlockQueue.needs_public_source 
 const graphPublicParserHandoff = graphPublicUnlockQueue.parserAdmissionHandoff as Array<Record<string, unknown>> | undefined;
 if (
   !Array.isArray(graphPublicParserHandoff)
-  || graphPublicParserHandoff.length !== 175
+  || graphPublicParserHandoff.length !== 300
   || !Array.isArray(graphPublicCurrentAdmission)
-  || graphPublicCurrentAdmission.length !== 175
+  || graphPublicCurrentAdmission.length !== 300
   || !graphPublicParserHandoff.every((row) =>
     typeof row.actor === "string"
     && typeof row.victimOrTarget === "string"
@@ -1485,6 +1558,12 @@ if (
     && typeof row.programDbPriority === "object"
     && Number((row.programDbPriority as Record<string, unknown>).gapContribution) > 0
     && (row.programDbPriority as Record<string, unknown>).admissionBlocker === "none"
+    && typeof row.programDcPriority === "object"
+    && Number((row.programDcPriority as Record<string, unknown>).gapContribution) > 0
+    && (row.programDcPriority as Record<string, unknown>).admissionBlocker === "none"
+    && Number((row.programDcPriority as Record<string, unknown>).sourceFamilyDiversityLift) > 0
+    && typeof (row.programDcPriority as Record<string, unknown>).corroborationStrength === "string"
+    && typeof (row.programDcPriority as Record<string, unknown>).freshnessRisk === "string"
     && Number(row.expectedPaidRowLiftAfterParserAdmission) > 0
     && row.admissionState === "ready_for_parser"
     && row.countsTowardFloorNow === false
@@ -1500,8 +1579,9 @@ if (
   throw new Error("Program CY paid row unlock queue must expose hash-only parser and public-support handoff rows");
 }
 const graphPublicProgramDbRejectionBuckets = graphPublicUnlockQueue.programDbRejectionBuckets as Record<string, unknown> | undefined;
+const graphPublicProgramDcRejectionBuckets = graphPublicUnlockQueue.programDcRejectionBuckets as Record<string, unknown> | undefined;
 if (
-  graphPublicParserHandoff.filter((row) => (row.programDbPriority as Record<string, unknown>).findingLikely === true).length !== 95
+  graphPublicParserHandoff.filter((row) => (row.programDcPriority as Record<string, unknown>).findingLikely === true).length < 160
   || !graphPublicProgramDbRejectionBuckets
   || Number(graphPublicProgramDbRejectionBuckets.stale) !== 4
   || Number(graphPublicProgramDbRejectionBuckets.alias_conflict) !== 4
@@ -1512,8 +1592,20 @@ if (
   || Number(graphPublicProgramDbRejectionBuckets.not_enough_source_support) !== 6
   || Number(graphPublicProgramDbRejectionBuckets.rowsCountTowardFloorNow) !== 0
   || graphPublicProgramDbRejectionBuckets.noLeak !== true
+  || !graphPublicProgramDcRejectionBuckets
+  || Number(graphPublicProgramDcRejectionBuckets.stale) !== 4
+  || Number(graphPublicProgramDcRejectionBuckets.alias_conflict) !== 4
+  || Number(graphPublicProgramDcRejectionBuckets.contradiction) !== 2
+  || Number(graphPublicProgramDcRejectionBuckets.duplicate) !== 0
+  || Number(graphPublicProgramDcRejectionBuckets.generic_source_page) !== 0
+  || Number(graphPublicProgramDcRejectionBuckets.restricted_only) !== 0
+  || Number(graphPublicProgramDcRejectionBuckets.not_enough_source_support) !== 6
+  || Number(graphPublicProgramDcRejectionBuckets.missing_buyer_action) !== 0
+  || Number(graphPublicProgramDcRejectionBuckets.weak_source_family_diversity) !== 0
+  || Number(graphPublicProgramDcRejectionBuckets.rowsCountTowardFloorNow) !== 0
+  || graphPublicProgramDcRejectionBuckets.noLeak !== true
 ) {
-  throw new Error("Program DB graph public handoff must expose 175 rows, 75-plus finding-likely rows, and explicit rejection buckets");
+  throw new Error("Program DC graph public handoff must expose 300 rows, 160-plus finding-likely rows, and explicit rejection buckets");
 }
 const graphPublicPivots = graphPublicCorroborationPivotPacket.candidates as Array<Record<string, unknown>>;
 if (!graphPublicPivots.every((row) => {
@@ -1887,12 +1979,22 @@ if (
 }
 const hostedProofChecklistGateEffects = hostedProofOperatorChecklist?.gateEffects as Record<string, Record<string, unknown>> | undefined;
 const hostedProofChecklistExamples = hostedProofOperatorChecklist?.validationExamples as Array<Record<string, unknown>> | undefined;
+const hostedProofOperatorActionBoard = hostedProofOperatorChecklist?.operatorActionBoard as Record<string, unknown> | undefined;
 if (
   !hostedProofOperatorChecklist
   || hostedProofOperatorChecklist.schemaVersion !== "ti.hosted_apify_proof_operator_checklist.v1"
   || hostedProofOperatorChecklist.status !== "missing_proof"
   || hostedProofOperatorChecklist.sampleOnly !== false
   || hostedProofOperatorChecklist.unlockSummary !== "none"
+  || !hostedProofOperatorActionBoard
+  || hostedProofOperatorActionBoard.canRunNow !== false
+  || hostedProofOperatorActionBoard.canVerifyRunNow !== false
+  || hostedProofOperatorActionBoard.canImportObservedProofNow !== false
+  || !Array.isArray(hostedProofOperatorActionBoard.missingSecretNames)
+  || !(hostedProofOperatorActionBoard.missingSecretNames as string[]).includes("APIFY_TOKEN")
+  || typeof hostedProofOperatorActionBoard.nextCommand !== "string"
+  || !hostedProofOperatorActionBoard.nextCommand.includes("TI_APIFY_HOSTED_PROOF_MODE=run")
+  || hostedProofOperatorActionBoard.expectedUnlock !== "none"
   || !Array.isArray(hostedProofOperatorChecklist.missingFields)
   || !(hostedProofOperatorChecklist.missingFields as string[]).includes("runId")
   || !(hostedProofOperatorChecklist.missingFields as string[]).includes("pricingModel")
@@ -1906,10 +2008,10 @@ if (
   || !hostedProofChecklistExamples.some((example) => example.name === "valid_hosted300_marketplace_hold" && example.unlockSummary === "hosted100_hosted300")
   || !hostedProofChecklistExamples.some((example) => example.name === "invalid_unsafe_no_leak_proof" && example.expectedStatus === "rejected")
 ) {
-  throw new Error("Hosted proof operator checklist must explain missing fields, sample rejection, hosted100/hosted300 gate effects, and unsafe proof rejection");
+  throw new Error("Hosted proof operator checklist must explain operator action state, missing fields, sample rejection, hosted100/hosted300 gate effects, and unsafe proof rejection");
 }
 const hostedProofCommandExamples = hostedProofImportPath.commandExamples as string[] | undefined;
-if (!hostedProofCommandExamples?.join(" ").includes("TI_APIFY_HOSTED_PROOF_MODE=run") || !hostedProofCommandExamples.join(" ").includes("TI_APIFY_OBSERVED_PROOF_PATH")) {
+if (!hostedProofCommandExamples?.join(" ").includes("TI_APIFY_HOSTED_PROOF_MODE=run") || !hostedProofCommandExamples.join(" ").includes("TI_APIFY_OBSERVED_PROOF_PATH") || !hostedProofCommandExamples.join(" ").includes("hosted-apify-observed-proof.hosted300.template.json")) {
   throw new Error("Hosted paid-readiness proof must expose copy/paste hosted run and verify commands");
 }
 const hostedRequiredZeroCounts = hostedPaidIntegrityGate.requiredZeroCounts as Record<string, unknown> | undefined;
@@ -1940,6 +2042,34 @@ for (const field of ["rawEvidenceExposed", "unsafeUrlsExposed", "restrictedPaylo
 }
 if (!((hostedPaidReadinessProof.manualVerificationSteps as string[] | undefined) ?? []).join(" ").includes("secondBatchAudit")) {
   throw new Error("Hosted paid-readiness proof must instruct operators to verify Program CP secondBatchAudit before paid promotion");
+}
+const programDcReleaseGates = paidReleaseTruthBoard.programDcReleaseGates as Record<string, unknown> | undefined;
+const programDcCurrent500Gate = programDcReleaseGates?.current500Gate as Record<string, unknown> | undefined;
+const programDcCurrent1000Gate = programDcReleaseGates?.current1000Gate as Record<string, unknown> | undefined;
+const programDcHostedGate = programDcReleaseGates?.hostedProofExecutionGate as Record<string, unknown> | undefined;
+const programDcMarketplaceGate = programDcReleaseGates?.marketplacePaidTrafficGate as Record<string, unknown> | undefined;
+if (
+  !programDcReleaseGates
+  || programDcReleaseGates.schemaVersion !== "ti.program_dc_paid_release_gates.v1"
+  || !programDcCurrent500Gate
+  || programDcCurrent500Gate.requiredSellableRows !== 500
+  || programDcCurrent500Gate.observedSellableRows !== paidRowQuality.sellable
+  || programDcCurrent500Gate.requiredTrueFindingShare !== 0.55
+  || programDcCurrent500Gate.maximumSourceProvenanceShare !== 0.4
+  || !programDcCurrent1000Gate
+  || programDcCurrent1000Gate.state !== "hold"
+  || programDcCurrent1000Gate.requiredUsefulRows !== 1000
+  || programDcCurrent1000Gate.countsProjectedRowsAsPaid !== false
+  || !programDcHostedGate
+  || programDcHostedGate.state !== "hold"
+  || programDcHostedGate.observedOnly !== true
+  || programDcHostedGate.observedProofImportState !== "missing"
+  || !programDcMarketplaceGate
+  || programDcMarketplaceGate.state !== "hold"
+  || programDcMarketplaceGate.paidTrafficAllowedNow !== false
+  || programDcMarketplaceGate.noInventedExternalMetrics !== true
+) {
+  throw new Error("Program DC release gates must expose current500/current1000/hosted/marketplace gates in Actor OUTPUT and keep hosted marketplace traffic held");
 }
 if (!paidReleaseBuckets.every((bucket) =>
   typeof bucket.owner === "string"

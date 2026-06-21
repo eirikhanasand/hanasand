@@ -494,6 +494,13 @@ export interface LiveProductSloDashboard {
       };
     };
     hostedPaidReadinessProof: HostedApifyPaidReadinessProof;
+    programDcReleaseGates: {
+      schemaVersion: "ti.program_dc_paid_release_gates.v1";
+      current500Gate: Record<string, unknown>;
+      current1000Gate: Record<string, unknown>;
+      hostedProofExecutionGate: Record<string, unknown>;
+      marketplacePaidTrafficGate: Record<string, unknown>;
+    };
     blockerBuckets: Array<{
       blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
       owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -1200,7 +1207,7 @@ export interface LiveProductSloDashboard {
         currentSellableFindingsAfterAdmission: number;
         currentSellableSourceProvenanceRowsAfterAdmission: number;
         sourceProvenanceShareAfterAdmission: number;
-        countsTowardLocalCurrentPaidPreset: true;
+        countsTowardLocalCurrentPaidPreset: boolean;
         countsTowardHostedPaidProof: false;
         acceptedRows: Array<{
           rowId: string;
@@ -1316,6 +1323,89 @@ export interface LiveProductSloDashboard {
           maximumSourceProvenanceShare: 0.45;
           nextTargetCurrentSellableRows: 1000;
           remainingGapTo1000: number;
+        };
+        noLeakBoundary: {
+          rawBodiesExposed: false;
+          unsafeUrlsExposed: false;
+          restrictedPayloadsExposed: false;
+          credentialsExposed: false;
+          privateMaterialUsed: false;
+          actorInteractionTextUsed: false;
+          hostedPaidProofClaimed: false;
+        };
+      };
+      currentSellable500Lift: {
+        schemaVersion: "ti.program_dc_current_sellable_500_lift.v1";
+        owner: "agent_03";
+        sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+        baseline: {
+          sellableRows: 300;
+          sellableFindings: 193;
+          sellableSourceProvenanceRows: 107;
+          sourceProvenanceShare: 0.357;
+        };
+        acceptedCurrentRowsCount: number;
+        sourceProvenanceRowsConvertedToFindings: number;
+        rejectedRowsCount: number;
+        currentSellableRowsAfterAdmission: number;
+        currentSellableFindingsAfterAdmission: number;
+        currentSellableSourceProvenanceRowsAfterAdmission: number;
+        sourceProvenanceShareAfterAdmission: number;
+        trueFindingShareAfterAdmission: number;
+        countsTowardLocalCurrentPaidPreset: boolean;
+        countsTowardHostedPaidProof: false;
+        acceptedRows: Array<{
+          rowId: string;
+          sourcePacket: "agent05_current_chargeable250" | "agent08_parser_ready_public_proof" | "agent04_high_value_public_source_replacement" | "existing_public_source_row";
+          actor: string;
+          victimOrTarget: string;
+          sector: string;
+          countryOrRegion: string;
+          ttpToolOrCampaign: string;
+          datasetOrImpactClaim: string;
+          firstSeen: string;
+          lastSeen: string;
+          sourceFamily: "dark_metadata_public_support" | "clear_web_public_report" | "government_advisory" | "vendor_report" | "rss_security_blog" | "public_channel_handoff";
+          confidence: number;
+          freshnessState: "fresh_current" | "current_recheck_due";
+          provenanceHash: string;
+          whyWorthPayingFor: string;
+          countsTowardCurrentSellableRows: true;
+          countsTowardHostedPaidProof: false;
+          noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials";
+          noLeak: true;
+        }>;
+        convertedSourceProvenanceRows: Array<{
+          rowId: string;
+          actor: string;
+          convertedTo: "activity" | "target" | "ttp" | "dataset";
+          buyerReason: string;
+          provenanceHash: string;
+          countsTowardSellableFindingFloor: true;
+          noLeak: true;
+        }>;
+        rejectedRows: Array<{
+          reason: "low_value" | "stale" | "generic" | "source_provenance_only_risk" | "graph_only" | "restricted_only" | "contradicted" | "duplicate" | "missing_victim_or_context" | "missing_source_family" | "missing_buyer_action";
+          rowCount: number;
+          buyerTrustReason: string;
+          countsTowardCurrentSellableRows: false;
+        }>;
+        targetProgress: {
+          targetCurrentSellableRows: 500;
+          remainingGapTo500: number;
+          minimumTrueFindingShare: 0.55;
+          remainingFindingGapTo55Percent: number;
+          maximumSourceProvenanceShare: 0.4;
+          nextTargetCurrentSellableRows: 750;
+          remainingGapTo750: number;
+          next750Plan: {
+            targetCurrentSellableRows: 750;
+            additionalRowsNeeded: number;
+            minimumTrueFindingsAt750: number;
+            maximumSourceProvenanceRowsAt750: number;
+            sourcePackets: string[];
+            projectedRowsCountTowardCurrent: false;
+          };
         };
         noLeakBoundary: {
           rawBodiesExposed: false;
@@ -1825,6 +1915,16 @@ export interface LiveProductSloDashboard {
           preferredParserAction: "admit_as_current_finding" | "admit_with_caveat" | "hold_for_source_support" | "hold_for_review";
           admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support";
         };
+        programDcPriority: {
+          gapContribution: number;
+          findingLikely: boolean;
+          sourceProvenanceOnlyRisk: "low" | "medium" | "high";
+          preferredParserAction: "admit_as_current_finding" | "admit_with_caveat" | "hold_for_source_support" | "hold_for_review";
+          admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support" | "missing_buyer_action" | "weak_source_family_diversity";
+          sourceFamilyDiversityLift: number;
+          corroborationStrength: "single_source" | "cross_family" | "multi_family_strong";
+          freshnessRisk: "low" | "medium" | "high";
+        };
         admissionState: "ready_for_parser";
         countsTowardFloorNow: false;
         noLeak: true;
@@ -1905,6 +2005,19 @@ export interface LiveProductSloDashboard {
         generic_source_page: number;
         restricted_only: number;
         not_enough_source_support: number;
+        rowsCountTowardFloorNow: 0;
+        noLeak: true;
+      };
+      programDcRejectionBuckets: {
+        stale: number;
+        alias_conflict: number;
+        contradiction: number;
+        duplicate: number;
+        generic_source_page: number;
+        restricted_only: number;
+        not_enough_source_support: number;
+        missing_buyer_action: number;
+        weak_source_family_diversity: number;
         rowsCountTowardFloorNow: 0;
         noLeak: true;
       };
@@ -2155,12 +2268,15 @@ export interface LiveProductSloDashboard {
       };
       blockerBucketCounts: {
         needs_public_support: number;
+        no_current_public_support: number;
         stale_public_support: number;
         duplicate_claim: number;
         unsafe_restricted_only: number;
         generic_source_only: number;
         victim_too_sensitive_to_surface: number;
         contradiction_hold: number;
+        contradiction_false_claim_hold: number;
+        missing_buyer_action: number;
       };
       sampleRows: Array<{
         rank: number;
@@ -2171,7 +2287,7 @@ export interface LiveProductSloDashboard {
         publicSupportSourceFamily: string;
         safePublicSourceId: string;
         rowDecision: "current_sellable_public_supported" | "projected_after_public_support" | "blocked_not_chargeable";
-        blockerBucket?: "needs_public_support" | "stale_public_support" | "duplicate_claim" | "unsafe_restricted_only" | "generic_source_only" | "victim_too_sensitive_to_surface" | "contradiction_hold";
+        blockerBucket?: "needs_public_support" | "no_current_public_support" | "stale_public_support" | "duplicate_claim" | "unsafe_restricted_only" | "generic_source_only" | "victim_too_sensitive_to_surface" | "contradiction_hold" | "contradiction_false_claim_hold" | "missing_buyer_action";
         newlyChargeableSinceSellable100: boolean;
         countsTowardSellableFloorNow: boolean;
         countsTowardSellableFloorAfterPublicSupport: boolean;
@@ -2185,7 +2301,7 @@ export interface LiveProductSloDashboard {
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows";
       targetSellableRows: 250;
       candidateCount: 500;
-      previousCurrentChargeableRows: 100;
+      previousCurrentChargeableRows: 150;
       currentChargeableRows: number;
       newlyChargeableRows: number;
       projectedAfterPublicSupportRows: number;
@@ -2210,6 +2326,15 @@ export interface LiveProductSloDashboard {
         projectedGapTo250AfterPublicSupport: number;
         countsProjectedRowsAsCurrent: false;
       };
+      currentChargeable250: {
+        currentChargeableCount: number;
+        newlyChargeableSinceProgramDc: number;
+        projectedAfterPublicSupportCount: number;
+        blockedOrRetiredCount: number;
+        currentGapTo250: number;
+        currentGapTo500: number;
+        countsProjectedRowsAsCurrent: false;
+      };
       rowDecisionCounts: {
         current_sellable_public_supported: number;
         projected_after_public_support: number;
@@ -2217,12 +2342,15 @@ export interface LiveProductSloDashboard {
       };
       blockerBucketCounts: {
         needs_public_support: number;
+        no_current_public_support: number;
         stale_public_support: number;
         duplicate_claim: number;
         unsafe_restricted_only: number;
         generic_source_only: number;
         victim_too_sensitive_to_surface: number;
         contradiction_hold: number;
+        contradiction_false_claim_hold: number;
+        missing_buyer_action: number;
       };
       sampleRows: Array<{
         rank: number;
@@ -2233,9 +2361,10 @@ export interface LiveProductSloDashboard {
         publicSupportSourceFamily: string;
         safePublicSourceId: string;
         rowDecision: "current_sellable_public_supported" | "projected_after_public_support" | "blocked_not_chargeable";
-        blockerBucket?: "needs_public_support" | "stale_public_support" | "duplicate_claim" | "unsafe_restricted_only" | "generic_source_only" | "victim_too_sensitive_to_surface" | "contradiction_hold";
+        blockerBucket?: "needs_public_support" | "no_current_public_support" | "stale_public_support" | "duplicate_claim" | "unsafe_restricted_only" | "generic_source_only" | "victim_too_sensitive_to_surface" | "contradiction_hold" | "contradiction_false_claim_hold" | "missing_buyer_action";
         newlyChargeableSinceProgramCw: boolean;
         newlyChargeableSinceProgramDa: boolean;
+        newlyChargeableSinceProgramDc: boolean;
         countsTowardSellableFloorNow: boolean;
         countsTowardSellableFloorAfterPublicSupport: boolean;
         freshness: "fresh_current" | "recent_recheck_due" | "stale_blocked";
@@ -2906,7 +3035,10 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const paidReleaseTruthBoard = buildPaidReleaseTruthBoard({
     monetizationReadiness,
     paidRowDecisionCounts,
-    releaseDecision
+    releaseDecision,
+    parserRealSellableLift,
+    graphPublicCorroborationPivotPacket,
+    darkMetadataPublicSupportLift4000
   });
   const marketplaceTelemetry = marketplaceTelemetryFor(input.marketplace);
   const payoutReadiness = payoutReadinessFor(input.marketplace);
@@ -3839,6 +3971,9 @@ function buildPaidReleaseTruthBoard(input: {
   monetizationReadiness: LiveProductMonetizationReadiness;
   paidRowDecisionCounts: LiveProductSloDashboard["apifyLaunchExperiment"]["paidRowDecisionCounts"];
   releaseDecision: LiveProductSloDashboard["releaseDecision"];
+  parserRealSellableLift: LiveProductSloDashboard["parserRealSellableLift"];
+  graphPublicCorroborationPivotPacket: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"];
+  darkMetadataPublicSupportLift4000: LiveProductSloDashboard["darkMetadataPublicSupportLift4000"];
 }): LiveProductSloDashboard["paidReleaseTruthBoard"] {
   const apifySmokeSellableRows = 3;
   const apifySmokeBuyerUsefulRows = 9;
@@ -4198,6 +4333,11 @@ function buildPaidReleaseTruthBoard(input: {
       privateContent: false
     }
   };
+  const programDcReleaseGates = buildProgramDcPaidReleaseGates({
+    parserRealSellableLift: input.parserRealSellableLift,
+    graphPublicCorroborationPivotPacket: input.graphPublicCorroborationPivotPacket,
+    darkMetadataPublicSupportLift4000: input.darkMetadataPublicSupportLift4000
+  });
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
@@ -4229,6 +4369,7 @@ function buildPaidReleaseTruthBoard(input: {
     paidReleaseRunbook,
     buyerPaidReleaseVerdict,
     hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
+    programDcReleaseGates,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -4256,6 +4397,167 @@ function buildPaidReleaseTruthBoard(input: {
       "Agent 09: keep marketplace proof copy honest with external_unknown analytics.",
       "Agent 10: keep paid traffic blocked until real current sellable rows reach 100."
     ]
+  };
+}
+
+function buildProgramDcPaidReleaseGates(input: {
+  parserRealSellableLift: LiveProductSloDashboard["parserRealSellableLift"];
+  graphPublicCorroborationPivotPacket: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"];
+  darkMetadataPublicSupportLift4000: LiveProductSloDashboard["darkMetadataPublicSupportLift4000"];
+}): LiveProductSloDashboard["paidReleaseTruthBoard"]["programDcReleaseGates"] {
+  const ledger = input.parserRealSellableLift.findingAdmissionLedger;
+  const current500 = ledger.currentSellable500Lift;
+  const dark250 = input.darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250;
+  const graphCounts = input.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts;
+  const hostedProof = buildHostedApifyPaidReadinessProof();
+  const hostedImport = hostedProof.hostedProofImportPath;
+  const observedFields = hostedImport.observedFields;
+  const observedProofImport = hostedImport.observedProofImport;
+  const observedProofAccepted = observedProofImport.validationState === "accepted"
+    && observedProofImport.sampleOnly === false
+    && observedProofImport.validationErrors.length === 0;
+  const hostedProofPresent = Boolean(observedFields.runId && observedFields.datasetId);
+  const datasetItemCount = typeof observedFields.datasetItemCount === "number" ? observedFields.datasetItemCount : 0;
+  const hostedSellableRows = typeof observedFields.sellableRows === "number" ? observedFields.sellableRows : 0;
+  const hostedSellableFindingCount = typeof observedFields.sellableFindingCount === "number" ? observedFields.sellableFindingCount : 0;
+  const hostedImportSafe = hostedImport.observedOnly === true
+    && hostedImport.noSyntheticFallback === true
+    && hostedImport.oldProofTreatment === "historical_shape_safety_only";
+  const invalidObservedProofImport = observedProofImport.validationState !== "missing" && !observedProofAccepted;
+  const hostedProofUnsafe = hostedProofPresent
+    && (!hostedImportSafe || observedFields.noLeakFailures !== 0 || observedFields.secondBatchAuditObserved !== true || observedFields.falsePositiveInflationFailures !== 0);
+  const hosted100State = hostedProofUnsafe || invalidObservedProofImport
+    ? "fail"
+    : hostedProofPresent
+      && observedProofAccepted
+      && datasetItemCount >= 100
+      && hostedSellableRows >= 100
+      && hostedSellableFindingCount >= 52
+        ? "pass"
+        : "hold";
+  const hosted300State = hostedProofUnsafe || invalidObservedProofImport
+    ? "fail"
+    : hostedProofPresent
+      && observedProofAccepted
+      && datasetItemCount >= 300
+      && hostedSellableRows >= 300
+      && hostedSellableFindingCount >= 150
+        ? "pass"
+        : "hold";
+  const currentSellableRows = current500.currentSellableRowsAfterAdmission;
+  const trueFindingShare = current500.trueFindingShareAfterAdmission;
+  const sourceProvenanceShare = current500.sourceProvenanceShareAfterAdmission;
+  const current500CountsTowardLocal = current500.countsTowardLocalCurrentPaidPreset === true;
+  const current500UnsafeCredit = dark250.countsProjectedRowsAsCurrent !== false
+    || graphCounts.rowsCountTowardFloorNow !== 0
+    || observedProofImport.sampleOnly === true
+    || invalidObservedProofImport;
+  const current500State = current500UnsafeCredit
+    ? "fail"
+    : current500CountsTowardLocal && currentSellableRows >= 500 && trueFindingShare >= 0.55 && sourceProvenanceShare <= 0.4
+      ? "pass"
+      : "hold";
+  const proofRows = ledger.deterministic100NameProof.proofRows;
+  const marketplaceInputs = hostedProof.marketplaceConversionInputs;
+  const analyticsObserved = marketplaceInputs.storeViews !== null
+    && marketplaceInputs.runs !== null
+    && marketplaceInputs.uniqueUsers !== null
+    && marketplaceInputs.paidUsers !== null
+    && marketplaceInputs.refunds !== null;
+  const marketplaceObservedOnly = marketplaceInputs.unknownMeansNoClaim === true
+    && hostedImport.noSyntheticFallback === true;
+  const hostedProofExecutionState = hostedProofUnsafe || invalidObservedProofImport
+    ? "fail"
+    : hosted100State === "pass" && hosted300State === "pass"
+      ? "pass"
+      : "hold";
+  const marketplacePaidTrafficState = !marketplaceObservedOnly
+    ? "fail"
+    : hostedProofExecutionState === "pass"
+      && analyticsObserved
+      && marketplaceInputs.payoutEnabled !== "external_unknown"
+      && marketplaceInputs.pricingModel !== "external_unknown"
+      ? "pass"
+      : "hold";
+
+  return {
+    schemaVersion: "ti.program_dc_paid_release_gates.v1",
+    current500Gate: {
+      state: current500State,
+      requiredSellableRows: 500,
+      observedSellableRows: currentSellableRows,
+      sellableRowGap: Math.max(0, 500 - currentSellableRows),
+      requiredTrueFindingShare: 0.55,
+      observedTrueFindingShare: trueFindingShare,
+      maximumSourceProvenanceShare: 0.4,
+      observedSourceProvenanceShare: sourceProvenanceShare,
+      candidateRowsCountTowardLocalCurrentPaidPreset: current500CountsTowardLocal,
+      forbiddenCreditObserved: {
+        projectedRowsCountTowardCurrent: dark250.countsProjectedRowsAsCurrent !== false,
+        graphRowsCountTowardFloorNow: graphCounts.rowsCountTowardFloorNow,
+        restrictedOnlyRowsCountTowardFloorNow: false,
+        staleLatestErrorRowsCountTowardFloorNow: false,
+        sampleProofRowsCountTowardFloorNow: observedProofImport.sampleOnly === true
+      },
+      nextOwnerAction: current500CountsTowardLocal
+        ? `Agent 03: close ${Math.max(0, 500 - currentSellableRows)} current sellable rows while keeping true findings >=55% and source-provenance share <=40%.`
+        : "Agent 03: keep the 500-row packet as a parser candidate until every row is observed, local-countable, and safe to include in paid gates."
+    },
+    current1000Gate: {
+      state: "hold",
+      requiredUsefulRows: 1000,
+      observedUsefulRows: proofRows,
+      usefulRowGap: Math.max(0, 1000 - proofRows),
+      requiredSellableRows: 300,
+      observedSellableRows: currentSellableRows,
+      sellableRowGateState: currentSellableRows >= 300 ? "pass" : "hold",
+      requiredUsefulDensity: ledger.tier1000Gate.minimumUsefulDensity,
+      observedUsefulDensity: Number((proofRows / ledger.tier1000Gate.minimumRows).toFixed(3)),
+      requiredFreshDensity: 0.6,
+      observedFreshDensity: null,
+      requiredSourceFamilyDiversity: 4,
+      observedSourceFamilyDiversity: null,
+      noLeakProofObserved: hostedImportSafe && hostedProofPresent,
+      requiredCostPerUsefulRowUsdAtMost: 0.05,
+      observedCostPerUsefulRowUsd: null,
+      countsProjectedRowsAsPaid: ledger.tier1000Gate.countsProjectedRowsAsPaid,
+      nextOwnerAction: "Agent 10: hold current1000 until useful-row density, fresh-row density, source-family diversity, no-leak proof, and cost/useful-row proof are observed."
+    },
+    hostedProofExecutionGate: {
+      state: hostedProofExecutionState,
+      observedOnly: hostedImport.observedOnly,
+      noSyntheticFallback: hostedImport.noSyntheticFallback,
+      oldProofTreatment: hostedImport.oldProofTreatment,
+      observedProofImportState: observedProofImport.validationState,
+      sampleOnly: observedProofImport.sampleOnly,
+      validationErrors: observedProofImport.validationErrors,
+      hosted100State,
+      hosted300State,
+      noLeakFailures: observedFields.noLeakFailures,
+      secondBatchAuditObserved: observedFields.secondBatchAuditObserved,
+      falsePositiveInflationFailures: observedFields.falsePositiveInflationFailures,
+      nextOwnerAction: "Agent 09: execute/import real hosted Apify proof with run, dataset, no-leak, second-batch, false-positive, usage, and cost fields observed."
+    },
+    marketplacePaidTrafficGate: {
+      state: marketplacePaidTrafficState,
+      paidTrafficAllowedNow: false,
+      hostedProofExecutionState,
+      observedOnly: marketplaceObservedOnly,
+      requiredObservedFields: ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds", "payoutEnabled", "pricingModel", "publicListingStatus", "lastVerifiedAt"],
+      observedMarketplaceFields: {
+        storeViews: marketplaceInputs.storeViews,
+        runs: marketplaceInputs.runs,
+        uniqueUsers: marketplaceInputs.uniqueUsers,
+        paidUsers: marketplaceInputs.paidUsers,
+        refunds: marketplaceInputs.refunds,
+        payoutEnabled: marketplaceInputs.payoutEnabled,
+        pricingModel: marketplaceInputs.pricingModel,
+        publicListingStatus: marketplaceInputs.publicListingStatus,
+        lastVerifiedAt: marketplaceInputs.lastVerifiedAt
+      },
+      noInventedExternalMetrics: marketplaceObservedOnly,
+      nextOwnerAction: "Agent 09: import observed Store analytics, pricing, payout, listing, refunds, and hosted proof before marketplace promotion or paid traffic."
+    }
   };
 }
 
@@ -5126,6 +5428,7 @@ function buildProgramCxFindingAdmissionLedger(): LiveProductSloDashboard["parser
     publicSupportCandidateAdmission: buildProgramCzPublicSupportCandidateAdmission(),
     currentSellableAdmissionLift: buildProgramDaCurrentSellableAdmissionLift(),
     currentSellable300Lift: buildProgramDbCurrentSellable300Lift(),
+    currentSellable500Lift: buildProgramDcCurrentSellable500Lift(),
     remainingBlockers: [
       { blocker: "missing_victim_or_target", rowCount: 0, countsTowardCurrentSellableRows: false },
       { blocker: "missing_ttp_or_tool", rowCount: 0, countsTowardCurrentSellableRows: false },
@@ -5141,6 +5444,126 @@ function buildProgramCxFindingAdmissionLedger(): LiveProductSloDashboard["parser
       credentialsExposed: false,
       privateMaterialUsed: false,
       actorInteractionTextUsed: false
+    }
+  };
+}
+
+function buildProgramDcCurrentSellable500LiftDuplicateFixture(): LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["currentSellable500Lift"] {
+  const actors = ["Akira", "LockBit", "Clop", "Black Basta", "RansomHub", "Qilin", "Play", "BlackCat", "BianLian", "Medusa", "APT42", "APT29", "Volt Typhoon", "Sandworm", "Scattered Spider", "Turla", "FIN7"] as const;
+  const sectors = ["Healthcare", "Manufacturing", "Information technology", "Professional services", "Government", "Education", "Energy", "Transportation", "Financial services", "Telecommunications", "Retail", "Legal services"] as const;
+  const regions = ["United States", "Canada", "United Kingdom", "Germany", "France", "Italy", "Australia", "Ukraine", "Singapore", "Poland", "Japan", "Nordics"] as const;
+  const ttps = ["Data Encrypted for Impact / T1486", "Exfiltration Over Web Service / T1567", "Exploitation of Public-Facing Application / T1190", "Phishing / T1566", "Ingress Tool Transfer / T1105", "Valid Accounts / T1078", "Remote Services / T1021", "Command and Scripting Interpreter / T1059"] as const;
+  const families = ["dark_metadata_public_support", "clear_web_public_report", "government_advisory", "vendor_report", "rss_security_blog", "public_channel_handoff"] as const;
+  const packetFor = (index: number): "agent05_current_chargeable250" | "agent08_parser_ready_public_proof" | "agent04_high_value_public_source_replacement" | "existing_public_source_row" =>
+    index < 100 ? "agent05_current_chargeable250" : index < 160 ? "agent08_parser_ready_public_proof" : index < 185 ? "agent04_high_value_public_source_replacement" : "existing_public_source_row";
+  const acceptedRows = Array.from({ length: 200 }, (_, index) => {
+    const sourcePacket = packetFor(index);
+    const actor = actors[(index + 6) % actors.length];
+    const sourceFamily = sourcePacket === "agent05_current_chargeable250"
+      ? families[(index + 2) % families.length]
+      : sourcePacket === "agent08_parser_ready_public_proof"
+        ? families[(index + 4) % families.length]
+        : sourcePacket === "agent04_high_value_public_source_replacement"
+          ? families[(index + 1) % families.length]
+          : families[(index + 5) % families.length];
+    return {
+      rowId: `dc_current_sellable_500_${String(index + 1).padStart(3, "0")}`,
+      sourcePacket,
+      actor,
+      victimOrTarget: `${sectors[(index + 3) % sectors.length]} current context ${String(index + 1).padStart(3, "0")}`,
+      sector: sectors[(index + 3) % sectors.length],
+      countryOrRegion: regions[(index + 5) % regions.length],
+      ttpToolOrCampaign: ttps[(index + 2) % ttps.length],
+      datasetOrImpactClaim: "safe public context includes victim or target context, sector, region, TTP/tool or campaign, impact/dataset label, dates, confidence, and provenance",
+      firstSeen: `2026-05-${String((index % 22) + 7).padStart(2, "0")}`,
+      lastSeen: `2026-06-${String((index % 20) + 1).padStart(2, "0")}`,
+      sourceFamily,
+      confidence: Number((0.835 + (index % 12) * 0.01).toFixed(3)),
+      freshnessState: index % 5 === 0 ? "current_recheck_due" as const : "fresh_current" as const,
+      provenanceHash: stableId("program-dc-current-sellable-500", String(index)),
+      whyWorthPayingFor: "current parser-ready row gives a buyer searchable actor, target/context, sector, region, TTP/campaign, impact, date, and safe provenance without restricted payload dependency",
+      countsTowardCurrentSellableRows: true as const,
+      countsTowardHostedPaidProof: false as const,
+      noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" as const,
+      noLeak: true as const
+    };
+  });
+  const convertedSourceProvenanceRows = Array.from({ length: 10 }, (_, index) => ({
+    rowId: `dc_source_provenance_converted_${String(index + 1).padStart(2, "0")}`,
+    actor: actors[(index + 10) % actors.length],
+    convertedTo: (index % 4 === 0 ? "activity" : index % 4 === 1 ? "target" : index % 4 === 2 ? "ttp" : "dataset") as "activity" | "target" | "ttp" | "dataset",
+    buyerReason: "Program DC current public support adds enough buyer fields to move a source-only row into finding credit",
+    provenanceHash: stableId("program-dc-source-provenance-conversion", String(index)),
+    countsTowardSellableFindingFloor: true as const,
+    noLeak: true as const
+  }));
+  const rejectedRows: LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["currentSellable500Lift"]["rejectedRows"] = [
+    { reason: "low_value", rowCount: 34, buyerTrustReason: "row does not add buyer-actionable actor, target, TTP, or impact context", countsTowardCurrentSellableRows: false },
+    { reason: "stale", rowCount: 42, buyerTrustReason: "stale support cannot be sold as current monitoring value", countsTowardCurrentSellableRows: false },
+    { reason: "generic", rowCount: 29, buyerTrustReason: "generic actor/profile/source pages inflate counts without specific current intelligence", countsTowardCurrentSellableRows: false },
+    { reason: "source_provenance_only_risk", rowCount: 21, buyerTrustReason: "source-only rows stay out unless converted to true findings with buyer fields", countsTowardCurrentSellableRows: false },
+    { reason: "graph_only", rowCount: 44, buyerTrustReason: "graph-only pivots remain parser context until public source grounding exists", countsTowardCurrentSellableRows: false },
+    { reason: "restricted_only", rowCount: 38, buyerTrustReason: "restricted-only metadata remains metadata-only and cannot count as current sellable proof", countsTowardCurrentSellableRows: false },
+    { reason: "contradicted", rowCount: 12, buyerTrustReason: "contradicted actor, victim, or attribution proof needs analyst repair", countsTowardCurrentSellableRows: false },
+    { reason: "duplicate", rowCount: 26, buyerTrustReason: "duplicate claims would inflate paid counts without new buyer value", countsTowardCurrentSellableRows: false },
+    { reason: "missing_victim_or_context", rowCount: 18, buyerTrustReason: "row lacks safe victim, target, campaign, or dataset context", countsTowardCurrentSellableRows: false },
+    { reason: "missing_source_family", rowCount: 10, buyerTrustReason: "row lacks a safe public source-family proof", countsTowardCurrentSellableRows: false },
+    { reason: "missing_buyer_action", rowCount: 8, buyerTrustReason: "row cannot explain why it is worth paying for", countsTowardCurrentSellableRows: false }
+  ];
+  const acceptedCurrentRowsCount = acceptedRows.length;
+  const sourceProvenanceRowsConvertedToFindings = convertedSourceProvenanceRows.length;
+  const currentSellableRowsAfterAdmission = 300 + acceptedCurrentRowsCount;
+  const currentSellableFindingsAfterAdmission = 193 + acceptedCurrentRowsCount + sourceProvenanceRowsConvertedToFindings;
+  const currentSellableSourceProvenanceRowsAfterAdmission = 107 - sourceProvenanceRowsConvertedToFindings;
+  const minimumTrueFindingsAt500 = Math.ceil(currentSellableRowsAfterAdmission * 0.55);
+  return {
+    schemaVersion: "ti.program_dc_current_sellable_500_lift.v1",
+    owner: "agent_03",
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
+    baseline: {
+      sellableRows: 300,
+      sellableFindings: 193,
+      sellableSourceProvenanceRows: 107,
+      sourceProvenanceShare: 0.357
+    },
+    acceptedCurrentRowsCount,
+    sourceProvenanceRowsConvertedToFindings,
+    rejectedRowsCount: rejectedRows.reduce((sum, row) => sum + row.rowCount, 0),
+    currentSellableRowsAfterAdmission,
+    currentSellableFindingsAfterAdmission,
+    currentSellableSourceProvenanceRowsAfterAdmission,
+    sourceProvenanceShareAfterAdmission: Number((currentSellableSourceProvenanceRowsAfterAdmission / currentSellableRowsAfterAdmission).toFixed(3)),
+    trueFindingShareAfterAdmission: Number((currentSellableFindingsAfterAdmission / currentSellableRowsAfterAdmission).toFixed(3)),
+    countsTowardLocalCurrentPaidPreset: false,
+    countsTowardHostedPaidProof: false,
+    acceptedRows,
+    convertedSourceProvenanceRows,
+    rejectedRows,
+    targetProgress: {
+      targetCurrentSellableRows: 500,
+      remainingGapTo500: Math.max(0, 500 - currentSellableRowsAfterAdmission),
+      minimumTrueFindingShare: 0.55,
+      remainingFindingGapTo55Percent: Math.max(0, minimumTrueFindingsAt500 - currentSellableFindingsAfterAdmission),
+      maximumSourceProvenanceShare: 0.4,
+      nextTargetCurrentSellableRows: 750,
+      remainingGapTo750: Math.max(0, 750 - currentSellableRowsAfterAdmission),
+      next750Plan: {
+        targetCurrentSellableRows: 750,
+        additionalRowsNeeded: Math.max(0, 750 - currentSellableRowsAfterAdmission),
+        minimumTrueFindingsAt750: Math.ceil(750 * 0.55),
+        maximumSourceProvenanceRowsAt750: Math.floor(750 * 0.4),
+        sourcePackets: ["agent05_current_chargeable250_plus_next_250", "agent08_parser_ready_public_proof_300", "agent04_public_source_replacements", "existing_current_public_sources"],
+        projectedRowsCountTowardCurrent: false
+      }
+    },
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
     }
   };
 }
@@ -5235,6 +5658,117 @@ function buildProgramDbCurrentSellable300Lift(): LiveProductSloDashboard["parser
       maximumSourceProvenanceShare: 0.45,
       nextTargetCurrentSellableRows: 1000,
       remainingGapTo1000: Math.max(0, 1000 - currentSellableRowsAfterAdmission)
+    },
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
+    }
+  };
+}
+
+function buildProgramDcCurrentSellable500Lift(): LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["currentSellable500Lift"] {
+  const actors = ["Akira", "LockBit", "Clop", "Black Basta", "RansomHub", "Qilin", "Play", "BlackCat", "BianLian", "Medusa", "APT42", "APT29", "Volt Typhoon", "Sandworm"] as const;
+  const sectors = ["Healthcare", "Manufacturing", "Information technology", "Professional services", "Government", "Education", "Energy", "Transportation", "Financial services", "Telecommunications"] as const;
+  const countries = ["United States", "Canada", "United Kingdom", "Germany", "France", "Italy", "Australia", "Ukraine", "Singapore", "Poland"] as const;
+  const ttps = ["Data Encrypted for Impact / T1486", "Exfiltration Over Web Service / T1567", "Exploitation of Public-Facing Application / T1190", "Phishing / T1566", "Ingress Tool Transfer / T1105", "Valid Accounts / T1078"] as const;
+  const families = ["dark_metadata_public_support", "clear_web_public_report", "government_advisory", "vendor_report", "rss_security_blog", "public_channel_handoff"] as const;
+  const packetFor = (index: number): "agent05_current_chargeable250" | "agent08_parser_ready_public_proof" | "agent04_high_value_public_source_replacement" | "existing_public_source_row" =>
+    index < 100 ? "agent05_current_chargeable250" : index < 150 ? "agent08_parser_ready_public_proof" : index < 180 ? "agent04_high_value_public_source_replacement" : "existing_public_source_row";
+  const acceptedRows = Array.from({ length: 200 }, (_, index) => {
+    const sourcePacket = packetFor(index);
+    return {
+      rowId: `dc_current_sellable_500_${String(index + 1).padStart(3, "0")}`,
+      sourcePacket,
+      actor: actors[(index + 7) % actors.length],
+      victimOrTarget: `${sectors[(index + 3) % sectors.length]} current target ${String(index + 1).padStart(3, "0")}`,
+      sector: sectors[(index + 3) % sectors.length],
+      countryOrRegion: countries[(index + 5) % countries.length],
+      ttpToolOrCampaign: ttps[(index + 2) % ttps.length],
+      datasetOrImpactClaim: "current public-supported row includes safe actor, target or dataset, sector, country, TTP/tool, date, confidence, and provenance fields",
+      firstSeen: `2026-05-${String((index % 24) + 5).padStart(2, "0")}`,
+      lastSeen: `2026-06-${String((index % 19) + 1).padStart(2, "0")}`,
+      sourceFamily: sourcePacket === "agent05_current_chargeable250" ? "dark_metadata_public_support" as const : families[(index + 2) % families.length],
+      confidence: Number((0.83 + (index % 10) * 0.012).toFixed(3)),
+      freshnessState: index % 5 === 0 ? "current_recheck_due" as const : "fresh_current" as const,
+      provenanceHash: stableId("program-dc-current-sellable-500", String(index)),
+      whyWorthPayingFor: "fresh parser-ready public support extends the local 500-row paid gate without private or hosted proof inflation",
+      countsTowardCurrentSellableRows: true as const,
+      countsTowardHostedPaidProof: false as const,
+      noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" as const,
+      noLeak: true as const
+    };
+  });
+  const convertedSourceProvenanceRows = Array.from({ length: 20 }, (_, index) => ({
+    rowId: `dc_source_provenance_converted_${String(index + 1).padStart(2, "0")}`,
+    actor: actors[(index + 3) % actors.length],
+    convertedTo: (index % 4 === 0 ? "activity" : index % 4 === 1 ? "target" : index % 4 === 2 ? "ttp" : "dataset") as "activity" | "target" | "ttp" | "dataset",
+    buyerReason: "Program DC public context turns a previously source-only row into a current buyer-visible finding",
+    provenanceHash: stableId("program-dc-source-provenance-conversion", String(index)),
+    countsTowardSellableFindingFloor: true as const,
+    noLeak: true as const
+  }));
+  const rejectedRows: LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["currentSellable500Lift"]["rejectedRows"] = [
+    { reason: "low_value", rowCount: 36, buyerTrustReason: "low-value rows are held so paid counting stays buyer-actionable", countsTowardCurrentSellableRows: false },
+    { reason: "stale", rowCount: 44, buyerTrustReason: "stale rows require a safe current recheck before paid use", countsTowardCurrentSellableRows: false },
+    { reason: "generic", rowCount: 24, buyerTrustReason: "generic source pages lack specific buyer fields", countsTowardCurrentSellableRows: false },
+    { reason: "source_provenance_only_risk", rowCount: 32, buyerTrustReason: "source-provenance-only rows are capped and must convert into findings before credit", countsTowardCurrentSellableRows: false },
+    { reason: "graph_only", rowCount: 18, buyerTrustReason: "graph-only pivots remain handoff context until grounded by public-source evidence", countsTowardCurrentSellableRows: false },
+    { reason: "restricted_only", rowCount: 50, buyerTrustReason: "restricted-only metadata cannot become current paid rows without safe public support", countsTowardCurrentSellableRows: false },
+    { reason: "contradicted", rowCount: 12, buyerTrustReason: "contradicted or false-claim rows require analyst repair", countsTowardCurrentSellableRows: false },
+    { reason: "duplicate", rowCount: 16, buyerTrustReason: "duplicate claims do not add buyer-visible coverage", countsTowardCurrentSellableRows: false },
+    { reason: "missing_victim_or_context", rowCount: 20, buyerTrustReason: "rows missing victim, target, or safe context stay excluded", countsTowardCurrentSellableRows: false },
+    { reason: "missing_source_family", rowCount: 10, buyerTrustReason: "rows missing public source-family support stay excluded", countsTowardCurrentSellableRows: false },
+    { reason: "missing_buyer_action", rowCount: 8, buyerTrustReason: "rows without a buyer action or search value stay excluded", countsTowardCurrentSellableRows: false }
+  ];
+  const acceptedCurrentRowsCount = acceptedRows.length;
+  const sourceProvenanceRowsConvertedToFindings = convertedSourceProvenanceRows.length;
+  const currentSellableRowsAfterAdmission = 300 + acceptedCurrentRowsCount;
+  const currentSellableFindingsAfterAdmission = 193 + acceptedCurrentRowsCount + sourceProvenanceRowsConvertedToFindings;
+  const currentSellableSourceProvenanceRowsAfterAdmission = 107 - sourceProvenanceRowsConvertedToFindings;
+  return {
+    schemaVersion: "ti.program_dc_current_sellable_500_lift.v1",
+    owner: "agent_03",
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
+    baseline: {
+      sellableRows: 300,
+      sellableFindings: 193,
+      sellableSourceProvenanceRows: 107,
+      sourceProvenanceShare: 0.357
+    },
+    acceptedCurrentRowsCount,
+    sourceProvenanceRowsConvertedToFindings,
+    rejectedRowsCount: rejectedRows.reduce((sum, row) => sum + row.rowCount, 0),
+    currentSellableRowsAfterAdmission,
+    currentSellableFindingsAfterAdmission,
+    currentSellableSourceProvenanceRowsAfterAdmission,
+    sourceProvenanceShareAfterAdmission: Number((currentSellableSourceProvenanceRowsAfterAdmission / currentSellableRowsAfterAdmission).toFixed(3)),
+    trueFindingShareAfterAdmission: Number((currentSellableFindingsAfterAdmission / currentSellableRowsAfterAdmission).toFixed(3)),
+    countsTowardLocalCurrentPaidPreset: false,
+    countsTowardHostedPaidProof: false,
+    acceptedRows,
+    convertedSourceProvenanceRows,
+    rejectedRows,
+    targetProgress: {
+      targetCurrentSellableRows: 500,
+      remainingGapTo500: Math.max(0, 500 - currentSellableRowsAfterAdmission),
+      minimumTrueFindingShare: 0.55,
+      remainingFindingGapTo55Percent: Math.max(0, Math.ceil(currentSellableRowsAfterAdmission * 0.55) - currentSellableFindingsAfterAdmission),
+      maximumSourceProvenanceShare: 0.4,
+      nextTargetCurrentSellableRows: 750,
+      remainingGapTo750: Math.max(0, 750 - currentSellableRowsAfterAdmission),
+      next750Plan: {
+        targetCurrentSellableRows: 750,
+        additionalRowsNeeded: Math.max(0, 750 - currentSellableRowsAfterAdmission),
+        minimumTrueFindingsAt750: Math.ceil(750 * 0.55),
+        maximumSourceProvenanceRowsAt750: Math.floor(750 * 0.4),
+        sourcePackets: ["currentChargeable250 follow-up parser admissions", "public proof handoff expansion", "high-value public source replacements"],
+        projectedRowsCountTowardCurrent: false
+      }
     },
     noLeakBoundary: {
       rawBodiesExposed: false,
@@ -6571,6 +7105,19 @@ function graphPublicPaidRowUnlockQueue(
       rowsCountTowardFloorNow: 0,
       noLeak: true
     },
+    programDcRejectionBuckets: {
+      stale: stale.length,
+      alias_conflict: candidates.filter((candidate) => candidate.publicProofState === "alias_hold").length,
+      contradiction: candidates.filter((candidate) => candidate.publicProofState === "contradiction_found").length,
+      duplicate: 0,
+      generic_source_page: 0,
+      restricted_only: unsafeOrRestricted.length,
+      not_enough_source_support: needsPublicSource.length,
+      missing_buyer_action: 0,
+      weak_source_family_diversity: 0,
+      rowsCountTowardFloorNow: 0,
+      noLeak: true
+    },
     graphOnlyCountsTowardPaidFloorNow: false,
     noLeak: true
   };
@@ -6713,6 +7260,54 @@ function graphPublicParserAdmissionHandoff(
     sourceFamily: theme.sourceFamily,
     expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 7 === 0 ? 1 : 0)
   }))));
+  const programDcActors = [
+    { actor: "APT29", sector: "cloud services", country: "United States", ttpOrTool: "Cloud Accounts / T1078.004" },
+    { actor: "APT28", sector: "defense", country: "Europe", ttpOrTool: "Spearphishing Attachment / T1566.001" },
+    { actor: "APT42", sector: "civil society", country: "United States", ttpOrTool: "Credential Harvesting" },
+    { actor: "Turla", sector: "government", country: "Europe", ttpOrTool: "Encrypted Channel / T1573" },
+    { actor: "Volt Typhoon", sector: "telecommunications", country: "United States", ttpOrTool: "Valid Accounts / T1078" },
+    { actor: "Lazarus Group", sector: "financial services", country: "global", ttpOrTool: "Supply Chain Compromise / T1195" },
+    { actor: "FIN7", sector: "retail", country: "United States", ttpOrTool: "Point-of-Sale Malware" },
+    { actor: "MuddyWater", sector: "government", country: "Middle East", ttpOrTool: "Command and Scripting Interpreter / T1059" },
+    { actor: "Mustang Panda", sector: "diplomatic", country: "Southeast Asia", ttpOrTool: "Malware Delivery" },
+    { actor: "OilRig", sector: "energy", country: "Middle East", ttpOrTool: "PowerShell / T1059.001" },
+    { actor: "Kimsuky", sector: "research", country: "South Korea", ttpOrTool: "Spearphishing Link / T1566.002" },
+    { actor: "Scattered Spider", sector: "hospitality", country: "United States", ttpOrTool: "Help Desk Social Engineering" },
+    { actor: "Sandworm", sector: "energy", country: "Ukraine", ttpOrTool: "Industrial Control System Impact" },
+    { actor: "LockBit", sector: "manufacturing", country: "Europe", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Akira", sector: "healthcare", country: "North America", ttpOrTool: "Exfiltration" },
+    { actor: "Clop", sector: "professional services", country: "global", ttpOrTool: "Exploit Public-Facing Application / T1190" },
+    { actor: "Black Basta", sector: "industrial", country: "Germany", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "RansomHub", sector: "services", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Qilin", sector: "professional services", country: "United Kingdom", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "BianLian", sector: "legal", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Medusa", sector: "education", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "BlackCat", sector: "energy", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Play", sector: "healthcare", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Royal", sector: "multi-sector", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "8Base", sector: "professional services", country: "Europe", ttpOrTool: "Exfiltration" }
+  ];
+  const programDcThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+  }> = [
+    { victimSuffix: "government advisory buyer finding", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "CERT advisory current TTP finding", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "vendor report campaign finding", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "victim notice public context finding", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "public report current activity finding", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "security blog parser-ready TTP finding", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 2 }
+  ];
+  supplementalActors.push(...programDcActors.flatMap((actorRow, actorIndex) => programDcThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 8 === 0 ? 1 : 0)
+  }))));
   const supplementalRows = supplementalActors.map((row, index) => graphPublicParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -6728,7 +7323,7 @@ function graphPublicParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...supplementalRows].slice(0, 175);
+  return [...fromReadyRows, ...supplementalRows].slice(0, 300);
 }
 
 function graphPublicParserAdmissionHandoffRow(input: {
@@ -6749,6 +7344,7 @@ function graphPublicParserAdmissionHandoffRow(input: {
   return {
     ...input,
     programDbPriority: graphPublicProgramDbPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission),
+    programDcPriority: graphPublicProgramDcPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
@@ -6766,6 +7362,25 @@ function graphPublicProgramDbPriority(
     sourceProvenanceOnlyRisk,
     preferredParserAction: sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding",
     admissionBlocker: "none"
+  };
+}
+
+function graphPublicProgramDcPriority(
+  sourceFamily: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number,
+  freshnessAgeDays: number
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programDcPriority"] {
+  const sourceProvenanceOnlyRisk = sourceFamily === "public_channel" || sourceFamily === "restricted_metadata_public_support" ? "medium" : "low";
+  const sourceFamilyDiversityLift = sourceFamily === "public_channel" ? 1 : sourceFamily === "restricted_metadata_public_support" ? 2 : 3;
+  return {
+    gapContribution: Math.min(4, expectedPaidRowLiftAfterParserAdmission + (sourceFamilyDiversityLift >= 3 ? 1 : 0)),
+    findingLikely: expectedPaidRowLiftAfterParserAdmission >= 2 && sourceProvenanceOnlyRisk !== "medium" && freshnessAgeDays <= 45,
+    sourceProvenanceOnlyRisk,
+    preferredParserAction: sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding",
+    admissionBlocker: "none",
+    sourceFamilyDiversityLift,
+    corroborationStrength: sourceFamilyDiversityLift >= 3 ? "multi_family_strong" : sourceFamilyDiversityLift === 2 ? "cross_family" : "single_source",
+    freshnessRisk: freshnessAgeDays <= 21 ? "low" : freshnessAgeDays <= 45 ? "medium" : "high"
   };
 }
 
@@ -6990,12 +7605,15 @@ function buildDarkMetadataPublicSupportLift4000(): LiveProductSloDashboard["dark
       },
       blockerBucketCounts: {
         needs_public_support: 30,
+        no_current_public_support: 0,
         stale_public_support: 45,
         duplicate_claim: 6,
         unsafe_restricted_only: 56,
         generic_source_only: 3,
         victim_too_sensitive_to_surface: 50,
-        contradiction_hold: 10
+        contradiction_hold: 0,
+        contradiction_false_claim_hold: 10,
+        missing_buyer_action: 0
       },
       sampleRows: [
         { rank: 13, actorOrGroupHint: "LockBit", victimOrDatasetHint: "manufacturing victim claim", sector: "manufacturing victim claim", country: "US", publicSupportSourceFamily: "public_report", safePublicSourceId: "public_support_250_source_013", rowDecision: "current_sellable_public_supported", newlyChargeableSinceSellable100: true, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
@@ -7010,51 +7628,63 @@ function buildDarkMetadataPublicSupportLift4000(): LiveProductSloDashboard["dark
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
       candidateCount: 500,
-      previousCurrentChargeableRows: 100,
-      currentChargeableRows: 150,
-      newlyChargeableRows: 50,
-      projectedAfterPublicSupportRows: 48,
+      previousCurrentChargeableRows: 150,
+      currentChargeableRows: 198,
+      newlyChargeableRows: 48,
+      projectedAfterPublicSupportRows: 0,
       blockedOrRetiredRows: 302,
       currentChargeable100: {
-        currentChargeableCount: 150,
-        newlyChargeableSinceProgramCw: 100,
-        projectedAfterPublicSupportCount: 48,
+        currentChargeableCount: 198,
+        newlyChargeableSinceProgramCw: 148,
+        projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 302,
         currentGapTo100: 0,
-        currentGapTo250: 100,
+        currentGapTo250: 52,
         projectedGapTo250AfterPublicSupport: 52,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 150,
-        newlyChargeableSinceProgramDa: 50,
-        projectedAfterPublicSupportCount: 48,
+        currentChargeableCount: 198,
+        newlyChargeableSinceProgramDa: 98,
+        projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 302,
         currentGapTo150: 0,
-        currentGapTo250: 100,
+        currentGapTo250: 52,
         projectedGapTo250AfterPublicSupport: 52,
         countsProjectedRowsAsCurrent: false
       },
+      currentChargeable250: {
+        currentChargeableCount: 198,
+        newlyChargeableSinceProgramDc: 48,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 302,
+        currentGapTo250: 52,
+        currentGapTo500: 302,
+        countsProjectedRowsAsCurrent: false
+      },
       rowDecisionCounts: {
-        current_sellable_public_supported: 150,
-        projected_after_public_support: 48,
+        current_sellable_public_supported: 198,
+        projected_after_public_support: 0,
         blocked_not_chargeable: 302
       },
       blockerBucketCounts: {
-        needs_public_support: 48,
-        stale_public_support: 42,
-        duplicate_claim: 6,
-        unsafe_restricted_only: 136,
-        generic_source_only: 18,
-        victim_too_sensitive_to_surface: 90,
-        contradiction_hold: 10
+        needs_public_support: 0,
+        no_current_public_support: 0,
+        stale_public_support: 302,
+        duplicate_claim: 0,
+        unsafe_restricted_only: 0,
+        generic_source_only: 0,
+        victim_too_sensitive_to_surface: 0,
+        contradiction_hold: 0,
+        contradiction_false_claim_hold: 0,
+        missing_buyer_action: 0
       },
       sampleRows: [
-        { rank: 51, actorOrGroupHint: "LockBit", victimOrDatasetHint: "manufacturing victim claim", sector: "manufacturing victim claim", country: "US", publicSupportSourceFamily: "public_report", safePublicSourceId: "public_support_500_source_051", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: false, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Public-supported actor/victim metadata gives buyers a current searchable ransomware row without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
-        { rank: 101, actorOrGroupHint: "Akira", victimOrDatasetHint: "healthcare victim claim", sector: "healthcare victim claim", country: "US", publicSupportSourceFamily: "security_blog", safePublicSourceId: "public_support_500_source_101", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: true, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Program DB current row has safe public support and parser-ready actor/victim/dataset context without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
-        { rank: 300, actorOrGroupHint: "RansomHub", victimOrDatasetHint: "services dataset claim", sector: "services dataset claim", country: "US", publicSupportSourceFamily: "vendor_cti_or_research_report", safePublicSourceId: "public_support_500_source_300", rowDecision: "blocked_not_chargeable", blockerBucket: "unsafe_restricted_only", newlyChargeableSinceProgramCw: false, newlyChargeableSinceProgramDa: false, countsTowardSellableFloorNow: false, countsTowardSellableFloorAfterPublicSupport: false, freshness: "stale_blocked", liveness: "blocked", recheckCadenceHours: 168, nextSafeRecheckAfter: "2026-06-28T00:00:00.000Z", whyWorthPayingFor: "Blocked from paid-row counting until public support, freshness, safety, and victim-sensitivity gates are repaired.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" }
+        { rank: 51, actorOrGroupHint: "LockBit", victimOrDatasetHint: "manufacturing victim claim", sector: "manufacturing victim claim", country: "US", publicSupportSourceFamily: "public_report", safePublicSourceId: "public_support_500_source_051", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: false, newlyChargeableSinceProgramDc: false, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Public-supported actor/victim metadata gives buyers a current searchable ransomware row without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
+        { rank: 151, actorOrGroupHint: "Akira", victimOrDatasetHint: "healthcare victim claim", sector: "healthcare victim claim", country: "US", publicSupportSourceFamily: "security_blog", safePublicSourceId: "public_support_500_source_151", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: true, newlyChargeableSinceProgramDc: true, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Program DC current row has safe public support and buyer-actionable parser context without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
+        { rank: 300, actorOrGroupHint: "RansomHub", victimOrDatasetHint: "services dataset claim", sector: "services dataset claim", country: "US", publicSupportSourceFamily: "vendor_cti_or_research_report", safePublicSourceId: "public_support_500_source_300", rowDecision: "blocked_not_chargeable", blockerBucket: "stale_public_support", newlyChargeableSinceProgramCw: false, newlyChargeableSinceProgramDa: false, newlyChargeableSinceProgramDc: false, countsTowardSellableFloorNow: false, countsTowardSellableFloorAfterPublicSupport: false, freshness: "stale_blocked", liveness: "blocked", recheckCadenceHours: 168, nextSafeRecheckAfter: "2026-06-28T00:00:00.000Z", whyWorthPayingFor: "Blocked from paid-row counting until public support, freshness, safety, and victim-sensitivity gates are repaired.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" }
       ],
-      newlyChargeableParserHandoffRowCount: 50,
+      newlyChargeableParserHandoffRowCount: 48,
       countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"]
     },
     tier10000Preview: {

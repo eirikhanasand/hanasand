@@ -564,6 +564,9 @@ describe("api v1", () => {
       expect.objectContaining({ gate: "current_sellable_rows", observed: 3, state: "hold" }),
       expect.objectContaining({ gate: "sellable_row_rate", observed: 0.25, state: "pass" }),
       expect.objectContaining({ gate: "useful_row_density", observed: 0.75, state: "pass" }),
+      expect.objectContaining({ gate: "average_buyer_value", observed: 0.558, state: "pass" }),
+      expect.objectContaining({ gate: "no_leak_proof", observed: true, state: "pass" }),
+      expect.objectContaining({ gate: "stale_latest_activity_errors", observed: 0, state: "pass" }),
       expect.objectContaining({ gate: "refunds", observed: null, state: "external_unknown" }),
       expect.objectContaining({ gate: "payout_readiness", observed: "external_unknown", state: "external_unknown" })
     ]));
@@ -755,6 +758,13 @@ describe("api v1", () => {
         acceptedObservedFields: [],
         sampleOnly: false,
         unlockSummary: "none",
+        operatorActionBoard: {
+          canRunNow: false,
+          canVerifyRunNow: false,
+          canImportObservedProofNow: false,
+          missingSecretNames: ["APIFY_TOKEN"],
+          expectedUnlock: "none"
+        },
         gateEffects: {
           hosted100: { state: "hold", unlocks: false },
           hosted300: { state: "hold", unlocks: false },
@@ -772,12 +782,39 @@ describe("api v1", () => {
     expect(hostedProofImportPath.commandExamples).toEqual(expect.arrayContaining([
       "TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness",
       "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness",
+      "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted300.template.json bun run check:hosted-apify-paid-readiness",
       "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
       "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness"
     ]));
     expect(hostedProofImportPath.requiredEnvironment).toEqual(expect.arrayContaining(["APIFY_TOKEN", "TI_APIFY_HOSTED_PROOF_MODE=run|verify", "TI_APIFY_OBSERVED_PROOF_JSON=<single observed proof JSON>", "TI_APIFY_OBSERVED_PROOF_PATH=<path to observed proof JSON>"]));
     expect(hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("100-name");
     expect(hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("secondBatchAudit");
+    expect((response.paidReleaseTruthBoard as { programDcReleaseGates: Record<string, unknown> }).programDcReleaseGates).toMatchObject({
+      schemaVersion: "ti.program_dc_paid_release_gates.v1",
+      current500Gate: {
+        requiredSellableRows: 500,
+        observedSellableRows: 500,
+        sellableRowGap: 0,
+        requiredTrueFindingShare: 0.55,
+        maximumSourceProvenanceShare: 0.4
+      },
+      current1000Gate: {
+        state: "hold",
+        requiredUsefulRows: 1000,
+        requiredSellableRows: 300,
+        countsProjectedRowsAsPaid: false
+      },
+      hostedProofExecutionGate: {
+        state: "hold",
+        observedOnly: true,
+        observedProofImportState: "missing"
+      },
+      marketplacePaidTrafficGate: {
+        state: "hold",
+        paidTrafficAllowedNow: false,
+        noInventedExternalMetrics: true
+      }
+    });
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {
@@ -1370,6 +1407,15 @@ describe("api v1", () => {
         projectedGapTo250AfterPublicSupport: number;
         countsProjectedRowsAsCurrent: boolean;
       };
+      currentChargeable250: {
+        currentChargeableCount: number;
+        newlyChargeableSinceProgramDc: number;
+        projectedAfterPublicSupportCount: number;
+        blockedOrRetiredCount: number;
+        currentGapTo250: number;
+        currentGapTo500: number;
+        countsProjectedRowsAsCurrent: boolean;
+      };
         rowDecisionCounts: Record<string, number>;
         blockerBucketCounts: Record<string, number>;
         sampleRows: Array<{ rowDecision: string; blockerBucket?: string; newlyChargeableSinceProgramCw: boolean; countsTowardSellableFloorNow: boolean; countsTowardSellableFloorAfterPublicSupport: boolean; noLeakProof: string; safePublicSourceId: string; freshness: string; recheckCadenceHours: number; whyWorthPayingFor: string }>;
@@ -1377,39 +1423,48 @@ describe("api v1", () => {
       };
     }).publicSupportSellable500).toMatchObject({
       candidateCount: 500,
-      previousCurrentChargeableRows: 100,
-      currentChargeableRows: 150,
-      newlyChargeableRows: 50,
-      projectedAfterPublicSupportRows: 48,
+      previousCurrentChargeableRows: 150,
+      currentChargeableRows: 198,
+      newlyChargeableRows: 48,
+      projectedAfterPublicSupportRows: 0,
       blockedOrRetiredRows: 302,
       currentChargeable100: {
-        currentChargeableCount: 150,
-        newlyChargeableSinceProgramCw: 100,
-        projectedAfterPublicSupportCount: 48,
+        currentChargeableCount: 198,
+        newlyChargeableSinceProgramCw: 148,
+        projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 302,
         currentGapTo100: 0,
-        currentGapTo250: 100,
+        currentGapTo250: 52,
         projectedGapTo250AfterPublicSupport: 52,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 150,
-        newlyChargeableSinceProgramDa: 50,
-        projectedAfterPublicSupportCount: 48,
+        currentChargeableCount: 198,
+        newlyChargeableSinceProgramDa: 98,
+        projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 302,
         currentGapTo150: 0,
-        currentGapTo250: 100,
+        currentGapTo250: 52,
         projectedGapTo250AfterPublicSupport: 52,
         countsProjectedRowsAsCurrent: false
       },
+      currentChargeable250: {
+        currentChargeableCount: 198,
+        newlyChargeableSinceProgramDc: 48,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 302,
+        currentGapTo250: 52,
+        currentGapTo500: 302,
+        countsProjectedRowsAsCurrent: false
+      },
       rowDecisionCounts: {
-        current_sellable_public_supported: 150,
-        projected_after_public_support: 48,
+        current_sellable_public_supported: 198,
+        projected_after_public_support: 0,
         blocked_not_chargeable: 302
       },
-      newlyChargeableParserHandoffRowCount: 50
+      newlyChargeableParserHandoffRowCount: 48
     });
-    expect(Object.values((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable500: { blockerBucketCounts: Record<string, number> } }).publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(350);
+    expect(Object.values((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable500: { blockerBucketCounts: Record<string, number> } }).publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(302);
     expect((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable500: { sampleRows: Array<{ rowDecision: string; blockerBucket?: string; countsTowardSellableFloorNow: boolean; noLeakProof: string; safePublicSourceId: string; freshness: string; recheckCadenceHours: number; whyWorthPayingFor: string }> } }).publicSupportSellable500.sampleRows.every((row) =>
       row.safePublicSourceId.startsWith("public_support_500_source_") &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
@@ -1777,13 +1832,14 @@ describe("api v1", () => {
     expect(graphPublicPivots.filter((row) => row.publicProofState === "public_proof_found").every((row) => row.countsTowardProductionSellableRowsAfterParserAdmission === true)).toBe(true);
     expect(graphPublicPivots.filter((row) => row.publicProofState === "queued_for_search").every((row) => row.measuredRowsUnlockedForParserAdmission === 0)).toBe(true);
     expect(graphPublicPivots.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) => row.expectedSellableRowsUnlockedAfterPublicProof === 0 && ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) && ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk))).toBe(true);
-    const graphPublicUnlockQueue = (response.graphPublicCorroborationPivotPacket as { paidRowUnlockQueue: { counts: { admitted_by_parser: number; ready_for_parser: number; ready_for_current_admission: number; ready_for_parser_admission: number; needs_public_source: number; contradicted: number; contradicted_or_alias_hold: number; stale: number; stale_recheck: number; unsafe_or_restricted: number; rowsCountTowardFloorNow: number; rowsReadyAfterParserAdmission: number }; parserAdmissionHandoff: Array<{ actor: string; victimOrTarget: string; sourceFamily: string; freshnessAgeDays: number; contradictionState: string; provenanceHash: string; buyerReason: string; expectedPaidRowLiftAfterParserAdmission: number; programDbPriority: { gapContribution: number; findingLikely: boolean; sourceProvenanceOnlyRisk: string; preferredParserAction: string; admissionBlocker: string }; admissionState: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_current_admission: Array<{ actor: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_parser_admission: Array<{ expectedRowsUnlockedAfterParserAdmission: number; countsTowardFloorNow: boolean; proofUrlHash: string; noLeak: boolean }>; needs_public_source: Array<{ sourceClass: string; countsTowardFloorNow: boolean; noLeak: boolean }>; contradicted_or_alias_hold: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; stale_recheck: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; programDbRejectionBuckets: Record<string, number | boolean>; graphOnlyCountsTowardPaidFloorNow: boolean; noLeak: boolean } }).paidRowUnlockQueue;
-    expect(graphPublicUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 175, ready_for_current_admission: 175, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
-    expect(graphPublicUnlockQueue.parserAdmissionHandoff).toHaveLength(175);
-    expect(graphPublicUnlockQueue.ready_for_current_admission).toHaveLength(175);
-    expect(graphPublicUnlockQueue.parserAdmissionHandoff.every((row) => row.actor.length > 0 && row.victimOrTarget.length > 0 && row.sourceFamily.length > 0 && row.freshnessAgeDays >= 0 && row.contradictionState.length > 0 && row.provenanceHash.length > 0 && row.buyerReason.length > 0 && row.expectedPaidRowLiftAfterParserAdmission > 0 && row.programDbPriority.gapContribution > 0 && row.programDbPriority.admissionBlocker === "none" && row.admissionState === "ready_for_parser" && row.countsTowardFloorNow === false && row.noLeak)).toBe(true);
-    expect(graphPublicUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDbPriority.findingLikely)).toHaveLength(95);
+    const graphPublicUnlockQueue = (response.graphPublicCorroborationPivotPacket as { paidRowUnlockQueue: { counts: { admitted_by_parser: number; ready_for_parser: number; ready_for_current_admission: number; ready_for_parser_admission: number; needs_public_source: number; contradicted: number; contradicted_or_alias_hold: number; stale: number; stale_recheck: number; unsafe_or_restricted: number; rowsCountTowardFloorNow: number; rowsReadyAfterParserAdmission: number }; parserAdmissionHandoff: Array<{ actor: string; victimOrTarget: string; sourceFamily: string; freshnessAgeDays: number; contradictionState: string; provenanceHash: string; buyerReason: string; expectedPaidRowLiftAfterParserAdmission: number; programDbPriority: { gapContribution: number; findingLikely: boolean; sourceProvenanceOnlyRisk: string; preferredParserAction: string; admissionBlocker: string }; programDcPriority: { gapContribution: number; findingLikely: boolean; sourceProvenanceOnlyRisk: string; preferredParserAction: string; admissionBlocker: string; sourceFamilyDiversityLift: number; corroborationStrength: string; freshnessRisk: string }; admissionState: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_current_admission: Array<{ actor: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_parser_admission: Array<{ expectedRowsUnlockedAfterParserAdmission: number; countsTowardFloorNow: boolean; proofUrlHash: string; noLeak: boolean }>; needs_public_source: Array<{ sourceClass: string; countsTowardFloorNow: boolean; noLeak: boolean }>; contradicted_or_alias_hold: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; stale_recheck: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; programDbRejectionBuckets: Record<string, number | boolean>; programDcRejectionBuckets: Record<string, number | boolean>; graphOnlyCountsTowardPaidFloorNow: boolean; noLeak: boolean } }).paidRowUnlockQueue;
+    expect(graphPublicUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 300, ready_for_current_admission: 300, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
+    expect(graphPublicUnlockQueue.parserAdmissionHandoff).toHaveLength(300);
+    expect(graphPublicUnlockQueue.ready_for_current_admission).toHaveLength(300);
+    expect(graphPublicUnlockQueue.parserAdmissionHandoff.every((row) => row.actor.length > 0 && row.victimOrTarget.length > 0 && row.sourceFamily.length > 0 && row.freshnessAgeDays >= 0 && row.contradictionState.length > 0 && row.provenanceHash.length > 0 && row.buyerReason.length > 0 && row.expectedPaidRowLiftAfterParserAdmission > 0 && row.programDbPriority.gapContribution > 0 && row.programDbPriority.admissionBlocker === "none" && row.programDcPriority.gapContribution > 0 && row.programDcPriority.admissionBlocker === "none" && row.programDcPriority.sourceFamilyDiversityLift > 0 && row.programDcPriority.corroborationStrength.length > 0 && row.programDcPriority.freshnessRisk.length > 0 && row.admissionState === "ready_for_parser" && row.countsTowardFloorNow === false && row.noLeak)).toBe(true);
+    expect(graphPublicUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDcPriority.findingLikely).length).toBeGreaterThanOrEqual(170);
     expect(graphPublicUnlockQueue.programDbRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, rowsCountTowardFloorNow: 0, noLeak: true });
+    expect(graphPublicUnlockQueue.programDcRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, missing_buyer_action: 0, weak_source_family_diversity: 0, rowsCountTowardFloorNow: 0, noLeak: true });
     expect(graphPublicUnlockQueue.ready_for_parser_admission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(25);
     expect(graphPublicUnlockQueue.ready_for_parser_admission.every((row) => row.countsTowardFloorNow === false && row.proofUrlHash.length > 0 && row.noLeak)).toBe(true);
     expect(graphPublicUnlockQueue.needs_public_source.some((row) => row.sourceClass === "restricted_metadata_public_support")).toBe(true);
@@ -4869,6 +4925,7 @@ describe("api v1", () => {
         operatorRecordingRule: { externalValuesStayUnknownUntilObserved: boolean; recordOnlyObservedApifyValues: string[] };
       };
       hostedPaidReadinessProof: Record<string, unknown>;
+      programDcReleaseGates: Record<string, unknown>;
     };
     expect(readinessPaidReleaseTruthBoard.observedMarketplaceTelemetry).toMatchObject({
       schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
@@ -5009,7 +5066,16 @@ describe("api v1", () => {
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofImportPath: { commandExamples: string[]; observedProofImport: { validationState: string } } }).hostedProofImportPath.commandExamples.join(" ")).toContain("TI_APIFY_OBSERVED_PROOF_PATH");
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofImportPath: { observedProofImport: { validationState: string } } }).hostedProofImportPath.observedProofImport.validationState).toBe("missing");
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofOperatorChecklist: { missingFields: string[]; validationExamples: Array<{ name: string }> } }).hostedProofOperatorChecklist.missingFields).toEqual(expect.arrayContaining(["runId", "datasetId", "pricingModel", "payoutEnabled", "observedAt"]));
+    expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofOperatorChecklist: { operatorActionBoard: { nextCommand: string; stillBlockedAfterCommand: string[] }; validationExamples: Array<{ name: string }> } }).hostedProofOperatorChecklist.operatorActionBoard.nextCommand).toContain("TI_APIFY_HOSTED_PROOF_MODE=run");
+    expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofOperatorChecklist: { operatorActionBoard: { stillBlockedAfterCommand: string[] }; validationExamples: Array<{ name: string }> } }).hostedProofOperatorChecklist.operatorActionBoard.stillBlockedAfterCommand.join(" ")).toContain("paid marketplace promotion remains blocked");
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { hostedProofOperatorChecklist: { validationExamples: Array<{ name: string }> } }).hostedProofOperatorChecklist.validationExamples.map((example) => example.name)).toEqual(expect.arrayContaining(["sample_proof_rejected_for_promotion", "valid_hosted100_hosted300_hold", "valid_hosted300_marketplace_hold", "invalid_unsafe_no_leak_proof"]));
+    expect((readinessPaidReleaseTruthBoard as { programDcReleaseGates: Record<string, unknown> }).programDcReleaseGates).toMatchObject({
+      schemaVersion: "ti.program_dc_paid_release_gates.v1",
+      current500Gate: { state: "hold", requiredSellableRows: 500, observedSellableRows: 500, candidateRowsCountTowardLocalCurrentPaidPreset: true },
+      current1000Gate: { state: "hold", requiredUsefulRows: 1000, countsProjectedRowsAsPaid: false },
+      hostedProofExecutionGate: { state: "hold", observedOnly: true, observedProofImportState: "missing" },
+      marketplacePaidTrafficGate: { state: "hold", paidTrafficAllowedNow: false, noInventedExternalMetrics: true }
+    });
     const readinessStoreReadiness = apifyStoreReadiness.storeReadiness as typeof apifyStoreReadiness.storeReadiness & {
       hostedPaidReadinessProof: Record<string, unknown>;
     };

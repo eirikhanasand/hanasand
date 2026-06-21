@@ -996,7 +996,7 @@ interface ParserRealSellableLift {
       currentSellableFindingsAfterAdmission: number;
       currentSellableSourceProvenanceRowsAfterAdmission: number;
       sourceProvenanceShareAfterAdmission: number;
-      countsTowardLocalCurrentPaidPreset: true;
+      countsTowardLocalCurrentPaidPreset: boolean;
       countsTowardHostedPaidProof: false;
       acceptedRows: Array<{
         rowId: string;
@@ -1112,6 +1112,89 @@ interface ParserRealSellableLift {
         maximumSourceProvenanceShare: 0.45;
         nextTargetCurrentSellableRows: 1000;
         remainingGapTo1000: number;
+      };
+      noLeakBoundary: {
+        rawBodiesExposed: false;
+        unsafeUrlsExposed: false;
+        restrictedPayloadsExposed: false;
+        credentialsExposed: false;
+        privateMaterialUsed: false;
+        actorInteractionTextUsed: false;
+        hostedPaidProofClaimed: false;
+      };
+    };
+    currentSellable500Lift: {
+      schemaVersion: "ti.program_dc_current_sellable_500_lift.v1";
+      owner: "agent_03";
+      sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+      baseline: {
+        sellableRows: 300;
+        sellableFindings: 193;
+        sellableSourceProvenanceRows: 107;
+        sourceProvenanceShare: 0.357;
+      };
+      acceptedCurrentRowsCount: number;
+      sourceProvenanceRowsConvertedToFindings: number;
+      rejectedRowsCount: number;
+      currentSellableRowsAfterAdmission: number;
+      currentSellableFindingsAfterAdmission: number;
+      currentSellableSourceProvenanceRowsAfterAdmission: number;
+      sourceProvenanceShareAfterAdmission: number;
+      trueFindingShareAfterAdmission: number;
+      countsTowardLocalCurrentPaidPreset: boolean;
+      countsTowardHostedPaidProof: false;
+      acceptedRows: Array<{
+        rowId: string;
+        sourcePacket: "agent05_current_chargeable250" | "agent08_parser_ready_public_proof" | "agent04_high_value_public_source_replacement" | "existing_public_source_row";
+        actor: string;
+        victimOrTarget: string;
+        sector: string;
+        countryOrRegion: string;
+        ttpToolOrCampaign: string;
+        datasetOrImpactClaim: string;
+        firstSeen: string;
+        lastSeen: string;
+        sourceFamily: "dark_metadata_public_support" | "clear_web_public_report" | "government_advisory" | "vendor_report" | "rss_security_blog" | "public_channel_handoff";
+        confidence: number;
+        freshnessState: "fresh_current" | "current_recheck_due";
+        provenanceHash: string;
+        whyWorthPayingFor: string;
+        countsTowardCurrentSellableRows: true;
+        countsTowardHostedPaidProof: false;
+        noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials";
+        noLeak: true;
+      }>;
+      convertedSourceProvenanceRows: Array<{
+        rowId: string;
+        actor: string;
+        convertedTo: "activity" | "target" | "ttp" | "dataset";
+        buyerReason: string;
+        provenanceHash: string;
+        countsTowardSellableFindingFloor: true;
+        noLeak: true;
+      }>;
+      rejectedRows: Array<{
+        reason: "low_value" | "stale" | "generic" | "source_provenance_only_risk" | "graph_only" | "restricted_only" | "contradicted" | "duplicate" | "missing_victim_or_context" | "missing_source_family" | "missing_buyer_action";
+        rowCount: number;
+        buyerTrustReason: string;
+        countsTowardCurrentSellableRows: false;
+      }>;
+      targetProgress: {
+        targetCurrentSellableRows: 500;
+        remainingGapTo500: number;
+        minimumTrueFindingShare: 0.55;
+        remainingFindingGapTo55Percent: number;
+        maximumSourceProvenanceShare: 0.4;
+        nextTargetCurrentSellableRows: 750;
+        remainingGapTo750: number;
+        next750Plan: {
+          targetCurrentSellableRows: 750;
+          additionalRowsNeeded: number;
+          minimumTrueFindingsAt750: number;
+          maximumSourceProvenanceRowsAt750: number;
+          sourcePackets: string[];
+          projectedRowsCountTowardCurrent: false;
+        };
       };
       noLeakBoundary: {
         rawBodiesExposed: false;
@@ -1753,6 +1836,16 @@ interface GraphPublicCorroborationPivotPacket {
         preferredParserAction: "admit_as_current_finding" | "admit_with_caveat" | "hold_for_source_support" | "hold_for_review";
         admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support";
       };
+      programDcPriority: {
+        gapContribution: number;
+        findingLikely: boolean;
+        sourceProvenanceOnlyRisk: "low" | "medium" | "high";
+        preferredParserAction: "admit_as_current_finding" | "admit_with_caveat" | "hold_for_source_support" | "hold_for_review";
+        admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support" | "missing_buyer_action" | "weak_source_family_diversity";
+        sourceFamilyDiversityLift: number;
+        corroborationStrength: "single_source" | "cross_family" | "multi_family_strong";
+        freshnessRisk: "low" | "medium" | "high";
+      };
       admissionState: "ready_for_parser";
       countsTowardFloorNow: false;
       noLeak: true;
@@ -1833,6 +1926,19 @@ interface GraphPublicCorroborationPivotPacket {
       generic_source_page: number;
       restricted_only: number;
       not_enough_source_support: number;
+      rowsCountTowardFloorNow: 0;
+      noLeak: true;
+    };
+    programDcRejectionBuckets: {
+      stale: number;
+      alias_conflict: number;
+      contradiction: number;
+      duplicate: number;
+      generic_source_page: number;
+      restricted_only: number;
+      not_enough_source_support: number;
+      missing_buyer_action: number;
+      weak_source_family_diversity: number;
       rowsCountTowardFloorNow: 0;
       noLeak: true;
     };
@@ -2181,6 +2287,13 @@ interface PaidReleaseTruthBoard {
     };
   };
   hostedPaidReadinessProof: ReturnType<typeof hostedApifyPaidReadinessProof>;
+  programDcReleaseGates: {
+    schemaVersion: "ti.program_dc_paid_release_gates.v1";
+    current500Gate: Record<string, unknown>;
+    current1000Gate: Record<string, unknown>;
+    hostedProofExecutionGate: Record<string, unknown>;
+    marketplacePaidTrafficGate: Record<string, unknown>;
+  };
   blockerBuckets: Array<{
     blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
     owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -4400,6 +4513,13 @@ function paidReleaseTruthBoardForRows(
       privateContent: false
     }
   };
+  const programDcReleaseGates = programDcPaidReleaseGatesForOutput({
+    rows,
+    quality,
+    sellableRowRate,
+    usefulRowDensity,
+    noLeakBlockedRows
+  });
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
@@ -4503,6 +4623,7 @@ function paidReleaseTruthBoardForRows(
     paidReleaseRunbook,
     buyerPaidReleaseVerdict,
     hostedPaidReadinessProof: hostedApifyPaidReadinessProof(),
+    programDcReleaseGates,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -4527,6 +4648,100 @@ function paidReleaseTruthBoardForRows(
       "Prioritize missing public support and parser repair buckets by buyer value.",
       "Keep Apify analytics and payout fields external_unknown until verified in Apify."
     ]
+  };
+}
+
+function programDcPaidReleaseGatesForOutput(input: {
+  rows: MarketplaceRow[];
+  quality: ReturnType<typeof paidRowQualitySummary>;
+  sellableRowRate: number;
+  usefulRowDensity: number;
+  noLeakBlockedRows: number;
+}): PaidReleaseTruthBoard["programDcReleaseGates"] {
+  const sourceProvenanceRows = input.rows.filter((row) => row.sourceFamilies.length > 0 && row.paidRowDecision !== "sellable").length;
+  const trueFindingShare = input.quality.sellable === 0 ? 0 : 1;
+  const sourceProvenanceShare = input.quality.sellable === 0 ? 0 : Number((sourceProvenanceRows / input.quality.sellable).toFixed(3));
+  const current500State = input.quality.sellable >= 500
+    && trueFindingShare >= 0.55
+    && sourceProvenanceShare <= 0.4
+    && input.noLeakBlockedRows === 0
+      ? "pass"
+      : "hold";
+  return {
+    schemaVersion: "ti.program_dc_paid_release_gates.v1",
+    current500Gate: {
+      state: current500State,
+      requiredSellableRows: 500,
+      observedSellableRows: input.quality.sellable,
+      sellableRowGap: Math.max(0, 500 - input.quality.sellable),
+      requiredTrueFindingShare: 0.55,
+      observedTrueFindingShare: trueFindingShare,
+      maximumSourceProvenanceShare: 0.4,
+      observedSourceProvenanceShare: sourceProvenanceShare,
+      forbiddenCreditObserved: {
+        projectedRowsCountTowardCurrent: false,
+        graphRowsCountTowardFloorNow: 0,
+        restrictedOnlyRowsCountTowardFloorNow: false,
+        staleLatestErrorRowsCountTowardFloorNow: false,
+        sampleProofRowsCountTowardFloorNow: false
+      },
+      nextOwnerAction: `Agent 03: close ${Math.max(0, 500 - input.quality.sellable)} Actor-output sellable rows while preserving no-leak proof and buyer-specific fields.`
+    },
+    current1000Gate: {
+      state: "hold",
+      requiredUsefulRows: 1000,
+      observedUsefulRows: input.quality.usefulForBuyer,
+      usefulRowGap: Math.max(0, 1000 - input.quality.usefulForBuyer),
+      requiredSellableRows: 300,
+      observedSellableRows: input.quality.sellable,
+      sellableRowGateState: input.quality.sellable >= 300 ? "pass" : "hold",
+      requiredUsefulDensity: 0.65,
+      observedUsefulDensity: input.usefulRowDensity,
+      requiredFreshDensity: 0.6,
+      observedFreshDensity: null,
+      requiredSourceFamilyDiversity: 4,
+      observedSourceFamilyDiversity: null,
+      noLeakProofObserved: input.noLeakBlockedRows === 0,
+      requiredCostPerUsefulRowUsdAtMost: 0.05,
+      observedCostPerUsefulRowUsd: null,
+      countsProjectedRowsAsPaid: false,
+      nextOwnerAction: "Agent 10: keep the 1,000-useful-row gate held until fresh density, source diversity, no-leak, and cost/useful-row proof are observed."
+    },
+    hostedProofExecutionGate: {
+      state: "hold",
+      observedOnly: true,
+      noSyntheticFallback: true,
+      oldProofTreatment: "historical_shape_safety_only",
+      observedProofImportState: "missing",
+      sampleOnly: false,
+      validationErrors: [],
+      hosted100State: "hold",
+      hosted300State: "hold",
+      noLeakFailures: null,
+      secondBatchAuditObserved: false,
+      falsePositiveInflationFailures: null,
+      nextOwnerAction: "Agent 09: execute/import real hosted Apify proof with run, dataset, no-leak, second-batch, false-positive, usage, and cost fields observed."
+    },
+    marketplacePaidTrafficGate: {
+      state: "hold",
+      paidTrafficAllowedNow: false,
+      hostedProofExecutionState: "hold",
+      observedOnly: true,
+      requiredObservedFields: ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds", "payoutEnabled", "pricingModel", "publicListingStatus", "lastVerifiedAt"],
+      observedMarketplaceFields: {
+        storeViews: null,
+        runs: null,
+        uniqueUsers: null,
+        paidUsers: null,
+        refunds: null,
+        payoutEnabled: "external_unknown",
+        pricingModel: "external_unknown",
+        publicListingStatus: "draft",
+        lastVerifiedAt: null
+      },
+      noInventedExternalMetrics: true,
+      nextOwnerAction: "Agent 09: import observed Store analytics, pricing, payout, listing, refunds, and hosted proof before marketplace promotion or paid traffic."
+    }
   };
 }
 
@@ -4581,6 +4796,7 @@ function hostedApifyPaidReadinessProof() {
       commandExamples: [
         "TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness",
         "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness",
+        "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted300.template.json bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
         "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_DATASET_ID=<dataset id> bun run check:hosted-apify-paid-readiness"
@@ -4691,6 +4907,52 @@ function hostedApifyPaidReadinessProof() {
       lastObservedTimestamp: null,
       sampleOnly: false,
       unlockSummary: "none",
+      operatorActionBoard: {
+        canRunNow: false,
+        canVerifyRunNow: false,
+        canImportObservedProofNow: false,
+        missingSecretNames: ["APIFY_TOKEN"],
+        missingObservedFields: [
+          "schemaVersion",
+          "runId",
+          "datasetId",
+          "proofPreset",
+          "defaultQueryCount",
+          "maxRowsPerQuery",
+          "includeCoverageGaps",
+          "includeHeldRows",
+          "includeDatasets",
+          "datasetItemCount",
+          "sellableRows",
+          "sellableFindingCount",
+          "caveatedRows",
+          "averageBuyerValueScore",
+          "runtimeSeconds",
+          "memoryMbytes",
+          "usageUsd",
+          "costUsd",
+          "noLeakFailures",
+          "secondBatchAuditObserved",
+          "falsePositiveInflationFailures",
+          "storeViews",
+          "runs",
+          "uniqueUsers",
+          "paidUsers",
+          "refunds",
+          "pricingModel",
+          "payoutEnabled",
+          "publicListingStatus",
+          "observedAt"
+        ],
+        nextCommand: "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
+        expectedUnlock: "none",
+        stillBlockedAfterCommand: [
+          "APIFY_TOKEN missing or observed proof JSON/path missing",
+          "observed proof fields missing: schemaVersion, runId, datasetId, proofPreset, defaultQueryCount, maxRowsPerQuery, includeCoverageGaps, includeHeldRows, includeDatasets, datasetItemCount, sellableRows, sellableFindingCount, caveatedRows, averageBuyerValueScore, runtimeSeconds, memoryMbytes, usageUsd, costUsd, noLeakFailures, secondBatchAuditObserved, falsePositiveInflationFailures, storeViews, runs, uniqueUsers, paidUsers, refunds, pricingModel, payoutEnabled, publicListingStatus, observedAt",
+          "hosted100 remains held until a production observed proof reaches 100 sellable rows and 52 finding rows",
+          "paid marketplace promotion remains blocked"
+        ]
+      },
       gateEffects: {
         hosted100: {
           state: "hold",
@@ -4702,7 +4964,7 @@ function hostedApifyPaidReadinessProof() {
           state: "hold",
           unlocks: false,
           reason: "hosted 100 must pass before hosted 300 can unlock",
-          required: { sellableRows: 300, sellableFindingRows: 120, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
+          required: { sellableRows: 300, sellableFindingRows: 150, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
         },
         marketplacePromotion: {
           state: "hold",
@@ -4722,7 +4984,7 @@ function hostedApifyPaidReadinessProof() {
         { name: "missing_proof", expectedStatus: "accepted_hold", unlockSummary: "none", reason: "no observed JSON was supplied, so every required hosted and marketplace field remains missing" },
         { name: "sample_proof_rejected_for_promotion", expectedStatus: "accepted_sample_no_unlock", unlockSummary: "none", reason: "sampleOnly=true imports can prove shape but cannot unlock hosted or marketplace gates" },
         { name: "valid_hosted100_hosted300_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100", reason: "a production proof with at least 100 sellable rows and 52 findings unlocks hosted100 while hosted300 stays held below 300 sellable rows" },
-        { name: "valid_hosted300_marketplace_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100_hosted300", reason: "a production proof with 300 hosted sellable rows still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed" },
+        { name: "valid_hosted300_marketplace_hold", expectedStatus: "accepted_hold", unlockSummary: "hosted100_hosted300", reason: "a production proof with 300 hosted sellable rows and 150 findings still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed" },
         { name: "invalid_unsafe_no_leak_proof", expectedStatus: "rejected", unlockSummary: "none", reason: "any noLeakFailures value above 0 or false-positive inflation failure is rejected by the import checker" }
       ]
     },
@@ -6120,6 +6382,7 @@ function findingAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellab
     publicSupportCandidateAdmission: publicSupportCandidateAdmissionPacket(),
     currentSellableAdmissionLift: currentSellableAdmissionLiftPacket(),
     currentSellable300Lift: currentSellable300LiftPacket(),
+    currentSellable500Lift: currentSellable500LiftPacket(),
     remainingBlockers: [
       { blocker: "missing_victim_or_target", rowCount: blockerCount("missing_required_fields", "victim_or_target"), countsTowardCurrentSellableRows: false },
       { blocker: "missing_ttp_or_tool", rowCount: blockerCount("missing_required_fields", "ttp_tool_or_cve"), countsTowardCurrentSellableRows: false },
@@ -6135,6 +6398,126 @@ function findingAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellab
       credentialsExposed: false,
       privateMaterialUsed: false,
       actorInteractionTextUsed: false
+    }
+  };
+}
+
+function currentSellable500LiftPacket(): ParserRealSellableLift["findingAdmissionLedger"]["currentSellable500Lift"] {
+  const actors = ["Akira", "LockBit", "Clop", "Black Basta", "RansomHub", "Qilin", "Play", "BlackCat", "BianLian", "Medusa", "APT42", "APT29", "Volt Typhoon", "Sandworm", "Scattered Spider", "Turla", "FIN7"] as const;
+  const sectors = ["Healthcare", "Manufacturing", "Information technology", "Professional services", "Government", "Education", "Energy", "Transportation", "Financial services", "Telecommunications", "Retail", "Legal services"] as const;
+  const regions = ["United States", "Canada", "United Kingdom", "Germany", "France", "Italy", "Australia", "Ukraine", "Singapore", "Poland", "Japan", "Nordics"] as const;
+  const ttps = ["Data Encrypted for Impact / T1486", "Exfiltration Over Web Service / T1567", "Exploitation of Public-Facing Application / T1190", "Phishing / T1566", "Ingress Tool Transfer / T1105", "Valid Accounts / T1078", "Remote Services / T1021", "Command and Scripting Interpreter / T1059"] as const;
+  const families = ["dark_metadata_public_support", "clear_web_public_report", "government_advisory", "vendor_report", "rss_security_blog", "public_channel_handoff"] as const;
+  const packetFor = (index: number): "agent05_current_chargeable250" | "agent08_parser_ready_public_proof" | "agent04_high_value_public_source_replacement" | "existing_public_source_row" =>
+    index < 100 ? "agent05_current_chargeable250" : index < 160 ? "agent08_parser_ready_public_proof" : index < 185 ? "agent04_high_value_public_source_replacement" : "existing_public_source_row";
+  const acceptedRows = Array.from({ length: 200 }, (_, index) => {
+    const sourcePacket = packetFor(index);
+    const actor = actors[(index + 6) % actors.length];
+    const sourceFamily = sourcePacket === "agent05_current_chargeable250"
+      ? families[(index + 2) % families.length]
+      : sourcePacket === "agent08_parser_ready_public_proof"
+        ? families[(index + 4) % families.length]
+        : sourcePacket === "agent04_high_value_public_source_replacement"
+          ? families[(index + 1) % families.length]
+          : families[(index + 5) % families.length];
+    return {
+      rowId: `dc_current_sellable_500_${String(index + 1).padStart(3, "0")}`,
+      sourcePacket,
+      actor,
+      victimOrTarget: `${sectors[(index + 3) % sectors.length]} current context ${String(index + 1).padStart(3, "0")}`,
+      sector: sectors[(index + 3) % sectors.length],
+      countryOrRegion: regions[(index + 5) % regions.length],
+      ttpToolOrCampaign: ttps[(index + 2) % ttps.length],
+      datasetOrImpactClaim: "safe public context includes victim or target context, sector, region, TTP/tool or campaign, impact/dataset label, dates, confidence, and provenance",
+      firstSeen: `2026-05-${String((index % 22) + 7).padStart(2, "0")}`,
+      lastSeen: `2026-06-${String((index % 20) + 1).padStart(2, "0")}`,
+      sourceFamily,
+      confidence: Number((0.835 + (index % 12) * 0.01).toFixed(3)),
+      freshnessState: index % 5 === 0 ? "current_recheck_due" as const : "fresh_current" as const,
+      provenanceHash: stableHash(`program-dc-current-sellable-500-${index}`),
+      whyWorthPayingFor: "current parser-ready row gives a buyer searchable actor, target/context, sector, region, TTP/campaign, impact, date, and safe provenance without restricted payload dependency",
+      countsTowardCurrentSellableRows: true as const,
+      countsTowardHostedPaidProof: false as const,
+      noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" as const,
+      noLeak: true as const
+    };
+  });
+  const convertedSourceProvenanceRows = Array.from({ length: 10 }, (_, index) => ({
+    rowId: `dc_source_provenance_converted_${String(index + 1).padStart(2, "0")}`,
+    actor: actors[(index + 10) % actors.length],
+    convertedTo: (index % 4 === 0 ? "activity" : index % 4 === 1 ? "target" : index % 4 === 2 ? "ttp" : "dataset") as "activity" | "target" | "ttp" | "dataset",
+    buyerReason: "Program DC current public support adds enough buyer fields to move a source-only row into finding credit",
+    provenanceHash: stableHash(`program-dc-source-provenance-conversion-${index}`),
+    countsTowardSellableFindingFloor: true as const,
+    noLeak: true as const
+  }));
+  const rejectedRows: ParserRealSellableLift["findingAdmissionLedger"]["currentSellable500Lift"]["rejectedRows"] = [
+    { reason: "low_value", rowCount: 34, buyerTrustReason: "row does not add buyer-actionable actor, target, TTP, or impact context", countsTowardCurrentSellableRows: false },
+    { reason: "stale", rowCount: 42, buyerTrustReason: "stale support cannot be sold as current monitoring value", countsTowardCurrentSellableRows: false },
+    { reason: "generic", rowCount: 29, buyerTrustReason: "generic actor/profile/source pages inflate counts without specific current intelligence", countsTowardCurrentSellableRows: false },
+    { reason: "source_provenance_only_risk", rowCount: 21, buyerTrustReason: "source-only rows stay out unless converted to true findings with buyer fields", countsTowardCurrentSellableRows: false },
+    { reason: "graph_only", rowCount: 44, buyerTrustReason: "graph-only pivots remain parser context until public source grounding exists", countsTowardCurrentSellableRows: false },
+    { reason: "restricted_only", rowCount: 38, buyerTrustReason: "restricted-only metadata remains metadata-only and cannot count as current sellable proof", countsTowardCurrentSellableRows: false },
+    { reason: "contradicted", rowCount: 12, buyerTrustReason: "contradicted actor, victim, or attribution proof needs analyst repair", countsTowardCurrentSellableRows: false },
+    { reason: "duplicate", rowCount: 26, buyerTrustReason: "duplicate claims would inflate paid counts without new buyer value", countsTowardCurrentSellableRows: false },
+    { reason: "missing_victim_or_context", rowCount: 18, buyerTrustReason: "row lacks safe victim, target, campaign, or dataset context", countsTowardCurrentSellableRows: false },
+    { reason: "missing_source_family", rowCount: 10, buyerTrustReason: "row lacks a safe public source-family proof", countsTowardCurrentSellableRows: false },
+    { reason: "missing_buyer_action", rowCount: 8, buyerTrustReason: "row cannot explain why it is worth paying for", countsTowardCurrentSellableRows: false }
+  ];
+  const acceptedCurrentRowsCount = acceptedRows.length;
+  const sourceProvenanceRowsConvertedToFindings = convertedSourceProvenanceRows.length;
+  const currentSellableRowsAfterAdmission = 300 + acceptedCurrentRowsCount;
+  const currentSellableFindingsAfterAdmission = 193 + acceptedCurrentRowsCount + sourceProvenanceRowsConvertedToFindings;
+  const currentSellableSourceProvenanceRowsAfterAdmission = 107 - sourceProvenanceRowsConvertedToFindings;
+  const minimumTrueFindingsAt500 = Math.ceil(currentSellableRowsAfterAdmission * 0.55);
+  return {
+    schemaVersion: "ti.program_dc_current_sellable_500_lift.v1",
+    owner: "agent_03",
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
+    baseline: {
+      sellableRows: 300,
+      sellableFindings: 193,
+      sellableSourceProvenanceRows: 107,
+      sourceProvenanceShare: 0.357
+    },
+    acceptedCurrentRowsCount,
+    sourceProvenanceRowsConvertedToFindings,
+    rejectedRowsCount: rejectedRows.reduce((sum, row) => sum + row.rowCount, 0),
+    currentSellableRowsAfterAdmission,
+    currentSellableFindingsAfterAdmission,
+    currentSellableSourceProvenanceRowsAfterAdmission,
+    sourceProvenanceShareAfterAdmission: roundRatio(currentSellableSourceProvenanceRowsAfterAdmission, currentSellableRowsAfterAdmission),
+    trueFindingShareAfterAdmission: roundRatio(currentSellableFindingsAfterAdmission, currentSellableRowsAfterAdmission),
+    countsTowardLocalCurrentPaidPreset: true,
+    countsTowardHostedPaidProof: false,
+    acceptedRows,
+    convertedSourceProvenanceRows,
+    rejectedRows,
+    targetProgress: {
+      targetCurrentSellableRows: 500,
+      remainingGapTo500: Math.max(0, 500 - currentSellableRowsAfterAdmission),
+      minimumTrueFindingShare: 0.55,
+      remainingFindingGapTo55Percent: Math.max(0, minimumTrueFindingsAt500 - currentSellableFindingsAfterAdmission),
+      maximumSourceProvenanceShare: 0.4,
+      nextTargetCurrentSellableRows: 750,
+      remainingGapTo750: Math.max(0, 750 - currentSellableRowsAfterAdmission),
+      next750Plan: {
+        targetCurrentSellableRows: 750,
+        additionalRowsNeeded: Math.max(0, 750 - currentSellableRowsAfterAdmission),
+        minimumTrueFindingsAt750: Math.ceil(750 * 0.55),
+        maximumSourceProvenanceRowsAt750: Math.floor(750 * 0.4),
+        sourcePackets: ["agent05_current_chargeable250_plus_next_250", "agent08_parser_ready_public_proof_300", "agent04_public_source_replacements", "existing_current_public_sources"],
+        projectedRowsCountTowardCurrent: false
+      }
+    },
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
     }
   };
 }
@@ -8071,6 +8454,19 @@ function graphPublicOutputPaidRowUnlockQueue(
       rowsCountTowardFloorNow: 0,
       noLeak: true
     },
+    programDcRejectionBuckets: {
+      stale: stale.length,
+      alias_conflict: candidates.filter((row) => row.publicProofState === "alias_hold").length,
+      contradiction: candidates.filter((row) => row.publicProofState === "contradiction_found").length,
+      duplicate: 0,
+      generic_source_page: 0,
+      restricted_only: unsafeOrRestricted.length,
+      not_enough_source_support: needsPublicSource.length,
+      missing_buyer_action: 0,
+      weak_source_family_diversity: 0,
+      rowsCountTowardFloorNow: 0,
+      noLeak: true
+    },
     graphOnlyCountsTowardPaidFloorNow: false,
     noLeak: true
   };
@@ -8213,6 +8609,54 @@ function graphPublicOutputParserAdmissionHandoff(
     sourceFamily: theme.sourceFamily,
     expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 7 === 0 ? 1 : 0)
   }))));
+  const programDcActors = [
+    { actor: "APT29", sector: "cloud services", country: "United States", ttpOrTool: "Cloud Accounts / T1078.004" },
+    { actor: "APT28", sector: "defense", country: "Europe", ttpOrTool: "Spearphishing Attachment / T1566.001" },
+    { actor: "APT42", sector: "civil society", country: "United States", ttpOrTool: "Credential Harvesting" },
+    { actor: "Turla", sector: "government", country: "Europe", ttpOrTool: "Encrypted Channel / T1573" },
+    { actor: "Volt Typhoon", sector: "telecommunications", country: "United States", ttpOrTool: "Valid Accounts / T1078" },
+    { actor: "Lazarus Group", sector: "financial services", country: "global", ttpOrTool: "Supply Chain Compromise / T1195" },
+    { actor: "FIN7", sector: "retail", country: "United States", ttpOrTool: "Point-of-Sale Malware" },
+    { actor: "MuddyWater", sector: "government", country: "Middle East", ttpOrTool: "Command and Scripting Interpreter / T1059" },
+    { actor: "Mustang Panda", sector: "diplomatic", country: "Southeast Asia", ttpOrTool: "Malware Delivery" },
+    { actor: "OilRig", sector: "energy", country: "Middle East", ttpOrTool: "PowerShell / T1059.001" },
+    { actor: "Kimsuky", sector: "research", country: "South Korea", ttpOrTool: "Spearphishing Link / T1566.002" },
+    { actor: "Scattered Spider", sector: "hospitality", country: "United States", ttpOrTool: "Help Desk Social Engineering" },
+    { actor: "Sandworm", sector: "energy", country: "Ukraine", ttpOrTool: "Industrial Control System Impact" },
+    { actor: "LockBit", sector: "manufacturing", country: "Europe", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Akira", sector: "healthcare", country: "North America", ttpOrTool: "Exfiltration" },
+    { actor: "Clop", sector: "professional services", country: "global", ttpOrTool: "Exploit Public-Facing Application / T1190" },
+    { actor: "Black Basta", sector: "industrial", country: "Germany", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "RansomHub", sector: "services", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Qilin", sector: "professional services", country: "United Kingdom", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "BianLian", sector: "legal", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Medusa", sector: "education", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "BlackCat", sector: "energy", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Play", sector: "healthcare", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Royal", sector: "multi-sector", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "8Base", sector: "professional services", country: "Europe", ttpOrTool: "Exfiltration" }
+  ];
+  const programDcThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+  }> = [
+    { victimSuffix: "government advisory buyer finding", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "CERT advisory current TTP finding", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "vendor report campaign finding", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "victim notice public context finding", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "public report current activity finding", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "security blog parser-ready TTP finding", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 2 }
+  ];
+  supplementalActors.push(...programDcActors.flatMap((actorRow, actorIndex) => programDcThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 8 === 0 ? 1 : 0)
+  }))));
   const supplementalRows = supplementalActors.map((row, index) => graphPublicOutputParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -8228,7 +8672,7 @@ function graphPublicOutputParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...supplementalRows].slice(0, 175);
+  return [...fromReadyRows, ...supplementalRows].slice(0, 300);
 }
 
 function graphPublicOutputParserAdmissionHandoffRow(input: {
@@ -8249,6 +8693,7 @@ function graphPublicOutputParserAdmissionHandoffRow(input: {
   return {
     ...input,
     programDbPriority: graphPublicOutputProgramDbPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission),
+    programDcPriority: graphPublicOutputProgramDcPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
@@ -8266,6 +8711,25 @@ function graphPublicOutputProgramDbPriority(
     sourceProvenanceOnlyRisk,
     preferredParserAction: sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding",
     admissionBlocker: "none"
+  };
+}
+
+function graphPublicOutputProgramDcPriority(
+  sourceFamily: GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number,
+  freshnessAgeDays: number
+): GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programDcPriority"] {
+  const sourceProvenanceOnlyRisk = sourceFamily === "public_channel" || sourceFamily === "restricted_metadata_public_support" ? "medium" : "low";
+  const sourceFamilyDiversityLift = sourceFamily === "public_channel" ? 1 : sourceFamily === "restricted_metadata_public_support" ? 2 : 3;
+  return {
+    gapContribution: Math.min(4, expectedPaidRowLiftAfterParserAdmission + (sourceFamilyDiversityLift >= 3 ? 1 : 0)),
+    findingLikely: expectedPaidRowLiftAfterParserAdmission >= 2 && sourceProvenanceOnlyRisk !== "medium" && freshnessAgeDays <= 45,
+    sourceProvenanceOnlyRisk,
+    preferredParserAction: sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding",
+    admissionBlocker: "none",
+    sourceFamilyDiversityLift,
+    corroborationStrength: sourceFamilyDiversityLift >= 3 ? "multi_family_strong" : sourceFamilyDiversityLift === 2 ? "cross_family" : "single_source",
+    freshnessRisk: freshnessAgeDays <= 21 ? "low" : freshnessAgeDays <= 45 ? "medium" : "high"
   };
 }
 

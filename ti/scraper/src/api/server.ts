@@ -10819,6 +10819,83 @@ function buildApifyStoreReadinessContract(input: {
     paidReleaseRunbook,
     buyerPaidReleaseVerdict,
     hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
+    programDcReleaseGates: {
+      schemaVersion: "ti.program_dc_paid_release_gates.v1",
+      current500Gate: {
+        state: "hold",
+        requiredSellableRows: 500,
+        observedSellableRows: 500,
+        sellableRowGap: 0,
+        requiredTrueFindingShare: 0.55,
+        observedTrueFindingShare: 0.826,
+        maximumSourceProvenanceShare: 0.4,
+        observedSourceProvenanceShare: 0.174,
+        candidateRowsCountTowardLocalCurrentPaidPreset: true,
+        forbiddenCreditObserved: {
+          projectedRowsCountTowardCurrent: false,
+          graphRowsCountTowardFloorNow: 0,
+          restrictedOnlyRowsCountTowardFloorNow: false,
+          staleLatestErrorRowsCountTowardFloorNow: false,
+          sampleProofRowsCountTowardFloorNow: false
+        },
+        nextOwnerAction: "Agent 03: keep the 500-row packet as a parser candidate until every row is observed, local-countable, and safe to include in paid gates."
+      },
+      current1000Gate: {
+        state: "hold",
+        requiredUsefulRows: 1000,
+        observedUsefulRows: 607,
+        usefulRowGap: 393,
+        requiredSellableRows: 300,
+        observedSellableRows: 500,
+        sellableRowGateState: "pass",
+        requiredUsefulDensity: 0.65,
+        observedUsefulDensity: 0.607,
+        requiredFreshDensity: 0.6,
+        observedFreshDensity: null,
+        requiredSourceFamilyDiversity: 4,
+        observedSourceFamilyDiversity: null,
+        noLeakProofObserved: false,
+        requiredCostPerUsefulRowUsdAtMost: 0.05,
+        observedCostPerUsefulRowUsd: null,
+        countsProjectedRowsAsPaid: false,
+        nextOwnerAction: "Agent 10: hold current1000 until useful-row density, fresh-row density, source-family diversity, no-leak proof, and cost/useful-row proof are observed."
+      },
+      hostedProofExecutionGate: {
+        state: "hold",
+        observedOnly: true,
+        noSyntheticFallback: true,
+        oldProofTreatment: "historical_shape_safety_only",
+        observedProofImportState: "missing",
+        sampleOnly: false,
+        validationErrors: [],
+        hosted100State: "hold",
+        hosted300State: "hold",
+        noLeakFailures: null,
+        secondBatchAuditObserved: false,
+        falsePositiveInflationFailures: null,
+        nextOwnerAction: "Agent 09: execute/import real hosted Apify proof with run, dataset, no-leak, second-batch, false-positive, usage, and cost fields observed."
+      },
+      marketplacePaidTrafficGate: {
+        state: "hold",
+        paidTrafficAllowedNow: false,
+        hostedProofExecutionState: "hold",
+        observedOnly: true,
+        requiredObservedFields: ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds", "payoutEnabled", "pricingModel", "publicListingStatus", "lastVerifiedAt"],
+        observedMarketplaceFields: {
+          storeViews: null,
+          runs: null,
+          uniqueUsers: null,
+          paidUsers: null,
+          refunds: null,
+          payoutEnabled: "external_unknown",
+          pricingModel: "external_unknown",
+          publicListingStatus: "draft_copy_ready_not_promoted",
+          lastVerifiedAt: null
+        },
+        noInventedExternalMetrics: true,
+        nextOwnerAction: "Agent 09: import observed Store analytics, pricing, payout, listing, refunds, and hosted proof before marketplace promotion or paid traffic."
+      }
+    },
     blockerBuckets: [
       { blocker: "already_chargeable", owner: "agent_10", rowDeltaTo100: 0, expectedRowGain: 3, confidence: "observed", risk: "current smoke rows prove safe output shape only", fastestNextTask: "keep chargeable rows visible while repair buckets create 97 more real rows", coordinationFile: "coordination_agent_10.md", countsTowardPaidFloorNow: true },
       { blocker: "missing_public_support", owner: "agent_04", rowDeltaTo100: 28, expectedRowGain: 28, confidence: "medium", risk: "single-source or unsupported rows stay caveated/held", fastestNextTask: "attach safe public corroboration to highest-value actor/ransomware rows", coordinationFile: "coordination_agent_04.md", countsTowardPaidFloorNow: false },

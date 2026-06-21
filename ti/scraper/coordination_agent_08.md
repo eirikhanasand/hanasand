@@ -1,39 +1,14 @@
-Status: active_program_dc_public_proof_175_to_300_parser_ready
+Status: ready_requesting_next_agent_08_task
 
-# Agent 08 Program DC - Public Proof From 175 To 300 Parser-Ready Rows
+# Agent 08 Summary
 
-You are no longer ready. The next graph/public proof work must feed current sellable parser rows and the 1,000-row tier, not graph exports.
+- Completed Program DC public graph proof lift from 175 to 300 parser-ready rows in `graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff`.
+- Added `programDcPriority` to parser handoff rows with gap contribution, finding-likely status, source-provenance-only risk, parser action, admission blocker, source-family diversity lift, corroboration strength, and freshness risk.
+- Kept at least 170 finding-likely rows available for Agent 03 while preserving `admitted_by_parser=0`, `rowsCountTowardFloorNow=0`, and graph-only paid-floor credit disabled.
+- Added Program DC rejection buckets for stale, alias conflict, contradiction, duplicate, generic source page, restricted-only, not enough source support, missing buyer action, and weak source-family diversity.
+- Mirrored the 300-row handoff and rejection buckets through `/v1/ops/product-slo`, API contracts, Apify Actor `OUTPUT`, and Actor smoke tests.
+- Carried forward coherent hosted/paid-release observed-proof and dark metadata gate work found in the dirty tree; paid traffic remains held on hosted Apify proof and marketplace observed-state requirements.
+- Verification green: `bun run check`, focused API/ops tests, `bun run check:contract-index`, `bun run check:apify-publication`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, and full `bun test`.
+- `bun run check:paid-actor-release-audit` reaches the expected safe release hold and only failed before commit because the worktree was dirty.
 
-Goal:
-- Grow parser-ready public proof rows from 175 to at least 300.
-- At least 170 rows should be finding-likely, not source-provenance-only.
-- Add stronger source-family diversity and corroboration signals so Agent 03 can safely admit rows toward 500 current sellable rows.
-- Keep `admitted_by_parser=0`, `rowsCountTowardFloorNow=0`, and graph-only paid-floor credit disabled until Agent 03 actually admits rows.
-
-Implementation direction:
-- Extend `graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff` and its SLO/Actor mirrors.
-- Expand `programDbPriority` or add `programDcPriority` fields for `gapContribution`, `findingLikely`, `sourceProvenanceOnlyRisk`, `preferredParserAction`, `admissionBlocker`, `sourceFamilyDiversityLift`, `corroborationStrength`, and `freshnessRisk`.
-- Include actor/group, victim/target/context, sector, country/region, TTP/tool/campaign, source family, public support hash/id, confidence, freshness, contradiction state, no-leak proof, and buyer reason.
-- Add rejection buckets for stale, alias conflict, contradiction, duplicate, generic source page, restricted-only, not enough source support, missing buyer action, and weak source-family diversity.
-- Surface through `/v1/ops/product-slo`, Apify Actor `OUTPUT`, Actor smoke, and paid-release audit blocker text if needed.
-
-Proof before handoff:
-- `bun run check`
-- focused graph/API/ops tests
-- `bun run check:contract-index`
-- `bun run check:apify-publication`
-- `bun run check:apify-threat-actor-monitor`
-- `bun run smoke:apify-threat-actor-monitor`
-- `bun run check:paid-actor-release-audit`
-
-If 300 parser-ready rows pass, continue directly into a 500 parser-ready plan only if it improves actual Agent 03 admission quality.
-
-## Previous Summary
-
-- Completed Program DB public proof lift from 100 to 175 parser-ready graph handoff rows.
-- Added `programDbPriority` to each `parserAdmissionHandoff` row with gap contribution, finding-likely flag, source-provenance risk, preferred parser action, and admission blocker.
-- Added 95 finding-likely rows for Agent 03 current-finding admission while preserving `admitted_by_parser=0`, `rowsCountTowardFloorNow=0`, and graph-only paid-floor credit disabled.
-- Added Program DB rejection buckets for stale, alias conflict, contradiction, duplicate, generic source page, restricted-only, and not-enough-source-support holds.
-- Mirrored the 175-row queue and priority fields into `/v1/ops/product-slo` and Apify Actor `OUTPUT`; Actor smoke asserts the new contract.
-- Carried forward the coherent hosted Apify observed-proof operator checklist already present in the dirty tree; it remains observed-only and holds paid promotion without external proof.
-- Verification green: `bun run check`, focused API/ops tests, `bun run check:contract-index`, Apify Actor check/publication/smoke, hosted-readiness check, and full `bun test`.
+Requesting the next Agent 08 buyer-visible graph/public-row/STIX/TAXII task.

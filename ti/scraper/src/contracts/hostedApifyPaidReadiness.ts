@@ -69,6 +69,16 @@ interface HostedProofOperatorChecklist {
   lastObservedTimestamp: string | null;
   sampleOnly: boolean;
   unlockSummary: "none" | "hosted100" | "hosted100_hosted300" | "hosted100_hosted300_marketplace_promotion";
+  operatorActionBoard: {
+    canRunNow: boolean;
+    canVerifyRunNow: boolean;
+    canImportObservedProofNow: boolean;
+    missingSecretNames: string[];
+    missingObservedFields: string[];
+    nextCommand: string;
+    expectedUnlock: HostedProofOperatorChecklist["unlockSummary"];
+    stillBlockedAfterCommand: string[];
+  };
   gateEffects: {
     hosted100: {
       state: HostedProofOperatorGateState;
@@ -80,7 +90,7 @@ interface HostedProofOperatorChecklist {
       state: HostedProofOperatorGateState;
       unlocks: boolean;
       reason: string;
-      required: { sellableRows: 300; sellableFindingRows: 120; noLeakFailures: 0; falsePositiveInflationFailures: 0 };
+      required: { sellableRows: 300; sellableFindingRows: 150; noLeakFailures: 0; falsePositiveInflationFailures: 0 };
     };
     marketplacePromotion: {
       state: HostedProofOperatorGateState;
@@ -230,6 +240,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
     && Number.isFinite(observedProof.uniqueUsers)
     && Number.isFinite(observedProof.paidUsers)
     && Number.isFinite(observedProof.refunds)
+    && typeof observedProof.pricingModel === "string"
     && observedProof.pricingModel.length > 0
     && observedProof.payoutEnabled === true
   );
@@ -237,6 +248,7 @@ export function buildHostedApifyPaidReadinessProof(input: {
   const commandExamples = [
     "TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness",
     "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness",
+    "TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.hosted300.template.json bun run check:hosted-apify-paid-readiness",
     "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness",
     "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness",
     "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_DATASET_ID=<dataset id> bun run check:hosted-apify-paid-readiness"
@@ -245,7 +257,10 @@ export function buildHostedApifyPaidReadinessProof(input: {
     observedProof,
     observedFields,
     commandExamples,
-    marketplaceValuesObserved
+    marketplaceValuesObserved,
+    hasToken: input.hasToken === true,
+    hasRunOrDatasetId: Boolean(process.env.TI_APIFY_HOSTED_RUN_ID || process.env.TI_APIFY_HOSTED_DATASET_ID),
+    hasObservedProofImportSource: Boolean(process.env.TI_APIFY_OBSERVED_PROOF_JSON || process.env.TI_APIFY_OBSERVED_PROOF_PATH)
   });
   return {
     schemaVersion: "ti.hosted_apify_paid_readiness_proof.v1",
@@ -426,20 +441,50 @@ const observedProofRequiredFields = [
   "observedAt"
 ] as const;
 
+const hostedProofGateRequiredFields = [
+  "schemaVersion",
+  "runId",
+  "datasetId",
+  "proofPreset",
+  "defaultQueryCount",
+  "maxRowsPerQuery",
+  "includeCoverageGaps",
+  "includeHeldRows",
+  "includeDatasets",
+  "datasetItemCount",
+  "sellableRows",
+  "sellableFindingCount",
+  "caveatedRows",
+  "averageBuyerValueScore",
+  "runtimeSeconds",
+  "memoryMbytes",
+  "usageUsd",
+  "costUsd",
+  "noLeakFailures",
+  "secondBatchAuditObserved",
+  "falsePositiveInflationFailures",
+  "publicListingStatus",
+  "observedAt"
+] as const;
+
 function buildHostedProofOperatorChecklist(input: {
   observedProof: HostedApifyObservedProofImport | undefined;
   observedFields: Required<HostedApifyProofObservation>;
   commandExamples: string[];
   marketplaceValuesObserved: boolean;
+  hasToken: boolean;
+  hasRunOrDatasetId: boolean;
+  hasObservedProofImportSource: boolean;
 }): HostedProofOperatorChecklist {
   const sampleOnly = input.observedProof?.sampleOnly === true;
   const productionObserved = Boolean(input.observedProof && !sampleOnly);
   const missingFields = observedProofRequiredFields.filter((field) => !hasObservedImportValue(input.observedProof, field));
+  const hostedMissingFields = hostedProofGateRequiredFields.filter((field) => !hasObservedImportValue(input.observedProof, field));
   const acceptedObservedFields = observedProofRequiredFields.filter((field) => hasObservedImportValue(input.observedProof, field));
   const unsafeProof = input.observedFields.noLeakFailures !== null && input.observedFields.noLeakFailures !== 0
     || input.observedFields.falsePositiveInflationFailures !== null && input.observedFields.falsePositiveInflationFailures !== 0;
   const hosted100Pass = productionObserved
-    && missingFields.length === 0
+    && hostedMissingFields.length === 0
     && (input.observedProof?.defaultQueryCount ?? 0) >= 100
     && (input.observedFields.sellableRows ?? 0) >= 100
     && (input.observedFields.sellableFindingCount ?? 0) >= 52
@@ -448,7 +493,7 @@ function buildHostedProofOperatorChecklist(input: {
     && input.observedFields.falsePositiveInflationFailures === 0;
   const hosted300Pass = hosted100Pass
     && (input.observedFields.sellableRows ?? 0) >= 300
-    && (input.observedFields.sellableFindingCount ?? 0) >= 120;
+    && (input.observedFields.sellableFindingCount ?? 0) >= 150;
   const marketplacePromotionPass = hosted300Pass
     && input.marketplaceValuesObserved
     && input.observedProof?.refunds === 0
@@ -462,6 +507,18 @@ function buildHostedProofOperatorChecklist(input: {
       : hosted100Pass
         ? "hosted100"
         : "none";
+  const stillBlockedAfterCommand = operatorStillBlockedAfterCommand({
+    sampleOnly,
+    unsafeProof,
+    hosted100Pass,
+    hosted300Pass,
+    marketplacePromotionPass,
+    marketplaceValuesObserved: input.marketplaceValuesObserved,
+    missingFields,
+    hasToken: input.hasToken,
+    hasObservedProofImportSource: input.hasObservedProofImportSource,
+    publicListingStatus: input.observedProof?.publicListingStatus
+  });
 
   return {
     schemaVersion: "ti.hosted_apify_proof_operator_checklist.v1",
@@ -472,18 +529,28 @@ function buildHostedProofOperatorChecklist(input: {
     lastObservedTimestamp: input.observedProof?.observedAt ?? input.observedFields.lastVerifiedAt ?? null,
     sampleOnly,
     unlockSummary,
+    operatorActionBoard: {
+      canRunNow: input.hasToken,
+      canVerifyRunNow: input.hasToken && input.hasRunOrDatasetId,
+      canImportObservedProofNow: input.hasObservedProofImportSource,
+      missingSecretNames: input.hasToken ? [] : ["APIFY_TOKEN"],
+      missingObservedFields: missingFields,
+      nextCommand: nextOperatorCommand(input),
+      expectedUnlock: unlockSummary,
+      stillBlockedAfterCommand
+    },
     gateEffects: {
       hosted100: {
         state: hosted100Pass ? "pass" : blockedState,
         unlocks: hosted100Pass,
-        reason: hosted100Pass ? "production observed proof satisfies the hosted 100-name floor" : gateHoldReason(sampleOnly, unsafeProof, missingFields, "hosted 100-name proof is incomplete"),
+        reason: hosted100Pass ? "production observed proof satisfies the hosted 100-name floor" : gateHoldReason(sampleOnly, unsafeProof, hostedMissingFields, "hosted 100-name proof is incomplete"),
         required: { defaultQueryCount: 100, sellableRows: 100, sellableFindingRows: 52, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
       },
       hosted300: {
         state: hosted300Pass ? "pass" : blockedState,
         unlocks: hosted300Pass,
-        reason: hosted300Pass ? "production observed proof satisfies the hosted 300-row gate" : hosted100Pass ? "hosted 100 passes, but hosted sellable rows or finding rows are below the 300 gate" : gateHoldReason(sampleOnly, unsafeProof, missingFields, "hosted 100 must pass before hosted 300 can unlock"),
-        required: { sellableRows: 300, sellableFindingRows: 120, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
+        reason: hosted300Pass ? "production observed proof satisfies the hosted 300-row gate" : hosted100Pass ? "hosted 100 passes, but hosted sellable rows or finding rows are below the 300 gate" : gateHoldReason(sampleOnly, unsafeProof, hostedMissingFields, "hosted 100 must pass before hosted 300 can unlock"),
+        required: { sellableRows: 300, sellableFindingRows: 150, noLeakFailures: 0, falsePositiveInflationFailures: 0 }
       },
       marketplacePromotion: {
         state: marketplacePromotionPass ? "pass" : blockedState,
@@ -516,7 +583,7 @@ function buildHostedProofOperatorChecklist(input: {
         name: "valid_hosted300_marketplace_hold",
         expectedStatus: "accepted_hold",
         unlockSummary: "hosted100_hosted300",
-        reason: "a production proof with 300 hosted sellable rows still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed"
+        reason: "a production proof with 300 hosted sellable rows and 150 findings still keeps marketplace promotion held when listing state remains draft or marketplace fields are not observed"
       },
       {
         name: "invalid_unsafe_no_leak_proof",
@@ -526,6 +593,43 @@ function buildHostedProofOperatorChecklist(input: {
       }
     ]
   };
+}
+
+function nextOperatorCommand(input: {
+  commandExamples: string[];
+  hasToken: boolean;
+  hasRunOrDatasetId: boolean;
+  hasObservedProofImportSource: boolean;
+}): string {
+  if (input.hasObservedProofImportSource) return "bun run check:hosted-apify-paid-readiness";
+  if (input.hasToken && input.hasRunOrDatasetId) return "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness";
+  if (input.hasToken) return "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness";
+  return input.commandExamples.find((command) => command.includes("APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run")) ?? "APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness";
+}
+
+function operatorStillBlockedAfterCommand(input: {
+  sampleOnly: boolean;
+  unsafeProof: boolean;
+  hosted100Pass: boolean;
+  hosted300Pass: boolean;
+  marketplacePromotionPass: boolean;
+  marketplaceValuesObserved: boolean;
+  missingFields: string[];
+  hasToken: boolean;
+  hasObservedProofImportSource: boolean;
+  publicListingStatus: HostedApifyObservedProofImport["publicListingStatus"] | undefined;
+}): string[] {
+  const blockers: string[] = [];
+  if (!input.hasToken && !input.hasObservedProofImportSource) blockers.push("APIFY_TOKEN missing or observed proof JSON/path missing");
+  if (input.missingFields.length > 0) blockers.push(`observed proof fields missing: ${input.missingFields.join(", ")}`);
+  if (input.sampleOnly) blockers.push("sampleOnly=true cannot unlock hosted or marketplace gates");
+  if (input.unsafeProof) blockers.push("no-leak and false-positive inflation failures must be zero");
+  if (!input.hosted100Pass) blockers.push("hosted100 remains held until a production observed proof reaches 100 sellable rows and 52 finding rows");
+  if (input.hosted100Pass && !input.hosted300Pass) blockers.push("hosted300 remains held until a production observed proof reaches 300 sellable rows and 150 finding rows");
+  if (input.hosted300Pass && !input.marketplaceValuesObserved) blockers.push("marketplace analytics, pricing, payout, paid users, runs, and refunds remain external_unknown/null");
+  if (input.hosted300Pass && input.publicListingStatus === "draft_copy_ready_not_promoted") blockers.push("public listing state remains draft_copy_ready_not_promoted");
+  if (!input.marketplacePromotionPass) blockers.push("paid marketplace promotion remains blocked");
+  return [...new Set(blockers)];
 }
 
 function hasObservedImportValue(proof: HostedApifyObservedProofImport | undefined, field: (typeof observedProofRequiredFields)[number]): boolean {
