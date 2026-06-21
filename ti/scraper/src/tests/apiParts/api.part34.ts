@@ -1,0 +1,198 @@
+import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir, handleApiRequest, startApiServer, loadRuntimeConfig, FocusedFrontier, activatePublicCanarySources, buildCanaryOperatorSummary, runCanaryCollectionCycle, startCanaryCollectionLoop, createLogger, MetricsRegistry, WorkerSupervisor, processCollectedItem, FileBackedScraperStore, InMemoryObjectEvidenceStore, InMemoryScraperStore, hashContent, api, apiRestrictedMetadataApplyPlanSources, body, fixtureCapture, fixtureDelta, restrictedMetadataApplyPlanSources, seedEvidenceReplayFixture, source, telegramCapture } from "../apiTestHarness.ts";
+import type { AnalystClaimLedgerEntry, CanaryOperatorResponseForTest, CanaryReadinessResponseForTest, CanarySoakResponseForTest, RawCapture, SourceRecord } from "../apiTestHarness.ts";
+
+describe("api v1", () => {
+  test("returns restricted metadata apply-plan contracts for every cutover status", async () => {
+    const store = new InMemoryScraperStore();
+    for (const item of apiRestrictedMetadataApplyPlanSources()) store.saveSource(item);
+    const response = await body(await handleApiRequest(api("/v1/restricted-metadata/apply-plan", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ retentionExpiringWithinDays: 7, includeCutover: true })
+    }), {
+      store,
+      frontier: new FocusedFrontier()
+    }));
+
+    expect(response.contract).toMatchObject({
+      endpoint: "/v1/restricted-metadata/apply-plan",
+      method: "POST",
+      mode: "dry_run",
+      examples: {
+        disabled: { action: "disable_source", safety: "rollback_only" },
+        pendingApproval: { action: "renew_legal_notes", safety: "human_approval_required" },
+        readyMetadataOnly: { action: "enable_metadata_only_queue", safety: "automation_safe" },
+        blockedUnsafeTarget: { action: "keep_source_blocked", safety: "blocked" },
+        killSwitchActive: { action: "apply_kill_switch", safety: "rollback_only" },
+        retentionExpiring: { action: "shorten_retention" },
+        auditClean: { action: "enable_metadata_only_queue" }
+      }
+    });
+    const applyPlan = response.applyPlan as {
+      actions: Array<{
+        action: string;
+        sourceId: string;
+        safety: string;
+        prohibitedAlternatives: string[];
+        proof: {
+          exposesRawUrl: boolean;
+          allowsPayloadDownload: boolean;
+          allowsAuthBypass: boolean;
+          allowsCaptchaSolving: boolean;
+          allowsPrivateCommunityAccess: boolean;
+          allowsThreatActorInteraction: boolean;
+        };
+      }>;
+      connectorCertifications: Array<{ scenario: string; metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; noLeakSerialization: { passed: boolean }; guarantees: Record<string, boolean> }>;
+      killSwitchDrills: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ scenario: string; metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; operatorVisible: boolean; guarantees: Record<string, boolean>; noLeakSerialization: { passed: boolean } }> };
+      emergencyStopCertification: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; noLeakSerialization: { passed: boolean }; packets: Array<{ scenario: string; metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; rcGate: string; proof: Record<string, boolean>; noLeakSerialization: { passed: boolean } }> };
+      nonBlockingSearch: { metadataOnly: boolean; safeForApi: boolean; nonBlockingPublicSearch: boolean; maxPublicSearchAddedLatencyMs: number; observedScenarios: string[]; packets: Array<{ publicSearchAction: string; proof: Record<string, boolean>; noLeakSerialization: { passed: boolean } }> };
+      analystOperations: { metadataOnly: boolean; safeForApi: boolean; dryRunOnly: boolean; observedScenarios: string[]; victimNotificationPacketCount: number; packets: Array<{ schedulerIsolation: { directEgressAllowed: boolean }; proof: Record<string, boolean>; noLeakSerialization: { passed: boolean } }> };
+      noLeakSerialization: { passed: boolean };
+      summary: Record<string, number>;
+      agent09PolicyStatusFields: string[];
+      agent10KillSwitchRollback: string[];
+    };
+    expect(applyPlan.actions.map((item) => item.action)).toEqual(expect.arrayContaining([
+      "enable_metadata_only_queue",
+      "renew_legal_notes",
+      "keep_source_blocked",
+      "apply_kill_switch",
+      "disable_source",
+      "shorten_retention"
+    ]));
+    expect(applyPlan.summary.automation_safe).toBeGreaterThanOrEqual(2);
+    expect(applyPlan.summary.human_approval_required).toBeGreaterThanOrEqual(1);
+    expect(applyPlan.summary.blocked).toBeGreaterThanOrEqual(1);
+    expect(applyPlan.summary.rollback_only).toBeGreaterThanOrEqual(1);
+    expect(applyPlan.agent09PolicyStatusFields).toEqual(expect.arrayContaining([
+      "disabled",
+      "pending_approval",
+      "ready_metadata_only",
+      "blocked_unsafe_target",
+      "kill_switch_active",
+      "retention_expiring",
+      "audit_clean"
+    ]));
+    expect(applyPlan.agent10KillSwitchRollback).toEqual(expect.arrayContaining(["pause_restricted_metadata_workers"]));
+    expect(applyPlan.noLeakSerialization.passed).toBe(true);
+    expect(applyPlan.connectorCertifications.map((packet) => packet.scenario)).toEqual(expect.arrayContaining([
+      "unsafe_link_form_download",
+      "retention_expiry",
+      "low_yield_source"
+    ]));
+    expect(applyPlan.connectorCertifications.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.noLeakSerialization.passed &&
+      packet.guarantees.noContact &&
+      packet.guarantees.noDownload
+    )).toBe(true);
+    expect(applyPlan.killSwitchDrills).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      operatorVisible: true,
+      noLeakSerialization: { passed: true }
+    });
+    expect(applyPlan.killSwitchDrills.observedScenarios).toEqual(expect.arrayContaining([
+      "unsafe_download_form_contact_link",
+      "kill_switch_activation_mid_run",
+      "retention_expiry",
+      "public_api_blocked_state"
+    ]));
+    expect(applyPlan.killSwitchDrills.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.operatorVisible &&
+      packet.noLeakSerialization.passed &&
+      packet.guarantees.noContact &&
+      packet.guarantees.noDownload
+    )).toBe(true);
+    expect(applyPlan.emergencyStopCertification).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true,
+      noLeakSerialization: { passed: true }
+    });
+    expect(applyPlan.emergencyStopCertification.observedScenarios).toEqual(expect.arrayContaining([
+      "unsafe_download_form_contact_target",
+      "kill_switch_propagation",
+      "retention_expiry",
+      "public_api_blocked_state"
+    ]));
+    expect(applyPlan.emergencyStopCertification.packets.every((packet) =>
+      packet.metadataOnly &&
+      packet.safeForApi &&
+      packet.dryRunOnly &&
+      packet.rcGate === "restricted_metadata_emergency_stop_certification_rc" &&
+      packet.noLeakSerialization.passed &&
+      packet.proof.noUnsafeAccess &&
+      packet.proof.noDataExposure &&
+      packet.proof.noContact &&
+      packet.proof.noDownload &&
+      packet.proof.noCredentialBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noStealth &&
+      packet.proof.noRawPayloads &&
+      packet.proof.noRawUrls &&
+      packet.proof.hashOnlyEvidence
+    )).toBe(true);
+    expect(applyPlan.nonBlockingSearch).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      nonBlockingPublicSearch: true,
+      maxPublicSearchAddedLatencyMs: 0
+    });
+    expect(applyPlan.nonBlockingSearch.observedScenarios).toEqual(expect.arrayContaining(["unsafe_target", "kill_switch", "retention_expiry", "public_api_blocked_state"]));
+    expect(applyPlan.nonBlockingSearch.packets.every((packet) =>
+      packet.publicSearchAction === "continue_clear_web_and_public_channel" &&
+      packet.proof.doesNotBlockPublicSearch &&
+      packet.proof.doesNotPromoteRestrictedFacts &&
+      packet.proof.noUnsafeAccess &&
+      packet.proof.noDataExposure &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    expect(applyPlan.analystOperations).toMatchObject({
+      metadataOnly: true,
+      safeForApi: true,
+      dryRunOnly: true
+    });
+    expect(applyPlan.analystOperations.observedScenarios).toEqual(expect.arrayContaining(["approval_requested", "unsafe_download_form_contact_target", "raw_payload_blocked", "victim_notification_packet", "emergency_stop_rollback"]));
+    expect(applyPlan.analystOperations.packets.every((packet) =>
+      packet.schedulerIsolation.directEgressAllowed === false &&
+      packet.proof.noStolenFilesDownloaded &&
+      packet.proof.noCredentials &&
+      packet.proof.noAuthBypass &&
+      packet.proof.noCaptchaSolving &&
+      packet.proof.noPrivateAccess &&
+      packet.proof.noThreatActorInteraction &&
+      packet.noLeakSerialization.passed
+    )).toBe(true);
+    for (const action of applyPlan.actions) {
+      expect(action.prohibitedAlternatives).toEqual(expect.arrayContaining([
+        "payload download remains prohibited",
+        "credential or authentication bypass remains prohibited",
+        "CAPTCHA solving remains prohibited",
+        "private community access remains prohibited",
+        "threat actor interaction remains prohibited",
+        "unsafe restricted URLs remain redacted to hashes"
+      ]));
+      expect(action.proof).toMatchObject({
+        exposesRawUrl: false,
+        allowsPayloadDownload: false,
+        allowsAuthBypass: false,
+        allowsCaptchaSolving: false,
+        allowsPrivateCommunityAccess: false,
+        allowsThreatActorInteraction: false
+      });
+    }
+    const serialized = JSON.stringify(response);
+    expect(serialized).not.toContain("http://");
+    expect(serialized).not.toContain(".onion");
+    expect(serialized).not.toContain("user:pass");
+    expect(serialized).not.toContain("customer-dump");
+  });
+});

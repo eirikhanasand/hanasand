@@ -1,0 +1,86 @@
+import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir, handleApiRequest, startApiServer, loadRuntimeConfig, FocusedFrontier, activatePublicCanarySources, buildCanaryOperatorSummary, runCanaryCollectionCycle, startCanaryCollectionLoop, createLogger, MetricsRegistry, WorkerSupervisor, processCollectedItem, FileBackedScraperStore, InMemoryObjectEvidenceStore, InMemoryScraperStore, hashContent, api, apiRestrictedMetadataApplyPlanSources, body, fixtureCapture, fixtureDelta, restrictedMetadataApplyPlanSources, seedEvidenceReplayFixture, source, telegramCapture } from "../apiTestHarness.ts";
+import type { AnalystClaimLedgerEntry, CanaryOperatorResponseForTest, CanaryReadinessResponseForTest, CanarySoakResponseForTest, RawCapture, SourceRecord } from "../apiTestHarness.ts";
+
+describe("api v1", () => {
+  test("records native live HTTP provenance for canary captures", async () => {
+    const store = new InMemoryScraperStore();
+    const objectStore = new InMemoryObjectEvidenceStore();
+    const frontier = new FocusedFrontier();
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => new Response(`
+        <rss><channel><item>
+          <title>APT42 native canary HTTP evidence</title>
+          <link>https://example.test/native/apt42</link>
+          <description>APT42 targeted energy sector victims with phishing infrastructure and malware. Indicator 203.0.113.88 observed.</description>
+          <pubDate>Sun, 24 May 2026 10:03:00 GMT</pubDate>
+        </item></channel></rss>
+      `, { status: 200, headers: { "content-type": "application/rss+xml" } })
+    });
+    try {
+      store.saveSource(source({
+        id: "src_native_canary_http",
+        name: "Native HTTP Canary",
+        type: "rss",
+        url: server.url.toString(),
+        status: "active",
+        metadata: { canaryPortfolio: true },
+        governance: {
+          approvalState: "approved",
+          approvalRequired: false,
+          metadataOnly: false,
+          approvedAt: "2026-05-24T10:00:00.000Z",
+          approvedBy: "operator",
+          policyVersion: "collection-policy:v1"
+        }
+      }));
+
+      const run = await runCanaryCollectionCycle({
+        store,
+        frontier,
+        objectStore,
+        maxSources: 1,
+        maxTasks: 1,
+        now: () => "2026-05-24T10:03:00.000Z"
+      });
+      expect(run).toMatchObject({
+        activationApplied: false,
+        completedTaskCount: 1,
+        failedTaskCount: 0,
+        insertedCaptureCount: 1,
+        incidentCount: 1
+      });
+      const capture = store.listCaptures()[0];
+      expect(capture?.storageKind).toBe("external_object");
+      expect(capture?.metadata.fetchMode).toBe("native_live_http");
+      expect(capture?.metadata.fetchProvenance).toMatchObject({
+        mode: "native_live_http",
+        adapterVersion: "public_canary_fetcher:v1",
+        httpStatus: 200,
+        bounded: true,
+        userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)"
+      });
+      expect(capture?.metadata.finalUrlHash).toEqual(expect.any(String));
+      expect(capture?.metadata.responseBytes).toEqual(expect.any(Number));
+      expect(store.getSource("src_native_canary_http")?.metadata?.lastCanaryFetchMode).toBe("native_live_http");
+      const operator = buildCanaryOperatorSummary({ store, frontier, generatedAt: "2026-05-24T10:03:00.000Z" });
+      expect(operator.evidenceStorage).toMatchObject({
+        productionEvidenceMode: "native_live_http",
+        nativeLiveHttpCaptureCount: 1,
+        injectedProofFetchCaptureCount: 0,
+        unknownFetchModeCaptureCount: 0,
+        externalObjectCaptureCount: 1
+      });
+      expect(operator.latestCaptures[0]).toMatchObject({
+        fetchProvenance: {
+          mode: "native_live_http",
+          httpStatus: 200,
+          finalUrlHash: expect.any(String),
+          bytesReceived: expect.any(Number)
+        }
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+});

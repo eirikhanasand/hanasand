@@ -1,0 +1,95 @@
+import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir, handleApiRequest, startApiServer, loadRuntimeConfig, FocusedFrontier, activatePublicCanarySources, buildCanaryOperatorSummary, runCanaryCollectionCycle, startCanaryCollectionLoop, createLogger, MetricsRegistry, WorkerSupervisor, processCollectedItem, FileBackedScraperStore, InMemoryObjectEvidenceStore, InMemoryScraperStore, hashContent, api, apiRestrictedMetadataApplyPlanSources, body, fixtureCapture, fixtureDelta, restrictedMetadataApplyPlanSources, seedEvidenceReplayFixture, source, telegramCapture } from "../apiTestHarness.ts";
+import type { AnalystClaimLedgerEntry, CanaryOperatorResponseForTest, CanaryReadinessResponseForTest, CanarySoakResponseForTest, RawCapture, SourceRecord } from "../apiTestHarness.ts";
+
+describe("api v1", () => {
+  test("wires restricted metadata status for actor victim country sector and unknown queries", async () => {
+    const store = new InMemoryScraperStore();
+    for (const item of [
+      source({ id: "src_runtime_tor", type: "tor_metadata", url: "http://runtime.onion/posts", accessMethod: "approved_proxy", status: "active", risk: "high", legalNotes: "Approved metadata-only fixture.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-05-01T00:00:00.000Z", approvedBy: "reviewer" } }),
+      source({ id: "src_runtime_i2p", type: "i2p_metadata", url: "http://runtime.i2p/posts", accessMethod: "approved_proxy", status: "active", risk: "high", legalNotes: "Approved metadata-only fixture.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-05-01T00:00:00.000Z", approvedBy: "reviewer" } }),
+      source({ id: "src_runtime_freenet", type: "freenet_metadata", url: "freenet:runtime/posts", accessMethod: "approved_proxy", status: "active", risk: "high", legalNotes: "Approved metadata-only fixture.", governance: { approvalRequired: true, approvalState: "approved", metadataOnly: true, approvedAt: "2026-05-01T00:00:00.000Z", approvedBy: "reviewer" } })
+    ]) store.saveSource(item);
+    const saveRestrictedCapture = (input: { id: string; sourceId: string; actor: string; victim: string; sector: string; country: string; data: string }) => store.saveCapture({
+      id: input.id,
+      sourceId: input.sourceId,
+      url: `http://redacted-${input.id}.onion/post`,
+      collectedAt: "2026-05-24T00:00:00.000Z",
+      contentHash: `hash_${input.id}`,
+      mediaType: "text/plain",
+      storageKind: "metadata_only",
+      metadata: {
+        adapter: "darknet_metadata",
+        leakSite: {
+          actorName: input.actor,
+          victimName: input.victim,
+          claimDate: "2026-05-20",
+          claimedSector: input.sector,
+          claimedCountry: input.country,
+          claimedDataCategory: input.data,
+          postStatus: "new",
+          sourceTimestamp: "2026-05-23T00:00:00.000Z",
+          urlHash: `urlhash_${input.id}`,
+          screenshotHash: `screenhash_${input.id}`,
+          confidence: 0.81
+        },
+        policyDecision: { id: `policy_${input.id}` }
+      },
+      sensitive: true
+    });
+    saveRestrictedCapture({ id: "akira", sourceId: "src_runtime_tor", actor: "Akira", victim: "Fjord Energy AS", sector: "Energy", country: "NO", data: "contracts" });
+    saveRestrictedCapture({ id: "sample", sourceId: "src_runtime_i2p", actor: "SampleLocker", victim: "Baltic Health AB", sector: "Healthcare", country: "SE", data: "patient-system metadata" });
+    saveRestrictedCapture({ id: "example", sourceId: "src_runtime_freenet", actor: "ExampleCrew", victim: "Nordic Manufacturing Oy", sector: "Manufacturing", country: "FI", data: "invoices" });
+
+    const queries = [
+      ["Akira", "actor", "partial_metadata", 1],
+      ["Fjord Energy", "victim", "partial_metadata", 1],
+      ["NO", "country", "partial_metadata", 1],
+      ["Manufacturing", "sector", "partial_metadata", 1],
+      ["totally unknown query", "actor", "approval_required", 0]
+    ] as const;
+
+    for (const [query, entityType, partialState, matchingResultCount] of queries) {
+      const response = await body(await handleApiRequest(api(`/v1/intel/search?q=${encodeURIComponent(query)}&entityType=${entityType}`), {
+        store,
+        frontier: new FocusedFrontier()
+      }));
+      expect(response.restrictedMetadata).toMatchObject({
+        query: {
+          query,
+          entityType,
+          matchingResultCount,
+          partialState
+        },
+        operationalSla: {
+          metadataOnly: true,
+          safeForApi: true
+        },
+        enforcement: {
+          metadataOnly: true,
+          safeForApi: true
+        },
+        auditReplay: {
+          metadataOnly: true,
+          safeForApi: true
+        },
+        connectorCertification: {
+          metadataOnly: true,
+          safeForApi: true,
+          dryRunOnly: true,
+          noLeakSerialization: {
+            passed: true
+          }
+        },
+        agent10ReleasePacket: {
+          runtimeProofName: "restricted_metadata_sla"
+        },
+        agent06EvidenceHandoffProof: { unsafeDetected: false }
+      });
+      const serialized = JSON.stringify(response.restrictedMetadata);
+      expect(serialized).not.toContain("http://");
+      expect(serialized).not.toContain(".onion");
+      expect(serialized).not.toContain("redacted-");
+      expect(serialized).not.toContain("patient-system metadata file");
+    }
+  });
+});
