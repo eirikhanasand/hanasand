@@ -506,6 +506,7 @@ export interface LiveProductSloDashboard {
       revenueImpactBlockerBoard: Array<Record<string, unknown>>;
       nonMonetizingWorkGuard: Record<string, unknown>;
     };
+    programDeReleaseBoard: Record<string, unknown>;
     blockerBuckets: Array<{
       blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
       owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -4377,10 +4378,16 @@ function buildPaidReleaseTruthBoard(input: {
       privateContent: false
     }
   };
+  const hostedPaidReadinessProof = buildHostedApifyPaidReadinessProof();
   const programDcReleaseGates = buildProgramDcPaidReleaseGates({
     parserRealSellableLift: input.parserRealSellableLift,
     graphPublicCorroborationPivotPacket: input.graphPublicCorroborationPivotPacket,
     darkMetadataPublicSupportLift4000: input.darkMetadataPublicSupportLift4000
+  });
+  const programDeReleaseBoard = buildProgramDePaidBetaReleaseBoard({
+    programDcReleaseGates,
+    observedMarketplaceTelemetry,
+    hostedPaidReadinessProof
   });
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
@@ -4412,8 +4419,9 @@ function buildPaidReleaseTruthBoard(input: {
     observedMarketplaceTelemetry,
     paidReleaseRunbook,
     buyerPaidReleaseVerdict,
-    hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
+    hostedPaidReadinessProof,
     programDcReleaseGates,
+    programDeReleaseBoard,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -4728,6 +4736,182 @@ function buildProgramDcPaidReleaseGates(input: {
       nextOwnerAction: "Agent 09: import observed Store analytics, pricing, payout, listing, refunds, and hosted proof before marketplace promotion or paid traffic."
     },
     revenueImpactBlockerBoard
+  };
+}
+
+function buildProgramDePaidBetaReleaseBoard(input: {
+  programDcReleaseGates: LiveProductSloDashboard["paidReleaseTruthBoard"]["programDcReleaseGates"];
+  observedMarketplaceTelemetry: LiveProductSloDashboard["paidReleaseTruthBoard"]["observedMarketplaceTelemetry"];
+  hostedPaidReadinessProof: HostedApifyPaidReadinessProof;
+}): Record<string, unknown> {
+  const current750Gate = input.programDcReleaseGates.current750Gate as Record<string, unknown>;
+  const current1000Gate = input.programDcReleaseGates.current1000Gate as Record<string, unknown>;
+  const current1000LocalSellableGate = input.programDcReleaseGates.current1000LocalSellableGate as Record<string, unknown>;
+  const hostedProofExecutionGate = input.programDcReleaseGates.hostedProofExecutionGate as Record<string, unknown>;
+  const marketplacePaidTrafficGate = input.programDcReleaseGates.marketplacePaidTrafficGate as Record<string, unknown>;
+  const nonMonetizingWorkGuard = input.programDcReleaseGates.nonMonetizingWorkGuard as Record<string, unknown>;
+  const telemetry = input.observedMarketplaceTelemetry.currentValues;
+  const hostedProof = input.hostedPaidReadinessProof.hostedProofImportPath;
+  const hosted100State = String(hostedProofExecutionGate.hosted100State ?? "hold");
+  const hosted300State = String(hostedProofExecutionGate.hosted300State ?? "hold");
+  const pricingObserved = telemetry.pricingState !== "external_unknown";
+  const payoutObserved = telemetry.payoutState !== "external_unknown";
+  const analyticsObserved = [
+    telemetry.storeViews,
+    telemetry.uniqueUsers,
+    telemetry.trialRuns,
+    telemetry.paidRuns,
+    telemetry.actorRuns,
+    telemetry.refunds
+  ].every((value) => typeof value === "number");
+  const noLeakObserved = hostedProof.observedFields.noLeakFailures === 0
+    || (hostedProof.observedFields.noLeakFailures === null && hostedProof.noSyntheticFallback === true);
+  const costPerUsefulRowObserved = typeof (current1000Gate as { observedCostPerUsefulRowUsd?: unknown }).observedCostPerUsefulRowUsd === "number";
+  const privatePaidBetaReady = current750Gate.state === "pass"
+    && current1000Gate.state === "pass"
+    && hosted100State === "pass"
+    && pricingObserved
+    && payoutObserved
+    && analyticsObserved
+    && noLeakObserved
+    && costPerUsefulRowObserved
+    && nonMonetizingWorkGuard.state === "pass";
+  const publicPaidTrafficReady = privatePaidBetaReady
+    && current1000LocalSellableGate.state === "pass"
+    && hosted300State === "pass"
+    && marketplacePaidTrafficGate.state === "pass"
+    && typeof telemetry.paidRuns === "number"
+    && typeof telemetry.refunds === "number";
+  const current750Gap = Number(current750Gate.sellableRowGap ?? 250);
+  const current1000UsefulGap = Number(current1000Gate.usefulRowGap ?? 393);
+  const current1000SellableGap = Number(current1000LocalSellableGate.sellableRowGap ?? 500);
+  return {
+    schemaVersion: "ti.program_de_paid_beta_release_truth.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "coordination_agent_10.md"],
+    decision: publicPaidTrafficReady ? "ready_for_public_paid_traffic" : privatePaidBetaReady ? "ready_for_private_paid_beta" : "hold_paid_release",
+    privatePaidBetaAllowedNow: privatePaidBetaReady,
+    publicPaidTrafficAllowedNow: publicPaidTrafficReady,
+    localProgressIsNotHostedRevenue: true,
+    thresholds: {
+      privatePaidBeta: {
+        current750Gate: "pass",
+        current1000UsefulRows: 1000,
+        hosted100ObservedProof: "pass",
+        pricingState: "observed",
+        payoutState: "observed",
+        analyticsVisibility: "observed",
+        noLeakProof: "pass",
+        costPerUsefulRowUsdAtMost: 0.05
+      },
+      publicPaidTraffic: {
+        current1000LocalSellableRows: 1000,
+        hosted300ObservedProof: "pass",
+        marketplacePaidTrafficGate: "pass",
+        conversionEvidence: "observed_paid_runs_and_refunds",
+        refunds: 0
+      }
+    },
+    privatePaidBetaGate: {
+      state: privatePaidBetaReady ? "pass" : "hold",
+      blockers: [
+        current750Gate.state === "pass" ? null : "current750_sellable_rows",
+        current1000Gate.state === "pass" ? null : "current1000_useful_rows",
+        hosted100State === "pass" ? null : "hosted100_observed_proof",
+        pricingObserved ? null : "pricing_state_external_unknown",
+        payoutObserved ? null : "payout_state_external_unknown",
+        analyticsObserved ? null : "analytics_external_unknown",
+        noLeakObserved ? null : "no_leak_proof_missing",
+        costPerUsefulRowObserved ? null : "cost_per_useful_row_unobserved"
+      ].filter(Boolean),
+      observed: {
+        current750State: current750Gate.state,
+        current750Gap,
+        current1000UsefulState: current1000Gate.state,
+        current1000UsefulGap,
+        hosted100State,
+        pricingState: telemetry.pricingState,
+        payoutState: telemetry.payoutState,
+        analyticsObserved,
+        noLeakObserved,
+        costPerUsefulRowUsd: current1000Gate.observedCostPerUsefulRowUsd ?? null
+      }
+    },
+    publicPaidTrafficGate: {
+      state: publicPaidTrafficReady ? "pass" : "hold",
+      blockers: [
+        privatePaidBetaReady ? null : "private_paid_beta_not_ready",
+        current1000LocalSellableGate.state === "pass" ? null : "current1000_local_sellable_rows",
+        hosted300State === "pass" ? null : "hosted300_observed_proof",
+        marketplacePaidTrafficGate.state === "pass" ? null : "marketplace_paid_traffic_gate",
+        typeof telemetry.paidRuns === "number" ? null : "paid_runs_unobserved",
+        typeof telemetry.refunds === "number" ? null : "refunds_unobserved"
+      ].filter(Boolean),
+      observed: {
+        current1000LocalSellableState: current1000LocalSellableGate.state,
+        current1000SellableGap,
+        hosted300State,
+        marketplacePaidTrafficState: marketplacePaidTrafficGate.state,
+        storeViews: telemetry.storeViews,
+        actorRuns: telemetry.actorRuns,
+        paidRuns: telemetry.paidRuns,
+        refunds: telemetry.refunds
+      }
+    },
+    topRevenueActions: [
+      {
+        rank: 1,
+        owner: "agent_09",
+        action: "import_hosted_100_and_300_observed_proof",
+        expectedRowLift: 0,
+        expectedConversionLift: "unblocks_private_beta_and_public_traffic_proof",
+        proofCommand: "bun run check:hosted-apify-paid-readiness",
+        state: hostedProofExecutionGate.state
+      },
+      {
+        rank: 2,
+        owner: "agent_03",
+        action: "close_current750_sellable_row_gap",
+        expectedRowLift: current750Gap,
+        expectedConversionLift: "unblocks_private_beta_local_gate",
+        proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts",
+        state: current750Gate.state
+      },
+      {
+        rank: 3,
+        owner: "agent_10",
+        action: "observe_current1000_useful_density_and_cost",
+        expectedRowLift: current1000UsefulGap,
+        expectedConversionLift: "prevents_low_value_private_beta",
+        proofCommand: "bun run check:paid-actor-release-audit",
+        state: current1000Gate.state
+      },
+      {
+        rank: 4,
+        owner: "agent_09",
+        action: "import_pricing_payout_and_analytics",
+        expectedRowLift: 0,
+        expectedConversionLift: "unblocks_marketplace_revenue_truth",
+        proofCommand: "manual_external_apify_console_or_api_verification_required",
+        state: pricingObserved && payoutObserved && analyticsObserved ? "pass" : "hold"
+      },
+      {
+        rank: 5,
+        owner: "agent_08",
+        action: "increase_public_corroboration_for_1000_row_path",
+        expectedRowLift: current1000SellableGap,
+        expectedConversionLift: "improves_source_diversity_and_sellable_density",
+        proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts",
+        state: current1000LocalSellableGate.state
+      }
+    ],
+    antiBloatGuard: {
+      coordinationOnlyCountsTowardRelease: false,
+      dtoOnlyCountsTowardRelease: false,
+      stixTaxiiOnlyCountsTowardRelease: false,
+      syntheticIndexRowsCountTowardRelease: false,
+      requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true,
+      source: "programDcReleaseGates.nonMonetizingWorkGuard"
+    }
   };
 }
 

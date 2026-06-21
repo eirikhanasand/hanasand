@@ -2322,6 +2322,7 @@ interface PaidReleaseTruthBoard {
     hostedProofExecutionGate: Record<string, unknown>;
     marketplacePaidTrafficGate: Record<string, unknown>;
   };
+  programDeReleaseBoard: Record<string, unknown>;
   blockerBuckets: Array<{
     blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
     owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -4548,6 +4549,14 @@ function paidReleaseTruthBoardForRows(
     usefulRowDensity,
     noLeakBlockedRows
   });
+  const programDeReleaseBoard = programDeReleaseBoardForOutput({
+    quality,
+    sellableRowRate,
+    usefulRowDensity,
+    noLeakBlockedRows,
+    programDcReleaseGates,
+    observedMarketplaceTelemetry
+  });
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
@@ -4652,6 +4661,7 @@ function paidReleaseTruthBoardForRows(
     buyerPaidReleaseVerdict,
     hostedPaidReadinessProof: hostedApifyPaidReadinessProof(),
     programDcReleaseGates,
+    programDeReleaseBoard,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -4769,6 +4779,131 @@ function programDcPaidReleaseGatesForOutput(input: {
       },
       noInventedExternalMetrics: true,
       nextOwnerAction: "Agent 09: import observed Store analytics, pricing, payout, listing, refunds, and hosted proof before marketplace promotion or paid traffic."
+    }
+  };
+}
+
+function programDeReleaseBoardForOutput(input: {
+  quality: ReturnType<typeof paidRowQualitySummary>;
+  sellableRowRate: number;
+  usefulRowDensity: number;
+  noLeakBlockedRows: number;
+  programDcReleaseGates: PaidReleaseTruthBoard["programDcReleaseGates"];
+  observedMarketplaceTelemetry: PaidReleaseTruthBoard["observedMarketplaceTelemetry"];
+}): Record<string, unknown> {
+  const current1000Gate = input.programDcReleaseGates.current1000Gate as Record<string, unknown>;
+  const marketplaceValues = input.observedMarketplaceTelemetry.currentValues;
+  const analyticsObserved = [
+    marketplaceValues.storeViews,
+    marketplaceValues.uniqueUsers,
+    marketplaceValues.trialRuns,
+    marketplaceValues.paidRuns,
+    marketplaceValues.actorRuns,
+    marketplaceValues.refunds
+  ].every((value) => typeof value === "number");
+  const pricingObserved = marketplaceValues.pricingState !== "external_unknown";
+  const payoutObserved = marketplaceValues.payoutState !== "external_unknown";
+  const noLeakObserved = input.noLeakBlockedRows === 0;
+  const current750State = input.quality.sellable >= 750 ? "pass" : "hold";
+  const current1000UsefulState = input.quality.usefulForBuyer >= 1000
+    && input.usefulRowDensity >= 0.65
+    && noLeakObserved
+    && typeof current1000Gate.observedCostPerUsefulRowUsd === "number"
+      ? "pass"
+      : "hold";
+  const privatePaidBetaReady = current750State === "pass"
+    && current1000UsefulState === "pass"
+    && pricingObserved
+    && payoutObserved
+    && analyticsObserved
+    && noLeakObserved;
+  const publicPaidTrafficReady = privatePaidBetaReady
+    && input.quality.sellable >= 1000
+    && input.programDcReleaseGates.marketplacePaidTrafficGate.state === "pass"
+    && typeof marketplaceValues.paidRuns === "number"
+    && typeof marketplaceValues.refunds === "number";
+  return {
+    schemaVersion: "ti.program_de_paid_beta_release_truth.v1",
+    routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
+    decision: publicPaidTrafficReady ? "ready_for_public_paid_traffic" : privatePaidBetaReady ? "ready_for_private_paid_beta" : "hold_paid_release",
+    privatePaidBetaAllowedNow: privatePaidBetaReady,
+    publicPaidTrafficAllowedNow: publicPaidTrafficReady,
+    localProgressIsNotHostedRevenue: true,
+    thresholds: {
+      privatePaidBeta: {
+        current750Gate: "pass",
+        current1000UsefulRows: 1000,
+        hosted100ObservedProof: "pass",
+        pricingState: "observed",
+        payoutState: "observed",
+        analyticsVisibility: "observed",
+        noLeakProof: "pass",
+        costPerUsefulRowUsdAtMost: 0.05
+      },
+      publicPaidTraffic: {
+        current1000LocalSellableRows: 1000,
+        hosted300ObservedProof: "pass",
+        marketplacePaidTrafficGate: "pass",
+        conversionEvidence: "observed_paid_runs_and_refunds",
+        refunds: 0
+      }
+    },
+    privatePaidBetaGate: {
+      state: privatePaidBetaReady ? "pass" : "hold",
+      blockers: [
+        current750State === "pass" ? null : "current750_sellable_rows",
+        current1000UsefulState === "pass" ? null : "current1000_useful_rows",
+        "hosted100_observed_proof",
+        pricingObserved ? null : "pricing_state_external_unknown",
+        payoutObserved ? null : "payout_state_external_unknown",
+        analyticsObserved ? null : "analytics_external_unknown",
+        noLeakObserved ? null : "no_leak_proof_missing",
+        typeof current1000Gate.observedCostPerUsefulRowUsd === "number" ? null : "cost_per_useful_row_unobserved"
+      ].filter(Boolean),
+      observed: {
+        currentSellableRows: input.quality.sellable,
+        current750Gap: Math.max(0, 750 - input.quality.sellable),
+        usefulRows: input.quality.usefulForBuyer,
+        current1000UsefulGap: Math.max(0, 1000 - input.quality.usefulForBuyer),
+        usefulRowDensity: input.usefulRowDensity,
+        pricingState: marketplaceValues.pricingState,
+        payoutState: marketplaceValues.payoutState,
+        analyticsObserved,
+        noLeakObserved
+      }
+    },
+    publicPaidTrafficGate: {
+      state: publicPaidTrafficReady ? "pass" : "hold",
+      blockers: [
+        privatePaidBetaReady ? null : "private_paid_beta_not_ready",
+        input.quality.sellable >= 1000 ? null : "current1000_local_sellable_rows",
+        "hosted300_observed_proof",
+        input.programDcReleaseGates.marketplacePaidTrafficGate.state === "pass" ? null : "marketplace_paid_traffic_gate",
+        typeof marketplaceValues.paidRuns === "number" ? null : "paid_runs_unobserved",
+        typeof marketplaceValues.refunds === "number" ? null : "refunds_unobserved"
+      ].filter(Boolean),
+      observed: {
+        current1000SellableGap: Math.max(0, 1000 - input.quality.sellable),
+        marketplacePaidTrafficState: input.programDcReleaseGates.marketplacePaidTrafficGate.state,
+        storeViews: marketplaceValues.storeViews,
+        actorRuns: marketplaceValues.actorRuns,
+        paidRuns: marketplaceValues.paidRuns,
+        refunds: marketplaceValues.refunds
+      }
+    },
+    topRevenueActions: [
+      { rank: 1, owner: "agent_09", action: "import_hosted_100_and_300_observed_proof", expectedRowLift: 0, expectedConversionLift: "unblocks_private_beta_and_public_traffic_proof", proofCommand: "bun run check:hosted-apify-paid-readiness", state: "hold" },
+      { rank: 2, owner: "agent_03", action: "close_current750_sellable_row_gap", expectedRowLift: Math.max(0, 750 - input.quality.sellable), expectedConversionLift: "unblocks_private_beta_local_gate", proofCommand: "bun run check:apify-threat-actor-monitor", state: current750State },
+      { rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost", expectedRowLift: Math.max(0, 1000 - input.quality.usefulForBuyer), expectedConversionLift: "prevents_low_value_private_beta", proofCommand: "bun run check:paid-actor-release-audit", state: current1000UsefulState },
+      { rank: 4, owner: "agent_09", action: "import_pricing_payout_and_analytics", expectedRowLift: 0, expectedConversionLift: "unblocks_marketplace_revenue_truth", proofCommand: "manual_external_apify_console_or_api_verification_required", state: pricingObserved && payoutObserved && analyticsObserved ? "pass" : "hold" },
+      { rank: 5, owner: "agent_08", action: "increase_public_corroboration_for_1000_row_path", expectedRowLift: Math.max(0, 1000 - input.quality.sellable), expectedConversionLift: "improves_source_diversity_and_sellable_density", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: input.quality.sellable >= 1000 ? "pass" : "hold" }
+    ],
+    antiBloatGuard: {
+      coordinationOnlyCountsTowardRelease: false,
+      dtoOnlyCountsTowardRelease: false,
+      stixTaxiiOnlyCountsTowardRelease: false,
+      syntheticIndexRowsCountTowardRelease: false,
+      requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
     }
   };
 }
