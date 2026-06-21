@@ -1,0 +1,115 @@
+import type { MarketplaceRow, PaidRowDecision } from "./types.ts";
+import { uniqueStrings } from "./utils.ts";
+import { isCorroboratedPublicFinding, whyWorthPayingFor } from "./paidDecision.ts";
+
+export function graphSellableSupportForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision">,
+  signals: NonNullable<MarketplaceRow["marketplaceGraphSignals"]>,
+  pack: NonNullable<MarketplaceRow["paidGraphSearchPack"]>
+): NonNullable<MarketplaceRow["graphSellableSupport"]> {
+  const sourceFamilyProofState: NonNullable<MarketplaceRow["graphSellableSupport"]>["sourceFamilyProofState"] = pack.sourceFamilyCorroboration === "corroborated"
+    ? "proven"
+    : pack.sourceFamilyCorroboration === "metadata_only"
+      ? "metadata_only"
+      : pack.sourceFamilyCorroboration === "single_source"
+        ? "single_source"
+        : "missing_public_support";
+  const contradictionState: NonNullable<MarketplaceRow["graphSellableSupport"]>["contradictionState"] = signals.contradictionState;
+  const repairOwner: NonNullable<MarketplaceRow["graphSellableSupport"]>["repairOwner"] =
+    contradictionState !== "none" ? "agent_07" :
+      sourceFamilyProofState === "missing_public_support" || sourceFamilyProofState === "single_source" ? "agent_04" :
+        sourceFamilyProofState === "metadata_only" ? "agent_05" :
+          decision.paidRowDecision === "coverage_gap_only" || decision.paidRowDecision === "hold" ? "agent_03" : "agent_08";
+  const relationshipSupport = signals.relationshipLinks[0] ?? pack.primaryEntity;
+  return {
+    schemaVersion: "ti.apify_graph_sellable_support.v1",
+    relationshipSupport,
+    supportingSourceFamily: pack.sourceFamilyCorroboration,
+    sourceFamilyProofState,
+    contradictionState,
+    caveat: contradictionState !== "none"
+      ? "relationship held for contradiction review"
+      : sourceFamilyProofState === "proven"
+        ? "relationship supports buyer action but does not count alone"
+        : "relationship is a repair/search pivot until source-family support exists",
+    nextBuyerSearch: pack.usefulNextSearches[0] ?? `${pack.primaryEntity} public corroboration`,
+    repairOwner,
+    supportsPaidDecision: decision.paidRowDecision ?? "hold",
+    countsTowardProductionSellableRows: false,
+    noLeak: true
+  };
+}
+
+export function paidGraphSearchPackForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">,
+  graphLift: Pick<MarketplaceRow, "graphQualityLiftEvidence">,
+  signals: NonNullable<MarketplaceRow["marketplaceGraphSignals"]>
+): NonNullable<MarketplaceRow["paidGraphSearchPack"]> {
+  const queryType = paidGraphQueryType(row);
+  const contradictionCaveatState: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["contradictionCaveatState"] = signals.contradictionState === "contradicted"
+    ? "contradicted"
+    : decision.paidRowDecision === "hold" || decision.paidRowDecision === "suppress"
+      ? "held"
+      : decision.paidRowDecision === "included_with_caveat" || signals.signalState === "needs_corroboration"
+        ? "caveated"
+        : "none";
+  const sourceFamilyCorroboration: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["sourceFamilyCorroboration"] = row.hasDarknetMetadata && !row.hasPublicChannelCoverage
+    ? "metadata_only"
+    : graphLift.graphQualityLiftEvidence?.sourceFamilyCorroborated
+      ? "corroborated"
+      : row.sourceFamilyCount === 1
+        ? "single_source"
+        : "unverified";
+  const exportEligibility: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["exportEligibility"] = graphLift.graphQualityLiftEvidence?.exportEligible
+    ? "eligible"
+    : contradictionCaveatState === "held" || sourceFamilyCorroboration === "metadata_only"
+      ? "not_exportable"
+      : "review_required";
+  const noisyPivots = uniqueStrings([
+    ...signals.rejectedPivotReasons,
+    ...row.reviewReasons.filter((reason) => reason.includes("alias") || reason.includes("unrelated") || reason.includes("hold")).slice(0, 3)
+  ]).slice(0, 6);
+  const usefulNextSearches = uniqueStrings([
+    ...row.nextSearchPivots,
+    ...signals.nextBuyerPivots,
+    ...row.relationshipPivots.filter((pivot) => !pivot.endsWith(":actor")).slice(0, 3)
+  ]).slice(0, 8);
+  return {
+    schemaVersion: "ti.apify_paid_graph_search_pack.v1",
+    queryType,
+    buyerIntent: buyerIntentForGraphPack(queryType, decision.paidRowDecision),
+    primaryEntity: row.actor,
+    normalizedAliases: uniqueStrings([row.actor, ...(row.aliases ?? [])]).slice(0, 6),
+    usefulNextSearches: usefulNextSearches.length > 0 ? usefulNextSearches : [`${row.actor} fresh public evidence`],
+    sourceFamilyCorroboration,
+    contradictionCaveatState,
+    suppressedNoisyPivots: noisyPivots,
+    exportEligibility,
+    whyWorthPayingForOrHeld: row.whyWorthPayingFor ?? whyWorthPayingFor(row, decision),
+    noLeak: true
+  };
+}
+
+function paidGraphQueryType(row: MarketplaceRow): NonNullable<MarketplaceRow["paidGraphSearchPack"]>["queryType"] {
+  if (row.reviewReasons.some((reason) => reason.includes("alias") || reason.includes("unrelated"))) return "alias_collision";
+  if (/lockbit|akira|clop|black basta|ransomhub|play|qilin|ransomware/i.test(`${row.actor} ${row.aliases?.join(" ") ?? ""}`)) return "ransomware_group";
+  if (row.rowType === "target" || row.relationshipPivotTypes.includes("victim")) return "victim";
+  if (row.relationshipPivotTypes.includes("sector")) return "sector";
+  if (row.relationshipPivotTypes.includes("country")) return "country";
+  if (row.rowType === "ttp" || row.relationshipPivotTypes.includes("ttp")) return "ttp";
+  if (row.relationshipPivotTypes.includes("tool")) return "tool";
+  if (row.relationshipPivotTypes.includes("campaign")) return "campaign";
+  if (row.status === "searching" || row.coverageStatus === "no_evidence") return "unknown";
+  return "actor";
+}
+
+function buyerIntentForGraphPack(queryType: NonNullable<MarketplaceRow["paidGraphSearchPack"]>["queryType"], decision: PaidRowDecision | undefined): string {
+  if (queryType === "unknown") return "avoid default actor output while keeping next searches honest";
+  if (queryType === "alias_collision") return "suppress noisy aliases before they create paid false positives";
+  if (decision === "sellable") return "pivot from a paid finding into the next useful search or export review";
+  if (decision === "included_with_caveat") return "use as a lead while collecting corroboration";
+  return "hold until evidence, provenance, and buyer action are strong enough";
+}
+
