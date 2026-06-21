@@ -78,7 +78,7 @@ type EvidenceSourceFamily = Exclude<MarketplaceRow["sourceType"], "system">;
 type ProgramDdCurrentSellable750Lift = {
   schemaVersion: "ti.program_dd_current_sellable_750_lift.v1";
   owner: "agent_03";
-  sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+  sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
   baseline: { sellableRows: 500; sellableFindings: 413; sellableSourceProvenanceRows: 87; sourceProvenanceShare: 0.174 };
   acceptedCurrentRowsCount: number;
   sourceProvenanceRowsConvertedToFindings: number;
@@ -1206,7 +1206,7 @@ interface ParserRealSellableLift {
     currentSellable500Lift: {
       schemaVersion: "ti.program_dc_current_sellable_500_lift.v1";
       owner: "agent_03";
-      sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
+      sourcePackets: Array<"darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750" | "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000" | "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff" | "agent04_high_value_public_source_replacements" | "existing_public_source_rows">;
       baseline: {
         sellableRows: 300;
         sellableFindings: 193;
@@ -6929,7 +6929,7 @@ function currentSellable750LiftPacket(): ProgramDdCurrentSellable750Lift {
   return {
     schemaVersion: "ti.program_dd_current_sellable_750_lift.v1",
     owner: "agent_03",
-    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750", "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
     baseline: { sellableRows: 500, sellableFindings: 413, sellableSourceProvenanceRows: 87, sourceProvenanceShare: 0.174 },
     acceptedCurrentRowsCount,
     sourceProvenanceRowsConvertedToFindings,
@@ -6957,7 +6957,7 @@ function currentSellable750LiftPacket(): ProgramDdCurrentSellable750Lift {
         additionalRowsNeeded: Math.max(0, 1000 - currentSellableRowsAfterAdmission),
         minimumTrueFindingsAt1000: 700,
         maximumSourceProvenanceRowsAt1000: 250,
-        sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750.recheck", "agent08_public_corroboration_expansion", "agent04_high_value_public_source_replacements", "existing_clear_web_current_evidence"],
+        sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000", "agent08_public_corroboration_expansion", "agent04_high_value_public_source_replacements", "existing_clear_web_current_evidence"],
         projectedRowsCountTowardCurrent: false
       }
     },

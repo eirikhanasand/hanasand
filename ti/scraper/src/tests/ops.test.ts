@@ -1781,6 +1781,14 @@ describe("ops controls", () => {
         projectedRowsCountTowardCurrent: false
       }
     });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellable750Lift.sourcePackets).toEqual(expect.arrayContaining([
+      "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750",
+      "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000",
+      "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff"
+    ]));
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.currentSellable750Lift.targetProgress.next1000Plan.sourcePackets).toEqual(expect.arrayContaining([
+      "darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable1000"
+    ]));
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.remainingBlockers.every((row) => row.countsTowardCurrentSellableRows === false)).toBe(true);
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.noLeakBoundary).toMatchObject({
       rawBodiesExposed: false,
@@ -2161,15 +2169,15 @@ describe("ops controls", () => {
       schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1",
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
-      candidateCount: 750,
-      previousCurrentChargeableRows: 500,
-      currentChargeableRows: 750,
+      candidateCount: 1000,
+      previousCurrentChargeableRows: 750,
+      currentChargeableRows: 1000,
       newlyChargeableRows: 250,
       projectedAfterPublicSupportRows: 0,
       blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 750,
-        newlyChargeableSinceProgramCw: 700,
+        currentChargeableCount: 1000,
+        newlyChargeableSinceProgramCw: 950,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo100: 0,
@@ -2178,8 +2186,8 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 750,
-        newlyChargeableSinceProgramDa: 650,
+        currentChargeableCount: 1000,
+        newlyChargeableSinceProgramDa: 900,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo150: 0,
@@ -2188,8 +2196,8 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 750,
-        newlyChargeableSinceProgramDc: 600,
+        currentChargeableCount: 1000,
+        newlyChargeableSinceProgramDc: 850,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo250: 0,
@@ -2197,27 +2205,37 @@ describe("ops controls", () => {
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable500: {
-        currentChargeableCount: 750,
+        currentChargeableCount: 1000,
         newlyChargeableSinceProgramDd: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo500: 0,
-        currentGapTo1000: 250,
+        currentGapTo1000: 0,
         parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable750: {
-        currentChargeableCount: 750,
+        currentChargeableCount: 1000,
         newlyChargeableSinceProgramDe: 250,
         projectedAfterPublicSupportCount: 0,
         blockedOrRetiredCount: 0,
         currentGapTo750: 0,
-        currentGapTo1000: 250,
+        currentGapTo1000: 0,
+        parserHandoffRowCount: 250,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable1000: {
+        currentChargeableCount: 1000,
+        newlyChargeableSinceProgramFg: 250,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 0,
+        currentGapTo1000: 0,
+        currentGapTo4000: 3000,
         parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 750,
+        current_sellable_public_supported: 1000,
         projected_after_public_support: 0,
         blocked_not_chargeable: 0
       },
