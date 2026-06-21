@@ -548,6 +548,51 @@ export interface EvidenceSearchableSourceMetadataPromotionGateRepository {
   ): EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus;
 }
 
+export interface EvidenceSearchableSourceMetadataPromotionConsumerReplay {
+  schemaVersion: "ti.evidence_searchable_source_metadata_promotion_consumer_replay.v1";
+  generatedAt: string;
+  replayId: string;
+  sourcePromotionGateRepository: EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus["schemaVersion"];
+  productSurface: "apify_public_threat_actor_monitor";
+  actorBuild: "0.6.4";
+  dryRun: true;
+  willWriteActorDataset: false;
+  willWritePublicAnswerCache: false;
+  counts: {
+    receiptRows: number;
+    readyDirectPublicRows: number;
+    blockedMetadataRows: number;
+    publicSupportReplayRequired: number;
+  };
+  receipts: EvidenceSearchableSourceMetadataPromotionConsumerReplayReceipt[];
+  policy: {
+    directPublicRowsMayEnterActorConsumer: true;
+    restrictedMetadataRowsRequireCompletedPublicSupportReplay: true;
+    repositoryPersistenceRequiredBeforeProductionWrite: true;
+    productionWritesDisabled: true;
+    restrictedRowsMetadataOnly: true;
+  };
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceSearchableSourceMetadataPromotionConsumerReplayReceipt {
+  receiptId: string;
+  gateRowId: string;
+  documentId: string;
+  sourceId?: string;
+  captureId?: string;
+  claimLedgerEntryId?: string;
+  sourceFamily: EvidenceSearchableSourceMetadataPromotionGateDecisionRow["source_family"];
+  promotionState: EvidenceSearchableSourceMetadataPromotionGateDecisionRow["promotion_state"];
+  consumerAction: "actor_dataset_candidate_ready" | "await_public_support_replay";
+  canWriteActorDatasetNow: false;
+  canWritePublicAnswerCacheNow: false;
+  requiredEvidence: EvidenceSearchableSourceMetadataPromotionGateDecisionRow["required_evidence"];
+  buyerVisibleFields: EvidenceSearchableSourceMetadataPromotionGateDecisionRow["buyer_visible_fields"];
+  blocker?: "public_support_repository_replay_required" | "promotion_gate_repository_disabled";
+  noLeak: true;
+}
+
 export interface EvidenceSearchReadModelPromotionReplay {
   schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
   generatedAt: string;
@@ -2283,6 +2328,66 @@ class DisabledEvidenceSearchableSourceMetadataPromotionGateRepository implements
 
 export function createEvidenceSearchableSourceMetadataPromotionGateRepository(): EvidenceSearchableSourceMetadataPromotionGateRepository {
   return new DisabledEvidenceSearchableSourceMetadataPromotionGateRepository();
+}
+
+export function buildEvidenceSearchableSourceMetadataPromotionConsumerReplay(
+  rows: EvidenceSearchableSourceMetadataPromotionGatePostgresRows,
+  repositoryStatus: EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus,
+  input: { generatedAt?: string } = {}
+): EvidenceSearchableSourceMetadataPromotionConsumerReplay {
+  const run = rows.promotion_gate_runs[0];
+  const generatedAt = input.generatedAt ?? repositoryStatus.generatedAt ?? run?.generated_at ?? nowIso();
+  const receipts: EvidenceSearchableSourceMetadataPromotionConsumerReplayReceipt[] = rows.promotion_gate_rows.map((row) => {
+    const readyDirect = row.promotion_state === "eligible_direct_public_support" && row.can_promote_now;
+    return {
+      receiptId: stableId("evidence-searchable-source-promotion-consumer-replay", `${row.gate_id}:${row.gate_row_id}`),
+      gateRowId: row.gate_row_id,
+      documentId: row.document_id,
+      sourceId: row.source_id,
+      captureId: row.capture_id,
+      claimLedgerEntryId: row.claim_ledger_entry_id,
+      sourceFamily: row.source_family,
+      promotionState: row.promotion_state,
+      consumerAction: readyDirect ? "actor_dataset_candidate_ready" : "await_public_support_replay",
+      canWriteActorDatasetNow: false,
+      canWritePublicAnswerCacheNow: false,
+      requiredEvidence: [...row.required_evidence],
+      buyerVisibleFields: [...row.buyer_visible_fields],
+      blocker: readyDirect
+        ? "promotion_gate_repository_disabled"
+        : "public_support_repository_replay_required",
+      noLeak: true
+    };
+  });
+
+  return {
+    schemaVersion: "ti.evidence_searchable_source_metadata_promotion_consumer_replay.v1",
+    generatedAt,
+    replayId: stableId("evidence-searchable-source-promotion-consumer-replay", `${run?.gate_id ?? "missing"}:${generatedAt}`),
+    sourcePromotionGateRepository: repositoryStatus.schemaVersion,
+    productSurface: run?.product_surface ?? "apify_public_threat_actor_monitor",
+    actorBuild: run?.actor_build ?? "0.6.4",
+    dryRun: true,
+    willWriteActorDataset: false,
+    willWritePublicAnswerCache: false,
+    counts: {
+      receiptRows: receipts.length,
+      readyDirectPublicRows: receipts.filter((receipt) => receipt.consumerAction === "actor_dataset_candidate_ready").length,
+      blockedMetadataRows: receipts.filter((receipt) => receipt.consumerAction === "await_public_support_replay").length,
+      publicSupportReplayRequired: receipts.filter((receipt) =>
+        receipt.requiredEvidence.includes("public_support_repository_replay")
+      ).length
+    },
+    receipts,
+    policy: {
+      directPublicRowsMayEnterActorConsumer: true,
+      restrictedMetadataRowsRequireCompletedPublicSupportReplay: true,
+      repositoryPersistenceRequiredBeforeProductionWrite: true,
+      productionWritesDisabled: true,
+      restrictedRowsMetadataOnly: true
+    },
+    safeOutput: SAFE_OUTPUT
+  };
 }
 
 export function buildEvidenceSearchReadModelPromotionReplay(

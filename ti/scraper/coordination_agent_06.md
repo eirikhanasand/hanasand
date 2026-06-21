@@ -250,6 +250,15 @@ Progress update 2026-06-21 08:13 CEST:
 - Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, and `bun run check:route-inventory`.
 - Continue next with completed public-support replay receipts when Agent 01/04/07 produce completed support rows, or a promotion-gate-to-Actor-consumer replay receipt once the read model has real completed rows.
 
+Progress update 2026-06-21 09:45 CEST:
+- Continued with the dry-run Actor/public-answer consumer replay receipts from searchable metadata promotion-gate audit rows.
+- Added `ti.evidence_searchable_source_metadata_promotion_consumer_replay.v1` on `/v1/evidence/cutover-report.readModelCutover.searchableSourceMetadataPromotionConsumerReplay`.
+- Direct public rows now produce `actor_dataset_candidate_ready` receipts, while restricted/dark metadata rows produce `await_public_support_replay` receipts until public-support evidence replays through the read model.
+- The replay writes zero Actor dataset rows and zero public-answer cache entries; production writes stay blocked behind repository persistence and explicit enablement.
+- Restricted/leak material remains metadata-only: receipts contain only ids, source family, promotion state, required evidence, buyer-visible field names, blockers, and no-leak flags.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, and `bun run check:route-inventory`.
+- Continue next with completed public-support replay receipt ingestion when Agent 01/04/07 produce completed support rows, so blocked metadata rows can be promoted only after corroborated replay.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

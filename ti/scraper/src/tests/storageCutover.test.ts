@@ -66,6 +66,7 @@ import {
   createEvidenceActorDatasetSourceGapConsumerQueueAuditRepository,
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
+  buildEvidenceSearchableSourceMetadataPromotionConsumerReplay,
   buildEvidenceSearchableSourceMetadataPromotionGate,
   createEvidenceSearchableSourceMetadataPromotionGateRepository,
   buildEvidenceSearchableSourceMetadataPublicSupportQueue,
@@ -2292,6 +2293,65 @@ describe("evidence storage cutover", () => {
     expect(searchableSourceMetadataPromotionGateRepositorySerialized).not.toContain(restrictedRaw);
     expect(searchableSourceMetadataPromotionGateRepositorySerialized).not.toContain("tenant/source/private-key");
     expect(searchableSourceMetadataPromotionGateRepositorySerialized).not.toContain(".onion");
+
+    const searchableSourceMetadataPromotionConsumerReplay = buildEvidenceSearchableSourceMetadataPromotionConsumerReplay(
+      searchableSourceMetadataPromotionGateRows,
+      searchableSourceMetadataPromotionGateRepositoryStatus,
+      { generatedAt: "2026-05-24T21:44:44.500Z" }
+    );
+    expect(searchableSourceMetadataPromotionConsumerReplay).toMatchObject({
+      schemaVersion: "ti.evidence_searchable_source_metadata_promotion_consumer_replay.v1",
+      sourcePromotionGateRepository: "ti.evidence_searchable_source_metadata_promotion_gate_repository.v1",
+      productSurface: "apify_public_threat_actor_monitor",
+      actorBuild: "0.6.4",
+      dryRun: true,
+      willWriteActorDataset: false,
+      willWritePublicAnswerCache: false,
+      counts: {
+        receiptRows: searchableSourceMetadataPromotionGateRows.promotion_gate_rows.length,
+        readyDirectPublicRows: searchableSourceMetadataPromotionGateRows.promotion_gate_rows.filter((row) =>
+          row.promotion_state === "eligible_direct_public_support"
+        ).length,
+        blockedMetadataRows: searchableSourceMetadataPromotionGateRows.promotion_gate_rows.filter((row) =>
+          row.promotion_state === "blocked_public_support_required"
+        ).length,
+        publicSupportReplayRequired: searchableSourceMetadataPromotionGateRows.promotion_gate_rows.filter((row) =>
+          row.required_evidence.includes("public_support_repository_replay")
+        ).length
+      },
+      policy: {
+        directPublicRowsMayEnterActorConsumer: true,
+        restrictedMetadataRowsRequireCompletedPublicSupportReplay: true,
+        repositoryPersistenceRequiredBeforeProductionWrite: true,
+        productionWritesDisabled: true,
+        restrictedRowsMetadataOnly: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    expect(searchableSourceMetadataPromotionConsumerReplay.receipts.some((receipt) =>
+      receipt.consumerAction === "actor_dataset_candidate_ready" &&
+      receipt.canWriteActorDatasetNow === false &&
+      receipt.blocker === "promotion_gate_repository_disabled" &&
+      receipt.noLeak === true
+    )).toBe(true);
+    expect(searchableSourceMetadataPromotionConsumerReplay.receipts.some((receipt) =>
+      receipt.consumerAction === "await_public_support_replay" &&
+      receipt.canWriteActorDatasetNow === false &&
+      receipt.requiredEvidence.includes("public_support_repository_replay") &&
+      receipt.blocker === "public_support_repository_replay_required" &&
+      receipt.noLeak === true
+    )).toBe(true);
+    const searchableSourceMetadataPromotionConsumerReplaySerialized = JSON.stringify(searchableSourceMetadataPromotionConsumerReplay);
+    expect(searchableSourceMetadataPromotionConsumerReplaySerialized).not.toContain(restrictedRaw);
+    expect(searchableSourceMetadataPromotionConsumerReplaySerialized).not.toContain("tenant/source/private-key");
+    expect(searchableSourceMetadataPromotionConsumerReplaySerialized).not.toContain(".onion");
 
     const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(backendWriteSet, {
       query: "APT29",
