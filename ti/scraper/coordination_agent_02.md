@@ -45,6 +45,13 @@ Side-tool support priority:
 - Green so far: `bun run check` and `bun test src/tests/schedulerProduction.test.ts`.
 - Next: wire this loop receipt into a real worker runner or route-visible operations surface only when the shared paid-row/hosted-proof worktree is stable.
 
+## Progress - 2026-06-21 07:17 CEST
+
+- Wired the disabled source-gap worker loop into `POST /v1/frontier/apply-plan` as opt-in `applyPlan.sourceGapWorkerLoopPreview`.
+- The preview exposes worker partitions, drain behavior, blocked worker entry state, commit policy, and `sleep_until_next_poll` without leasing, acknowledging, enqueueing, fetching, or mutating runs.
+- Kept the lower-level `applyPlan.sourceGapEnqueueRehearsal` intact and added the new request flag to the public dry-run contract.
+- Next: continue toward a real disabled worker runner only after current paid-row/source-pack gate edits are committed and checks stay green.
+
 ## Progress - 2026-06-21 01:13 CEST
 
 - Added a disabled-by-default source-gap enqueue adapter preview under `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness.enqueueAdapterPreview`.

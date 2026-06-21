@@ -2143,6 +2143,7 @@ export interface SchedulerApplyPlanApiRequestDto {
   selectedActions?: SchedulerRepairAction[];
   includeExecutionPreview?: boolean;
   includeSourceGapEnqueueRehearsal?: boolean;
+  includeSourceGapWorkerLoopPreview?: boolean;
   hostMemoryMb?: number;
   dbConnectionUtilization?: number;
   workerUtilization?: number;
@@ -2227,6 +2228,9 @@ export interface SchedulerApplyPlanApiResponseDto {
   executionPreview?: SchedulerApplyPlanExecutionPreview;
   sourceGapEnqueueRehearsal?: SchedulerSourceGapEnqueueRehearsalReceipt & {
     routeField: "applyPlan.sourceGapEnqueueRehearsal";
+  };
+  sourceGapWorkerLoopPreview?: SchedulerSourceGapWorkerLoopReceipt & {
+    routeField: "applyPlan.sourceGapWorkerLoopPreview";
   };
   canaryControlPlane: {
     dryRun: true;

@@ -5563,7 +5563,8 @@ export function buildSchedulerApplyPlan(input: {
 export function buildSchedulerApplyPlanApiResponse(
   plan: SchedulerApplyPlanReport,
   request: SchedulerApplyPlanApiRequestDto = {},
-  sourceGapEnqueueRehearsal?: SchedulerSourceGapEnqueueRehearsalReceipt
+  sourceGapEnqueueRehearsal?: SchedulerSourceGapEnqueueRehearsalReceipt,
+  sourceGapWorkerLoopPreview?: SchedulerSourceGapWorkerLoopReceipt
 ): SchedulerApplyPlanApiResponseDto {
   const selectedActions = new Set(request.selectedActions ?? plan.steps.map((step) => step.action));
   const items = plan.steps
@@ -5606,6 +5607,12 @@ export function buildSchedulerApplyPlanApiResponse(
           routeField: "applyPlan.sourceGapEnqueueRehearsal"
         }
       : undefined,
+    sourceGapWorkerLoopPreview: request.includeSourceGapWorkerLoopPreview && sourceGapWorkerLoopPreview
+      ? {
+          ...sourceGapWorkerLoopPreview,
+          routeField: "applyPlan.sourceGapWorkerLoopPreview"
+        }
+      : undefined,
     canaryControlPlane: schedulerApplyPlanCanaryControlPlane(items),
     promotionPacketLink: {
       field: "schedulerApplyPlanId",
@@ -5631,6 +5638,7 @@ export function schedulerApplyPlanApiContract(): SchedulerApplyPlanApiContractDt
         { name: "selectedActions", type: "SchedulerRepairAction[]", required: false, description: "Optional action filter for compact Agent 09 responses." },
         { name: "includeExecutionPreview", type: "boolean", required: false, description: "Includes a dry-run preview that explicitly reports no mutation, leasing, acknowledgement, or run changes." },
         { name: "includeSourceGapEnqueueRehearsal", type: "boolean", required: false, description: "Includes the guarded daily Actor source-gap enqueue rehearsal receipt; default output is blocked/no-mutation unless every promotion gate is explicit." },
+        { name: "includeSourceGapWorkerLoopPreview", type: "boolean", required: false, description: "Includes the disabled source-gap worker loop receipt with partition, drain, and next-action state; the API preview never leases, acknowledges, fetches, or mutates runs." },
         { name: "hostMemoryMb", type: "number", required: false, description: "Host memory used to compute emergency-brake headroom for the 1 TB deployment target." },
         { name: "dbConnectionUtilization", type: "number", required: false, description: "Current DB connection utilization ratio for headroom warnings." },
         { name: "workerUtilization", type: "number", required: false, description: "Current worker utilization ratio for headroom warnings." },
@@ -5638,7 +5646,7 @@ export function schedulerApplyPlanApiContract(): SchedulerApplyPlanApiContractDt
       ]
     },
     response: {
-      fields: ["contract", "applyPlan", "applyPlan.sourceGapEnqueueRehearsal"],
+      fields: ["contract", "applyPlan", "applyPlan.sourceGapEnqueueRehearsal", "applyPlan.sourceGapWorkerLoopPreview"],
       itemFields: ["stepId", "action", "dryRun", "execution", "riskClass", "operatorApprovalRequired", "affectedCount", "reasonCodes", "preconditions", "expectedQueueRunDelta", "rollback", "apiWarningCode", "sourceIds", "canaryControlPlane"],
       forbiddenMutationFields: ["leasedTask", "acknowledgedTask", "mutatedRun", "updatedSource", "startedWorker", "rawQueueRow", "dbTransaction", "cursorPayload", "replayPayload"],
       actions: ["release_expired_leases", "cancel_abandoned_runs", "requeue_transient_failures", "delay_low_priority_sweeps", "pause_noisy_source_queues", "quarantine_permanently_failing_sources", "trigger_emergency_brake"],

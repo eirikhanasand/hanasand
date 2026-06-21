@@ -17,6 +17,7 @@ import {
   buildSchedulerWorkerSoakMigration,
   InMemorySchedulerQueueRepository,
   rehearseSchedulerSourceGapEnqueue,
+  runSchedulerSourceGapWorkerLoop,
   schedulerApplyPlanApiContract,
   type SchedulerApplyPlanApiResponseDto,
   type SchedulerApplyPlanApiRequestDto,
@@ -73,6 +74,7 @@ export function handleFrontierApplyPlanRoute(input: {
     selectedActions: input.request.selectedActions as SchedulerRepairAction[] | undefined,
     includeExecutionPreview: input.request.includeExecutionPreview === true,
     includeSourceGapEnqueueRehearsal: input.request.includeSourceGapEnqueueRehearsal === true,
+    includeSourceGapWorkerLoopPreview: input.request.includeSourceGapWorkerLoopPreview === true,
     hostMemoryMb: numberOrUndefined(input.request.hostMemoryMb),
     dbConnectionUtilization: numberOrUndefined(input.request.dbConnectionUtilization),
     workerUtilization: numberOrUndefined(input.request.workerUtilization),
@@ -110,19 +112,28 @@ export function handleFrontierApplyPlanRoute(input: {
             sources: input.sources,
             now
           })
+        : undefined, request.includeSourceGapWorkerLoopPreview
+        ? buildSourceGapWorkerLoopPreviewForApplyPlan({
+            queued: input.queued,
+            leased: input.leased,
+            deadLetters: input.deadLetters,
+            runs: input.runs,
+            sources: input.sources,
+            now
+          })
         : undefined)
     }
   };
 }
 
-function buildSourceGapEnqueueRehearsalForApplyPlan(input: {
+function buildDailyActorRunPlanForApplyPlan(input: {
   queued: CollectionTask[];
   leased: CollectionTask[];
   deadLetters: FrontierAck[];
   runs: CollectionRun[];
   sources: SourceRecord[];
   now: Date;
-}): NonNullable<SchedulerApplyPlanApiResponseDto["sourceGapEnqueueRehearsal"]> {
+}) {
   const queueEconomics = buildSchedulerQueueEconomics({
     queued: input.queued,
     leased: input.leased,
@@ -229,9 +240,41 @@ function buildSourceGapEnqueueRehearsalForApplyPlan(input: {
     workerQueueCutover,
     now: input.now
   });
+  return dailyPlan;
+}
+
+function buildSourceGapEnqueueRehearsalForApplyPlan(input: {
+  queued: CollectionTask[];
+  leased: CollectionTask[];
+  deadLetters: FrontierAck[];
+  runs: CollectionRun[];
+  sources: SourceRecord[];
+  now: Date;
+}): NonNullable<SchedulerApplyPlanApiResponseDto["sourceGapEnqueueRehearsal"]> {
+  const dailyPlan = buildDailyActorRunPlanForApplyPlan(input);
   return {
     ...rehearseSchedulerSourceGapEnqueue(dailyPlan, new InMemorySchedulerQueueRepository(), { now: input.now }),
     routeField: "applyPlan.sourceGapEnqueueRehearsal"
+  };
+}
+
+function buildSourceGapWorkerLoopPreviewForApplyPlan(input: {
+  queued: CollectionTask[];
+  leased: CollectionTask[];
+  deadLetters: FrontierAck[];
+  runs: CollectionRun[];
+  sources: SourceRecord[];
+  now: Date;
+}): NonNullable<SchedulerApplyPlanApiResponseDto["sourceGapWorkerLoopPreview"]> {
+  const dailyPlan = buildDailyActorRunPlanForApplyPlan(input);
+  return {
+    ...runSchedulerSourceGapWorkerLoop(dailyPlan, new InMemorySchedulerQueueRepository(), {
+      loopId: "frontier_apply_plan_source_gap_loop_preview",
+      workerId: "frontier_apply_plan_source_gap_worker_preview",
+      workerPartition: "background_source_sweep",
+      now: input.now
+    }),
+    routeField: "applyPlan.sourceGapWorkerLoopPreview"
   };
 }
 

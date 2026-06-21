@@ -9950,6 +9950,7 @@ describe("api v1", () => {
         scenario: "api_scheduler_contract",
         includeExecutionPreview: true,
         includeSourceGapEnqueueRehearsal: true,
+        includeSourceGapWorkerLoopPreview: true,
         workerUtilization: 0.96,
         dbConnectionUtilization: 0.91,
         maxApiP95QueueAgeSeconds: 120
@@ -9981,6 +9982,16 @@ describe("api v1", () => {
         mutatedRunCount: number;
         mutatedTaskCount: number;
         repositoryCalls: Array<{ executed: boolean; skippedReason?: string }>;
+      };
+      sourceGapWorkerLoopPreview: {
+        schemaVersion: string;
+        routeField: string;
+        disabledByDefault: boolean;
+        willMutate: boolean;
+        nextLoopAction: string;
+        commitPolicy: string;
+        partitionPlan: Array<{ workerPartition: string; drainBehavior: string; taskIds: string[] }>;
+        entry: { decision: string; nextWorkerAction: string };
       };
       promotionPacketLink: { field: string };
     };
@@ -10045,11 +10056,39 @@ describe("api v1", () => {
     expect(applyPlan.sourceGapEnqueueRehearsal.blockedReasons).toEqual(expect.arrayContaining(["apply_not_requested", "source_gap_enqueue_flag_disabled", "postgres_queue_disabled"]));
     expect(applyPlan.sourceGapEnqueueRehearsal.repositoryCalls.length).toBeGreaterThan(0);
     expect(applyPlan.sourceGapEnqueueRehearsal.repositoryCalls.every((call) => call.executed === false && call.skippedReason === "blocked_by_preflight")).toBe(true);
+    expect(applyPlan.sourceGapWorkerLoopPreview).toMatchObject({
+      schemaVersion: "ti.scheduler_source_gap_worker_loop.v1",
+      routeField: "applyPlan.sourceGapWorkerLoopPreview",
+      disabledByDefault: true,
+      willMutate: false,
+      nextLoopAction: "sleep_until_next_poll",
+      commitPolicy: "return_blocked_receipt",
+      entry: {
+        decision: "blocked_before_repository",
+        nextWorkerAction: "return_without_mutation"
+      }
+    });
+    expect(applyPlan.sourceGapWorkerLoopPreview.partitionPlan).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        workerPartition: "interactive_actor_search",
+        drainBehavior: "finish_or_checkpoint_before_shutdown",
+        taskIds: expect.arrayContaining(["dryrun_interactive_live_search_tier_100_apt29_safe_public_sources"])
+      }),
+      expect.objectContaining({
+        workerPartition: "public_channel_window",
+        drainBehavior: "checkpoint_and_requeue_by_reuse_key"
+      }),
+      expect.objectContaining({
+        workerPartition: "restricted_metadata_approval",
+        drainBehavior: "metadata_review_hold"
+      })
+    ]));
     expect(applyPlan.promotionPacketLink.field).toBe("schedulerApplyPlanId");
     expect(afterQueued).toEqual(beforeQueued);
     expect(afterLeased).toEqual(beforeLeased);
     expect(JSON.stringify(response.applyPlan)).not.toContain("dbTransaction");
     expect(JSON.stringify(response.applyPlan)).not.toContain("cursorPayload");
+    expect(JSON.stringify(response.applyPlan)).not.toContain("leasedTask");
   });
 
   test("rejects invalid scheduler apply-plan actions without mutating frontier state", async () => {
