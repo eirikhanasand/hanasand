@@ -4,8 +4,8 @@ import { nowIso, stableId } from "../utils.ts";
 import { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 import { detachedState, externalize, fetchItems, health, taskFor } from "./canaryHelpers.ts";
-export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts";
-export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
+import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
+export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
 import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCollectionOptions } from "./canaryCollectionTypes.ts";
@@ -20,7 +20,7 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   options.store.savePlan?.({ id: planId, requestId: "req_public_canary", createdAt: generatedAt, tasks, request: { query: canaryQueries }, reviewRequired: [], rejected: activation.rejected, audit: [] });
   options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: "running", createdAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, reviewTaskCount: 0, rejectedSourceCount: activation.rejected.length, captureCount: 0, incidentCount: 0 });
   for (const task of tasks) options.frontier.enqueueTask(task);
-  const counters: any = { leasedTaskCount: 0, completedTaskCount: 0, failedTaskCount: 0, insertedCaptureCount: 0, duplicateCaptureCount: 0, incidentCount: 0, retryScheduledCount: 0, retryExhaustedCount: 0 };
+  const counters: any = { leasedTaskCount: 0, completedTaskCount: 0, failedTaskCount: 0, insertedCaptureCount: 0, duplicateCaptureCount: 0, incidentCount: 0, skippedLowValueCount: 0, retryScheduledCount: 0, retryExhaustedCount: 0 };
   const latestCaptureIds: string[] = [], errors: any[] = [];
   const concurrency = Math.max(1, Math.min(maxTasks, Number(options.maxConcurrentTasks ?? 5)));
   for (let done = 0; done < maxTasks; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, maxTasks - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
@@ -43,6 +43,7 @@ async function runLeasedTask(options: any, runId: string, generatedAt: string, f
     if (!source) throw new Error("source missing");
     const collectedItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000);
     for (const collected of collectedItems.slice(0, options.maxItemsPerTask ?? 40)) {
+      if (!isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt })) { counters.skippedLowValueCount++; continue; } collected.metadata = { ...collected.metadata, sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
       let pipeline = processCollectedItem(collected);
       if (pipeline.capture.body && options.objectStore) pipeline = { ...pipeline, capture: externalize(pipeline.capture, options.objectStore) };
       const duplicate = options.store.findDuplicateCapture?.(pipeline.capture), saved = options.store.savePipelineResult(pipeline);

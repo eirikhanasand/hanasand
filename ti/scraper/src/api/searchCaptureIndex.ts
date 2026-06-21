@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { isSellableIntelText } from "../value/sellableIntel.ts";
 type SearchDoc = { capture: any; text: string; title: string; collectedAt: string };
 const cache = new WeakMap<object, { signature: string; docs: SearchDoc[] }>();
 const norm = (value: unknown) => String(value ?? "").toLowerCase();
@@ -21,7 +22,7 @@ function docsForStore(store: any): SearchDoc[] {
   const signature = `${captures.length}:${captures.at(-1)?.id ?? ""}:${captures.at(-1)?.contentHash ?? ""}`;
   const previous = cache.get(store);
   if (previous?.signature === signature) return previous.docs;
-  const docs = captures.map((capture: any) => ({
+  const docs = captures.filter(sellableCapture).map((capture: any) => ({
     capture,
     title: norm(capture.title),
     collectedAt: capture.collectedAt ?? "",
@@ -31,22 +32,13 @@ function docsForStore(store: any): SearchDoc[] {
   return docs;
 }
 
+function sellableCapture(capture: any) {
+  return capture.metadata?.sellableCandidate === true || isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt });
+}
+
 function searchableText(capture: any) {
   const leak = capture.metadata?.leakSite ?? {};
-  return unique([
-    capture.id,
-    capture.sourceId,
-    capture.title,
-    capture.body,
-    capture.rawText,
-    capture.metadata?.safeExcerpt,
-    capture.metadata?.adapter,
-    leak.actorName,
-    leak.victimName,
-    leak.claimedSector,
-    leak.claimedCountry,
-    leak.claimedDataCategory
-  ]).join(" ").toLowerCase();
+  return unique([capture.id, capture.sourceId, capture.title, capture.body, capture.rawText, capture.metadata?.safeExcerpt, capture.metadata?.adapter, leak.actorName, leak.victimName, leak.claimedSector, leak.claimedCountry, leak.claimedDataCategory]).join(" ").toLowerCase();
 }
 
 function scoreDoc(doc: SearchDoc, terms: string[]) {
