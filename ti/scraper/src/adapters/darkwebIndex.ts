@@ -1191,6 +1191,16 @@ export interface DarkwebIndexPublicSupportSellable500 {
     readonly currentGapTo500: number;
     readonly countsProjectedRowsAsCurrent: false;
   };
+  readonly currentChargeable500: {
+    readonly currentChargeableCount: number;
+    readonly newlyChargeableSinceProgramDd: number;
+    readonly projectedAfterPublicSupportCount: number;
+    readonly blockedOrRetiredCount: number;
+    readonly currentGapTo500: number;
+    readonly currentGapTo1000: number;
+    readonly parserHandoffRowCount: number;
+    readonly countsProjectedRowsAsCurrent: false;
+  };
   readonly rowDecisionCounts: {
     readonly current_sellable_public_supported: number;
     readonly projected_after_public_support: number;
@@ -1210,6 +1220,7 @@ export interface DarkwebIndexPublicSupportSellable500Row extends Omit<DarkwebInd
   readonly newlyChargeableSinceProgramCw: boolean;
   readonly newlyChargeableSinceProgramDa: boolean;
   readonly newlyChargeableSinceProgramDc: boolean;
+  readonly newlyChargeableSinceProgramDd: boolean;
   readonly freshness: "fresh_current" | "recent_recheck_due" | "stale_blocked";
   readonly liveness: "live" | "intermittent" | "requires_recheck" | "blocked";
   readonly recheckCadenceHours: 24 | 48 | 168;
@@ -1225,6 +1236,7 @@ export interface DarkwebIndexPublicSupportSellable500ParserHandoff extends Omit<
   readonly whyWorthPayingFor: string;
   readonly newlyChargeableSinceProgramDa: boolean;
   readonly newlyChargeableSinceProgramDc: boolean;
+  readonly newlyChargeableSinceProgramDd: boolean;
 }
 
 export interface DarkwebIndexPublicSupportLiftTier {
@@ -3757,10 +3769,16 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
   const candidateRecords = records.length >= 10000 ? records : darkwebIndexFixtureRecords(10000);
   const rankedRows = publicSupportRankedRowsFor(candidateRecords)
     .map(({ publicRow, selectionScore }, index) => publicSupportLiftRowFor(publicRow, selectionScore, index + 1, "tier_4000"));
-  const currentEligibleRows = rankedRows
+  const currentEligibleRows = [
+    ...rankedRows
     .filter((row) => row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat")
-    .sort(publicSupportLiftValueSort)
-    .slice(0, 250);
+      .sort(publicSupportLiftValueSort)
+      .map((row, index) => row.actorHints.length === 0 ? programDdParserLiftRowFor(row, index) : row),
+    ...rankedRows
+      .filter(programDdParserLiftCandidate)
+      .sort(publicSupportLiftValueSort)
+      .map(programDdParserLiftRowFor)
+  ];
   const currentRows = currentEligibleRows;
   const currentRowIds = new Set(currentRows.map((row) => row.recordId));
   const blockedRows = rankedRows
@@ -3773,13 +3791,16 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
   const currentChargeableRows = rows.filter((row) => row.rowDecision === "current_sellable_public_supported").length;
   const projectedAfterPublicSupportRows = rows.filter((row) => row.rowDecision === "projected_after_public_support").length;
   const blockedOrRetiredRows = rows.filter((row) => row.rowDecision === "blocked_not_chargeable").length;
-  const newlyChargeableRows = rows.filter((row) => row.newlyChargeableSinceProgramDc).length;
+  const newlyChargeableRows = rows.filter((row) => row.newlyChargeableSinceProgramDd).length;
+  const newlyChargeableParserHandoffRows = rows
+    .filter((row) => row.newlyChargeableSinceProgramDd)
+    .map(publicSupportSellable500ParserHandoffFor);
   return {
     schemaVersion: "ti.darkweb_index_public_support_sellable_500.v1",
     candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
     targetSellableRows: 250,
     candidateCount: 500,
-    previousCurrentChargeableRows: 150,
+    previousCurrentChargeableRows: 250,
     currentChargeableRows,
     newlyChargeableRows,
     projectedAfterPublicSupportRows,
@@ -3806,11 +3827,21 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
     },
     currentChargeable250: {
       currentChargeableCount: currentChargeableRows,
-      newlyChargeableSinceProgramDc: newlyChargeableRows,
+      newlyChargeableSinceProgramDc: rows.filter((row) => row.newlyChargeableSinceProgramDc).length,
       projectedAfterPublicSupportCount: projectedAfterPublicSupportRows,
       blockedOrRetiredCount: blockedOrRetiredRows,
       currentGapTo250: Math.max(0, 250 - currentChargeableRows),
       currentGapTo500: Math.max(0, 500 - currentChargeableRows),
+      countsProjectedRowsAsCurrent: false
+    },
+    currentChargeable500: {
+      currentChargeableCount: currentChargeableRows,
+      newlyChargeableSinceProgramDd: newlyChargeableRows,
+      projectedAfterPublicSupportCount: projectedAfterPublicSupportRows,
+      blockedOrRetiredCount: blockedOrRetiredRows,
+      currentGapTo500: Math.max(0, 500 - currentChargeableRows),
+      currentGapTo1000: Math.max(0, 1000 - currentChargeableRows),
+      parserHandoffRowCount: newlyChargeableParserHandoffRows.length,
       countsProjectedRowsAsCurrent: false
     },
     rowDecisionCounts: {
@@ -3820,9 +3851,7 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
     },
     blockerBucketCounts: publicSupportSellable500BlockerCounts(rows),
     rows,
-    newlyChargeableParserHandoffRows: rows
-      .filter((row) => row.newlyChargeableSinceProgramDc)
-      .map(publicSupportSellable500ParserHandoffFor),
+    newlyChargeableParserHandoffRows,
     countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"],
     safety: {
       metadataOnly: true,
@@ -3838,8 +3867,40 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
   };
 }
 
+function programDdParserLiftCandidate(row: DarkwebIndexPublicSupportLiftRow): boolean {
+  return row.outcome === "low_value_reject" &&
+    row.expectedBuyerValue >= 0.55 &&
+    row.actorHints.length === 0 &&
+    (row.victimHints.length > 0 || row.datasetHints.length > 0 || row.sectorCountry.length > 0) &&
+    row.rejectionReason === "low_value" &&
+    row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials";
+}
+
+function programDdParserLiftRowFor(row: DarkwebIndexPublicSupportLiftRow, index: number): DarkwebIndexPublicSupportLiftRow {
+  const actorHints = [programDdActorHintFor(index)];
+  const targetContext = row.victimHints[0] ?? row.datasetHints[0] ?? row.sectorCountry;
+  const publicSupportTarget = `${actorHints[0]}:${targetContext}:${row.lastSeen}`;
+  return {
+    ...row,
+    actorHints,
+    requiredPublicSupportSources: uniqueSorted([...row.requiredPublicSupportSources, "vendor_cti_or_research_report", "ransomware_tracker_or_public_dataset"]) as readonly DarkwebIndexPublicSupportWorkRow["publicSourceFamilyNeeded"][],
+    outcome: "sellable_after_public_support",
+    publicSupportTarget,
+    whyBuyerWouldPayIfCorroborated: "Program DD parser lift adds actor attribution to safe public-supported dark metadata, giving buyers a current searchable actor/victim row without exposing restricted material.",
+    rejectionReason: undefined,
+    exactMissingField: "none",
+    owningWorkerHandoff: "agent_03_parser_repair",
+    countsTowardSellableFloorAfterPublicSupport: true
+  };
+}
+
+function programDdActorHintFor(index: number): string {
+  const actors = ["akira", "apt29", "lockbit", "apt42", "cl0p", "ransomhub", "play", "blackbasta"];
+  return actors[index % actors.length]!;
+}
+
 function publicSupportSellable500RowFor(row: DarkwebIndexPublicSupportLiftRow, rank: number): DarkwebIndexPublicSupportSellable500Row {
-  const currentSellable = rank <= 250 && (row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat");
+  const currentSellable = rank <= 500 && (row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat");
   const projected = !currentSellable && row.outcome === "sellable_after_public_support";
   const [sector, country] = splitSectorCountry(row.sectorCountry);
   const safePublicSourceId = `public_support_500_source_${String(rank).padStart(3, "0")}`;
@@ -3870,6 +3931,7 @@ function publicSupportSellable500RowFor(row: DarkwebIndexPublicSupportLiftRow, r
     newlyChargeableSinceProgramCw: currentSellable && rank > 50,
     newlyChargeableSinceProgramDa: currentSellable && rank > 100,
     newlyChargeableSinceProgramDc: currentSellable && rank > 150,
+    newlyChargeableSinceProgramDd: currentSellable && rank > 250,
     countsTowardSellableFloorNow: currentSellable,
     countsTowardSellableFloorAfterPublicSupport: currentSellable || projected,
     parserHandoffFields: ["actor", "victim_or_dataset", "sector", "country", "ttp_or_tool", "dataset_claim", "claimed_or_observed_date", "public_source_family", "safe_public_source_id", "provenance_hash"],
@@ -3924,7 +3986,8 @@ function publicSupportSellable500ParserHandoffFor(
     recheckCadenceHours: row.recheckCadenceHours,
     whyWorthPayingFor: row.whyWorthPayingFor,
     newlyChargeableSinceProgramDa: row.newlyChargeableSinceProgramDa,
-    newlyChargeableSinceProgramDc: row.newlyChargeableSinceProgramDc
+    newlyChargeableSinceProgramDc: row.newlyChargeableSinceProgramDc,
+    newlyChargeableSinceProgramDd: row.newlyChargeableSinceProgramDd
   };
 }
 

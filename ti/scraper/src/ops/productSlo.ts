@@ -4476,6 +4476,13 @@ function buildProgramDcPaidReleaseGates(input: {
     : current500CountsTowardLocal && currentSellableRows >= 500 && trueFindingShare >= 0.55 && sourceProvenanceShare <= 0.4
       ? "pass"
       : "hold";
+  const localSellableGateState = (requiredRows: number): "pass" | "hold" | "fail" => current500UnsafeCredit
+    ? "fail"
+    : current500CountsTowardLocal && currentSellableRows >= requiredRows && trueFindingShare >= 0.55 && sourceProvenanceShare <= 0.4
+      ? "pass"
+      : "hold";
+  const current750State = localSellableGateState(750);
+  const current1000LocalSellableState = localSellableGateState(1000);
   const proofRows = ledger.deterministic100NameProof.proofRows;
   const marketplaceInputs = hostedProof.marketplaceConversionInputs;
   const analyticsObserved = marketplaceInputs.storeViews !== null
@@ -4498,9 +4505,87 @@ function buildProgramDcPaidReleaseGates(input: {
       && marketplaceInputs.pricingModel !== "external_unknown"
       ? "pass"
       : "hold";
+  const current1000UsefulState = ledger.tier1000Gate.countsProjectedRowsAsPaid !== false
+    ? "fail"
+    : proofRows >= 1000
+      && currentSellableRows >= 300
+      && Number((proofRows / ledger.tier1000Gate.minimumRows).toFixed(3)) >= ledger.tier1000Gate.minimumUsefulDensity
+      && hostedImportSafe
+        ? "pass"
+        : "hold";
+  const releaseDecision = marketplacePaidTrafficState === "pass" && current1000LocalSellableState === "pass" && current1000UsefulState === "pass"
+    ? "ready_for_public_paid_traffic"
+    : current750State === "pass" && hosted100State === "pass" && hostedProofExecutionState !== "fail"
+      ? "ready_for_private_paid_beta"
+      : "hold_paid_release";
+  const revenueImpactBlockerBoard = [
+    {
+      rank: 1,
+      blocker: "hosted_proof_gap",
+      owner: "agent_09",
+      state: hostedProofExecutionState,
+      observedGap: hosted300State === "pass" ? 0 : 300 - Math.min(300, hostedSellableRows),
+      revenueImpact: "blocks public paid traffic and private beta proof",
+      nextOwnerAction: "Import observed hosted Apify proof with run, dataset, no-leak, second-batch, false-positive, usage, and cost fields."
+    },
+    {
+      rank: 2,
+      blocker: "pricing_payout_analytics_gap",
+      owner: "agent_09",
+      state: marketplacePaidTrafficState,
+      observedGap: analyticsObserved && marketplaceInputs.payoutEnabled !== "external_unknown" && marketplaceInputs.pricingModel !== "external_unknown" ? 0 : 1,
+      revenueImpact: "blocks public marketplace promotion",
+      nextOwnerAction: "Import observed Store analytics, pricing model, payout state, refunds, listing status, and last verified timestamp."
+    },
+    {
+      rank: 3,
+      blocker: "parser_current_750_gap",
+      owner: "agent_03",
+      state: current750State,
+      observedGap: Math.max(0, 750 - currentSellableRows),
+      revenueImpact: "blocks private paid beta confidence and 1,000-row ladder progress",
+      nextOwnerAction: "Admit current source-backed rows without graph-only, restricted-only, stale, duplicate, generic, or projected credit."
+    },
+    {
+      rank: 4,
+      blocker: "dark_metadata_public_support_gap",
+      owner: "agent_05",
+      state: dark250.currentChargeableCount >= 500 ? "pass" : "hold",
+      observedGap: Math.max(0, 500 - dark250.currentChargeableCount),
+      revenueImpact: "limits parser admission supply for current750/current1000",
+      nextOwnerAction: "Lift dark metadata public-supported current chargeable rows while restricted-only rows stay out of paid counts."
+    },
+    {
+      rank: 5,
+      blocker: "public_corroboration_gap",
+      owner: "agent_08",
+      state: graphCounts.rowsReadyAfterParserAdmission >= 500 ? "pass" : "hold",
+      observedGap: Math.max(0, 500 - graphCounts.rowsReadyAfterParserAdmission),
+      revenueImpact: "limits source diversity and parser-ready public proof",
+      nextOwnerAction: "Grow parser-ready public corroboration rows while graph-only rows keep zero current paid-floor credit."
+    },
+    {
+      rank: 6,
+      blocker: "useful_row_density_gap",
+      owner: "agent_10",
+      state: current1000UsefulState,
+      observedGap: Math.max(0, 1000 - proofRows),
+      revenueImpact: "blocks current1000 useful-row proof and cost/useful-row confidence",
+      nextOwnerAction: "Keep current1000 held until useful density, fresh density, source diversity, no-leak, and cost/useful-row proof are observed."
+    }
+  ];
 
   return {
     schemaVersion: "ti.program_dc_paid_release_gates.v1",
+    releaseDecisionBoard: {
+      schemaVersion: "ti.program_dd_release_decision_board.v1",
+      decision: releaseDecision,
+      allowedDecisions: ["hold_paid_release", "ready_for_private_paid_beta", "ready_for_public_paid_traffic"],
+      localProgressIsNotHostedRevenue: true,
+      dirtyWorktreeBlocksPromotion: true,
+      publicPaidTrafficAllowedNow: releaseDecision === "ready_for_public_paid_traffic",
+      privatePaidBetaAllowedNow: releaseDecision === "ready_for_private_paid_beta" || releaseDecision === "ready_for_public_paid_traffic"
+    },
     current500Gate: {
       state: current500State,
       requiredSellableRows: 500,
@@ -4522,8 +4607,39 @@ function buildProgramDcPaidReleaseGates(input: {
         ? `Agent 03: close ${Math.max(0, 500 - currentSellableRows)} current sellable rows while keeping true findings >=55% and source-provenance share <=40%.`
         : "Agent 03: keep the 500-row packet as a parser candidate until every row is observed, local-countable, and safe to include in paid gates."
     },
+    current750Gate: {
+      state: current750State,
+      requiredSellableRows: 750,
+      observedSellableRows: currentSellableRows,
+      sellableRowGap: Math.max(0, 750 - currentSellableRows),
+      requiredTrueFindingShare: 0.55,
+      observedTrueFindingShare: trueFindingShare,
+      maximumSourceProvenanceShare: 0.4,
+      observedSourceProvenanceShare: sourceProvenanceShare,
+      candidateRowsCountTowardLocalCurrentPaidPreset: current500CountsTowardLocal,
+      forbiddenCreditObserved: {
+        projectedRowsCountTowardCurrent: dark250.countsProjectedRowsAsCurrent !== false,
+        graphRowsCountTowardFloorNow: graphCounts.rowsCountTowardFloorNow,
+        restrictedOnlyRowsCountTowardFloorNow: false,
+        staleLatestErrorRowsCountTowardFloorNow: false,
+        sampleProofRowsCountTowardFloorNow: observedProofImport.sampleOnly === true
+      },
+      nextOwnerAction: `Agent 03: close ${Math.max(0, 750 - currentSellableRows)} current sellable rows to the 750 gate while preserving true-finding and source-provenance quality.`
+    },
+    current1000LocalSellableGate: {
+      state: current1000LocalSellableState,
+      requiredSellableRows: 1000,
+      observedSellableRows: currentSellableRows,
+      sellableRowGap: Math.max(0, 1000 - currentSellableRows),
+      requiredTrueFindingShare: 0.55,
+      observedTrueFindingShare: trueFindingShare,
+      maximumSourceProvenanceShare: 0.4,
+      observedSourceProvenanceShare: sourceProvenanceShare,
+      countsProjectedRowsAsPaid: false,
+      nextOwnerAction: `Agent 03/05/08: add ${Math.max(0, 1000 - currentSellableRows)} observed current sellable rows from parser, dark metadata public support, and public corroboration without unsafe paid credit.`
+    },
     current1000Gate: {
-      state: "hold",
+      state: current1000UsefulState,
       requiredUsefulRows: 1000,
       observedUsefulRows: proofRows,
       usefulRowGap: Math.max(0, 1000 - proofRows),
@@ -4541,6 +4657,14 @@ function buildProgramDcPaidReleaseGates(input: {
       observedCostPerUsefulRowUsd: null,
       countsProjectedRowsAsPaid: ledger.tier1000Gate.countsProjectedRowsAsPaid,
       nextOwnerAction: "Agent 10: hold current1000 until useful-row density, fresh-row density, source-family diversity, no-leak proof, and cost/useful-row proof are observed."
+    },
+    nonMonetizingWorkGuard: {
+      state: "pass",
+      architectureOnlyCountsTowardRevenue: false,
+      coordinationOnlyCountsTowardRevenue: false,
+      schemaOnlyCountsTowardRevenue: false,
+      requiresBuyerVisibleMetricMovement: true,
+      proofField: "nonMonetizingWorkDetector"
     },
     hostedProofExecutionGate: {
       state: hostedProofExecutionState,
@@ -4576,7 +4700,8 @@ function buildProgramDcPaidReleaseGates(input: {
       },
       noInventedExternalMetrics: marketplaceObservedOnly,
       nextOwnerAction: "Agent 09: import observed Store analytics, pricing, payout, listing, refunds, and hosted proof before marketplace promotion or paid traffic."
-    }
+    },
+    revenueImpactBlockerBoard
   };
 }
 
@@ -7491,7 +7616,7 @@ function graphPublicProgramDdPriority(
           : "fresh_activity";
   return {
     gapContribution: Math.min(5, expectedPaidRowLiftAfterParserAdmission + (sourceFamilyDiversityLift >= 4 ? 2 : 1)),
-    findingLikely: expectedPaidRowLiftAfterParserAdmission >= 2 && freshnessRisk !== "high",
+    findingLikely: expectedPaidRowLiftAfterParserAdmission >= 2 && sourceProvenanceOnlyRisk !== "medium" && freshnessRisk !== "high",
     sourceProvenanceOnlyRisk,
     preferredParserAction: sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding",
     admissionBlocker: "none",

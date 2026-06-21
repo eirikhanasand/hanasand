@@ -721,12 +721,31 @@ describe("ops controls", () => {
     expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("secondBatchAudit");
     expect(dashboard.paidReleaseTruthBoard.programDcReleaseGates).toMatchObject({
       schemaVersion: "ti.program_dc_paid_release_gates.v1",
+      releaseDecisionBoard: {
+        schemaVersion: "ti.program_dd_release_decision_board.v1",
+        decision: "hold_paid_release",
+        localProgressIsNotHostedRevenue: true,
+        dirtyWorktreeBlocksPromotion: true
+      },
       current500Gate: {
         requiredSellableRows: 500,
         observedSellableRows: 500,
         sellableRowGap: 0,
         requiredTrueFindingShare: 0.55,
         maximumSourceProvenanceShare: 0.4
+      },
+      current750Gate: {
+        state: "hold",
+        requiredSellableRows: 750,
+        observedSellableRows: 500,
+        sellableRowGap: 250
+      },
+      current1000LocalSellableGate: {
+        state: "hold",
+        requiredSellableRows: 1000,
+        observedSellableRows: 500,
+        sellableRowGap: 500,
+        countsProjectedRowsAsPaid: false
       },
       current1000Gate: {
         state: "hold",
@@ -743,8 +762,18 @@ describe("ops controls", () => {
         state: "hold",
         paidTrafficAllowedNow: false,
         noInventedExternalMetrics: true
+      },
+      nonMonetizingWorkGuard: {
+        state: "pass",
+        architectureOnlyCountsTowardRevenue: false,
+        requiresBuyerVisibleMetricMovement: true
       }
     });
+    expect(dashboard.paidReleaseTruthBoard.programDcReleaseGates.revenueImpactBlockerBoard).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rank: 1, blocker: "hosted_proof_gap", owner: "agent_09" }),
+      expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 250 }),
+      expect.objectContaining({ blocker: "useful_row_density_gap", owner: "agent_10", observedGap: 393 })
+    ]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(dashboard.scaleStepGates).toMatchObject({

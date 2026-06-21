@@ -791,12 +791,31 @@ describe("api v1", () => {
     expect(hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("secondBatchAudit");
     expect((response.paidReleaseTruthBoard as { programDcReleaseGates: Record<string, unknown> }).programDcReleaseGates).toMatchObject({
       schemaVersion: "ti.program_dc_paid_release_gates.v1",
+      releaseDecisionBoard: {
+        schemaVersion: "ti.program_dd_release_decision_board.v1",
+        decision: "hold_paid_release",
+        localProgressIsNotHostedRevenue: true,
+        dirtyWorktreeBlocksPromotion: true
+      },
       current500Gate: {
         requiredSellableRows: 500,
         observedSellableRows: 500,
         sellableRowGap: 0,
         requiredTrueFindingShare: 0.55,
         maximumSourceProvenanceShare: 0.4
+      },
+      current750Gate: {
+        state: "hold",
+        requiredSellableRows: 750,
+        observedSellableRows: 500,
+        sellableRowGap: 250
+      },
+      current1000LocalSellableGate: {
+        state: "hold",
+        requiredSellableRows: 1000,
+        observedSellableRows: 500,
+        sellableRowGap: 500,
+        countsProjectedRowsAsPaid: false
       },
       current1000Gate: {
         state: "hold",
@@ -813,8 +832,18 @@ describe("api v1", () => {
         state: "hold",
         paidTrafficAllowedNow: false,
         noInventedExternalMetrics: true
+      },
+      nonMonetizingWorkGuard: {
+        state: "pass",
+        architectureOnlyCountsTowardRevenue: false,
+        requiresBuyerVisibleMetricMovement: true
       }
     });
+    expect(((response.paidReleaseTruthBoard as { programDcReleaseGates: { revenueImpactBlockerBoard: Array<Record<string, unknown>> } }).programDcReleaseGates.revenueImpactBlockerBoard)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rank: 1, blocker: "hosted_proof_gap", owner: "agent_09" }),
+      expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 250 }),
+      expect.objectContaining({ blocker: "useful_row_density_gap", owner: "agent_10", observedGap: 393 })
+    ]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {
@@ -1834,7 +1863,7 @@ describe("api v1", () => {
     expect(graphPublicPivots.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) => row.expectedSellableRowsUnlockedAfterPublicProof === 0 && ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) && ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk))).toBe(true);
     const graphPublicUnlockQueue = (response.graphPublicCorroborationPivotPacket as { paidRowUnlockQueue: { counts: { admitted_by_parser: number; ready_for_parser: number; ready_for_current_admission: number; ready_for_parser_admission: number; needs_public_source: number; contradicted: number; contradicted_or_alias_hold: number; stale: number; stale_recheck: number; unsafe_or_restricted: number; rowsCountTowardFloorNow: number; rowsReadyAfterParserAdmission: number }; parserAdmissionHandoff: Array<{ actor: string; victimOrTarget: string; sourceFamily: string; freshnessAgeDays: number; contradictionState: string; provenanceHash: string; buyerReason: string; expectedPaidRowLiftAfterParserAdmission: number; programDbPriority: { gapContribution: number; findingLikely: boolean; sourceProvenanceOnlyRisk: string; preferredParserAction: string; admissionBlocker: string }; programDcPriority: { gapContribution: number; findingLikely: boolean; sourceProvenanceOnlyRisk: string; preferredParserAction: string; admissionBlocker: string; sourceFamilyDiversityLift: number; corroborationStrength: string; freshnessRisk: string }; admissionState: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_current_admission: Array<{ actor: string; countsTowardFloorNow: boolean; noLeak: boolean }>; ready_for_parser_admission: Array<{ expectedRowsUnlockedAfterParserAdmission: number; countsTowardFloorNow: boolean; proofUrlHash: string; noLeak: boolean }>; needs_public_source: Array<{ sourceClass: string; countsTowardFloorNow: boolean; noLeak: boolean }>; contradicted_or_alias_hold: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; stale_recheck: Array<{ countsTowardFloorNow: boolean; noLeak: boolean }>; programDbRejectionBuckets: Record<string, number | boolean>; programDcRejectionBuckets: Record<string, number | boolean>; graphOnlyCountsTowardPaidFloorNow: boolean; noLeak: boolean } }).paidRowUnlockQueue;
     expect(graphPublicUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 500, ready_for_current_admission: 500, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
-    expect(graphPublicUnlockQueue.parserAdmissionHandoff).toHaveLength(300);
+    expect(graphPublicUnlockQueue.parserAdmissionHandoff).toHaveLength(500);
     expect(graphPublicUnlockQueue.ready_for_current_admission).toHaveLength(500);
     expect(graphPublicUnlockQueue.parserAdmissionHandoff.every((row) => row.actor.length > 0 && row.victimOrTarget.length > 0 && row.sourceFamily.length > 0 && row.freshnessAgeDays >= 0 && row.contradictionState.length > 0 && row.provenanceHash.length > 0 && row.buyerReason.length > 0 && row.expectedPaidRowLiftAfterParserAdmission > 0 && row.programDbPriority.gapContribution > 0 && row.programDbPriority.admissionBlocker === "none" && row.programDcPriority.gapContribution > 0 && row.programDcPriority.admissionBlocker === "none" && row.programDcPriority.sourceFamilyDiversityLift > 0 && row.programDcPriority.corroborationStrength.length > 0 && row.programDcPriority.freshnessRisk.length > 0 && row.admissionState === "ready_for_parser" && row.countsTowardFloorNow === false && row.noLeak)).toBe(true);
     expect(graphPublicUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDcPriority.findingLikely).length).toBeGreaterThanOrEqual(170);

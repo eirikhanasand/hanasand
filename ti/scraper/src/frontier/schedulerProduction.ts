@@ -2539,11 +2539,11 @@ export function buildSchedulerDailyActorRunPlan(input: {
     schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1",
     routeVisible: true,
     paidActorFloor: {
-      gate: "current_1000_useful_rows",
+      gate: "current_750_sellable_rows",
       previousLocalGate: "current_500_sellable_rows",
-      targetSellableRows: 500,
+      targetSellableRows: 750,
       currentLocalSellableRows: 500,
-      currentLocalGapRows: 0,
+      currentLocalGapRows: 250,
       targetUsefulRows: 1000,
       currentUsefulRows: 607,
       currentUsefulGapRows: 393,
@@ -2573,6 +2573,18 @@ export function buildSchedulerDailyActorRunPlan(input: {
         nextCadenceAction: "run_100_name_preset_after_source_sweeps"
       },
       {
+        inputId: "parser_current_750_lift",
+        owner: "agent_03",
+        schedulerUse: "raise_daily_actor_cadence",
+        rows: 250,
+        targetRows: 750,
+        currentRows: 500,
+        gapRows: 250,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "run_100_name_preset_after_source_sweeps"
+      },
+      {
         inputId: "dark_metadata_250_chargeable_support",
         owner: "agent_05",
         schedulerUse: "reserve_metadata_review",
@@ -2585,6 +2597,18 @@ export function buildSchedulerDailyActorRunPlan(input: {
         nextCadenceAction: "schedule_metadata_review_before_emit"
       },
       {
+        inputId: "dark_metadata_500_chargeable_support",
+        owner: "agent_05",
+        schedulerUse: "reserve_metadata_review",
+        rows: 250,
+        targetRows: 500,
+        currentRows: 250,
+        gapRows: 250,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "schedule_metadata_review_before_emit"
+      },
+      {
         inputId: "graph_public_300_corroboration_handoff",
         owner: "agent_08",
         schedulerUse: "reserve_public_corroboration",
@@ -2592,6 +2616,18 @@ export function buildSchedulerDailyActorRunPlan(input: {
         targetRows: 300,
         currentRows: 300,
         gapRows: 0,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "schedule_public_corroboration_before_emit"
+      },
+      {
+        inputId: "graph_public_500_corroboration_handoff",
+        owner: "agent_08",
+        schedulerUse: "reserve_public_corroboration",
+        rows: 200,
+        targetRows: 500,
+        currentRows: 300,
+        gapRows: 200,
         countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "schedule_public_corroboration_before_emit"
@@ -2631,6 +2667,18 @@ export function buildSchedulerDailyActorRunPlan(input: {
         countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "wait_for_hosted_proof_import"
+      },
+      {
+        inputId: "hosted_conversion_payout_truth",
+        owner: "agent_09",
+        schedulerUse: "hold_until_external_proof",
+        rows: 0,
+        targetRows: 100,
+        currentRows: 0,
+        gapRows: 100,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "wait_for_hosted_proof_import"
       }
     ],
     schedulerActions: [
@@ -2638,8 +2686,15 @@ export function buildSchedulerDailyActorRunPlan(input: {
         actionId: "daily_actor_100_name_preset",
         visibleState: "searching",
         cadence: "daily",
-        reason: "local 500-row gate is passed; current1000 now needs useful-row density, fresh-row density, source-family diversity, no-leak proof, and cost-per-useful-row proof before promotion",
+        reason: "local 500-row gate is passed; Program DD now schedules the 250-row sellable gap to current750 before current1000 useful-row promotion",
         protectedBy: ["duplicate_run_reuse", "paid_row_gate", "no_leak_gate", "hosted_proof_gate"]
+      },
+      {
+        actionId: "current750_sellable_gap_sweeps",
+        visibleState: "partial",
+        cadence: "daily",
+        reason: "current750 is held on 250 sellable rows; parser, approved metadata support, and public corroboration sweeps must lift real current rows before paid promotion",
+        protectedBy: ["duplicate_run_reuse", "paid_row_gate", "source_policy", "metadata_review", "no_leak_gate"]
       },
       {
         actionId: "current1000_useful_density_measurement",
@@ -2679,8 +2734,8 @@ export function buildSchedulerDailyActorRunPlan(input: {
     ],
     nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
     uiSummary: {
-      headline: "local_500_gate_passed_current_1000_useful_gate_next",
-      operatorMessage: "Run the 100-name Actor preset after public corroboration and approved metadata review sweeps; current1000 remains held until the 393 useful-row gap, fresh-density proof, source-family diversity, no-leak proof, and cost/useful-row proof are observed.",
+      headline: "current_750_sellable_gate_active_current_1000_useful_gate_next",
+      operatorMessage: "Run the 100-name Actor preset after Program DD parser, public corroboration, and approved metadata sweeps; current750 remains held on a 250 sellable-row gap, and current1000 remains held until the 393 useful-row gap, fresh-density proof, source-family diversity, no-leak proof, and cost/useful-row proof are observed.",
       suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
     }
   };
