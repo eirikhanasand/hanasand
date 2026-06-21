@@ -23,6 +23,9 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Added `dailyActorPresetCanaryPacket.sourceFamilyAcquisitionRows`, mapping source-family gaps to concrete reviewed atlas candidate IDs from both freshness-priority and high-value replacement rows, including affected actors, expected fresh/useful rows, scheduler cadence, source actions, measurement gate, and no-leak boundaries.
+- Candidate mapping now falls back from missing same-family freshness rows to broader actor-overlap replacement candidates, so public-channel/vendor/cloud/ransomware family gaps do not disappear when the freshness queue is advisory/government-heavy.
+- Verification is green for this pass: `bun test src/tests/sourceSeeds.test.ts`, `bun run check`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 538 passing tests.
 - Added `dailyActorPresetCanaryPacket.sourceFamilyGapRows`, deriving a family-level Agent 04 acquisition queue from actor-specific daily paid Actor gaps with prioritized families, affected actors, fresh-row need, public/legal/parser criteria, and no private/auth/CAPTCHA boundaries.
 - Sorted daily Actor source-family coverage deterministically by actor reach, source count, useful-row estimate, and family name so downstream Apify/SLO views can consume stable buyer-visible diversity rankings.
 - Verification is green for this pass: `bun test src/tests/sourceSeeds.test.ts`, `bun run check`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 537 passing tests.
