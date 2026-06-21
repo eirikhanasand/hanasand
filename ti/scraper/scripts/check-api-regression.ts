@@ -1,13 +1,8 @@
 import { handleApiRequest } from "../src/api/server.ts";
 import { FocusedFrontier } from "../src/frontier/frontier.ts";
 import { InMemoryScraperStore } from "../src/storage/memoryStore.ts";
-
 const forbiddenPattern = /authorization:|cookie:|bearer_token_value|password_value|raw_body_value|restricted_raw_url_value|object_key_value|credential_value|leaked_row_value/i;
-
-const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
-  store: new InMemoryScraperStore(),
-  frontier: new FocusedFrontier()
-});
+const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), { store: new InMemoryScraperStore(), frontier: new FocusedFrontier() });
 const json = await response.json();
 const contract = isRecord(json) ? json : {};
 const sentinel = isRecord(contract.apiRegressionSentinel) ? contract.apiRegressionSentinel : {};
@@ -32,7 +27,6 @@ const openapiComponents = isRecord(openapi.components) ? openapi.components : {}
 const openapiSchemas = isRecord(openapiComponents.schemas) ? openapiComponents.schemas : {};
 const routes = Array.isArray(routeInventory.routes) ? routeInventory.routes.filter(isRecord) : [];
 const routeSignatures = routes.map((route) => `${String(route.method ?? "")} ${String(route.path ?? "")}`);
-
 const routeInvariant = isRecord(sentinel.routeInventoryInvariant) ? sentinel.routeInventoryInvariant : {};
 const responseInvariant = isRecord(sentinel.responseShapeInvariant) ? sentinel.responseShapeInvariant : {};
 const openapiInvariant = isRecord(sentinel.openapiInvariant) ? sentinel.openapiInvariant : {};
@@ -48,39 +42,23 @@ const scraperNativeReplacementInvariant = isRecord(sentinel.scraperNativeReplace
 const apifyStoreReadinessInvariant = isRecord(sentinel.apifyStoreReadinessInvariant) ? sentinel.apifyStoreReadinessInvariant : {};
 const darkwebIndexFrontendInvariant = isRecord(sentinel.darkwebIndexFrontendInvariant) ? sentinel.darkwebIndexFrontendInvariant : {};
 const sourceAtlasFrontendInvariant = isRecord(sentinel.sourceAtlasFrontendInvariant) ? sentinel.sourceAtlasFrontendInvariant : {};
-
 const failures: string[] = [];
-const check = (condition: boolean, message: string) => {
-  if (!condition) failures.push(message);
+const check = (condition: boolean, message: string) => { if (!condition) failures.push(message);
 };
-
 check(response.status === 200, "contracts endpoint must return HTTP 200");
 check(sentinel.schemaVersion === "ti.api_regression_sentinel.v1", "sentinel schemaVersion drifted");
 check(gateway.schemaVersion === "ti.api_gateway_integration.v1", "gateway integration schemaVersion drifted");
 check(gateway.status === "deployment_plan_ready", "gateway integration status drifted");
 check(sentinel.status === "active_backward_compatibility_gate", "sentinel status drifted");
 check(Number(routeInvariant.expectedRouteCount ?? 0) === routes.length, "route count invariant does not match route inventory");
-for (const signature of stringArray(routeInvariant.requiredStableRoutes).filter((route) => route.startsWith("/v1") === false || route.includes(" ") === true)) {
-  if (signature === "POST /api/ti/search") continue;
-  check(routeSignatures.includes(signature), `stable route missing from inventory: ${signature}`);
-}
-for (const key of stringArray(responseInvariant.requiredTopLevelKeys)) {
-  check(Object.prototype.hasOwnProperty.call(contract, key), `contract missing top-level key: ${key}`);
-}
-for (const field of stringArray(responseInvariant.publicSearchRequiredKeys)) {
-  check(stringArray(responseInvariant.publicSearchStableFields).includes(field), `public search stable fields missing ${field}`);
-}
-for (const field of ["status", "runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated"]) {
-  check(stringArray(responseInvariant.publicWrapperDeltaStableFields).includes(field), `public wrapper delta fields missing ${field}`);
-}
-for (const path of stringArray(openapiInvariant.requiredPaths)) {
-  check(Object.prototype.hasOwnProperty.call(openapiPaths, path), `OpenAPI path missing ${path}`);
-}
-for (const schema of stringArray(openapiInvariant.requiredSchemas)) {
-  check(Object.prototype.hasOwnProperty.call(openapiSchemas, schema), `OpenAPI schema missing ${schema}`);
-}
-
-const auth = isRecord(behaviorInvariants.auth) ? behaviorInvariants.auth : {};
+for (const signature of stringArray(routeInvariant.requiredStableRoutes).filter((route) => route.startsWith("/v1") === false || route.includes(" ") === true)) { if (signature === "POST /api/ti/search") continue;
+check(routeSignatures.includes(signature), `stable route missing from inventory: ${signature}`);
+} for (const key of stringArray(responseInvariant.requiredTopLevelKeys)) { check(Object.prototype.hasOwnProperty.call(contract, key), `contract missing top-level key: ${key}`);
+} for (const field of stringArray(responseInvariant.publicSearchRequiredKeys)) { check(stringArray(responseInvariant.publicSearchStableFields).includes(field), `public search stable fields missing ${field}`);
+} for (const field of ["status", "runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated"]) { check(stringArray(responseInvariant.publicWrapperDeltaStableFields).includes(field), `public wrapper delta fields missing ${field}`);
+} for (const path of stringArray(openapiInvariant.requiredPaths)) { check(Object.prototype.hasOwnProperty.call(openapiPaths, path), `OpenAPI path missing ${path}`);
+} for (const schema of stringArray(openapiInvariant.requiredSchemas)) { check(Object.prototype.hasOwnProperty.call(openapiSchemas, schema), `OpenAPI schema missing ${schema}`);
+} const auth = isRecord(behaviorInvariants.auth) ? behaviorInvariants.auth : {};
 check(stringArray(auth.requiredForwardedHeaders).includes("x-tenant-id"), "auth invariant missing x-tenant-id");
 check(stringArray(auth.requiredForwardedHeaders).includes("x-actor-id"), "auth invariant missing x-actor-id");
 const idempotency = isRecord(behaviorInvariants.idempotency) ? behaviorInvariants.idempotency : {};
@@ -93,12 +71,9 @@ check(stringArray(pagination.responseFields).includes("nextCursor"), "pagination
 const errors = isRecord(behaviorInvariants.errors) ? behaviorInvariants.errors : {};
 const envelope = isRecord(errors.envelope) ? errors.envelope : {};
 check(isRecord(envelope.error), "error envelope missing error object");
-for (const code of ["bad_request", "not_found", "idempotency_conflict", "queue_pressure", "policy_blocked", "duplicate_run_reuse"]) {
-  check(stringArray(errors.requiredCodes).includes(code), `required error code missing ${code}`);
-}
-const rateLimits = isRecord(behaviorInvariants.rateLimits) ? behaviorInvariants.rateLimits : {};
+for (const code of ["bad_request", "not_found", "idempotency_conflict", "queue_pressure", "policy_blocked", "duplicate_run_reuse"]) { check(stringArray(errors.requiredCodes).includes(code), `required error code missing ${code}`);
+} const rateLimits = isRecord(behaviorInvariants.rateLimits) ? behaviorInvariants.rateLimits : {};
 check(stringArray(rateLimits.responseHeaders).includes("retry-after"), "rate-limit retry-after header missing");
-
 check(sdkInvariant.fixturePackSchemaVersion === "ti.sdk_fixture_pack.v1", "SDK fixture pack schema drifted");
 check(stringArray(sdkInvariant.requiredFixtureFiles).length >= 9, "SDK fixture file count regressed");
 check(stringArray(sdkInvariant.compatibilityCommands).includes("bun run check:sdk-fixtures"), "SDK fixture check missing from compatibility commands");
@@ -107,13 +82,9 @@ check(streamingWebhookCompatibility.status === "contract_only_polling_remains_pr
 check(publicWrapperCutoverReadiness.schemaVersion === "ti.public_wrapper_cutover_readiness.v1", "public wrapper cutover readiness schema drifted");
 check(publicWrapperCutoverReadiness.status === "watch_ready_polling_compatible", "public wrapper cutover readiness status drifted");
 check(publicWrapperCutoverInvariant.schemaVersion === "ti.public_wrapper_cutover_readiness.v1", "sentinel public wrapper cutover invariant schema drifted");
-for (const field of ["status", "runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "publicTiAnswer", "publicWrapperDelta"]) {
-  check(stringArray(publicWrapperCutoverInvariant.requiredStableFields).includes(field), `public wrapper cutover invariant missing ${field}`);
-}
-for (const fallbackCode of ["default_actor_fallback", "demo_copy", "stale_cache_copy", "unknown_ready_without_evidence"]) {
-  check(stringArray(publicWrapperCutoverInvariant.bannedFallbackCodes).includes(fallbackCode), `public wrapper fallback watch missing ${fallbackCode}`);
-}
-check(publicWrapperCutoverInvariant.deprecationAlias === "POST /api/ti/search", "public wrapper deprecation alias drifted");
+for (const field of ["status", "runId", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "publicTiAnswer", "publicWrapperDelta"]) { check(stringArray(publicWrapperCutoverInvariant.requiredStableFields).includes(field), `public wrapper cutover invariant missing ${field}`);
+} for (const fallbackCode of ["default_actor_fallback", "demo_copy", "stale_cache_copy", "unknown_ready_without_evidence"]) { check(stringArray(publicWrapperCutoverInvariant.bannedFallbackCodes).includes(fallbackCode), `public wrapper fallback watch missing ${fallbackCode}`);
+} check(publicWrapperCutoverInvariant.deprecationAlias === "POST /api/ti/search", "public wrapper deprecation alias drifted");
 check(stringArray(publicWrapperCutoverInvariant.rollbackTriggers).includes("default_actor_detected"), "default actor rollback trigger missing");
 check(stringArray(publicWrapperCutoverInvariant.proofCommands).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"), "made-up actor public proof missing from cutover invariant");
 check(realtimeDeliveryPrototype.schemaVersion === "ti.realtime_delivery_prototype.v1", "realtime delivery prototype schema drifted");
@@ -121,50 +92,32 @@ check(realtimeDeliveryPrototype.status === "disabled_by_default_polling_primary"
 check(realtimeDeliveryPrototypeInvariant.schemaVersion === "ti.realtime_delivery_prototype.v1", "sentinel realtime prototype invariant schema drifted");
 check(realtimeDeliveryPrototypeInvariant.enabledByDefault === false, "realtime prototype must remain disabled by default");
 check(realtimeDeliveryPrototypeInvariant.pollingPrimary === true, "realtime prototype polling primary invariant drifted");
-for (const mode of ["sse", "webhook"]) {
-  check(stringArray(realtimeDeliveryPrototypeInvariant.deliveryModes).includes(mode), `realtime prototype delivery mode missing ${mode}`);
-}
-for (const eventType of ["run.status", "answer.delta", "evidence.promoted", "source.gap", "graph.review_hold", "restricted_metadata.hold", "quality.caveat", "error.retry_hint", "run.terminal"]) {
-  check(stringArray(realtimeDeliveryPrototypeInvariant.eventTypes).includes(eventType), `realtime prototype event type missing ${eventType}`);
-}
-for (const field of ["eventId", "eventType", "runId", "tenantId", "pollCursor", "deltaCursor", "sequence", "createdAt"]) {
-  check(stringArray(realtimeDeliveryPrototypeInvariant.requiredFields).includes(field), `realtime prototype envelope missing ${field}`);
-}
-check(stringArray(realtimeDeliveryPrototypeInvariant.forbiddenPayloadFields).includes("webhook_secret"), "realtime prototype no-leak webhook secret guard missing");
+for (const mode of ["sse", "webhook"]) { check(stringArray(realtimeDeliveryPrototypeInvariant.deliveryModes).includes(mode), `realtime prototype delivery mode missing ${mode}`);
+} for (const eventType of ["run.status", "answer.delta", "evidence.promoted", "source.gap", "graph.review_hold", "restricted_metadata.hold", "quality.caveat", "error.retry_hint", "run.terminal"]) { check(stringArray(realtimeDeliveryPrototypeInvariant.eventTypes).includes(eventType), `realtime prototype event type missing ${eventType}`);
+} for (const field of ["eventId", "eventType", "runId", "tenantId", "pollCursor", "deltaCursor", "sequence", "createdAt"]) { check(stringArray(realtimeDeliveryPrototypeInvariant.requiredFields).includes(field), `realtime prototype envelope missing ${field}`);
+} check(stringArray(realtimeDeliveryPrototypeInvariant.forbiddenPayloadFields).includes("webhook_secret"), "realtime prototype no-leak webhook secret guard missing");
 check(stringArray(realtimeDeliveryPrototypeInvariant.proofCommands).includes("bun run check:api-regression"), "realtime prototype API regression proof missing");
 check(realtimeDeliverySoak.schemaVersion === "ti.realtime_delivery_soak.v1", "realtime delivery soak schema drifted");
 check(realtimeDeliverySoak.status === "disabled_soak_contract_ready_polling_primary", "realtime delivery soak status drifted");
 check(realtimeDeliverySoakInvariant.schemaVersion === "ti.realtime_delivery_soak.v1", "sentinel realtime soak invariant schema drifted");
 check(realtimeDeliverySoakInvariant.pollingPrimary === true, "realtime soak polling primary invariant drifted");
-for (const scenario of ["disabled_sse_replay", "webhook_outbox_retry", "cursor_gap_replay", "fallback_to_polling", "unsafe_payload_block"]) {
-  check(stringArray(realtimeDeliverySoakInvariant.scenarios).includes(scenario), `realtime soak scenario missing ${scenario}`);
-}
-for (const state of ["retry_scheduled", "dead_lettered", "disabled"]) {
-  check(stringArray(realtimeDeliverySoakInvariant.outboxStates).includes(state), `realtime soak outbox state missing ${state}`);
-}
-check(stringArray(realtimeDeliverySoakInvariant.cursorGapActions).includes("fallback_to_polling"), "realtime soak cursor gap fallback missing");
+for (const scenario of ["disabled_sse_replay", "webhook_outbox_retry", "cursor_gap_replay", "fallback_to_polling", "unsafe_payload_block"]) { check(stringArray(realtimeDeliverySoakInvariant.scenarios).includes(scenario), `realtime soak scenario missing ${scenario}`);
+} for (const state of ["retry_scheduled", "dead_lettered", "disabled"]) { check(stringArray(realtimeDeliverySoakInvariant.outboxStates).includes(state), `realtime soak outbox state missing ${state}`);
+} check(stringArray(realtimeDeliverySoakInvariant.cursorGapActions).includes("fallback_to_polling"), "realtime soak cursor gap fallback missing");
 check(stringArray(realtimeDeliverySoakInvariant.forbiddenPayloadFields).includes("webhook_secret"), "realtime soak no-leak webhook secret guard missing");
 check(stringArray(realtimeDeliverySoakInvariant.proofCommands).includes("bun run check:contract-index"), "realtime soak contract-index proof missing");
 check(clientGenerationFreeze.schemaVersion === "ti.client_generation_freeze.v1", "client generation freeze schema drifted");
 check(clientGenerationFreeze.status === "frozen_contract_ready_for_codegen", "client generation freeze status drifted");
 check(clientGenerationFreezeInvariant.schemaVersion === "ti.client_generation_freeze.v1", "sentinel client generation freeze invariant schema drifted");
 check(clientGenerationFreezeInvariant.openapiVersion === "3.1.0", "client generation OpenAPI version drifted");
-for (const target of ["typescript_fetch_browser", "typescript_node_service", "analyst_automation_types", "future_realtime_types"]) {
-  check(stringArray(clientGenerationFreezeInvariant.generatedTargets).includes(target), `client generation target missing ${target}`);
-}
-for (const operationId of ["contracts_get_v1_contracts", "intel_get_v1_intel_search", "intel_post_v1_intel_runs", "intel_get_v1_intel_runs_id_results"]) {
-  check(stringArray(clientGenerationFreezeInvariant.requiredOperationIds).includes(operationId), `client generation operationId missing ${operationId}`);
-}
-for (const schema of ["ClientGenerationFreeze", "GeneratedClientTarget", "SdkPollingEnvelope", "RealtimeDeliveryPrototype"]) {
-  check(stringArray(clientGenerationFreezeInvariant.requiredSchemas).includes(schema), `client generation schema missing ${schema}`);
-}
-check(stringArray(clientGenerationFreezeInvariant.requiredFixtures).includes("fixtures/sdk/initial_public_search.json"), "client generation initial fixture missing");
+for (const target of ["typescript_fetch_browser", "typescript_node_service", "analyst_automation_types", "future_realtime_types"]) { check(stringArray(clientGenerationFreezeInvariant.generatedTargets).includes(target), `client generation target missing ${target}`);
+} for (const operationId of ["contracts_get_v1_contracts", "intel_get_v1_intel_search", "intel_post_v1_intel_runs", "intel_get_v1_intel_runs_id_results"]) { check(stringArray(clientGenerationFreezeInvariant.requiredOperationIds).includes(operationId), `client generation operationId missing ${operationId}`);
+} for (const schema of ["ClientGenerationFreeze", "GeneratedClientTarget", "SdkPollingEnvelope", "RealtimeDeliveryPrototype"]) { check(stringArray(clientGenerationFreezeInvariant.requiredSchemas).includes(schema), `client generation schema missing ${schema}`);
+} check(stringArray(clientGenerationFreezeInvariant.requiredFixtures).includes("fixtures/sdk/initial_public_search.json"), "client generation initial fixture missing");
 check(clientGenerationFreezeInvariant.changelogGateStatus === "ready_for_generated_client_release_gate", "client generation changelog gate status drifted");
 check(clientGenerationFreezeInvariant.minimumNoticeDays === 90, "client generation deprecation notice period drifted");
-for (const blocker of ["operation_id_removed", "required_schema_removed", "cursor_field_removed", "unsafe_payload_field_added"]) {
-  check(stringArray(clientGenerationFreezeInvariant.breakingChangeBlockers).includes(blocker), `client generation changelog blocker missing ${blocker}`);
-}
-const changelogGate = isRecord(clientGenerationFreeze.changelogGate) ? clientGenerationFreeze.changelogGate : {};
+for (const blocker of ["operation_id_removed", "required_schema_removed", "cursor_field_removed", "unsafe_payload_field_added"]) { check(stringArray(clientGenerationFreezeInvariant.breakingChangeBlockers).includes(blocker), `client generation changelog blocker missing ${blocker}`);
+} const changelogGate = isRecord(clientGenerationFreeze.changelogGate) ? clientGenerationFreeze.changelogGate : {};
 const deprecationPolicy = isRecord(changelogGate.deprecationPolicy) ? changelogGate.deprecationPolicy : {};
 check(changelogGate.schemaVersion === "ti.generated_client_changelog_gate.v1", "client generation changelog gate schema drifted");
 check(changelogGate.status === "ready_for_generated_client_release_gate", "client generation changelog gate missing");
@@ -178,17 +131,13 @@ check(stringArray(clientGenerationFreezeInvariant.proofCommands).includes("bun r
 check(frontendProgressiveUpdateContract.schemaVersion === "ti.frontend_progressive_update_contract.v1", "frontend progressive update schema drifted");
 check(frontendProgressiveUpdateContract.status === "frozen_ui_polling_contract", "frontend progressive update status drifted");
 check(frontendProgressiveUpdateInvariant.schemaVersion === "ti.frontend_progressive_update_contract.v1", "sentinel frontend progressive invariant schema drifted");
-for (const field of ["status", "runId", "pollCursor", "deltaCursor", "publicTiAnswer", "publicWrapperDelta"]) {
-  check(stringArray(frontendProgressiveUpdateInvariant.requiredFields).includes(field), `frontend progressive field missing ${field}`);
-}
-check(scraperNativeReplacementReadiness.schemaVersion === "ti.scraper_native_replacement_readiness.v1", "scraper-native replacement readiness schema drifted");
+for (const field of ["status", "runId", "pollCursor", "deltaCursor", "publicTiAnswer", "publicWrapperDelta"]) { check(stringArray(frontendProgressiveUpdateInvariant.requiredFields).includes(field), `frontend progressive field missing ${field}`);
+} check(scraperNativeReplacementReadiness.schemaVersion === "ti.scraper_native_replacement_readiness.v1", "scraper-native replacement readiness schema drifted");
 check(scraperNativeReplacementReadiness.status === "replacement_board_ready_polling_primary", "scraper-native replacement readiness status drifted");
 check(scraperNativeReplacementInvariant.schemaVersion === "ti.scraper_native_replacement_readiness.v1", "sentinel scraper-native replacement invariant schema drifted");
 check(scraperNativeReplacementInvariant.decision === "watch_ready", "scraper-native replacement decision drifted");
-for (const proofCase of ["known_actor", "random_actor", "made_up_actor", "empty_delta"]) {
-  check(stringArray(scraperNativeReplacementInvariant.requiredCases).includes(proofCase), `scraper-native replacement case missing ${proofCase}`);
-}
-check(stringArray(scraperNativeReplacementInvariant.blockers).includes("default_actor_detected"), "scraper-native replacement default actor blocker missing");
+for (const proofCase of ["known_actor", "random_actor", "made_up_actor", "empty_delta"]) { check(stringArray(scraperNativeReplacementInvariant.requiredCases).includes(proofCase), `scraper-native replacement case missing ${proofCase}`);
+} check(stringArray(scraperNativeReplacementInvariant.blockers).includes("default_actor_detected"), "scraper-native replacement default actor blocker missing");
 check(stringArray(scraperNativeReplacementInvariant.proofCommands).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"), "scraper-native replacement made-up actor proof missing");
 check(apifyStoreReadiness.schemaVersion === "ti.apify_store_readiness.v1", "Apify store readiness schema drifted");
 check(apifyStoreReadiness.status === "buyer_ready_with_external_payout_blocker", "Apify store readiness status drifted");
@@ -198,110 +147,49 @@ check(apifyStoreReadinessInvariant.publishedBuildVersion === "0.6.7", "Apify pub
 check(apifyStoreReadinessInvariant.latestProofRunId === "OThlfd0uzSCNnedAO", "Apify proof run id drifted");
 check(apifyStoreReadinessInvariant.latestProofDatasetId === "LSen2fYtwFTtOr7vK", "Apify proof dataset id drifted");
 check(apifyStoreReadinessInvariant.pricingEffectiveDate === "2026-07-04", "Apify pricing effective date drifted");
-for (const query of ["APT29", "Volt Typhoon", "Scattered Spider", "LockBit"]) {
-  check(stringArray(apifyStoreReadinessInvariant.sampleQueries).includes(query), `Apify sample proof missing ${query}`);
-}
-for (const state of ["queued", "searching", "partial", "ready", "empty_delta"]) {
-  check(stringArray(apifyStoreReadinessInvariant.compatibilityStates).includes(state), `Apify compatibility state missing ${state}`);
-}
-check(stringArray(apifyStoreReadinessInvariant.defaultQueries).length === 100, "Apify default watchlist must contain 100 queries");
+for (const query of ["APT29", "Volt Typhoon", "Scattered Spider", "LockBit"]) { check(stringArray(apifyStoreReadinessInvariant.sampleQueries).includes(query), `Apify sample proof missing ${query}`);
+} for (const state of ["queued", "searching", "partial", "ready", "empty_delta"]) { check(stringArray(apifyStoreReadinessInvariant.compatibilityStates).includes(state), `Apify compatibility state missing ${state}`);
+} check(stringArray(apifyStoreReadinessInvariant.defaultQueries).length === 100, "Apify default watchlist must contain 100 queries");
 check(stringArray(apifyStoreReadinessInvariant.blockers).includes("apify_beneficiary_and_payout_method_not_stored_in_repo"), "Apify payout blocker missing");
 check(stringArray(apifyStoreReadinessInvariant.proofCommands).includes("bun run check:apify-publication"), "Apify publication proof missing");
 check(darkwebIndexFrontendContract.schemaVersion === "ti.darkweb_index_frontend_contract.v1", "darkweb index frontend contract schema drifted");
 check(darkwebIndexFrontendContract.status === "frozen_metadata_only_frontend_contract", "darkweb index frontend contract status drifted");
 check(darkwebIndexFrontendInvariant.schemaVersion === "ti.darkweb_index_frontend_contract.v1", "sentinel darkweb frontend invariant schema drifted");
 check(darkwebIndexFrontendInvariant.route === "/ti/darkweb/index", "darkweb frontend route drifted");
-for (const route of ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]) {
-  check(Object.values(isRecord(darkwebIndexFrontendInvariant.apiRoutes) ? darkwebIndexFrontendInvariant.apiRoutes : {}).includes(route), `darkweb frontend API route missing ${route}`);
-}
-for (const field of ["redactedDisplayUrl", "category", "legalTriage", "safeSummary", "lastSeen", "liveness", "provenance", "reviewState"]) {
-  check(stringArray(darkwebIndexFrontendInvariant.tableColumns).includes(field), `darkweb frontend table column missing ${field}`);
-}
-for (const field of ["q", "category", "legalTriage", "liveness", "network", "reviewState", "cursor", "limit"]) {
-  check(stringArray(darkwebIndexFrontendInvariant.filters).includes(field), `darkweb frontend filter missing ${field}`);
-}
-for (const section of ["summary", "classification", "whatWasNotAccessed", "sourceProvenance", "refreshHistory", "graphLinks", "reviewState"]) {
-  check(stringArray(darkwebIndexFrontendInvariant.detailDrawerSections).includes(section), `darkweb frontend drawer section missing ${section}`);
-}
-for (const forbidden of ["rawUnsafeUrl", "fullOnionUrl", "credential", "object_key", "leaked_row", "payload_download"]) {
-  check(stringArray(darkwebIndexFrontendInvariant.forbiddenUiPayloadFields).includes(forbidden), `darkweb frontend no-leak field missing ${forbidden}`);
-}
-check(stringArray(darkwebIndexFrontendInvariant.proofCommands).includes("bun run check:contract-index"), "darkweb frontend contract-index proof missing");
+for (const route of ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts"]) { check(Object.values(isRecord(darkwebIndexFrontendInvariant.apiRoutes) ? darkwebIndexFrontendInvariant.apiRoutes : {}).includes(route), `darkweb frontend API route missing ${route}`);
+} for (const field of ["redactedDisplayUrl", "category", "legalTriage", "safeSummary", "lastSeen", "liveness", "provenance", "reviewState"]) { check(stringArray(darkwebIndexFrontendInvariant.tableColumns).includes(field), `darkweb frontend table column missing ${field}`);
+} for (const field of ["q", "category", "legalTriage", "liveness", "network", "reviewState", "cursor", "limit"]) { check(stringArray(darkwebIndexFrontendInvariant.filters).includes(field), `darkweb frontend filter missing ${field}`);
+} for (const section of ["summary", "classification", "whatWasNotAccessed", "sourceProvenance", "refreshHistory", "graphLinks", "reviewState"]) { check(stringArray(darkwebIndexFrontendInvariant.detailDrawerSections).includes(section), `darkweb frontend drawer section missing ${section}`);
+} for (const forbidden of ["rawUnsafeUrl", "fullOnionUrl", "credential", "object_key", "leaked_row", "payload_download"]) { check(stringArray(darkwebIndexFrontendInvariant.forbiddenUiPayloadFields).includes(forbidden), `darkweb frontend no-leak field missing ${forbidden}`);
+} check(stringArray(darkwebIndexFrontendInvariant.proofCommands).includes("bun run check:contract-index"), "darkweb frontend contract-index proof missing");
 check(sourceAtlasFrontendContract.schemaVersion === "ti.source_atlas_frontend_contract.v1", "source atlas frontend contract schema drifted");
 check(sourceAtlasFrontendContract.status === "frozen_dry_run_source_discovery_frontend_contract", "source atlas frontend contract status drifted");
 check(sourceAtlasFrontendInvariant.schemaVersion === "ti.source_atlas_frontend_contract.v1", "sentinel source atlas frontend invariant schema drifted");
 check(sourceAtlasFrontendInvariant.route === "/ti/sources/atlas", "source atlas frontend route drifted");
-for (const route of ["/v1/sources/atlas", "/v1/sources/atlas/export", "/v1/contracts", "/v1/analyst/source-activation-packets"]) {
-  check(Object.values(isRecord(sourceAtlasFrontendInvariant.apiRoutes) ? sourceAtlasFrontendInvariant.apiRoutes : {}).includes(route), `source atlas frontend API route missing ${route}`);
-}
-for (const field of ["id", "domain", "family", "queryClassCoverage", "sourceValueScore", "parserCapability", "legalRobotsState", "activationReadiness", "approvalRequired"]) {
-  check(stringArray(sourceAtlasFrontendInvariant.tableColumns).includes(field), `source atlas frontend table column missing ${field}`);
-}
-for (const field of ["queryClass", "family", "parserState", "legalRobotsState", "activationReadiness", "recordLimit"]) {
-  check(stringArray(sourceAtlasFrontendInvariant.filters).includes(field), `source atlas frontend filter missing ${field}`);
-}
-for (const section of ["sourceSummary", "coverage", "parserCapability", "legalRobots", "activationReadiness", "approvalPacket", "rollbackPacket", "canaryPlan", "whatWillNotHappen"]) {
-  check(stringArray(sourceAtlasFrontendInvariant.detailDrawerSections).includes(section), `source atlas frontend drawer section missing ${section}`);
-}
-for (const label of ["first_100", "first_1000", "future_10k"]) {
-  check(stringArray(sourceAtlasFrontendInvariant.importPlanLabels).includes(label), `source atlas frontend plan label missing ${label}`);
-}
-for (const operation of ["source pack import", "registry mutation", "crawl enqueue", "silent activation", "private/invite/auth/CAPTCHA activation"]) {
-  check(stringArray(sourceAtlasFrontendInvariant.forbiddenOperations).includes(operation), `source atlas frontend forbidden operation missing ${operation}`);
-}
-check(stringArray(sourceAtlasFrontendInvariant.proofCommands).includes("bun run check:contract-index"), "source atlas frontend contract-index proof missing");
-for (const scenario of ["first_response", "repeated_poll_empty_delta", "new_delta_available", "made_up_actor_searching", "metadata_review_hold", "final_ready"]) {
-  check(stringArray(frontendProgressiveUpdateInvariant.proofScenarios).includes(scenario), `frontend progressive scenario missing ${scenario}`);
-}
-check(stringArray(frontendProgressiveUpdateInvariant.mergeRules).includes("preserve previous publicTiAnswer on empty deltas"), "frontend progressive empty-delta merge rule missing");
+for (const route of ["/v1/sources/atlas", "/v1/sources/atlas/export", "/v1/contracts", "/v1/analyst/source-activation-packets"]) { check(Object.values(isRecord(sourceAtlasFrontendInvariant.apiRoutes) ? sourceAtlasFrontendInvariant.apiRoutes : {}).includes(route), `source atlas frontend API route missing ${route}`);
+} for (const field of ["id", "domain", "family", "queryClassCoverage", "sourceValueScore", "parserCapability", "legalRobotsState", "activationReadiness", "approvalRequired"]) { check(stringArray(sourceAtlasFrontendInvariant.tableColumns).includes(field), `source atlas frontend table column missing ${field}`);
+} for (const field of ["queryClass", "family", "parserState", "legalRobotsState", "activationReadiness", "recordLimit"]) { check(stringArray(sourceAtlasFrontendInvariant.filters).includes(field), `source atlas frontend filter missing ${field}`);
+} for (const section of ["sourceSummary", "coverage", "parserCapability", "legalRobots", "activationReadiness", "approvalPacket", "rollbackPacket", "canaryPlan", "whatWillNotHappen"]) { check(stringArray(sourceAtlasFrontendInvariant.detailDrawerSections).includes(section), `source atlas frontend drawer section missing ${section}`);
+} for (const label of ["first_100", "first_1000", "future_10k"]) { check(stringArray(sourceAtlasFrontendInvariant.importPlanLabels).includes(label), `source atlas frontend plan label missing ${label}`);
+} for (const operation of ["source pack import", "registry mutation", "crawl enqueue", "silent activation", "private/invite/auth/CAPTCHA activation"]) { check(stringArray(sourceAtlasFrontendInvariant.forbiddenOperations).includes(operation), `source atlas frontend forbidden operation missing ${operation}`);
+} check(stringArray(sourceAtlasFrontendInvariant.proofCommands).includes("bun run check:contract-index"), "source atlas frontend contract-index proof missing");
+for (const scenario of ["first_response", "repeated_poll_empty_delta", "new_delta_available", "made_up_actor_searching", "metadata_review_hold", "final_ready"]) { check(stringArray(frontendProgressiveUpdateInvariant.proofScenarios).includes(scenario), `frontend progressive scenario missing ${scenario}`);
+} check(stringArray(frontendProgressiveUpdateInvariant.mergeRules).includes("preserve previous publicTiAnswer on empty deltas"), "frontend progressive empty-delta merge rule missing");
 check(stringArray(frontendProgressiveUpdateInvariant.proofCommands).includes("TI_SEARCH_READINESS_QUERY='Made Up Actor' bun run check:scraper-native-search"), "frontend progressive made-up actor proof missing");
 check(streamingWebhookInvariant.schemaVersion === "ti.streaming_webhook_compatibility.v1", "sentinel streaming/webhook invariant schema drifted");
-for (const mode of ["sse", "webhook"]) {
-  check(stringArray(streamingWebhookInvariant.deliveryModes).includes(mode), `streaming delivery mode missing ${mode}`);
-}
-for (const eventType of ["run.status", "answer.delta", "evidence.promoted", "source.gap", "graph.review_hold", "restricted_metadata.hold", "error.retry_hint", "run.terminal"]) {
-  check(stringArray(streamingWebhookInvariant.eventTypes).includes(eventType), `streaming event type missing ${eventType}`);
-}
-for (const field of ["runId", "status", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "warningCodes"]) {
-  check(stringArray(streamingWebhookInvariant.pollingCompatibilityFields).includes(field), `streaming polling field missing ${field}`);
-}
-check(stringArray(streamingWebhookInvariant.requiredHeaders).includes("x-tenant-id"), "streaming tenant header invariant missing");
+for (const mode of ["sse", "webhook"]) { check(stringArray(streamingWebhookInvariant.deliveryModes).includes(mode), `streaming delivery mode missing ${mode}`);
+} for (const eventType of ["run.status", "answer.delta", "evidence.promoted", "source.gap", "graph.review_hold", "restricted_metadata.hold", "error.retry_hint", "run.terminal"]) { check(stringArray(streamingWebhookInvariant.eventTypes).includes(eventType), `streaming event type missing ${eventType}`);
+} for (const field of ["runId", "status", "pollCursor", "deltaCursor", "refreshAfterSeconds", "updated", "warningCodes"]) { check(stringArray(streamingWebhookInvariant.pollingCompatibilityFields).includes(field), `streaming polling field missing ${field}`);
+} check(stringArray(streamingWebhookInvariant.requiredHeaders).includes("x-tenant-id"), "streaming tenant header invariant missing");
 check(stringArray(streamingWebhookInvariant.forbiddenPayloadFields).includes("webhook_secret"), "streaming no-leak webhook secret guard missing");
 check(clientCompatibilityMatrix.status === "contract_frozen_for_client_generation", "client compatibility matrix is not frozen");
 check(enterpriseApiSurface.status === "contract_frozen_for_openapi_generation", "enterprise API surface is not frozen");
 check(sdkIntegration.status === "contract_only_no_push_delivery", "SDK integration status drifted");
 check(!forbiddenPattern.test(JSON.stringify({ sentinel, enterpriseApiSurface, sdkIntegration, clientCompatibilityMatrix, streamingWebhookCompatibility, publicWrapperCutoverReadiness, realtimeDeliveryPrototype, realtimeDeliverySoak, clientGenerationFreeze, frontendProgressiveUpdateContract, scraperNativeReplacementReadiness, apifyStoreReadiness, darkwebIndexFrontendContract, sourceAtlasFrontendContract })), "contract examples contain unsafe material");
 check(!forbiddenPattern.test(JSON.stringify(gateway)), "gateway examples contain unsafe material");
-
 const ok = failures.length === 0;
-console.log(JSON.stringify({
-  event: "api_regression_sentinel.check",
-  ok,
-  routeCount: routes.length,
-  requiredStableRouteCount: stringArray(routeInvariant.requiredStableRoutes).length,
-  topLevelKeyCount: stringArray(responseInvariant.requiredTopLevelKeys).length,
-  gatewayStatus: String(gateway.status ?? ""),
-  streamingWebhookStatus: String(streamingWebhookCompatibility.status ?? ""),
-  publicWrapperCutoverStatus: String(publicWrapperCutoverReadiness.status ?? ""),
-  realtimeDeliveryPrototypeStatus: String(realtimeDeliveryPrototype.status ?? ""),
-  realtimeDeliverySoakStatus: String(realtimeDeliverySoak.status ?? ""),
-  clientGenerationFreezeStatus: String(clientGenerationFreeze.status ?? ""),
-  frontendProgressiveUpdateStatus: String(frontendProgressiveUpdateContract.status ?? ""),
-  scraperNativeReplacementStatus: String(scraperNativeReplacementReadiness.status ?? ""),
-  darkwebIndexFrontendStatus: String(darkwebIndexFrontendContract.status ?? ""),
-  sourceAtlasFrontendStatus: String(sourceAtlasFrontendContract.status ?? ""),
-  requiredSchemaCount: stringArray(openapiInvariant.requiredSchemas).length,
-  failures
-}));
-
-if (!ok) {
-  process.exit(1);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+console.log(JSON.stringify({ event: "api_regression_sentinel.check", ok, routeCount: routes.length, requiredStableRouteCount: stringArray(routeInvariant.requiredStableRoutes).length, topLevelKeyCount: stringArray(responseInvariant.requiredTopLevelKeys).length, gatewayStatus: String(gateway.status ?? ""), streamingWebhookStatus: String(streamingWebhookCompatibility.status ?? ""), publicWrapperCutoverStatus: String(publicWrapperCutoverReadiness.status ?? ""), realtimeDeliveryPrototypeStatus: String(realtimeDeliveryPrototype.status ?? ""), realtimeDeliverySoakStatus: String(realtimeDeliverySoak.status ?? ""), clientGenerationFreezeStatus: String(clientGenerationFreeze.status ?? ""), frontendProgressiveUpdateStatus: String(frontendProgressiveUpdateContract.status ?? ""), scraperNativeReplacementStatus: String(scraperNativeReplacementReadiness.status ?? ""), darkwebIndexFrontendStatus: String(darkwebIndexFrontendContract.status ?? ""), sourceAtlasFrontendStatus: String(sourceAtlasFrontendContract.status ?? ""), requiredSchemaCount: stringArray(openapiInvariant.requiredSchemas).length, failures }));
+if (!ok) { process.exit(1);
+} function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value);
+} function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
