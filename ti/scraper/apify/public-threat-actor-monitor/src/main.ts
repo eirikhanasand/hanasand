@@ -4341,10 +4341,42 @@ function hostedApifyPaidReadinessProof() {
     paidProofAcceptance: {
       minimumDefaultQueryCount: 100,
       minimumSellableRows: 100,
+      minimumSellableFindingRows: 52,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
       noLeakFailures: 0,
+      falsePositiveInflationFailures: 0,
       pricingStateMustBeObserved: true,
       payoutStateMustBeObserved: true,
       marketplaceTelemetryMustBeObserved: true
+    },
+    paidRowIntegrityGate: {
+      schemaVersion: "ti.program_cp_hosted_paid_row_integrity_gate.v1",
+      sourceProofField: "falsePositiveSuppressionGate.programCpHardening.secondBatchAudit",
+      requiredForPaidPromotion: true,
+      hostedProofCountsTowardPaidPromotion: false,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      requiredZeroCounts: {
+        staleLatestActivitySellableRows: 0,
+        aliasOrWrongActorSellableRows: 0,
+        genericSourcePageSellableRows: 0,
+        graphOnlySellableRows: 0,
+        restrictedOnlySellableRows: 0
+      },
+      caveatedRowsCountTowardChargeable: false,
+      requiredSignals: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"],
+      blockers: [
+        "hosted_100_name_cp_second_batch_audit_not_yet_observed",
+        "source_provenance_rows_do_not_count_as_findings",
+        "stale_alias_generic_graph_restricted_rows_must_be_zero"
+      ],
+      noLeakProof: {
+        rawEvidenceExposed: false,
+        unsafeUrlsExposed: false,
+        restrictedPayloadsExposed: false,
+        objectKeysExposed: false,
+        privateMaterialExposed: false,
+        actorInteractionContentExposed: false
+      }
     },
     marketplaceConversionInputs: {
       storeViews: null,
@@ -4362,10 +4394,12 @@ function hostedApifyPaidReadinessProof() {
       "Publish or rebuild eirikhanasand/public-threat-actor-monitor from the current Actor package.",
       "Start a hosted Apify run with the default 100-name input: no custom query list, maxRowsPerQuery=25, includeCoverageGaps=false, includeHeldRows=false, includeDatasets=false.",
       "Record run id, default dataset id, dataset item count, sellable rows, sellable finding count, caveated rows, average buyer value, runtime, memory, usage cost, and no-leak result.",
+      "Compare hosted OUTPUT falsePositiveSuppressionGate.programCpHardening.secondBatchAudit against the paid-row integrity gate: source-provenance rows do not count as findings, and stale/latest, alias/wrong-actor, generic-source-page, graph-only, restricted-only, and caveated-as-chargeable failures are zero.",
       "Record Store views, runs, unique users, paid users, refunds, payout enabled, pricing model, and last verified timestamp only from Apify."
     ],
     blockers: [
       "hosted_100_name_apify_run_not_yet_verified",
+      "hosted_100_name_cp_second_batch_audit_not_yet_observed",
       "external_payout_pricing_analytics_not_yet_verified"
     ]
   } as const;

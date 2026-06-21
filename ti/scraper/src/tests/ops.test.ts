@@ -635,6 +635,27 @@ describe("ops controls", () => {
         proofDecision: "shape_safety_proof",
         countsTowardPaidPromotion: false
       },
+      paidProofAcceptance: {
+        minimumSellableRows: 100,
+        minimumSellableFindingRows: 52,
+        sourceProvenanceRowsCountTowardFindingFloor: false,
+        falsePositiveInflationFailures: 0
+      },
+      paidRowIntegrityGate: {
+        schemaVersion: "ti.program_cp_hosted_paid_row_integrity_gate.v1",
+        sourceProofField: "falsePositiveSuppressionGate.programCpHardening.secondBatchAudit",
+        requiredForPaidPromotion: true,
+        hostedProofCountsTowardPaidPromotion: false,
+        sourceProvenanceRowsCountTowardFindingFloor: false,
+        requiredZeroCounts: {
+          staleLatestActivitySellableRows: 0,
+          aliasOrWrongActorSellableRows: 0,
+          genericSourcePageSellableRows: 0,
+          graphOnlySellableRows: 0,
+          restrictedOnlySellableRows: 0
+        },
+        caveatedRowsCountTowardChargeable: false
+      },
       marketplaceConversionInputs: {
         storeViews: null,
         runs: null,
@@ -647,7 +668,11 @@ describe("ops controls", () => {
         unknownMeansNoClaim: true
       }
     });
+    expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
+    expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
+    expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.paidRowIntegrityGate.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, actorInteractionContentExposed: false });
     expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("100-name");
+    expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("secondBatchAudit");
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(dashboard.scaleStepGates).toMatchObject({
@@ -1646,6 +1671,31 @@ describe("ops controls", () => {
       row.safePublicSourceId.startsWith("public_support_source_") &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
       (row.rowDecision !== "retired_not_chargeable" || (!row.countsTowardSellableFloorNow && !row.countsTowardSellableFloorAfterPublicSupport))
+    )).toBe(true);
+    expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable250).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_sellable_250.v1",
+      candidateSource: "publicSupportLift1000.tier_4000_ranked_rows",
+      targetSellableRows: 100,
+      candidateCount: 250,
+      previousCurrentChargeableRows: 12,
+      currentChargeableRows: 50,
+      newlyChargeableRows: 38,
+      projectedAfterPublicSupportRows: 30,
+      blockedOrRetiredRows: 170,
+      remainingGapTo100Now: 50,
+      remainingGapTo100AfterProjectedSupport: 20,
+      rowDecisionCounts: {
+        current_sellable_public_supported: 50,
+        projected_after_public_support: 30,
+        blocked_not_chargeable: 170
+      },
+      newlyChargeableParserHandoffRowCount: 38
+    });
+    expect(Object.values(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable250.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(200);
+    expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable250.sampleRows.every((row) =>
+      row.safePublicSourceId.startsWith("public_support_250_source_") &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      (row.rowDecision === "current_sellable_public_supported" || (!row.countsTowardSellableFloorNow && row.blockerBucket !== undefined))
     )).toBe(true);
     expect(dashboard.darkMetadataPublicSupportLift4000.tier10000Preview).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",

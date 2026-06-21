@@ -499,6 +499,60 @@ describe("darkweb metadata index contracts", () => {
       row.requiredFields.includes("safe_public_source_id") &&
       row.safePublicSourceHash.length > 0
     )).toBe(true);
+    expect(status.publicSupportLift1000.publicSupportSellable250).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_sellable_250.v1",
+      candidateSource: "publicSupportLift1000.tier_4000_ranked_rows",
+      targetSellableRows: 100,
+      candidateCount: 250,
+      previousCurrentChargeableRows: 12,
+      currentChargeableRows: 50,
+      newlyChargeableRows: 38,
+      projectedAfterPublicSupportRows: 30,
+      blockedOrRetiredRows: 170,
+      remainingGapTo100Now: 50,
+      remainingGapTo100AfterProjectedSupport: 20,
+      rowDecisionCounts: {
+        current_sellable_public_supported: 50,
+        projected_after_public_support: 30,
+        blocked_not_chargeable: 170
+      },
+      countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"]
+    });
+    expect(status.publicSupportSellable250).toEqual(status.publicSupportLift1000.publicSupportSellable250);
+    expect(status.publicSupportLift1000.publicSupportSellable250.rows).toHaveLength(250);
+    expect(status.publicSupportLift1000.publicSupportSellable250.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(50);
+    expect(status.publicSupportLift1000.publicSupportSellable250.rows.filter((row) => row.newlyChargeableSinceSellable100)).toHaveLength(38);
+    expect(status.publicSupportLift1000.publicSupportSellable250.newlyChargeableParserHandoffRows).toHaveLength(38);
+    expect(Object.values(status.publicSupportLift1000.publicSupportSellable250.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(200);
+    expect(Object.keys(status.publicSupportLift1000.publicSupportSellable250.blockerBucketCounts).sort()).toEqual([
+      "duplicate_claim",
+      "generic_source_only",
+      "needs_public_support",
+      "stale_public_support",
+      "unsafe_restricted_only",
+      "victim_too_sensitive_to_surface"
+    ]);
+    expect(status.publicSupportLift1000.publicSupportSellable250.rows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.safePublicSourceId.startsWith("public_support_250_source_") &&
+      row.safePublicSourceHash.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.parserHandoffFields.includes("safe_public_source_id") &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      (row.rowDecision === "current_sellable_public_supported" || !row.countsTowardSellableFloorNow)
+    )).toBe(true);
+    expect(status.publicSupportLift1000.publicSupportSellable250.newlyChargeableParserHandoffRows.every((row) =>
+      row.handoffOwner === "agent_03_parser_repair" &&
+      row.countsTowardSellableFloorNow === true &&
+      row.actor.length > 0 &&
+      row.victimOrDataset.length > 0 &&
+      row.sector.length > 0 &&
+      row.country.length > 0 &&
+      row.ttpOrTool.length > 0 &&
+      row.datasetClaim.length > 0 &&
+      row.safePublicSourceId.startsWith("public_support_250_source_") &&
+      row.provenanceHash.length > 0
+    )).toBe(true);
     expect(status.publicSupportLift1000.tier10000Preview).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",
       baselineTier: "tier_4000",
@@ -1162,6 +1216,7 @@ describe("darkweb metadata index contracts", () => {
       routeFields: ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000", "ops.productSlo.darkMetadataPublicSupportLift4000"],
       repairQueueField: "publicSupportLift1000.first100RepairQueue",
       sellable100Field: "publicSupportLift1000.publicSupportSellable100",
+      sellable250Field: "publicSupportLift1000.publicSupportSellable250",
       tier10000PreviewField: "publicSupportLift1000.tier10000Preview",
       sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       strictNoInflation: true,
@@ -1361,6 +1416,17 @@ describe("darkweb metadata index contracts", () => {
     });
     expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable100.agent03ParserHandoffRows).toHaveLength(100);
     expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable100.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(12);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable250).toMatchObject({
+      candidateCount: 250,
+      currentChargeableRows: 50,
+      newlyChargeableRows: 38,
+      projectedAfterPublicSupportRows: 30,
+      blockedOrRetiredRows: 170,
+      remainingGapTo100Now: 50,
+      remainingGapTo100AfterProjectedSupport: 20
+    });
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable250.newlyChargeableParserHandoffRows).toHaveLength(38);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable250.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(50);
     expect(firstPage.productHandoff.publicSupportLift1000.metricMovement).toMatchObject({
       repairCandidatesAdded: 100,
       likelySellableRowsAfterPublicSupport: 80,

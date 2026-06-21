@@ -632,6 +632,19 @@ describe("api v1", () => {
         countsTowardPaidPromotion: boolean;
         localProof: { defaultQueryCount: number; sellableRows: number; countsTowardPaidPromotion: boolean };
         latestHostedProof: { runId: string; querySetCount: number; sellableRows: number; proofDecision: string; countsTowardPaidPromotion: boolean };
+        paidProofAcceptance: { minimumSellableRows: number; minimumSellableFindingRows: number; sourceProvenanceRowsCountTowardFindingFloor: boolean; falsePositiveInflationFailures: number };
+        paidRowIntegrityGate: {
+          schemaVersion: string;
+          sourceProofField: string;
+          requiredForPaidPromotion: boolean;
+          hostedProofCountsTowardPaidPromotion: boolean;
+          sourceProvenanceRowsCountTowardFindingFloor: boolean;
+          requiredZeroCounts: Record<string, number>;
+          caveatedRowsCountTowardChargeable: boolean;
+          requiredSignals: string[];
+          blockers: string[];
+          noLeakProof: Record<string, boolean>;
+        };
         marketplaceConversionInputs: Record<string, null | string | boolean>;
         manualVerificationSteps: string[];
       };
@@ -655,6 +668,27 @@ describe("api v1", () => {
         proofDecision: "shape_safety_proof",
         countsTowardPaidPromotion: false
       },
+      paidProofAcceptance: {
+        minimumSellableRows: 100,
+        minimumSellableFindingRows: 52,
+        sourceProvenanceRowsCountTowardFindingFloor: false,
+        falsePositiveInflationFailures: 0
+      },
+      paidRowIntegrityGate: {
+        schemaVersion: "ti.program_cp_hosted_paid_row_integrity_gate.v1",
+        sourceProofField: "falsePositiveSuppressionGate.programCpHardening.secondBatchAudit",
+        requiredForPaidPromotion: true,
+        hostedProofCountsTowardPaidPromotion: false,
+        sourceProvenanceRowsCountTowardFindingFloor: false,
+        requiredZeroCounts: {
+          staleLatestActivitySellableRows: 0,
+          aliasOrWrongActorSellableRows: 0,
+          genericSourcePageSellableRows: 0,
+          graphOnlySellableRows: 0,
+          restrictedOnlySellableRows: 0
+        },
+        caveatedRowsCountTowardChargeable: false
+      },
       marketplaceConversionInputs: {
         storeViews: null,
         runs: null,
@@ -667,7 +701,11 @@ describe("api v1", () => {
         unknownMeansNoClaim: true
       }
     });
+    expect(hostedPaidReadinessProof.paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
+    expect(hostedPaidReadinessProof.paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
+    expect(hostedPaidReadinessProof.paidRowIntegrityGate.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, actorInteractionContentExposed: false });
     expect(hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("100-name");
+    expect(hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("secondBatchAudit");
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {
@@ -1194,6 +1232,43 @@ describe("api v1", () => {
       row.safePublicSourceId.startsWith("public_support_source_") &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
       (row.rowDecision !== "retired_not_chargeable" || (!row.countsTowardSellableFloorNow && !row.countsTowardSellableFloorAfterPublicSupport))
+    )).toBe(true);
+    expect((response.darkMetadataPublicSupportLift4000 as {
+      publicSupportSellable250: {
+        candidateCount: number;
+        previousCurrentChargeableRows: number;
+        currentChargeableRows: number;
+        newlyChargeableRows: number;
+        projectedAfterPublicSupportRows: number;
+        blockedOrRetiredRows: number;
+        remainingGapTo100Now: number;
+        remainingGapTo100AfterProjectedSupport: number;
+        rowDecisionCounts: Record<string, number>;
+        blockerBucketCounts: Record<string, number>;
+        sampleRows: Array<{ rowDecision: string; blockerBucket?: string; newlyChargeableSinceSellable100: boolean; countsTowardSellableFloorNow: boolean; countsTowardSellableFloorAfterPublicSupport: boolean; noLeakProof: string; safePublicSourceId: string }>;
+        newlyChargeableParserHandoffRowCount: number;
+      };
+    }).publicSupportSellable250).toMatchObject({
+      candidateCount: 250,
+      previousCurrentChargeableRows: 12,
+      currentChargeableRows: 50,
+      newlyChargeableRows: 38,
+      projectedAfterPublicSupportRows: 30,
+      blockedOrRetiredRows: 170,
+      remainingGapTo100Now: 50,
+      remainingGapTo100AfterProjectedSupport: 20,
+      rowDecisionCounts: {
+        current_sellable_public_supported: 50,
+        projected_after_public_support: 30,
+        blocked_not_chargeable: 170
+      },
+      newlyChargeableParserHandoffRowCount: 38
+    });
+    expect(Object.values((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable250: { blockerBucketCounts: Record<string, number> } }).publicSupportSellable250.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(200);
+    expect((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable250: { sampleRows: Array<{ rowDecision: string; blockerBucket?: string; newlyChargeableSinceSellable100: boolean; countsTowardSellableFloorNow: boolean; countsTowardSellableFloorAfterPublicSupport: boolean; noLeakProof: string; safePublicSourceId: string }> } }).publicSupportSellable250.sampleRows.every((row) =>
+      row.safePublicSourceId.startsWith("public_support_250_source_") &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      (row.rowDecision === "current_sellable_public_supported" || (!row.countsTowardSellableFloorNow && row.blockerBucket !== undefined))
     )).toBe(true);
     expect((response.first100AdmissionQuality as {
       schemaVersion: string;
@@ -4711,6 +4786,27 @@ describe("api v1", () => {
         sellableRows: 4,
         countsTowardPaidPromotion: false
       },
+      paidProofAcceptance: {
+        minimumSellableRows: 100,
+        minimumSellableFindingRows: 52,
+        sourceProvenanceRowsCountTowardFindingFloor: false,
+        falsePositiveInflationFailures: 0
+      },
+      paidRowIntegrityGate: {
+        schemaVersion: "ti.program_cp_hosted_paid_row_integrity_gate.v1",
+        sourceProofField: "falsePositiveSuppressionGate.programCpHardening.secondBatchAudit",
+        requiredForPaidPromotion: true,
+        hostedProofCountsTowardPaidPromotion: false,
+        sourceProvenanceRowsCountTowardFindingFloor: false,
+        requiredZeroCounts: {
+          staleLatestActivitySellableRows: 0,
+          aliasOrWrongActorSellableRows: 0,
+          genericSourcePageSellableRows: 0,
+          graphOnlySellableRows: 0,
+          restrictedOnlySellableRows: 0
+        },
+        caveatedRowsCountTowardChargeable: false
+      },
       marketplaceConversionInputs: {
         storeViews: null,
         runs: null,
@@ -4723,6 +4819,8 @@ describe("api v1", () => {
         unknownMeansNoClaim: true
       }
     });
+    expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { requiredSignals: string[]; blockers: string[]; noLeakProof: Record<string, boolean> } }).paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
+    expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { blockers: string[] } }).paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));
     const readinessStoreReadiness = apifyStoreReadiness.storeReadiness as typeof apifyStoreReadiness.storeReadiness & {
       hostedPaidReadinessProof: Record<string, unknown>;
     };
@@ -4731,7 +4829,13 @@ describe("api v1", () => {
       status: "external_token_missing",
       command: "bun run check:hosted-apify-paid-readiness",
       paidTrafficAllowed: false,
-      countsTowardPaidPromotion: false
+      countsTowardPaidPromotion: false,
+      paidRowIntegrityGate: {
+        schemaVersion: "ti.program_cp_hosted_paid_row_integrity_gate.v1",
+        sourceProofField: "falsePositiveSuppressionGate.programCpHardening.secondBatchAudit",
+        requiredForPaidPromotion: true,
+        sourceProvenanceRowsCountTowardFindingFloor: false
+      }
     });
     expect(apifyStoreReadiness.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(apifyStoreReadiness.revenueConversionChecklist).toMatchObject({

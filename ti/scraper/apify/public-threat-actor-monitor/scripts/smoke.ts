@@ -1577,6 +1577,8 @@ const hostedPaidReadinessProof = paidReleaseTruthBoard.hostedPaidReadinessProof 
 const hostedPaidLocalProof = hostedPaidReadinessProof?.localProof as Record<string, unknown> | undefined;
 const latestHostedProof = hostedPaidReadinessProof?.latestHostedProof as Record<string, unknown> | undefined;
 const hostedMarketplaceInputs = hostedPaidReadinessProof?.marketplaceConversionInputs as Record<string, unknown> | undefined;
+const hostedPaidAcceptance = hostedPaidReadinessProof?.paidProofAcceptance as Record<string, unknown> | undefined;
+const hostedPaidIntegrityGate = hostedPaidReadinessProof?.paidRowIntegrityGate as Record<string, unknown> | undefined;
 if (
   !hostedPaidReadinessProof
   || hostedPaidReadinessProof.schemaVersion !== "ti.hosted_apify_paid_readiness_proof.v1"
@@ -1602,8 +1604,49 @@ if (
   || hostedMarketplaceInputs.payoutEnabled !== "external_unknown"
   || hostedMarketplaceInputs.pricingModel !== "external_unknown"
   || hostedMarketplaceInputs.publicListingStatus !== "draft_copy_ready_not_promoted"
+  || !hostedPaidAcceptance
+  || hostedPaidAcceptance.minimumSellableRows !== 100
+  || hostedPaidAcceptance.minimumSellableFindingRows !== 52
+  || hostedPaidAcceptance.sourceProvenanceRowsCountTowardFindingFloor !== false
+  || hostedPaidAcceptance.falsePositiveInflationFailures !== 0
+  || !hostedPaidIntegrityGate
+  || hostedPaidIntegrityGate.schemaVersion !== "ti.program_cp_hosted_paid_row_integrity_gate.v1"
+  || hostedPaidIntegrityGate.sourceProofField !== "falsePositiveSuppressionGate.programCpHardening.secondBatchAudit"
+  || hostedPaidIntegrityGate.requiredForPaidPromotion !== true
+  || hostedPaidIntegrityGate.hostedProofCountsTowardPaidPromotion !== false
+  || hostedPaidIntegrityGate.sourceProvenanceRowsCountTowardFindingFloor !== false
+  || hostedPaidIntegrityGate.caveatedRowsCountTowardChargeable !== false
 ) {
   throw new Error("Hosted paid-readiness proof must keep local and single-query hosted proof out of paid promotion until 100-name hosted Apify metrics are observed");
+}
+const hostedRequiredZeroCounts = hostedPaidIntegrityGate.requiredZeroCounts as Record<string, unknown> | undefined;
+for (const field of [
+  "staleLatestActivitySellableRows",
+  "aliasOrWrongActorSellableRows",
+  "genericSourcePageSellableRows",
+  "graphOnlySellableRows",
+  "restrictedOnlySellableRows"
+]) {
+  if (hostedRequiredZeroCounts?.[field] !== 0) throw new Error(`Hosted paid-readiness CP integrity gate must require zero ${field}`);
+}
+const hostedPaidIntegrityRequiredSignals = hostedPaidIntegrityGate.requiredSignals as string[] | undefined;
+for (const signal of ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]) {
+  if (!hostedPaidIntegrityRequiredSignals?.includes(signal)) throw new Error(`Hosted paid-readiness CP integrity gate must require ${signal}`);
+}
+const hostedPaidIntegrityBlockers = hostedPaidIntegrityGate.blockers as string[] | undefined;
+for (const blocker of [
+  "hosted_100_name_cp_second_batch_audit_not_yet_observed",
+  "source_provenance_rows_do_not_count_as_findings",
+  "stale_alias_generic_graph_restricted_rows_must_be_zero"
+]) {
+  if (!hostedPaidIntegrityBlockers?.includes(blocker)) throw new Error(`Hosted paid-readiness CP integrity gate must block on ${blocker}`);
+}
+const hostedPaidIntegrityNoLeakProof = hostedPaidIntegrityGate.noLeakProof as Record<string, unknown> | undefined;
+for (const field of ["rawEvidenceExposed", "unsafeUrlsExposed", "restrictedPayloadsExposed", "objectKeysExposed", "privateMaterialExposed", "actorInteractionContentExposed"]) {
+  if (hostedPaidIntegrityNoLeakProof?.[field] !== false) throw new Error(`Hosted paid-readiness CP integrity gate must prove no leak for ${field}`);
+}
+if (!((hostedPaidReadinessProof.manualVerificationSteps as string[] | undefined) ?? []).join(" ").includes("secondBatchAudit")) {
+  throw new Error("Hosted paid-readiness proof must instruct operators to verify Program CP secondBatchAudit before paid promotion");
 }
 if (!paidReleaseBuckets.every((bucket) =>
   typeof bucket.owner === "string"
