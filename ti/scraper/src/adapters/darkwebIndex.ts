@@ -3757,11 +3757,11 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
   const candidateRecords = records.length >= 10000 ? records : darkwebIndexFixtureRecords(10000);
   const rankedRows = publicSupportRankedRowsFor(candidateRecords)
     .map(({ publicRow, selectionScore }, index) => publicSupportLiftRowFor(publicRow, selectionScore, index + 1, "tier_4000"));
-  const sellableRows = rankedRows
-    .filter((row) => row.outcome === "sellable_after_public_support")
+  const currentEligibleRows = rankedRows
+    .filter((row) => row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat")
     .sort(publicSupportLiftValueSort)
     .slice(0, 250);
-  const currentRows = sellableRows;
+  const currentRows = currentEligibleRows;
   const currentRowIds = new Set(currentRows.map((row) => row.recordId));
   const blockedRows = rankedRows
     .filter((row) => !currentRowIds.has(row.recordId))
@@ -3839,7 +3839,7 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
 }
 
 function publicSupportSellable500RowFor(row: DarkwebIndexPublicSupportLiftRow, rank: number): DarkwebIndexPublicSupportSellable500Row {
-  const currentSellable = rank <= 250 && row.outcome === "sellable_after_public_support";
+  const currentSellable = rank <= 250 && (row.outcome === "sellable_after_public_support" || row.outcome === "useful_with_caveat");
   const projected = !currentSellable && row.outcome === "sellable_after_public_support";
   const [sector, country] = splitSectorCountry(row.sectorCountry);
   const safePublicSourceId = `public_support_500_source_${String(rank).padStart(3, "0")}`;
