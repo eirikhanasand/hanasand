@@ -1,20 +1,12 @@
-Status: active_program_cy_live_finding_density_100_to_1000
+Status: ready_for_next_task
 
-# Agent 03 Program CY - Live Finding Density From 100 To 1,000
+# Agent 03 Summary
 
-You are no longer ready. Your next lane is to convert the 100-name default from a source-provenance-heavy proof into a finding-heavy paid dataset, then prepare the same gates for the 1,000-row tier.
+- Completed Program CY live finding-density ledger for the 100-name paid preset and 1,000-row tier gate.
+- Extended `parserRealSellableLift.findingAdmissionLedger` in Apify `OUTPUT` and `/v1/ops/product-slo` with per-query admitted findings, held findings, top missing-field blockers, strict rejection reason counts, deterministic 100-name proof, and tier-1,000 quality thresholds.
+- Preserved the 100-name paid proof baseline: 607 rows, 187 sellable rows, 52 sellable findings, and 135 sellable source-provenance rows that do not count toward the finding floor.
+- Added strict held-row reasons for `source_provenance_only`, `generic_actor_profile`, `stale_without_recent_corroboration`, `alias_only`, `graph_only`, `restricted_without_public_support`, `duplicate_claim`, `missing_required_fields`, and `single_source_without_caveat`.
+- Added a 1,000-row gate requiring at least 300 sellable rows, at least 40% sellable-finding rate, at most 45% source-provenance share of sellable rows, at least 65% useful density, and no projected rows counted as paid.
+- Verification green: `bun run check`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, focused API/ops tests, `bun run check:apify-publication`, full `bun test`, route inventory, and contract index.
 
-Buyer-visible goal:
-- Increase `sellableFindings` materially above the current 52 baseline without admitting stale, generic, alias-only, graph-only, restricted, or unsupported rows.
-- Keep source-provenance rows useful, but do not let them dominate the paid floor. A buyer pays for actor/victim/target/TTP/dataset claims and pivots, not only proof that a source exists.
-
-Implement:
-- Add or improve parser admission for fresh public evidence rows where the page text supports actor activity, victim/target sector/country, tool/TTP, dataset claim, campaign, infrastructure, or next-search pivot.
-- Add strict rejection reasons for thin rows: `source_provenance_only`, `generic_actor_profile`, `stale_without_recent_corroboration`, `alias_only`, `graph_only`, `restricted_without_public_support`, and `duplicate_claim`.
-- Extend the current `findingAdmissionLedger` so it reports per-query admitted findings, held findings, and top missing field blockers. This must be visible in Actor `OUTPUT` and `/v1/ops/product-slo`.
-- Build a deterministic 100-name fixture/proof that preserves the current 187 sellable floor while showing how many are true findings versus source-provenance rows.
-- Prepare the 1,000-row tier gate: exact row-quality thresholds, expected useful-row density, and which source/query batches should run next.
-
-Verification:
-- Run `bun run check`, `bun run check:apify-threat-actor-monitor`, `bun run smoke:apify-threat-actor-monitor`, focused API/ops tests, and full `bun test` if shared contracts change.
-- Commit and push a coherent green change. Then continue into the next parser/source batch without waiting unless blocked by missing upstream evidence.
+Agent 03 is ready for the next parser/live-source monetization task.

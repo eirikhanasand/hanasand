@@ -1184,11 +1184,58 @@ describe("ops controls", () => {
     });
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.admittedFindingRows.every((row) =>
       row.actor === "APT42" &&
+      row.query === "APT42" &&
       ["activity", "target", "ttp"].includes(row.rowType) &&
       row.sourceEvidenceCount >= 4 &&
       row.missingFields.length === 0 &&
       row.noLeak
     )).toBe(true);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.perQueryAdmission).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        query: "100-name paid preset",
+        admittedFindings: 52,
+        sourceProvenanceRows: 135,
+        topMissingFields: expect.arrayContaining(["victim_or_target", "ttp_tool_or_cve", "source_family_support"])
+      })
+    ]));
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.heldFindingRows.every((row) => row.countsTowardSellableFindingFloor === false && row.noLeak)).toBe(true);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.rejectionReasonCounts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reason: "source_provenance_only", rowCount: 135, countsTowardSellableFindingFloor: false }),
+      expect.objectContaining({ reason: "generic_actor_profile", countsTowardSellableFindingFloor: false }),
+      expect.objectContaining({ reason: "stale_without_recent_corroboration", countsTowardSellableFindingFloor: false }),
+      expect.objectContaining({ reason: "alias_only", countsTowardSellableFindingFloor: false }),
+      expect.objectContaining({ reason: "graph_only", countsTowardSellableFindingFloor: false }),
+      expect.objectContaining({ reason: "restricted_without_public_support", rowCount: 68, countsTowardSellableFindingFloor: false }),
+      expect.objectContaining({ reason: "duplicate_claim", countsTowardSellableFindingFloor: false })
+    ]));
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.deterministic100NameProof).toMatchObject({
+      proofPreset: "100_name_paid_preset",
+      proofRows: 607,
+      sellableRowsPreserved: 187,
+      sellableFindingsBaseline: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      projectedFindingRowsAfterCurrentParserBatch: 80,
+      projectedFindingLift: 28
+    });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.tier1000Gate).toMatchObject({
+      schemaVersion: "ti.program_cy_1000_row_finding_density_gate.v1",
+      minimumRows: 1000,
+      minimumSellableRows: 300,
+      minimumSellableFindingRate: 0.4,
+      maximumSourceProvenanceShareOfSellable: 0.45,
+      minimumUsefulDensity: 0.65,
+      countsProjectedRowsAsPaid: false
+    });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.tier1000Gate.requiredRejectionReasons).toEqual(expect.arrayContaining([
+      "source_provenance_only",
+      "generic_actor_profile",
+      "stale_without_recent_corroboration",
+      "alias_only",
+      "graph_only",
+      "restricted_without_public_support",
+      "duplicate_claim"
+    ]));
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.remainingBlockers.every((row) => row.countsTowardCurrentSellableRows === false)).toBe(true);
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.noLeakBoundary).toMatchObject({
       rawBodiesExposed: false,

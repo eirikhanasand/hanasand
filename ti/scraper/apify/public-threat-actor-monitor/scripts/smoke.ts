@@ -680,14 +680,38 @@ if (
   || Number(findingAdmissionLedger.currentSellableSourceProvenanceRows) < 4
   || Number(findingAdmissionLedger.activityTargetTtpRowsAdmittedThisPass) < 4
   || !Array.isArray(findingAdmissionLedger.admittedFindingRows)
+  || !Array.isArray(findingAdmissionLedger.perQueryAdmission)
+  || !Array.isArray(findingAdmissionLedger.heldFindingRows)
+  || !Array.isArray(findingAdmissionLedger.rejectionReasonCounts)
   || !Array.isArray(findingAdmissionLedger.remainingBlockers)
 ) {
   throw new Error("Program CX finding admission ledger must separate sellable findings from source-provenance rows");
 }
 for (const row of findingAdmissionLedger.admittedFindingRows as Array<Record<string, unknown>>) {
-  if (!["activity", "target", "ttp"].includes(String(row.rowType)) || Number(row.sourceEvidenceCount) < 4 || row.noLeak !== true) {
+  if (typeof row.query !== "string" || !["activity", "target", "ttp"].includes(String(row.rowType)) || Number(row.sourceEvidenceCount) < 4 || row.noLeak !== true) {
     throw new Error("Program CX admitted finding rows must be activity/target/TTP findings with public proof");
   }
+}
+for (const reason of ["source_provenance_only", "generic_actor_profile", "stale_without_recent_corroboration", "alias_only", "graph_only", "restricted_without_public_support", "duplicate_claim"]) {
+  if (!(findingAdmissionLedger.rejectionReasonCounts as Array<Record<string, unknown>>).some((row) => row.reason === reason && row.countsTowardSellableFindingFloor === false)) {
+    throw new Error(`Program CY finding density ledger must expose ${reason} rejection counts`);
+  }
+  if (!(findingAdmissionLedger.tier1000Gate as Record<string, unknown> | undefined)?.requiredRejectionReasons || !((findingAdmissionLedger.tier1000Gate as Record<string, unknown>).requiredRejectionReasons as string[]).includes(reason)) {
+    throw new Error(`Program CY 1,000-row gate must require ${reason}`);
+  }
+}
+if (
+  (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown> | undefined)?.proofRows !== 607
+  || (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown>).sellableRowsPreserved !== 187
+  || (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown>).sellableFindingsBaseline !== 52
+  || (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown>).sellableSourceProvenanceRows !== 135
+  || (findingAdmissionLedger.deterministic100NameProof as Record<string, unknown>).sourceProvenanceRowsCountTowardFindingFloor !== false
+  || Number((findingAdmissionLedger.deterministic100NameProof as Record<string, unknown>).projectedFindingRowsAfterCurrentParserBatch) < 52
+  || (findingAdmissionLedger.tier1000Gate as Record<string, unknown> | undefined)?.schemaVersion !== "ti.program_cy_1000_row_finding_density_gate.v1"
+  || Number((findingAdmissionLedger.tier1000Gate as Record<string, unknown>).minimumRows) !== 1000
+  || (findingAdmissionLedger.tier1000Gate as Record<string, unknown>).countsProjectedRowsAsPaid !== false
+) {
+  throw new Error("Program CY finding density ledger must preserve 100-name proof and expose 1,000-row gate");
 }
 for (const row of findingAdmissionLedger.remainingBlockers as Array<Record<string, unknown>>) {
   if (row.countsTowardCurrentSellableRows !== false) throw new Error("Program CX remaining blockers must not count toward sellable rows");

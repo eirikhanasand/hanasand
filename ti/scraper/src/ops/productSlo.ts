@@ -1054,6 +1054,7 @@ export interface LiveProductSloDashboard {
       admittedFindingRows: Array<{
         rowId: string;
         actor: string;
+        query: string;
         rowType: "activity" | "target" | "ttp";
         sourceEvidenceCount: number;
         missingFields: string[];
@@ -1061,6 +1062,53 @@ export interface LiveProductSloDashboard {
         provenanceHash: string;
         noLeak: true;
       }>;
+      perQueryAdmission: Array<{
+        query: string;
+        admittedFindings: number;
+        heldFindings: number;
+        sourceProvenanceRows: number;
+        topMissingFields: string[];
+        nextParserAction: string;
+      }>;
+      heldFindingRows: Array<{
+        rowId: string;
+        query: string;
+        actor: string;
+        rowType: "activity" | "target" | "ttp" | "dataset" | "source" | "profile";
+        rejectionReason: "source_provenance_only" | "generic_actor_profile" | "stale_without_recent_corroboration" | "alias_only" | "graph_only" | "restricted_without_public_support" | "duplicate_claim" | "missing_required_fields" | "single_source_without_caveat";
+        missingFields: string[];
+        nextBuyerSearch: string;
+        provenanceHash: string;
+        countsTowardSellableFindingFloor: false;
+        noLeak: true;
+      }>;
+      rejectionReasonCounts: Array<{
+        reason: "source_provenance_only" | "generic_actor_profile" | "stale_without_recent_corroboration" | "alias_only" | "graph_only" | "restricted_without_public_support" | "duplicate_claim" | "missing_required_fields" | "single_source_without_caveat";
+        rowCount: number;
+        countsTowardSellableFindingFloor: false;
+      }>;
+      deterministic100NameProof: {
+        proofPreset: "100_name_paid_preset";
+        proofRows: 607;
+        sellableRowsPreserved: 187;
+        sellableFindingsBaseline: 52;
+        sellableSourceProvenanceRows: 135;
+        sourceProvenanceRowsCountTowardFindingFloor: false;
+        projectedFindingRowsAfterCurrentParserBatch: number;
+        projectedFindingLift: number;
+      };
+      tier1000Gate: {
+        schemaVersion: "ti.program_cy_1000_row_finding_density_gate.v1";
+        minimumRows: 1000;
+        minimumSellableRows: 300;
+        minimumSellableFindingRate: 0.4;
+        maximumSourceProvenanceShareOfSellable: 0.45;
+        minimumUsefulDensity: 0.65;
+        requiredRejectionReasons: Array<"source_provenance_only" | "generic_actor_profile" | "stale_without_recent_corroboration" | "alias_only" | "graph_only" | "restricted_without_public_support" | "duplicate_claim">;
+        nextSourceBatches: string[];
+        nextQueryBatches: string[];
+        countsProjectedRowsAsPaid: false;
+      };
       remainingBlockers: Array<{
         blocker: "missing_victim_or_target" | "missing_ttp_or_tool" | "missing_public_proof" | "single_source_without_caveat" | "stale_or_held" | "alias_or_contradiction";
         rowCount: number;
@@ -2187,7 +2235,7 @@ function buildMarketplaceConversionRealRowSamplePackStatic(
         "no-leak sample proof remains green"
       ],
       targetBuyer: "CTI analyst evaluating daily actor, victim, CVE, sector, and ransomware monitoring",
-      inputPreset: "20 default actor/ransomware queries, maxRowsPerQuery=25, includeCoverageGaps=true, includeDatasets=false",
+      inputPreset: "100-name paid preset, maxRowsPerQuery=25, includeCoverageGaps=false, includeHeldRows=false, includeDatasets=false; hosted proof must be re-run before promotion",
       successMetric: "trial-to-paid conversion >= 15%, useful-row density >= 40%, repeat users >= 1, refunds = 0",
       stopLossMetric: "stop paid traffic if paid runs stay 0 after 100 verified Store views, useful-row density drops below 40%, refunds appear, or sellable rows fall below 100",
       refundRisk: "medium until real paid cohorts verify useful rows, freshness, and no-leak guarantees"
@@ -4541,10 +4589,15 @@ function buildProgramCwCurrentAdmissionLedger(): LiveProductSloDashboard["parser
 
 function buildProgramCxFindingAdmissionLedger(): LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"] {
   const admittedFindingRows: LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["admittedFindingRows"] = [
-    { rowId: "cw_apt42_campaign_current_admission", actor: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Government, policy, and diplomacy Phishing / T1566", provenanceHash: stableId("program_cx_finding", "apt42_campaign"), noLeak: true },
-    { rowId: "cw_apt42_sector_current_admission", actor: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Government, policy, and diplomacy United States", provenanceHash: stableId("program_cx_finding", "apt42_sector"), noLeak: true },
-    { rowId: "cw_apt42_ttp_current_admission", actor: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Phishing T1566 credential collection", provenanceHash: stableId("program_cx_finding", "apt42_ttp"), noLeak: true },
-    { rowId: "cw_apt42_source_family_current_admission", actor: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 public report source-family corroboration", provenanceHash: stableId("program_cx_finding", "apt42_source_family"), noLeak: true }
+    { rowId: "cw_apt42_campaign_current_admission", actor: "APT42", query: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Government, policy, and diplomacy Phishing / T1566", provenanceHash: stableId("program_cx_finding", "apt42_campaign"), noLeak: true },
+    { rowId: "cw_apt42_sector_current_admission", actor: "APT42", query: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Government, policy, and diplomacy United States", provenanceHash: stableId("program_cx_finding", "apt42_sector"), noLeak: true },
+    { rowId: "cw_apt42_ttp_current_admission", actor: "APT42", query: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Phishing T1566 credential collection", provenanceHash: stableId("program_cx_finding", "apt42_ttp"), noLeak: true },
+    { rowId: "cw_apt42_source_family_current_admission", actor: "APT42", query: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 public report source-family corroboration", provenanceHash: stableId("program_cx_finding", "apt42_source_family"), noLeak: true }
+  ];
+  const heldFindingRows: LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["heldFindingRows"] = [
+    { rowId: "cy_apt42_source_provenance_hold", query: "APT42", actor: "APT42", rowType: "source", rejectionReason: "source_provenance_only", missingFields: ["finding_context"], nextBuyerSearch: "APT42 public source to activity finding", provenanceHash: stableId("program_cy_hold", "apt42_source"), countsTowardSellableFindingFloor: false, noLeak: true },
+    { rowId: "cy_generic_profile_hold", query: "100-name paid preset", actor: "multi-actor", rowType: "profile", rejectionReason: "generic_actor_profile", missingFields: ["victim_or_target", "ttp_tool_or_cve"], nextBuyerSearch: "actor current activity target TTP public proof", provenanceHash: stableId("program_cy_hold", "generic_profile"), countsTowardSellableFindingFloor: false, noLeak: true },
+    { rowId: "cy_restricted_support_hold", query: "ransomware public support", actor: "ransomware", rowType: "dataset", rejectionReason: "restricted_without_public_support", missingFields: ["source_family_support"], nextBuyerSearch: "ransomware victim public corroboration", provenanceHash: stableId("program_cy_hold", "restricted_public_support"), countsTowardSellableFindingFloor: false, noLeak: true }
   ];
   return {
     schemaVersion: "ti.program_cx_100_name_activity_parser_lift.v1",
@@ -4563,6 +4616,44 @@ function buildProgramCxFindingAdmissionLedger(): LiveProductSloDashboard["parser
     sellableFindingLiftFromBaseline: -45,
     sourceProvenanceShareOfSellable: 0.333,
     admittedFindingRows,
+    perQueryAdmission: [
+      { query: "APT42", admittedFindings: 4, heldFindings: 1, sourceProvenanceRows: 4, topMissingFields: ["finding_context"], nextParserAction: "convert source-provenance proof into activity/target/TTP findings only when the public text supports buyer fields" },
+      { query: "100-name paid preset", admittedFindings: 52, heldFindings: 135, sourceProvenanceRows: 135, topMissingFields: ["victim_or_target", "ttp_tool_or_cve", "source_family_support"], nextParserAction: "rank caveated rows by public support and promote only complete findings" }
+    ],
+    heldFindingRows,
+    rejectionReasonCounts: [
+      { reason: "source_provenance_only", rowCount: 135, countsTowardSellableFindingFloor: false },
+      { reason: "generic_actor_profile", rowCount: 24, countsTowardSellableFindingFloor: false },
+      { reason: "stale_without_recent_corroboration", rowCount: 0, countsTowardSellableFindingFloor: false },
+      { reason: "alias_only", rowCount: 0, countsTowardSellableFindingFloor: false },
+      { reason: "graph_only", rowCount: 0, countsTowardSellableFindingFloor: false },
+      { reason: "restricted_without_public_support", rowCount: 68, countsTowardSellableFindingFloor: false },
+      { reason: "duplicate_claim", rowCount: 0, countsTowardSellableFindingFloor: false },
+      { reason: "missing_required_fields", rowCount: 44, countsTowardSellableFindingFloor: false },
+      { reason: "single_source_without_caveat", rowCount: 12, countsTowardSellableFindingFloor: false }
+    ],
+    deterministic100NameProof: {
+      proofPreset: "100_name_paid_preset",
+      proofRows: 607,
+      sellableRowsPreserved: 187,
+      sellableFindingsBaseline: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      projectedFindingRowsAfterCurrentParserBatch: 80,
+      projectedFindingLift: 28
+    },
+    tier1000Gate: {
+      schemaVersion: "ti.program_cy_1000_row_finding_density_gate.v1",
+      minimumRows: 1000,
+      minimumSellableRows: 300,
+      minimumSellableFindingRate: 0.4,
+      maximumSourceProvenanceShareOfSellable: 0.45,
+      minimumUsefulDensity: 0.65,
+      requiredRejectionReasons: ["source_provenance_only", "generic_actor_profile", "stale_without_recent_corroboration", "alias_only", "graph_only", "restricted_without_public_support", "duplicate_claim"],
+      nextSourceBatches: ["public_report_current_activity", "vendor_ransomware_victim_roundups", "government_advisory_current_campaigns", "public_channel_corroboration_without_private_access"],
+      nextQueryBatches: ["top_100_actor_activity_refresh", "ransomware_victim_public_support", "ttp_tool_current_campaigns", "sector_country_targeting_lift"],
+      countsProjectedRowsAsPaid: false
+    },
     remainingBlockers: [
       { blocker: "missing_victim_or_target", rowCount: 0, countsTowardCurrentSellableRows: false },
       { blocker: "missing_ttp_or_tool", rowCount: 0, countsTowardCurrentSellableRows: false },

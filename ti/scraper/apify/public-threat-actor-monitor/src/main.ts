@@ -852,6 +852,7 @@ interface ParserRealSellableLift {
     admittedFindingRows: Array<{
       rowId: string;
       actor: string;
+      query: string;
       rowType: "activity" | "target" | "ttp";
       sourceEvidenceCount: number;
       missingFields: string[];
@@ -859,6 +860,53 @@ interface ParserRealSellableLift {
       provenanceHash: string;
       noLeak: true;
     }>;
+    perQueryAdmission: Array<{
+      query: string;
+      admittedFindings: number;
+      heldFindings: number;
+      sourceProvenanceRows: number;
+      topMissingFields: string[];
+      nextParserAction: string;
+    }>;
+    heldFindingRows: Array<{
+      rowId: string;
+      query: string;
+      actor: string;
+      rowType: "activity" | "target" | "ttp" | "dataset" | "source" | "profile";
+      rejectionReason: "source_provenance_only" | "generic_actor_profile" | "stale_without_recent_corroboration" | "alias_only" | "graph_only" | "restricted_without_public_support" | "duplicate_claim" | "missing_required_fields" | "single_source_without_caveat";
+      missingFields: string[];
+      nextBuyerSearch: string;
+      provenanceHash: string;
+      countsTowardSellableFindingFloor: false;
+      noLeak: true;
+    }>;
+    rejectionReasonCounts: Array<{
+      reason: "source_provenance_only" | "generic_actor_profile" | "stale_without_recent_corroboration" | "alias_only" | "graph_only" | "restricted_without_public_support" | "duplicate_claim" | "missing_required_fields" | "single_source_without_caveat";
+      rowCount: number;
+      countsTowardSellableFindingFloor: false;
+    }>;
+    deterministic100NameProof: {
+      proofPreset: "100_name_paid_preset";
+      proofRows: 607;
+      sellableRowsPreserved: 187;
+      sellableFindingsBaseline: 52;
+      sellableSourceProvenanceRows: 135;
+      sourceProvenanceRowsCountTowardFindingFloor: false;
+      projectedFindingRowsAfterCurrentParserBatch: number;
+      projectedFindingLift: number;
+    };
+    tier1000Gate: {
+      schemaVersion: "ti.program_cy_1000_row_finding_density_gate.v1";
+      minimumRows: 1000;
+      minimumSellableRows: 300;
+      minimumSellableFindingRate: 0.4;
+      maximumSourceProvenanceShareOfSellable: 0.45;
+      minimumUsefulDensity: 0.65;
+      requiredRejectionReasons: Array<"source_provenance_only" | "generic_actor_profile" | "stale_without_recent_corroboration" | "alias_only" | "graph_only" | "restricted_without_public_support" | "duplicate_claim">;
+      nextSourceBatches: string[];
+      nextQueryBatches: string[];
+      countsProjectedRowsAsPaid: false;
+    };
     remainingBlockers: Array<{
       blocker: "missing_victim_or_target" | "missing_ttp_or_tool" | "missing_public_proof" | "single_source_without_caveat" | "stale_or_held" | "alias_or_contradiction";
       rowCount: number;
@@ -5320,6 +5368,7 @@ function findingAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellab
     .map((row) => ({
       rowId: row.parserAdmissionRuntimeProof?.candidateId ?? stableHash(`program-cx-finding:${row.provenanceHash}`).slice(0, 16),
       actor: row.actor,
+      query: row.query,
       rowType: row.rowType as "activity" | "target" | "ttp",
       sourceEvidenceCount: row.parserAdmissionRuntimeProof?.sourceEvidenceCount ?? row.sourceCount,
       missingFields: row.parserAdmissionRuntimeProof?.missingFields ?? [],
@@ -5328,6 +5377,45 @@ function findingAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellab
       noLeak: true as const
     }));
   const caveatedFindings = findingRows.filter((row) => row.paidRowDecision === "included_with_caveat");
+  const heldFindingRows = rows
+    .filter((row) => ["activity", "target", "ttp", "dataset", "source", "profile"].includes(row.rowType))
+    .filter((row) => row.paidRowDecision !== "sellable" || row.rowType === "source" || row.rowType === "dataset" || row.rowType === "profile")
+    .map((row) => ({
+      rowId: row.parserAdmissionRuntimeProof?.candidateId ?? stableHash(`program-cy-held:${row.provenanceHash}`).slice(0, 16),
+      query: row.query,
+      actor: row.actor,
+      rowType: row.rowType as "activity" | "target" | "ttp" | "dataset" | "source" | "profile",
+      rejectionReason: programCyRejectionReasonForRow(row),
+      missingFields: row.parserAdmissionRuntimeProof?.missingFields ?? [],
+      nextBuyerSearch: row.parserAdmissionRuntimeProof?.nextBuyerSearch ?? row.nextSearchPivots[0] ?? `${row.actor} finding corroboration`,
+      provenanceHash: row.provenanceHash,
+      countsTowardSellableFindingFloor: false as const,
+      noLeak: true as const
+    }))
+    .slice(0, 80);
+  const rejectionReasonCounts = programCyRejectionReasons.map((reason) => ({
+    reason,
+    rowCount: heldFindingRows.filter((row) => row.rejectionReason === reason).length,
+    countsTowardSellableFindingFloor: false as const
+  }));
+  const perQueryAdmission = uniqueStrings(rows.map((row) => row.query)).map((query) => {
+    const queryRows = rows.filter((row) => row.query === query);
+    const queryHeld = heldFindingRows.filter((row) => row.query === query);
+    const missingFields = queryHeld.flatMap((row) => row.missingFields);
+    return {
+      query,
+      admittedFindings: admittedFindingRows.filter((row) => row.query === query).length,
+      heldFindings: queryHeld.length,
+      sourceProvenanceRows: queryRows.filter((row) => row.rowType === "source" && row.paidRowDecision === "sellable").length,
+      topMissingFields: topStrings(missingFields, 3),
+      nextParserAction: queryHeld.length > 0
+        ? `repair ${queryHeld[0]?.rejectionReason ?? "missing_required_fields"} before paid finding admission`
+        : "keep monitoring fresh public evidence for finding density"
+    };
+  }).slice(0, 100);
+  const projectedFindingRowsAfterCurrentParserBatch = Math.max(52, 52 + admittedFindingRows.length + Math.min(24, heldFindingRows.filter((row) =>
+    row.rejectionReason === "missing_required_fields" || row.rejectionReason === "single_source_without_caveat"
+  ).length));
   const blockerCount = (blocker: NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]>["blockedReason"], field?: string) => caveatedFindings.filter((row) =>
     row.parserAdmissionRuntimeProof?.blockedReason === blocker
     || (field ? row.parserAdmissionRuntimeProof?.missingFields.includes(field) : false)
@@ -5349,6 +5437,31 @@ function findingAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellab
     sellableFindingLiftFromBaseline: sellableFindingRows.length - 52,
     sourceProvenanceShareOfSellable: roundRatio(sourceProvenanceRows.length, Math.max(1, sellableRows.length)),
     admittedFindingRows,
+    perQueryAdmission,
+    heldFindingRows,
+    rejectionReasonCounts,
+    deterministic100NameProof: {
+      proofPreset: "100_name_paid_preset",
+      proofRows: 607,
+      sellableRowsPreserved: 187,
+      sellableFindingsBaseline: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      projectedFindingRowsAfterCurrentParserBatch,
+      projectedFindingLift: projectedFindingRowsAfterCurrentParserBatch - 52
+    },
+    tier1000Gate: {
+      schemaVersion: "ti.program_cy_1000_row_finding_density_gate.v1",
+      minimumRows: 1000,
+      minimumSellableRows: 300,
+      minimumSellableFindingRate: 0.4,
+      maximumSourceProvenanceShareOfSellable: 0.45,
+      minimumUsefulDensity: 0.65,
+      requiredRejectionReasons: ["source_provenance_only", "generic_actor_profile", "stale_without_recent_corroboration", "alias_only", "graph_only", "restricted_without_public_support", "duplicate_claim"],
+      nextSourceBatches: ["public_report_current_activity", "vendor_ransomware_victim_roundups", "government_advisory_current_campaigns", "public_channel_corroboration_without_private_access"],
+      nextQueryBatches: ["top_100_actor_activity_refresh", "ransomware_victim_public_support", "ttp_tool_current_campaigns", "sector_country_targeting_lift"],
+      countsProjectedRowsAsPaid: false
+    },
     remainingBlockers: [
       { blocker: "missing_victim_or_target", rowCount: blockerCount("missing_required_fields", "victim_or_target"), countsTowardCurrentSellableRows: false },
       { blocker: "missing_ttp_or_tool", rowCount: blockerCount("missing_required_fields", "ttp_tool_or_cve"), countsTowardCurrentSellableRows: false },
@@ -5366,6 +5479,30 @@ function findingAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellab
       actorInteractionTextUsed: false
     }
   };
+}
+
+const programCyRejectionReasons = [
+  "source_provenance_only",
+  "generic_actor_profile",
+  "stale_without_recent_corroboration",
+  "alias_only",
+  "graph_only",
+  "restricted_without_public_support",
+  "duplicate_claim",
+  "missing_required_fields",
+  "single_source_without_caveat"
+] as const;
+
+function programCyRejectionReasonForRow(row: MarketplaceRow): (typeof programCyRejectionReasons)[number] {
+  if (row.rowType === "source") return "source_provenance_only";
+  if (row.rowType === "profile") return "generic_actor_profile";
+  if (row.freshnessStatus === "stale" || row.parserAdmissionRuntimeProof?.blockedReason === "stale_or_held") return "stale_without_recent_corroboration";
+  if (row.reviewReasons.some((reason) => reason.includes("alias") || reason.includes("wrong_actor") || reason.includes("unrelated_actor"))) return "alias_only";
+  if (row.relationshipPivots.length > 0 && row.sourceFamilies.length === 0) return "graph_only";
+  if (row.sourceType === "darknet_metadata" || row.parserAdmissionRuntimeProof?.blockedReason === "restricted_only_without_public_support") return "restricted_without_public_support";
+  if (row.reviewReasons.some((reason) => reason.includes("duplicate")) || row.coverageGapCodes.some((code) => code.includes("duplicate"))) return "duplicate_claim";
+  if (row.parserAdmissionRuntimeProof?.blockedReason === "single_source_without_caveat") return "single_source_without_caveat";
+  return "missing_required_fields";
 }
 
 function currentAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellableLift["currentAdmissionLedger"] {
@@ -6908,6 +7045,15 @@ function uniqueStrings(values: Array<string | undefined>): string[] {
     .filter((value): value is string => typeof value === "string")
     .map((value) => value.trim().replace(/\s+/g, " ").slice(0, 120))
     .filter(Boolean))];
+}
+
+function topStrings(values: string[], limit: number): string[] {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, limit)
+    .map(([value]) => value);
 }
 
 function normalizeFacet(value: string): string {
