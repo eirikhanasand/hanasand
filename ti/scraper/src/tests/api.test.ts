@@ -14819,6 +14819,27 @@ describe("api v1", () => {
         store,
         frontier: new FocusedFrontier()
       }));
+      const publicTiAnswer = response.publicTiAnswer as {
+        buyerSearchCard: {
+          schemaVersion: string;
+          status: string;
+          actor: string;
+          summary: string;
+          recentActivity: string[];
+          victimsTargets: string[];
+          ttpTools: string[];
+          sourcePivots: string[];
+          freshness: { status: string; updatedAt: string; lastSeenAt?: string };
+          confidence: { score: number; label: string; reason: string };
+          nextSearches: string[];
+          safety: {
+            noRawLeakData: boolean;
+            noUnsafeUrls: boolean;
+            noCredentials: boolean;
+            restrictedMaterial: string;
+          };
+        };
+      };
       const profile = response.actorProfile as {
         status: string;
         confidence: number;
@@ -15005,6 +15026,26 @@ describe("api v1", () => {
       if (item.expect.victim) expect(profile.answer.victims).toContain(item.expect.victim);
       if (item.expect.victim) expect(profile.answer.claims.find((claim) => claim.kind === "victim" && claim.value === item.expect.victim)?.evidenceIds.length).toBeGreaterThan(0);
       if (item.query === "APT29") expect(profile.answer.claims.some((claim) => claim.ledgerIds.includes("ledger_api_apt29_ready"))).toBe(true);
+      expect(publicTiAnswer.buyerSearchCard).toMatchObject({
+        schemaVersion: "ti.public_buyer_search_card.v1",
+        actor: item.query,
+        safety: {
+          noRawLeakData: true,
+          noUnsafeUrls: true,
+          noCredentials: true,
+          restrictedMaterial: "metadata_only_or_suppressed"
+        }
+      });
+      expect(publicTiAnswer.buyerSearchCard.summary.length).toBeGreaterThan(0);
+      expect(publicTiAnswer.buyerSearchCard.recentActivity.length).toBeGreaterThan(0);
+      expect(publicTiAnswer.buyerSearchCard.sourcePivots.length).toBeGreaterThan(0);
+      expect(publicTiAnswer.buyerSearchCard.nextSearches.length).toBeGreaterThan(0);
+      expect(publicTiAnswer.buyerSearchCard.confidence.score).toBeGreaterThanOrEqual(0);
+      expect(publicTiAnswer.buyerSearchCard.confidence.score).toBeLessThanOrEqual(1);
+      if (item.expect.victim) expect(publicTiAnswer.buyerSearchCard.victimsTargets).toContain(item.expect.victim);
+      if (item.expect.ttp) expect(publicTiAnswer.buyerSearchCard.ttpTools).toContain(item.expect.ttp);
+      if (item.expect.malware) expect(publicTiAnswer.buyerSearchCard.ttpTools).toContain(item.expect.malware);
+      if (item.expect.vulnerability) expect(publicTiAnswer.buyerSearchCard.ttpTools).toContain(item.expect.vulnerability);
       if (item.expect.warning) expect(profile.answer.reviewGates.some((gate) => gate.state !== "passed")).toBe(true);
       if (item.expect.warning) expect(profile.answer.readinessSla.explanations.length).toBeGreaterThan(0);
       if (profile.answer.promotionPolicy.state === "ready") expect(profile.answer.promotionPolicy.canPromote).toBe(true);
@@ -15528,6 +15569,18 @@ describe("api v1", () => {
         freshness: { showLastSeen: boolean; noLastSeenFiction: boolean };
         polling: { intervalSeconds: number; nextPollAfterSeconds: number; hint: string };
       };
+      buyerSearchCard: {
+        schemaVersion: string;
+        status: string;
+        summary: string;
+        recentActivity: string[];
+        victimsTargets: string[];
+        ttpTools: string[];
+        sourcePivots: string[];
+        nextSearches: string[];
+        confidence: { score: number; label: string; reason: string };
+        safety: { noRawLeakData: boolean; noUnsafeUrls: boolean; noCredentials: boolean };
+      };
       safeWording: { overstatesLiveSnippets: boolean; rawEvidenceExposed: boolean; restrictedPayloadsExposed: boolean; guidance: string[] };
     };
 
@@ -15570,6 +15623,18 @@ describe("api v1", () => {
       intervalSeconds: 3,
       nextPollAfterSeconds: 3,
       hint: "poll_after_3_seconds"
+    });
+    expect(publicTiAnswer.buyerSearchCard).toMatchObject({
+      schemaVersion: "ti.public_buyer_search_card.v1",
+      status: "searching",
+      summary: "Searching",
+      recentActivity: [],
+      victimsTargets: [],
+      ttpTools: [],
+      sourcePivots: [],
+      nextSearches: [],
+      confidence: { score: 0, label: "unknown" },
+      safety: { noRawLeakData: true, noUnsafeUrls: true, noCredentials: true }
     });
     expect(publicTiAnswer.safeWording.overstatesLiveSnippets).toBe(false);
     expect(publicTiAnswer.safeWording.rawEvidenceExposed).toBe(false);

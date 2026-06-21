@@ -2949,6 +2949,10 @@ function publicTiAnswerForSearch(input: {
     ? stringArray(compactAnswerCopy.summary)
     : stringArray(contract.safeSummary);
   const searchingOnly = responsiveSafeSummary.length === 1 && responsiveSafeSummary[0] === "Searching";
+  const sourceSupported = !searchingOnly && (
+    arrayRecords(contract.evidenceLedgerReferences).length > 0
+    || stringArray(responsiveSafeSummary).some((line) => line !== "Searching")
+  );
   return {
     ...contract,
     safeSummary: responsiveSafeSummary,
@@ -2956,6 +2960,14 @@ function publicTiAnswerForSearch(input: {
     stateMachine,
     releaseCandidate,
     ux,
+    buyerSearchCard: publicBuyerSearchCardForSearch({
+      actorProfile: input.actorProfile,
+      contract,
+      answer,
+      ux,
+      sourceSupported,
+      searchingOnly
+    }),
     route: {
       endpoint: "/v1/intel/search",
       publicWrapperPath: "/api/ti/search",
@@ -3008,6 +3020,126 @@ function publicTiAnswerForSearch(input: {
       releaseState: input.sla.releaseState,
       answerReadiness: input.sla.answerReadiness,
       polling: input.sla.polling
+    }
+  };
+}
+
+function publicBuyerSearchCardForSearch(input: {
+  actorProfile: ReturnType<typeof actorProfileForQuery>;
+  contract: Record<string, unknown>;
+  answer: Record<string, unknown>;
+  ux: ReturnType<typeof publicTiAnswerUxSemantics>;
+  sourceSupported: boolean;
+  searchingOnly: boolean;
+}) {
+  const query = String(input.contract.query ?? input.actorProfile.actor);
+  if (input.searchingOnly || !input.sourceSupported) {
+    return {
+      schemaVersion: "ti.public_buyer_search_card.v1",
+      status: "searching",
+      actor: query,
+      summary: "Searching",
+      recentActivity: [],
+      victimsTargets: [],
+      ttpTools: [],
+      sourcePivots: [],
+      freshness: {
+        status: "searching",
+        updatedAt: String(record(input.ux.freshness)?.updatedAt ?? nowIso())
+      },
+      confidence: {
+        score: 0,
+        label: "unknown",
+        reason: "waiting for safe public evidence"
+      },
+      nextSearches: [],
+      safety: {
+        noRawLeakData: true,
+        noUnsafeUrls: true,
+        noCredentials: true,
+        restrictedMaterial: "metadata_only_or_suppressed"
+      }
+    };
+  }
+  const claims = arrayRecords(input.answer.claims);
+  const analystFusion = record(input.answer.analystFusion) ?? {};
+  const recentAttacks = arrayRecords(analystFusion.recentAttacks);
+  const targets = record(input.actorProfile.targets) ?? {};
+  const victimsTargets = uniqueStrings([
+    ...stringArray(targets.victims),
+    ...stringArray(targets.sectors),
+    ...stringArray(targets.regions),
+    ...recentAttacks.flatMap((attack) => [
+      typeof attack.victim === "string" ? attack.victim : "",
+      ...stringArray(attack.sectors),
+      ...stringArray(attack.regions)
+    ])
+  ]).slice(0, 8);
+  const ttpTools = uniqueStrings([
+    ...stringArray(input.actorProfile.ttps),
+    ...stringArray(input.actorProfile.malwareTools),
+    ...stringArray(input.actorProfile.vulnerabilities),
+    ...recentAttacks.flatMap((attack) => [
+      ...stringArray(attack.ttps),
+      ...stringArray(attack.malwareTools),
+      ...stringArray(attack.vulnerabilities)
+    ])
+  ]).slice(0, 8);
+  const recentActivity = uniqueStrings([
+    ...recentAttacks.map((attack) => {
+      const parts = uniqueStrings([
+        typeof attack.victim === "string" ? attack.victim : "",
+        ...stringArray(attack.sectors),
+        ...stringArray(attack.regions),
+        ...stringArray(attack.ttps),
+        ...stringArray(attack.malwareTools),
+        ...stringArray(attack.vulnerabilities)
+      ]).slice(0, 4);
+      return parts.length > 0 ? parts.join(" / ") : "";
+    }),
+    ...stringArray(input.actorProfile.summary).slice(0, 2)
+  ]).slice(0, 5);
+  const sourceFamilies = uniqueStrings(claims.flatMap((claim) => stringArray(claim.sourceFamilySupport))).slice(0, 6);
+  const ledgerCount = uniqueStrings(claims.flatMap((claim) => stringArray(claim.ledgerIds))).length;
+  const sourcePivots = uniqueStrings([
+    ...sourceFamilies.map((family) => `family:${family}`),
+    ledgerCount > 0 ? `ledger_refs:${ledgerCount}` : "",
+    ...stringArray(record(record(input.answer.readinessSla)?.evidenceFamilySupport)?.evidenceIds).slice(0, 3).map((id) => `evidence:${id}`)
+  ]).slice(0, 8);
+  const confidence = Number(input.actorProfile.confidence);
+  const confidenceScore = Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0;
+  const confidenceLabel = confidenceScore >= 0.75 ? "high" : confidenceScore >= 0.55 ? "medium" : "low";
+  const freshness = record(input.ux.freshness) ?? {};
+  const nextSearches = uniqueStrings([
+    query,
+    ...victimsTargets.slice(0, 3).map((pivot) => `${query} ${pivot}`),
+    ...ttpTools.slice(0, 3).map((pivot) => `${query} ${pivot}`)
+  ]).slice(0, 6);
+  return {
+    schemaVersion: "ti.public_buyer_search_card.v1",
+    status: String(input.answer.status ?? input.contract.displayState ?? "partial"),
+    actor: query,
+    summary: stringArray(record(input.ux.compactAnswerCopy)?.summary)[0] ?? stringArray(input.actorProfile.summary)[0] ?? query,
+    recentActivity,
+    victimsTargets,
+    ttpTools,
+    sourcePivots,
+    freshness: {
+      status: String(input.answer.status ?? input.contract.displayState ?? "partial"),
+      updatedAt: String(freshness.updatedAt ?? nowIso()),
+      lastSeenAt: typeof freshness.lastSeenAt === "string" ? freshness.lastSeenAt : undefined
+    },
+    confidence: {
+      score: Number(confidenceScore.toFixed(3)),
+      label: confidenceLabel,
+      reason: `${sourceFamilies.length || 0} source families, ${claims.length} public claims`
+    },
+    nextSearches,
+    safety: {
+      noRawLeakData: true,
+      noUnsafeUrls: true,
+      noCredentials: true,
+      restrictedMaterial: "metadata_only_or_suppressed"
     }
   };
 }

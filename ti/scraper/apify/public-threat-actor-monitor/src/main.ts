@@ -258,6 +258,34 @@ interface MarketplaceRow {
   buyerSummary?: string;
   recommendedBuyerAction?: string;
   keyPivots?: string[];
+  buyerSearchCard?: {
+    schemaVersion: "ti.apify_buyer_search_card.v1";
+    status: "sellable" | "lead" | "coverage_gap" | "held";
+    actor: string;
+    summary: string;
+    recentActivity: string[];
+    victimsTargets: string[];
+    ttpTools: string[];
+    sourcePivots: string[];
+    freshness: {
+      status: MarketplaceRow["freshnessStatus"];
+      observedAt?: string;
+      firstReportedAt?: string;
+      lastReportedAt?: string;
+    };
+    confidence: {
+      score: number;
+      label: "high" | "medium" | "low";
+      reason: string;
+    };
+    nextSearches: string[];
+    safety: {
+      noRawLeakData: true;
+      noUnsafeUrls: true;
+      noCredentials: true;
+      restrictedMaterial: "metadata_only_or_suppressed";
+    };
+  };
   paidRowDecision?: "sellable" | "included_with_caveat" | "coverage_gap_only" | "hold" | "suppress";
   paidRowReason?: string;
   paidRowReasonCodes?: string[];
@@ -3119,6 +3147,7 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
     buyerSummary: buyerSummaryForRow(row, decision, whyWorthPaying),
     recommendedBuyerAction: recommendedBuyerActionForRow(row, decision),
     keyPivots: keyPivotsForRow(row),
+    buyerSearchCard: buyerSearchCardForRow(row, decision, whyWorthPaying),
     whyWorthPayingFor: whyWorthPaying,
     ...graphLift,
     marketplaceGraphSignals,
@@ -3135,6 +3164,86 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
       `graph_support:${graphSellableSupport.sourceFamilyProofState}`,
       `parser_admission:${parserAdmissionRuntimeProof.admissionDecision}`
     ]).sort()
+  };
+}
+
+function buyerSearchCardForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">,
+  whyWorthPaying: string
+): NonNullable<MarketplaceRow["buyerSearchCard"]> {
+  const status: NonNullable<MarketplaceRow["buyerSearchCard"]>["status"] = decision.paidRowDecision === "sellable"
+    ? "sellable"
+    : decision.paidRowDecision === "included_with_caveat"
+      ? "lead"
+      : decision.paidRowDecision === "coverage_gap_only"
+        ? "coverage_gap"
+        : "held";
+  const recentActivity = uniqueStrings([
+    row.claimType ? row.claimType.replaceAll("_", " ") : "",
+    row.claimedDate ? `claimed ${row.claimedDate}` : "",
+    row.impact ?? "",
+    row.relationshipSummary
+  ].filter(Boolean)).slice(0, 4);
+  const victimsTargets = uniqueStrings([
+    row.victimName ?? "",
+    row.sector ?? "",
+    ...(row.affectedSectors ?? []),
+    row.country ?? "",
+    ...(row.countries ?? []),
+    ...(row.regions ?? [])
+  ].filter(Boolean)).slice(0, 6);
+  const ttpTools = uniqueStrings([
+    row.ttp ?? "",
+    row.attackId ?? "",
+    row.tactic ?? "",
+    ...row.relationshipPivots
+      .filter((pivot) => /^(ttp|attack|tactic|tool|malware|cve):/i.test(pivot))
+      .map((pivot) => pivot.replace(/^[^:]+:/, ""))
+  ].filter(Boolean)).slice(0, 6);
+  const sourcePivots = uniqueStrings([
+    ...(row.sourceName ? [`source:${row.sourceName}`] : []),
+    ...row.sourceFamilies.map((family) => `family:${family}`),
+    ...(row.sourceId ? [`id:${row.sourceId}`] : []),
+    ...(row.publisherCount ? [`publishers:${row.publisherCount}`] : []),
+    ...(row.corroboratingSourceIds?.length ? [`corroborating:${row.corroboratingSourceIds.length}`] : [])
+  ]).slice(0, 6);
+  const nextSearches = uniqueStrings([
+    ...keyPivotsForRow(row),
+    ...row.nextSearchPivots
+  ]).slice(0, 6);
+  const confidenceLabel: NonNullable<MarketplaceRow["buyerSearchCard"]>["confidence"]["label"] = row.confidence >= 0.75
+    ? "high"
+    : row.confidence >= 0.55
+      ? "medium"
+      : "low";
+  return {
+    schemaVersion: "ti.apify_buyer_search_card.v1",
+    status,
+    actor: row.actor,
+    summary: buyerSummaryForRow(row, decision, whyWorthPaying),
+    recentActivity: recentActivity.length > 0 ? recentActivity : [row.title],
+    victimsTargets,
+    ttpTools,
+    sourcePivots,
+    freshness: {
+      status: row.freshnessStatus,
+      observedAt: row.lastReportedAt ?? row.claimedDate ?? row.lastSeen,
+      firstReportedAt: row.firstReportedAt,
+      lastReportedAt: row.lastReportedAt
+    },
+    confidence: {
+      score: Number(row.confidence.toFixed(3)),
+      label: confidenceLabel,
+      reason: row.paidRowReason ?? whyWorthPaying
+    },
+    nextSearches,
+    safety: {
+      noRawLeakData: true,
+      noUnsafeUrls: true,
+      noCredentials: true,
+      restrictedMaterial: "metadata_only_or_suppressed"
+    }
   };
 }
 
@@ -4414,6 +4523,7 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
   const revenueConversionChecklist = revenueConversionChecklistForRows(rows, paidRowQuality);
   const pricingProof = pricingProofForOutput();
   const buyerSampleRows = buyerSampleRowsForOutput();
+  const buyerVisibleOutputQuality = buyerVisibleOutputQualityForRows(rows);
   const fakeTractionGuards = [
     "store views remain null until sourced from Apify analytics",
     "unique users remain null until sourced from Apify analytics",
@@ -4453,11 +4563,47 @@ function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationS
     revenueConversionChecklist,
     pricingProof,
     buyerSampleRows,
+    buyerVisibleOutputQuality,
     fakeTractionGuards,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
     dailyCollectionRun: dailyCollectionRunForRows(rows),
     rows
+  };
+}
+
+function buyerVisibleOutputQualityForRows(rows: MarketplaceRow[]) {
+  const rowsWithBuyerSearchCard = rows.filter((row) => row.buyerSearchCard?.schemaVersion === "ti.apify_buyer_search_card.v1");
+  const completeBuyerSearchCards = rowsWithBuyerSearchCard.filter((row) => {
+    const card = row.buyerSearchCard;
+    if (!card) return false;
+    return card.actor.length > 0
+      && card.summary.length >= 24
+      && card.recentActivity.length > 0
+      && card.sourcePivots.length > 0
+      && card.nextSearches.length > 0
+      && card.confidence.score >= 0
+      && card.confidence.score <= 1
+      && card.safety.noRawLeakData
+      && card.safety.noUnsafeUrls
+      && card.safety.noCredentials;
+  });
+  const buyerReadyCards = completeBuyerSearchCards.filter((row) => row.buyerSearchCard?.status === "sellable" || row.buyerSearchCard?.status === "lead");
+  return {
+    schemaVersion: "ti.apify_buyer_visible_output_quality.v1",
+    rowCount: rows.length,
+    rowsWithBuyerSearchCard: rowsWithBuyerSearchCard.length,
+    completeBuyerSearchCards: completeBuyerSearchCards.length,
+    buyerReadyCards: buyerReadyCards.length,
+    cardCoverageRate: rows.length === 0 ? 0 : Number((rowsWithBuyerSearchCard.length / rows.length).toFixed(3)),
+    completeCardRate: rows.length === 0 ? 0 : Number((completeBuyerSearchCards.length / rows.length).toFixed(3)),
+    buyerReadyCardRate: rows.length === 0 ? 0 : Number((buyerReadyCards.length / rows.length).toFixed(3)),
+    requiredBuyerFields: ["actor", "summary", "recentActivity", "victimsTargets", "ttpTools", "sourcePivots", "freshness", "confidence", "nextSearches", "safety"],
+    noLeakFailures: rowsWithBuyerSearchCard.filter((row) =>
+      row.buyerSearchCard?.safety.noRawLeakData !== true
+      || row.buyerSearchCard?.safety.noUnsafeUrls !== true
+      || row.buyerSearchCard?.safety.noCredentials !== true
+    ).length
   };
 }
 

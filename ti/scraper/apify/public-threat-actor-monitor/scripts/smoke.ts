@@ -38,6 +38,7 @@ if (!Array.isArray(output) || output.length < 4) {
 }
 for (const row of output) {
   const publicBuyerText = `${row.buyerSummary ?? ""} ${row.recommendedBuyerAction ?? ""}`;
+  const card = row.buyerSearchCard as Record<string, unknown> | undefined;
   if (
     typeof row.buyerSummary !== "string"
     || row.buyerSummary.length < 24
@@ -46,10 +47,26 @@ for (const row of output) {
     || !Array.isArray(row.keyPivots)
     || row.keyPivots.length < 1
     || !row.keyPivots.every((pivot) => typeof pivot === "string" && pivot.length > 0)
+    || !card
+    || card.schemaVersion !== "ti.apify_buyer_search_card.v1"
+    || typeof card.actor !== "string"
+    || card.actor.length < 1
+    || typeof card.summary !== "string"
+    || card.summary.length < 24
+    || !Array.isArray(card.recentActivity)
+    || card.recentActivity.length < 1
+    || !Array.isArray(card.sourcePivots)
+    || card.sourcePivots.length < 1
+    || !Array.isArray(card.nextSearches)
+    || card.nextSearches.length < 1
+    || typeof (card.confidence as Record<string, unknown> | undefined)?.score !== "number"
+    || (card.safety as Record<string, unknown> | undefined)?.noRawLeakData !== true
+    || (card.safety as Record<string, unknown> | undefined)?.noUnsafeUrls !== true
+    || (card.safety as Record<string, unknown> | undefined)?.noCredentials !== true
   ) {
-    throw new Error("OUTPUT rows must expose buyer summaries, recommended actions, and key pivots");
+    throw new Error("OUTPUT rows must expose buyer summaries, recommended actions, key pivots, and buyer search cards");
   }
-  if (/\b(agent_\d+|proof|blocker|governance|internal)\b/i.test(publicBuyerText)) {
+  if (/\b(agent_\d+|proof|blocker|governance|internal)\b/i.test(`${publicBuyerText} ${card.summary ?? ""}`)) {
     throw new Error("Buyer-facing row fields must avoid internal proof, blocker, governance, or agent wording");
   }
 }
@@ -87,6 +104,20 @@ if (
 }
 if (Number(paidRowQuality.sellable) < 19 || Number(paidRowQuality.usefulForBuyer) < 20) {
   throw new Error("APT42 daily collection smoke must keep at least 19 sellable and 20 buyer-useful candidate rows after row prioritization");
+}
+const buyerVisibleOutputQuality = outputRecord.buyerVisibleOutputQuality as Record<string, unknown> | undefined;
+if (
+  !buyerVisibleOutputQuality
+  || buyerVisibleOutputQuality.schemaVersion !== "ti.apify_buyer_visible_output_quality.v1"
+  || buyerVisibleOutputQuality.rowCount !== output.length
+  || buyerVisibleOutputQuality.rowsWithBuyerSearchCard !== output.length
+  || buyerVisibleOutputQuality.completeBuyerSearchCards !== output.length
+  || Number(buyerVisibleOutputQuality.buyerReadyCards) < 20
+  || buyerVisibleOutputQuality.cardCoverageRate !== 1
+  || buyerVisibleOutputQuality.completeCardRate !== 1
+  || buyerVisibleOutputQuality.noLeakFailures !== 0
+) {
+  throw new Error("OUTPUT record must report complete safe buyer search card coverage for every row");
 }
 const dailyCollectionRun = outputRecord.dailyCollectionRun as Record<string, unknown> | undefined;
 if (
