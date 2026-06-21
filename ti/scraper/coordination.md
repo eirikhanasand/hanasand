@@ -41,6 +41,8 @@ Paid release must remain blocked until hosted proof reaches at least 100 sellabl
 - Agent 09: hosted proof reruns, marketplace truth import, and delta measurement.
 - Agent 10: release gate honesty, cost/useful-row guard, and paid-traffic block enforcement.
 
+Agent 01 is adding a review-only source-pack approval outcome read model to `/v1/analyst/source-activation-packets`; it must not import source packs, mutate registry rows, enqueue crawling, expose raw URLs/payloads, or count projected rows toward paid gates before proof.
+
 ## What Counts
 
 Counts as monetization progress:

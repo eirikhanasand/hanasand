@@ -5311,11 +5311,12 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
       sourceAtlasApprovalReceipts: approvalReceipts.summary.receipts,
       sourceAtlasAuditRowsWithApprovalReceipts: approvalReceipts.summary.matchedAuditRows,
       sourcePackCandidateReviewRows: sourcePackReview.summary.reviewRows,
+      sourcePackApprovalOutcomeRows: sourcePackReview.approvalOutcomeSummary.outcomeRows,
       approvalRequired: allPackets.filter((packet) => packet.execution === "approval_required").length,
       dryRunOnly: allPackets.filter((packet) => packet.execution === "dry_run_only").length,
       blocked: allPackets.filter((packet) => packet.execution === "blocked").length,
       approvedDryRunPackets: allPackets.filter((packet) => packet.approvedAt).length,
-      meaningfulWorkCount: allPackets.filter((packet) => packet.execution !== "blocked" || !packet.approvedAt).length + atlasAudit.summary.auditRows + sourcePackReview.summary.reviewRows,
+      meaningfulWorkCount: allPackets.filter((packet) => packet.execution !== "blocked" || !packet.approvedAt).length + atlasAudit.summary.auditRows + sourcePackReview.summary.reviewRows + sourcePackReview.approvalOutcomeSummary.outcomeRows,
       byExecution
     },
     packets,
@@ -5325,11 +5326,14 @@ function buildAnalystSourceActivationPacketsResponse(store: ScraperStore, input:
     sourceAtlasApprovalReceipts: approvalReceipts.receipts,
     sourcePackReviewSummary: sourcePackReview.summary,
     sourcePackReviewPackets: sourcePackReview.packets,
+    sourcePackApprovalOutcomeSummary: sourcePackReview.approvalOutcomeSummary,
+    sourcePackApprovalOutcomeRows: sourcePackReview.approvalOutcomeRows,
     guarantees: [
       "activation packets are operator/legal approval metadata, not source mutations",
       "source-atlas audit packets are persisted-row review context and are not executable approval packets",
       "source-atlas approval receipts link operator decisions back to audit rows where packet ids or atlas source ids match",
       "source-pack candidate review rows are economics review context and do not import source packs",
+      "source-pack approval outcome rows are review-only triage state and never apply approvals or source-pack activation",
       "approving a packet records dry-run approval context only",
       "restricted sources are not silently restored, crawled, or fetched by this route",
       "raw leak downloads, credential material, private access, CAPTCHA/auth bypass, and threat-actor interaction remain blocked"
@@ -5486,6 +5490,8 @@ function buildSourceAtlasSourcePackCandidateReviewReadModel(input: { tenantId?: 
   const byAcquisitionMode = countBy(rows, (row) => row.acquisition_mode);
   const baseline = atlas.sourceEconomics.sourcePackCandidates.baseline;
   const projectedPayworthySourceCount = baseline.currentPayworthySourceCount + rows.reduce((sum, row) => sum + row.expected_payworthy_lift, 0);
+  const approvalOutcomeRows = rows.slice(0, input.limit).map(safeSourceAtlasSourcePackApprovalOutcomeDto);
+  const approvalOutcomeCounts = countSourcePackApprovalOutcomes(approvalOutcomeRows);
   return {
     summary: {
       schemaVersion: "ti.source_atlas_source_pack_candidate_review_read_model.v1",
@@ -5524,10 +5530,148 @@ function buildSourceAtlasSourcePackCandidateReviewReadModel(input: { tenantId?: 
       sourceActivationApplied: false,
       executableApprovalPacketsCreated: false
     },
+    approvalOutcomeSummary: {
+      schemaVersion: "ti.source_atlas_source_pack_approval_outcome_read_model.v1",
+      sourceTable: "source_atlas_source_pack_candidate_review",
+      sourceRoute: "/v1/sources/atlas",
+      sourceField: "sourceEconomics.sourcePackCandidates",
+      route: "/v1/analyst/source-activation-packets",
+      outcomeRows: approvalOutcomeRows.length,
+      tenantId: input.tenantId,
+      generatedAt: atlas.generatedAt,
+      outcomesTracked: SOURCE_PACK_APPROVAL_OUTCOMES,
+      byOutcome: approvalOutcomeCounts,
+      approvalRowsApplied: 0,
+      projectedRowsCountedTowardPaidGateNow: 0,
+      reviewOnly: true,
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      sourcePackImported: false,
+      sourceActivationApplied: false,
+      registryMutationPlanned: false,
+      crawlEnqueued: false,
+      rawUrlsExposed: false,
+      rawPayloadsExposed: false,
+      executableApprovalPacketsCreated: false
+    },
+    approvalOutcomeRows,
     packets: rows.slice(0, input.limit).map((row) =>
       safeSourceAtlasSourcePackCandidateReviewPacketDto(row, paidActorGateByPackId.get(row.pack_id))
     )
   };
+}
+
+const SOURCE_PACK_APPROVAL_OUTCOMES = [
+  "approved",
+  "held",
+  "rejected",
+  "duplicate",
+  "legal_review",
+  "parser_needed",
+  "scheduler_needed"
+] as const;
+
+type SourcePackApprovalOutcome = (typeof SOURCE_PACK_APPROVAL_OUTCOMES)[number];
+
+function sourcePackApprovalOutcomeFor(row: SourceAtlasSourcePackCandidateReviewRow): SourcePackApprovalOutcome {
+  if (row.expected_payworthy_lift <= 0) return "rejected";
+  if (row.acquisition_mode === "replacement_pack") return "duplicate";
+  if (row.acquisition_mode === "legal_review_pack") return "legal_review";
+  if (row.acquisition_mode === "parser_repair_pack") return "parser_needed";
+  if (row.acquisition_mode === "public_source_pack" || row.expected_scheduler_tasks_per_day > 0 || row.required_proof.includes("daily_actor_run_delta")) return "scheduler_needed";
+  if (row.required_proof.includes("legal_review_current")) return "legal_review";
+  if (row.required_proof.includes("parser_certified")) return "parser_needed";
+  return "held";
+}
+
+function sourcePackApprovalOwnerHandoffFor(outcome: SourcePackApprovalOutcome, row: SourceAtlasSourcePackCandidateReviewRow) {
+  switch (outcome) {
+    case "approved":
+      return row.agent01_source_registry_handoff;
+    case "duplicate":
+      return row.agent07_quality_handoff;
+    case "legal_review":
+      return row.agent01_source_registry_handoff;
+    case "parser_needed":
+      return row.agent03_parser_handoff;
+    case "scheduler_needed":
+      return row.agent09_marketplace_handoff;
+    case "rejected":
+      return row.agent10_slo_handoff;
+    case "held":
+    default:
+      return row.agent01_source_registry_handoff;
+  }
+}
+
+function sourcePackApprovalRollbackReasonFor(outcome: SourcePackApprovalOutcome): string {
+  switch (outcome) {
+    case "approved":
+      return "Keep approval as a recorded review outcome only until a separate activation workflow applies it.";
+    case "duplicate":
+      return "Keep candidate source pack unimported until duplicate suppression proof identifies the canonical replacement.";
+    case "legal_review":
+      return "Keep candidate source pack unimported until legal and robots review is current.";
+    case "parser_needed":
+      return "Keep candidate source pack unimported until parser certification proves useful safe rows.";
+    case "scheduler_needed":
+      return "Keep candidate source pack unimported until scheduler cadence and daily Actor row deltas are proven.";
+    case "rejected":
+      return "Leave candidate source pack rejected and require a fresh candidate packet before reconsideration.";
+    case "held":
+    default:
+      return "Hold candidate source pack as review-only and require explicit proof before any registry or crawler change.";
+  }
+}
+
+function safeSourceAtlasSourcePackApprovalOutcomeDto(row: SourceAtlasSourcePackCandidateReviewRow) {
+  const outcome = sourcePackApprovalOutcomeFor(row);
+  return {
+    outcomeId: stableId("source_pack_approval_outcome", `${row.tenant_id ?? "global"}:${row.pack_id}:${outcome}`),
+    packId: row.pack_id,
+    tenantId: row.tenant_id,
+    rank: row.rank,
+    packLabel: row.pack_label,
+    family: row.family,
+    acquisitionMode: row.acquisition_mode,
+    outcome,
+    approvalApplied: false,
+    countsTowardPaidGateNow: false,
+    sourceIds: row.source_ids,
+    safeSourceHashes: row.safe_source_hashes,
+    expectedPayworthyLift: row.expected_payworthy_lift,
+    expectedFreshRowsPerDay: row.expected_fresh_rows_per_day,
+    expectedUsefulEvidenceItemsPerDay: row.expected_useful_evidence_items_per_day,
+    expectedSchedulerTasksPerDay: row.expected_scheduler_tasks_per_day,
+    ownerHandoff: sourcePackApprovalOwnerHandoffFor(outcome, row),
+    proofNeeded: row.required_proof,
+    rollbackReason: sourcePackApprovalRollbackReasonFor(outcome),
+    provenance: {
+      sourceTable: "source_atlas_source_pack_candidate_review",
+      sourcePackCandidateId: row.pack_id,
+      generatedAt: row.generated_at,
+      safeSourceHashCount: row.safe_source_hashes.length
+    },
+    deliveryBoundary: {
+      reviewOnly: true,
+      dryRunOnly: row.dry_run,
+      sourcePackImported: false,
+      sourceActivationApplied: false,
+      registryMutationPlanned: false,
+      crawlEnqueued: false,
+      rawUrlsExposed: false,
+      rawPayloadsExposed: false,
+      executableApprovalPacket: false
+    }
+  };
+}
+
+function countSourcePackApprovalOutcomes(rows: Array<{ outcome: SourcePackApprovalOutcome }>): Record<SourcePackApprovalOutcome, number> {
+  const counts = Object.fromEntries(SOURCE_PACK_APPROVAL_OUTCOMES.map((outcome) => [outcome, 0])) as Record<SourcePackApprovalOutcome, number>;
+  for (const row of rows) counts[row.outcome] += 1;
+  return counts;
 }
 
 type SourcePackPaidActorGateReviewRow =
@@ -8132,7 +8276,7 @@ function buildEnterpriseApiContractIndex() {
     { method: "GET", path: "/v1/analyst/metadata-review-tasks", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "tasks", "notificationPackets", "claimLedger"] },
     { method: "GET", path: "/v1/analyst/loop", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "state", "runStatusClarity", "workQueue", "activityTimeline", "readinessChecklist", "reviewTasks", "sourceActivationPackets", "notificationPackets", "claimLedger"] },
     { method: "GET", path: "/v1/analyst/persistence-readiness", surface: "analyst", owner: "Agent 01/09", responseKeys: ["endpoint", "migration", "workflowTables", "readiness", "noLeakGuardrails"] },
-    { method: "GET", path: "/v1/analyst/source-activation-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets"] },
+    { method: "GET", path: "/v1/analyst/source-activation-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets", "sourcePackApprovalOutcomeSummary", "sourcePackApprovalOutcomeRows"] },
     { method: "GET", path: "/v1/analyst/source-activation-packets/{id}/execution-preview", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "readiness", "packet", "executionPreview", "forbiddenOperations"] },
     { method: "POST", path: "/v1/analyst/source-activation-packets/{id}/actions", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "dryRun", "action", "packet", "result"] },
     { method: "GET", path: "/v1/analyst/victim-notification-packets", surface: "analyst", owner: "Agent 01/09", responseKeys: ["contract", "runStatusClarity", "packets"] },

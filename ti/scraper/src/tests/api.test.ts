@@ -12288,7 +12288,7 @@ describe("api v1", () => {
       frontier: new FocusedFrontier()
     }))) as {
       contract: Record<string, unknown>;
-      runStatusClarity: { activationPackets: number; approvalRequired: number; sourceAtlasAuditRows: number; sourceAtlasApprovalReceipts: number; sourceAtlasAuditRowsWithApprovalReceipts: number; sourcePackCandidateReviewRows: number; meaningfulWorkCount: number };
+      runStatusClarity: { activationPackets: number; approvalRequired: number; sourceAtlasAuditRows: number; sourceAtlasApprovalReceipts: number; sourceAtlasAuditRowsWithApprovalReceipts: number; sourcePackCandidateReviewRows: number; sourcePackApprovalOutcomeRows: number; meaningfulWorkCount: number };
       sourceAtlasAuditSummary: { auditRows: number };
       sourceAtlasAuditPackets: unknown[];
       sourceAtlasApprovalReceiptSummary: { receipts: number; matchedAuditRows: number; pendingAuditLinks: number };
@@ -12307,6 +12307,14 @@ describe("api v1", () => {
         };
       };
       sourcePackReviewPackets: unknown[];
+      sourcePackApprovalOutcomeSummary: {
+        schemaVersion: string;
+        sourceTable: string;
+        outcomeRows: number;
+        outcomesTracked: string[];
+        byOutcome: Record<string, number>;
+      };
+      sourcePackApprovalOutcomeRows: unknown[];
       packets: unknown[];
     };
     expect(sourceActivationPackets).toMatchObject({
@@ -12324,6 +12332,7 @@ describe("api v1", () => {
     });
     expect(sourceActivationPackets.runStatusClarity.sourceAtlasAuditRows).toBeGreaterThan(0);
     expect(sourceActivationPackets.runStatusClarity.sourcePackCandidateReviewRows).toBeGreaterThan(0);
+    expect(sourceActivationPackets.runStatusClarity.sourcePackApprovalOutcomeRows).toBeGreaterThan(0);
     expect(sourceActivationPackets.runStatusClarity.meaningfulWorkCount).toBeGreaterThan(1);
     expect(sourceActivationPackets.sourceAtlasAuditSummary).toMatchObject({
       sourceTable: "source_atlas_activation_packet_audit",
@@ -12356,6 +12365,81 @@ describe("api v1", () => {
     });
     expect(sourceActivationPackets.sourcePackReviewSummary.reviewRows).toBe(sourceActivationPackets.runStatusClarity.sourcePackCandidateReviewRows);
     expect(sourceActivationPackets.sourcePackReviewSummary.paidActorGatePrioritization.prioritizedReviewRows).toBeGreaterThan(0);
+    expect(sourceActivationPackets.sourcePackApprovalOutcomeSummary).toMatchObject({
+      schemaVersion: "ti.source_atlas_source_pack_approval_outcome_read_model.v1",
+      sourceTable: "source_atlas_source_pack_candidate_review",
+      reviewOnly: true,
+      dryRun: true,
+      willMutate: false,
+      willImportSourcePacks: false,
+      willStartCrawling: false,
+      sourcePackImported: false,
+      sourceActivationApplied: false,
+      registryMutationPlanned: false,
+      crawlEnqueued: false,
+      rawUrlsExposed: false,
+      rawPayloadsExposed: false,
+      executableApprovalPacketsCreated: false
+    });
+    expect(sourceActivationPackets.sourcePackApprovalOutcomeSummary.outcomeRows).toBe(sourceActivationPackets.runStatusClarity.sourcePackApprovalOutcomeRows);
+    expect(sourceActivationPackets.sourcePackApprovalOutcomeSummary.outcomesTracked).toEqual([
+      "approved",
+      "held",
+      "rejected",
+      "duplicate",
+      "legal_review",
+      "parser_needed",
+      "scheduler_needed"
+    ]);
+    expect(Object.values(sourceActivationPackets.sourcePackApprovalOutcomeSummary.byOutcome).reduce((sum, count) => sum + count, 0)).toBe(sourceActivationPackets.sourcePackApprovalOutcomeSummary.outcomeRows);
+    expect(sourceActivationPackets.sourcePackApprovalOutcomeSummary.byOutcome.scheduler_needed).toBeGreaterThan(0);
+    expect(sourceActivationPackets.sourcePackApprovalOutcomeSummary.byOutcome.parser_needed).toBeGreaterThan(0);
+    const sourcePackApprovalOutcome = (sourceActivationPackets.sourcePackApprovalOutcomeRows as Array<{
+      outcomeId: string;
+      packId: string;
+      outcome: string;
+      safeSourceHashes: string[];
+      expectedFreshRowsPerDay: number;
+      expectedUsefulEvidenceItemsPerDay: number;
+      ownerHandoff: string;
+      proofNeeded: string[];
+      rollbackReason: string;
+      countsTowardPaidGateNow: boolean;
+      deliveryBoundary: {
+        reviewOnly: boolean;
+        dryRunOnly: boolean;
+        sourcePackImported: boolean;
+        sourceActivationApplied: boolean;
+        registryMutationPlanned: boolean;
+        crawlEnqueued: boolean;
+        rawUrlsExposed: boolean;
+        rawPayloadsExposed: boolean;
+        executableApprovalPacket: boolean;
+      };
+    }>)[0];
+    expect(sourcePackApprovalOutcome).toMatchObject({
+      countsTowardPaidGateNow: false,
+      deliveryBoundary: {
+        reviewOnly: true,
+        dryRunOnly: true,
+        sourcePackImported: false,
+        sourceActivationApplied: false,
+        registryMutationPlanned: false,
+        crawlEnqueued: false,
+        rawUrlsExposed: false,
+        rawPayloadsExposed: false,
+        executableApprovalPacket: false
+      }
+    });
+    expect(sourcePackApprovalOutcome.outcomeId).toStartWith("source_pack_approval_outcome_");
+    expect(sourcePackApprovalOutcome.packId).toStartWith("ti_source_atlas_source_pack_candidate_");
+    expect(["approved", "held", "rejected", "duplicate", "legal_review", "parser_needed", "scheduler_needed"]).toContain(sourcePackApprovalOutcome.outcome);
+    expect(sourcePackApprovalOutcome.safeSourceHashes.every((hash) => hash.startsWith("ti_source_atlas_source_"))).toBe(true);
+    expect(sourcePackApprovalOutcome.expectedFreshRowsPerDay).toBeGreaterThan(0);
+    expect(sourcePackApprovalOutcome.expectedUsefulEvidenceItemsPerDay).toBeGreaterThan(0);
+    expect(sourcePackApprovalOutcome.ownerHandoff.length).toBeGreaterThan(0);
+    expect(sourcePackApprovalOutcome.proofNeeded.length).toBeGreaterThan(0);
+    expect(sourcePackApprovalOutcome.rollbackReason.length).toBeGreaterThan(0);
     const sourcePackReviewPacket = (sourceActivationPackets.sourcePackReviewPackets as Array<{
       packId: string;
       safeSourceHashes: string[];
@@ -12421,6 +12505,7 @@ describe("api v1", () => {
       packet.paidActorGatePriority.noActivationBoundary.rawPayloadsExposed === false
     )).toBe(true);
     expect(JSON.stringify(sourceActivationPackets.sourcePackReviewPackets)).not.toContain("https://");
+    expect(JSON.stringify(sourceActivationPackets.sourcePackApprovalOutcomeRows)).not.toContain("https://");
     const atlasAuditPacket = (sourceActivationPackets.sourceAtlasAuditPackets as Array<{
       packetId: string;
       atlasSourceIds: string[];
