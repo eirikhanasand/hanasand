@@ -3,6 +3,7 @@ import { rejectedPivotReasonsForRow, relationshipLinksForRow } from "./pivots.ts
 import { contradictionStateForRow, signalStateForRow } from "./state.ts";
 import { buyerActionForSignal, freshnessHintsForRow, sourceBlockersForRow } from "./utility.ts";
 import { pivotUtility, relationshipConfidence, type SignalCounts } from "./confidence.ts";
+import type { RejectedPivotReason } from "../marketplaceRowParts/graphSignals.ts";
 
 export function marketplaceGraphSignalsForRow(
   row: MarketplaceRow,
@@ -32,7 +33,14 @@ export function marketplaceGraphSignalsForRow(
   };
 }
 
-function signalCounts(row: MarketplaceRow, relationshipLinks: string[], rejectedPivotReasons, signalState, contradictionState, evidence): SignalCounts {
+function signalCounts(
+  row: MarketplaceRow,
+  relationshipLinks: string[],
+  rejectedPivotReasons: RejectedPivotReason[],
+  signalState: SignalCounts["signalState"],
+  contradictionState: SignalCounts["contradictionState"],
+  evidence: MarketplaceRow["graphQualityLiftEvidence"]
+): SignalCounts {
   const actionPivotCount = row.nextSearchPivots.length;
   const usefulPivotCount = Math.max(actionPivotCount, relationshipLinks.filter((link) => !link.endsWith(":actor")).length);
   const corroboratedPivotCount = evidence?.sourceFamilyCorroborated ? Math.min(usefulPivotCount, row.sourceFamilyCount + actionPivotCount) : 0;

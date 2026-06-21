@@ -1,5 +1,5 @@
 import type { MarketplaceRow } from "./types.ts";
-import { caveatedLead, capabilityWithoutEvidence, coverageGap, heldRow, noEvidenceHold, parserAdmittedSellable, publicEvidenceSellable, publicFindingSellable, sourceProvenance, strongSellable, unsupportedContext } from "./paidDecision/decisions.ts";
+import { caveatedLead, capabilityWithoutEvidence, coverageGap, noEvidenceHold, parserAdmittedSellable, publicEvidenceSellable, publicFindingSellable, sourceProvenance, strongSellable, unsupportedContext } from "./paidDecision/decisions.ts";
 import { isCorroboratedPublicFinding, isSellablePublicEvidenceRow } from "./paidDecision/predicates.ts";
 export { isCorroboratedPublicFinding, isSellablePublicEvidenceRow } from "./paidDecision/predicates.ts";
 export { whyWorthPayingFor } from "./paidDecision/reasons.ts";

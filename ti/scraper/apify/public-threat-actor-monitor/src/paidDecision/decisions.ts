@@ -53,6 +53,7 @@ export function unsupportedContext(): Decision {
 function decision(paidRowDecision: Decision["paidRowDecision"], paidRowReason: string, paidRowReasonCodes: string[], buyerValueScore: number, billingGuidance: Decision["billingGuidance"], paidRowRemediationActions: Decision["paidRowRemediationActions"]): Decision {
   return { paidRowDecision, paidRowReason, paidRowReasonCodes, paidRowRemediationActions, buyerValueScore, billingGuidance };
 }
-function remediation(owner: string, action: string, expectedEffect: string) { return { owner, action, expectedEffect }; }
+type RemediationAction = NonNullable<Decision["paidRowRemediationActions"]>[number];
+function remediation(owner: RemediationAction["owner"], action: string, expectedEffect: string): RemediationAction { return { owner, action, expectedEffect }; }
 function holdCodes(row: MarketplaceRow): string[] { return [...(row.contradictionHints.length > 0 ? ["contradiction_hold"] : []), ...(row.coverageStatus === "no_evidence" ? ["no_public_evidence"] : [])]; }
 function caveatCodes(row: MarketplaceRow): string[] { return [...(row.evidenceGrade === "single_source" ? ["single_source"] : []), ...(row.sourceFamilyCount < 2 ? ["source_family_thin"] : []), ...(row.freshnessStatus === "stale" ? ["stale_support"] : []), row.isActionable ? "lead_is_actionable" : "lead_only"]; }

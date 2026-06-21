@@ -50,6 +50,6 @@ function fallbackDecision(response: TiSearchResponse, gaps: string[]): string {
   return "complete";
 }
 
-function retryAfter(response: TiSearchResponse, queueDecision: Record<string, unknown>, scheduler: Record<string, unknown>, nextPollSeconds: number): number {
+function retryAfter(response: TiSearchResponse, queueDecision: Record<string, unknown> | undefined, scheduler: Record<string, unknown> | undefined, nextPollSeconds: number): number {
   return clampInt(numberFromUnknown(queueDecision?.retryAfterSeconds ?? scheduler?.retryAfterSeconds), response.status === "ready" ? 0 : 3, 86_400, response.status === "queued" || response.status === "partial" ? Math.max(3, nextPollSeconds) : 0);
 }

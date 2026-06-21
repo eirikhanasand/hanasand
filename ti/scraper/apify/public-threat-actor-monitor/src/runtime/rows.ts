@@ -16,7 +16,9 @@ export function prioritizeDailyCollectionRows(rows: MarketplaceRow[]): Marketpla
     .map((entry) => entry.row);
 }
 
-function compareRows(left, right): number {
+type RankedRow = { row: MarketplaceRow; index: number };
+
+function compareRows(left: RankedRow, right: RankedRow): number {
   const leftDecision = left.row.paidRowDecision ?? "hold";
   const rightDecision = right.row.paidRowDecision ?? "hold";
   return decisionRank[leftDecision] - decisionRank[rightDecision]
