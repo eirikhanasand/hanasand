@@ -255,6 +255,9 @@ interface MarketplaceRow {
   buyerCaveat: string;
   expectedTimeToUsefulSignal: string;
   pollingHint: string;
+  buyerSummary?: string;
+  recommendedBuyerAction?: string;
+  keyPivots?: string[];
   paidRowDecision?: "sellable" | "included_with_caveat" | "coverage_gap_only" | "hold" | "suppress";
   paidRowReason?: string;
   paidRowReasonCodes?: string[];
@@ -3043,10 +3046,14 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
   const marketplaceGraphSignals = marketplaceGraphSignalsForRow(row, decision, graphLift);
   const paidGraphSearchPack = paidGraphSearchPackForRow(row, decision, graphLift, marketplaceGraphSignals);
   const graphSellableSupport = graphSellableSupportForRow(row, decision, marketplaceGraphSignals, paidGraphSearchPack);
+  const whyWorthPaying = whyWorthPayingFor(row, decision);
   return {
     ...row,
     ...decision,
-    whyWorthPayingFor: whyWorthPayingFor(row, decision),
+    buyerSummary: buyerSummaryForRow(row, decision, whyWorthPaying),
+    recommendedBuyerAction: recommendedBuyerActionForRow(row, decision),
+    keyPivots: keyPivotsForRow(row),
+    whyWorthPayingFor: whyWorthPaying,
     ...graphLift,
     marketplaceGraphSignals,
     paidGraphSearchPack,
@@ -3063,6 +3070,62 @@ function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
       `parser_admission:${parserAdmissionRuntimeProof.admissionDecision}`
     ]).sort()
   };
+}
+
+function buyerSummaryForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">,
+  whyWorthPaying: string
+): string {
+  const freshness = row.freshnessStatus === "unknown" ? "observed" : row.freshnessStatus;
+  const subject = row.victimName ?? row.sector ?? row.ttp ?? row.sourceName ?? row.title;
+  if (decision.paidRowDecision === "sellable") {
+    return `${freshness} ${row.actor} ${row.rowType} row: ${subject}. ${whyWorthPaying}.`;
+  }
+  if (decision.paidRowDecision === "included_with_caveat") {
+    return `${freshness} ${row.actor} lead: ${subject}. Useful context, but corroboration is still thin.`;
+  }
+  if (decision.paidRowDecision === "coverage_gap_only") {
+    return `${row.actor} coverage gap: ${row.highestValueMissingFamily || "additional public support"} would make future rows more useful.`;
+  }
+  if (decision.paidRowDecision === "suppress") {
+    return `${row.actor} row is hidden from paid output because it lacks safe matching evidence.`;
+  }
+  return `${row.actor} row is held until evidence, freshness, or specificity improves.`;
+}
+
+function recommendedBuyerActionForRow(
+  row: MarketplaceRow,
+  decision: Pick<MarketplaceRow, "paidRowDecision">
+): string {
+  if (decision.paidRowDecision === "sellable") {
+    return `Triage now; pivot on ${keyPivotsForRow(row).slice(0, 3).join(", ") || row.actor}.`;
+  }
+  if (decision.paidRowDecision === "included_with_caveat") {
+    return `Use as a lead and collect corroboration from ${row.highestValueMissingFamily || "another public source family"}.`;
+  }
+  if (decision.paidRowDecision === "coverage_gap_only") {
+    return row.nextBestSourceAction || `Add ${row.highestValueMissingFamily || "another source family"} coverage.`;
+  }
+  if (decision.paidRowDecision === "suppress") {
+    return "Do not use this row for decisions until safe matching evidence appears.";
+  }
+  return "Hold for review before acting.";
+}
+
+function keyPivotsForRow(row: MarketplaceRow): string[] {
+  return uniqueStrings([
+    row.actor,
+    row.victimName ?? "",
+    row.sector ?? "",
+    ...(row.affectedSectors ?? []),
+    row.country ?? "",
+    ...(row.countries ?? []),
+    row.ttp ?? "",
+    row.attackId ?? "",
+    ...row.sourceFamilies.map((family) => `source:${family}`),
+    ...row.nextSearchPivots.slice(0, 3)
+  ].filter(Boolean)).slice(0, 8);
 }
 
 function parserAdmissionRuntimeProofForRow(row: MarketplaceRow): NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]> {

@@ -36,6 +36,23 @@ const output = outputRecord.rows as Array<Record<string, unknown>>;
 if (!Array.isArray(output) || output.length < 4) {
   throw new Error(`Expected at least 4 output rows, got ${Array.isArray(output) ? output.length : "non-array"}`);
 }
+for (const row of output) {
+  const publicBuyerText = `${row.buyerSummary ?? ""} ${row.recommendedBuyerAction ?? ""}`;
+  if (
+    typeof row.buyerSummary !== "string"
+    || row.buyerSummary.length < 24
+    || typeof row.recommendedBuyerAction !== "string"
+    || row.recommendedBuyerAction.length < 12
+    || !Array.isArray(row.keyPivots)
+    || row.keyPivots.length < 1
+    || !row.keyPivots.every((pivot) => typeof pivot === "string" && pivot.length > 0)
+  ) {
+    throw new Error("OUTPUT rows must expose buyer summaries, recommended actions, and key pivots");
+  }
+  if (/\b(agent_\d+|proof|blocker|governance|internal)\b/i.test(publicBuyerText)) {
+    throw new Error("Buyer-facing row fields must avoid internal proof, blocker, governance, or agent wording");
+  }
+}
 const monetization = outputRecord.monetization as Record<string, unknown> | undefined;
 if (
   !monetization
