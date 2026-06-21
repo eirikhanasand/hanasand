@@ -10655,6 +10655,28 @@ describe("api v1", () => {
         sourceRows: Array<{ atlasSourceId: string; sourceHash: string; decision: string; uniqueEvidenceYield: number; expectedApiActorUsefulness: number; expectedPublicTiAnswerLift: number; economicsScore: number }>;
         familyMetrics: Array<{ sourceCount: number; estimatedStorageMbPerDay: number; estimatedDailySchedulerTasks: number; topSourceIds: string[] }>;
         marketplaceValueBreakdown: Record<string, number>;
+        sourcePackCandidates: {
+          paidActorGatePrioritization: {
+            schemaVersion: string;
+            gate: string;
+            projectedRowsAfterParserAdmission: number;
+            nextSellableRowGate: number;
+            remainingSellableRowsAfterParserAdmission: number;
+            countsTowardPaidGateNow: boolean;
+            reviewRows: Array<{
+              packId: string;
+              countsTowardPaidGateNow: boolean;
+              noActivationBoundary: {
+                sourcePackImported: boolean;
+                sourceActivationApplied: boolean;
+                registryMutationPlanned: boolean;
+                crawlEnqueued: boolean;
+                rawUrlsExposed: boolean;
+                rawPayloadsExposed: boolean;
+              };
+            }>;
+          };
+        };
         degradationQueues: Array<{ queue: string; willMutate: boolean; willStartCrawling: boolean }>;
         guardrails: { noRegistryMutation: boolean; noSourceActivation: boolean; noCrawling: boolean; noWorkerLeases: boolean; noRawUnsafeUrls: boolean; noPayloadDownloads: boolean };
         handoffs: { agent09ApiFrontend: string[] };
