@@ -13,6 +13,14 @@ Side-tool support priority:
 - Support Agent 01 source atlas with first-100/first-1000 source import canary scheduling, source discovery cadence, and no-auto-activation controls.
 - These are data enrichment helpers for the main CTI scraper, not separate products.
 
+## Progress - 2026-06-21 07:43 CEST
+
+- Added `scheduler.dailyActorRunPlan.paidRowCadenceInputs` so the daily Actor scheduler now exposes the current local 300-sellable-row gate, held hosted 300-row proof gate, 100-name preset baseline, and which Agent 03/05/08/01/09 handoffs can affect cadence.
+- The packet separates rows that count toward the local floor from review-only/projected/external-proof rows that must not count toward hosted paid promotion, and names the next visible scheduler actions for public corroboration, approved metadata review, source-pack holds, and hosted proof import.
+- Updated the public scheduler contract field list, operations docs, and scheduler tests so UI/operators can show paid-row cadence and proof-hold state instead of a generic search spinner.
+- Green so far: `bun test src/tests/schedulerProduction.test.ts` and `bun run check`.
+- Next: run route/contract/API guards, then commit only this Agent 02 slice while leaving Agent 01's active `sourceSeeds.ts` edit untouched.
+
 ## Progress - 2026-06-21 01:44 CEST
 
 - Added `rehearseSchedulerSourceGapEnqueue`, a guarded source-gap adapter harness that consumes `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness.enqueueAdapterPreview`.
