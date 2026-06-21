@@ -1706,6 +1706,16 @@ function buildDailyActorPresetCanaryPacket(
     .map((row) => row.atlasSourceId));
   const expectedFreshRowsPerDay = roundScore(rows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
   const expectedUsefulRowsPerDay = roundScore(rows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0));
+  const sourceFamiliesInRows: TiSourceAtlasFamily[] = Array.from(new Set(rows.flatMap((row): TiSourceAtlasFamily[] => row.sourceFamilies)));
+  const sourceFamilyCoverage = sourceFamiliesInRows.map((family) => {
+    const familyRows = rows.filter((row) => row.sourceFamilies.includes(family));
+    return {
+      family,
+      actorCount: familyRows.length,
+      sourceCount: uniqueStrings(familyRows.flatMap((row) => row.atlasSourceIds)).length,
+      expectedUsefulRowsPerDay: roundScore(familyRows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0))
+    };
+  });
   const actorSpecificGapRows = rows.map((row) => {
     const currentDirectSourceCount = row.supportMode === "direct_actor_sources" ? row.atlasSourceIds.length : 0;
     const fallbackSourceCount = row.supportMode === "default_watchlist_freshness_fallback" ? row.atlasSourceIds.length : 0;
@@ -1741,6 +1751,8 @@ function buildDailyActorPresetCanaryPacket(
     expectedUsefulRowsPerDay,
     expectedActorCoverageCount: rows.filter((row) => row.atlasSourceIds.length > 0 && !row.actor.includes("LockBit") && !row.actor.includes("Akira")).length,
     expectedRansomwareCoverageCount: rows.filter((row) => row.atlasSourceIds.length > 0 && (row.actor.includes("LockBit") || row.actor.includes("Akira"))).length,
+    sourceFamilyDiversityCount: sourceFamilyCoverage.length,
+    sourceFamilyCoverage,
     rows,
     actorSpecificGapRows,
     ownerHandoffs: {

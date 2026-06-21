@@ -1988,6 +1988,17 @@ describe("source seed bundles", () => {
     expect(dailyPresetPacket.p0SourceCount).toBeGreaterThan(0);
     expect(dailyPresetPacket.expectedFreshRowsPerDay).toBeGreaterThan(0);
     expect(dailyPresetPacket.expectedUsefulRowsPerDay).toBeGreaterThan(0);
+    expect(dailyPresetPacket.sourceFamilyDiversityCount).toBe(dailyPresetPacket.sourceFamilyCoverage.length);
+    expect(dailyPresetPacket.sourceFamilyDiversityCount).toBeGreaterThanOrEqual(3);
+    expect(dailyPresetPacket.sourceFamilyCoverage.every((row) =>
+      row.actorCount > 0 &&
+      row.sourceCount > 0 &&
+      row.expectedUsefulRowsPerDay > 0
+    )).toBe(true);
+    expect(dailyPresetPacket.sourceFamilyCoverage.map((row) => row.family)).toEqual(expect.arrayContaining([
+      "cve_advisory",
+      "cert_government"
+    ]));
     expect(dailyPresetPacket.rows.map((row) => row.actor)).toEqual(expect.arrayContaining([
       "APT29",
       "APT28",

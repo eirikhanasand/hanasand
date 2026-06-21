@@ -1964,6 +1964,13 @@ export interface TiSourceAtlasProductSourceLadderPacket {
         expectedUsefulRowsPerDay: number;
         expectedActorCoverageCount: number;
         expectedRansomwareCoverageCount: number;
+        sourceFamilyDiversityCount: number;
+        sourceFamilyCoverage: Array<{
+          family: TiSourceAtlasFamily;
+          actorCount: number;
+          sourceCount: number;
+          expectedUsefulRowsPerDay: number;
+        }>;
         rows: Array<{
           rank: number;
           actor: "APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira";
