@@ -4,7 +4,7 @@ type FreshnessStatus = MarketplaceRow["freshnessStatus"];
 
 export interface ParserAdmissionRuntimeProof {
   schemaVersion: "ti.apify_parser_admission_runtime_proof.v1";
-  owner: "agent_03";
+  owner: "parser";
   candidateId: string;
   admissionDecision: "sellable" | "useful_caveated" | "suppress";
   countsTowardCurrentSellableRows: boolean;
@@ -18,7 +18,7 @@ export interface ParserAdmissionRuntimeProof {
   contradictionState: "none" | "held" | "contradicted";
   provenanceHash: string;
   nextBuyerSearch: string;
-  repairOwner: "agent_03" | "agent_04" | "agent_05" | "agent_07";
+  repairOwner: "parser" | "source" | "channels" | "quality";
   blockedReason?: ParserAdmissionBlockedReason;
   noLeakProof: ParserNoLeakProof;
 }

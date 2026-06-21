@@ -22,10 +22,6 @@ export function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
     buyerSearchCard: buyerSearchCardForRow(row, decision, whyWorthPaying),
     whyWorthPayingFor: whyWorthPaying,
     ...graphLift,
-    marketplaceGraphSignals,
-    paidGraphSearchPack,
-    graphSellableSupport,
-    parserAdmissionRuntimeProof,
     analysisFacets: uniqueStrings([
       ...row.analysisFacets,
       `paid:${decision.paidRowDecision}`,
@@ -38,4 +34,3 @@ export function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
     ]).sort()
   };
 }
-
