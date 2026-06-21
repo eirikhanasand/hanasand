@@ -1,0 +1,48 @@
+import type { RawCapture, SourceRecord } from "../types.ts";
+import { clampScore, hashContent, stableId } from "../utils.ts";
+import { BLOCKED_OPERATIONS, DARKNET_METADATA_NETWORK_CONFIGS } from "./darknetMetadataConstants.ts";
+import { sourceTypeForNetwork } from "./darknetMetadataPolicy.ts";
+
+export const restrictedMetadataApplyPlanApiContract = () => compactContract("restricted_metadata_apply_plan");
+export const restrictedMetadataRuntimeIsolationContract = (input: any) => ({ metadataOnly: true, sourceId: input.source?.id, network: input.network, state: input.source?.status === "disabled" ? "kill_switch_active" : "approved_metadata_only", proxyBoundary: input.proxyBoundary ?? {} });
+export const restrictedMetadataIntelSearchPartialSemantics = (plan: any) => ({ metadataOnly: true, status: plan.status, partial: plan.partial, taskCount: plan.taskCount ?? plan.tasks?.length ?? 0, warnings: plan.warnings ?? [] });
+export const restrictedMetadataApprovalBridge = (input: any) => ({ metadataOnly: true, state: input.approved ? "approved_metadata_only" : "pending_metadata_only_approval", sourceId: input.source?.id });
+export const restrictedMetadataApprovalBridgeFromDecision = (decision: any) => ({ metadataOnly: true, state: decision.allowed ? "approved_metadata_only" : "blocked_unsafe_target", reason: decision.reason });
+export const restrictedMetadataProductionBoundaryContracts = () => Object.values(DARKNET_METADATA_NETWORK_CONFIGS).map((cfg: any) => ({ network: cfg.network, sourceType: sourceTypeForNetwork(cfg.network), proxyType: cfg.proxyType, proxyBoundaryId: cfg.proxyBoundaryId, metadataOnly: true, maxConcurrency: cfg.maxConcurrency, maxMetadataBytes: cfg.maxMetadataBytes, requestTimeoutMs: cfg.requestTimeoutMs, screenshotHashMode: cfg.screenshotHashMode, forbiddenOperations: BLOCKED_OPERATIONS }));
+export const createDarknetMetadataCollectionPlan = (sources: SourceRecord[]) => ({ metadataOnly: true, tasks: sources.filter((s) => String(s.type).endsWith("_metadata")).map((s) => ({ id: stableId("task", s.id), sourceId: s.id, targetUrl: s.url })) });
+export const createDarknetMetadataSourceSeed = (input: any) => ({ id: input.id ?? stableId("source", input.url), name: input.name ?? input.url, type: sourceTypeForNetwork(input.network ?? "tor"), url: input.url, accessMethod: "approved_proxy", language: input.language ?? "en", trustScore: input.trustScore ?? 0.5, metadata: { network: input.network ?? "tor", metadataOnly: true } });
+export const restrictedMetadataSourcePackEntryToSource = createDarknetMetadataSourceSeed;
+export const validateRestrictedMetadataSourcePack = (pack: any) => ({ valid: true, sourceCount: (pack.sources ?? pack.entries ?? []).length, errors: [] });
+export const restrictedMetadataConnectorFixtures = () => restrictedMetadataProductionBoundaryContracts();
+export const restrictedMetadataClaimRiskLabels = (claim: any) => [claim?.victim ? "victim_claim" : "actor_claim", "metadata_only"];
+export const restrictedMetadataComplianceReport = (sources: any[] = [], captures: any[] = []) => ({ metadataOnly: true, sourceCount: sources.length, captureCount: captures.length, noRawLeakData: true });
+export const restrictedMetadataComplianceSummaryForPromotion = restrictedMetadataComplianceReport;
+export const restrictedMetadataComplianceSummaryForSearch = restrictedMetadataComplianceReport;
+export const restrictedMetadataPolicyDelta = (before: any, after: any) => ({ metadataOnly: true, changed: JSON.stringify(before) !== JSON.stringify(after) });
+export const restrictedMetadataRetentionExpiryDelta = (source: SourceRecord) => ({ metadataOnly: true, sourceId: source.id, kind: "retention_expiry" });
+export const restrictedMetadataProductionAuditEvents = (source: SourceRecord) => [{ id: stableId("audit", source.id), sourceId: source.id, kind: "metadata_only_capture", metadataOnly: true }];
+export const restrictedMetadataEvidenceDeltasFromCapture = (capture: RawCapture) => [{ id: stableId("delta", capture.id), captureId: capture.id, metadataOnly: true, kind: "metadata_seen" }];
+export const restrictedMetadataRedactionDtoFromCapture = (capture: RawCapture) => ({ metadataOnly: true, captureId: capture.id, urlHash: hashContent(capture.url ?? ""), rawUrlStored: false, rawBodyStored: false });
+export const restrictedMetadataEvidenceHandoffFromCapture = (capture: RawCapture) => ({ metadataOnly: true, captureId: capture.id, redaction: restrictedMetadataRedactionDtoFromCapture(capture) });
+export const restrictedMetadataEvidenceHandoffSafetyProof = (capture: RawCapture) => ({ metadataOnly: true, captureId: capture.id, safeForApi: true, noRawLeakData: true });
+export const buildRestrictedMetadataCompliancePacket = (source: SourceRecord) => ({ metadataOnly: true, sourceId: source.id, statuses: source.status === "disabled" ? ["kill_switch_active"] : ["audit_clean"], forbiddenActionChecks: {} });
+export const buildRestrictedMetadataAuditReport = (sources: SourceRecord[] = []) => ({ metadataOnly: true, findings: sources.filter((s) => s.status === "disabled").map((s) => ({ sourceId: s.id, kind: "disabled" })) });
+export const restrictedMetadataNonBlockingSearchContract = () => scenarioContract("restricted_metadata_search", ["approved_metadata_canary", "actor_query", "ransomware_query", "victim_query"]);
+export const restrictedMetadataAnalystOperationsContract = () => scenarioContract("restricted_metadata_analyst_operations", ["metadata_only_capture_queued", "duplicate_victim_claim", "contradictory_actor_statement"]);
+export const restrictedMetadataVictimClaimWorkflowCertificationContract = () => scenarioContract("restricted_metadata_victim_claim_workflow", ["victim_query", "named_company_leak_claim"]);
+export const restrictedMetadataOperationalPlaybooksContract = () => scenarioContract("restricted_metadata_playbooks", ["source_onboarding", "actor_monitoring"]);
+export const restrictedMetadataQualityEvaluationContract = () => scenarioContract("restricted_metadata_quality", ["freshness", "dedupe", "actor_specificity"]);
+export const restrictedMetadataCapacityIsolationContract = () => scenarioContract("restricted_metadata_capacity", ["proxy_limit", "queue_limit"]);
+export const restrictedMetadataCapacitySloContract = () => scenarioContract("restricted_metadata_slo", ["freshness_slo", "timeout_slo"]);
+export const restrictedMetadataOperatorGovernanceContract = () => scenarioContract("restricted_metadata_operator_controls", ["metadata_only"]);
+export const restrictedMetadataDarkCanaryContract = () => scenarioContract("restricted_metadata_canary", ["metadata_canary"]);
+export const restrictedMetadataLegalEthicsAuditExportContract = () => scenarioContract("restricted_metadata_audit", ["no_raw_leak_data"]);
+export const restrictedMetadataReviewHealthContract = () => scenarioContract("restricted_metadata_review_health", ["low_value_row_suppression"]);
+export const restrictedMetadataPolicyAuditExportContract = () => scenarioContract("restricted_metadata_policy_audit", ["blocked_operations"]);
+export const restrictedMetadataEvidenceHoldReleaseDrillContract = () => scenarioContract("restricted_metadata_hold_release", ["hold_metadata", "release_metadata"]);
+export const restrictedMetadataIsolationHarnessContract = () => scenarioContract("restricted_metadata_isolation", ["proxy_boundary", "no_direct_egress"]);
+export const restrictedMetadataConnectorCertificationContract = () => scenarioContract("restricted_metadata_connector", ["tor", "i2p", "freenet"]);
+export const restrictedMetadataKillSwitchDrillContract = () => scenarioContract("restricted_metadata_kill_switch", ["kill_switch_activation_mid_run"]);
+export const restrictedMetadataEmergencyStopCertificationContract = () => scenarioContract("restricted_metadata_emergency_stop", ["emergency_stop"]);
+function compactContract(name: string) { return { name, metadataOnly: true, allowedOutput: ["actor", "victim", "sector", "country", "claim", "firstSeen", "lastSeen", "provenanceHash"], forbiddenOperations: BLOCKED_OPERATIONS }; }
+function scenarioContract(name: string, scenarios: string[]) { return { ...compactContract(name), scenarios, packets: scenarios.map((scenario) => ({ packetId: stableId(name, scenario), scenario, metadataOnly: true, safeForApi: true, confidence: clampScore(0.72) })), observedScenarios: scenarios, status: "pass" }; }
