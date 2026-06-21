@@ -44,6 +44,8 @@ Every pass must directly improve one of:
 
 ## Handoff
 
+- 2026-06-21 Agent 08 completed hosted public corroboration lift for run `THMm2ZzYxW4HVPGJ6` / dataset `xLPoxMVY6cVjGsS4e`: 54 public corroboration rows are now handed to Agent 03 for parser admission toward 100 sellable rows / 52 sellable findings, with graph-only/restricted/stale/alias/generic/duplicate/contradiction rejects excluded from paid promotion.
+
 Before stopping:
 - Commit and push.
 - State exact sellable metric changed.
