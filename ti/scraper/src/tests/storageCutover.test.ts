@@ -67,6 +67,7 @@ import {
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
   buildEvidenceSearchableSourceMetadataPromotionGate,
+  createEvidenceSearchableSourceMetadataPromotionGateRepository,
   buildEvidenceSearchableSourceMetadataPublicSupportQueue,
   createEvidenceSearchableSourceMetadataPublicSupportRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
@@ -75,6 +76,7 @@ import {
   evidenceActorDatasetConsumerExecutionToPostgresRows,
   evidenceActorDatasetSourceGapConsumerQueueToPostgresRows,
   evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows,
+  evidenceSearchableSourceMetadataPromotionGateToPostgresRows,
   evidenceSearchableSourceMetadataPublicSupportQueueToPostgresRows,
   evidencePromotionExecutionFromPostgresRows,
   evidencePromotionExecutionToPostgresRows,
@@ -2210,6 +2212,86 @@ describe("evidence storage cutover", () => {
     expect(searchableSourceMetadataPromotionGateSerialized).not.toContain(restrictedRaw);
     expect(searchableSourceMetadataPromotionGateSerialized).not.toContain("tenant/source/private-key");
     expect(searchableSourceMetadataPromotionGateSerialized).not.toContain(".onion");
+
+    const searchableSourceMetadataPromotionGateRows = evidenceSearchableSourceMetadataPromotionGateToPostgresRows(searchableSourceMetadataPromotionGate);
+    expect(searchableSourceMetadataPromotionGateRows.promotion_gate_runs).toHaveLength(1);
+    expect(searchableSourceMetadataPromotionGateRows.promotion_gate_rows).toHaveLength(searchableSourceMetadataPromotionGate.rows.length);
+    expect(searchableSourceMetadataPromotionGateRows.promotion_gate_runs[0]).toMatchObject({
+      gate_id: searchableSourceMetadataPromotionGate.gateId,
+      source_catalog_schema: "ti.evidence_searchable_source_metadata_catalog.v1",
+      source_public_support_queue_schema: "ti.evidence_searchable_source_metadata_public_support_queue.v1",
+      source_public_support_repository_schema: "ti.evidence_searchable_source_metadata_public_support_repository.v1",
+      product_surface: "apify_public_threat_actor_monitor",
+      actor_build: "0.6.4",
+      dry_run: true,
+      will_promote_actor_rows: false,
+      will_write_public_answer_cache: false,
+      no_leak: true
+    });
+    expect(searchableSourceMetadataPromotionGateRows.promotion_gate_rows.some((row) =>
+      row.gate_id === searchableSourceMetadataPromotionGate.gateId &&
+      row.promotion_state === "eligible_direct_public_support" &&
+      row.can_promote_now &&
+      row.required_evidence.includes("public_report_source") &&
+      row.no_leak === true
+    )).toBe(true);
+    expect(searchableSourceMetadataPromotionGateRows.promotion_gate_rows.some((row) =>
+      row.gate_id === searchableSourceMetadataPromotionGate.gateId &&
+      row.promotion_state === "blocked_public_support_required" &&
+      row.can_promote_now === false &&
+      row.required_evidence.includes("public_support_repository_replay") &&
+      row.no_leak === true
+    )).toBe(true);
+    const searchableSourceMetadataPromotionGateRepository = createEvidenceSearchableSourceMetadataPromotionGateRepository();
+    const searchableSourceMetadataPromotionGateRepositoryStatus = searchableSourceMetadataPromotionGateRepository.persistPromotionGateRows(
+      searchableSourceMetadataPromotionGateRows,
+      { generatedAt: "2026-05-24T21:44:44.000Z" }
+    );
+    expect(searchableSourceMetadataPromotionGateRepositoryStatus).toMatchObject({
+      schemaVersion: "ti.evidence_searchable_source_metadata_promotion_gate_repository.v1",
+      backend: "postgres_searchable_source_metadata_promotion_gate",
+      enabled: false,
+      disabledByDefault: true,
+      liveBackendConnection: false,
+      willPersistRows: false,
+      willPromoteActorRows: false,
+      willWritePublicAnswerCache: false,
+      failClosedWithoutExplicitEnable: true,
+      requiredFeatureFlags: ["TI_SEARCHABLE_SOURCE_METADATA_PROMOTION_GATE_REPOSITORY_ENABLED"],
+      requiredTables: ["evidence_searchable_source_promotion_gate_runs", "evidence_searchable_source_promotion_gate_rows"],
+      acceptedRowCounts: {
+        gateRuns: 1,
+        gateRows: searchableSourceMetadataPromotionGate.rows.length,
+        eligibleDirectRows: searchableSourceMetadataPromotionGate.rows.filter((row) => row.promotionState === "eligible_direct_public_support").length,
+        blockedMetadataRows: searchableSourceMetadataPromotionGate.rows.filter((row) => row.promotionState === "blocked_public_support_required").length
+      },
+      persistedRowCounts: {
+        gateRuns: 0,
+        gateRows: 0
+      },
+      heldRowCounts: {
+        gateRuns: 1,
+        gateRows: searchableSourceMetadataPromotionGate.rows.length
+      },
+      blockedReasons: [
+        "searchable_source_metadata_promotion_gate_repository_disabled",
+        "postgres_searchable_source_metadata_promotion_gate_not_configured"
+      ],
+      replayReady: true,
+      canReplayWithoutRawEvidence: true,
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    const searchableSourceMetadataPromotionGateRepositorySerialized = JSON.stringify(searchableSourceMetadataPromotionGateRepositoryStatus);
+    expect(searchableSourceMetadataPromotionGateRepositorySerialized).not.toContain(restrictedRaw);
+    expect(searchableSourceMetadataPromotionGateRepositorySerialized).not.toContain("tenant/source/private-key");
+    expect(searchableSourceMetadataPromotionGateRepositorySerialized).not.toContain(".onion");
 
     const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(backendWriteSet, {
       query: "APT29",

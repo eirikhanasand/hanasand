@@ -468,6 +468,86 @@ export interface EvidenceSearchableSourceMetadataPromotionGateRow {
   noLeak: true;
 }
 
+export interface EvidenceSearchableSourceMetadataPromotionGatePostgresRows {
+  promotion_gate_runs: EvidenceSearchableSourceMetadataPromotionGateRunRow[];
+  promotion_gate_rows: EvidenceSearchableSourceMetadataPromotionGateDecisionRow[];
+}
+
+export interface EvidenceSearchableSourceMetadataPromotionGateRunRow {
+  gate_id: string;
+  generated_at: string;
+  source_catalog_schema: EvidenceSearchableSourceMetadataPromotionGate["sourceCatalog"];
+  source_public_support_queue_schema: EvidenceSearchableSourceMetadataPromotionGate["sourcePublicSupportQueue"];
+  source_public_support_repository_schema: EvidenceSearchableSourceMetadataPromotionGate["sourcePublicSupportRepository"];
+  product_surface: EvidenceSearchableSourceMetadataPromotionGate["productSurface"];
+  actor_build: EvidenceSearchableSourceMetadataPromotionGate["actorBuild"];
+  dry_run: true;
+  will_promote_actor_rows: false;
+  will_write_public_answer_cache: false;
+  counts: EvidenceSearchableSourceMetadataPromotionGate["counts"];
+  no_leak: true;
+}
+
+export interface EvidenceSearchableSourceMetadataPromotionGateDecisionRow {
+  gate_row_id: string;
+  gate_id: string;
+  document_id: string;
+  source_catalog_row_id: string;
+  source_id?: string;
+  capture_id?: string;
+  claim_ledger_entry_id?: string;
+  source_family: EvidenceSearchableSourceMetadataPromotionGateRow["sourceFamily"];
+  current_use: EvidenceSearchableSourceMetadataPromotionGateRow["currentUse"];
+  target_use: EvidenceSearchableSourceMetadataPromotionGateRow["targetUse"];
+  promotion_state: EvidenceSearchableSourceMetadataPromotionGateRow["promotionState"];
+  can_promote_now: boolean;
+  required_evidence: EvidenceSearchableSourceMetadataPromotionGateRow["requiredEvidence"];
+  buyer_visible_fields: EvidenceSearchableSourceMetadataPromotionGateRow["buyerVisibleFields"];
+  no_leak: true;
+}
+
+export interface EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus {
+  schemaVersion: "ti.evidence_searchable_source_metadata_promotion_gate_repository.v1";
+  generatedAt: string;
+  backend: "postgres_searchable_source_metadata_promotion_gate";
+  enabled: false;
+  disabledByDefault: true;
+  liveBackendConnection: false;
+  willPersistRows: false;
+  willPromoteActorRows: false;
+  willWritePublicAnswerCache: false;
+  failClosedWithoutExplicitEnable: true;
+  requiredFeatureFlags: ["TI_SEARCHABLE_SOURCE_METADATA_PROMOTION_GATE_REPOSITORY_ENABLED"];
+  requiredTables: ["evidence_searchable_source_promotion_gate_runs", "evidence_searchable_source_promotion_gate_rows"];
+  acceptedRowCounts: {
+    gateRuns: number;
+    gateRows: number;
+    eligibleDirectRows: number;
+    blockedMetadataRows: number;
+  };
+  persistedRowCounts: {
+    gateRuns: 0;
+    gateRows: 0;
+  };
+  heldRowCounts: {
+    gateRuns: number;
+    gateRows: number;
+  };
+  blockedReasons: string[];
+  replayReady: boolean;
+  canReplayWithoutRawEvidence: true;
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceSearchableSourceMetadataPromotionGateRepository {
+  readonly backend: "postgres_searchable_source_metadata_promotion_gate";
+  readonly enabled: false;
+  persistPromotionGateRows(
+    rows: EvidenceSearchableSourceMetadataPromotionGatePostgresRows,
+    input?: { generatedAt?: string }
+  ): EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus;
+}
+
 export interface EvidenceSearchReadModelPromotionReplay {
   schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
   generatedAt: string;
@@ -2072,6 +2152,137 @@ export function buildEvidenceSearchableSourceMetadataPromotionGate(
     noLeakGuarantees: { ...catalog.noLeakGuarantees },
     safeOutput: SAFE_OUTPUT
   };
+}
+
+export function evidenceSearchableSourceMetadataPromotionGateToPostgresRows(
+  gate: EvidenceSearchableSourceMetadataPromotionGate
+): EvidenceSearchableSourceMetadataPromotionGatePostgresRows {
+  const counts: EvidenceSearchableSourceMetadataPromotionGate["counts"] = {
+    directPublicSupportRows: gate.rows.filter((row) => row.promotionState === "eligible_direct_public_support").length,
+    metadataRowsBlockedForPublicSupport: gate.rows.filter((row) => row.promotionState === "blocked_public_support_required").length,
+    likelyUnlocksAfterPublicSupportReplay: gate.rows.filter((row) =>
+      row.promotionState === "blocked_public_support_required" &&
+      row.targetUse === "public_supported_actor_row"
+    ).length,
+    caveatedContextRows: gate.rows.filter((row) =>
+      row.promotionState === "blocked_public_support_required" &&
+      row.targetUse === "stronger_caveated_context"
+    ).length,
+    promotableNow: gate.rows.filter((row) => row.canPromoteNow).length
+  };
+  return {
+    promotion_gate_runs: [{
+      gate_id: gate.gateId,
+      generated_at: gate.generatedAt,
+      source_catalog_schema: gate.sourceCatalog,
+      source_public_support_queue_schema: gate.sourcePublicSupportQueue,
+      source_public_support_repository_schema: gate.sourcePublicSupportRepository,
+      product_surface: gate.productSurface,
+      actor_build: gate.actorBuild,
+      dry_run: true,
+      will_promote_actor_rows: false,
+      will_write_public_answer_cache: false,
+      counts,
+      no_leak: true
+    }],
+    promotion_gate_rows: gate.rows.map((row) => ({
+      gate_row_id: row.gateRowId,
+      gate_id: gate.gateId,
+      document_id: row.documentId,
+      source_catalog_row_id: row.sourceCatalogRowId,
+      source_id: row.sourceId,
+      capture_id: row.captureId,
+      claim_ledger_entry_id: row.claimLedgerEntryId,
+      source_family: row.sourceFamily,
+      current_use: row.currentUse,
+      target_use: row.targetUse,
+      promotion_state: row.promotionState,
+      can_promote_now: row.canPromoteNow,
+      required_evidence: [...row.requiredEvidence],
+      buyer_visible_fields: [...row.buyerVisibleFields],
+      no_leak: true
+    }))
+  };
+}
+
+export function buildDisabledEvidenceSearchableSourceMetadataPromotionGateRepositoryStatus(
+  rows: EvidenceSearchableSourceMetadataPromotionGatePostgresRows,
+  input: { generatedAt?: string } = {}
+): EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus {
+  const run = rows.promotion_gate_runs[0];
+  const generatedAt = input.generatedAt ?? run?.generated_at ?? nowIso();
+  const replayBlockers = [
+    !run ? "missing_promotion_gate_run" : null,
+    run && rows.promotion_gate_rows.length !== run.counts.directPublicSupportRows + run.counts.metadataRowsBlockedForPublicSupport
+      ? "promotion_gate_row_count_mismatch"
+      : null,
+    run && rows.promotion_gate_rows.filter((row) => row.promotion_state === "eligible_direct_public_support").length !== run.counts.directPublicSupportRows
+      ? "promotion_gate_direct_count_mismatch"
+      : null,
+    run && rows.promotion_gate_rows.filter((row) => row.promotion_state === "blocked_public_support_required").length !== run.counts.metadataRowsBlockedForPublicSupport
+      ? "promotion_gate_blocked_count_mismatch"
+      : null,
+    rows.promotion_gate_runs.some((row) => row.no_leak !== true) ? "promotion_gate_run_no_leak_failed" : null,
+    rows.promotion_gate_rows.some((row) => row.no_leak !== true) ? "promotion_gate_row_no_leak_failed" : null,
+    rows.promotion_gate_runs.some((row) => row.will_promote_actor_rows || row.will_write_public_answer_cache) ? "promotion_gate_production_write_flag_failed" : null,
+    rows.promotion_gate_rows.some((row) =>
+      row.promotion_state === "blocked_public_support_required" &&
+      (row.can_promote_now || !row.required_evidence.includes("public_support_repository_replay"))
+    ) ? "promotion_gate_blocked_row_replay_requirement_failed" : null
+  ].filter((blocker): blocker is string => Boolean(blocker));
+
+  return {
+    schemaVersion: "ti.evidence_searchable_source_metadata_promotion_gate_repository.v1",
+    generatedAt,
+    backend: "postgres_searchable_source_metadata_promotion_gate",
+    enabled: false,
+    disabledByDefault: true,
+    liveBackendConnection: false,
+    willPersistRows: false,
+    willPromoteActorRows: false,
+    willWritePublicAnswerCache: false,
+    failClosedWithoutExplicitEnable: true,
+    requiredFeatureFlags: ["TI_SEARCHABLE_SOURCE_METADATA_PROMOTION_GATE_REPOSITORY_ENABLED"],
+    requiredTables: ["evidence_searchable_source_promotion_gate_runs", "evidence_searchable_source_promotion_gate_rows"],
+    acceptedRowCounts: {
+      gateRuns: rows.promotion_gate_runs.length,
+      gateRows: rows.promotion_gate_rows.length,
+      eligibleDirectRows: rows.promotion_gate_rows.filter((row) => row.promotion_state === "eligible_direct_public_support").length,
+      blockedMetadataRows: rows.promotion_gate_rows.filter((row) => row.promotion_state === "blocked_public_support_required").length
+    },
+    persistedRowCounts: {
+      gateRuns: 0,
+      gateRows: 0
+    },
+    heldRowCounts: {
+      gateRuns: rows.promotion_gate_runs.length,
+      gateRows: rows.promotion_gate_rows.length
+    },
+    blockedReasons: [
+      "searchable_source_metadata_promotion_gate_repository_disabled",
+      "postgres_searchable_source_metadata_promotion_gate_not_configured",
+      ...replayBlockers
+    ],
+    replayReady: replayBlockers.length === 0,
+    canReplayWithoutRawEvidence: true,
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+class DisabledEvidenceSearchableSourceMetadataPromotionGateRepository implements EvidenceSearchableSourceMetadataPromotionGateRepository {
+  readonly backend = "postgres_searchable_source_metadata_promotion_gate" as const;
+  readonly enabled = false as const;
+
+  persistPromotionGateRows(
+    rows: EvidenceSearchableSourceMetadataPromotionGatePostgresRows,
+    input: { generatedAt?: string } = {}
+  ): EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus {
+    return buildDisabledEvidenceSearchableSourceMetadataPromotionGateRepositoryStatus(rows, input);
+  }
+}
+
+export function createEvidenceSearchableSourceMetadataPromotionGateRepository(): EvidenceSearchableSourceMetadataPromotionGateRepository {
+  return new DisabledEvidenceSearchableSourceMetadataPromotionGateRepository();
 }
 
 export function buildEvidenceSearchReadModelPromotionReplay(

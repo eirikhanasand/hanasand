@@ -36,6 +36,7 @@ import {
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
   buildEvidenceSearchableSourceMetadataPromotionGate,
+  createEvidenceSearchableSourceMetadataPromotionGateRepository,
   buildEvidenceSearchableSourceMetadataPublicSupportQueue,
   createEvidenceSearchableSourceMetadataPublicSupportRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
@@ -43,6 +44,7 @@ import {
   evidenceActorDatasetConsumerExecutionToPostgresRows,
   evidenceActorDatasetSourceGapConsumerQueueToPostgresRows,
   evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows,
+  evidenceSearchableSourceMetadataPromotionGateToPostgresRows,
   evidenceSearchableSourceMetadataPublicSupportQueueToPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
@@ -65,6 +67,7 @@ import {
   type EvidencePromotionTransactionPlan,
   type EvidenceSearchableSourceMetadataCatalog,
   type EvidenceSearchableSourceMetadataPromotionGate,
+  type EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus,
   type EvidenceSearchableSourceMetadataPublicSupportQueue,
   type EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus,
   type EvidenceSearchReadModelBackendWriteSet,
@@ -213,6 +216,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   searchableSourceMetadataPublicSupportQueue: EvidenceSearchableSourceMetadataPublicSupportQueue;
   searchableSourceMetadataPublicSupportRepository: EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus;
   searchableSourceMetadataPromotionGate: EvidenceSearchableSourceMetadataPromotionGate;
+  searchableSourceMetadataPromotionGateRepository: EvidenceSearchableSourceMetadataPromotionGateRepositoryStatus;
   readiness: {
     embedded: EvidenceSearchReadModelReadiness;
     postgres: EvidenceSearchReadModelReadiness;
@@ -476,6 +480,11 @@ function buildEvidenceSearchReadModelCutoverDto(
     searchableSourceMetadataPublicSupportRepository,
     { generatedAt }
   );
+  const searchableSourceMetadataPromotionGateRows = evidenceSearchableSourceMetadataPromotionGateToPostgresRows(searchableSourceMetadataPromotionGate);
+  const searchableSourceMetadataPromotionGateRepository = createEvidenceSearchableSourceMetadataPromotionGateRepository().persistPromotionGateRows(
+    searchableSourceMetadataPromotionGateRows,
+    { generatedAt }
+  );
   const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(writeSet, {
     query,
     normalizedQuery: handoff.normalizedQuery,
@@ -543,6 +552,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     searchableSourceMetadataPublicSupportQueue,
     searchableSourceMetadataPublicSupportRepository,
     searchableSourceMetadataPromotionGate,
+    searchableSourceMetadataPromotionGateRepository,
     readiness: {
       embedded,
       postgres,

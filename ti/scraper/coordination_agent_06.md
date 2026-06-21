@@ -241,6 +241,15 @@ Progress update 2026-06-21 07:27 CEST:
 - Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, and `bun run check:route-inventory`.
 - Continue next with completed public-support replay receipts once cross-agent repair rows exist, or with a disabled repository/audit boundary for promotion-gate decisions.
 
+Progress update 2026-06-21 08:13 CEST:
+- Continued with the disabled Postgres audit boundary for searchable metadata promotion-gate decisions.
+- Added `ti.evidence_searchable_source_metadata_promotion_gate_repository.v1` on `/v1/evidence/cutover-report.readModelCutover.searchableSourceMetadataPromotionGateRepository`.
+- Promotion-gate runs and decision rows now map to `evidence_searchable_source_promotion_gate_runs` and `evidence_searchable_source_promotion_gate_rows`, then stay held behind `TI_SEARCHABLE_SOURCE_METADATA_PROMOTION_GATE_REPOSITORY_ENABLED`.
+- The repository reports direct-eligible and blocked-metadata row counts while persisting zero rows, promoting zero Actor rows, and writing zero public-answer cache entries.
+- Restricted/leak material remains metadata-only: audit rows contain only ids, promotion states, required evidence, buyer-visible field names, counts, and no-leak flags.
+- Verification completed: `bun run check`, `bun test src/tests/storageCutover.test.ts`, and `bun run check:route-inventory`.
+- Continue next with completed public-support replay receipts when Agent 01/04/07 produce completed support rows, or a promotion-gate-to-Actor-consumer replay receipt once the read model has real completed rows.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST
