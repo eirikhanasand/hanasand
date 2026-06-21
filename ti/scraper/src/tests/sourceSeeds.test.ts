@@ -2105,6 +2105,36 @@ describe("source seed bundles", () => {
       row.noLeakBoundary.actorInteractionRequired === false &&
       row.noLeakBoundary.sourceActivationApplied === false
     )).toBe(true);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary).toMatchObject({
+      candidateFamilyCount: dailyPresetPacket.sourceFamilyAcquisitionRows.length,
+      p0CandidateFamilyCount: dailyPresetPacket.sourceFamilyAcquisitionRows.filter((row) => row.acquisitionPriority === "p0_actor_specific_gap").length
+    });
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.candidateSourceCount).toBe(
+      new Set(dailyPresetPacket.sourceFamilyAcquisitionRows.flatMap((row) => row.candidateSourceIds)).size
+    );
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.stageableSourceCount).toBe(
+      dailyPresetPacket.sourceFamilyAcquisitionSummary.stageableSourceIds.length
+    );
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.stageableSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_"))).toBe(true);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.familiesWithoutCandidates.every((family) =>
+      dailyPresetPacket.sourceFamilyGapRows.map((row) => row.family).includes(family) &&
+      !dailyPresetPacket.sourceFamilyAcquisitionRows.map((row) => row.family).includes(family)
+    )).toBe(true);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.expectedFreshRowsPerDay).toBe(
+      Number(dailyPresetPacket.sourceFamilyAcquisitionRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0).toFixed(3))
+    );
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.expectedUsefulRowsPerDay).toBe(
+      Number(dailyPresetPacket.sourceFamilyAcquisitionRows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0).toFixed(3))
+    );
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.nextAction).toContain(
+      dailyPresetPacket.sourceFamilyAcquisitionSummary.familiesWithoutCandidates.length > 0 ? "Acquire reviewed public candidates" : "Stage reviewed"
+    );
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.noLeakBoundary.rawUrlExposed).toBe(false);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.noLeakBoundary.rawPayloadExposed).toBe(false);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.noLeakBoundary.privateAuthCaptchaRequired).toBe(false);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.noLeakBoundary.crawlStarted).toBe(false);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.noLeakBoundary.actorInteractionRequired).toBe(false);
+    expect(dailyPresetPacket.sourceFamilyAcquisitionSummary.noLeakBoundary.sourceActivationApplied).toBe(false);
     expect(dailyPresetPacket.ownerHandoffs.agent02Scheduler.join(" ")).toContain("daily 100-name Actor preset");
     expect(dailyPresetPacket.ownerHandoffs.agent09Apify.join(" ")).toContain("/v1/sources/atlas");
     expect(atlas.sourceLadder.paidSourceTierPlan.highValueReplacementBatch.aggregate.projectedPayworthySourceCount).toBeGreaterThan(
