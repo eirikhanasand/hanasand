@@ -6,7 +6,8 @@ import { inferClaimType, inferNewsTtp } from "./ttp.ts";
 export function newsFallbackResponse(query: string, items: NewsRssItem[]): TiSearchResponse {
   const generatedAt = new Date().toISOString();
   const dated = items.map((item) => ({ item, iso: safeIso(item.pubDate) ?? generatedAt }));
-  const ttps = uniqueStrings(dated.map(({ item }) => inferNewsTtp(item.title).name)).slice(0, 4);
+  const ttps = uniqueStrings(dated.map(({ item }) => inferNewsTtp(item.title).name))
+    .filter((name) => name !== "Public reporting monitor").slice(0, 4);
   return {
     query, generatedAt, mode: "public_news_rss_fallback", status: "partial",
     runId: `news_${stableHash(`${query}:${generatedAt}`)}`,

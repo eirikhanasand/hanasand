@@ -1,8 +1,10 @@
 export function inferNewsTtp(title: string): { name: string; tactic: string; attackId?: string } {
   const lower = title.toLowerCase();
+  if (lower.includes("edr") || lower.includes("defense")) return { name: "Impair Defenses", tactic: "Defense Evasion", attackId: "T1562" };
+  if (lower.includes("self-propagat") || lower.includes("worm")) return { name: "Replication Through Removable Media", tactic: "Lateral Movement", attackId: "T1091" };
   if (lower.includes("phish")) return { name: "Phishing", tactic: "Initial Access", attackId: "T1566" };
   if (lower.includes("credential")) return { name: "Credential Access", tactic: "Credential Access" };
-  if (lower.includes("ransom")) return { name: "Data Encrypted for Impact", tactic: "Impact", attackId: "T1486" };
+  if (lower.includes("ransom") || lower.includes("encrypt")) return { name: "Data Encrypted for Impact", tactic: "Impact", attackId: "T1486" };
   if (lower.includes("malware")) return { name: "Malware", tactic: "Execution" };
   if (lower.includes("exploit") || lower.includes("cve")) return { name: "Exploit Public-Facing Application", tactic: "Initial Access", attackId: "T1190" };
   if (lower.includes("cloud")) return { name: "Cloud Service Discovery", tactic: "Discovery", attackId: "T1526" };

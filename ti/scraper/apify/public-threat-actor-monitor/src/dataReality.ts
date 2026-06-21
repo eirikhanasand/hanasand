@@ -36,5 +36,5 @@ function isDefaultWatchlist(row: MarketplaceRow): boolean {
 
 function hasLiveEvidence(row: MarketplaceRow): boolean {
   if (row.sourceType !== "system" && Boolean(row.sourceUrl)) return true;
-  return row.collectionMode.includes("live") && row.sourceCount > 0 && row.sourceFamilies.length > 0;
+  return /live|fallback/.test(row.collectionMode) && row.sourceCount > 0 && row.sourceFamilies.length > 0;
 }
