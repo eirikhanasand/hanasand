@@ -1,6 +1,7 @@
 import type { RuntimeConfig } from "../config/runtimeConfig.ts";
 import type { FocusedFrontier } from "../frontier/frontier.ts";
 import { buildLiveProductSloDashboard, type LiveProductProofMode } from "../ops/productSlo.ts";
+import { activatePublicCanarySources, buildCanaryOperatorSummary, buildCanaryReadinessPacket, runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
@@ -36,6 +37,10 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/restricted-metadata/apply-plan") return json({ endpoint: "/v1/restricted-metadata/apply-plan", metadataOnly: true, actions: [] });
     if (url.pathname === "/v1/quality/evaluate") return json({ quality: { query: url.searchParams.get("q") ?? "", status: "partial", score: 0.6 }, dashboard: { useful: true } });
     if (url.pathname === "/v1/ops/product-slo") return json({ route: "/v1/ops/product-slo", ...productSlo(options, url) });
+    if (url.pathname === "/v1/sources/canary-activation") return canaryActivation(request, options);
+    if (url.pathname === "/v1/ops/canary/run") return canaryRun(request, options);
+    if (url.pathname === "/v1/ops/canary") return json({ operatorView: buildCanaryOperatorSummary({ store: options.store, frontier: options.frontier, runtime: (options.canaryLoop as any)?.getState?.() }) });
+    if (url.pathname === "/v1/ops/canary/readiness") return json({ readiness: buildCanaryReadinessPacket({ store: options.store, frontier: options.frontier, requiredQueries: (url.searchParams.get("requiredQueries") ?? "APT42,Turla").split(","), requireNativeLiveHttp: booleanQuery(url.searchParams.get("requireNativeLiveHttp")) === true, generatedAt: url.searchParams.get("generatedAt") ?? undefined }) });
     if (url.pathname === "/v1/ops/resource-snapshot") return json({ service: "ti-scraper", queue: { queued: options.frontier.size() }, workers: options.supervisor?.snapshot() ?? [] });
     if (url.pathname === "/v1/frontier") return json({ queued: options.frontier.size(), tasks: options.frontier.snapshot?.() ?? [] });
     if (url.pathname.endsWith("/apply-plan")) return json({ endpoint: url.pathname, dryRun: true, actions: [] });
@@ -53,7 +58,10 @@ async function searchResponse(request: Request, options: ApiServerOptions, url: 
   const captures = options.store.listCaptures().filter((capture: any) => JSON.stringify(capture).toLowerCase().includes(query.toLowerCase()));
   const rows = captures.slice(0, numberQuery(url.searchParams.get("limit")) ?? 50).map((capture: any) => ({ id: capture.id, sourceId: capture.sourceId, title: capture.title, summary: String(capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "").slice(0, 500), collectedAt: capture.collectedAt, provenanceHash: hashContent(capture.id), metadataOnly: capture.storageKind === "metadata_only" || capture.metadata?.adapter === "darknet_metadata" }));
   const status = rows.length ? "ready" : "searching";
-  return json({ query, status, summary: rows.length ? [`Found ${rows.length} public-intelligence rows for ${query}.`] : ["searching"], rows, results: rows, runId: stableId("search", `${query}:${nowIso()}`), publicTiAnswer: { route: { canonicalPath: "/api/ti/search", publicWrapperPath: "/api/ti/search", publicWrapperMethod: "POST" }, status, query, summary: rows } });
+  const provenance = rows.map((row) => ({ evidenceStage: "captured_page", evidenceId: row.id, sourceId: row.sourceId }));
+  const actorProfile = { query, actor: query, datasets: { evidenceStageCounts: { captured_page: rows.length }, sourceCount: new Set(rows.map((r) => r.sourceId)).size }, provenance };
+  const publicTiAnswer = { route: { canonicalPath: "/api/ti/search", publicWrapperPath: "/api/ti/search", publicWrapperMethod: "POST" }, status, query, summary: rows, safeSummary: rows.length ? [`Found ${rows.length} public-intelligence rows for ${query}.`] : ["searching"], evidenceLedgerReferences: provenance, ux: { evidenceStageLabels: { captured_page: { count: rows.length } } } };
+  return json({ query, status, summary: publicTiAnswer.safeSummary, rows, results: rows, runId: stableId("search", `${query}:${nowIso()}`), actorProfile, publicTiAnswer });
 }
 
 async function createRun(request: Request, options: ApiServerOptions): Promise<Response> {
@@ -64,6 +72,17 @@ async function createRun(request: Request, options: ApiServerOptions): Promise<R
   options.store.savePlan?.(plan);
   options.store.saveRun?.(run);
   return json({ run, plan, scheduler: { queued: options.frontier.size() } }, 201);
+}
+
+async function canaryActivation(request: Request, options: ApiServerOptions): Promise<Response> {
+  const input = await readJson(request);
+  return json({ activation: activatePublicCanarySources({ store: options.store, tenantId: input.tenantId, operatorId: input.approvedBy, now: input.generatedAt }) });
+}
+
+async function canaryRun(request: Request, options: ApiServerOptions): Promise<Response> {
+  const input = await readJson(request);
+  const canaryRun = await runCanaryCollectionCycle({ store: options.store, frontier: options.frontier, objectStore: options.objectStore, fetch: options.canaryFetch as any, activateSources: false, maxSources: input.maxSources, maxTasks: input.maxTasks, now: () => input.generatedAt ?? nowIso() });
+  return json({ canaryRun });
 }
 
 function runStatus(options: ApiServerOptions, runId: string): Response {
