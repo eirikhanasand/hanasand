@@ -10301,7 +10301,7 @@ function buildApifyStoreReadinessContract(input: {
     firstPaidTrafficExperiment: {
       status: "blocked_until_100_sellable_rows",
       targetBuyer: "CTI analyst evaluating daily APT and ransomware monitoring for actor, victim, CVE, sector, and country pivots",
-      inputPreset: "20 default queries, maxRowsPerQuery=25, includeCoverageGaps=true, includeDatasets=false",
+      inputPreset: "100-name paid preset, maxRowsPerQuery=25, includeCoverageGaps=false, includeHeldRows=false, includeDatasets=false; local proof does not replace hosted proof",
       successMetric: "after the 100-row floor passes, paid traffic succeeds only if trialToPaidRate >= 0.15, repeatUsers >= 1, usefulRowsPerQuery >= 2, and refunds = 0",
       stopLossMetric: "stop if 100 verified store views produce no paid runs, sellable rows fall below 100, average buyer value drops below 0.55, or any no-leak failure appears",
       refundRisk: "medium until first paid cohort proves useful rows and no-leak guarantees; refunds are external Apify analytics and remain null here",
@@ -10387,7 +10387,7 @@ function buildApifyStoreReadinessContract(input: {
         "no-leak sample proof remains green"
       ],
       targetBuyer: "CTI analyst evaluating daily actor, victim, CVE, sector, and ransomware monitoring",
-      inputPreset: "20 default actor/ransomware queries, maxRowsPerQuery=25, includeCoverageGaps=true, includeDatasets=false",
+      inputPreset: "100-name paid preset, maxRowsPerQuery=25, includeCoverageGaps=false, includeHeldRows=false, includeDatasets=false; hosted proof must be re-run before promotion",
       successMetric: "trial-to-paid conversion >= 15%, useful-row density >= 40%, repeat users >= 1, refunds = 0",
       stopLossMetric: "stop paid traffic if paid runs stay 0 after 100 verified Store views, useful-row density drops below 40%, refunds appear, or sellable rows fall below 100",
       refundRisk: "medium until real paid cohorts verify useful rows, freshness, and no-leak guarantees"
