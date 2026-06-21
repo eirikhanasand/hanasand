@@ -26,11 +26,14 @@ const productSlo = await localJson("/v1/ops/product-slo?proofMode=local");
 const apifyStoreReadiness = record(contracts.apifyStoreReadiness);
 const paidReleaseTruthBoard = record(apifyStoreReadiness.paidReleaseTruthBoard);
 const sloPaidReleaseTruthBoard = record(productSlo.paidReleaseTruthBoard);
+const releaseLadder = buildReleaseLadder(productSlo, apifyStoreReadiness, paidReleaseTruthBoard);
 
 checks.push(checkNoStalePaidPresetCopy(productSlo, contracts));
 checks.push(checkLocalActorProof(apifyStoreReadiness));
 checks.push(checkHostedActorProof(apifyStoreReadiness));
 checks.push(checkHostedPaidReadinessProof(apifyStoreReadiness, paidReleaseTruthBoard, sloPaidReleaseTruthBoard));
+checks.push(checkReleaseLadder(releaseLadder));
+checks.push(checkPaidCountIntegrity(productSlo, paidReleaseTruthBoard, releaseLadder));
 checks.push(checkPaidFloorGate(apifyStoreReadiness, productSlo));
 checks.push(checkPayoutPricingListing(apifyStoreReadiness, paidReleaseTruthBoard));
 checks.push(checkNoLeakProof(paidReleaseTruthBoard, sloPaidReleaseTruthBoard));
@@ -51,6 +54,7 @@ const packet = {
   generatedAt,
   releaseDecision,
   safeToPromotePaidTraffic: releaseDecision === "ready_for_paid_release",
+  releaseLadder,
   summary: {
     pass: checks.filter((check) => check.status === "pass").length,
     hold: holdingChecks.length,
@@ -254,6 +258,209 @@ function checkHostedPaidReadinessProof(
   };
 }
 
+function buildReleaseLadder(
+  productSlo: Record<string, unknown>,
+  apifyStoreReadiness: Record<string, unknown>,
+  paidReleaseTruthBoard: Record<string, unknown>
+): Record<string, unknown> {
+  const storeReadiness = record(apifyStoreReadiness.storeReadiness);
+  const localProof = record(storeReadiness.localPaidPresetProof);
+  const latestProofRun = record(storeReadiness.latestProofRun);
+  const hostedProof = record(record(paidReleaseTruthBoard.hostedPaidReadinessProof));
+  const marketplace = record(hostedProof.marketplaceConversionInputs);
+  const telemetry = record(record(paidReleaseTruthBoard.observedMarketplaceTelemetry).currentValues);
+  const parserLedger = record(record(productSlo.parserRealSellableLift).findingAdmissionLedger);
+  const deterministicProof = record(parserLedger.deterministic100NameProof);
+  const tier1000Gate = record(parserLedger.tier1000Gate);
+  const darkSellable250 = record(record(productSlo.darkMetadataPublicSupportLift4000).publicSupportSellable250);
+  const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
+  const graphCounts = record(graphQueue.counts);
+
+  const currentSellableRows = firstFiniteNumber(localProof.sellableRows, deterministicProof.sellableRowsPreserved, parserLedger.baselineSellableRows);
+  const trueFindingCount = firstFiniteNumber(localProof.sellableFindings, deterministicProof.sellableFindingsBaseline, parserLedger.baselineSellableFindingRows);
+  const sellableSourceProvenanceRows = firstFiniteNumber(localProof.sellableSourceProvenanceRows, deterministicProof.sellableSourceProvenanceRows, parserLedger.baselineSellableSourceProvenanceRows);
+  const sourceProvenanceShare = Number.isFinite(numberValue(parserLedger.sourceProvenanceShareOfSellable))
+    ? numberValue(parserLedger.sourceProvenanceShareOfSellable)
+    : roundRatio(sellableSourceProvenanceRows, currentSellableRows);
+  const darkCurrentChargeableRows = numberValue(darkSellable250.currentChargeableRows);
+  const darkProjectedRows = numberValue(darkSellable250.projectedAfterPublicSupportRows);
+  const graphRowsCountTowardFloorNow = numberValue(graphCounts.rowsCountTowardFloorNow);
+  const graphRowsReadyAfterParserAdmission = numberValue(graphCounts.rowsReadyAfterParserAdmission);
+  const hostedStatus = String(hostedProof.status ?? latestProofRun.proofDecision ?? "unknown");
+  const hostedSellableRows = firstFiniteNumber(record(hostedProof.latestHostedProof).sellableRows, latestProofRun.sellableRows);
+  const hostedQuerySetCount = firstFiniteNumber(record(hostedProof.latestHostedProof).querySetCount, Array.isArray(latestProofRun.querySet) ? latestProofRun.querySet.length : Number.NaN);
+  const pricingState = String(marketplace.pricingModel ?? telemetry.pricingState ?? "external_unknown");
+  const payoutState = String(marketplace.payoutEnabled ?? telemetry.payoutState ?? "external_unknown");
+  const analyticsObserved = ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds"].every((field) => marketplace[field] !== null && marketplace[field] !== undefined);
+
+  const tier1000MinimumSellableRows = firstFiniteNumber(tier1000Gate.minimumSellableRows, 300);
+  const tier1000MinimumRows = firstFiniteNumber(tier1000Gate.minimumRows, 1000);
+  return {
+    schemaVersion: "ti.paid_actor_release_ladder_audit.v1",
+    status: "hold_paid_release",
+    current100LocalFloor: {
+      state: currentSellableRows >= 100 ? "pass" : "hold",
+      currentSellableRows,
+      trueFindingCount,
+      sellableSourceProvenanceRows,
+      sourceProvenanceShare,
+      sourceProvenanceRowsCountTowardFindingFloor: deterministicProof.sourceProvenanceRowsCountTowardFindingFloor === false ? false : parserLedger.sourceProvenanceRowsCountTowardFindingFloor,
+      proofDecision: localProof.proofDecision
+    },
+    hosted100Proof: {
+      state: hostedStatus === "paid_floor_hosted_proof" && hostedSellableRows >= 100 && hostedQuerySetCount >= 100 ? "pass" : "hold",
+      status: hostedStatus,
+      hostedSellableRows,
+      hostedQuerySetCount,
+      countsTowardPaidPromotion: hostedProof.countsTowardPaidPromotion,
+      latestHostedProofDecision: record(hostedProof.latestHostedProof).proofDecision ?? latestProofRun.proofDecision
+    },
+    next300SellableTarget: {
+      state: currentSellableRows >= 300 ? "pass" : "hold",
+      requiredSellableRows: 300,
+      currentSellableRows,
+      gap: Math.max(0, 300 - currentSellableRows),
+      trueFindingCount,
+      sourceProvenanceShare,
+      maximumSourceProvenanceShare: 0.45
+    },
+    tier1000Gate: {
+      state: currentSellableRows >= tier1000MinimumSellableRows && firstFiniteNumber(deterministicProof.proofRows, parserLedger.baseline100NameRows) >= tier1000MinimumRows ? "pass" : "hold",
+      minimumRows: tier1000MinimumRows,
+      minimumSellableRows: tier1000MinimumSellableRows,
+      minimumSellableFindingRate: tier1000Gate.minimumSellableFindingRate,
+      maximumSourceProvenanceShareOfSellable: tier1000Gate.maximumSourceProvenanceShareOfSellable,
+      countsProjectedRowsAsPaid: tier1000Gate.countsProjectedRowsAsPaid,
+      proofRows: firstFiniteNumber(deterministicProof.proofRows, parserLedger.baseline100NameRows)
+    },
+    darkMetadataCurrentChargeable: {
+      state: darkCurrentChargeableRows >= 100 ? "pass" : "hold",
+      currentChargeableRows: darkCurrentChargeableRows,
+      targetSellableRows: firstFiniteNumber(darkSellable250.targetSellableRows, 100),
+      remainingGapTo100Now: darkSellable250.remainingGapTo100Now,
+      projectedAfterPublicSupportRows: darkProjectedRows,
+      projectedRowsCountTowardFloorNow: false
+    },
+    graphParserHandoff: {
+      state: graphRowsCountTowardFloorNow === 0 ? "hold" : "fail",
+      readyForParser: graphCounts.ready_for_parser,
+      rowsReadyAfterParserAdmission: graphRowsReadyAfterParserAdmission,
+      rowsCountTowardFloorNow: graphRowsCountTowardFloorNow,
+      graphOnlyCountsTowardPaidFloorNow: graphQueue.graphOnlyCountsTowardPaidFloorNow
+    },
+    observedMarketplaceState: {
+      state: pricingState !== "external_unknown" && payoutState !== "external_unknown" && analyticsObserved ? "pass" : "hold",
+      pricingState,
+      payoutState,
+      analyticsObserved,
+      storeViews: marketplace.storeViews ?? telemetry.storeViews,
+      runs: marketplace.runs ?? telemetry.actorRuns,
+      uniqueUsers: marketplace.uniqueUsers ?? telemetry.uniqueUsers,
+      paidUsers: marketplace.paidUsers ?? telemetry.paidRuns,
+      refunds: marketplace.refunds ?? telemetry.refunds
+    },
+    nextBuyerVisibleBlockers: [
+      "Agent 03: admit public-supported parser handoff rows as activity, target, TTP, victim, or dataset findings until current sellable rows reach 300 without source-provenance padding.",
+      "Agent 05: lift public-supported dark metadata current chargeable rows from 50 toward 100; projected rows and restricted-only rows stay out of paid counts.",
+      "Agent 08: keep graph rows at zero current paid-floor credit until parser admission converts them into non-graph public findings.",
+      "Agent 09: run/record hosted 100-name Apify proof plus observed Store analytics, payout, pricing, refunds, and listing state before promotion."
+    ]
+  };
+}
+
+function checkReleaseLadder(releaseLadder: Record<string, unknown>): AuditCheck {
+  const local = record(releaseLadder.current100LocalFloor);
+  const hosted = record(releaseLadder.hosted100Proof);
+  const next300 = record(releaseLadder.next300SellableTarget);
+  const tier1000 = record(releaseLadder.tier1000Gate);
+  const observed = record(releaseLadder.observedMarketplaceState);
+  const localPassed = local.state === "pass";
+  const hostedPassed = hosted.state === "pass";
+  const next300Passed = next300.state === "pass";
+  const tier1000Passed = tier1000.state === "pass";
+  const observedPassed = observed.state === "pass";
+  return {
+    name: "monetization_release_ladder",
+    status: localPassed && hostedPassed && next300Passed && tier1000Passed && observedPassed ? "pass" : localPassed ? "hold" : "fail",
+    message: localPassed
+      ? "local 100-row floor is passed; hosted 100-name proof, 300-sellable next tier, 1,000-row gate, and observed marketplace state remain explicit ladder steps"
+      : "local 100-row paid floor is not passed, so higher release gates cannot be evaluated",
+    remediation: localPassed ? [
+      "Agent 03: convert public-supported parser handoffs into current sellable findings until the 300-row tier is reached.",
+      "Agent 05: increase public-supported dark metadata current chargeable rows; do not count projected or restricted-only rows.",
+      "Agent 08: keep graph-only/public-pivot rows out of paid counts until parser admission.",
+      "Agent 09: run the hosted 100-name Actor proof and import observed Apify payout, pricing, analytics, and refund state."
+    ] : [
+      "Restore the local 100-name paid preset proof with at least 100 current sellable rows before evaluating hosted or 300-row gates."
+    ],
+    details: releaseLadder
+  };
+}
+
+function checkPaidCountIntegrity(
+  productSlo: Record<string, unknown>,
+  paidReleaseTruthBoard: Record<string, unknown>,
+  releaseLadder: Record<string, unknown>
+): AuditCheck {
+  const parserLedger = record(record(productSlo.parserRealSellableLift).findingAdmissionLedger);
+  const deterministicProof = record(parserLedger.deterministic100NameProof);
+  const tier1000Gate = record(parserLedger.tier1000Gate);
+  const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
+  const graphCounts = record(graphQueue.counts);
+  const darkSellable250 = record(record(productSlo.darkMetadataPublicSupportLift4000).publicSupportSellable250);
+  const darkSampleRows = Array.isArray(darkSellable250.sampleRows) ? darkSellable250.sampleRows.filter(isRecord) : [];
+  const hostedProof = record(paidReleaseTruthBoard.hostedPaidReadinessProof);
+  const paidRowIntegrityGate = record(hostedProof.paidRowIntegrityGate);
+  const requiredZeroCounts = record(paidRowIntegrityGate.requiredZeroCounts);
+  const marketplace = record(hostedProof.marketplaceConversionInputs);
+  const rejectionReasonCounts = Array.isArray(parserLedger.rejectionReasonCounts) ? parserLedger.rejectionReasonCounts.filter(isRecord) : [];
+
+  const failures: string[] = [];
+  if (deterministicProof.sourceProvenanceRowsCountTowardFindingFloor !== false) failures.push("source_provenance_rows_count_toward_finding_floor");
+  if (tier1000Gate.countsProjectedRowsAsPaid !== false) failures.push("tier1000_counts_projected_rows_as_paid");
+  for (const row of rejectionReasonCounts) {
+    if (["source_provenance_only", "graph_only", "restricted_without_public_support"].includes(String(row.reason)) && row.countsTowardSellableFindingFloor !== false) {
+      failures.push(`${row.reason}_counts_toward_sellable_finding_floor`);
+    }
+  }
+  if (numberValue(graphCounts.rowsCountTowardFloorNow) !== 0) failures.push("graph_rows_count_toward_floor_now");
+  if (graphQueue.graphOnlyCountsTowardPaidFloorNow !== false) failures.push("graph_only_counts_toward_paid_floor_now");
+  for (const row of darkSampleRows) {
+    if (row.rowDecision === "projected_after_public_support" && row.countsTowardSellableFloorNow !== false) failures.push("projected_dark_row_counts_now");
+    if (row.rowDecision === "blocked_not_chargeable" && row.countsTowardSellableFloorNow !== false) failures.push("blocked_dark_row_counts_now");
+  }
+  if (paidRowIntegrityGate.sourceProvenanceRowsCountTowardFindingFloor !== false) failures.push("hosted_integrity_source_provenance_counts_as_finding");
+  if (paidRowIntegrityGate.caveatedRowsCountTowardChargeable !== false) failures.push("hosted_integrity_caveated_rows_count_as_chargeable");
+  for (const [field, value] of Object.entries(requiredZeroCounts)) {
+    if (value !== 0) failures.push(`hosted_integrity_${field}_not_zero`);
+  }
+  const observedOnlyFields = ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds"];
+  for (const field of observedOnlyFields) {
+    if (marketplace[field] !== null) failures.push(`marketplace_${field}_not_observed_only_null`);
+  }
+  if (marketplace.unknownMeansNoClaim !== true) failures.push("marketplace_unknown_does_not_mean_no_claim");
+
+  return {
+    name: "paid_count_integrity",
+    status: failures.length === 0 ? "pass" : "fail",
+    message: failures.length === 0
+      ? "paid counts exclude synthetic, source-provenance-only, graph-only, projected dark metadata, caveated, stale, restricted, and unobserved traction fields"
+      : "one or more non-current or non-observed buckets is being allowed into paid counts",
+    remediation: failures.length === 0 ? [] : [
+      "Remove any synthetic, projected, graph-only, source-provenance-only, caveated, stale, or restricted-only rows from paid floor counts.",
+      "Keep dark metadata projected_after_public_support rows and blocked_not_chargeable rows out of current sellable rows.",
+      "Keep marketplace traction/revenue fields null or external_unknown until copied from observed Apify analytics."
+    ],
+    details: {
+      failures,
+      current100LocalFloor: releaseLadder.current100LocalFloor,
+      graphParserHandoff: releaseLadder.graphParserHandoff,
+      darkMetadataCurrentChargeable: releaseLadder.darkMetadataCurrentChargeable,
+      requiredZeroCounts
+    }
+  };
+}
+
 function checkPaidFloorGate(apifyStoreReadiness: Record<string, unknown>, productSlo: Record<string, unknown>): AuditCheck {
   const readinessBoard = record(apifyStoreReadiness.paidReleaseTruthBoard);
   const sloBoard = record(productSlo.paidReleaseTruthBoard);
@@ -410,4 +617,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : Number.NaN;
+}
+
+function firstFiniteNumber(...values: unknown[]): number {
+  for (const value of values) {
+    const number = numberValue(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return Number.NaN;
+}
+
+function roundRatio(numerator: number, denominator: number): number {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return Number.NaN;
+  return Math.round((numerator / denominator) * 1_000) / 1_000;
 }

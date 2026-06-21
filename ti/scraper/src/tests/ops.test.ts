@@ -1321,6 +1321,75 @@ describe("ops controls", () => {
       "restricted_without_public_support",
       "duplicate_claim"
     ]));
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission).toMatchObject({
+      schemaVersion: "ti.program_cz_public_support_candidate_admission.v1",
+      owner: "agent_03",
+      sourcePackets: expect.arrayContaining([
+        "darkMetadataPublicSupportLift4000.publicSupportSellable250",
+        "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff"
+      ]),
+      acceptedCount: 63,
+      rejectedCount: 116
+    });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission.acceptedRows).toHaveLength(63);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission.acceptedRows.every((row) =>
+      row.actor.length > 0 &&
+      row.victimOrTarget.length > 0 &&
+      row.sector.length > 0 &&
+      row.country.length > 0 &&
+      row.ttpOrTool.length > 0 &&
+      row.datasetClaim.length > 0 &&
+      row.safePublicSourceId.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.countsTowardSellableRowsNow === false &&
+      row.countsAfterParserAdmission === true &&
+      row.noLeak
+    )).toBe(true);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission.acceptedRows.filter((row) => row.sourcePacket === "publicSupportSellable250")).toHaveLength(38);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission.acceptedRows.filter((row) => row.sourcePacket === "graphPublicParserAdmissionHandoff")).toHaveLength(25);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission.rejectionReasons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reason: "needs_public_support", countsTowardSellableRows: false }),
+      expect.objectContaining({ reason: "stale_public_support", countsTowardSellableRows: false }),
+      expect.objectContaining({ reason: "duplicate_claim", countsTowardSellableRows: false }),
+      expect.objectContaining({ reason: "unsafe_restricted_only", countsTowardSellableRows: false }),
+      expect.objectContaining({ reason: "generic_source_only", countsTowardSellableRows: false }),
+      expect.objectContaining({ reason: "contradicted_public_proof", countsTowardSellableRows: false }),
+      expect.objectContaining({ reason: "graph_only_without_public_source", countsTowardSellableRows: false })
+    ]));
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission.sourceFamilies).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceFamily: "dark_metadata_public_support" }),
+      expect.objectContaining({ sourceFamily: "clear_web_public_report" }),
+      expect.objectContaining({ sourceFamily: "government_advisory" }),
+      expect.objectContaining({ sourceFamily: "vendor_report" })
+    ]));
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission.projected300RowTierEffect).toMatchObject({
+      currentSellableRows: 187,
+      acceptedParserAdmissions: 63,
+      projectedSellableRowsAfterAdmission: 250,
+      targetSellableRows: 300,
+      remainingSellableGap: 50,
+      currentSellableFindings: 52,
+      projectedSellableFindingsAfterAdmission: 115,
+      targetSellableFindings: 120,
+      remainingFindingGap: 5,
+      sellableSourceProvenanceRowsPreserved: 135,
+      sourceProvenanceShareAfterAdmission: 0.54,
+      maximumSourceProvenanceShare: 0.45,
+      nextRequiredFindingAdmissions: 50,
+      projectedAtTargetSellableRows: 300,
+      projectedAtTargetSellableFindings: 165,
+      projectedAtTargetSourceProvenanceShare: 0.45,
+      countsProjectedRowsAsPaid: false
+    });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.publicSupportCandidateAdmission.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      productionSellableClaimed: false
+    });
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.remainingBlockers.every((row) => row.countsTowardCurrentSellableRows === false)).toBe(true);
     expect(dashboard.parserRealSellableLift.findingAdmissionLedger.noLeakBoundary).toMatchObject({
       rawBodiesExposed: false,

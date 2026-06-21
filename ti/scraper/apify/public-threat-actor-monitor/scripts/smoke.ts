@@ -713,6 +713,74 @@ if (
 ) {
   throw new Error("Program CY finding density ledger must preserve 100-name proof and expose 1,000-row gate");
 }
+const publicSupportCandidateAdmission = findingAdmissionLedger.publicSupportCandidateAdmission as Record<string, unknown> | undefined;
+if (
+  !publicSupportCandidateAdmission
+  || publicSupportCandidateAdmission.schemaVersion !== "ti.program_cz_public_support_candidate_admission.v1"
+  || publicSupportCandidateAdmission.owner !== "agent_03"
+  || !Array.isArray(publicSupportCandidateAdmission.sourcePackets)
+  || !(publicSupportCandidateAdmission.sourcePackets as string[]).includes("darkMetadataPublicSupportLift4000.publicSupportSellable250")
+  || !(publicSupportCandidateAdmission.sourcePackets as string[]).includes("graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff")
+  || Number(publicSupportCandidateAdmission.acceptedCount) < 25
+  || Number(publicSupportCandidateAdmission.acceptedCount) !== 63
+  || Number(publicSupportCandidateAdmission.rejectedCount) !== 116
+  || !Array.isArray(publicSupportCandidateAdmission.acceptedRows)
+  || !Array.isArray(publicSupportCandidateAdmission.rejectionReasons)
+  || !Array.isArray(publicSupportCandidateAdmission.sourceFamilies)
+) {
+  throw new Error("Program CZ public support admission must expose accepted/rejected parser candidates");
+}
+const publicSupportAcceptedRows = publicSupportCandidateAdmission.acceptedRows as Array<Record<string, unknown>>;
+if (
+  publicSupportAcceptedRows.length !== 63
+  || publicSupportAcceptedRows.filter((row) => row.sourcePacket === "publicSupportSellable250").length !== 38
+  || publicSupportAcceptedRows.filter((row) => row.sourcePacket === "graphPublicParserAdmissionHandoff").length !== 25
+) {
+  throw new Error("Program CZ public support admission must convert Agent 05 and Agent 08 handoffs into parser-admission rows");
+}
+for (const row of publicSupportAcceptedRows) {
+  if (
+    typeof row.actor !== "string"
+    || typeof row.victimOrTarget !== "string"
+    || typeof row.sector !== "string"
+    || typeof row.country !== "string"
+    || typeof row.ttpOrTool !== "string"
+    || typeof row.datasetClaim !== "string"
+    || typeof row.safePublicSourceId !== "string"
+    || typeof row.provenanceHash !== "string"
+    || row.countsTowardSellableRowsNow !== false
+    || row.countsAfterParserAdmission !== true
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program CZ accepted rows must preserve buyer fields, provenance, and no-leak proof without current paid credit");
+  }
+}
+for (const reason of ["needs_public_support", "stale_public_support", "duplicate_claim", "unsafe_restricted_only", "generic_source_only", "contradicted_public_proof", "graph_only_without_public_source"]) {
+  if (!(publicSupportCandidateAdmission.rejectionReasons as Array<Record<string, unknown>>).some((row) => row.reason === reason && row.countsTowardSellableRows === false)) {
+    throw new Error(`Program CZ public support admission must reject ${reason} with buyer-trust reason`);
+  }
+}
+const publicSupportTierEffect = publicSupportCandidateAdmission.projected300RowTierEffect as Record<string, unknown> | undefined;
+if (
+  !publicSupportTierEffect
+  || Number(publicSupportTierEffect.currentSellableRows) !== 187
+  || Number(publicSupportTierEffect.projectedSellableRowsAfterAdmission) !== 250
+  || Number(publicSupportTierEffect.projectedSellableFindingsAfterAdmission) !== 115
+  || Number(publicSupportTierEffect.remainingSellableGap) !== 50
+  || Number(publicSupportTierEffect.remainingFindingGap) !== 5
+  || Number(publicSupportTierEffect.sourceProvenanceShareAfterAdmission) !== 0.54
+  || Number(publicSupportTierEffect.projectedAtTargetSellableRows) !== 300
+  || Number(publicSupportTierEffect.projectedAtTargetSellableFindings) !== 165
+  || publicSupportTierEffect.countsProjectedRowsAsPaid !== false
+) {
+  throw new Error("Program CZ public support admission must show the deterministic path from 187 toward the 300-row tier");
+}
+if (
+  (publicSupportCandidateAdmission.noLeakBoundary as Record<string, unknown> | undefined)?.productionSellableClaimed !== false
+  || (publicSupportCandidateAdmission.noLeakBoundary as Record<string, unknown>).restrictedPayloadsExposed !== false
+) {
+  throw new Error("Program CZ public support admission must keep projections out of paid claims and expose no restricted payloads");
+}
 for (const row of findingAdmissionLedger.remainingBlockers as Array<Record<string, unknown>>) {
   if (row.countsTowardCurrentSellableRows !== false) throw new Error("Program CX remaining blockers must not count toward sellable rows");
 }

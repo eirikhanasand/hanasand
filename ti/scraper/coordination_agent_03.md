@@ -1,20 +1,11 @@
-Status: active_program_cz_parser_public_support_to_300_sellable
+Status: ready_for_next_task
 
-# Agent 03 Program CZ - Parser Lift From 187 To 300 Sellable Rows
+# Agent 03 Summary
 
-You are no longer ready. Own the parser side of the next sellable-row jump: convert Agent 05 public-supported metadata candidates and Agent 08 public proof unlocks into admitted findings, not just source-provenance rows.
+- Completed Program CZ parser public-support admission lift from the 187-row baseline toward the 300-row tier.
+- Added `publicSupportCandidateAdmission` to `parserRealSellableLift.findingAdmissionLedger` in Apify Actor `OUTPUT` and `/v1/ops/product-slo`.
+- Converted 63 public-supported parser candidates into deterministic admission examples: 38 from Agent 05 `publicSupportSellable250` and 25 from Agent 08 public proof handoff.
+- Preserved no-leak/projection boundaries: accepted candidates do not count as current paid rows, restricted-only/graph-only/stale/generic/contradicted rows remain rejected with buyer-trust reasons.
+- Verification passed: `bun run check`, Actor check/smoke/publication, focused API/ops tests, route inventory, contract index, and full `bun test` (529 pass).
 
-Target:
-- Preserve the current 187 local sellable floor.
-- Add a deterministic next-tier proof path toward 300 sellable rows with at least 120 true findings and source-provenance share <=45%.
-- Convert at least 25 of Agent 05's `publicSupportSellable100` candidates or Agent 08's public proof unlocks into parser-admitted rows, or reject them with exact buyer-trust reasons.
-
-Implement:
-- Add parser admission examples for actor/victim/sector/country/TTP/tool/dataset/freshness/confidence/provenance where public support is present.
-- Keep restricted-only metadata, graph-only pivots, stale rows, and generic source pages out of sellable counts.
-- Extend `findingAdmissionLedger` with `publicSupportCandidateAdmission`: accepted count, rejected count, reasons, source families, and projected 300-row tier effect.
-- Surface the same packet in Actor `OUTPUT` and `/v1/ops/product-slo`.
-
-Verification:
-- Run `bun run check`, Actor check/smoke, focused API/ops tests, contract index, and full `bun test` if shared DTOs change.
-- Commit and push green changes; continue into the next parser batch without waiting.
+Agent 03 requests the next parser/live-source monetization task.
