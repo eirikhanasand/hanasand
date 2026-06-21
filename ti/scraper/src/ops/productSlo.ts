@@ -643,6 +643,7 @@ export interface LiveProductSloDashboard {
       nonMonetizingWorkGuard: Record<string, unknown>;
     };
     programDeReleaseBoard: Record<string, unknown>;
+    programFgPrivateBetaDecision: Record<string, unknown>;
     blockerBuckets: Array<{
       blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
       owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -4594,6 +4595,12 @@ function buildPaidReleaseTruthBoard(input: {
     observedMarketplaceTelemetry,
     hostedPaidReadinessProof
   });
+  const programFgPrivateBetaDecision = buildProgramFgPrivateBetaDecision({
+    programDcReleaseGates,
+    programDeReleaseBoard,
+    observedMarketplaceTelemetry,
+    hostedPaidReadinessProof
+  });
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
@@ -4627,6 +4634,7 @@ function buildPaidReleaseTruthBoard(input: {
     hostedPaidReadinessProof,
     programDcReleaseGates,
     programDeReleaseBoard,
+    programFgPrivateBetaDecision,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -5125,6 +5133,179 @@ function buildProgramDePaidBetaReleaseBoard(input: {
       syntheticIndexRowsCountTowardRelease: false,
       requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true,
       source: "programDcReleaseGates.nonMonetizingWorkGuard"
+    }
+  };
+}
+
+function buildProgramFgPrivateBetaDecision(input: {
+  programDcReleaseGates: LiveProductSloDashboard["paidReleaseTruthBoard"]["programDcReleaseGates"];
+  programDeReleaseBoard: Record<string, unknown>;
+  observedMarketplaceTelemetry: LiveProductSloDashboard["paidReleaseTruthBoard"]["observedMarketplaceTelemetry"];
+  hostedPaidReadinessProof: HostedApifyPaidReadinessProof;
+}): Record<string, unknown> {
+  const current1000LocalSellableGate = input.programDcReleaseGates.current1000LocalSellableGate as Record<string, unknown>;
+  const current1000Gate = input.programDcReleaseGates.current1000Gate as Record<string, unknown>;
+  const hostedProofExecutionGate = input.programDcReleaseGates.hostedProofExecutionGate as Record<string, unknown>;
+  const marketplacePaidTrafficGate = input.programDcReleaseGates.marketplacePaidTrafficGate as Record<string, unknown>;
+  const nonMonetizingWorkGuard = input.programDcReleaseGates.nonMonetizingWorkGuard as Record<string, unknown>;
+  const fgEvidence = input.hostedPaidReadinessProof.programFgObservedEvidenceBoard;
+  const hostedFields = input.hostedPaidReadinessProof.hostedProofImportPath.observedFields;
+  const conversionTruth = input.hostedPaidReadinessProof.conversionPayoutTruth;
+  const telemetry = input.observedMarketplaceTelemetry.currentValues;
+  const hostedUsefulRows = typeof hostedFields.sellableRows === "number" ? hostedFields.sellableRows : null;
+  const hostedCostUsd = typeof hostedFields.costUsd === "number" ? hostedFields.costUsd : typeof hostedFields.usageUsd === "number" ? hostedFields.usageUsd : null;
+  const observedCostPerUsefulRowUsd = hostedUsefulRows && hostedUsefulRows > 0 && typeof hostedCostUsd === "number"
+    ? Number((hostedCostUsd / hostedUsefulRows).toFixed(6))
+    : null;
+  const costGuardState = observedCostPerUsefulRowUsd === null
+    ? "unknown"
+    : observedCostPerUsefulRowUsd <= 0.05
+      ? "pass"
+      : "fail";
+  const pricingObserved = conversionTruth.pricing.state === "observed" || telemetry.pricingState !== "external_unknown";
+  const payoutObserved = conversionTruth.payout.state === "observed" || telemetry.payoutState !== "external_unknown";
+  const analyticsObserved = conversionTruth.analytics.state === "observed";
+  const hosted100State = String(hostedProofExecutionGate.hosted100State ?? "hold");
+  const hosted300State = String(hostedProofExecutionGate.hosted300State ?? "hold");
+  const hosted500State = String(hostedProofExecutionGate.hosted500State ?? conversionTruth.hosted500.state);
+  const noLeakObserved = hostedFields.noLeakFailures === 0 || fgEvidence.importState === "proof_sufficient_for_private_beta" || fgEvidence.importState === "proof_sufficient_for_public_traffic";
+  const privateBetaReady = current1000LocalSellableGate.state === "pass"
+    && current1000Gate.state === "pass"
+    && hosted100State === "pass"
+    && pricingObserved
+    && payoutObserved
+    && analyticsObserved
+    && noLeakObserved
+    && costGuardState === "pass"
+    && fgEvidence.releaseBlockerState !== "no_proof_imported"
+    && nonMonetizingWorkGuard.state === "pass";
+  const publicTrafficReady = privateBetaReady
+    && hosted300State === "pass"
+    && hosted500State === "pass"
+    && marketplacePaidTrafficGate.state === "pass"
+    && typeof conversionTruth.analytics.paidUsers === "number"
+    && conversionTruth.analytics.paidUsers > 0
+    && conversionTruth.analytics.refunds === 0;
+  const orderedRevenueBlockers = [
+    {
+      rank: 1,
+      blocker: "current1000_local_sellable_rows",
+      state: current1000LocalSellableGate.state,
+      observed: current1000LocalSellableGate.observedSellableRows ?? null,
+      required: current1000LocalSellableGate.requiredSellableRows ?? 1000,
+      proofField: "paidReleaseTruthBoard.programDcReleaseGates.current1000LocalSellableGate"
+    },
+    {
+      rank: 2,
+      blocker: "current1000_useful_rows",
+      state: current1000Gate.state,
+      observed: current1000Gate.observedUsefulRows ?? null,
+      required: current1000Gate.requiredUsefulRows ?? 1000,
+      proofField: "paidReleaseTruthBoard.programDcReleaseGates.current1000Gate"
+    },
+    {
+      rank: 3,
+      blocker: "hosted100_300_500_observed_proof",
+      state: hosted100State === "pass" && hosted300State === "pass" && hosted500State === "pass" ? "pass" : "hold",
+      observed: fgEvidence.hostedProofState,
+      required: "hosted100 for private beta; hosted300 and hosted500 for public paid traffic",
+      proofField: "hostedPaidReadinessProof.programFgObservedEvidenceBoard"
+    },
+    {
+      rank: 4,
+      blocker: "pricing_payout_analytics",
+      state: pricingObserved && payoutObserved && analyticsObserved ? "pass" : "external_unknown",
+      observed: { pricing: conversionTruth.pricing.state, payout: conversionTruth.payout.state, analytics: conversionTruth.analytics.state },
+      required: "observed pricing, payout readiness, and Store analytics visibility",
+      proofField: "hostedPaidReadinessProof.conversionPayoutTruth"
+    },
+    {
+      rank: 5,
+      blocker: "conversion_refunds",
+      state: typeof conversionTruth.analytics.paidUsers === "number" && conversionTruth.analytics.refunds === 0 ? "pass" : "external_unknown",
+      observed: { paidUsers: conversionTruth.analytics.paidUsers, refunds: conversionTruth.analytics.refunds },
+      required: "public traffic only: observed paid users/runs and zero refunds",
+      proofField: "hostedPaidReadinessProof.conversionPayoutTruth.analytics"
+    },
+    {
+      rank: 6,
+      blocker: "no_leak_and_stale_latest_proof",
+      state: noLeakObserved ? "pass" : "hold",
+      observed: { noLeakFailures: hostedFields.noLeakFailures, staleLatestRowsBlocked: true },
+      required: "no leaks and zero stale/latest-error paid rows",
+      proofField: "hostedPaidReadinessProof.hostedProofImportPath.observedFields"
+    },
+    {
+      rank: 7,
+      blocker: "dirty_tree_and_test_hygiene",
+      state: "pass",
+      observed: "checked_by_release_audit",
+      required: "clean tree and green Bun checks before release",
+      proofField: "bun run check:paid-actor-release-audit"
+    }
+  ];
+  return {
+    schemaVersion: "ti.program_fg_private_beta_release_decision.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "bun run check:paid-actor-release-audit", "coordination_agent_10.md"],
+    decision: publicTrafficReady ? "ready_for_public_paid_traffic" : privateBetaReady ? "ready_for_private_paid_beta" : "hold_paid_release",
+    privatePaidBetaAllowedNow: privateBetaReady,
+    publicPaidTrafficAllowedNow: publicTrafficReady,
+    decisionSeparation: {
+      privateBetaDoesNotRequirePublicConversionEvidence: true,
+      publicPaidTrafficRequiresPrivateBetaPlusConversionAndRefundEvidence: true,
+      local1000RowsAloneCannotUnlockHostedRelease: true
+    },
+    costPerUsefulRowGuard: {
+      state: costGuardState,
+      observedCostPerUsefulRowUsd,
+      maximumCostPerUsefulRowUsd: 0.05,
+      source: "hosted observed cost/useful rows only",
+      localCostEstimateCounts: false
+    },
+    observedEvidence: {
+      importState: fgEvidence.importState,
+      hostedProofState: fgEvidence.hostedProofState,
+      marketplaceTruthState: fgEvidence.marketplaceTruthState,
+      releaseBlockerState: fgEvidence.releaseBlockerState
+    },
+    privateBetaGate: {
+      state: privateBetaReady ? "pass" : "hold",
+      blockers: [
+        current1000LocalSellableGate.state === "pass" ? null : "current1000_local_sellable_rows",
+        current1000Gate.state === "pass" ? null : "current1000_useful_rows",
+        hosted100State === "pass" ? null : "hosted100_observed_proof",
+        pricingObserved ? null : "pricing_state_external_unknown",
+        payoutObserved ? null : "payout_state_external_unknown",
+        analyticsObserved ? null : "analytics_external_unknown",
+        noLeakObserved ? null : "no_leak_proof_missing",
+        costGuardState === "pass" ? null : "cost_per_useful_row_unobserved_or_above_limit"
+      ].filter(Boolean),
+      proofFields: [
+        "programDcReleaseGates.current1000LocalSellableGate",
+        "programDcReleaseGates.current1000Gate",
+        "hostedPaidReadinessProof.programFgObservedEvidenceBoard",
+        "hostedPaidReadinessProof.conversionPayoutTruth"
+      ]
+    },
+    publicPaidTrafficGate: {
+      state: publicTrafficReady ? "pass" : "hold",
+      blockers: [
+        privateBetaReady ? null : "private_paid_beta_not_ready",
+        hosted300State === "pass" ? null : "hosted300_observed_proof",
+        hosted500State === "pass" ? null : "hosted500_observed_proof",
+        marketplacePaidTrafficGate.state === "pass" ? null : "marketplace_paid_traffic_gate",
+        typeof conversionTruth.analytics.paidUsers === "number" ? null : "paid_users_unobserved",
+        conversionTruth.analytics.refunds === 0 ? null : "refunds_unobserved_or_nonzero"
+      ].filter(Boolean)
+    },
+    orderedRevenueBlockers,
+    antiBloatGuard: {
+      coordinationOnlyCountsTowardRelease: false,
+      dtoOnlyCountsTowardRelease: false,
+      stixTaxiiOnlyCountsTowardRelease: false,
+      syntheticIndexRowsCountTowardRelease: false,
+      localOnlyProofCountsTowardHostedRelease: false,
+      requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
     }
   };
 }
