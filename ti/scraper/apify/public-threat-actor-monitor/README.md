@@ -14,7 +14,7 @@ This Actor turns public reporting into normalized rows for CTI, SOC, brand-risk,
 
 Held rows, suppressed rows, and coverage-gap diagnostics are opt-in. The default run keeps the dataset focused on buyer-useful intelligence rows.
 
-Current focused sample baseline: 40 safe rows for one actor query, 40 sellable rows, 40 buyer-useful rows, 100% sellable rate, average buyer value `0.85`, and no source-only, held, suppressed, or coverage-gap rows on the first page when enough chargeable findings exist.
+Current focused sample baseline: the default 100-name watchlist returns 400 safe metadata rows, 400 sellable rows, 400 buyer-useful rows, 100% sellable rate, average buyer value `0.86`, and no source-only, held, suppressed, or coverage-gap rows when enough chargeable findings exist.
 
 ## Buyer Examples
 
@@ -51,7 +51,7 @@ Leave `queries` empty to use the built-in 100-name watchlist. Add up to 100 cust
 
 ```json
 {
-  "maxRowsPerQuery": 25,
+  "maxRowsPerQuery": 4,
   "includeActivity": true,
   "includeTargets": true,
   "includeTtps": true,

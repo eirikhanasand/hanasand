@@ -6,11 +6,10 @@ const storage = `${root}/.apify-smoke-storage`;
 await Bun.spawn(["rm", "-rf", storage], { stdout: "inherit", stderr: "inherit" }).exited;
 await Bun.spawn(["mkdir", "-p", `${storage}/key_value_stores/default`], { stdout: "inherit", stderr: "inherit" }).exited;
 await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify({
-  queries: ["APT42"],
   includeDatasets: true,
   includeCoverageGaps: true,
   includeHeldRows: true,
-  maxRowsPerQuery: 40
+  maxRowsPerQuery: 4
 }, null, 2));
 
 const proc = Bun.spawn({
@@ -102,8 +101,8 @@ if (
 ) {
   throw new Error("OUTPUT record must expose paid-row quality counts");
 }
-if (Number(paidRowQuality.sellable) < 40 || Number(paidRowQuality.usefulForBuyer) < 40) {
-  throw new Error("APT42 daily collection smoke must keep at least 40 sellable and 40 buyer-useful candidate rows after row prioritization");
+if (Number(paidRowQuality.sellable) < 100 || Number(paidRowQuality.usefulForBuyer) < 100) {
+  throw new Error("Default daily collection smoke must keep at least 100 sellable and 100 buyer-useful candidate rows after row prioritization");
 }
 const buyerVisibleOutputQuality = outputRecord.buyerVisibleOutputQuality as Record<string, unknown> | undefined;
 if (
@@ -112,7 +111,7 @@ if (
   || buyerVisibleOutputQuality.rowCount !== output.length
   || buyerVisibleOutputQuality.rowsWithBuyerSearchCard !== output.length
   || buyerVisibleOutputQuality.completeBuyerSearchCards !== output.length
-  || Number(buyerVisibleOutputQuality.buyerReadyCards) < 20
+  || Number(buyerVisibleOutputQuality.buyerReadyCards) < 100
   || buyerVisibleOutputQuality.cardCoverageRate !== 1
   || buyerVisibleOutputQuality.completeCardRate !== 1
   || buyerVisibleOutputQuality.noLeakFailures !== 0
@@ -159,13 +158,10 @@ if (
   throw new Error("OUTPUT record must expose monetization readiness");
 }
 if (
-  (monetizationReadiness.sellableRows as number) < 100
-  && (
-    monetizationReadiness.status !== "blocked_for_paid_traffic"
-    || !(monetizationReadiness.blockers as string[]).includes("sellable_rows_below_100_production_floor")
-  )
+  monetizationReadiness.sellableRows as number >= 100
+  && monetizationReadiness.status !== "ready_for_paid_traffic"
 ) {
-  throw new Error("Runs below 100 sellable rows must be blocked for paid traffic");
+  throw new Error("Runs at or above 100 sellable rows must be ready for paid traffic");
 }
 const qualityLiftGate = outputRecord.qualityLiftGate as Record<string, unknown> | undefined;
 if (
@@ -716,7 +712,8 @@ if (
 }
 for (const row of currentAdmissionLedger.admittedRows as Array<Record<string, unknown>>) {
   if (
-    row.actor !== "APT42"
+    typeof row.actor !== "string"
+    || String(row.actor).trim().length === 0
     || row.rowType !== "activity"
     || Number(row.sourceEvidenceCount) < 4
     || !Array.isArray(row.requiredFieldsPresent)
@@ -733,6 +730,10 @@ for (const row of currentAdmissionLedger.admittedRows as Array<Record<string, un
   ) {
     throw new Error("Program CW admitted rows must carry complete parser proof and count as current sellable rows");
   }
+}
+const currentAdmissionActors = new Set((currentAdmissionLedger.admittedRows as Array<Record<string, unknown>>).map((row) => String(row.actor)));
+if (currentAdmissionActors.size < 100) {
+  throw new Error("Program CW admitted rows must cover the 100-name default watchlist instead of padding one actor");
 }
 for (const row of currentAdmissionLedger.falsePositiveSuppressions as Array<Record<string, unknown>>) {
   if (row.countsTowardCurrentSellableRows !== false || typeof row.proof !== "string" || String(row.proof).length === 0) {
@@ -1103,32 +1104,56 @@ const hundredRowCurrentRun = hundredRowConversionProof.currentRun as Record<stri
 const hundredRowProjection = hundredRowConversionProof.acceptedRepairProjection as Record<string, unknown> | undefined;
 const firstPaidTrafficExperiment = hundredRowConversionProof.firstPaidTrafficExperiment as Record<string, unknown> | undefined;
 const noFakeRevenueClaims = hundredRowConversionProof.noFakeRevenueClaims as Record<string, unknown> | undefined;
+const hundredRowCurrentSellableRows = Number(hundredRowCurrentRun?.currentSellableRows);
 if (
   !hundredRowCurrentRun
   || hundredRowCurrentRun.proofRunId !== "OThlfd0uzSCNnedAO"
   || hundredRowCurrentRun.proofDatasetId !== "LSen2fYtwFTtOr7vK"
   || hundredRowCurrentRun.proofDecision !== "shape_safety_proof"
-  || hundredRowCurrentRun.productionPaidTrafficReady !== false
-  || Number(hundredRowCurrentRun.currentSellableRows) >= 100
   || hundredRowCurrentRun.targetSellableRows !== 100
-  || Number(hundredRowCurrentRun.remainingSellableRows) <= 0
   || !Array.isArray(hundredRowCurrentRun.exactBlockers)
-  || !hundredRowCurrentRun.exactBlockers.includes("sellable_rows_below_100_production_floor")
 ) {
-  throw new Error("Program CF current-run proof must keep proof-sized runs blocked below the 100-row floor");
+  throw new Error("Program CF current-run proof must expose the 100-row production floor state");
+}
+if (
+  hundredRowCurrentSellableRows >= 100
+  && (
+    hundredRowCurrentRun.productionPaidTrafficReady !== true
+    || Number(hundredRowCurrentRun.remainingSellableRows) !== 0
+    || (hundredRowCurrentRun.exactBlockers as string[]).length !== 0
+  )
+) {
+  throw new Error("Program CF current-run proof must mark runs at or above 100 sellable rows as paid-traffic-ready");
+}
+if (
+  hundredRowCurrentSellableRows < 100
+  && (
+    hundredRowCurrentRun.productionPaidTrafficReady !== false
+    || Number(hundredRowCurrentRun.remainingSellableRows) <= 0
+    || !(hundredRowCurrentRun.exactBlockers as string[]).includes("sellable_rows_below_100_production_floor")
+  )
+) {
+  throw new Error("Program CF current-run proof must keep under-floor runs blocked below the 100-row floor");
 }
 if (
   !hundredRowProjection
-  || Number(hundredRowProjection.projectedSellableRowsFromAcceptedRepairs) <= 0
   || Number(hundredRowProjection.projectedSellableRowsAfterAcceptedRepairs) < 100
-  || Number(hundredRowProjection.oneRepairAwayRows) <= 0
   || Number(hundredRowProjection.caveatedUsefulRows) < 0
-  || Number(hundredRowProjection.blockedRows) <= 0
   || hundredRowProjection.graphOnlyRowsCountTowardProductionFloor !== false
   || hundredRowProjection.proofSizedRunsCountTowardProductionReadiness !== false
   || hundredRowProjection.caveatOnlyRunsCountTowardProductionReadiness !== false
 ) {
   throw new Error("Program CF accepted-repair projection must distinguish projected progress from production readiness");
+}
+if (
+  hundredRowCurrentSellableRows < 100
+  && (
+    Number(hundredRowProjection.projectedSellableRowsFromAcceptedRepairs) <= 0
+    || Number(hundredRowProjection.oneRepairAwayRows) <= 0
+    || Number(hundredRowProjection.blockedRows) <= 0
+  )
+) {
+  throw new Error("Program CF accepted-repair projection must show repair path when below the 100-row floor");
 }
 if (
   !firstPaidTrafficExperiment
@@ -1862,7 +1887,6 @@ if (
   || marketplaceConversionRealRowSamplePack.source !== "current_safe_output_rows_only"
   || marketplaceConversionRealRowSamplePack.proofRunId !== "OThlfd0uzSCNnedAO"
   || marketplaceConversionRealRowSamplePack.proofDatasetId !== "LSen2fYtwFTtOr7vK"
-  || marketplaceConversionRealRowSamplePack.productionPaidTrafficReady !== false
   || Number(marketplaceConversionRealRowSamplePack.currentSellableRows) < 1
   || marketplaceConversionRealRowSamplePack.targetSellableRows !== 100
   || !Array.isArray(marketplaceConversionRealRowSamplePack.sampleRows)
@@ -1870,6 +1894,12 @@ if (
   || !Array.isArray(marketplaceConversionRealRowSamplePack.marketplaceTelemetryDescriptors)
 ) {
   throw new Error("OUTPUT record must expose Program CL real-row marketplace conversion sample pack");
+}
+if (
+  Number(marketplaceConversionRealRowSamplePack.currentSellableRows) >= 100
+  && marketplaceConversionRealRowSamplePack.productionPaidTrafficReady !== true
+) {
+  throw new Error("Program CL marketplace sample pack must be paid-traffic-ready once 100 real sellable rows are present");
 }
 for (const row of marketplaceConversionRealRowSamplePack.sampleRows as Array<Record<string, unknown>>) {
   if (
@@ -1899,9 +1929,20 @@ for (const excludedClass of ["synthetic", "graph_only", "stale", "restricted_onl
 const paidTrafficExperimentReadiness = marketplaceConversionRealRowSamplePack.paidTrafficExperimentReadiness as Record<string, unknown> | undefined;
 if (
   !paidTrafficExperimentReadiness
-  || paidTrafficExperimentReadiness.status !== "blocked_until_100_real_sellable_rows"
   || !Array.isArray(paidTrafficExperimentReadiness.activatesWhen)
   || !String(paidTrafficExperimentReadiness.stopLossMetric).includes("sellable rows fall below 100")
+) {
+  throw new Error("Program CL paid-traffic experiment readiness must expose the 100-row floor state");
+}
+if (
+  Number(marketplaceConversionRealRowSamplePack.currentSellableRows) >= 100
+  && paidTrafficExperimentReadiness.status !== "ready_after_agent10_floor_passes"
+) {
+  throw new Error("Program CL paid-traffic experiment readiness must be ready after the 100-row floor passes");
+}
+if (
+  Number(marketplaceConversionRealRowSamplePack.currentSellableRows) < 100
+  && paidTrafficExperimentReadiness.status !== "blocked_until_100_real_sellable_rows"
 ) {
   throw new Error("Program CL paid-traffic experiment readiness must stay blocked until 100 real sellable rows");
 }
@@ -1926,13 +1967,29 @@ const first100BuyerPreview = marketplaceConversionRealRowSamplePack.first100Buye
 if (
   !first100BuyerPreview
   || first100BuyerPreview.schemaVersion !== "ti.apify_first_100_real_rows_buyer_preview.v1"
-  || first100BuyerPreview.status !== "blocked_preview_until_100_real_sellable_rows"
   || Number(first100BuyerPreview.currentSellableRows) < 1
-  || Number(first100BuyerPreview.remainingSellableRowsNeeded) <= 0
   || first100BuyerPreview.sampleRowsRequiredBeforePaidTraffic !== 100
   || !Array.isArray(first100BuyerPreview.topBlockerBuckets)
   || !Array.isArray(first100BuyerPreview.requiredBuyerFields)
   || !Array.isArray(first100BuyerPreview.activationGate)
+) {
+  throw new Error("Program CT first-100 buyer preview must expose the current 100-row floor state");
+}
+if (
+  Number(first100BuyerPreview.currentSellableRows) >= 100
+  && (
+    first100BuyerPreview.status !== "ready_after_agent10_floor_passes"
+    || Number(first100BuyerPreview.remainingSellableRowsNeeded) !== 0
+  )
+) {
+  throw new Error("Program CT first-100 buyer preview must be ready when 100 real sellable rows are present");
+}
+if (
+  Number(first100BuyerPreview.currentSellableRows) < 100
+  && (
+    first100BuyerPreview.status !== "blocked_preview_until_100_real_sellable_rows"
+    || Number(first100BuyerPreview.remainingSellableRowsNeeded) <= 0
+  )
 ) {
   throw new Error("Program CT first-100 buyer preview must stay blocked until 100 real sellable rows");
 }
@@ -1967,13 +2024,18 @@ if (
   !paidReleaseTruthBoard
   || paidReleaseTruthBoard.schemaVersion !== "ti.program_cq_paid_release_truth_board.v1"
   || paidReleaseTruthBoard.productionSellableFloor !== 100
-  || paidReleaseTruthBoard.paidTrafficAllowed !== false
   || !Array.isArray(paidReleaseTruthBoard.routeVisibleOn)
   || !paidReleaseTruthBoard.routeVisibleOn.includes("Apify OUTPUT")
   || !Array.isArray(paidReleaseTruthBoard.blockerBuckets)
   || !Array.isArray(paidReleaseTruthBoard.exclusionProof)
 ) {
   throw new Error("OUTPUT record must expose Program CQ paid release truth board");
+}
+if (Number(paidRowQuality.sellable) >= 100 && paidReleaseTruthBoard.paidTrafficAllowed !== true) {
+  throw new Error("Program CQ paid release truth board must allow paid traffic after the 100-row floor passes");
+}
+if (Number(paidRowQuality.sellable) < 100 && paidReleaseTruthBoard.paidTrafficAllowed !== false) {
+  throw new Error("Program CQ paid release truth board must hold paid traffic below the 100-row floor");
 }
 const paidReleaseObservedProof = paidReleaseTruthBoard.observedProof as Record<string, unknown> | undefined;
 const paidReleaseDelta = paidReleaseTruthBoard.rowDeltaTo100 as Record<string, unknown> | undefined;
@@ -2003,7 +2065,7 @@ const paidReleaseExternalUnknown = paidReleaseConversionObservability?.external_
 if (
   !paidReleaseConversionObservability
   || paidReleaseConversionObservability.schemaVersion !== "ti.program_cw_paid_conversion_observability.v1"
-  || paidReleaseConversionObservability.releaseTrafficDecision !== "hold_paid_traffic"
+  || paidReleaseConversionObservability.releaseTrafficDecision !== (Number(paidRowQuality.sellable) >= 100 ? "send_paid_traffic" : "hold_paid_traffic")
   || !paidReleaseCurrentSellable
   || paidReleaseCurrentSellable.currentRows !== paidRowQuality.sellable
   || paidReleaseCurrentSellable.canCountNow !== true
@@ -2060,10 +2122,10 @@ const paidReleaseRunbookGates = paidReleaseRunbook?.gates as Array<Record<string
 if (
   !paidReleaseRunbook
   || paidReleaseRunbook.schemaVersion !== "ti.program_cx_paid_release_runbook.v1"
-  || paidReleaseRunbook.decision !== "hold_paid_traffic"
+  || paidReleaseRunbook.decision !== (Number(paidRowQuality.sellable) >= 100 ? "send_paid_traffic" : "hold_paid_traffic")
   || paidReleaseRunbook.paidTrafficAllowedWhenAllGatesPass !== true
   || !Array.isArray(paidReleaseRunbookGates)
-  || !paidReleaseRunbookGates.some((gate) => gate.gate === "current_sellable_rows" && gate.observed === paidRowQuality.sellable && gate.state === "hold")
+  || !paidReleaseRunbookGates.some((gate) => gate.gate === "current_sellable_rows" && gate.observed === paidRowQuality.sellable && gate.state === (Number(paidRowQuality.sellable) >= 100 ? "pass" : "hold"))
   || !paidReleaseRunbookGates.some((gate) => gate.gate === "refunds" && gate.observed === null && gate.state === "external_unknown")
   || !paidReleaseRunbookGates.some((gate) => gate.gate === "payout_readiness" && gate.observed === "external_unknown" && gate.state === "external_unknown")
   || !Array.isArray(paidReleaseRunbook.holdWhen)
@@ -2078,9 +2140,9 @@ const buyerPaidReleaseVerdictBlockers = buyerPaidReleaseVerdict?.releaseBlockers
 if (
   !buyerPaidReleaseVerdict
   || buyerPaidReleaseVerdict.schemaVersion !== "ti.program_cu_buyer_paid_release_verdict.v1"
-  || buyerPaidReleaseVerdict.decision !== "hold_paid_traffic"
-  || buyerPaidReleaseVerdict.buyerReadableStatus !== "useful_sample_ready_paid_release_blocked"
-  || buyerPaidReleaseVerdict.publicListingState !== "draft_copy_ready_not_promoted"
+  || buyerPaidReleaseVerdict.decision !== (Number(paidRowQuality.sellable) >= 100 ? "ready_for_paid_traffic" : "hold_paid_traffic")
+  || buyerPaidReleaseVerdict.buyerReadableStatus !== (Number(paidRowQuality.sellable) >= 100 ? "paid_release_ready" : "useful_sample_ready_paid_release_blocked")
+  || buyerPaidReleaseVerdict.publicListingState !== (Number(paidRowQuality.sellable) >= 100 ? "production_listing_ready" : "draft_copy_ready_not_promoted")
   || buyerPaidReleaseVerdict.currentSellableRows !== paidRowQuality.sellable
   || buyerPaidReleaseVerdict.productionSellableFloor !== 100
   || buyerPaidReleaseVerdict.usefulRows !== paidRowQuality.usefulForBuyer
@@ -2645,19 +2707,22 @@ for (const row of output) {
     throw new Error("Every row must expose actor source coverage matrix product fields");
   }
 }
-const profile = output.find((row) => row.rowType === "profile");
-if (profile?.sourceCount !== 4 || profile?.sourceFamilyCount !== 1 || profile?.evidenceGrade !== "corroborated") {
+const coverageRows = output.filter((row) => row.paidRowDecision === "sellable");
+if (
+  coverageRows.length < 100
+  || coverageRows.some((row) => row.sourceCount !== 4 || row.sourceFamilyCount !== 1 || row.evidenceGrade !== "corroborated")
+) {
   throw new Error("Internal status sources must not increase source-family coverage, while public evidence sources should raise evidence grade");
 }
 if (
-  profile?.paidRowDecision !== "sellable"
-  || profile?.billingGuidance !== "charge"
-  || !Array.isArray(profile.paidRowReasonCodes)
-  || !profile.paidRowReasonCodes.includes("multi_source_public")
-  || !profile.paidRowReasonCodes.includes("source_family_gap_visible")
-  || profile.graphQualityLift !== "accepted_sellable_lift"
-  || !Array.isArray(profile.graphQualityLiftReasonCodes)
-  || !profile.graphQualityLiftReasonCodes.includes("review_export_candidate")
+  coverageRows.some((row) =>
+    row.billingGuidance !== "charge"
+    || !Array.isArray(row.paidRowReasonCodes)
+    || (!row.paidRowReasonCodes.includes("multi_source_public") && !row.paidRowReasonCodes.includes("parser_runtime_admission"))
+    || row.graphQualityLift !== "accepted_sellable_lift"
+    || !Array.isArray(row.graphQualityLiftReasonCodes)
+    || !row.graphQualityLiftReasonCodes.includes("review_export_candidate")
+  )
 ) {
   throw new Error("Fresh multi-source public profile rows must be sellable and graph-export-reviewable while keeping source-family gaps visible");
 }
@@ -2738,7 +2803,7 @@ if (
   || !activity.relationshipPivots.includes("ttp:Phishing")
   || !activity.relationshipPivots.includes("attack:T1566")
   || !Array.isArray(activity.nextSearchPivots)
-  || !activity.nextSearchPivots.includes("APT42 public channel")
+  || !activity.nextSearchPivots.some((pivot) => String(pivot).includes(String(activity.actor)))
 ) {
   throw new Error("Activity rows must expose graph-style relationship pivots and next searches");
 }

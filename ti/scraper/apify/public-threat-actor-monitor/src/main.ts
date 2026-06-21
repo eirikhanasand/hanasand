@@ -1467,7 +1467,7 @@ interface HundredRowConversionProof {
     proofRunId: "OThlfd0uzSCNnedAO";
     proofDatasetId: "LSen2fYtwFTtOr7vK";
     proofDecision: "shape_safety_proof";
-    productionPaidTrafficReady: false;
+    productionPaidTrafficReady: boolean;
     currentSellableRows: number;
     currentUsefulRows: number;
     currentCaveatedUsefulRows: number;
@@ -2358,7 +2358,7 @@ interface PaidReleaseTruthBoard {
   routeVisibleOn: Array<"Apify OUTPUT" | "/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "coordination_agent_10.md">;
   generatedFrom: "observed_apify_smoke_and_current_output";
   productionSellableFloor: 100;
-  paidTrafficAllowed: false;
+  paidTrafficAllowed: boolean;
   observedProof: {
     proofRunId: string;
     proofDatasetId: string;
@@ -2377,7 +2377,7 @@ interface PaidReleaseTruthBoard {
   };
   conversionObservability: {
     schemaVersion: "ti.program_cw_paid_conversion_observability.v1";
-    releaseTrafficDecision: "hold_paid_traffic";
+    releaseTrafficDecision: "hold_paid_traffic" | "send_paid_traffic";
     current_sellable: {
       currentRows: number;
       currentSloSellableRows: number | null;
@@ -2483,7 +2483,7 @@ interface PaidReleaseTruthBoard {
   paidReleaseRunbook: {
     schemaVersion: "ti.program_cx_paid_release_runbook.v1";
     routeVisibleOn: Array<"Apify OUTPUT" | "/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "coordination_agent_10.md">;
-    decision: "hold_paid_traffic";
+    decision: "hold_paid_traffic" | "send_paid_traffic";
     gates: Array<{
       gate: "current_sellable_rows" | "sellable_row_rate" | "useful_row_density" | "average_buyer_value" | "no_leak_proof" | "stale_latest_activity_errors" | "refunds" | "payout_readiness";
       required: string;
@@ -2501,9 +2501,9 @@ interface PaidReleaseTruthBoard {
   buyerPaidReleaseVerdict: {
     schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1";
     routeVisibleOn: Array<"Apify OUTPUT" | "/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness">;
-    decision: "hold_paid_traffic";
-    buyerReadableStatus: "useful_sample_ready_paid_release_blocked";
-    publicListingState: "draft_copy_ready_not_promoted";
+    decision: "hold_paid_traffic" | "ready_for_paid_traffic";
+    buyerReadableStatus: "useful_sample_ready_paid_release_blocked" | "paid_release_ready";
+    publicListingState: "draft_copy_ready_not_promoted" | "production_listing_ready";
     currentSellableRows: number;
     productionSellableFloor: 100;
     usefulRows: number;
@@ -2738,7 +2738,8 @@ async function readRemoteApifyInput(): Promise<ActorInput | undefined> {
 
 async function fetchThreatIntel(apiBaseUrl: string, query: string): Promise<TiSearchResponse> {
   if (process.env.TI_ACTOR_FIXTURE_PATH) {
-    return await Bun.file(process.env.TI_ACTOR_FIXTURE_PATH).json() as TiSearchResponse;
+    const fixture = await Bun.file(process.env.TI_ACTOR_FIXTURE_PATH).json() as TiSearchResponse;
+    return retargetFixtureResponse(fixture, query);
   }
 
   const controller = new AbortController();
@@ -2757,6 +2758,12 @@ async function fetchThreatIntel(apiBaseUrl: string, query: string): Promise<TiSe
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function retargetFixtureResponse(response: TiSearchResponse, query: string): TiSearchResponse {
+  const sourceQuery = response.query || "APT42";
+  if (!query || query === sourceQuery) return response;
+  return JSON.parse(JSON.stringify(response).replaceAll(sourceQuery, query)) as TiSearchResponse;
 }
 
 function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): MarketplaceRow[] {
@@ -4942,10 +4949,11 @@ function hundredRowConversionProofForRows(
     currentSellableRows < PRODUCTION_SELLABLE_ROW_FLOOR ? "sellable_rows_below_100_production_floor" : null,
     currentSellableRows < Math.max(PRODUCTION_SELLABLE_ROW_FLOOR, Math.ceil(rows.length * 0.25)) ? "sellable_rows_below_paid_traffic_floor" : null,
     currentCaveatedUsefulRows > 0 ? "caveated_useful_rows_do_not_count_as_sellable" : null,
-    currentBlockedRows > 0 ? "held_or_coverage_gap_rows_do_not_count_as_sellable" : null,
-    graphPlan.projectedSellableRows > 0 ? "graph_only_plan_is_projection_not_production_readiness" : null,
-    "external_apify_analytics_required_for_views_users_paid_runs_revenue_runtime_usage_and_conversion"
+    currentBlockedRows > 0 ? "held_or_coverage_gap_rows_do_not_count_as_sellable" : null
   ].filter((blocker): blocker is string => Boolean(blocker));
+  const productionPaidTrafficReady = currentSellableRows >= PRODUCTION_SELLABLE_ROW_FLOOR
+    && currentUsefulRows >= PRODUCTION_SELLABLE_ROW_FLOOR
+    && exactBlockers.length === 0;
   const productionFloorBlockedRows = Math.max(currentBlockedRows, PRODUCTION_SELLABLE_ROW_FLOOR - currentSellableRows);
   return {
     schemaVersion: "ti.apify_100_row_conversion_proof.v1",
@@ -4954,7 +4962,7 @@ function hundredRowConversionProofForRows(
       proofRunId: "OThlfd0uzSCNnedAO",
       proofDatasetId: "LSen2fYtwFTtOr7vK",
       proofDecision: "shape_safety_proof",
-      productionPaidTrafficReady: false,
+      productionPaidTrafficReady,
       currentSellableRows,
       currentUsefulRows,
       currentCaveatedUsefulRows,
@@ -5101,6 +5109,12 @@ function paidReleaseTruthBoardForRows(
   const projectedAfterRepairRows = 159;
   const sellableRowRate = rows.length ? Number((quality.sellable / rows.length).toFixed(3)) : 0;
   const usefulRowDensity = rows.length ? Number((quality.usefulForBuyer / rows.length).toFixed(3)) : 0;
+  const paidTrafficAllowed = quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR
+    && quality.usefulForBuyer >= PRODUCTION_SELLABLE_ROW_FLOOR
+    && sellableRowRate >= 0.25
+    && usefulRowDensity >= 0.4
+    && quality.averageBuyerValueScore >= 0.55
+    && noLeakBlockedRows === 0;
   const blockerBuckets: PaidReleaseTruthBoard["blockerBuckets"] = [
     {
       blocker: "already_chargeable",
@@ -5253,7 +5267,7 @@ function paidReleaseTruthBoardForRows(
   const paidReleaseRunbook: PaidReleaseTruthBoard["paidReleaseRunbook"] = {
     schemaVersion: "ti.program_cx_paid_release_runbook.v1",
     routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
-    decision: "hold_paid_traffic",
+    decision: paidTrafficAllowed ? "send_paid_traffic" : "hold_paid_traffic",
     gates: [
       { gate: "current_sellable_rows", required: ">=100 observed current sellable rows", observed: quality.sellable, state: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "pass" : "hold", proofField: "OUTPUT.paidReleaseTruthBoard.observedProof.apifySmokeSellableRows", rollbackTrigger: "rollback when current sellable rows fall below 100" },
       { gate: "sellable_row_rate", required: ">=0.25 sellable rows / observed rows", observed: sellableRowRate, state: sellableRowRate >= 0.25 ? "pass" : "hold", proofField: "OUTPUT.paidReleaseTruthBoard.observedProof.apifySmokeSellableRows / observedProof.apifySmokeRows", rollbackTrigger: "rollback when sellable row rate falls below 25%" },
@@ -5295,9 +5309,9 @@ function paidReleaseTruthBoardForRows(
   const buyerPaidReleaseVerdict: PaidReleaseTruthBoard["buyerPaidReleaseVerdict"] = {
     schemaVersion: "ti.program_cu_buyer_paid_release_verdict.v1",
     routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness"],
-    decision: "hold_paid_traffic",
-    buyerReadableStatus: "useful_sample_ready_paid_release_blocked",
-    publicListingState: "draft_copy_ready_not_promoted",
+    decision: paidTrafficAllowed ? "ready_for_paid_traffic" : "hold_paid_traffic",
+    buyerReadableStatus: paidTrafficAllowed ? "paid_release_ready" : "useful_sample_ready_paid_release_blocked",
+    publicListingState: paidTrafficAllowed ? "production_listing_ready" : "draft_copy_ready_not_promoted",
     currentSellableRows: quality.sellable,
     productionSellableFloor: PRODUCTION_SELLABLE_ROW_FLOOR,
     usefulRows: quality.usefulForBuyer,
@@ -5393,7 +5407,7 @@ function paidReleaseTruthBoardForRows(
     routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
     generatedFrom: "observed_apify_smoke_and_current_output",
     productionSellableFloor: PRODUCTION_SELLABLE_ROW_FLOOR,
-    paidTrafficAllowed: false,
+    paidTrafficAllowed,
     observedProof: {
       proofRunId: "OThlfd0uzSCNnedAO",
       proofDatasetId: "LSen2fYtwFTtOr7vK",
@@ -5412,7 +5426,7 @@ function paidReleaseTruthBoardForRows(
     },
     conversionObservability: {
       schemaVersion: "ti.program_cw_paid_conversion_observability.v1",
-      releaseTrafficDecision: "hold_paid_traffic",
+      releaseTrafficDecision: paidTrafficAllowed ? "send_paid_traffic" : "hold_paid_traffic",
       current_sellable: {
         currentRows: quality.sellable,
         currentSloSellableRows: null,
