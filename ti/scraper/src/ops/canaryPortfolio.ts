@@ -27,7 +27,22 @@ export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   src("src_canary_cert_ua", "CERT-UA Alerts", "rss", "https://cert.gov.ua/api/articles/rss", ["Sandworm", "Gamaredon", "UAC", "APT"], "government"),
   src("src_canary_crowdstrike", "CrowdStrike Blog", "rss", "https://www.crowdstrike.com/en-us/blog/feed/", ["APT", "ransomware", "eCrime"], "vendor"),
   src("src_canary_cybereason", "Cybereason Blog", "rss", "https://www.cybereason.com/blog/rss.xml", ["ransomware", "malware", "APT"], "vendor"),
-  src("src_canary_redcanary", "Red Canary Blog", "rss", "https://redcanary.com/blog/feed/", ["threat detection", "malware", "ransomware"], "vendor")
+  src("src_canary_redcanary", "Red Canary Blog", "rss", "https://redcanary.com/blog/feed/", ["threat detection", "malware", "ransomware"], "vendor"),
+  src("src_canary_sans_isc", "SANS ISC Diary", "rss", "https://isc.sans.edu/rssfeed_full.xml", ["malware", "phishing", "CVE", "ransomware"], "community"),
+  src("src_canary_darkreading", "Dark Reading", "rss", "https://www.darkreading.com/rss.xml", ["breach", "ransomware", "APT", "CVE"], "journalism"),
+  src("src_canary_securityweek", "SecurityWeek", "rss", "https://www.securityweek.com/feed/", ["breach", "ransomware", "APT", "CVE"], "journalism"),
+  src("src_canary_helpnetsecurity", "Help Net Security", "rss", "https://www.helpnetsecurity.com/feed/", ["malware", "ransomware", "vulnerability"], "journalism"),
+  src("src_canary_rapid7", "Rapid7 Blog", "rss", "https://www.rapid7.com/blog/rss/", ["CVE", "exploit", "ransomware"], "vendor"),
+  src("src_canary_qualys_vtr", "Qualys Threat Research", "rss", "https://blog.qualys.com/category/vulnerabilities-threat-research/feed", ["CVE", "exploit", "vulnerability"], "vendor"),
+  src("src_canary_tenable", "Tenable Blog", "rss", "https://www.tenable.com/blog/feed", ["CVE", "exploit", "vulnerability"], "vendor"),
+  src("src_canary_wiz", "Wiz Research", "rss", "https://www.wiz.io/blog/rss.xml", ["cloud", "CVE", "breach", "exploit"], "vendor"),
+  src("src_canary_watchtowr", "watchTowr Labs", "rss", "https://labs.watchtowr.com/rss/", ["exploit", "vulnerability", "CVE"], "vendor"),
+  src("src_canary_assetnote", "Assetnote Research", "rss", "https://www.assetnote.io/resources/research/rss.xml", ["exploit", "vulnerability", "CVE"], "vendor"),
+  src("src_canary_sonatype", "Sonatype Blog", "rss", "https://www.sonatype.com/blog/rss.xml", ["supply-chain", "malware", "CVE"], "vendor"),
+  src("src_canary_reversinglabs", "ReversingLabs Blog", "rss", "https://www.reversinglabs.com/blog/rss.xml", ["malware", "supply-chain", "ransomware"], "vendor"),
+  src("src_canary_eclecticiq", "EclecticIQ Blog", "rss", "https://blog.eclecticiq.com/rss.xml", ["APT", "ransomware", "malware"], "vendor"),
+  src("src_canary_nviso", "NVISO Labs", "rss", "https://blog.nviso.eu/feed/", ["malware", "phishing", "APT"], "vendor"),
+  src("src_canary_intezer", "Intezer Blog", "rss", "https://intezer.com/blog/feed/", ["malware", "ransomware", "cloud"], "vendor")
 ];
 
 function src(id: string, name: string, type: string, url: string, q: string[], family: string) {
