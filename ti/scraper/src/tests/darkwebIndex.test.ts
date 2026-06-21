@@ -525,6 +525,7 @@ describe("darkweb metadata index contracts", () => {
     expect(status.publicSupportLift1000.publicSupportSellable250.newlyChargeableParserHandoffRows).toHaveLength(38);
     expect(Object.values(status.publicSupportLift1000.publicSupportSellable250.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(200);
     expect(Object.keys(status.publicSupportLift1000.publicSupportSellable250.blockerBucketCounts).sort()).toEqual([
+      "contradiction_hold",
       "duplicate_claim",
       "generic_source_only",
       "needs_public_support",
@@ -558,34 +559,54 @@ describe("darkweb metadata index contracts", () => {
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
       candidateCount: 500,
-      previousCurrentChargeableRows: 50,
-      currentChargeableRows: 100,
+      previousCurrentChargeableRows: 100,
+      currentChargeableRows: 150,
       newlyChargeableRows: 50,
-      projectedAfterPublicSupportRows: 98,
+      projectedAfterPublicSupportRows: 48,
       blockedOrRetiredRows: 302,
       currentChargeable100: {
-        currentChargeableCount: 100,
-        newlyChargeableSinceProgramCw: 50,
-        projectedAfterPublicSupportCount: 98,
+        currentChargeableCount: 150,
+        newlyChargeableSinceProgramCw: 100,
+        projectedAfterPublicSupportCount: 48,
         blockedOrRetiredCount: 302,
         currentGapTo100: 0,
-        currentGapTo250: 150,
+        currentGapTo250: 100,
+        projectedGapTo250AfterPublicSupport: 52,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable150: {
+        currentChargeableCount: 150,
+        newlyChargeableSinceProgramDa: 50,
+        projectedAfterPublicSupportCount: 48,
+        blockedOrRetiredCount: 302,
+        currentGapTo150: 0,
+        currentGapTo250: 100,
         projectedGapTo250AfterPublicSupport: 52,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 100,
-        projected_after_public_support: 98,
+        current_sellable_public_supported: 150,
+        projected_after_public_support: 48,
         blocked_not_chargeable: 302
       },
       countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"]
     });
     expect(status.publicSupportSellable500).toEqual(status.publicSupportLift1000.publicSupportSellable500);
     expect(status.publicSupportLift1000.publicSupportSellable500.rows).toHaveLength(500);
-    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(100);
-    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramCw)).toHaveLength(50);
+    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(150);
+    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramCw)).toHaveLength(100);
+    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDa)).toHaveLength(50);
     expect(status.publicSupportLift1000.publicSupportSellable500.newlyChargeableParserHandoffRows).toHaveLength(50);
-    expect(Object.values(status.publicSupportLift1000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(400);
+    expect(Object.values(status.publicSupportLift1000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(350);
+    expect(Object.keys(status.publicSupportLift1000.publicSupportSellable500.blockerBucketCounts).sort()).toEqual([
+      "contradiction_hold",
+      "duplicate_claim",
+      "generic_source_only",
+      "needs_public_support",
+      "stale_public_support",
+      "unsafe_restricted_only",
+      "victim_too_sensitive_to_surface"
+    ]);
     expect(status.publicSupportLift1000.publicSupportSellable500.rows.every((row) =>
       row.safeLocatorHash.length > 0 &&
       row.safePublicSourceId.startsWith("public_support_500_source_") &&
@@ -609,6 +630,7 @@ describe("darkweb metadata index contracts", () => {
       row.safePublicSourceId.startsWith("public_support_500_source_") &&
       row.provenanceHash.length > 0 &&
       row.freshness === "fresh_current" &&
+      row.newlyChargeableSinceProgramDa === true &&
       row.recheckCadenceHours === 24 &&
       row.whyWorthPayingFor.length > 0
     )).toBe(true);
@@ -1489,19 +1511,28 @@ describe("darkweb metadata index contracts", () => {
     expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable250.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(50);
     expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500).toMatchObject({
       candidateCount: 500,
-      currentChargeableRows: 100,
+      previousCurrentChargeableRows: 100,
+      currentChargeableRows: 150,
       newlyChargeableRows: 50,
-      projectedAfterPublicSupportRows: 98,
+      projectedAfterPublicSupportRows: 48,
       blockedOrRetiredRows: 302,
       currentChargeable100: {
-        currentChargeableCount: 100,
+        currentChargeableCount: 150,
         currentGapTo100: 0,
-        currentGapTo250: 150,
+        currentGapTo250: 100,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable150: {
+        currentChargeableCount: 150,
+        newlyChargeableSinceProgramDa: 50,
+        currentGapTo150: 0,
+        currentGapTo250: 100,
         countsProjectedRowsAsCurrent: false
       }
     });
     expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.newlyChargeableParserHandoffRows).toHaveLength(50);
-    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(100);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(150);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDa)).toHaveLength(50);
     expect(firstPage.productHandoff.publicSupportLift1000.metricMovement).toMatchObject({
       repairCandidatesAdded: 100,
       likelySellableRowsAfterPublicSupport: 80,

@@ -299,6 +299,7 @@ function buildReleaseLadder(
   const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
   const darkSellable250 = record(darkSupportLift.publicSupportSellable250);
   const darkSellable500 = record(darkSupportLift.publicSupportSellable500);
+  const darkChargeable150 = record(darkSellable500.currentChargeable150);
   const darkChargeable100 = record(darkSellable500.currentChargeable100);
   const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
   const graphCounts = record(graphQueue.counts);
@@ -311,8 +312,8 @@ function buildReleaseLadder(
     : Number.isFinite(numberValue(parserLedger.sourceProvenanceShareOfSellable))
       ? numberValue(parserLedger.sourceProvenanceShareOfSellable)
     : roundRatio(sellableSourceProvenanceRows, currentSellableRows);
-  const darkCurrentChargeableRows = firstFiniteNumber(darkChargeable100.currentChargeableCount, darkSellable500.currentChargeableRows, darkSellable250.currentChargeableRows);
-  const darkProjectedRows = firstFiniteNumber(darkChargeable100.projectedAfterPublicSupportCount, darkSellable500.projectedAfterPublicSupportRows, darkSellable250.projectedAfterPublicSupportRows);
+  const darkCurrentChargeableRows = firstFiniteNumber(darkChargeable150.currentChargeableCount, darkChargeable100.currentChargeableCount, darkSellable500.currentChargeableRows, darkSellable250.currentChargeableRows);
+  const darkProjectedRows = firstFiniteNumber(darkChargeable150.projectedAfterPublicSupportCount, darkChargeable100.projectedAfterPublicSupportCount, darkSellable500.projectedAfterPublicSupportRows, darkSellable250.projectedAfterPublicSupportRows);
   const graphRowsCountTowardFloorNow = numberValue(graphCounts.rowsCountTowardFloorNow);
   const graphRowsReadyAfterParserAdmission = numberValue(graphCounts.rowsReadyAfterParserAdmission);
   const hostedStatus = String(hostedProof.status ?? latestProofRun.proofDecision ?? "unknown");
@@ -486,9 +487,10 @@ function buildReleaseLadder(
       currentChargeableRows: darkCurrentChargeableRows,
       targetSellableRows: firstFiniteNumber(darkSellable500.targetSellableRows, darkSellable250.targetSellableRows, 100),
       remainingGapTo100Now: firstFiniteNumber(darkChargeable100.currentGapTo100, darkSellable250.remainingGapTo100Now),
-      remainingGapTo250Now: firstFiniteNumber(darkChargeable100.currentGapTo250, 250 - darkCurrentChargeableRows),
+      remainingGapTo150Now: firstFiniteNumber(darkChargeable150.currentGapTo150, 150 - darkCurrentChargeableRows),
+      remainingGapTo250Now: firstFiniteNumber(darkChargeable150.currentGapTo250, darkChargeable100.currentGapTo250, 250 - darkCurrentChargeableRows),
       projectedAfterPublicSupportRows: darkProjectedRows,
-      projectedRowsCountTowardFloorNow: darkChargeable100.countsProjectedRowsAsCurrent === false ? false : false
+      projectedRowsCountTowardFloorNow: darkChargeable150.countsProjectedRowsAsCurrent === false ? false : false
     },
     graphParserHandoff: {
       state: graphRowsCountTowardFloorNow === 0 ? "hold" : "fail",

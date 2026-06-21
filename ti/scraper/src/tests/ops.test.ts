@@ -1867,29 +1867,39 @@ describe("ops controls", () => {
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
       candidateCount: 500,
-      previousCurrentChargeableRows: 50,
-      currentChargeableRows: 100,
+      previousCurrentChargeableRows: 100,
+      currentChargeableRows: 150,
       newlyChargeableRows: 50,
-      projectedAfterPublicSupportRows: 98,
+      projectedAfterPublicSupportRows: 48,
       blockedOrRetiredRows: 302,
       currentChargeable100: {
-        currentChargeableCount: 100,
-        newlyChargeableSinceProgramCw: 50,
-        projectedAfterPublicSupportCount: 98,
+        currentChargeableCount: 150,
+        newlyChargeableSinceProgramCw: 100,
+        projectedAfterPublicSupportCount: 48,
         blockedOrRetiredCount: 302,
         currentGapTo100: 0,
-        currentGapTo250: 150,
+        currentGapTo250: 100,
+        projectedGapTo250AfterPublicSupport: 52,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable150: {
+        currentChargeableCount: 150,
+        newlyChargeableSinceProgramDa: 50,
+        projectedAfterPublicSupportCount: 48,
+        blockedOrRetiredCount: 302,
+        currentGapTo150: 0,
+        currentGapTo250: 100,
         projectedGapTo250AfterPublicSupport: 52,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 100,
-        projected_after_public_support: 98,
+        current_sellable_public_supported: 150,
+        projected_after_public_support: 48,
         blocked_not_chargeable: 302
       },
       newlyChargeableParserHandoffRowCount: 50
     });
-    expect(Object.values(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(400);
+    expect(Object.values(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(350);
     expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.sampleRows.every((row) =>
       row.safePublicSourceId.startsWith("public_support_500_source_") &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&

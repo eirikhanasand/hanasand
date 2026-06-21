@@ -1328,9 +1328,19 @@ describe("api v1", () => {
           blockedOrRetiredCount: number;
           currentGapTo100: number;
           currentGapTo250: number;
-          projectedGapTo250AfterPublicSupport: number;
-          countsProjectedRowsAsCurrent: boolean;
-        };
+        projectedGapTo250AfterPublicSupport: number;
+        countsProjectedRowsAsCurrent: boolean;
+      };
+      currentChargeable150: {
+        currentChargeableCount: number;
+        newlyChargeableSinceProgramDa: number;
+        projectedAfterPublicSupportCount: number;
+        blockedOrRetiredCount: number;
+        currentGapTo150: number;
+        currentGapTo250: number;
+        projectedGapTo250AfterPublicSupport: number;
+        countsProjectedRowsAsCurrent: boolean;
+      };
         rowDecisionCounts: Record<string, number>;
         blockerBucketCounts: Record<string, number>;
         sampleRows: Array<{ rowDecision: string; blockerBucket?: string; newlyChargeableSinceProgramCw: boolean; countsTowardSellableFloorNow: boolean; countsTowardSellableFloorAfterPublicSupport: boolean; noLeakProof: string; safePublicSourceId: string; freshness: string; recheckCadenceHours: number; whyWorthPayingFor: string }>;
@@ -1338,29 +1348,39 @@ describe("api v1", () => {
       };
     }).publicSupportSellable500).toMatchObject({
       candidateCount: 500,
-      previousCurrentChargeableRows: 50,
-      currentChargeableRows: 100,
+      previousCurrentChargeableRows: 100,
+      currentChargeableRows: 150,
       newlyChargeableRows: 50,
-      projectedAfterPublicSupportRows: 98,
+      projectedAfterPublicSupportRows: 48,
       blockedOrRetiredRows: 302,
       currentChargeable100: {
-        currentChargeableCount: 100,
-        newlyChargeableSinceProgramCw: 50,
-        projectedAfterPublicSupportCount: 98,
+        currentChargeableCount: 150,
+        newlyChargeableSinceProgramCw: 100,
+        projectedAfterPublicSupportCount: 48,
         blockedOrRetiredCount: 302,
         currentGapTo100: 0,
-        currentGapTo250: 150,
+        currentGapTo250: 100,
+        projectedGapTo250AfterPublicSupport: 52,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable150: {
+        currentChargeableCount: 150,
+        newlyChargeableSinceProgramDa: 50,
+        projectedAfterPublicSupportCount: 48,
+        blockedOrRetiredCount: 302,
+        currentGapTo150: 0,
+        currentGapTo250: 100,
         projectedGapTo250AfterPublicSupport: 52,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 100,
-        projected_after_public_support: 98,
+        current_sellable_public_supported: 150,
+        projected_after_public_support: 48,
         blocked_not_chargeable: 302
       },
       newlyChargeableParserHandoffRowCount: 50
     });
-    expect(Object.values((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable500: { blockerBucketCounts: Record<string, number> } }).publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(400);
+    expect(Object.values((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable500: { blockerBucketCounts: Record<string, number> } }).publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(350);
     expect((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable500: { sampleRows: Array<{ rowDecision: string; blockerBucket?: string; countsTowardSellableFloorNow: boolean; noLeakProof: string; safePublicSourceId: string; freshness: string; recheckCadenceHours: number; whyWorthPayingFor: string }> } }).publicSupportSellable500.sampleRows.every((row) =>
       row.safePublicSourceId.startsWith("public_support_500_source_") &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
