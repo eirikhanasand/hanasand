@@ -1141,13 +1141,23 @@ describe("ops controls", () => {
       row.programDcPriority.sourceFamilyDiversityLift > 0 &&
       row.programDcPriority.corroborationStrength.length > 0 &&
       row.programDcPriority.freshnessRisk.length > 0 &&
+      row.programDdPriority.gapContribution > 0 &&
+      row.programDdPriority.admissionBlocker === "none" &&
+      row.programDdPriority.sourceFamilyDiversityLift > 0 &&
+      row.programDdPriority.corroborationStrength.length > 0 &&
+      row.programDdPriority.contradictionRisk.length > 0 &&
+      row.programDdPriority.freshnessRisk.length > 0 &&
+      row.programDdPriority.buyerVisibleValue.length > 0 &&
+      row.programDdPriority.noLeakProof === "hash_only_public_or_metadata_reference" &&
+      row.programDdPriority.nextPivot.length > 0 &&
       row.admissionState === "ready_for_parser" &&
       row.countsTowardFloorNow === false &&
       row.noLeak
     )).toBe(true);
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDcPriority.findingLikely).length).toBeGreaterThanOrEqual(170);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.filter((row) => row.programDdPriority.findingLikely).length).toBeGreaterThanOrEqual(350);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.programDbRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, rowsCountTowardFloorNow: 0, noLeak: true });
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.programDcRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, missing_buyer_action: 0, weak_source_family_diversity: 0, rowsCountTowardFloorNow: 0, noLeak: true });
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.programDdRejectionBuckets).toMatchObject({ stale: 4, alias_conflict: 4, contradiction: 2, duplicate: 0, generic_source_page: 0, restricted_only: 0, not_enough_source_support: 6, missing_buyer_action: 0, weak_source_family_diversity: 0, graph_only_speculation: 0, rowsCountTowardFloorNow: 0, noLeak: true });
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_parser_admission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(25);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_parser_admission.every((row) => row.countsTowardFloorNow === false && row.proofUrlHash.length > 0 && row.noLeak)).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.needs_public_source.some((row) => row.sourceClass === "restricted_metadata_public_support")).toBe(true);
