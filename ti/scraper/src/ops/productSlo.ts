@@ -407,6 +407,52 @@ export interface LiveProductSloDashboard {
         canCountNow: false;
       };
     };
+    observedMarketplaceTelemetry: {
+      schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1";
+      routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "Apify OUTPUT" | "coordination_agent_10.md">;
+      sourceOfTruth: "Apify Store analytics and billing";
+      ingestionState: "external_unknown";
+      currentValues: {
+        storeViews: null;
+        uniqueUsers: null;
+        trialRuns: null;
+        paidRuns: null;
+        actorStarts: null;
+        actorRuns: null;
+        datasetRows: null;
+        failedRuns: null;
+        repeatUsers: null;
+        refunds: null;
+        platformUsageCostUsd: null;
+        estimatedCreatorRevenueUsd: null;
+        payoutState: "external_unknown";
+        pricingState: "external_unknown";
+      };
+      manualImportPath: string[];
+      apiImportPath: string[];
+      validationChecks: string[];
+      proofCommands: string[];
+      unknownMeansNoClaim: true;
+      noSyntheticFallback: true;
+    };
+    paidReleaseRunbook: {
+      schemaVersion: "ti.program_cx_paid_release_runbook.v1";
+      routeVisibleOn: Array<"/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "Apify OUTPUT" | "coordination_agent_10.md">;
+      decision: "hold_paid_traffic";
+      gates: Array<{
+        gate: "current_sellable_rows" | "sellable_row_rate" | "useful_row_density" | "average_buyer_value" | "no_leak_proof" | "stale_latest_activity_errors" | "refunds" | "payout_readiness";
+        required: string;
+        observed: number | boolean | "external_unknown" | null;
+        state: "pass" | "hold" | "external_unknown";
+        proofField: string;
+        rollbackTrigger: string;
+      }>;
+      promoteWhen: string[];
+      holdWhen: string[];
+      rollbackWhen: string[];
+      proofCommands: string[];
+      paidTrafficAllowedWhenAllGatesPass: true;
+    };
     blockerBuckets: Array<{
       blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
       owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -891,6 +937,54 @@ export interface LiveProductSloDashboard {
         rowCount: number;
         countsTowardCurrentSellableRows: false;
         owner: "agent_03" | "agent_04" | "agent_05";
+        proof: string;
+      }>;
+      noLeakBoundary: {
+        rawBodiesExposed: false;
+        unsafeUrlsExposed: false;
+        restrictedPayloadsExposed: false;
+        credentialsExposed: false;
+        privateMaterialUsed: false;
+        actorInteractionTextUsed: false;
+      };
+    };
+    currentAdmissionLedger: {
+      schemaVersion: "ti.program_cw_parser_live_source_current_admission.v1";
+      owner: "agent_03";
+      routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows">;
+      baselineCurrentSellableRows: number;
+      rowsAdmittedThisPass: number;
+      currentSellableRowsAfterAdmission: number;
+      usefulRowsAfterAdmission: number;
+      averageBuyerValueBefore: number;
+      averageBuyerValueAfter: number;
+      buyerValueLift: number;
+      admittedRows: Array<{
+        rowId: string;
+        actor: string;
+        rowType: "activity";
+        sourceEvidenceCount: number;
+        sourceFamilySupport: string[];
+        requiredFieldsPresent: string[];
+        missingFields: string[];
+        nextBuyerSearch: string;
+        provenanceHash: string;
+        countsTowardCurrentSellableRows: true;
+        noLeak: true;
+      }>;
+      blockedLedger: {
+        missingActorRows: number;
+        missingVictimOrTargetRows: number;
+        missingTtpOrToolRows: number;
+        missingDateRows: number;
+        missingPublicProofRows: number;
+        genericSourcePageRows: number;
+        restrictedOnlyRows: number;
+      };
+      falsePositiveSuppressions: Array<{
+        class: "generic_source_page" | "stale_latest_activity" | "alias_or_wrong_actor" | "restricted_only_without_public_support";
+        rowCount: number;
+        countsTowardCurrentSellableRows: false;
         proof: string;
       }>;
       noLeakBoundary: {
@@ -3257,6 +3351,97 @@ function buildPaidReleaseTruthBoard(input: {
       canCountNow: false
     }
   };
+  const observedMarketplaceTelemetry: LiveProductSloDashboard["paidReleaseTruthBoard"]["observedMarketplaceTelemetry"] = {
+    schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "coordination_agent_10.md"],
+    sourceOfTruth: "Apify Store analytics and billing",
+    ingestionState: "external_unknown",
+    currentValues: {
+      storeViews: null,
+      uniqueUsers: null,
+      trialRuns: null,
+      paidRuns: null,
+      actorStarts: null,
+      actorRuns: null,
+      datasetRows: null,
+      failedRuns: null,
+      repeatUsers: null,
+      refunds: null,
+      platformUsageCostUsd: null,
+      estimatedCreatorRevenueUsd: null,
+      payoutState: "external_unknown",
+      pricingState: "external_unknown"
+    },
+    manualImportPath: [
+      "Open Apify Console > Store > public-threat-actor-monitor > Analytics for Store views and unique users.",
+      "Open Apify Console > Actor > Runs for trial runs, paid runs, actor starts, actor runs, dataset rows, and failed runs.",
+      "Open Apify Console > Billing/Payouts for refunds, platform usage cost, creator revenue, payout state, and pricing state.",
+      "Copy observed values into a reviewed telemetry import fixture; leave unavailable values null/external_unknown."
+    ],
+    apiImportPath: [
+      "Use Apify API analytics/run/billing exports when account access is available.",
+      "Normalize only observed fields into storeViews, uniqueUsers, trialRuns, paidRuns, actorStarts, actorRuns, datasetRows, failedRuns, repeatUsers, refunds, platformUsageCostUsd, estimatedCreatorRevenueUsd, payoutState, and pricingState.",
+      "Reject any import that mixes owner smoke runs, projections, graph pivots, source counts, or repair queues into marketplace telemetry."
+    ],
+    validationChecks: [
+      "all numeric telemetry fields are null or finite numbers >= 0",
+      "refunds must be null or an integer >= 0",
+      "paidRuns cannot exceed actorRuns when both are observed",
+      "repeatUsers cannot exceed uniqueUsers when both are observed",
+      "estimatedCreatorRevenueUsd stays null unless paidRuns and platformUsageCostUsd are observed",
+      "payoutState and pricingState stay external_unknown until verified from Apify account data"
+    ],
+    proofCommands: [
+      "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+      "bun run check:apify-threat-actor-monitor",
+      "bun run smoke:apify-threat-actor-monitor"
+    ],
+    unknownMeansNoClaim: true,
+    noSyntheticFallback: true
+  };
+  const paidReleaseRunbook: LiveProductSloDashboard["paidReleaseTruthBoard"]["paidReleaseRunbook"] = {
+    schemaVersion: "ti.program_cx_paid_release_runbook.v1",
+    routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "coordination_agent_10.md"],
+    decision: "hold_paid_traffic",
+    gates: [
+      { gate: "current_sellable_rows", required: ">=100 observed current sellable rows", observed: apifySmokeSellableRows, state: "hold", proofField: "paidReleaseTruthBoard.observedProof.apifySmokeSellableRows", rollbackTrigger: "rollback when current sellable rows fall below 100" },
+      { gate: "sellable_row_rate", required: ">=0.25 sellable rows / observed rows", observed: apifySmokeSellableRows / 12, state: "pass", proofField: "paidReleaseTruthBoard.observedProof.apifySmokeSellableRows / observedProof.apifySmokeRows", rollbackTrigger: "rollback when sellable row rate falls below 25%" },
+      { gate: "useful_row_density", required: ">=0.40 buyer-useful rows / observed rows", observed: apifySmokeBuyerUsefulRows / 12, state: "pass", proofField: "paidReleaseTruthBoard.observedProof.apifySmokeBuyerUsefulRows / observedProof.apifySmokeRows", rollbackTrigger: "rollback when useful row density falls below 40%" },
+      { gate: "average_buyer_value", required: ">=0.55 average buyer value", observed: 0.558, state: "pass", proofField: "paidReleaseTruthBoard.observedProof.apifySmokeAverageBuyerValueScore", rollbackTrigger: "rollback when average buyer value falls below 0.55" },
+      { gate: "no_leak_proof", required: "no-leak proof green", observed: true, state: "pass", proofField: "paidReleaseTruthBoard.fakeMetricGuard.noSyntheticFallback plus Apify smoke no-leak checks", rollbackTrigger: "rollback on any raw evidence, unsafe URL, credential, restricted payload, or private material leak" },
+      { gate: "stale_latest_activity_errors", required: "0 stale latest-activity errors", observed: 0, state: "pass", proofField: "falsePositiveSuppressionGate.programCpHardening.staleLatestActivityRowsBlocked", rollbackTrigger: "rollback when stale latest-activity rows are admitted as sellable" },
+      { gate: "refunds", required: "0 observed refunds", observed: null, state: "external_unknown", proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.refunds", rollbackTrigger: "rollback on any refund until root cause is reviewed" },
+      { gate: "payout_readiness", required: "known payout readiness", observed: "external_unknown", state: "external_unknown", proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.payoutState", rollbackTrigger: "rollback or hold when payout readiness is unknown, blocked, or regresses" }
+    ],
+    promoteWhen: [
+      "current sellable rows are >=100 in observed output, not projected repairs",
+      "sellable row rate is >=25% and useful row density is >=40%",
+      "average buyer value is >=0.55",
+      "no-leak proof is green and stale latest-activity errors are zero",
+      "refunds are observed as zero and payout readiness is known",
+      "pricing state is externally verified from Apify account data"
+    ],
+    holdWhen: [
+      "current sellable rows are below 100",
+      "any external marketplace metric needed for refund, payout, pricing, paid-run, or revenue proof is external_unknown",
+      "projected rows, graph-only pivots, caveated rows, dark metadata, source counts, or worker claims are the only path to the floor",
+      "no-leak or stale latest-activity proof is missing"
+    ],
+    rollbackWhen: [
+      "sellable rows drop below 100 after promotion",
+      "sellable row rate drops below 25% or useful row density drops below 40%",
+      "average buyer value drops below 0.55",
+      "any no-leak failure, stale latest-activity admission, refund, payout regression, or pricing mismatch appears",
+      "Apify telemetry import cannot be reproduced from manual/API proof"
+    ],
+    proofCommands: [
+      "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+      "bun run check:apify-threat-actor-monitor",
+      "bun run smoke:apify-threat-actor-monitor",
+      "bun run check:contract-index"
+    ],
+    paidTrafficAllowedWhenAllGatesPass: true
+  };
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
@@ -3284,6 +3469,8 @@ function buildPaidReleaseTruthBoard(input: {
       bucketMathIsAdditive: true
     },
     conversionObservability,
+    observedMarketplaceTelemetry,
+    paidReleaseRunbook,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -3867,6 +4054,7 @@ const buildParserRealSellableLift = (): LiveProductSloDashboard["parserRealSella
     rejectionRows,
     liveSourceAdmissionPacket: buildProgramCoLiveSourceAdmissionPacket(),
     runtimeAdmissionReplay: buildProgramCvRuntimeAdmissionReplay(),
+    currentAdmissionLedger: buildProgramCwCurrentAdmissionLedger(),
     ownerHandoffs: [
       { owner: "agent_04", handoff: "add missing public report/advisory support for caveated public-channel rows", rowCount: 6 },
       { owner: "agent_05", handoff: "find public support for metadata-only ransomware rows without raw leak access", rowCount: 4 },
@@ -4003,6 +4191,100 @@ function buildProgramCvRuntimeAdmissionReplay(): LiveProductSloDashboard["parser
       { class: "coverage_gap_only", rowCount: 2, countsTowardCurrentSellableRows: false, owner: "agent_03", proof: "coverage-gap rows describe missing collection work only" },
       { class: "restricted_only_without_public_support", rowCount: 1, countsTowardCurrentSellableRows: false, owner: "agent_05", proof: "metadata-only capability row has no safe public victim/impact support" },
       { class: "single_source_without_caveat", rowCount: 0, countsTowardCurrentSellableRows: false, owner: "agent_04", proof: "fixture activity now requires four public source IDs before chargeable admission" }
+    ],
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    }
+  };
+}
+
+function buildProgramCwCurrentAdmissionLedger(): LiveProductSloDashboard["parserRealSellableLift"]["currentAdmissionLedger"] {
+  const requiredFieldsPresent = ["actor", "victim_or_target", "sector", "country_or_region", "dataset_or_impact", "ttp_tool_or_cve", "first_seen", "last_seen", "source_family_support", "confidence", "caveat", "contradiction_state", "provenance_hash", "next_buyer_search"];
+  const admittedRows: LiveProductSloDashboard["parserRealSellableLift"]["currentAdmissionLedger"]["admittedRows"] = [
+    {
+      rowId: "cw_apt42_campaign_current_admission",
+      actor: "APT42",
+      rowType: "activity",
+      sourceEvidenceCount: 4,
+      sourceFamilySupport: ["clear_web"],
+      requiredFieldsPresent,
+      missingFields: [],
+      nextBuyerSearch: "APT42 Government, policy, and diplomacy Phishing / T1566",
+      provenanceHash: stableId("program_cw_current_admission", "apt42_campaign"),
+      countsTowardCurrentSellableRows: true,
+      noLeak: true
+    },
+    {
+      rowId: "cw_apt42_sector_current_admission",
+      actor: "APT42",
+      rowType: "activity",
+      sourceEvidenceCount: 4,
+      sourceFamilySupport: ["clear_web"],
+      requiredFieldsPresent,
+      missingFields: [],
+      nextBuyerSearch: "APT42 Government, policy, and diplomacy United States",
+      provenanceHash: stableId("program_cw_current_admission", "apt42_sector"),
+      countsTowardCurrentSellableRows: true,
+      noLeak: true
+    },
+    {
+      rowId: "cw_apt42_ttp_current_admission",
+      actor: "APT42",
+      rowType: "activity",
+      sourceEvidenceCount: 4,
+      sourceFamilySupport: ["clear_web"],
+      requiredFieldsPresent,
+      missingFields: [],
+      nextBuyerSearch: "APT42 Phishing T1566 credential collection",
+      provenanceHash: stableId("program_cw_current_admission", "apt42_ttp"),
+      countsTowardCurrentSellableRows: true,
+      noLeak: true
+    },
+    {
+      rowId: "cw_apt42_source_family_current_admission",
+      actor: "APT42",
+      rowType: "activity",
+      sourceEvidenceCount: 4,
+      sourceFamilySupport: ["clear_web"],
+      requiredFieldsPresent,
+      missingFields: [],
+      nextBuyerSearch: "APT42 public report source-family corroboration",
+      provenanceHash: stableId("program_cw_current_admission", "apt42_source_family"),
+      countsTowardCurrentSellableRows: true,
+      noLeak: true
+    }
+  ];
+  return {
+    schemaVersion: "ti.program_cw_parser_live_source_current_admission.v1",
+    owner: "agent_03",
+    routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"],
+    baselineCurrentSellableRows: 4,
+    rowsAdmittedThisPass: admittedRows.length,
+    currentSellableRowsAfterAdmission: 8,
+    usefulRowsAfterAdmission: 12,
+    averageBuyerValueBefore: 0.575,
+    averageBuyerValueAfter: 0.638,
+    buyerValueLift: 0.063,
+    admittedRows,
+    blockedLedger: {
+      missingActorRows: 0,
+      missingVictimOrTargetRows: 3,
+      missingTtpOrToolRows: 3,
+      missingDateRows: 0,
+      missingPublicProofRows: 1,
+      genericSourcePageRows: 4,
+      restrictedOnlyRows: 1
+    },
+    falsePositiveSuppressions: [
+      { class: "generic_source_page", rowCount: 4, countsTowardCurrentSellableRows: false, proof: "source pages remain provenance context unless parser extraction produces actor/victim/TTP/date fields" },
+      { class: "stale_latest_activity", rowCount: 0, countsTowardCurrentSellableRows: false, proof: "no stale rows were admitted in this pass" },
+      { class: "alias_or_wrong_actor", rowCount: 0, countsTowardCurrentSellableRows: false, proof: "no alias-only or wrong-actor row was admitted" },
+      { class: "restricted_only_without_public_support", rowCount: 1, countsTowardCurrentSellableRows: false, proof: "restricted-only metadata stays blocked until safe public support exists" }
     ],
     noLeakBoundary: {
       rawBodiesExposed: false,

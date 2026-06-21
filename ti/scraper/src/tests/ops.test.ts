@@ -539,6 +539,47 @@ describe("ops controls", () => {
     expect(dashboard.paidReleaseTruthBoard.conversionObservability.blocked_by_freshness).toMatchObject({ owner: "agent_07", expectedRowGain: 5, canCountNow: false });
     expect(dashboard.paidReleaseTruthBoard.conversionObservability.blocked_by_suppression).toMatchObject({ owner: "agent_07", expectedRowGain: 4, canCountNow: false });
     expect(dashboard.paidReleaseTruthBoard.conversionObservability.blocked_by_no_leak).toMatchObject({ owner: "agent_06", expectedRowGain: 0, canCountNow: false });
+    expect(dashboard.paidReleaseTruthBoard.observedMarketplaceTelemetry).toMatchObject({
+      schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
+      sourceOfTruth: "Apify Store analytics and billing",
+      ingestionState: "external_unknown",
+      currentValues: {
+        storeViews: null,
+        uniqueUsers: null,
+        trialRuns: null,
+        paidRuns: null,
+        actorStarts: null,
+        actorRuns: null,
+        datasetRows: null,
+        failedRuns: null,
+        repeatUsers: null,
+        refunds: null,
+        platformUsageCostUsd: null,
+        estimatedCreatorRevenueUsd: null,
+        payoutState: "external_unknown",
+        pricingState: "external_unknown"
+      },
+      unknownMeansNoClaim: true,
+      noSyntheticFallback: true
+    });
+    expect(dashboard.paidReleaseTruthBoard.observedMarketplaceTelemetry.validationChecks).toEqual(expect.arrayContaining(["paidRuns cannot exceed actorRuns when both are observed", "refunds must be null or an integer >= 0"]));
+    expect(dashboard.paidReleaseTruthBoard.observedMarketplaceTelemetry.manualImportPath.length).toBeGreaterThan(0);
+    expect(dashboard.paidReleaseTruthBoard.observedMarketplaceTelemetry.apiImportPath.join(" ")).toContain("Reject");
+    expect(dashboard.paidReleaseTruthBoard.paidReleaseRunbook).toMatchObject({
+      schemaVersion: "ti.program_cx_paid_release_runbook.v1",
+      decision: "hold_paid_traffic",
+      paidTrafficAllowedWhenAllGatesPass: true
+    });
+    expect(dashboard.paidReleaseTruthBoard.paidReleaseRunbook.gates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ gate: "current_sellable_rows", observed: 3, state: "hold" }),
+      expect.objectContaining({ gate: "sellable_row_rate", observed: 0.25, state: "pass" }),
+      expect.objectContaining({ gate: "useful_row_density", observed: 0.75, state: "pass" }),
+      expect.objectContaining({ gate: "average_buyer_value", observed: 0.558, state: "pass" }),
+      expect.objectContaining({ gate: "refunds", observed: null, state: "external_unknown" }),
+      expect.objectContaining({ gate: "payout_readiness", observed: "external_unknown", state: "external_unknown" })
+    ]));
+    expect(dashboard.paidReleaseTruthBoard.paidReleaseRunbook.holdWhen).toEqual(expect.arrayContaining(["current sellable rows are below 100"]));
+    expect(dashboard.paidReleaseTruthBoard.paidReleaseRunbook.rollbackWhen.some((rule) => rule.includes("refund"))).toBe(true);
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(dashboard.scaleStepGates).toMatchObject({
@@ -1025,6 +1066,44 @@ describe("ops controls", () => {
     expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay.suppressionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_source_page", "coverage_gap_only", "restricted_only_without_public_support", "single_source_without_caveat"]));
     expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay.suppressionProof.every((row) => row.countsTowardCurrentSellableRows === false && row.proof.length > 0)).toBe(true);
     expect(dashboard.parserRealSellableLift.runtimeAdmissionReplay.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    });
+    expect(dashboard.parserRealSellableLift.currentAdmissionLedger).toMatchObject({
+      schemaVersion: "ti.program_cw_parser_live_source_current_admission.v1",
+      owner: "agent_03",
+      baselineCurrentSellableRows: 4,
+      rowsAdmittedThisPass: 4,
+      currentSellableRowsAfterAdmission: 8,
+      usefulRowsAfterAdmission: 12,
+      averageBuyerValueBefore: 0.575,
+      averageBuyerValueAfter: 0.638,
+      buyerValueLift: 0.063
+    });
+    expect(dashboard.parserRealSellableLift.currentAdmissionLedger.admittedRows).toHaveLength(4);
+    expect(dashboard.parserRealSellableLift.currentAdmissionLedger.admittedRows.every((row) =>
+      row.actor === "APT42" &&
+      row.rowType === "activity" &&
+      row.sourceEvidenceCount >= 4 &&
+      row.requiredFieldsPresent.includes("victim_or_target") &&
+      row.requiredFieldsPresent.includes("ttp_tool_or_cve") &&
+      row.missingFields.length === 0 &&
+      row.countsTowardCurrentSellableRows &&
+      row.noLeak
+    )).toBe(true);
+    expect(dashboard.parserRealSellableLift.currentAdmissionLedger.blockedLedger).toMatchObject({
+      missingVictimOrTargetRows: 3,
+      missingTtpOrToolRows: 3,
+      genericSourcePageRows: 4,
+      restrictedOnlyRows: 1
+    });
+    expect(dashboard.parserRealSellableLift.currentAdmissionLedger.falsePositiveSuppressions.map((row) => row.class)).toEqual(expect.arrayContaining(["generic_source_page", "stale_latest_activity", "alias_or_wrong_actor", "restricted_only_without_public_support"]));
+    expect(dashboard.parserRealSellableLift.currentAdmissionLedger.falsePositiveSuppressions.every((row) => row.countsTowardCurrentSellableRows === false && row.proof.length > 0)).toBe(true);
+    expect(dashboard.parserRealSellableLift.currentAdmissionLedger.noLeakBoundary).toMatchObject({
       rawBodiesExposed: false,
       unsafeUrlsExposed: false,
       restrictedPayloadsExposed: false,

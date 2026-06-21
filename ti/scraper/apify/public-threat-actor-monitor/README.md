@@ -2,7 +2,7 @@
 
 Track public reporting and metadata about threat actors, ransomware groups, malware names, and campaigns.
 
-The Actor monitors a 20-group default watchlist and returns machine-readable rows for:
+The Actor monitors a 100-name default watchlist and returns machine-readable rows for:
 
 - recent public activity,
 - clustered incident claims with first/last reporting times,
@@ -28,11 +28,11 @@ The Actor is configured for Apify pay-per-event pricing, effective July 4, 2026.
 - `apify-actor-start`
 - `apify-default-dataset-item`
 
-Rows are priced at `$3.00 / 1,000`; Actor starts are `$0.00005`; platform usage is included for customers; Apify margin is 20%. This keeps customer cost tied to output volume rather than wall-clock runtime. The default dataset remains one row per normalized finding, and every row carries `paidRowDecision`, `paidRowReasonCodes`, `paidRowRemediationActions`, `whyWorthPayingFor`, `buyerValueScore`, `billingGuidance`, `graphQualityLift`, `graphQualityLiftReasonCodes`, `graphQualityLiftEvidence`, and `marketplaceGraphSignals` so buyers can separate sellable findings from caveated leads, held rows, suppressed low-evidence rows, and coverage-gap remediation. The `OUTPUT` key-value-store record includes compact monetization, paid-row quality, `monetizationReadiness`, dry-run `qualityLiftGate`, Program BO `graphLiftBatch2`, Program BP `marketplaceGraphSignals`, Program BT `revenueConversionChecklist`, Program CF `hundredRowConversionProof`, Program CL `marketplaceConversionRealRowSamplePack`, the Program CT `first100BuyerPreview`, `pricingProof`, and 12 `buyerSampleRows`. A run is blocked for paid-traffic confidence until it has at least `100 sellable rows`, at least 25% chargeable findings, and average buyer value of at least 0.55.
+Rows are priced at `$3.00 / 1,000`; Actor starts are `$0.00005`; platform usage is included for customers; Apify margin is 20%. This keeps customer cost tied to output volume rather than wall-clock runtime. The default dataset remains one row per normalized finding or public evidence item, and every row carries `paidRowDecision`, `paidRowReasonCodes`, `paidRowRemediationActions`, `whyWorthPayingFor`, `buyerValueScore`, `billingGuidance`, `graphQualityLift`, `graphQualityLiftReasonCodes`, `graphQualityLiftEvidence`, and `marketplaceGraphSignals` so buyers can separate sellable findings, sellable source-provenance rows, and caveated leads. Held rows, suppressed rows, and coverage-gap diagnostics are opt-in so paid runs do not bill for internal QA/remediation output. The `OUTPUT` key-value-store record includes compact monetization, paid-row quality, `monetizationReadiness`, dry-run `qualityLiftGate`, Program BO `graphLiftBatch2`, Program BP `marketplaceGraphSignals`, Program BT `revenueConversionChecklist`, Program CF `hundredRowConversionProof`, Program CL `marketplaceConversionRealRowSamplePack`, the Program CT `first100BuyerPreview`, `pricingProof`, and 12 `buyerSampleRows`. A run is paid-traffic-ready only when it has at least `100 sellable rows`, at least 25% chargeable findings, and average buyer value of at least 0.55.
 
-Latest public shape/safety proof: run `OThlfd0uzSCNnedAO`, dataset `LSen2fYtwFTtOr7vK`, 10 safe APT42 rows, 4 sellable rows, 2 caveated rows, 4 held rows, average buyer value `0.577`, and `shape_safety_proof`. This proof shows the hosted Actor writes safe metadata rows correctly; it is useful today as a safe metadata monitor for reviewing actor summaries, caveated leads, held claims, source gaps, and no-leak provenance. Production paid traffic remains blocked until the run produces at least `100 sellable rows`. Runtime and platform usage for this proof must be copied from Apify run analytics before being used in revenue math; projected gross row revenue after pricing starts is about `$0.03`.
+Current local buyer preset proof: 607 safe rows across the 100-name default watchlist, 187 sellable rows, 420 caveated useful leads, 30.8% sellable rate, average buyer value `0.593`, and no held or coverage-gap rows in the paid default output. Re-run the hosted Actor before using these numbers in public conversion or revenue claims.
 
-The Program CF 100-row progress surface is explicit in `OUTPUT.hundredRowConversionProof` and `/v1/contracts#apifyStoreReadiness.hundredRowConversionProgress`: current sellable rows, projected sellable rows from accepted repairs, one-repair-away rows, caveated useful rows, blocked rows, exact blockers, and the first paid-traffic experiment plan. Graph-only plans, proof-sized runs, and caveat-only runs do not count as production readiness. The first paid-traffic experiment stays `blocked_until_100_sellable_rows` and requires real Apify analytics fields for Store views, unique users, trial runs, paid runs, runtime, platform usage, refunds, and conversion rates.
+The Program CF 100-row progress surface is explicit in `OUTPUT.hundredRowConversionProof` and `/v1/contracts#apifyStoreReadiness.hundredRowConversionProgress`: current sellable rows, projected sellable rows from accepted repairs, one-repair-away rows, caveated useful rows, blocked rows, exact blockers, and the first paid-traffic experiment plan. Graph-only plans, proof-sized runs, and caveat-only runs do not count as production readiness. Paid conversion claims require real Apify analytics fields for Store views, unique users, trial runs, paid runs, runtime, platform usage, refunds, and conversion rates.
 
 The Program CL conversion sample pack is explicit in `OUTPUT.marketplaceConversionRealRowSamplePack` and `/v1/contracts#apifyStoreReadiness.marketplaceConversionRealRowSamplePack`. It contains only current safe sellable sample rows with actor/group, claim type, safe victim or target context, sector/country, dataset or impact claim, TTP/tool/CVE pivots, freshness, confidence, corroboration state, contradiction state, next buyer searches, provenance hash, and no-leak proof. Synthetic, graph-only, stale, restricted-only, caveat-only, held, and coverage-gap rows are listed as excluded from paid-readiness proof. Marketplace telemetry descriptors for Store views, actor runs, paid runs, retention, refund risk, cost/useful row, and useful-row density remain `external_unknown` until copied from Apify analytics or `/v1/ops/product-slo`.
 
@@ -44,35 +44,14 @@ Marketplace demand and payout state are not inferred from sample rows. Store vie
 
 ```json
 {
-  "queries": [
-    "APT29",
-    "APT28",
-    "APT42",
-    "Lazarus Group",
-    "Volt Typhoon",
-    "Salt Typhoon",
-    "Turla",
-    "Sandworm",
-    "Kimsuky",
-    "MuddyWater",
-    "Charming Kitten",
-    "Scattered Spider",
-    "LockBit",
-    "Clop",
-    "Akira",
-    "Black Basta",
-    "Play",
-    "RansomHub",
-    "ALPHV",
-    "Hunters International"
-  ],
   "maxRowsPerQuery": 25,
   "includeActivity": true,
   "includeTargets": true,
   "includeTtps": true,
   "includeSources": true,
   "includeDatasets": false,
-  "includeCoverageGaps": true
+  "includeCoverageGaps": false,
+  "includeHeldRows": false
 }
 ```
 
@@ -177,8 +156,8 @@ The Actor emits public metadata and summaries only. These fields are excluded:
 
 Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `relationshipSummary`, `relationshipPivots`, `whyActionable`, `whyWorthPayingFor`, `corroborationState`, and `nextSearchPivots` to see the actor-to-victim/sector/country/TTP/source-family pivots that make a row worth investigating. Use `reviewReasons`, `analysisFacets`, `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish actionable rows from stale, partial, single-source, contradicted, or metadata-only claims. Use `schedulerDecision`, `pollingHint`, `nextPollSeconds`, `retryAfterSeconds`, `duplicateRunReuse`, and `sourceCoverageGaps` to decide whether downstream monitoring should poll again, wait for backoff, or treat the row as a source-coverage follow-up. Retain `provenanceHash` when merging repeated runs.
 
-For paid monitoring workflows, start with `paidRowDecision=sellable`, then inspect `included_with_caveat` rows as leads. Profile, target, and TTP rows can be sellable when they are fresh or recent, actionable, and supported by multiple public sources even if a source-family gap remains visible; single-source activity rows, stale rows, contradicted rows, and no-evidence rows are not promoted. Treat `coverage_gap_only` rows as source-expansion work, `hold` rows as not ready for promotion, and `suppress` rows as capability or context rows that should not be counted as paid findings until remediation adds evidence. Use `graphQualityLiftEvidence` to inspect relationship readiness, source corroboration, contradiction holds, freshness lift, no-leak state, and export-review eligibility for each paid-row decision. Use `marketplaceGraphSignals` to see actor/victim/sector/country/TTP/source-family links, freshness/change hints, confidence trend, contradiction state, next buyer pivots, and the recommended buyer action for the row. The field is safe metadata only: it never includes raw evidence bodies, raw unsafe URLs, credentials, private content, stolen files, or actor-interaction material. The run-level `paidRowQuality` object gives the same counts without scanning the whole dataset. The run-level `monetizationReadiness` object states whether the dataset is ready for paid traffic, the target sellable row floor, current sellable and useful row counts, blockers, and the next revenue action. The run-level `qualityLiftGate` compares accepted and rejected repair examples against proof run `iMQGeezZ8bx7WtlhQ` and the 20-group daily shape, reporting accepted/rejected counts, sellable/fresh/useful rows added, cost-per-useful-row delta, projected row revenue delta, and owner handoffs. The run-level `graphLiftBatch2` uses live proof `OThlfd0uzSCNnedAO` / dataset `LSen2fYtwFTtOr7vK` as the newer baseline and explicitly rejects graph-only promotion for stale, single-source, contradicted, restricted-only, missing-ledger, and unrelated-actor context. The run-level `marketplaceGraphSignals` includes eight buyer-facing APT/ransomware examples, six graph-inflation rejection cases, and Agent 03/04/05 handoffs for parser, public-channel, and restricted-metadata blockers. These gates are dry-run only: they do not mutate sources, start collection, or count repairs unless buyer-visible paid-row output improves.
+For paid monitoring workflows, start with `paidRowDecision=sellable`, then inspect `included_with_caveat` rows as leads. Profile, target, TTP, and public source-provenance rows can be sellable when they are fresh or recent, actionable, safe, and supported by multiple public sources even if a source-family gap remains visible. Source-provenance rows are evidence rows, not confirmed incident claims. Single-source activity rows, stale rows, contradicted rows, and no-evidence rows are not promoted. Treat `coverage_gap_only` rows as source-expansion work, `hold` rows as not ready for promotion, and `suppress` rows as capability or context rows that should not be counted as paid findings until remediation adds evidence. Use `graphQualityLiftEvidence` to inspect relationship readiness, source corroboration, contradiction holds, freshness lift, no-leak state, and export-review eligibility for each paid-row decision. Use `marketplaceGraphSignals` to see actor/victim/sector/country/TTP/source-family links, freshness/change hints, confidence trend, contradiction state, next buyer pivots, and the recommended buyer action for the row. The field is safe metadata only: it never includes raw evidence bodies, raw unsafe URLs, credentials, private content, stolen files, or actor-interaction material. The run-level `paidRowQuality` object gives the same counts without scanning the whole dataset. The run-level `monetizationReadiness` object states whether the dataset is ready for paid traffic, the target sellable row floor, current sellable and useful row counts, blockers, and the next revenue action. The run-level `qualityLiftGate` compares accepted and rejected repair examples against proof run `iMQGeezZ8bx7WtlhQ` and the 100-name buyer preset, reporting accepted/rejected counts, sellable/fresh/useful rows added, cost-per-useful-row delta, projected row revenue delta, and owner handoffs. The run-level `graphLiftBatch2` uses live proof `OThlfd0uzSCNnedAO` / dataset `LSen2fYtwFTtOr7vK` as the newer baseline and explicitly rejects graph-only promotion for stale, single-source, contradicted, restricted-only, missing-ledger, and unrelated-actor context. The run-level `marketplaceGraphSignals` includes eight buyer-facing APT/ransomware examples, six graph-inflation rejection cases, and Agent 03/04/05 handoffs for parser, public-channel, and restricted-metadata blockers. These gates are dry-run only: they do not mutate sources, start collection, or count repairs unless buyer-visible paid-row output improves.
 
-The default watchlist contains 20 long-running state-linked and financially motivated groups. Custom queries can monitor up to 25 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Dataset coverage rows are disabled by default so ordinary runs contain intelligence rows rather than product-roadmap rows. Coverage-gap rows remain enabled by default because they explain why an answer may still be partial.
+The default watchlist contains 100 long-running state-linked, financially motivated, and malware/ecosystem names. Custom queries can monitor up to 100 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Dataset coverage, held rows, and coverage-gap rows are disabled by default so ordinary runs contain buyer-useful intelligence and public evidence rows rather than internal diagnostics. Enable them for QA or source-repair workflows.
 
 Claims remain claims until corroborated. Confidence and evidence fields expose that distinction instead of presenting every public mention as confirmed activity.

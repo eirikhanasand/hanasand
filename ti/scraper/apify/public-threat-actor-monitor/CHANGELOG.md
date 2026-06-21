@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.8 - 2026-06-21
+
+- Expanded the default monitor from the 20-name proof preset to a 100-name buyer preset / 100-name default watchlist while keeping custom runs capped at 100 names.
+- Added sellable public source-provenance rows for fresh or recent safe source evidence that directly supports an actor result, without presenting provenance as a confirmed incident claim.
+- Changed paid defaults to suppress held/suppressed rows and coverage-gap diagnostics unless explicitly requested. The current local 100-name buyer preset produces 607 safe rows: 187 sellable rows, 420 caveated leads, 30.8% sellable rate, and average buyer value `0.593`.
+- Increased the Actor timeout to 600 seconds for the 100-name default tier.
+
 ## 0.6.7 - 2026-06-20
 
 - Recorded hosted build `0.6.7` as the current shape/safety proof surface. Remote proof run `OThlfd0uzSCNnedAO` produced dataset `LSen2fYtwFTtOr7vK` with 10 safe APT42 rows: 4 sellable, 2 caveated, 4 held, average buyer value `0.577`, and `shape_safety_proof`.
@@ -28,7 +35,7 @@
 
 - Added compact relationship insight fields to every marketplace dataset row: `relationshipSummary`, `relationshipPivots`, `whyActionable`, `freshnessDelta`, `confidenceDelta`, `contradictionHints`, `corroborationState`, and `nextSearchPivots`.
 - Added the `GET /v1/contracts` `apifyStoreReadiness` publication contract as the source of truth for the exact default input, sample output DTOs, public proof DTOs, frontend polling states, pricing hooks, safety contract, and known Apify payout blockers.
-- Expanded the manifest example input to the full 20-query default watchlist and kept `includeCoverageGaps` enabled by default.
+- Expanded the manifest example input to the full 20-query default watchlist and kept `includeCoverageGaps` enabled by default. Superseded in `0.6.8` by the 100-name buyer preset with diagnostics disabled by default.
 - Tightened publication guardrails to reject draft listing copy, hello-world input, generic local categories, and unsafe output claims.
 - Tightened the publication gate to validate required scheduler, retry/backoff, duplicate-run reuse, source-coverage, coverage-gap, review, and analysis-facet fields in the actual dataset schema and fixture.
 - Added actor source-coverage action fields to every dataset row: freshness expectation, top missing source family, next best source action, buyer caveat, and expected time to useful signal.

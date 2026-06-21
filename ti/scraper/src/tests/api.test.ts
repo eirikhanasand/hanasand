@@ -507,6 +507,68 @@ describe("api v1", () => {
     expect(conversionObservability.blocked_by_suppression).toMatchObject({ owner: "agent_07", expectedRowGain: 4, canCountNow: false });
     expect(conversionObservability.blocked_by_no_leak).toMatchObject({ owner: "agent_06", expectedRowGain: 0, proofCommand: "bun run smoke:apify-threat-actor-monitor", canCountNow: false });
     expect(conversionObservability.external_marketplace_unknown).toMatchObject({ state: "external_unknown", observedStoreViews: null, observedActorRuns: null, observedPaidRuns: null, observedConversionRate: null, canCountNow: false });
+    const observedMarketplaceTelemetry = (response.paidReleaseTruthBoard as {
+      observedMarketplaceTelemetry: {
+        schemaVersion: string;
+        ingestionState: string;
+        currentValues: Record<string, null | string>;
+        manualImportPath: string[];
+        apiImportPath: string[];
+        validationChecks: string[];
+        proofCommands: string[];
+        unknownMeansNoClaim: boolean;
+        noSyntheticFallback: boolean;
+      };
+    }).observedMarketplaceTelemetry;
+    expect(observedMarketplaceTelemetry).toMatchObject({
+      schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
+      ingestionState: "external_unknown",
+      currentValues: {
+        storeViews: null,
+        uniqueUsers: null,
+        trialRuns: null,
+        paidRuns: null,
+        actorStarts: null,
+        actorRuns: null,
+        datasetRows: null,
+        failedRuns: null,
+        repeatUsers: null,
+        refunds: null,
+        platformUsageCostUsd: null,
+        estimatedCreatorRevenueUsd: null,
+        payoutState: "external_unknown",
+        pricingState: "external_unknown"
+      },
+      unknownMeansNoClaim: true,
+      noSyntheticFallback: true
+    });
+    expect(observedMarketplaceTelemetry.validationChecks).toEqual(expect.arrayContaining(["paidRuns cannot exceed actorRuns when both are observed", "repeatUsers cannot exceed uniqueUsers when both are observed"]));
+    expect(observedMarketplaceTelemetry.manualImportPath.length).toBeGreaterThan(0);
+    expect(observedMarketplaceTelemetry.apiImportPath.join(" ")).toContain("Reject");
+    const paidReleaseRunbook = (response.paidReleaseTruthBoard as {
+      paidReleaseRunbook: {
+        schemaVersion: string;
+        decision: string;
+        gates: Array<{ gate: string; observed: number | string | null | boolean; state: string }>;
+        holdWhen: string[];
+        rollbackWhen: string[];
+        paidTrafficAllowedWhenAllGatesPass: boolean;
+      };
+    }).paidReleaseRunbook;
+    expect(paidReleaseRunbook).toMatchObject({
+      schemaVersion: "ti.program_cx_paid_release_runbook.v1",
+      decision: "hold_paid_traffic",
+      paidTrafficAllowedWhenAllGatesPass: true
+    });
+    expect(paidReleaseRunbook.gates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ gate: "current_sellable_rows", observed: 3, state: "hold" }),
+      expect.objectContaining({ gate: "sellable_row_rate", observed: 0.25, state: "pass" }),
+      expect.objectContaining({ gate: "useful_row_density", observed: 0.75, state: "pass" }),
+      expect.objectContaining({ gate: "refunds", observed: null, state: "external_unknown" }),
+      expect.objectContaining({ gate: "payout_readiness", observed: "external_unknown", state: "external_unknown" })
+    ]));
+    expect(paidReleaseRunbook.holdWhen).toEqual(expect.arrayContaining(["current sellable rows are below 100"]));
+    expect(paidReleaseRunbook.rollbackWhen.some((rule) => rule.includes("refund"))).toBe(true);
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {
@@ -4368,6 +4430,53 @@ describe("api v1", () => {
       }
     });
     expect(apifyStoreReadiness.paidReleaseTruthBoard.blockerBuckets.map((row) => row.blocker)).toEqual(expect.arrayContaining(["already_chargeable", "missing_public_support", "parser_repair", "freshness", "alias_collision", "source_family_gap", "dark_metadata_public_support", "no_leak_proof", "marketplace_output_gap"]));
+    const readinessPaidReleaseTruthBoard = apifyStoreReadiness.paidReleaseTruthBoard as typeof apifyStoreReadiness.paidReleaseTruthBoard & {
+      observedMarketplaceTelemetry: {
+        validationChecks: string[];
+        apiImportPath: string[];
+      };
+      paidReleaseRunbook: {
+        gates: Array<{ gate: string; observed: number | string | null | boolean; state: string }>;
+        rollbackWhen: string[];
+      };
+    };
+    expect(readinessPaidReleaseTruthBoard.observedMarketplaceTelemetry).toMatchObject({
+      schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
+      ingestionState: "external_unknown",
+      currentValues: {
+        storeViews: null,
+        uniqueUsers: null,
+        trialRuns: null,
+        paidRuns: null,
+        actorStarts: null,
+        actorRuns: null,
+        datasetRows: null,
+        failedRuns: null,
+        repeatUsers: null,
+        refunds: null,
+        platformUsageCostUsd: null,
+        estimatedCreatorRevenueUsd: null,
+        payoutState: "external_unknown",
+        pricingState: "external_unknown"
+      },
+      unknownMeansNoClaim: true,
+      noSyntheticFallback: true
+    });
+    expect(readinessPaidReleaseTruthBoard.observedMarketplaceTelemetry.validationChecks).toEqual(expect.arrayContaining(["paidRuns cannot exceed actorRuns when both are observed", "estimatedCreatorRevenueUsd stays null unless paidRuns and platformUsageCostUsd are observed"]));
+    expect(readinessPaidReleaseTruthBoard.observedMarketplaceTelemetry.apiImportPath.join(" ")).toContain("Reject");
+    expect(readinessPaidReleaseTruthBoard.paidReleaseRunbook).toMatchObject({
+      schemaVersion: "ti.program_cx_paid_release_runbook.v1",
+      decision: "hold_paid_traffic",
+      paidTrafficAllowedWhenAllGatesPass: true
+    });
+    expect(readinessPaidReleaseTruthBoard.paidReleaseRunbook.gates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ gate: "current_sellable_rows", observed: 3, state: "hold" }),
+      expect.objectContaining({ gate: "sellable_row_rate", observed: 0.25, state: "pass" }),
+      expect.objectContaining({ gate: "useful_row_density", observed: 0.75, state: "pass" }),
+      expect.objectContaining({ gate: "refunds", observed: null, state: "external_unknown" }),
+      expect.objectContaining({ gate: "payout_readiness", observed: "external_unknown", state: "external_unknown" })
+    ]));
+    expect(readinessPaidReleaseTruthBoard.paidReleaseRunbook.rollbackWhen.some((rule) => rule.includes("refund"))).toBe(true);
     expect(apifyStoreReadiness.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(apifyStoreReadiness.revenueConversionChecklist).toMatchObject({
       schemaVersion: "ti.apify_revenue_conversion_checklist.v1",

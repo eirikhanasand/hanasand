@@ -618,6 +618,54 @@ for (const requiredActor of ["APT29", "APT28", "APT42", "Volt Typhoon", "Lazarus
 if (liveSourceRows.filter((row) => row.admissionDecision === "sellable").length !== 30) throw new Error("Program CO admission packet must include 30 sellable candidate rows");
 if (liveSourceRows.filter((row) => row.admissionDecision === "useful_caveated").length !== 6) throw new Error("Program CO admission packet must include 6 useful caveated rows");
 if (liveSourceRows.filter((row) => row.admissionDecision === "suppress").length !== 4) throw new Error("Program CO admission packet must include 4 suppression rows");
+const currentAdmissionLedger = parserRealSellableLift.currentAdmissionLedger as Record<string, unknown> | undefined;
+if (
+  !currentAdmissionLedger
+  || currentAdmissionLedger.schemaVersion !== "ti.program_cw_parser_live_source_current_admission.v1"
+  || currentAdmissionLedger.owner !== "agent_03"
+  || currentAdmissionLedger.baselineCurrentSellableRows !== 4
+  || Number(currentAdmissionLedger.rowsAdmittedThisPass) < 4
+  || Number(currentAdmissionLedger.currentSellableRowsAfterAdmission) <= 4
+  || Number(currentAdmissionLedger.usefulRowsAfterAdmission) < Number(currentAdmissionLedger.currentSellableRowsAfterAdmission)
+  || Number(currentAdmissionLedger.buyerValueLift) <= 0
+  || !Array.isArray(currentAdmissionLedger.admittedRows)
+  || !Array.isArray(currentAdmissionLedger.falsePositiveSuppressions)
+  || typeof currentAdmissionLedger.blockedLedger !== "object"
+  || typeof currentAdmissionLedger.noLeakBoundary !== "object"
+) {
+  throw new Error("Program CW current parser admission ledger must show current sellable-row lift");
+}
+for (const row of currentAdmissionLedger.admittedRows as Array<Record<string, unknown>>) {
+  if (
+    row.actor !== "APT42"
+    || row.rowType !== "activity"
+    || Number(row.sourceEvidenceCount) < 4
+    || !Array.isArray(row.requiredFieldsPresent)
+    || !(row.requiredFieldsPresent as string[]).includes("victim_or_target")
+    || !(row.requiredFieldsPresent as string[]).includes("ttp_tool_or_cve")
+    || !Array.isArray(row.missingFields)
+    || row.missingFields.length !== 0
+    || typeof row.nextBuyerSearch !== "string"
+    || String(row.nextBuyerSearch).length === 0
+    || typeof row.provenanceHash !== "string"
+    || String(row.provenanceHash).length === 0
+    || row.countsTowardCurrentSellableRows !== true
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program CW admitted rows must carry complete parser proof and count as current sellable rows");
+  }
+}
+for (const row of currentAdmissionLedger.falsePositiveSuppressions as Array<Record<string, unknown>>) {
+  if (row.countsTowardCurrentSellableRows !== false || typeof row.proof !== "string" || String(row.proof).length === 0) {
+    throw new Error("Program CW suppression ledger must keep false positives outside current sellable rows");
+  }
+}
+for (const key of ["rawBodiesExposed", "unsafeUrlsExposed", "restrictedPayloadsExposed", "credentialsExposed", "privateMaterialUsed", "actorInteractionTextUsed"]) {
+  if ((currentAdmissionLedger.noLeakBoundary as Record<string, unknown>)[key] !== false) throw new Error(`Program CW no-leak boundary must keep ${key} false`);
+}
+if (Number(paidRowQuality.sellable) < Number(currentAdmissionLedger.currentSellableRowsAfterAdmission)) {
+  throw new Error("Program CW ledger must agree with paid-row quality sellable count");
+}
 const hundredRowConversionProof = outputRecord.hundredRowConversionProof as Record<string, unknown> | undefined;
 if (
   !hundredRowConversionProof
@@ -1285,6 +1333,54 @@ for (const bucket of ["blocked_by_public_support", "blocked_by_parser", "blocked
   if (!row || typeof row.owner !== "string" || typeof row.nextTask !== "string" || typeof row.expectedRowGain !== "number" || typeof row.proofCommand !== "string" || row.canCountNow !== false) {
     throw new Error(`Program CW conversion observability bucket ${bucket} must expose owner, next task, expected gain, proof command, and non-current count state`);
   }
+}
+const paidReleaseObservedTelemetry = paidReleaseTruthBoard.observedMarketplaceTelemetry as Record<string, unknown> | undefined;
+const paidReleaseObservedTelemetryValues = paidReleaseObservedTelemetry?.currentValues as Record<string, unknown> | undefined;
+if (
+  !paidReleaseObservedTelemetry
+  || paidReleaseObservedTelemetry.schemaVersion !== "ti.program_cx_observed_marketplace_telemetry_contract.v1"
+  || paidReleaseObservedTelemetry.ingestionState !== "external_unknown"
+  || paidReleaseObservedTelemetry.unknownMeansNoClaim !== true
+  || paidReleaseObservedTelemetry.noSyntheticFallback !== true
+  || !paidReleaseObservedTelemetryValues
+  || paidReleaseObservedTelemetryValues.storeViews !== null
+  || paidReleaseObservedTelemetryValues.uniqueUsers !== null
+  || paidReleaseObservedTelemetryValues.trialRuns !== null
+  || paidReleaseObservedTelemetryValues.paidRuns !== null
+  || paidReleaseObservedTelemetryValues.actorStarts !== null
+  || paidReleaseObservedTelemetryValues.actorRuns !== null
+  || paidReleaseObservedTelemetryValues.datasetRows !== null
+  || paidReleaseObservedTelemetryValues.failedRuns !== null
+  || paidReleaseObservedTelemetryValues.repeatUsers !== null
+  || paidReleaseObservedTelemetryValues.refunds !== null
+  || paidReleaseObservedTelemetryValues.platformUsageCostUsd !== null
+  || paidReleaseObservedTelemetryValues.estimatedCreatorRevenueUsd !== null
+  || paidReleaseObservedTelemetryValues.payoutState !== "external_unknown"
+  || paidReleaseObservedTelemetryValues.pricingState !== "external_unknown"
+  || !Array.isArray(paidReleaseObservedTelemetry.manualImportPath)
+  || !Array.isArray(paidReleaseObservedTelemetry.apiImportPath)
+  || !Array.isArray(paidReleaseObservedTelemetry.validationChecks)
+  || !(paidReleaseObservedTelemetry.validationChecks as string[]).includes("paidRuns cannot exceed actorRuns when both are observed")
+) {
+  throw new Error("Program CX observed marketplace telemetry must keep external Apify analytics/billing unknown until imported from real sources");
+}
+const paidReleaseRunbook = paidReleaseTruthBoard.paidReleaseRunbook as Record<string, unknown> | undefined;
+const paidReleaseRunbookGates = paidReleaseRunbook?.gates as Array<Record<string, unknown>> | undefined;
+if (
+  !paidReleaseRunbook
+  || paidReleaseRunbook.schemaVersion !== "ti.program_cx_paid_release_runbook.v1"
+  || paidReleaseRunbook.decision !== "hold_paid_traffic"
+  || paidReleaseRunbook.paidTrafficAllowedWhenAllGatesPass !== true
+  || !Array.isArray(paidReleaseRunbookGates)
+  || !paidReleaseRunbookGates.some((gate) => gate.gate === "current_sellable_rows" && gate.observed === paidRowQuality.sellable && gate.state === "hold")
+  || !paidReleaseRunbookGates.some((gate) => gate.gate === "refunds" && gate.observed === null && gate.state === "external_unknown")
+  || !paidReleaseRunbookGates.some((gate) => gate.gate === "payout_readiness" && gate.observed === "external_unknown" && gate.state === "external_unknown")
+  || !Array.isArray(paidReleaseRunbook.holdWhen)
+  || !(paidReleaseRunbook.holdWhen as string[]).includes("current sellable rows are below 100")
+  || !Array.isArray(paidReleaseRunbook.rollbackWhen)
+  || !(paidReleaseRunbook.rollbackWhen as string[]).some((rule) => rule.includes("refund"))
+) {
+  throw new Error("Program CX paid release runbook must hold paid traffic until row, refund, payout, and no-leak gates pass");
 }
 if (!paidReleaseBuckets.every((bucket) =>
   typeof bucket.owner === "string"

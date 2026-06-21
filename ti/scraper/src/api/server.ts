@@ -10343,6 +10343,97 @@ function buildApifyStoreReadinessContract(input: {
       ]
     }
   };
+  const observedMarketplaceTelemetry = {
+    schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
+    routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"],
+    sourceOfTruth: "Apify Store analytics and billing",
+    ingestionState: "external_unknown",
+    currentValues: {
+      storeViews: null,
+      uniqueUsers: null,
+      trialRuns: null,
+      paidRuns: null,
+      actorStarts: null,
+      actorRuns: null,
+      datasetRows: null,
+      failedRuns: null,
+      repeatUsers: null,
+      refunds: null,
+      platformUsageCostUsd: null,
+      estimatedCreatorRevenueUsd: null,
+      payoutState: "external_unknown",
+      pricingState: "external_unknown"
+    },
+    manualImportPath: [
+      "Open Apify Console > Store > public-threat-actor-monitor > Analytics for Store views and unique users.",
+      "Open Apify Console > Actor > Runs for trial runs, paid runs, actor starts, actor runs, dataset rows, and failed runs.",
+      "Open Apify Console > Billing/Payouts for refunds, platform usage cost, creator revenue, payout state, and pricing state.",
+      "Copy observed values into a reviewed telemetry import fixture; leave unavailable values null/external_unknown."
+    ],
+    apiImportPath: [
+      "Use Apify API analytics/run/billing exports when account access is available.",
+      "Normalize only observed fields into storeViews, uniqueUsers, trialRuns, paidRuns, actorStarts, actorRuns, datasetRows, failedRuns, repeatUsers, refunds, platformUsageCostUsd, estimatedCreatorRevenueUsd, payoutState, and pricingState.",
+      "Reject any import that mixes owner smoke runs, projections, graph pivots, source counts, or repair queues into marketplace telemetry."
+    ],
+    validationChecks: [
+      "all numeric telemetry fields are null or finite numbers >= 0",
+      "refunds must be null or an integer >= 0",
+      "paidRuns cannot exceed actorRuns when both are observed",
+      "repeatUsers cannot exceed uniqueUsers when both are observed",
+      "estimatedCreatorRevenueUsd stays null unless paidRuns and platformUsageCostUsd are observed",
+      "payoutState and pricingState stay external_unknown until verified from Apify account data"
+    ],
+    proofCommands: [
+      "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+      "bun run check:apify-threat-actor-monitor",
+      "bun run smoke:apify-threat-actor-monitor"
+    ],
+    unknownMeansNoClaim: true,
+    noSyntheticFallback: true
+  };
+  const paidReleaseRunbook = {
+    schemaVersion: "ti.program_cx_paid_release_runbook.v1",
+    routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"],
+    decision: "hold_paid_traffic",
+    gates: [
+      { gate: "current_sellable_rows", required: ">=100 observed current sellable rows", observed: 3, state: "hold", proofField: "paidReleaseTruthBoard.observedProof.apifySmokeSellableRows", rollbackTrigger: "rollback when current sellable rows fall below 100" },
+      { gate: "sellable_row_rate", required: ">=0.25 sellable rows / observed rows", observed: 0.25, state: "pass", proofField: "paidReleaseTruthBoard.observedProof.apifySmokeSellableRows / observedProof.apifySmokeRows", rollbackTrigger: "rollback when sellable row rate falls below 25%" },
+      { gate: "useful_row_density", required: ">=0.40 buyer-useful rows / observed rows", observed: 0.75, state: "pass", proofField: "paidReleaseTruthBoard.observedProof.apifySmokeBuyerUsefulRows / observedProof.apifySmokeRows", rollbackTrigger: "rollback when useful row density falls below 40%" },
+      { gate: "average_buyer_value", required: ">=0.55 average buyer value", observed: 0.558, state: "pass", proofField: "paidReleaseTruthBoard.observedProof.apifySmokeAverageBuyerValueScore", rollbackTrigger: "rollback when average buyer value falls below 0.55" },
+      { gate: "no_leak_proof", required: "no-leak proof green", observed: true, state: "pass", proofField: "paidReleaseTruthBoard.fakeMetricGuard.noSyntheticFallback plus Apify smoke no-leak checks", rollbackTrigger: "rollback on any raw evidence, unsafe URL, credential, restricted payload, or private material leak" },
+      { gate: "stale_latest_activity_errors", required: "0 stale latest-activity errors", observed: 0, state: "pass", proofField: "falsePositiveSuppressionGate.programCpHardening.staleLatestActivityRowsBlocked", rollbackTrigger: "rollback when stale latest-activity rows are admitted as sellable" },
+      { gate: "refunds", required: "0 observed refunds", observed: null, state: "external_unknown", proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.refunds", rollbackTrigger: "rollback on any refund until root cause is reviewed" },
+      { gate: "payout_readiness", required: "known payout readiness", observed: "external_unknown", state: "external_unknown", proofField: "paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.payoutState", rollbackTrigger: "rollback or hold when payout readiness is unknown, blocked, or regresses" }
+    ],
+    promoteWhen: [
+      "current sellable rows are >=100 in observed output, not projected repairs",
+      "sellable row rate is >=25% and useful row density is >=40%",
+      "average buyer value is >=0.55",
+      "no-leak proof is green and stale latest-activity errors are zero",
+      "refunds are observed as zero and payout readiness is known",
+      "pricing state is externally verified from Apify account data"
+    ],
+    holdWhen: [
+      "current sellable rows are below 100",
+      "any external marketplace metric needed for refund, payout, pricing, paid-run, or revenue proof is external_unknown",
+      "projected rows, graph-only pivots, caveated rows, dark metadata, source counts, or worker claims are the only path to the floor",
+      "no-leak or stale latest-activity proof is missing"
+    ],
+    rollbackWhen: [
+      "sellable rows drop below 100 after promotion",
+      "sellable row rate drops below 25% or useful row density drops below 40%",
+      "average buyer value drops below 0.55",
+      "any no-leak failure, stale latest-activity admission, refund, payout regression, or pricing mismatch appears",
+      "Apify telemetry import cannot be reproduced from manual/API proof"
+    ],
+    proofCommands: [
+      "bun test src/tests/ops.test.ts src/tests/api.test.ts",
+      "bun run check:apify-threat-actor-monitor",
+      "bun run smoke:apify-threat-actor-monitor",
+      "bun run check:contract-index"
+    ],
+    paidTrafficAllowedWhenAllGatesPass: true
+  };
   const paidReleaseTruthBoard = {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["/v1/contracts#apifyStoreReadiness", "/v1/ops/product-slo", "Apify OUTPUT", "coordination_agent_10.md"],
@@ -10442,6 +10533,8 @@ function buildApifyStoreReadinessContract(input: {
         canCountNow: false
       }
     },
+    observedMarketplaceTelemetry,
+    paidReleaseRunbook,
     blockerBuckets: [
       { blocker: "already_chargeable", owner: "agent_10", rowDeltaTo100: 0, expectedRowGain: 3, confidence: "observed", risk: "current smoke rows prove safe output shape only", fastestNextTask: "keep chargeable rows visible while repair buckets create 97 more real rows", coordinationFile: "coordination_agent_10.md", countsTowardPaidFloorNow: true },
       { blocker: "missing_public_support", owner: "agent_04", rowDeltaTo100: 28, expectedRowGain: 28, confidence: "medium", risk: "single-source or unsupported rows stay caveated/held", fastestNextTask: "attach safe public corroboration to highest-value actor/ransomware rows", coordinationFile: "coordination_agent_04.md", countsTowardPaidFloorNow: false },

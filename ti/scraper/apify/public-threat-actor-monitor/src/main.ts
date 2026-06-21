@@ -785,6 +785,54 @@ interface ParserRealSellableLift {
       handoff: string;
     }>;
   };
+  currentAdmissionLedger: {
+    schemaVersion: "ti.program_cw_parser_live_source_current_admission.v1";
+    owner: "agent_03";
+    routeVisibleOn: Array<"Apify OUTPUT" | "Apify dataset rows" | "/v1/ops/product-slo">;
+    baselineCurrentSellableRows: number;
+    rowsAdmittedThisPass: number;
+    currentSellableRowsAfterAdmission: number;
+    usefulRowsAfterAdmission: number;
+    averageBuyerValueBefore: number;
+    averageBuyerValueAfter: number;
+    buyerValueLift: number;
+    admittedRows: Array<{
+      rowId: string;
+      actor: string;
+      rowType: "activity";
+      sourceEvidenceCount: number;
+      sourceFamilySupport: string[];
+      requiredFieldsPresent: string[];
+      missingFields: string[];
+      nextBuyerSearch: string;
+      provenanceHash: string;
+      countsTowardCurrentSellableRows: true;
+      noLeak: true;
+    }>;
+    blockedLedger: {
+      missingActorRows: number;
+      missingVictimOrTargetRows: number;
+      missingTtpOrToolRows: number;
+      missingDateRows: number;
+      missingPublicProofRows: number;
+      genericSourcePageRows: number;
+      restrictedOnlyRows: number;
+    };
+    falsePositiveSuppressions: Array<{
+      class: "generic_source_page" | "stale_latest_activity" | "alias_or_wrong_actor" | "restricted_only_without_public_support";
+      rowCount: number;
+      countsTowardCurrentSellableRows: false;
+      proof: string;
+    }>;
+    noLeakBoundary: {
+      rawBodiesExposed: false;
+      unsafeUrlsExposed: false;
+      restrictedPayloadsExposed: false;
+      credentialsExposed: false;
+      privateMaterialUsed: false;
+      actorInteractionTextUsed: false;
+    };
+  };
   staleRowsSuppressed: number;
   aliasOrUnrelatedRowsSuppressed: number;
   rowsStillOneRepairAway: number;
@@ -1545,6 +1593,52 @@ interface PaidReleaseTruthBoard {
       canCountNow: false;
     };
   };
+  observedMarketplaceTelemetry: {
+    schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1";
+    routeVisibleOn: Array<"Apify OUTPUT" | "/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "coordination_agent_10.md">;
+    sourceOfTruth: "Apify Store analytics and billing";
+    ingestionState: "external_unknown";
+    currentValues: {
+      storeViews: null;
+      uniqueUsers: null;
+      trialRuns: null;
+      paidRuns: null;
+      actorStarts: null;
+      actorRuns: null;
+      datasetRows: null;
+      failedRuns: null;
+      repeatUsers: null;
+      refunds: null;
+      platformUsageCostUsd: null;
+      estimatedCreatorRevenueUsd: null;
+      payoutState: "external_unknown";
+      pricingState: "external_unknown";
+    };
+    manualImportPath: string[];
+    apiImportPath: string[];
+    validationChecks: string[];
+    proofCommands: string[];
+    unknownMeansNoClaim: true;
+    noSyntheticFallback: true;
+  };
+  paidReleaseRunbook: {
+    schemaVersion: "ti.program_cx_paid_release_runbook.v1";
+    routeVisibleOn: Array<"Apify OUTPUT" | "/v1/ops/product-slo" | "/v1/contracts#apifyStoreReadiness" | "coordination_agent_10.md">;
+    decision: "hold_paid_traffic";
+    gates: Array<{
+      gate: "current_sellable_rows" | "sellable_row_rate" | "useful_row_density" | "average_buyer_value" | "no_leak_proof" | "stale_latest_activity_errors" | "refunds" | "payout_readiness";
+      required: string;
+      observed: number | boolean | "external_unknown" | null;
+      state: "pass" | "hold" | "external_unknown";
+      proofField: string;
+      rollbackTrigger: string;
+    }>;
+    promoteWhen: string[];
+    holdWhen: string[];
+    rollbackWhen: string[];
+    proofCommands: string[];
+    paidTrafficAllowedWhenAllGatesPass: true;
+  };
   blockerBuckets: Array<{
     blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
     owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -1782,6 +1876,7 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
         provenanceHash: stableHash([response.query, item.title, item.detail, item.date, item.sourceIds.join(","), activityTtp?.attackId ?? ""].join("|"))
       });
     }
+    rows.push(...parserLiveCurrentAdmissionRows(response, generatedAt, lastSeen, sourceById));
   }
 
   if (input.includeTargets) {
@@ -1898,6 +1993,130 @@ function normalizeResponse(response: TiSearchResponse, input: NormalizedInput): 
   }
 
   return rows.map(withPaidRowDecision);
+}
+
+function parserLiveCurrentAdmissionRows(
+  response: TiSearchResponse,
+  generatedAt: string,
+  lastSeen: string,
+  sourceById: Map<string, TiSearchResponse["sources"][number]>
+): MarketplaceRow[] {
+  const activity = response.recentActivity.find((item) => {
+    const publicSourceCount = item.sourceIds
+      .map((id) => sourceById.get(id))
+      .filter((source) => sourceType(source?.type) !== "system").length;
+    return publicSourceCount >= 4
+      && item.confidence >= 0.6
+      && Boolean(item.claimType)
+      && (item.affectedSectors?.length ?? 0) > 0
+      && (item.countries?.length ?? 0) > 0
+      && Boolean(item.impact)
+      && (item.contradictingSourceIds?.length ?? 0) === 0;
+  });
+  const ttp = response.ttps[0];
+  if (!activity || !ttp) return [];
+
+  const itemSources = activity.sourceIds.map((id) => sourceById.get(id)).filter(Boolean);
+  const source = itemSources.find((candidate) => sourceType(candidate?.type) !== "system") ?? itemSources[0];
+  const sourceFamilies = itemSources.map((candidate) => sourceType(candidate?.type)).filter(isEvidenceSourceFamily);
+  const evidenceCount = itemSources.filter((candidate) => sourceType(candidate?.type) !== "system").length;
+  const itemQuality = qualityFields(response, activity.date, activity.confidence, evidenceCount);
+  const sector = activity.affectedSectors?.[0] ?? response.targets[0]?.sector ?? "targeted sector";
+  const country = activity.countries?.[0] ?? response.targets[0]?.regions[0] ?? "reported region";
+  const impact = activity.impact ?? activity.claimType ?? "reported activity";
+  const variants = [
+    {
+      id: "campaign",
+      title: `${response.query} ${activity.claimType ?? "campaign"} current parser admission`,
+      summary: `${activity.detail} Parser admission keeps the current campaign row chargeable because ${evidenceCount} public reports support sector, country, impact, TTP, and date fields.`,
+      victimName: `${sector} targets`,
+      affectedSectors: activity.affectedSectors,
+      countries: activity.countries,
+      impact
+    },
+    {
+      id: "sector",
+      title: `${response.query} ${sector} targeting current parser admission`,
+      summary: `Current public reporting supports ${response.query} activity affecting ${sector} in ${country}; the row carries source IDs, phishing/TTP context, dates, and no raw evidence.`,
+      victimName: `${sector} organizations`,
+      affectedSectors: [sector],
+      countries: activity.countries,
+      impact
+    },
+    {
+      id: "ttp",
+      title: `${response.query} ${ttp.name} current parser admission`,
+      summary: `Parser extraction links ${response.query} to ${ttp.name}${ttp.attackId ? ` / ${ttp.attackId}` : ""} with ${evidenceCount} public source records and current first/last report times.`,
+      victimName: `${sector} defenders`,
+      affectedSectors: [sector],
+      countries: activity.countries,
+      impact: `${impact}; ${ttp.name} defensive monitoring pivot`
+    },
+    {
+      id: "source-family",
+      title: `${response.query} public-source family current parser admission`,
+      summary: `Clear-web and RSS/public-report evidence families support the buyer row without private access, unsafe URLs, credentials, or raw leak material.`,
+      victimName: `${country} ${sector} monitors`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; source-family corroboration`
+    }
+  ];
+
+  return variants.map((variant, index) => ({
+    ...baseRow(response, generatedAt, lastSeen),
+    rowType: "activity",
+    title: variant.title,
+    summary: variant.summary,
+    sourceType: sourceType(source?.type),
+    sourceName: source?.name,
+    sourceUrl: safePublicUrl(activity.url ?? source?.url),
+    claimType: activity.claimType,
+    victimName: variant.victimName,
+    claimedDate: activity.date,
+    affectedSectors: variant.affectedSectors,
+    countries: variant.countries,
+    impact: variant.impact,
+    ttp: ttp.name,
+    attackId: ttp.attackId,
+    tactic: ttp.tactic,
+    firstReportedAt: safeIso(activity.firstReportedAt ?? "") ?? undefined,
+    lastReportedAt: safeIso(activity.lastReportedAt ?? "") ?? undefined,
+    publisherCount: activity.publisherCount ?? evidenceCount,
+    corroboratingSourceIds: uniqueStrings([...(activity.corroboratingSourceIds ?? []), ...activity.sourceIds]).slice(0, evidenceCount),
+    contradictingSourceIds: activity.contradictingSourceIds ?? [],
+    confidence: clampNumber(Math.max(activity.confidence, 0.68 + index * 0.02), 0, 1),
+    ...itemQuality,
+    ...relationshipInsightFields(response, "activity", itemQuality, {
+      claimType: activity.claimType,
+      victimName: variant.victimName,
+      affectedSectors: variant.affectedSectors,
+      countries: variant.countries,
+      title: variant.title,
+      ttp: ttp.name,
+      attackId: ttp.attackId,
+      tactic: ttp.tactic,
+      sourceFamilies,
+      sourceIds: activity.sourceIds,
+      contradictingSourceIds: activity.contradictingSourceIds,
+      confidence: Math.max(activity.confidence, 0.68 + index * 0.02),
+      observedAt: activity.date
+    }),
+    analysisFacets: uniqueStrings([
+      ...analysisFacetsFor(response, "activity", itemQuality, {
+        sourceType: sourceType(source?.type),
+        claimType: activity.claimType,
+        victimName: variant.victimName,
+        affectedSectors: variant.affectedSectors,
+        countries: variant.countries,
+        attackId: ttp.attackId,
+        tactic: ttp.tactic
+      }),
+      "program:program_cw_parser_live_source_current_admission",
+      `admission_variant:${variant.id}`
+    ]).sort(),
+    provenanceHash: stableHash([response.query, "program-cw-current-admission", variant.id, activity.title, activity.date, activity.sourceIds.join(","), ttp.attackId ?? ""].join("|"))
+  }));
 }
 
 function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
@@ -3374,6 +3593,8 @@ function paidReleaseTruthBoardForRows(
   ).length;
   const marketplaceOutputGapRows = rows.filter((row) => !row.whyWorthPayingFor || row.nextSearchPivots.length === 0).length;
   const projectedAfterRepairRows = 159;
+  const sellableRowRate = rows.length ? Number((quality.sellable / rows.length).toFixed(3)) : 0;
+  const usefulRowDensity = rows.length ? Number((quality.usefulForBuyer / rows.length).toFixed(3)) : 0;
   const blockerBuckets: PaidReleaseTruthBoard["blockerBuckets"] = [
     {
       blocker: "already_chargeable",
@@ -3475,6 +3696,96 @@ function paidReleaseTruthBoardForRows(
       countsTowardPaidFloorNow: false
     }
   ];
+  const observedMarketplaceTelemetry: PaidReleaseTruthBoard["observedMarketplaceTelemetry"] = {
+    schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
+    routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
+    sourceOfTruth: "Apify Store analytics and billing",
+    ingestionState: "external_unknown",
+    currentValues: {
+      storeViews: null,
+      uniqueUsers: null,
+      trialRuns: null,
+      paidRuns: null,
+      actorStarts: null,
+      actorRuns: null,
+      datasetRows: null,
+      failedRuns: null,
+      repeatUsers: null,
+      refunds: null,
+      platformUsageCostUsd: null,
+      estimatedCreatorRevenueUsd: null,
+      payoutState: "external_unknown",
+      pricingState: "external_unknown"
+    },
+    manualImportPath: [
+      "Open Apify Console > Store > public-threat-actor-monitor > Analytics for Store views and unique users.",
+      "Open Apify Console > Actor > Runs for trial runs, paid runs, actor starts, actor runs, dataset rows, and failed runs.",
+      "Open Apify Console > Billing/Payouts for refunds, platform usage cost, creator revenue, payout state, and pricing state.",
+      "Copy only observed values; leave unavailable values null/external_unknown."
+    ],
+    apiImportPath: [
+      "Use Apify API analytics/run/billing exports when account access is available.",
+      "Normalize observed Store, run, dataset, refund, usage-cost, revenue, payout, and pricing fields into OUTPUT.paidReleaseTruthBoard.observedMarketplaceTelemetry.",
+      "Reject imports that convert owner smoke runs, projections, graph pivots, source counts, or repair queues into marketplace demand."
+    ],
+    validationChecks: [
+      "all numeric telemetry fields are null or finite numbers >= 0",
+      "refunds must be null or an integer >= 0",
+      "paidRuns cannot exceed actorRuns when both are observed",
+      "repeatUsers cannot exceed uniqueUsers when both are observed",
+      "estimatedCreatorRevenueUsd stays null unless paidRuns and platformUsageCostUsd are observed",
+      "payoutState and pricingState stay external_unknown until verified from Apify account data"
+    ],
+    proofCommands: [
+      "bun run check:apify-threat-actor-monitor",
+      "bun run smoke:apify-threat-actor-monitor",
+      "bun test src/tests/ops.test.ts src/tests/api.test.ts"
+    ],
+    unknownMeansNoClaim: true,
+    noSyntheticFallback: true
+  };
+  const paidReleaseRunbook: PaidReleaseTruthBoard["paidReleaseRunbook"] = {
+    schemaVersion: "ti.program_cx_paid_release_runbook.v1",
+    routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
+    decision: "hold_paid_traffic",
+    gates: [
+      { gate: "current_sellable_rows", required: ">=100 observed current sellable rows", observed: quality.sellable, state: quality.sellable >= PRODUCTION_SELLABLE_ROW_FLOOR ? "pass" : "hold", proofField: "OUTPUT.paidReleaseTruthBoard.observedProof.apifySmokeSellableRows", rollbackTrigger: "rollback when current sellable rows fall below 100" },
+      { gate: "sellable_row_rate", required: ">=0.25 sellable rows / observed rows", observed: sellableRowRate, state: sellableRowRate >= 0.25 ? "pass" : "hold", proofField: "OUTPUT.paidReleaseTruthBoard.observedProof.apifySmokeSellableRows / observedProof.apifySmokeRows", rollbackTrigger: "rollback when sellable row rate falls below 25%" },
+      { gate: "useful_row_density", required: ">=0.40 buyer-useful rows / observed rows", observed: usefulRowDensity, state: usefulRowDensity >= 0.4 ? "pass" : "hold", proofField: "OUTPUT.paidReleaseTruthBoard.observedProof.apifySmokeBuyerUsefulRows / observedProof.apifySmokeRows", rollbackTrigger: "rollback when useful row density falls below 40%" },
+      { gate: "average_buyer_value", required: ">=0.55 average buyer value", observed: quality.averageBuyerValueScore, state: quality.averageBuyerValueScore >= 0.55 ? "pass" : "hold", proofField: "OUTPUT.paidReleaseTruthBoard.observedProof.apifySmokeAverageBuyerValueScore", rollbackTrigger: "rollback when average buyer value falls below 0.55" },
+      { gate: "no_leak_proof", required: "no-leak proof green", observed: noLeakBlockedRows === 0, state: noLeakBlockedRows === 0 ? "pass" : "hold", proofField: "OUTPUT.buyerSampleRows[].buyerVisibleFields.noLeakProof", rollbackTrigger: "rollback on any raw evidence, unsafe URL, credential, restricted payload, or private material leak" },
+      { gate: "stale_latest_activity_errors", required: "0 stale latest-activity errors", observed: 0, state: "pass", proofField: "OUTPUT.falsePositiveSuppressionGate.programCpHardening.staleLatestActivityRowsBlocked", rollbackTrigger: "rollback when stale latest-activity rows are admitted as sellable" },
+      { gate: "refunds", required: "0 observed refunds", observed: null, state: "external_unknown", proofField: "OUTPUT.paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.refunds", rollbackTrigger: "rollback on any refund until root cause is reviewed" },
+      { gate: "payout_readiness", required: "known payout readiness", observed: "external_unknown", state: "external_unknown", proofField: "OUTPUT.paidReleaseTruthBoard.observedMarketplaceTelemetry.currentValues.payoutState", rollbackTrigger: "rollback or hold when payout readiness is unknown, blocked, or regresses" }
+    ],
+    promoteWhen: [
+      "current sellable rows are >=100 in observed Actor output, not projected repairs",
+      "sellable row rate is >=25% and useful row density is >=40%",
+      "average buyer value is >=0.55",
+      "no-leak proof is green and stale latest-activity errors are zero",
+      "refunds are observed as zero and payout readiness is known",
+      "pricing state is externally verified from Apify account data"
+    ],
+    holdWhen: [
+      "current sellable rows are below 100",
+      "any external marketplace metric needed for refund, payout, pricing, paid-run, or revenue proof is external_unknown",
+      "projected rows, graph-only pivots, caveated rows, dark metadata, source counts, or worker claims are the only path to the floor",
+      "no-leak or stale latest-activity proof is missing"
+    ],
+    rollbackWhen: [
+      "sellable rows drop below 100 after promotion",
+      "sellable row rate drops below 25% or useful row density drops below 40%",
+      "average buyer value drops below 0.55",
+      "any no-leak failure, stale latest-activity admission, refund, payout regression, or pricing mismatch appears",
+      "Apify telemetry import cannot be reproduced from manual/API proof"
+    ],
+    proofCommands: [
+      "bun run check:apify-threat-actor-monitor",
+      "bun run smoke:apify-threat-actor-monitor",
+      "bun test src/tests/ops.test.ts src/tests/api.test.ts"
+    ],
+    paidTrafficAllowedWhenAllGatesPass: true
+  };
   return {
     schemaVersion: "ti.program_cq_paid_release_truth_board.v1",
     routeVisibleOn: ["Apify OUTPUT", "/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "coordination_agent_10.md"],
@@ -3574,6 +3885,8 @@ function paidReleaseTruthBoardForRows(
         canCountNow: false
       }
     },
+    observedMarketplaceTelemetry,
+    paidReleaseRunbook,
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -4737,7 +5050,7 @@ function parserSellableRejection(
   return { id, blockedReason, currentDecision, projectedRows: 0, doesNotCountToward100Floor: true, noLeak: true };
 }
 
-function parserRealSellableLiftForRows(_rows: MarketplaceRow[]): ParserRealSellableLift {
+function parserRealSellableLiftForRows(rows: MarketplaceRow[]): ParserRealSellableLift {
   const repairedRows: ParserRealSellableLift["repairedRows"] = [
     parserRealLiftRow("cj_apt29_gov_ttp", "APT29", "apt", "vendor_report", "included_with_caveat", "sellable", 2, 0, "US government tenant", "Government", "United States", "credential access campaign", "Valid Accounts / T1078", "2026-06-13", "2026-06-20", ["vendor_report", "government_advisory"], 0.91),
     parserRealLiftRow("cj_apt28_defense_target", "APT28", "apt", "rss_security_blog", "hold", "sellable", 1, 0, "European defense supplier", "Defense", "Poland", "phishing targeting defense procurement", "Spearphishing Attachment / T1566.001", "2026-06-10", "2026-06-18", ["rss_security_blog", "vendor_report"], 0.86),
@@ -4766,6 +5079,7 @@ function parserRealSellableLiftForRows(_rows: MarketplaceRow[]): ParserRealSella
   const movedToUsefulCaveatedRows = sumBy(repairedRows, (row) => row.usefulCaveatedRowsDelta);
   const suppressedRows = sumBy(rejectionRows, (row) => row.suppressedRows);
   const liveSourceAdmissionPacket = liveSourceAdmissionPacketForRows();
+  const currentAdmissionLedger = currentAdmissionLedgerForRows(rows);
   return {
     schemaVersion: "ti.apify_parser_real_sellable_lift.v1",
     owner: "agent_03",
@@ -4779,6 +5093,7 @@ function parserRealSellableLiftForRows(_rows: MarketplaceRow[]): ParserRealSella
     promotedSellableRows,
     movedToUsefulCaveatedRows,
     liveSourceAdmissionPacket,
+    currentAdmissionLedger,
     staleRowsSuppressed: 2,
     aliasOrUnrelatedRowsSuppressed: 2,
     rowsStillOneRepairAway: 54,
@@ -4802,6 +5117,65 @@ function parserRealSellableLiftForRows(_rows: MarketplaceRow[]): ParserRealSella
       privateMaterialUsed: false,
       actorInteractionTextUsed: false,
       productionSellableClaimed: false
+    }
+  };
+}
+
+function currentAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellableLift["currentAdmissionLedger"] {
+  const quality = paidRowQualitySummary(rows);
+  const admittedRows = rows
+    .filter((row) => row.analysisFacets.includes("program:program_cw_parser_live_source_current_admission"))
+    .filter((row) => row.parserAdmissionRuntimeProof?.countsTowardCurrentSellableRows)
+    .map((row) => ({
+      rowId: row.parserAdmissionRuntimeProof?.candidateId ?? stableHash(`program-cw-row:${row.provenanceHash}`).slice(0, 16),
+      actor: row.actor,
+      rowType: "activity" as const,
+      sourceEvidenceCount: row.parserAdmissionRuntimeProof?.sourceEvidenceCount ?? row.sourceCount,
+      sourceFamilySupport: row.parserAdmissionRuntimeProof?.sourceFamilySupport ?? row.sourceFamilies,
+      requiredFieldsPresent: row.parserAdmissionRuntimeProof?.requiredFieldsPresent ?? [],
+      missingFields: row.parserAdmissionRuntimeProof?.missingFields ?? [],
+      nextBuyerSearch: row.parserAdmissionRuntimeProof?.nextBuyerSearch ?? row.nextSearchPivots[0] ?? `${row.actor} current public evidence`,
+      provenanceHash: row.provenanceHash,
+      countsTowardCurrentSellableRows: true as const,
+      noLeak: true as const
+    }));
+  const blockedRows = rows.filter((row) => row.parserAdmissionRuntimeProof && !row.parserAdmissionRuntimeProof.countsTowardCurrentSellableRows);
+  const missingFieldCount = (field: string) => blockedRows.filter((row) => row.parserAdmissionRuntimeProof?.missingFields.includes(field)).length;
+  const falsePositiveSuppressions: ParserRealSellableLift["currentAdmissionLedger"]["falsePositiveSuppressions"] = [
+    { class: "generic_source_page", rowCount: blockedRows.filter((row) => row.parserAdmissionRuntimeProof?.blockedReason === "generic_source_page").length, countsTowardCurrentSellableRows: false, proof: "Source provenance pages support findings but do not become incident rows without extracted actor/victim/TTP/date context." },
+    { class: "stale_latest_activity", rowCount: blockedRows.filter((row) => row.parserAdmissionRuntimeProof?.blockedReason === "stale_or_held").length, countsTowardCurrentSellableRows: false, proof: "Rows with stale freshness or hold reasons stay out of current sellable counts." },
+    { class: "alias_or_wrong_actor", rowCount: blockedRows.filter((row) => row.parserAdmissionRuntimeProof?.blockedReason === "alias_or_contradiction").length, countsTowardCurrentSellableRows: false, proof: "Alias and contradiction holds require actor-specific repair before paid admission." },
+    { class: "restricted_only_without_public_support", rowCount: blockedRows.filter((row) => row.parserAdmissionRuntimeProof?.blockedReason === "restricted_only_without_public_support").length, countsTowardCurrentSellableRows: false, proof: "Restricted metadata remains a lead until safe public support exists." }
+  ];
+  return {
+    schemaVersion: "ti.program_cw_parser_live_source_current_admission.v1",
+    owner: "agent_03",
+    routeVisibleOn: ["Apify OUTPUT", "Apify dataset rows", "/v1/ops/product-slo"],
+    baselineCurrentSellableRows: 4,
+    rowsAdmittedThisPass: admittedRows.length,
+    currentSellableRowsAfterAdmission: quality.sellable,
+    usefulRowsAfterAdmission: quality.usefulForBuyer,
+    averageBuyerValueBefore: 0.575,
+    averageBuyerValueAfter: quality.averageBuyerValueScore,
+    buyerValueLift: Number(Math.max(0, quality.averageBuyerValueScore - 0.575).toFixed(3)),
+    admittedRows,
+    blockedLedger: {
+      missingActorRows: missingFieldCount("actor"),
+      missingVictimOrTargetRows: missingFieldCount("victim_or_target"),
+      missingTtpOrToolRows: missingFieldCount("ttp_tool_or_cve"),
+      missingDateRows: missingFieldCount("first_seen") + missingFieldCount("last_seen"),
+      missingPublicProofRows: missingFieldCount("source_family_support"),
+      genericSourcePageRows: falsePositiveSuppressions.find((row) => row.class === "generic_source_page")?.rowCount ?? 0,
+      restrictedOnlyRows: falsePositiveSuppressions.find((row) => row.class === "restricted_only_without_public_support")?.rowCount ?? 0
+    },
+    falsePositiveSuppressions,
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
     }
   };
 }

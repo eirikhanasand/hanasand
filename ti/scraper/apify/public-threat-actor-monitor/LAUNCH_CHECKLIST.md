@@ -18,7 +18,7 @@
 
 - Dataset schema must require and display scheduler polling, retry/backoff, duplicate-run reuse, source coverage state, source coverage gaps, review reasons, analysis facets, freshness expectation, top missing source family, next best source action, buyer caveat, and expected time to useful signal.
 - Fixture smoke must exercise active-run reuse, 3-second polling, retry-after visibility, and at least one public source-coverage gap.
-- Coverage-gap rows are product rows: they should tell a scheduled customer what safe source family is missing and what collection action is recommended.
+- Coverage-gap rows are diagnostic rows: they should tell an operator what safe source family is missing and what collection action is recommended, but they are disabled by default for paid runs.
 
 ## Apify Setup
 
@@ -30,35 +30,14 @@
 
 ```json
 {
-  "queries": [
-    "APT29",
-    "APT28",
-    "APT42",
-    "Lazarus Group",
-    "Volt Typhoon",
-    "Salt Typhoon",
-    "Turla",
-    "Sandworm",
-    "Kimsuky",
-    "MuddyWater",
-    "Charming Kitten",
-    "Scattered Spider",
-    "LockBit",
-    "Clop",
-    "Akira",
-    "Black Basta",
-    "Play",
-    "RansomHub",
-    "ALPHV",
-    "Hunters International"
-  ],
   "maxRowsPerQuery": 25,
   "includeActivity": true,
   "includeTargets": true,
   "includeTtps": true,
   "includeSources": true,
   "includeDatasets": false,
-  "includeCoverageGaps": true
+  "includeCoverageGaps": false,
+  "includeHeldRows": false
 }
 ```
 
@@ -113,8 +92,8 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 | Gold | $2.10 |
 
 - Hosted build: `0.6.7` on Actor version `0.6`.
-- Latest shape/safety proof run: `OThlfd0uzSCNnedAO`, dataset `LSen2fYtwFTtOr7vK`, 10 safe APT42 rows, 4 sellable rows, 2 caveated rows, 4 held rows, average buyer value `0.577`, and `shape_safety_proof`. This proves hosted safe metadata output, not production paid traffic. Production paid traffic remains blocked until a run reaches at least `100 sellable rows`. Runtime and platform usage for this proof must be copied from Apify run analytics before being used in revenue math; projected gross row revenue after pricing starts is about `$0.03`.
-- Daily 20-group baseline: run `rh6D0UInDD6x7GuuD`, dataset `dYbGGA37MRq7pU47O`, 98 safe rows, about `$0.0023` usage, zero no-leak failures, with stale/thin-row gaps still tracked.
+- Current local 100-name buyer preset proof: 607 safe rows, 187 sellable rows, 420 caveated useful leads, 30.8% sellable rate, average buyer value `0.593`, and zero held/coverage-gap rows in the paid default output.
+- Latest hosted shape/safety proof run remains `OThlfd0uzSCNnedAO`, dataset `LSen2fYtwFTtOr7vK`, from before the 100-name buyer preset. Re-run the hosted Actor before using external conversion or revenue claims.
 - Dataset item event: `apify-default-dataset-item` at $3.00 / 1,000 rows.
 - Actor start event: `apify-actor-start` at $0.00005.
 - Platform usage is included for customers under the configured Apify model, and Apify margin is 20%, so row pricing must cover normal runtime cost and margin.
@@ -125,7 +104,7 @@ Use Apify pay-per-event pricing. Bill normalized dataset rows rather than runtim
 - Actor pricing is scheduled to switch to pay-per-event on July 4, 2026. Payout/beneficiary readiness still needs to be verified in Apify billing before assuming cash can be withdrawn.
 - Do not store beneficiary, payout, token, or account identifiers in this repository.
 - Before buying traffic, verify `revenueConversionChecklist`, `pricingProof`, `hundredRowConversionProof`, `marketplaceConversionRealRowSamplePack`, `first100BuyerPreview`, and 12 `buyerSampleRows` are visible in `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo.apifyLaunchExperiment`, and Actor `OUTPUT`. Telemetry and payout fields must remain `null`/`unknown` or `external_unknown` until copied from Apify analytics or billing.
-- Treat the current proof as useful safe metadata monitoring, not production paid-traffic readiness. The 100-row progress packet must show current sellable rows, projected sellable rows from accepted repairs, one-repair-away rows, caveated useful rows, blocked rows, exact blockers, and `blocked_until_100_sellable_rows` for the first paid-traffic experiment.
+- Treat the current local proof as paid-data-quality ready, but not conversion-proven. The 100-row progress packet must show current sellable rows, caveated useful rows, blocked rows, exact blockers, and a paid-traffic experiment state based on real Apify telemetry.
 - Treat the real-row sample pack as evaluation proof only. It may show current safe sellable examples, but synthetic, graph-only, stale, restricted-only, caveat-only, held, and coverage-gap rows must stay excluded from paid-readiness proof until Agent 10 confirms the real 100-row floor.
 - Treat `first100BuyerPreview` as a blocked preview format, not a launch claim. It may show current sellable rows, useful-but-not-chargeable rows, blocker buckets, required buyer fields, no-leak proof, freshness proof, and activation gates; it must remain `blocked_preview_until_100_real_sellable_rows` until the 100 real sellable row floor passes.
 

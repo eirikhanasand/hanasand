@@ -36,28 +36,6 @@ const forbiddenListingTerms = [
 ];
 
 const requiredCategories = ["SECURITY", "MONITORING"];
-const expectedDefaultQueries = [
-  "APT29",
-  "APT28",
-  "APT42",
-  "Lazarus Group",
-  "Volt Typhoon",
-  "Salt Typhoon",
-  "Turla",
-  "Sandworm",
-  "Kimsuky",
-  "MuddyWater",
-  "Charming Kitten",
-  "Scattered Spider",
-  "LockBit",
-  "Clop",
-  "Akira",
-  "Black Basta",
-  "Play",
-  "RansomHub",
-  "ALPHV",
-  "Hunters International"
-];
 const requiredDatasetFields = [
   "coverageStatus",
   "collectionPriority",
@@ -145,11 +123,11 @@ const fixture = await Bun.file("fixtures/apt42.json").json() as Record<string, u
 
 const failures: string[] = [];
 const latestShapeSafetyProof = {
-  buildVersion: "0.6.7",
-  runId: "OThlfd0uzSCNnedAO",
-  datasetId: "LSen2fYtwFTtOr7vK",
-  proofDecision: "shape_safety_proof",
-  productionFloor: "100 sellable rows"
+  buyerPreset: "100-name",
+  localRows: "607 safe rows",
+  localSellableRows: "187 sellable rows",
+  localSellableRate: "30.8% sellable rate",
+  localAverageBuyerValue: "average buyer value `0.593`"
 };
 
 for (const field of ["title", "description"] as const) {
@@ -169,11 +147,9 @@ if (!exampleInput) {
   failures.push("Missing parseable exampleRunInput.body");
 } else {
   const queries = Array.isArray(exampleInput.queries) ? exampleInput.queries : [];
-  for (const query of expectedDefaultQueries) {
-    if (!queries.includes(query)) failures.push(`Example input must include ${query}`);
-  }
-  if (queries.length !== expectedDefaultQueries.length) failures.push(`Example input must contain exactly ${expectedDefaultQueries.length} default queries`);
-  if (exampleInput.includeCoverageGaps !== true) failures.push("Example input must include coverage gaps");
+  if (queries.length !== 0) failures.push("Example input should omit queries so the 100-name default watchlist is used");
+  if (exampleInput.includeCoverageGaps !== false) failures.push("Example input should disable coverage gaps by default");
+  if (exampleInput.includeHeldRows !== false) failures.push("Example input should disable held diagnostics by default");
   if (exampleInput.includeDatasets !== false) failures.push("Example input should keep dataset coverage disabled by default");
 }
 
@@ -209,7 +185,10 @@ const contractMentions: Array<[string, string[]]> = [
   ["synthetic Apify event billing", ["apify_synthetic_events", "default dataset"]],
   ["100-row conversion proof", ["hundredRowConversionProof", "ti.apify_100_row_conversion_proof.v1"]],
   ["100 sellable row progress", ["current sellable rows", "projected sellable rows", "one-repair-away rows"]],
-  ["paid-traffic floor blocker", ["blocked_until_100_sellable_rows", "production paid traffic remains blocked until"]],
+  ["paid-traffic floor", ["at least `100 sellable rows`", "paid-traffic-ready"]],
+  ["100-name buyer preset", ["100-name default watchlist", "100-name buyer preset"]],
+  ["diagnostics opt-in", ["Held rows, suppressed rows, and coverage-gap diagnostics are opt-in", "includeHeldRows"]],
+  ["sellable public evidence rows", ["sellable source-provenance rows", "public source-provenance rows"]],
   ["real-row conversion sample pack", ["marketplaceConversionRealRowSamplePack", "ti.apify_marketplace_conversion_real_row_sample_pack.v1"]],
   ["first-100 buyer preview", ["first100BuyerPreview", "ti.apify_first_100_real_rows_buyer_preview.v1", "blocked_preview_until_100_real_sellable_rows"]],
   ["real-row proof exclusions", ["synthetic, graph-only, stale, restricted-only, caveat-only, held, and coverage-gap rows", "excluded from paid-readiness proof"]],
@@ -228,9 +207,9 @@ for (const [surface, text] of [
   ["launch checklist", launchChecklist],
   ["changelog", changelog]
 ] as const) {
-for (const term of Object.values(latestShapeSafetyProof)) {
-  if (!text.includes(term)) failures.push(`${surface} must mention latest shape/safety proof ${term}`);
-}
+  for (const term of Object.values(latestShapeSafetyProof)) {
+    if (!text.includes(term)) failures.push(`${surface} must mention current buyer preset proof ${term}`);
+  }
 }
 
 const datasetProperties = datasetSchema.fields?.properties ?? {};

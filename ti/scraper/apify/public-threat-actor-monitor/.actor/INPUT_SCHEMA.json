@@ -6,7 +6,7 @@
     "queries": {
       "title": "Actors or groups",
       "type": "array",
-      "description": "Threat actor, ransomware group, malware, or campaign names to monitor. The default watchlist is the buyer evaluation preset used by the marketplace conversion sample pack and first-100 buyer preview; paid traffic is still blocked until output quality reaches the real 100-row floor.",
+      "description": "Threat actor, ransomware group, malware, or campaign names to monitor. Leave empty to use the 100-name high-signal default watchlist. Custom runs accept up to 100 names.",
       "editor": "stringList",
       "prefill": ["APT29", "APT28", "APT42", "Lazarus Group", "Volt Typhoon", "Salt Typhoon", "Turla", "Sandworm", "Kimsuky", "MuddyWater", "Charming Kitten", "Scattered Spider", "LockBit", "Clop", "Akira", "Black Basta", "Play", "RansomHub", "ALPHV", "Hunters International"]
     },
@@ -57,8 +57,14 @@
     "includeCoverageGaps": {
       "title": "Include coverage gaps",
       "type": "boolean",
-      "description": "Add rows that explain thin, stale, or missing source coverage and the recommended collection action.",
-      "default": true
+      "description": "Add diagnostic rows that explain thin, stale, or missing source coverage and the recommended collection action. Disabled by default so paid runs contain buyer-useful rows instead of internal remediation rows.",
+      "default": false
+    },
+    "includeHeldRows": {
+      "title": "Include held diagnostics",
+      "type": "boolean",
+      "description": "Add held or suppressed rows for QA and source repair. Disabled by default because held rows are not buyer-payworthy dataset items.",
+      "default": false
     }
   },
   "required": []
