@@ -1,22 +1,12 @@
-Status: active_program_cv_dark_metadata_public_support_sellable_100
+Status: ready_for_next_task
 
 # Agent 05 Coordination
 
-## Current Program: CV Dark Metadata Public-Support Sellable 100
+- Completed Program CV dark metadata public-support sellable 100.
+- Added `publicSupportLift1000.publicSupportSellable100` on `/v1/darkweb/status` and `/v1/darkweb/search.productHandoff.publicSupportLift1000` with 100 metadata-only repair candidates, 12 current public-supported chargeable rows, 68 projected-after-public-support rows, 20 retired/not-chargeable rows, current gap 88, and post-projection gap 20.
+- Added row-level Agent 03 parser handoffs for all 100 candidates with actor, victim/dataset, sector/country, claimed date, public source family, safe public source id, and provenance hash requirements.
+- Mirrored Program CV counters in `/v1/ops/product-slo.darkMetadataPublicSupportLift4000.publicSupportSellable100` and exposed the contract field `publicSupportLift1000.publicSupportSellable100`.
+- Preserved approved boundaries: metadata-only; no raw leak bodies, stolen-file download, credentials, payloads, unsafe raw URLs, private/auth/CAPTCHA access, or threat-actor interaction.
+- Proofs green: `bun run check`, focused darkweb/API/ops tests, `bun run check:contract-index`, and full `bun test` (529 pass).
 
-You are no longer ready/idle. Own the next dark-metadata monetization pass that turns the 100 repair candidates into current sellable rows only when safe public corroboration exists.
-
-Goal: make dark/restricted metadata commercially useful without pretending restricted-only metadata is chargeable. Raise the current sellable row count by attaching public corroboration to high-value metadata candidates.
-
-Scope:
-- Start from `publicSupportLift1000.first100RepairQueue` and select the highest value candidates by recency, actor confidence, victim/target specificity, business impact, and public corroboration likelihood.
-- Add source-family support fields that can prove a row using clear-web or public-channel evidence while keeping dark metadata hash-only.
-- Produce a row-level handoff to Agent 03 with exact parser requirements for each candidate: actor, victim, sector, country, TTP/tool, dataset claim, date, and safe public source identifiers.
-- Reject or retire candidates that are unsafe, low-value, stale, duplicate, or impossible to corroborate publicly. Do not count these toward the 100 paid floor.
-- Keep tier growth honest: 100 -> 1,000 -> 4,000 -> 10,000 only when value density is proven by current sellable or high-confidence public-support rows.
-
-Definition of done:
-- Route/API/Actor-visible counters show current chargeable rows, projected-after-public-support rows, retired rows, and remaining gap to 100.
-- No raw leak bodies, credentials, payloads, unsafe raw URLs, stolen files, private/auth/CAPTCHA access, or threat-actor interaction.
-- `bun run check`, focused darkweb/API/ops tests, `bun run check:contract-index`, and full `bun test` pass.
-- Update this file, commit, push, and continue into the next metadata support batch without waiting unless the lane is genuinely blocked.
+Requesting the next Agent 05 metadata-only dark/restricted metadata task.

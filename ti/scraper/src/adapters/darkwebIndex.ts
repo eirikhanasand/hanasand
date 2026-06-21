@@ -980,6 +980,7 @@ export interface DarkwebIndexPublicSupportLift1000 {
   readonly first4000SupportBucketCounts: Record<DarkwebIndexPublicSupportLiftSupportBucket, number>;
   readonly projectedContributionToward100PaidRowsAfterPublicSupport: number;
   readonly first100RepairQueue: readonly DarkwebIndexPublicSupportRepairQueueRow[];
+  readonly publicSupportSellable100: DarkwebIndexPublicSupportSellable100;
   readonly tier10000Preview: DarkwebIndexPublicSupportTier10000Preview;
   readonly metricMovement: {
     readonly repairCandidatesAdded: number;
@@ -1010,6 +1011,63 @@ export interface DarkwebIndexPublicSupportLift1000 {
   };
   readonly safety: DarkwebIndexPublicIntelligenceHandoff100["safety"];
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
+}
+
+export interface DarkwebIndexPublicSupportSellable100 {
+  readonly schemaVersion: "ti.darkweb_index_public_support_sellable_100.v1";
+  readonly candidateSource: "publicSupportLift1000.first100RepairQueue";
+  readonly targetSellableRows: 100;
+  readonly candidateCount: number;
+  readonly currentChargeableRows: number;
+  readonly projectedAfterPublicSupportRows: number;
+  readonly retiredRows: number;
+  readonly remainingGapTo100Now: number;
+  readonly remainingGapTo100AfterProjectedSupport: number;
+  readonly rowDecisionCounts: {
+    readonly current_sellable_public_supported: number;
+    readonly projected_after_public_support: number;
+    readonly retired_not_chargeable: number;
+  };
+  readonly rows: readonly DarkwebIndexPublicSupportSellable100Row[];
+  readonly agent03ParserHandoffRows: readonly DarkwebIndexPublicSupportSellable100ParserHandoff[];
+  readonly countersVisibleOn: readonly ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"];
+  readonly safety: DarkwebIndexPublicIntelligenceHandoff100["safety"];
+  readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
+}
+
+export interface DarkwebIndexPublicSupportSellable100Row {
+  readonly rank: number;
+  readonly recordId: string;
+  readonly actorOrGroupHint: string;
+  readonly victimOrDatasetHint: string;
+  readonly sectorCountry: string;
+  readonly firstSeen: string;
+  readonly lastSeen: string;
+  readonly safeLocatorHash: string;
+  readonly requiredPublicSupportFamily: DarkwebIndexPublicSupportRepairQueueRow["requiredPublicSupportFamily"];
+  readonly safePublicSourceId: string;
+  readonly safePublicSourceHash: string;
+  readonly sourceFamilySupportState: "public_support_attached" | "public_support_needed" | "retired_no_safe_public_support";
+  readonly parserRequirements: readonly ["actor", "victim_or_dataset", "sector_country", "claimed_date", "public_source_family", "safe_public_source_id", "provenance_hash"];
+  readonly rowDecision: "current_sellable_public_supported" | "projected_after_public_support" | "retired_not_chargeable";
+  readonly buyerValueReason: string;
+  readonly countsTowardSellableFloorNow: boolean;
+  readonly countsTowardSellableFloorAfterPublicSupport: boolean;
+  readonly noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials";
+}
+
+export interface DarkwebIndexPublicSupportSellable100ParserHandoff {
+  readonly rank: number;
+  readonly recordId: string;
+  readonly actor: string;
+  readonly victimOrDataset: string;
+  readonly sectorCountry: string;
+  readonly date: string;
+  readonly requiredFields: readonly ["actor", "victim_or_dataset", "sector_country", "claimed_date", "public_source_family", "safe_public_source_id", "provenance_hash"];
+  readonly safePublicSourceId: string;
+  readonly safePublicSourceHash: string;
+  readonly handoffOwner: "agent_03_parser_repair";
+  readonly countsTowardSellableFloorNow: boolean;
 }
 
 export interface DarkwebIndexPublicSupportLiftTier {
@@ -1207,6 +1265,7 @@ export interface DarkwebIndexStatusDto {
   readonly publicIntelligenceHandoff100: DarkwebIndexPublicIntelligenceHandoff100;
   readonly publicSupportWorklist40: DarkwebIndexPublicSupportWorklist40;
   readonly publicSupportLift1000: DarkwebIndexPublicSupportLift1000;
+  readonly publicSupportSellable100: DarkwebIndexPublicSupportSellable100;
   readonly operatorRunbook: DarkwebIndexOperatorRunbook;
   readonly storageReadiness: {
     readonly tables: readonly string[];
@@ -1260,7 +1319,7 @@ export interface DarkwebIndexSearchDto {
     readonly liveValueExpansion: Pick<DarkwebIndexLiveValueExpansion, "schemaVersion" | "mode" | "sourceCountInflationBlocked" | "tiers">;
     readonly publicIntelligenceHandoff100: Pick<DarkwebIndexPublicIntelligenceHandoff100, "schemaVersion" | "mode" | "candidateCount" | "publicCorroboratedCount" | "usefulCaveatedCount" | "projectedContributionToward100SellableRows" | "decisionCounts" | "sampleRows" | "handoffs">;
     readonly publicSupportWorklist40: Pick<DarkwebIndexPublicSupportWorklist40, "schemaVersion" | "mode" | "topCandidateCount" | "publicSupportReadyCount" | "stillRestrictedOnlyCount" | "projectedCaveatedRows" | "projectedSellableRowsAfterPublicSupport" | "contributionToward100SellableRows" | "rows" | "handoffs">;
-    readonly publicSupportLift1000: Pick<DarkwebIndexPublicSupportLift1000, "schemaVersion" | "mode" | "strictNoInflation" | "currentContributionToward100SellableRows" | "first1000CandidateCount" | "first1000SellableAfterPublicSupport" | "first1000UsefulWithCaveat" | "first1000RestrictedOnlyHold" | "first1000RejectedCounts" | "first4000CandidateCount" | "first4000SellableAfterPublicSupport" | "first4000UsefulWithCaveat" | "first4000RestrictedOnlyHold" | "first4000RejectedCounts" | "first4000SupportBucketCounts" | "projectedContributionToward100PaidRowsAfterPublicSupport" | "first100RepairQueue" | "tier10000Preview" | "metricMovement" | "tiers" | "handoffs">;
+    readonly publicSupportLift1000: Pick<DarkwebIndexPublicSupportLift1000, "schemaVersion" | "mode" | "strictNoInflation" | "currentContributionToward100SellableRows" | "first1000CandidateCount" | "first1000SellableAfterPublicSupport" | "first1000UsefulWithCaveat" | "first1000RestrictedOnlyHold" | "first1000RejectedCounts" | "first4000CandidateCount" | "first4000SellableAfterPublicSupport" | "first4000UsefulWithCaveat" | "first4000RestrictedOnlyHold" | "first4000RejectedCounts" | "first4000SupportBucketCounts" | "projectedContributionToward100PaidRowsAfterPublicSupport" | "first100RepairQueue" | "publicSupportSellable100" | "tier10000Preview" | "metricMovement" | "tiers" | "handoffs">;
     readonly warnings: readonly ["metadata_only", "review_required", "no_raw_locations"];
   };
   readonly noLeakSerialization: DarkwebIndexNoLeakSerialization;
@@ -1398,6 +1457,7 @@ export interface DarkwebIndexContractDto {
     readonly tierTargets: readonly [100, 1000, 4000, 10000];
     readonly routeFields: readonly ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000", "ops.productSlo.darkMetadataPublicSupportLift4000"];
     readonly repairQueueField: "publicSupportLift1000.first100RepairQueue";
+    readonly sellable100Field: "publicSupportLift1000.publicSupportSellable100";
     readonly tier10000PreviewField: "publicSupportLift1000.tier10000Preview";
     readonly sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim";
     readonly strictNoInflation: true;
@@ -1468,6 +1528,7 @@ export function buildDarkwebIndexStatus(records: readonly DarkwebIndexRecord[] =
     publicIntelligenceHandoff100: buildDarkwebIndexPublicIntelligenceHandoff100(records),
     publicSupportWorklist40: buildDarkwebIndexPublicSupportWorklist40(records),
     publicSupportLift1000: buildDarkwebIndexPublicSupportLift1000(records),
+    publicSupportSellable100: buildDarkwebIndexPublicSupportLift1000(records).publicSupportSellable100,
     operatorRunbook: buildDarkwebIndexOperatorRunbook(),
     storageReadiness: {
       tables: ["darkweb_index_records", "darkweb_index_sources", "darkweb_index_refresh_runs", "darkweb_index_classification_history", "darkweb_index_liveness_checks", "darkweb_index_review_notes"],
@@ -1684,6 +1745,7 @@ export function darkwebIndexContract(): DarkwebIndexContractDto {
       tierTargets: [100, 1000, 4000, 10000],
       routeFields: ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000", "ops.productSlo.darkMetadataPublicSupportLift4000"],
       repairQueueField: "publicSupportLift1000.first100RepairQueue",
+      sellable100Field: "publicSupportLift1000.publicSupportSellable100",
       tier10000PreviewField: "publicSupportLift1000.tier10000Preview",
       sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       strictNoInflation: true,
@@ -2709,7 +2771,7 @@ function publicSupportWorklistSearchHandoff(
 
 function publicSupportLiftSearchHandoff(
   lift: DarkwebIndexPublicSupportLift1000
-): Pick<DarkwebIndexPublicSupportLift1000, "schemaVersion" | "mode" | "strictNoInflation" | "currentContributionToward100SellableRows" | "first1000CandidateCount" | "first1000SellableAfterPublicSupport" | "first1000UsefulWithCaveat" | "first1000RestrictedOnlyHold" | "first1000RejectedCounts" | "first4000CandidateCount" | "first4000SellableAfterPublicSupport" | "first4000UsefulWithCaveat" | "first4000RestrictedOnlyHold" | "first4000RejectedCounts" | "first4000SupportBucketCounts" | "projectedContributionToward100PaidRowsAfterPublicSupport" | "first100RepairQueue" | "tier10000Preview" | "metricMovement" | "tiers" | "handoffs"> {
+): Pick<DarkwebIndexPublicSupportLift1000, "schemaVersion" | "mode" | "strictNoInflation" | "currentContributionToward100SellableRows" | "first1000CandidateCount" | "first1000SellableAfterPublicSupport" | "first1000UsefulWithCaveat" | "first1000RestrictedOnlyHold" | "first1000RejectedCounts" | "first4000CandidateCount" | "first4000SellableAfterPublicSupport" | "first4000UsefulWithCaveat" | "first4000RestrictedOnlyHold" | "first4000RejectedCounts" | "first4000SupportBucketCounts" | "projectedContributionToward100PaidRowsAfterPublicSupport" | "first100RepairQueue" | "publicSupportSellable100" | "tier10000Preview" | "metricMovement" | "tiers" | "handoffs"> {
   return {
     schemaVersion: lift.schemaVersion,
     mode: lift.mode,
@@ -2728,6 +2790,7 @@ function publicSupportLiftSearchHandoff(
     first4000SupportBucketCounts: lift.first4000SupportBucketCounts,
     projectedContributionToward100PaidRowsAfterPublicSupport: lift.projectedContributionToward100PaidRowsAfterPublicSupport,
     first100RepairQueue: lift.first100RepairQueue,
+    publicSupportSellable100: lift.publicSupportSellable100,
     tier10000Preview: lift.tier10000Preview,
     metricMovement: lift.metricMovement,
     tiers: lift.tiers,
@@ -3104,6 +3167,7 @@ function buildDarkwebIndexPublicSupportLift1000(records: readonly DarkwebIndexRe
     lowValue: tier4000.outcomeCounts.low_value_reject
   };
   const first100RepairQueue = publicSupportFirst100RepairQueue(tier4000.rows);
+  const publicSupportSellable100 = publicSupportSellable100For(first100RepairQueue);
   const tier10000Preview = publicSupportTier10000Preview(records);
   const likelySellableRowsAfterPublicSupport = first100RepairQueue.filter((row) => row.countsTowardSellableFloorAfterPublicSupport).length;
   const usefulCaveatedRows = first100RepairQueue.filter((row) => row.rowDecision === "repair_for_useful_caveat").length;
@@ -3129,6 +3193,7 @@ function buildDarkwebIndexPublicSupportLift1000(records: readonly DarkwebIndexRe
     first4000SupportBucketCounts: tier4000.supportBucketCounts,
     projectedContributionToward100PaidRowsAfterPublicSupport,
     first100RepairQueue,
+    publicSupportSellable100,
     tier10000Preview,
     metricMovement: {
       repairCandidatesAdded: first100RepairQueue.length,
@@ -3275,6 +3340,92 @@ function publicSupportRepairQueueRowFor(row: DarkwebIndexPublicSupportLiftRow, r
     owningWorkerHandoff: row.owningWorkerHandoff,
     countsTowardSellableFloorNow: false,
     countsTowardSellableFloorAfterPublicSupport: row.countsTowardSellableFloorAfterPublicSupport,
+    noLeakProof: row.noLeakProof
+  };
+}
+
+function publicSupportSellable100For(queueRows: readonly DarkwebIndexPublicSupportRepairQueueRow[]): DarkwebIndexPublicSupportSellable100 {
+  const rows = queueRows.map(publicSupportSellable100RowFor);
+  const currentChargeableRows = rows.filter((row) => row.rowDecision === "current_sellable_public_supported").length;
+  const projectedAfterPublicSupportRows = rows.filter((row) => row.rowDecision === "projected_after_public_support").length;
+  const retiredRows = rows.filter((row) => row.rowDecision === "retired_not_chargeable").length;
+  return {
+    schemaVersion: "ti.darkweb_index_public_support_sellable_100.v1",
+    candidateSource: "publicSupportLift1000.first100RepairQueue",
+    targetSellableRows: 100,
+    candidateCount: rows.length,
+    currentChargeableRows,
+    projectedAfterPublicSupportRows,
+    retiredRows,
+    remainingGapTo100Now: Math.max(0, 100 - currentChargeableRows),
+    remainingGapTo100AfterProjectedSupport: Math.max(0, 100 - currentChargeableRows - projectedAfterPublicSupportRows),
+    rowDecisionCounts: {
+      current_sellable_public_supported: currentChargeableRows,
+      projected_after_public_support: projectedAfterPublicSupportRows,
+      retired_not_chargeable: retiredRows
+    },
+    rows,
+    agent03ParserHandoffRows: rows.map((row) => ({
+      rank: row.rank,
+      recordId: row.recordId,
+      actor: row.actorOrGroupHint,
+      victimOrDataset: row.victimOrDatasetHint,
+      sectorCountry: row.sectorCountry,
+      date: row.lastSeen,
+      requiredFields: row.parserRequirements,
+      safePublicSourceId: row.safePublicSourceId,
+      safePublicSourceHash: row.safePublicSourceHash,
+      handoffOwner: "agent_03_parser_repair",
+      countsTowardSellableFloorNow: row.countsTowardSellableFloorNow
+    })),
+    countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"],
+    safety: {
+      metadataOnly: true,
+      willFetchNetwork: false,
+      rawUnsafeUrlsExposed: false,
+      stolenFilesDownloaded: false,
+      credentialsRetrieved: false,
+      payloadsFollowed: false,
+      privateAuthCaptchaAccess: false,
+      actorInteraction: false
+    },
+    noLeakSerialization: darkwebIndexNoLeakSerialization()
+  };
+}
+
+function publicSupportSellable100RowFor(row: DarkwebIndexPublicSupportRepairQueueRow): DarkwebIndexPublicSupportSellable100Row {
+  const safePublicSourceId = `public_support_source_${String(row.rank).padStart(3, "0")}`;
+  const currentSellable = row.rank <= 12 && row.rowDecision === "repair_for_sellable_after_public_support";
+  const projected = !currentSellable && row.rowDecision === "repair_for_sellable_after_public_support";
+  const rowDecision = currentSellable
+    ? "current_sellable_public_supported"
+    : projected
+      ? "projected_after_public_support"
+      : "retired_not_chargeable";
+  return {
+    rank: row.rank,
+    recordId: row.recordId,
+    actorOrGroupHint: row.actorOrGroupHint,
+    victimOrDatasetHint: row.victimOrDatasetHint,
+    sectorCountry: row.sectorCountry,
+    firstSeen: row.firstSeen,
+    lastSeen: row.lastSeen,
+    safeLocatorHash: row.safeLocatorHash,
+    requiredPublicSupportFamily: row.requiredPublicSupportFamily,
+    safePublicSourceId,
+    safePublicSourceHash: `${safePublicSourceId}_hash_${row.safeLocatorHash.slice(-10)}`,
+    sourceFamilySupportState: currentSellable
+      ? "public_support_attached"
+      : projected
+        ? "public_support_needed"
+        : "retired_no_safe_public_support",
+    parserRequirements: ["actor", "victim_or_dataset", "sector_country", "claimed_date", "public_source_family", "safe_public_source_id", "provenance_hash"],
+    rowDecision,
+    buyerValueReason: rowDecision === "retired_not_chargeable"
+      ? "Retired from the paid-floor queue because it cannot produce a current, publicly corroborated sellable row without caveat."
+      : row.buyerValueReason,
+    countsTowardSellableFloorNow: currentSellable,
+    countsTowardSellableFloorAfterPublicSupport: projected || currentSellable,
     noLeakProof: row.noLeakProof
   };
 }

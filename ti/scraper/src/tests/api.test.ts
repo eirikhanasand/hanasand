@@ -1118,6 +1118,37 @@ describe("api v1", () => {
       row.countsTowardSellableFloorNow === false &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials"
     )).toBe(true);
+    expect((response.darkMetadataPublicSupportLift4000 as {
+      publicSupportSellable100: {
+        candidateCount: number;
+        currentChargeableRows: number;
+        projectedAfterPublicSupportRows: number;
+        retiredRows: number;
+        remainingGapTo100Now: number;
+        remainingGapTo100AfterProjectedSupport: number;
+        rowDecisionCounts: Record<string, number>;
+        sampleRows: Array<{ rowDecision: string; countsTowardSellableFloorNow: boolean; countsTowardSellableFloorAfterPublicSupport: boolean; noLeakProof: string; safePublicSourceId: string }>;
+        agent03ParserHandoffRowCount: number;
+      };
+    }).publicSupportSellable100).toMatchObject({
+      candidateCount: 100,
+      currentChargeableRows: 12,
+      projectedAfterPublicSupportRows: 68,
+      retiredRows: 20,
+      remainingGapTo100Now: 88,
+      remainingGapTo100AfterProjectedSupport: 20,
+      rowDecisionCounts: {
+        current_sellable_public_supported: 12,
+        projected_after_public_support: 68,
+        retired_not_chargeable: 20
+      },
+      agent03ParserHandoffRowCount: 100
+    });
+    expect((response.darkMetadataPublicSupportLift4000 as { publicSupportSellable100: { sampleRows: Array<{ rowDecision: string; countsTowardSellableFloorNow: boolean; countsTowardSellableFloorAfterPublicSupport: boolean; noLeakProof: string; safePublicSourceId: string }> } }).publicSupportSellable100.sampleRows.every((row) =>
+      row.safePublicSourceId.startsWith("public_support_source_") &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      (row.rowDecision !== "retired_not_chargeable" || (!row.countsTowardSellableFloorNow && !row.countsTowardSellableFloorAfterPublicSupport))
+    )).toBe(true);
     expect((response.first100AdmissionQuality as {
       schemaVersion: string;
       routeVisibleOn: string[];
@@ -1186,6 +1217,28 @@ describe("api v1", () => {
         suppressionProof: Array<{ class: string; countsTowardSellable: boolean; proof: string }>;
         preservedTruePositiveProof: Array<{ countsTowardSellable: boolean; noLeak: boolean; provenanceHash: string; requiredSignals: string[] }>;
         fastestRepairsTo100: Array<{ owner: string; countsTowardPaidFloorNow: boolean; nextAction: string }>;
+        secondBatchAudit: {
+          schemaVersion: string;
+          auditedPreset: string;
+          localProofRows: number;
+          currentSellableRows: number;
+          sellableFindingRows: number;
+          sellableSourceProvenanceRows: number;
+          sourceProvenanceRowsCountTowardFindingFloor: boolean;
+          localProofPassed100RowFloor: boolean;
+          hostedProofRequired: boolean;
+          hostedProofCountsTowardPaidPromotion: boolean;
+          externalMarketplaceVerificationRequired: boolean;
+          staleLatestActivitySellableRows: number;
+          aliasOrWrongActorSellableRows: number;
+          genericSourcePageSellableRows: number;
+          graphOnlySellableRows: number;
+          restrictedOnlySellableRows: number;
+          caveatedRowsCountTowardChargeable: boolean;
+          findingAdmissionRequiredSignals: string[];
+          rowInflationGuards: Array<{ guard: string; countsTowardPaidPromotion: boolean; proof: string }>;
+          noLeakProof: Record<string, boolean>;
+        };
         noLeakProof: Record<string, boolean>;
       };
     }).programCpHardening;
@@ -1207,6 +1260,29 @@ describe("api v1", () => {
     expect(programCpHardening.preservedTruePositiveProof.every((row) => row.countsTowardSellable && row.noLeak && row.provenanceHash.length > 0 && row.requiredSignals.includes("current_public_support") && row.requiredSignals.includes("actor_specific") && row.requiredSignals.includes("buyer_action"))).toBe(true);
     expect(programCpHardening.fastestRepairsTo100.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_06", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(programCpHardening.fastestRepairsTo100.every((row) => row.countsTowardPaidFloorNow === false && row.nextAction.length > 0)).toBe(true);
+    expect(programCpHardening.secondBatchAudit).toMatchObject({
+      schemaVersion: "ti.program_cp_second_batch_candidate_audit.v1",
+      auditedPreset: "100_name_paid_preset",
+      localProofRows: 607,
+      currentSellableRows: 187,
+      sellableFindingRows: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      localProofPassed100RowFloor: true,
+      hostedProofRequired: true,
+      hostedProofCountsTowardPaidPromotion: false,
+      externalMarketplaceVerificationRequired: true,
+      staleLatestActivitySellableRows: 0,
+      aliasOrWrongActorSellableRows: 0,
+      genericSourcePageSellableRows: 0,
+      graphOnlySellableRows: 0,
+      restrictedOnlySellableRows: 0,
+      caveatedRowsCountTowardChargeable: false
+    });
+    expect(programCpHardening.secondBatchAudit.findingAdmissionRequiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
+    expect(programCpHardening.secondBatchAudit.rowInflationGuards.map((row) => row.guard)).toEqual(expect.arrayContaining(["source_provenance_padding", "stale_latest_activity", "alias_or_wrong_actor", "generic_source_page", "graph_only", "restricted_only", "caveated_as_chargeable"]));
+    expect(programCpHardening.secondBatchAudit.rowInflationGuards.every((row) => row.countsTowardPaidPromotion === false && row.proof.length > 0)).toBe(true);
+    expect(programCpHardening.secondBatchAudit.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(programCpHardening.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect((response.marketplaceGraphSignals as {
       schemaVersion: string;
@@ -13334,6 +13410,28 @@ describe("api v1", () => {
           caveatedRowsExcludedFromChargeable: number;
           suppressionProof: Array<{ class: string; countsTowardSellable: boolean; proof: string }>;
           fastestRepairsTo100: Array<{ owner: string; countsTowardPaidFloorNow: boolean; nextAction: string }>;
+          secondBatchAudit: {
+            schemaVersion: string;
+            auditedPreset: string;
+            localProofRows: number;
+            currentSellableRows: number;
+            sellableFindingRows: number;
+            sellableSourceProvenanceRows: number;
+            sourceProvenanceRowsCountTowardFindingFloor: boolean;
+            localProofPassed100RowFloor: boolean;
+            hostedProofRequired: boolean;
+            hostedProofCountsTowardPaidPromotion: boolean;
+            externalMarketplaceVerificationRequired: boolean;
+            staleLatestActivitySellableRows: number;
+            aliasOrWrongActorSellableRows: number;
+            genericSourcePageSellableRows: number;
+            graphOnlySellableRows: number;
+            restrictedOnlySellableRows: number;
+            caveatedRowsCountTowardChargeable: boolean;
+            findingAdmissionRequiredSignals: string[];
+            rowInflationGuards: Array<{ guard: string; countsTowardPaidPromotion: boolean; proof: string }>;
+            noLeakProof: Record<string, boolean>;
+          };
           noLeakProof: Record<string, boolean>;
         };
       };
@@ -13353,6 +13451,29 @@ describe("api v1", () => {
     });
     expect(pipelineCpHardening.suppressionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["stale_latest_activity", "alias_collision", "wrong_actor", "generic_source_page", "unrelated_co_mention", "graph_only", "restricted_only", "synthetic_proof_only", "low_buyer_value", "caveated_only"]));
     expect(pipelineCpHardening.suppressionProof.every((row) => row.countsTowardSellable === false && row.proof.length > 0)).toBe(true);
+    expect(pipelineCpHardening.secondBatchAudit).toMatchObject({
+      schemaVersion: "ti.program_cp_second_batch_candidate_audit.v1",
+      auditedPreset: "100_name_paid_preset",
+      localProofRows: 607,
+      currentSellableRows: 187,
+      sellableFindingRows: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      localProofPassed100RowFloor: true,
+      hostedProofRequired: true,
+      hostedProofCountsTowardPaidPromotion: false,
+      externalMarketplaceVerificationRequired: true,
+      staleLatestActivitySellableRows: 0,
+      aliasOrWrongActorSellableRows: 0,
+      genericSourcePageSellableRows: 0,
+      graphOnlySellableRows: 0,
+      restrictedOnlySellableRows: 0,
+      caveatedRowsCountTowardChargeable: false
+    });
+    expect(pipelineCpHardening.secondBatchAudit.findingAdmissionRequiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
+    expect(pipelineCpHardening.secondBatchAudit.rowInflationGuards.map((row) => row.guard)).toEqual(expect.arrayContaining(["source_provenance_padding", "stale_latest_activity", "alias_or_wrong_actor", "generic_source_page", "graph_only", "restricted_only", "caveated_as_chargeable"]));
+    expect(pipelineCpHardening.secondBatchAudit.rowInflationGuards.every((row) => row.countsTowardPaidPromotion === false && row.proof.length > 0)).toBe(true);
+    expect(pipelineCpHardening.secondBatchAudit.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(pipelineCpHardening.fastestRepairsTo100.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_06", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(pipelineCpHardening.fastestRepairsTo100.every((row) => row.countsTowardPaidFloorNow === false && row.nextAction.length > 0)).toBe(true);
     expect(pipelineCpHardening.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });

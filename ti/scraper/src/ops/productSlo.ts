@@ -1290,6 +1290,41 @@ export interface LiveProductSloDashboard {
         nextAction: string;
         countsTowardPaidFloorNow: false;
       }>;
+      secondBatchAudit: {
+        schemaVersion: "ti.program_cp_second_batch_candidate_audit.v1";
+        auditedPreset: "100_name_paid_preset";
+        localProofRows: 607;
+        currentSellableRows: 187;
+        sellableFindingRows: 52;
+        sellableSourceProvenanceRows: 135;
+        sourceProvenanceRowsCountTowardFindingFloor: false;
+        localProofPassed100RowFloor: true;
+        hostedProofRequired: true;
+        hostedProofCountsTowardPaidPromotion: false;
+        externalMarketplaceVerificationRequired: true;
+        staleLatestActivitySellableRows: 0;
+        aliasOrWrongActorSellableRows: 0;
+        genericSourcePageSellableRows: 0;
+        graphOnlySellableRows: 0;
+        restrictedOnlySellableRows: 0;
+        caveatedRowsCountTowardChargeable: false;
+        findingAdmissionRequiredSignals: Array<"current_public_support" | "actor_specific" | "finding_context" | "freshness_not_stale" | "provenance_hash" | "no_leak" | "buyer_action">;
+        rowInflationGuards: Array<{
+          guard: "source_provenance_padding" | "stale_latest_activity" | "alias_or_wrong_actor" | "generic_source_page" | "graph_only" | "restricted_only" | "caveated_as_chargeable";
+          countsTowardPaidPromotion: false;
+          proof: string;
+          owner: "agent_03" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+        }>;
+        noLeakProof: {
+          rawEvidenceExposed: false;
+          unsafeUrlsExposed: false;
+          restrictedPayloadsExposed: false;
+          objectKeysExposed: false;
+          privateMaterialExposed: false;
+          accountMaterialExposed: false;
+          actorInteractionContentExposed: false;
+        };
+      };
       noLeakProof: {
         rawEvidenceExposed: false;
         unsafeUrlsExposed: false;
@@ -1668,6 +1703,35 @@ export interface LiveProductSloDashboard {
       countsTowardSellableFloorAfterPublicSupport: boolean;
       noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials";
     }>;
+    publicSupportSellable100: {
+      schemaVersion: "ti.darkweb_index_public_support_sellable_100.v1";
+      candidateSource: "publicSupportLift1000.first100RepairQueue";
+      targetSellableRows: 100;
+      candidateCount: number;
+      currentChargeableRows: number;
+      projectedAfterPublicSupportRows: number;
+      retiredRows: number;
+      remainingGapTo100Now: number;
+      remainingGapTo100AfterProjectedSupport: number;
+      rowDecisionCounts: {
+        current_sellable_public_supported: number;
+        projected_after_public_support: number;
+        retired_not_chargeable: number;
+      };
+      sampleRows: Array<{
+        rank: number;
+        actorOrGroupHint: string;
+        victimOrDatasetHint: string;
+        safePublicSourceId: string;
+        sourceFamilySupportState: "public_support_attached" | "public_support_needed" | "retired_no_safe_public_support";
+        rowDecision: "current_sellable_public_supported" | "projected_after_public_support" | "retired_not_chargeable";
+        countsTowardSellableFloorNow: boolean;
+        countsTowardSellableFloorAfterPublicSupport: boolean;
+        noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials";
+      }>;
+      agent03ParserHandoffRowCount: number;
+      countersVisibleOn: Array<"/v1/darkweb/status" | "/v1/darkweb/search" | "/v1/contracts" | "/v1/ops/product-slo">;
+    };
     tier10000Preview: {
       schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1";
       baselineTier: "tier_4000";
@@ -4940,6 +5004,44 @@ function buildProgramCpHardening(): LiveProductSloDashboard["falsePositiveSuppre
       { owner: "agent_09", blocker: "marketplace_wording", rowsBlocked: 7, expectedSellableRowsAfterRepair: 0, nextAction: "Label caveated rows as useful context, not chargeable confirmations.", countsTowardPaidFloorNow: false },
       { owner: "agent_10", blocker: "paid_release_accounting", rowsBlocked: 84, expectedSellableRowsAfterRepair: 0, nextAction: "Keep the paid floor blocked until 100 fresh public-supported sellable rows exist.", countsTowardPaidFloorNow: false }
     ],
+    secondBatchAudit: {
+      schemaVersion: "ti.program_cp_second_batch_candidate_audit.v1",
+      auditedPreset: "100_name_paid_preset",
+      localProofRows: 607,
+      currentSellableRows: 187,
+      sellableFindingRows: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      localProofPassed100RowFloor: true,
+      hostedProofRequired: true,
+      hostedProofCountsTowardPaidPromotion: false,
+      externalMarketplaceVerificationRequired: true,
+      staleLatestActivitySellableRows: 0,
+      aliasOrWrongActorSellableRows: 0,
+      genericSourcePageSellableRows: 0,
+      graphOnlySellableRows: 0,
+      restrictedOnlySellableRows: 0,
+      caveatedRowsCountTowardChargeable: false,
+      findingAdmissionRequiredSignals: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"],
+      rowInflationGuards: [
+        { guard: "source_provenance_padding", countsTowardPaidPromotion: false, proof: "The 100-name proof has 135 sellable source-provenance rows, but they are excluded from the sellable finding floor unless parser-extracted activity/target/TTP context exists.", owner: "agent_07" },
+        { guard: "stale_latest_activity", countsTowardPaidPromotion: false, proof: "No stale latest-activity rows may count as sellable in the second-batch audit.", owner: "agent_07" },
+        { guard: "alias_or_wrong_actor", countsTowardPaidPromotion: false, proof: "Alias and wrong-actor rows require accepted actor specificity before paid admission.", owner: "agent_07" },
+        { guard: "generic_source_page", countsTowardPaidPromotion: false, proof: "Generic source pages remain support/provenance only until concrete finding fields are extracted.", owner: "agent_03" },
+        { guard: "graph_only", countsTowardPaidPromotion: false, proof: "Graph-only rows need non-graph public corroboration before promotion.", owner: "agent_08" },
+        { guard: "restricted_only", countsTowardPaidPromotion: false, proof: "Restricted-only metadata remains held until safe public support exists.", owner: "agent_05" },
+        { guard: "caveated_as_chargeable", countsTowardPaidPromotion: false, proof: "Caveated rows remain buyer context and cannot be chargeable confirmations.", owner: "agent_09" }
+      ],
+      noLeakProof: {
+        rawEvidenceExposed: false,
+        unsafeUrlsExposed: false,
+        restrictedPayloadsExposed: false,
+        objectKeysExposed: false,
+        privateMaterialExposed: false,
+        accountMaterialExposed: false,
+        actorInteractionContentExposed: false
+      }
+    },
     noLeakProof: {
       rawEvidenceExposed: false,
       unsafeUrlsExposed: false,
@@ -5623,6 +5725,29 @@ function buildDarkMetadataPublicSupportLift4000(): LiveProductSloDashboard["dark
       { rank: 2, actorOrGroupHint: "Akira", victimOrDatasetHint: "healthcare victim claim", requiredPublicSupportFamily: "security_blog", rowDecision: "repair_for_sellable_after_public_support", owningWorkerHandoff: "agent_04_source_support", countsTowardSellableFloorNow: false, countsTowardSellableFloorAfterPublicSupport: true, noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
       { rank: 3, actorOrGroupHint: "RansomHub", victimOrDatasetHint: "services dataset claim", requiredPublicSupportFamily: "vendor_cti_or_research_report", rowDecision: "repair_for_useful_caveat", owningWorkerHandoff: "agent_03_parser_repair", countsTowardSellableFloorNow: false, countsTowardSellableFloorAfterPublicSupport: false, noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" }
     ],
+    publicSupportSellable100: {
+      schemaVersion: "ti.darkweb_index_public_support_sellable_100.v1",
+      candidateSource: "publicSupportLift1000.first100RepairQueue",
+      targetSellableRows: 100,
+      candidateCount: 100,
+      currentChargeableRows: 12,
+      projectedAfterPublicSupportRows: 68,
+      retiredRows: 20,
+      remainingGapTo100Now: 88,
+      remainingGapTo100AfterProjectedSupport: 20,
+      rowDecisionCounts: {
+        current_sellable_public_supported: 12,
+        projected_after_public_support: 68,
+        retired_not_chargeable: 20
+      },
+      sampleRows: [
+        { rank: 1, actorOrGroupHint: "LockBit", victimOrDatasetHint: "manufacturing victim claim", safePublicSourceId: "public_support_source_001", sourceFamilySupportState: "public_support_attached", rowDecision: "current_sellable_public_supported", countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
+        { rank: 13, actorOrGroupHint: "Akira", victimOrDatasetHint: "healthcare victim claim", safePublicSourceId: "public_support_source_013", sourceFamilySupportState: "public_support_needed", rowDecision: "projected_after_public_support", countsTowardSellableFloorNow: false, countsTowardSellableFloorAfterPublicSupport: true, noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
+        { rank: 81, actorOrGroupHint: "RansomHub", victimOrDatasetHint: "services dataset claim", safePublicSourceId: "public_support_source_081", sourceFamilySupportState: "retired_no_safe_public_support", rowDecision: "retired_not_chargeable", countsTowardSellableFloorNow: false, countsTowardSellableFloorAfterPublicSupport: false, noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" }
+      ],
+      agent03ParserHandoffRowCount: 100,
+      countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"]
+    },
     tier10000Preview: {
       schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",
       baselineTier: "tier_4000",

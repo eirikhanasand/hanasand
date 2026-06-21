@@ -1306,6 +1306,29 @@ describe("ops controls", () => {
     expect(dashboard.falsePositiveSuppressionGate.programCpHardening.preservedTruePositiveProof.every((row) => row.countsTowardSellable && row.noLeak && row.provenanceHash.length > 0 && row.requiredSignals.includes("current_public_support") && row.requiredSignals.includes("actor_specific") && row.requiredSignals.includes("buyer_action"))).toBe(true);
     expect(dashboard.falsePositiveSuppressionGate.programCpHardening.fastestRepairsTo100.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_06", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.falsePositiveSuppressionGate.programCpHardening.fastestRepairsTo100.every((row) => row.countsTowardPaidFloorNow === false && row.nextAction.length > 0)).toBe(true);
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.secondBatchAudit).toMatchObject({
+      schemaVersion: "ti.program_cp_second_batch_candidate_audit.v1",
+      auditedPreset: "100_name_paid_preset",
+      localProofRows: 607,
+      currentSellableRows: 187,
+      sellableFindingRows: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      localProofPassed100RowFloor: true,
+      hostedProofRequired: true,
+      hostedProofCountsTowardPaidPromotion: false,
+      externalMarketplaceVerificationRequired: true,
+      staleLatestActivitySellableRows: 0,
+      aliasOrWrongActorSellableRows: 0,
+      genericSourcePageSellableRows: 0,
+      graphOnlySellableRows: 0,
+      restrictedOnlySellableRows: 0,
+      caveatedRowsCountTowardChargeable: false
+    });
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.secondBatchAudit.findingAdmissionRequiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.secondBatchAudit.rowInflationGuards.map((row) => row.guard)).toEqual(expect.arrayContaining(["source_provenance_padding", "stale_latest_activity", "alias_or_wrong_actor", "generic_source_page", "graph_only", "restricted_only", "caveated_as_chargeable"]));
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.secondBatchAudit.rowInflationGuards.every((row) => row.countsTowardPaidPromotion === false && row.proof.length > 0)).toBe(true);
+    expect(dashboard.falsePositiveSuppressionGate.programCpHardening.secondBatchAudit.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(dashboard.falsePositiveSuppressionGate.programCpHardening.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
     expect(dashboard.falsePositiveSuppressionGate.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.falsePositiveSuppressionGate.noLeakProof).toMatchObject({ rawEvidenceExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, objectKeysExposed: false, privateMaterialExposed: false, accountMaterialExposed: false, actorInteractionContentExposed: false });
@@ -1495,6 +1518,28 @@ describe("ops controls", () => {
     ]));
     expect(dashboard.darkMetadataPublicSupportLift4000.first100RepairQueue).toHaveLength(3);
     expect(dashboard.darkMetadataPublicSupportLift4000.first100RepairQueue.every((row) => row.countsTowardSellableFloorNow === false && row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials")).toBe(true);
+    expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable100).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_sellable_100.v1",
+      candidateSource: "publicSupportLift1000.first100RepairQueue",
+      targetSellableRows: 100,
+      candidateCount: 100,
+      currentChargeableRows: 12,
+      projectedAfterPublicSupportRows: 68,
+      retiredRows: 20,
+      remainingGapTo100Now: 88,
+      remainingGapTo100AfterProjectedSupport: 20,
+      rowDecisionCounts: {
+        current_sellable_public_supported: 12,
+        projected_after_public_support: 68,
+        retired_not_chargeable: 20
+      },
+      agent03ParserHandoffRowCount: 100
+    });
+    expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable100.sampleRows.every((row) =>
+      row.safePublicSourceId.startsWith("public_support_source_") &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&
+      (row.rowDecision !== "retired_not_chargeable" || (!row.countsTowardSellableFloorNow && !row.countsTowardSellableFloorAfterPublicSupport))
+    )).toBe(true);
     expect(dashboard.darkMetadataPublicSupportLift4000.tier10000Preview).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",
       evaluatedCandidateCount: 10000,

@@ -460,6 +460,45 @@ describe("darkweb metadata index contracts", () => {
       remainingRowsToFirst100FloorAfterPublicSupport: 20,
       countsTowardSellableFloorNow: false
     });
+    expect(status.publicSupportLift1000.publicSupportSellable100).toMatchObject({
+      schemaVersion: "ti.darkweb_index_public_support_sellable_100.v1",
+      candidateSource: "publicSupportLift1000.first100RepairQueue",
+      targetSellableRows: 100,
+      candidateCount: 100,
+      currentChargeableRows: 12,
+      projectedAfterPublicSupportRows: 68,
+      retiredRows: 20,
+      remainingGapTo100Now: 88,
+      remainingGapTo100AfterProjectedSupport: 20,
+      rowDecisionCounts: {
+        current_sellable_public_supported: 12,
+        projected_after_public_support: 68,
+        retired_not_chargeable: 20
+      },
+      countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"]
+    });
+    expect(status.publicSupportSellable100).toEqual(status.publicSupportLift1000.publicSupportSellable100);
+    expect(status.publicSupportLift1000.publicSupportSellable100.rows).toHaveLength(100);
+    expect(status.publicSupportLift1000.publicSupportSellable100.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(12);
+    expect(status.publicSupportLift1000.publicSupportSellable100.rows.filter((row) => row.rowDecision === "retired_not_chargeable").every((row) =>
+      row.countsTowardSellableFloorNow === false &&
+      row.countsTowardSellableFloorAfterPublicSupport === false
+    )).toBe(true);
+    expect(status.publicSupportLift1000.publicSupportSellable100.rows.every((row) =>
+      row.safeLocatorHash.length > 0 &&
+      row.safePublicSourceId.startsWith("public_support_source_") &&
+      row.safePublicSourceHash.length > 0 &&
+      row.parserRequirements.includes("safe_public_source_id") &&
+      row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials"
+    )).toBe(true);
+    expect(status.publicSupportLift1000.publicSupportSellable100.agent03ParserHandoffRows).toHaveLength(100);
+    expect(status.publicSupportLift1000.publicSupportSellable100.agent03ParserHandoffRows.every((row) =>
+      row.handoffOwner === "agent_03_parser_repair" &&
+      row.requiredFields.includes("actor") &&
+      row.requiredFields.includes("victim_or_dataset") &&
+      row.requiredFields.includes("safe_public_source_id") &&
+      row.safePublicSourceHash.length > 0
+    )).toBe(true);
     expect(status.publicSupportLift1000.tier10000Preview).toMatchObject({
       schemaVersion: "ti.darkweb_index_public_support_tier10000_preview.v1",
       baselineTier: "tier_4000",
@@ -1122,6 +1161,7 @@ describe("darkweb metadata index contracts", () => {
       tierTargets: [100, 1000, 4000, 10000],
       routeFields: ["status.publicSupportLift1000", "darkwebIndex.productHandoff.publicSupportLift1000", "ops.productSlo.darkMetadataPublicSupportLift4000"],
       repairQueueField: "publicSupportLift1000.first100RepairQueue",
+      sellable100Field: "publicSupportLift1000.publicSupportSellable100",
       tier10000PreviewField: "publicSupportLift1000.tier10000Preview",
       sellableRule: "safe_public_source_must_support_same_actor_victim_dataset_sector_date_claim",
       strictNoInflation: true,
@@ -1311,6 +1351,16 @@ describe("darkweb metadata index contracts", () => {
     expect(firstPage.productHandoff.publicSupportLift1000.tiers[2]?.rows).toHaveLength(4000);
     expect(firstPage.productHandoff.publicSupportLift1000.first4000SupportBucketCounts.currently_chargeable).toBe(0);
     expect(firstPage.productHandoff.publicSupportLift1000.first100RepairQueue).toHaveLength(100);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable100).toMatchObject({
+      candidateCount: 100,
+      currentChargeableRows: 12,
+      projectedAfterPublicSupportRows: 68,
+      retiredRows: 20,
+      remainingGapTo100Now: 88,
+      remainingGapTo100AfterProjectedSupport: 20
+    });
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable100.agent03ParserHandoffRows).toHaveLength(100);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable100.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(12);
     expect(firstPage.productHandoff.publicSupportLift1000.metricMovement).toMatchObject({
       repairCandidatesAdded: 100,
       likelySellableRowsAfterPublicSupport: 80,
