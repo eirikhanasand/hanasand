@@ -35,7 +35,17 @@ export const REVENUE_CANARY_FEEDS = [
   src("src_canary_checkmarx", "Checkmarx Blog", "rss", "https://checkmarx.com/blog/feed/", ["CVE", "supply-chain", "vulnerability"], "vendor"),
   src("src_canary_netlab360", "Netlab 360", "rss", "https://blog.netlab.360.com/rss/", ["botnet", "malware", "C2"], "vendor"),
   src("src_canary_cyble", "Cyble Blog", "rss", "https://cyble.com/blog/feed/", ["ransomware", "breach", "malware"], "vendor"),
-  src("src_canary_asec", "ASEC Blog", "rss", "https://asec.ahnlab.com/en/feed/", ["malware", "ransomware", "APT"], "vendor")
+  src("src_canary_asec", "ASEC Blog", "rss", "https://asec.ahnlab.com/en/feed/", ["malware", "ransomware", "APT"], "vendor"),
+  src("src_canary_silentpush", "Silent Push Blog", "rss", "https://www.silentpush.com/feed/", ["infrastructure", "APT", "phishing"], "vendor"),
+  src("src_canary_certfr", "CERT-FR Alerts", "rss", "https://www.cert.ssi.gouv.fr/feed/", ["CVE", "APT", "vulnerability"], "government"),
+  src("src_canary_ncscuk", "NCSC UK News", "rss", "https://www.ncsc.gov.uk/api/1/services/v1/news-rss-feed.xml", ["APT", "advisory", "malware"], "government"),
+  src("src_canary_intrinsec", "Intrinsec Blog", "rss", "https://www.intrinsec.com/feed/", ["APT", "ransomware", "malware"], "vendor"),
+  src("src_canary_quointelligence", "QuoIntelligence Blog", "rss", "https://quointelligence.eu/feed/", ["APT", "ransomware", "malware"], "vendor"),
+  src("src_canary_zerodayinitiative", "Zero Day Initiative", "rss", "https://www.zerodayinitiative.com/rss/published/", ["CVE", "exploit", "vulnerability"], "vendor"),
+  src("src_canary_sentinelone_blog", "SentinelOne Blog", "rss", "https://www.sentinelone.com/blog/feed/", ["APT", "ransomware", "malware"], "vendor"),
+  src("src_canary_github_blog_security", "GitHub Security Blog", "rss", "https://github.blog/security/feed/", ["supply-chain", "CVE", "malware"], "vendor"),
+  src("src_canary_openssf", "OpenSSF Blog", "rss", "https://openssf.org/feed/", ["supply-chain", "vulnerability", "malware"], "nonprofit"),
+  src("src_canary_endorlabs", "Endor Labs Blog", "rss", "https://www.endorlabs.com/blog/rss.xml", ["supply-chain", "CVE", "malware"], "vendor")
 ];
 
 function src(id: string, name: string, type: string, url: string, q: string[], family: string) {

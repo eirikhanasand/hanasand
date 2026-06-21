@@ -1,6 +1,7 @@
 import { hashContent } from "../utils.ts";
+import { termRegex } from "./searchTerm.ts";
 
-const TAGS = ["ransomware", "breach", "malware", "phishing", "exploit", "cve", "apt", "leak", "victim", "botnet", "ddos"];
+const TAGS = ["ransomware", "breach", "malware", "phishing", "exploit", "cve", "apt", "leak", "victim", "botnet", "ddos", "supply-chain", "zero-day", "infrastructure", "c2"];
 
 export function rowFromCapture(capture: any, source?: any) {
   const summary = cleanSummary(capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
@@ -42,8 +43,9 @@ function isMetadataOnly(capture: any) {
 
 function tagsFor(text: string) {
   const lower = text.toLowerCase();
-  return TAGS.filter((tag) => lower.includes(tag));
+  return TAGS.filter((tag) => termRegex(tag).test(lower));
 }
+
 
 function cleanSummary(value: unknown) {
   return String(value ?? "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
