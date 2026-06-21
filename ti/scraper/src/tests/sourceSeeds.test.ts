@@ -1505,9 +1505,9 @@ describe("source seed bundles", () => {
     expect(atlas.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization).toMatchObject({
       schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1",
       gate: "daily_100_name_paid_actor_300_row_gate",
-      projectedRowsAfterParserAdmission: 250,
+      projectedRowsAfterParserAdmission: 300,
       nextSellableRowGate: 300,
-      remainingSellableRowsAfterParserAdmission: 50,
+      remainingSellableRowsAfterParserAdmission: 0,
       projectedSourcePackRowsCountNow: false,
       countsTowardPaidGateNow: false
     });

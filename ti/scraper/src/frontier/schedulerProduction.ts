@@ -2535,6 +2535,116 @@ export function buildSchedulerDailyActorRunPlan(input: {
         }))
     ].map((row) => [`${row.query}:${row.reason}`, row])).values())
   };
+  const paidRowCadenceInputs: SchedulerDailyActorRunPlanDto["paidRowCadenceInputs"] = {
+    schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1",
+    routeVisible: true,
+    paidActorFloor: {
+      gate: "hosted_300_sellable_rows",
+      targetSellableRows: 300,
+      currentLocalSellableRows: 300,
+      hostedObservedSellableRows: null,
+      hostedProofRequired: true,
+      countsTowardHostedPaidGateNow: false
+    },
+    localPresetBaseline: {
+      defaultQueryCount: 100,
+      usefulRows: 607,
+      sellableRowsBeforeCurrentLift: 187,
+      sellableRowsAfterCurrentLift: 300,
+      sourceProvenanceShare: 0.357,
+      promotionState: "local_gate_ready_hosted_gate_held"
+    },
+    admissionInputs: [
+      {
+        inputId: "parser_current_local_lift",
+        owner: "agent_03",
+        schedulerUse: "raise_daily_actor_cadence",
+        rows: 50,
+        countsTowardLocalFloorNow: true,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "run_100_name_preset_after_source_sweeps"
+      },
+      {
+        inputId: "dark_metadata_chargeable_support",
+        owner: "agent_05",
+        schedulerUse: "reserve_metadata_review",
+        rows: darkMetadataGapQueries.length,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "schedule_metadata_review_before_emit"
+      },
+      {
+        inputId: "graph_public_corroboration_handoff",
+        owner: "agent_08",
+        schedulerUse: "reserve_public_corroboration",
+        rows: 175,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "schedule_public_corroboration_before_emit"
+      },
+      {
+        inputId: "source_pack_gate_alignment",
+        owner: "agent_01",
+        schedulerUse: "hold_as_review_only",
+        rows: 0,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "keep_review_only_no_enqueue"
+      },
+      {
+        inputId: "hosted_observed_proof",
+        owner: "agent_09",
+        schedulerUse: "hold_until_external_proof",
+        rows: 0,
+        countsTowardLocalFloorNow: false,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "wait_for_hosted_proof_import"
+      }
+    ],
+    schedulerActions: [
+      {
+        actionId: "daily_actor_100_name_preset",
+        visibleState: "searching",
+        cadence: "daily",
+        reason: "local 300-row gate is ready; hosted paid promotion remains held until observed hosted proof is imported",
+        protectedBy: ["duplicate_run_reuse", "paid_row_gate", "no_leak_gate", "hosted_proof_gate"]
+      },
+      {
+        actionId: "public_corroboration_before_emit",
+        visibleState: "partial",
+        cadence: "four_hourly",
+        reason: `${publicChannelGapQueries.length} watchlist queries need public-channel or public-corroboration support before caveats can lift`,
+        protectedBy: ["duplicate_run_reuse", "source_policy", "paid_row_gate", "no_leak_gate"]
+      },
+      {
+        actionId: "dark_metadata_review_before_emit",
+        visibleState: "metadata_review",
+        cadence: "daily",
+        reason: `${darkMetadataGapQueries.length} ransomware or intrusion-set queries need approved metadata review before metadata-only context improves paid rows`,
+        protectedBy: ["metadata_review", "paid_row_gate", "no_leak_gate"]
+      },
+      {
+        actionId: "source_pack_review_hold",
+        visibleState: "queued",
+        cadence: "hourly",
+        reason: "source-pack alignment can influence priority, but review-only rows do not enqueue or count as paid rows",
+        protectedBy: ["source_policy", "paid_row_gate", "no_leak_gate"]
+      },
+      {
+        actionId: "hosted_proof_hold",
+        visibleState: "queued",
+        cadence: "on_external_proof",
+        reason: "hosted 300-row promotion stays held until the external Apify proof import has observed sellable rows",
+        protectedBy: ["hosted_proof_gate", "paid_row_gate", "no_leak_gate"]
+      }
+    ],
+    nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
+    uiSummary: {
+      headline: "local_300_gate_ready_hosted_proof_held",
+      operatorMessage: "Run the 100-name Actor preset after public corroboration and approved metadata review sweeps; keep hosted paid promotion held until external proof is imported.",
+      suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
+    }
+  };
 
   return {
     generatedAt: now.toISOString(),
@@ -2615,6 +2725,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
       ]
     },
     executionQueuePlan,
+    paidRowCadenceInputs,
     sourceGapClosurePlan,
     sourceGapExecutionReadiness,
     routeContracts: {

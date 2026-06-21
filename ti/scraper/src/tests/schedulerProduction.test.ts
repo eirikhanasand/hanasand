@@ -1550,6 +1550,67 @@ describe("scheduler production readiness", () => {
       expect.objectContaining({ query: "APT42", reason: "missing_public_channel", action: "enqueue_gap_fill" }),
       expect.objectContaining({ query: "LockBit", reason: "missing_dark_metadata", action: "metadata_review" })
     ]));
+    expect(daily.paidRowCadenceInputs).toMatchObject({
+      schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1",
+      routeVisible: true,
+      paidActorFloor: {
+        gate: "hosted_300_sellable_rows",
+        targetSellableRows: 300,
+        currentLocalSellableRows: 300,
+        hostedObservedSellableRows: null,
+        hostedProofRequired: true,
+        countsTowardHostedPaidGateNow: false
+      },
+      localPresetBaseline: {
+        defaultQueryCount: 100,
+        usefulRows: 607,
+        sellableRowsBeforeCurrentLift: 187,
+        sellableRowsAfterCurrentLift: 300,
+        promotionState: "local_gate_ready_hosted_gate_held"
+      },
+      nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
+      uiSummary: {
+        headline: "local_300_gate_ready_hosted_proof_held",
+        suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
+      }
+    });
+    expect(daily.paidRowCadenceInputs.admissionInputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        inputId: "parser_current_local_lift",
+        owner: "agent_03",
+        rows: 50,
+        countsTowardLocalFloorNow: true,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "run_100_name_preset_after_source_sweeps"
+      }),
+      expect.objectContaining({
+        inputId: "graph_public_corroboration_handoff",
+        owner: "agent_08",
+        rows: 175,
+        countsTowardLocalFloorNow: false,
+        nextCadenceAction: "schedule_public_corroboration_before_emit"
+      }),
+      expect.objectContaining({
+        inputId: "hosted_observed_proof",
+        owner: "agent_09",
+        rows: 0,
+        countsTowardHostedPaidGateNow: false,
+        nextCadenceAction: "wait_for_hosted_proof_import"
+      })
+    ]));
+    expect(daily.paidRowCadenceInputs.schedulerActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        actionId: "daily_actor_100_name_preset",
+        visibleState: "searching",
+        cadence: "daily",
+        protectedBy: expect.arrayContaining(["duplicate_run_reuse", "paid_row_gate", "hosted_proof_gate"])
+      }),
+      expect.objectContaining({
+        actionId: "dark_metadata_review_before_emit",
+        visibleState: "metadata_review",
+        protectedBy: expect.arrayContaining(["metadata_review", "no_leak_gate"])
+      })
+    ]));
     expect(daily.sourceGapClosurePlan).toMatchObject({
       schemaVersion: "ti.scheduler_source_gap_closure_plan.v1",
       routeVisible: true,

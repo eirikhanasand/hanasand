@@ -1352,6 +1352,48 @@ export interface SchedulerDailyActorRunPlanDto {
       visibleState: "searching" | "partial" | "metadata_review";
     }>;
   };
+  paidRowCadenceInputs: {
+    schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1";
+    routeVisible: true;
+    paidActorFloor: {
+      gate: "hosted_300_sellable_rows";
+      targetSellableRows: 300;
+      currentLocalSellableRows: number;
+      hostedObservedSellableRows: number | null;
+      hostedProofRequired: true;
+      countsTowardHostedPaidGateNow: false;
+    };
+    localPresetBaseline: {
+      defaultQueryCount: 100;
+      usefulRows: number;
+      sellableRowsBeforeCurrentLift: number;
+      sellableRowsAfterCurrentLift: number;
+      sourceProvenanceShare: number;
+      promotionState: "local_gate_ready_hosted_gate_held";
+    };
+    admissionInputs: Array<{
+      inputId: "parser_current_local_lift" | "dark_metadata_chargeable_support" | "graph_public_corroboration_handoff" | "source_pack_gate_alignment" | "hosted_observed_proof";
+      owner: "agent_01" | "agent_03" | "agent_05" | "agent_08" | "agent_09" | "agent_02";
+      schedulerUse: "raise_daily_actor_cadence" | "reserve_metadata_review" | "reserve_public_corroboration" | "hold_as_review_only" | "hold_until_external_proof";
+      rows: number;
+      countsTowardLocalFloorNow: boolean;
+      countsTowardHostedPaidGateNow: boolean;
+      nextCadenceAction: "run_100_name_preset_after_source_sweeps" | "schedule_metadata_review_before_emit" | "schedule_public_corroboration_before_emit" | "keep_review_only_no_enqueue" | "wait_for_hosted_proof_import";
+    }>;
+    schedulerActions: Array<{
+      actionId: "daily_actor_100_name_preset" | "public_corroboration_before_emit" | "dark_metadata_review_before_emit" | "source_pack_review_hold" | "hosted_proof_hold";
+      visibleState: "searching" | "partial" | "metadata_review" | "queued";
+      cadence: "daily" | "hourly" | "four_hourly" | "on_external_proof";
+      reason: string;
+      protectedBy: Array<"duplicate_run_reuse" | "paid_row_gate" | "source_policy" | "metadata_review" | "no_leak_gate" | "hosted_proof_gate">;
+    }>;
+    nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps";
+    uiSummary: {
+      headline: "local_300_gate_ready_hosted_proof_held";
+      operatorMessage: string;
+      suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid";
+    };
+  };
   sourceGapClosurePlan: {
     schemaVersion: "ti.scheduler_source_gap_closure_plan.v1";
     routeVisible: true;

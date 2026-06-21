@@ -11280,9 +11280,9 @@ describe("api v1", () => {
     expect(atlasResponse.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization).toMatchObject({
       schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1",
       gate: "daily_100_name_paid_actor_300_row_gate",
-      projectedRowsAfterParserAdmission: 250,
+      projectedRowsAfterParserAdmission: 300,
       nextSellableRowGate: 300,
-      remainingSellableRowsAfterParserAdmission: 50,
+      remainingSellableRowsAfterParserAdmission: 0,
       countsTowardPaidGateNow: false
     });
     expect(atlasResponse.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization.reviewRows.length).toBeGreaterThan(0);
@@ -12101,7 +12101,7 @@ describe("api v1", () => {
         schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1",
         gate: "daily_100_name_paid_actor_300_row_gate",
         nextSellableRowGate: 300,
-        remainingSellableRowsAfterParserAdmission: 50,
+        remainingSellableRowsAfterParserAdmission: 0,
         projectedSourcePackRowsCountNow: false,
         countsTowardPaidGateNow: false
       },

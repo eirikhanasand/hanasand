@@ -9322,7 +9322,7 @@ function buildEnterpriseApiContractIndex() {
         field: "scheduler.dailyActorRunPlan",
         schemaVersion: "ti.scheduler_daily_actor_run_plan.v1",
         actor: "eirikhanasand/public-threat-actor-monitor",
-        fields: ["apifyActor", "latestProofRun", "runTargets", "watchlist", "sourceTierCadence", "economics", "staleSuppression", "freshCollectionRetryPlan", "executionQueuePlan", "sourceGapClosurePlan", "sourceGapExecutionReadiness", "routeContracts", "releaseGate"],
+        fields: ["apifyActor", "latestProofRun", "runTargets", "watchlist", "sourceTierCadence", "economics", "staleSuppression", "freshCollectionRetryPlan", "executionQueuePlan", "paidRowCadenceInputs", "sourceGapClosurePlan", "sourceGapExecutionReadiness", "routeContracts", "releaseGate"],
         guarantee: "daily Actor scheduling is dry-run and buyer-visible: the 20-query Apify default watchlist, latest build 0.6.7 proof run, paid-row decision counts, source/dark-metadata 100->1000->4000 sweep cadence, execution enqueue batches, per-actor source gap closure actions, source gap execution readiness, useful-row targets, fresh-row targets, stale-only suppression, duplicate-run reuse, 3-second polling, retry-after/dead-letter visibility, and cost per useful row are exposed without mutating scheduler state"
       },
       schedulerProductionLeaseSemantics: {
