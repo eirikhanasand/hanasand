@@ -298,13 +298,17 @@ function buildReleaseLadder(
   const currentSellableAdmissionLift = record(parserLedger.currentSellableAdmissionLift);
   const currentSellable300Lift = record(parserLedger.currentSellable300Lift);
   const currentSellable500Lift = record(parserLedger.currentSellable500Lift);
+  const currentSellable750Lift = record(parserLedger.currentSellable750Lift);
+  const currentSellable750LiftUsable = currentSellable750Lift.schemaVersion === "ti.program_dd_current_sellable_750_lift.v1"
+    && currentSellable750Lift.countsTowardLocalCurrentPaidPreset === true
+    && currentSellable750Lift.countsTowardHostedPaidProof === false;
   const currentSellable500LiftUsable = currentSellable500Lift.schemaVersion === "ti.program_dc_current_sellable_500_lift.v1"
     && currentSellable500Lift.countsTowardLocalCurrentPaidPreset === true
     && currentSellable500Lift.countsTowardHostedPaidProof === false;
   const currentSellable300LiftUsable = currentSellable300Lift.schemaVersion === "ti.program_db_current_sellable_300_lift.v1"
     && currentSellable300Lift.countsTowardLocalCurrentPaidPreset === true
     && currentSellable300Lift.countsTowardHostedPaidProof === false;
-  const activeCurrentSellableLift = currentSellable500LiftUsable ? currentSellable500Lift : currentSellable300LiftUsable ? currentSellable300Lift : currentSellableAdmissionLift;
+  const activeCurrentSellableLift = currentSellable750LiftUsable ? currentSellable750Lift : currentSellable500LiftUsable ? currentSellable500Lift : currentSellable300LiftUsable ? currentSellable300Lift : currentSellableAdmissionLift;
   const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
   const darkSellable250 = record(darkSupportLift.publicSupportSellable250);
   const darkSellable500 = record(darkSupportLift.publicSupportSellable500);
@@ -640,6 +644,16 @@ function buildReleaseLadder(
         trueFindingShareAfterAdmission: numberValue(currentSellable500Lift.trueFindingShareAfterAdmission),
         countsTowardLocalCurrentPaidPreset: currentSellable500Lift.countsTowardLocalCurrentPaidPreset,
         countsTowardHostedPaidProof: currentSellable500Lift.countsTowardHostedPaidProof
+      },
+      currentSellable750Lift: {
+        schemaVersion: currentSellable750Lift.schemaVersion,
+        activeForCurrentLocalGate: currentSellable750LiftUsable,
+        acceptedCurrentRowsCount: numberValue(currentSellable750Lift.acceptedCurrentRowsCount),
+        sourceProvenanceRowsConvertedToFindings: numberValue(currentSellable750Lift.sourceProvenanceRowsConvertedToFindings),
+        trueFindingShareAfterAdmission: numberValue(currentSellable750Lift.trueFindingShareAfterAdmission),
+        sourceProvenanceShareAfterAdmission: numberValue(currentSellable750Lift.sourceProvenanceShareAfterAdmission),
+        countsTowardLocalCurrentPaidPreset: currentSellable750Lift.countsTowardLocalCurrentPaidPreset,
+        countsTowardHostedPaidProof: currentSellable750Lift.countsTowardHostedPaidProof
       },
       sourceProvenanceRowsCountTowardFindingFloor: deterministicProof.sourceProvenanceRowsCountTowardFindingFloor === false ? false : parserLedger.sourceProvenanceRowsCountTowardFindingFloor,
       proofDecision: localProof.proofDecision
@@ -1092,6 +1106,7 @@ function checkPaidCountIntegrity(
   const currentSellableAdmissionLift = record(parserLedger.currentSellableAdmissionLift);
   const currentSellable300Lift = record(parserLedger.currentSellable300Lift);
   const currentSellable500Lift = record(parserLedger.currentSellable500Lift);
+  const currentSellable750Lift = record(parserLedger.currentSellable750Lift);
   const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
   const graphCounts = record(graphQueue.counts);
   const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
@@ -1125,10 +1140,15 @@ function checkPaidCountIntegrity(
   const current500AcceptedRows = Array.isArray(currentSellable500Lift.acceptedRows) ? currentSellable500Lift.acceptedRows.filter(isRecord) : [];
   const current500ConvertedRows = Array.isArray(currentSellable500Lift.convertedSourceProvenanceRows) ? currentSellable500Lift.convertedSourceProvenanceRows.filter(isRecord) : [];
   const current500RejectedRows = Array.isArray(currentSellable500Lift.rejectedRows) ? currentSellable500Lift.rejectedRows.filter(isRecord) : [];
+  const current750AcceptedRows = Array.isArray(currentSellable750Lift.acceptedRows) ? currentSellable750Lift.acceptedRows.filter(isRecord) : [];
+  const current750ConvertedRows = Array.isArray(currentSellable750Lift.convertedSourceProvenanceRows) ? currentSellable750Lift.convertedSourceProvenanceRows.filter(isRecord) : [];
+  const current750RejectedRows = Array.isArray(currentSellable750Lift.rejectedRows) ? currentSellable750Lift.rejectedRows.filter(isRecord) : [];
   const hasCurrentSellableAdmissionLift = currentSellableAdmissionLift.schemaVersion === "ti.program_da_current_sellable_admission_lift.v1";
   const hasCurrentSellable300Lift = currentSellable300Lift.schemaVersion === "ti.program_db_current_sellable_300_lift.v1";
   const hasCurrentSellable500Lift = currentSellable500Lift.schemaVersion === "ti.program_dc_current_sellable_500_lift.v1";
+  const hasCurrentSellable750Lift = currentSellable750Lift.schemaVersion === "ti.program_dd_current_sellable_750_lift.v1";
   const currentSellable500LiftIsLocalCountable = currentSellable500Lift.countsTowardLocalCurrentPaidPreset === true;
+  const currentSellable750LiftIsLocalCountable = currentSellable750Lift.countsTowardLocalCurrentPaidPreset === true;
 
   const failures: string[] = [];
   if (deterministicProof.sourceProvenanceRowsCountTowardFindingFloor !== false) failures.push("source_provenance_rows_count_toward_finding_floor");
@@ -1160,6 +1180,16 @@ function checkPaidCountIntegrity(
       if (numberValue(currentSellable500Lift.sourceProvenanceShareAfterAdmission) > 0.4) failures.push("current_sellable_500_source_provenance_share_above_40");
       if (current500AcceptedRows.length < 200) failures.push("current_sellable_500_lift_too_few_accepted_rows");
       if (current500ConvertedRows.length < 10) failures.push("current_sellable_500_lift_too_few_source_rows_converted");
+    }
+  }
+  if (hasCurrentSellable750Lift) {
+    if (currentSellable750Lift.countsTowardHostedPaidProof !== false) failures.push("current_sellable_750_lift_counts_as_hosted_proof");
+    if (currentSellable750LiftIsLocalCountable) {
+      if (numberValue(currentSellable750Lift.currentSellableRowsAfterAdmission) < 750) failures.push("current_sellable_750_lift_below_750");
+      if (numberValue(currentSellable750Lift.trueFindingShareAfterAdmission) < 0.7) failures.push("current_sellable_750_true_finding_share_below_70");
+      if (numberValue(currentSellable750Lift.sourceProvenanceShareAfterAdmission) > 0.25) failures.push("current_sellable_750_source_provenance_share_above_25");
+      if (current750AcceptedRows.length < 250) failures.push("current_sellable_750_lift_too_few_accepted_rows");
+      if (current750ConvertedRows.length < 30) failures.push("current_sellable_750_lift_too_few_source_rows_converted");
     }
   }
   if (projected300Effect.countsProjectedRowsAsPaid !== false) failures.push("public_support_admission_counts_projected_rows_as_paid");
@@ -1203,6 +1233,23 @@ function checkPaidCountIntegrity(
   }
   for (const row of current500RejectedRows) {
     if (row.countsTowardCurrentSellableRows !== false) failures.push(`current_500_rejected_${row.reason}_counts_now`);
+  }
+  for (const row of current750AcceptedRows) {
+    if (row.countsTowardCurrentSellableRows !== true) failures.push("current_750_accepted_row_not_current_countable");
+    if (row.countsTowardHostedPaidProof !== false) failures.push("current_750_accepted_row_counts_as_hosted_proof");
+    if (row.noLeak !== true) failures.push("current_750_accepted_row_missing_no_leak");
+    if (typeof row.nextPivot !== "string" || row.nextPivot.length === 0) failures.push("current_750_accepted_row_missing_next_pivot");
+  }
+  for (const row of current750ConvertedRows) {
+    if (row.countsTowardSellableFindingFloor !== true) failures.push("current_750_converted_source_row_not_finding_countable");
+    if (row.noLeak !== true) failures.push("current_750_converted_source_row_missing_no_leak");
+  }
+  const requiredCurrent750Rejections = new Set(["stale_only", "duplicate", "generic_profile_or_source_page", "weak_actor_match", "wrong_actor_or_alias_conflict", "restricted_only", "graph_only", "missing_victim_or_context", "missing_source_family", "missing_buyer_action", "missing_no_leak_proof", "source_provenance_density_overflow"]);
+  for (const reason of requiredCurrent750Rejections) {
+    if (!current750RejectedRows.some((row) => row.reason === reason && numberValue(row.rowCount) > 0)) failures.push(`current_750_missing_rejection_${reason}`);
+  }
+  for (const row of current750RejectedRows) {
+    if (row.countsTowardCurrentSellableRows !== false) failures.push(`current_750_rejected_${row.reason}_counts_now`);
   }
   for (const row of rejectionReasonCounts) {
     if (["source_provenance_only", "graph_only", "restricted_without_public_support"].includes(String(row.reason)) && row.countsTowardSellableFindingFloor !== false) {

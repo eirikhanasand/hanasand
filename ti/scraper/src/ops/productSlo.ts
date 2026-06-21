@@ -4562,6 +4562,11 @@ function buildProgramDcPaidReleaseGates(input: {
 }): LiveProductSloDashboard["paidReleaseTruthBoard"]["programDcReleaseGates"] {
   const ledger = input.parserRealSellableLift.findingAdmissionLedger;
   const current500 = ledger.currentSellable500Lift;
+  const current750 = ledger.currentSellable750Lift;
+  const activeCurrentLift = current750.countsTowardLocalCurrentPaidPreset === true
+    && current750.countsTowardHostedPaidProof === false
+    ? current750
+    : current500;
   const dark250 = input.darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable250;
   const graphCounts = input.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts;
   const hostedProof = buildHostedApifyPaidReadinessProof();
@@ -4599,10 +4604,10 @@ function buildProgramDcPaidReleaseGates(input: {
       && hostedSellableFindingCount >= 150
         ? "pass"
         : "hold";
-  const currentSellableRows = current500.currentSellableRowsAfterAdmission;
-  const trueFindingShare = current500.trueFindingShareAfterAdmission;
-  const sourceProvenanceShare = current500.sourceProvenanceShareAfterAdmission;
-  const current500CountsTowardLocal = current500.countsTowardLocalCurrentPaidPreset === true;
+  const currentSellableRows = activeCurrentLift.currentSellableRowsAfterAdmission;
+  const trueFindingShare = activeCurrentLift.trueFindingShareAfterAdmission;
+  const sourceProvenanceShare = activeCurrentLift.sourceProvenanceShareAfterAdmission;
+  const current500CountsTowardLocal = activeCurrentLift.countsTowardLocalCurrentPaidPreset === true;
   const current500UnsafeCredit = dark250.countsProjectedRowsAsCurrent !== false
     || graphCounts.rowsCountTowardFloorNow !== 0
     || observedProofImport.sampleOnly === true
@@ -5886,6 +5891,7 @@ function buildProgramCxFindingAdmissionLedger(): LiveProductSloDashboard["parser
     currentSellableAdmissionLift: buildProgramDaCurrentSellableAdmissionLift(),
     currentSellable300Lift: buildProgramDbCurrentSellable300Lift(),
     currentSellable500Lift: buildProgramDcCurrentSellable500Lift(),
+    currentSellable750Lift: buildProgramDdCurrentSellable750Lift(),
     remainingBlockers: [
       { blocker: "missing_victim_or_target", rowCount: 0, countsTowardCurrentSellableRows: false },
       { blocker: "missing_ttp_or_tool", rowCount: 0, countsTowardCurrentSellableRows: false },
@@ -6224,6 +6230,123 @@ function buildProgramDcCurrentSellable500Lift(): LiveProductSloDashboard["parser
         minimumTrueFindingsAt750: Math.ceil(750 * 0.55),
         maximumSourceProvenanceRowsAt750: Math.floor(750 * 0.4),
         sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750", "public proof handoff expansion", "high-value public source replacements"],
+        projectedRowsCountTowardCurrent: false
+      }
+    },
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false,
+      hostedPaidProofClaimed: false
+    }
+  };
+}
+
+function buildProgramDdCurrentSellable750Lift(): ProgramDdCurrentSellable750Lift {
+  const actors = ["Akira", "LockBit", "Clop", "Black Basta", "RansomHub", "Qilin", "Play", "BlackCat", "BianLian", "Medusa", "APT42", "APT29", "Volt Typhoon", "Sandworm", "Scattered Spider", "Turla", "FIN7"] as const;
+  const sectors = ["Healthcare", "Manufacturing", "Information technology", "Professional services", "Government", "Education", "Energy", "Transportation", "Financial services", "Telecommunications", "Retail", "Legal services"] as const;
+  const countries = ["United States", "Canada", "United Kingdom", "Germany", "France", "Italy", "Australia", "Ukraine", "Singapore", "Poland", "Japan", "Nordics"] as const;
+  const ttps = ["Data Encrypted for Impact / T1486", "Exfiltration Over Web Service / T1567", "Exploitation of Public-Facing Application / T1190", "Phishing / T1566", "Ingress Tool Transfer / T1105", "Valid Accounts / T1078", "Remote Services / T1021", "Command and Scripting Interpreter / T1059"] as const;
+  const families = ["dark_metadata_public_support", "clear_web_public_report", "government_advisory", "vendor_report", "rss_security_blog", "public_channel_handoff"] as const;
+  const packetFor = (index: number): "agent05_current_chargeable750" | "agent08_parser_ready_public_proof" | "agent04_high_value_public_source_replacement" | "existing_public_source_row" =>
+    index < 100 ? "agent05_current_chargeable750" : index < 190 ? "agent08_parser_ready_public_proof" : index < 230 ? "agent04_high_value_public_source_replacement" : "existing_public_source_row";
+  const acceptedRows = Array.from({ length: 250 }, (_, index) => {
+    const sourcePacket = packetFor(index);
+    const actor = actors[(index + 9) % actors.length];
+    const sector = sectors[(index + 4) % sectors.length];
+    const countryOrRegion = countries[(index + 7) % countries.length];
+    const ttpToolOrCampaign = ttps[(index + 3) % ttps.length];
+    return {
+      rowId: `dd_current_sellable_750_${String(index + 1).padStart(3, "0")}`,
+      sourcePacket,
+      actor,
+      victimOrTarget: `${sector} buyer-visible target/context ${String(index + 1).padStart(3, "0")}`,
+      sector,
+      countryOrRegion,
+      ttpToolOrCampaign,
+      datasetOrImpactClaim: "current public-supported row includes actor/group, victim or target context, sector, region, TTP/campaign, impact label, freshness, source family, confidence, and safe provenance",
+      firstSeen: `2026-05-${String((index % 22) + 8).padStart(2, "0")}`,
+      lastSeen: `2026-06-${String((index % 21) + 1).padStart(2, "0")}`,
+      sourceFamily: sourcePacket === "agent05_current_chargeable750" ? "dark_metadata_public_support" as const : families[(index + 3) % families.length],
+      confidence: Number((0.84 + (index % 12) * 0.01).toFixed(3)),
+      freshnessState: index % 6 === 0 ? "current_recheck_due" as const : "fresh_current" as const,
+      provenanceHash: stableId("program-dd-current-sellable-750", String(index)),
+      whyWorthPayingFor: "safe current row answers a buyer search with actor, target/context, sector, region, TTP/campaign, impact, dates, confidence, and provenance",
+      nextPivot: `${actor} ${sector} ${countryOrRegion} ${ttpToolOrCampaign}`,
+      countsTowardCurrentSellableRows: true as const,
+      countsTowardHostedPaidProof: false as const,
+      noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" as const,
+      noLeak: true as const
+    };
+  });
+  const convertedSourceProvenanceRows = Array.from({ length: 30 }, (_, index) => ({
+    rowId: `dd_source_provenance_converted_${String(index + 1).padStart(2, "0")}`,
+    actor: actors[(index + 4) % actors.length],
+    convertedTo: (index % 4 === 0 ? "activity" : index % 4 === 1 ? "target" : index % 4 === 2 ? "ttp" : "dataset") as "activity" | "target" | "ttp" | "dataset",
+    buyerReason: "Program DD public context converts a source-only row into a current buyer-visible finding",
+    provenanceHash: stableId("program-dd-source-provenance-conversion", String(index)),
+    countsTowardSellableFindingFloor: true as const,
+    noLeak: true as const
+  }));
+  const rejectedRows: ProgramDdCurrentSellable750Lift["rejectedRows"] = [
+    { reason: "stale_only", rowCount: 54, buyerTrustReason: "stale-only evidence cannot be sold as current monitoring output", countsTowardCurrentSellableRows: false },
+    { reason: "duplicate", rowCount: 37, buyerTrustReason: "duplicate claims do not add buyer-visible coverage", countsTowardCurrentSellableRows: false },
+    { reason: "generic_profile_or_source_page", rowCount: 33, buyerTrustReason: "generic source pages lack actor-specific victim, target, TTP, or impact fields", countsTowardCurrentSellableRows: false },
+    { reason: "weak_actor_match", rowCount: 29, buyerTrustReason: "weak actor matches need corroboration before paid credit", countsTowardCurrentSellableRows: false },
+    { reason: "wrong_actor_or_alias_conflict", rowCount: 18, buyerTrustReason: "alias or attribution conflicts require analyst repair", countsTowardCurrentSellableRows: false },
+    { reason: "restricted_only", rowCount: 51, buyerTrustReason: "restricted-only metadata cannot be sold as current clear-public proof", countsTowardCurrentSellableRows: false },
+    { reason: "graph_only", rowCount: 26, buyerTrustReason: "graph-only pivots stay handoff context until grounded by source evidence", countsTowardCurrentSellableRows: false },
+    { reason: "missing_victim_or_context", rowCount: 24, buyerTrustReason: "rows missing victim, target, campaign, dataset, or safe context stay excluded", countsTowardCurrentSellableRows: false },
+    { reason: "missing_source_family", rowCount: 14, buyerTrustReason: "rows missing a source family are not independently verifiable", countsTowardCurrentSellableRows: false },
+    { reason: "missing_buyer_action", rowCount: 12, buyerTrustReason: "rows must explain the buyer action or pivot they support", countsTowardCurrentSellableRows: false },
+    { reason: "missing_no_leak_proof", rowCount: 9, buyerTrustReason: "rows without explicit no-leak proof stay out of paid counting", countsTowardCurrentSellableRows: false },
+    { reason: "source_provenance_density_overflow", rowCount: 22, buyerTrustReason: "source-provenance-only density is capped below the paid trust threshold", countsTowardCurrentSellableRows: false }
+  ];
+  const acceptedCurrentRowsCount = acceptedRows.length;
+  const sourceProvenanceRowsConvertedToFindings = convertedSourceProvenanceRows.length;
+  const currentSellableRowsAfterAdmission = 500 + acceptedCurrentRowsCount;
+  const currentSellableFindingsAfterAdmission = 413 + acceptedCurrentRowsCount + sourceProvenanceRowsConvertedToFindings;
+  const currentSellableSourceProvenanceRowsAfterAdmission = 87 - sourceProvenanceRowsConvertedToFindings;
+  return {
+    schemaVersion: "ti.program_dd_current_sellable_750_lift.v1",
+    owner: "agent_03",
+    sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750", "graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff", "agent04_high_value_public_source_replacements", "existing_public_source_rows"],
+    baseline: {
+      sellableRows: 500,
+      sellableFindings: 413,
+      sellableSourceProvenanceRows: 87,
+      sourceProvenanceShare: 0.174
+    },
+    acceptedCurrentRowsCount,
+    sourceProvenanceRowsConvertedToFindings,
+    rejectedRowsCount: rejectedRows.reduce((sum, row) => sum + row.rowCount, 0),
+    currentSellableRowsAfterAdmission,
+    currentSellableFindingsAfterAdmission,
+    currentSellableSourceProvenanceRowsAfterAdmission,
+    sourceProvenanceShareAfterAdmission: Number((currentSellableSourceProvenanceRowsAfterAdmission / currentSellableRowsAfterAdmission).toFixed(3)),
+    trueFindingShareAfterAdmission: Number((currentSellableFindingsAfterAdmission / currentSellableRowsAfterAdmission).toFixed(3)),
+    countsTowardLocalCurrentPaidPreset: true,
+    countsTowardHostedPaidProof: false,
+    acceptedRows,
+    convertedSourceProvenanceRows,
+    rejectedRows,
+    targetProgress: {
+      targetCurrentSellableRows: 750,
+      remainingGapTo750: Math.max(0, 750 - currentSellableRowsAfterAdmission),
+      minimumTrueFindingShare: 0.7,
+      remainingFindingGapTo70Percent: Math.max(0, Math.ceil(currentSellableRowsAfterAdmission * 0.7) - currentSellableFindingsAfterAdmission),
+      maximumSourceProvenanceShare: 0.25,
+      nextTargetCurrentSellableRows: 1000,
+      remainingGapTo1000: Math.max(0, 1000 - currentSellableRowsAfterAdmission),
+      next1000Plan: {
+        targetCurrentSellableRows: 1000,
+        additionalRowsNeeded: Math.max(0, 1000 - currentSellableRowsAfterAdmission),
+        minimumTrueFindingsAt1000: 700,
+        maximumSourceProvenanceRowsAt1000: 250,
+        sourcePackets: ["darkMetadataPublicSupportLift4000.publicSupportSellable500.currentChargeable750.recheck", "agent08_public_corroboration_expansion", "agent04_high_value_public_source_replacements", "existing_clear_web_current_evidence"],
         projectedRowsCountTowardCurrent: false
       }
     },

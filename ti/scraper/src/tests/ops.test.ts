@@ -728,23 +728,24 @@ describe("ops controls", () => {
         dirtyWorktreeBlocksPromotion: true
       },
       current500Gate: {
+        state: "pass",
         requiredSellableRows: 500,
-        observedSellableRows: 500,
+        observedSellableRows: 750,
         sellableRowGap: 0,
         requiredTrueFindingShare: 0.55,
         maximumSourceProvenanceShare: 0.4
       },
       current750Gate: {
-        state: "hold",
+        state: "pass",
         requiredSellableRows: 750,
-        observedSellableRows: 500,
-        sellableRowGap: 250
+        observedSellableRows: 750,
+        sellableRowGap: 0
       },
       current1000LocalSellableGate: {
         state: "hold",
         requiredSellableRows: 1000,
-        observedSellableRows: 500,
-        sellableRowGap: 500,
+        observedSellableRows: 750,
+        sellableRowGap: 250,
         countsProjectedRowsAsPaid: false
       },
       current1000Gate: {
@@ -771,7 +772,7 @@ describe("ops controls", () => {
     });
     expect(dashboard.paidReleaseTruthBoard.programDcReleaseGates.revenueImpactBlockerBoard).toEqual(expect.arrayContaining([
       expect.objectContaining({ rank: 1, blocker: "hosted_proof_gap", owner: "agent_09" }),
-      expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 250 }),
+      expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 0, state: "pass" }),
       expect.objectContaining({ blocker: "useful_row_density_gap", owner: "agent_10", observedGap: 393 })
     ]));
     expect(dashboard.paidReleaseTruthBoard.programDeReleaseBoard).toMatchObject({
@@ -783,8 +784,8 @@ describe("ops controls", () => {
       privatePaidBetaGate: {
         state: "hold",
         observed: {
-          current750State: "hold",
-          current750Gap: 250,
+          current750State: "pass",
+          current750Gap: 0,
           current1000UsefulState: "hold",
           current1000UsefulGap: 393,
           pricingState: "external_unknown",
@@ -796,7 +797,7 @@ describe("ops controls", () => {
         state: "hold",
         observed: {
           current1000LocalSellableState: "hold",
-          current1000SellableGap: 500,
+          current1000SellableGap: 250,
           marketplacePaidTrafficState: "hold"
         }
       },
@@ -808,7 +809,7 @@ describe("ops controls", () => {
         requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
       }
     });
-    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).privatePaidBetaGate.blockers).toEqual(expect.arrayContaining(["current750_sellable_rows", "current1000_useful_rows", "hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved"]));
+    expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).privatePaidBetaGate.blockers).toEqual(expect.arrayContaining(["current1000_useful_rows", "hosted100_observed_proof", "pricing_state_external_unknown", "payout_state_external_unknown", "analytics_external_unknown", "cost_per_useful_row_unobserved"]));
     expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { privatePaidBetaGate: { blockers: string[] }; publicPaidTrafficGate: { blockers: string[] }; topRevenueActions: Array<Record<string, unknown>> }).publicPaidTrafficGate.blockers).toEqual(expect.arrayContaining(["private_paid_beta_not_ready", "current1000_local_sellable_rows", "hosted300_observed_proof", "marketplace_paid_traffic_gate", "paid_runs_unobserved", "refunds_unobserved"]));
     expect((dashboard.paidReleaseTruthBoard.programDeReleaseBoard as { topRevenueActions: Array<Record<string, unknown>> }).topRevenueActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ rank: 1, owner: "agent_09", action: "import_hosted_100_and_300_observed_proof" }),

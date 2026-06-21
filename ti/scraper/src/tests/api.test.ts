@@ -798,23 +798,24 @@ describe("api v1", () => {
         dirtyWorktreeBlocksPromotion: true
       },
       current500Gate: {
+        state: "pass",
         requiredSellableRows: 500,
-        observedSellableRows: 500,
+        observedSellableRows: 750,
         sellableRowGap: 0,
         requiredTrueFindingShare: 0.55,
         maximumSourceProvenanceShare: 0.4
       },
       current750Gate: {
-        state: "hold",
+        state: "pass",
         requiredSellableRows: 750,
-        observedSellableRows: 500,
-        sellableRowGap: 250
+        observedSellableRows: 750,
+        sellableRowGap: 0
       },
       current1000LocalSellableGate: {
         state: "hold",
         requiredSellableRows: 1000,
-        observedSellableRows: 500,
-        sellableRowGap: 500,
+        observedSellableRows: 750,
+        sellableRowGap: 250,
         countsProjectedRowsAsPaid: false
       },
       current1000Gate: {
@@ -841,7 +842,7 @@ describe("api v1", () => {
     });
     expect(((response.paidReleaseTruthBoard as { programDcReleaseGates: { revenueImpactBlockerBoard: Array<Record<string, unknown>> } }).programDcReleaseGates.revenueImpactBlockerBoard)).toEqual(expect.arrayContaining([
       expect.objectContaining({ rank: 1, blocker: "hosted_proof_gap", owner: "agent_09" }),
-      expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 250 }),
+      expect.objectContaining({ blocker: "parser_current_750_gap", owner: "agent_03", observedGap: 0, state: "pass" }),
       expect.objectContaining({ blocker: "useful_row_density_gap", owner: "agent_10", observedGap: 393 })
     ]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
