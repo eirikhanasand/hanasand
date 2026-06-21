@@ -553,6 +553,10 @@ export function buildTiSourceAtlasApiResponse(input: { queries?: string[]; tenan
   const descriptorHolds = records.filter((record) => record.activationReadiness.state === "descriptor_only_hold").map((record) => record.id);
   const importPlans = buildTiSourceAtlasImportPlans(records, first100, first1000Ids, generatedAt);
   const coverageMatrix = buildTiSourceAtlasCoverageMatrix(records, input.queries ?? []);
+  const sourceLadder: TiSourceAtlasProductSourceLadderPacket = buildTiSourceAtlasParserImpactSourceLadderPacket(records, generatedAt);
+  const freshnessFirstRows = sourceLadder.paidSourceTierPlan.highValueReplacementBatch.freshnessPriorityQueue.rows
+    .filter((row) => row.priority === "p0_fresh_paid_row_lift")
+    .slice(0, 25);
   return {
     endpoint: "/v1/sources/atlas",
     schemaVersion: "ti.source_atlas.v1",
@@ -584,13 +588,28 @@ export function buildTiSourceAtlasApiResponse(input: { queries?: string[]; tenan
     }),
     lifecycleReview: buildTiSourceAtlasLifecycleReviewPacket(records, generatedAt),
     sourceEconomics: buildTiSourceAtlasReliabilityEconomicsPacket(records, generatedAt),
-    sourceLadder: buildTiSourceAtlasParserImpactSourceLadderPacket(records, generatedAt),
+    sourceLadder,
     activationCanary: {
       dryRun: true,
       willMutate: false,
       willStartCrawling: false,
       first100SourceIds: first100.map((record) => record.id),
       first1000SourceIds: first1000Ids,
+      freshnessFirstSourceIds: freshnessFirstRows.map((row) => row.atlasSourceId),
+      freshnessFirstExpectedFreshRowsPerDay: roundScore(freshnessFirstRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0)),
+      freshnessFirstExpectedUsefulRowsPerDay: roundScore(freshnessFirstRows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0)),
+      freshnessFirstAcceptanceCriteria: [
+        "operator approval recorded before source activation",
+        "each source produces safe fresh metadata without raw URL or payload exposure",
+        "fresh/useful paid Actor rows increase before counting payworthy-source lift",
+        "scheduler cadence stays within p0 source budgets and preserves tenant fairness"
+      ],
+      freshnessFirstRollbackTriggers: [
+        "unsafe payload or raw source material appears in output",
+        "fresh-row lift is zero after approved canary measurement",
+        "parser confidence fails to produce actor/ransomware-specific facts",
+        "legal or robots review expires before activation"
+      ],
       parserCertificationRequiredSourceIds: parserHolds.slice(0, 100),
       descriptorOnlySourceIds: descriptorHolds.slice(0, 100),
       rollbackPlanIds: importPlans.map((plan) => plan.rollbackPacket.rollbackPlanId),

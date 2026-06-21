@@ -2321,6 +2321,11 @@ export interface TiSourceAtlasApiResponse {
     willStartCrawling: false;
     first100SourceIds: string[];
     first1000SourceIds: string[];
+    freshnessFirstSourceIds: string[];
+    freshnessFirstExpectedFreshRowsPerDay: number;
+    freshnessFirstExpectedUsefulRowsPerDay: number;
+    freshnessFirstAcceptanceCriteria: string[];
+    freshnessFirstRollbackTriggers: string[];
     parserCertificationRequiredSourceIds: string[];
     descriptorOnlySourceIds: string[];
     rollbackPlanIds: string[];

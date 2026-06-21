@@ -23,6 +23,8 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Added freshness-first activation canary fields to `/v1/sources/atlas`: 25 p0 source ids, expected fresh/useful rows per day, acceptance criteria, and rollback triggers derived from the high-value freshness queue without starting crawls or mutating registry state.
+- Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.
 - Added `paidSourceTierPlan.highValueReplacementBatch.freshnessPriorityQueue` for the 4,000-source monetization gate, ranking concrete atlas source ids by p0/p1 freshness lift, expected useful/fresh rows per day, scheduler cadence, actor/ransomware coverage, parser/legal action, measurement gates, and no-leak boundaries.
 - Added freshness actor/family rollups for APT29, APT28, APT42, Volt Typhoon, Lazarus, Scattered Spider, FIN7, LockBit, and Akira so the next acquisition pass is driven by buyer-visible fresh-row lift instead of source-count padding.
 - Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.

@@ -2129,6 +2129,20 @@ describe("source seed bundles", () => {
       willMutate: false,
       willStartCrawling: false
     });
+    expect(atlas.activationCanary.freshnessFirstSourceIds.length).toBeGreaterThan(0);
+    expect(atlas.activationCanary.freshnessFirstSourceIds).toHaveLength(25);
+    expect(atlas.activationCanary.freshnessFirstSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_"))).toBe(true);
+    expect(new Set(atlas.activationCanary.freshnessFirstSourceIds).size).toBeGreaterThan(20);
+    expect(atlas.activationCanary.freshnessFirstExpectedFreshRowsPerDay).toBeGreaterThan(0);
+    expect(atlas.activationCanary.freshnessFirstExpectedUsefulRowsPerDay).toBeGreaterThan(0);
+    expect(atlas.activationCanary.freshnessFirstAcceptanceCriteria).toEqual(expect.arrayContaining([
+      expect.stringContaining("operator approval"),
+      expect.stringContaining("fresh/useful paid Actor rows")
+    ]));
+    expect(atlas.activationCanary.freshnessFirstRollbackTriggers).toEqual(expect.arrayContaining([
+      expect.stringContaining("unsafe payload"),
+      expect.stringContaining("fresh-row lift is zero")
+    ]));
 	    expect(atlas.activationCanary.first100SourceIds).toHaveLength(100);
 	    expect(atlas.activationCanary.first1000SourceIds).toHaveLength(1000);
 	    expect(atlas.activationCanary.descriptorOnlySourceIds.length).toBeGreaterThan(0);
