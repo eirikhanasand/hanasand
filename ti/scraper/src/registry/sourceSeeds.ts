@@ -1657,9 +1657,7 @@ function buildDailyActorPresetCanaryPacket(
       const directActorRows = eligibleRows
         .filter((row) => row.actors.includes(actor) || row.ransomwareGroups.includes(actor))
         .slice(0, 8);
-      const fallbackRows = eligibleRows.length > 0
-        ? [...eligibleRows.slice(actorIndex % eligibleRows.length), ...eligibleRows.slice(0, actorIndex % eligibleRows.length)].slice(0, 4)
-        : [];
+      const fallbackRows = selectDailyActorFallbackRows(actor, eligibleRows, actorIndex);
       const actorRows = directActorRows.length > 0 ? directActorRows : fallbackRows;
       const atlasSourceIds = uniqueStrings(actorRows.map((row) => row.atlasSourceId));
       const sourceFamilies = uniqueStrings(actorRows.map((row) => row.sourceFamily)) as TiSourceAtlasFamily[];
@@ -1758,15 +1756,56 @@ function dailyActorPresetRequiredFamilies(
   actor: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["rows"][number]["actor"],
   currentFamilies: TiSourceAtlasFamily[]
 ): TiSourceAtlasFamily[] {
+  return dailyActorPresetPreferredFamilies(actor).filter((family) => !currentFamilies.includes(family)).slice(0, 3);
+}
+
+function dailyActorPresetPreferredFamilies(
+  actor: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["rows"][number]["actor"]
+): TiSourceAtlasFamily[] {
   const ransomwareFamilies: TiSourceAtlasFamily[] = ["ransomware_tracker", "public_channel_descriptor", "vendor_threat_blog", "cert_government"];
   const actorFamilies: TiSourceAtlasFamily[] = ["vendor_threat_blog", "cert_government", "malware_researcher", "public_channel_descriptor", "cve_advisory"];
   const cloudFamilies: TiSourceAtlasFamily[] = ["cloud_saas_security", "vendor_threat_blog", "cert_government", "public_channel_descriptor"];
-  const preferred = actor === "LockBit" || actor === "Akira"
+  return actor === "LockBit" || actor === "Akira"
     ? ransomwareFamilies
     : actor === "Scattered Spider" || actor === "Volt Typhoon"
       ? cloudFamilies
       : actorFamilies;
-  return preferred.filter((family) => !currentFamilies.includes(family)).slice(0, 3);
+}
+
+function selectDailyActorFallbackRows(
+  actor: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["rows"][number]["actor"],
+  eligibleRows: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"],
+  actorIndex: number
+): TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["freshnessPriorityQueue"]["rows"] {
+  if (eligibleRows.length === 0) return [];
+  const rotatedRows = [...eligibleRows.slice(actorIndex % eligibleRows.length), ...eligibleRows.slice(0, actorIndex % eligibleRows.length)];
+  const preferredFamilies = dailyActorPresetPreferredFamilies(actor);
+  const selected: typeof eligibleRows = [];
+  const selectedSourceIds = new Set<string>();
+  const selectedFamilies = new Set<TiSourceAtlasFamily>();
+  for (const family of preferredFamilies) {
+    const matching = rotatedRows.find((row) => row.sourceFamily === family && !selectedSourceIds.has(row.atlasSourceId));
+    if (matching) {
+      selected.push(matching);
+      selectedSourceIds.add(matching.atlasSourceId);
+      selectedFamilies.add(matching.sourceFamily);
+    }
+    if (selected.length >= 4) return selected;
+  }
+  for (const row of rotatedRows) {
+    if (selected.length >= 4) break;
+    if (selectedSourceIds.has(row.atlasSourceId) || selectedFamilies.has(row.sourceFamily)) continue;
+    selected.push(row);
+    selectedSourceIds.add(row.atlasSourceId);
+    selectedFamilies.add(row.sourceFamily);
+  }
+  for (const row of rotatedRows) {
+    if (selected.length >= 4) break;
+    if (selectedSourceIds.has(row.atlasSourceId)) continue;
+    selected.push(row);
+    selectedSourceIds.add(row.atlasSourceId);
+  }
+  return selected;
 }
 
 function dailyActorPresetSourceCriteria(

@@ -2019,6 +2019,10 @@ describe("source seed bundles", () => {
       row.noLeakBoundary.sourceActivationApplied === false
     )).toBe(true);
     expect(dailyPresetPacket.rows.some((row) => row.supportMode === "default_watchlist_freshness_fallback")).toBe(true);
+    expect(dailyPresetPacket.rows.some((row) =>
+      row.supportMode === "default_watchlist_freshness_fallback" &&
+      (row.sourceFamilies.includes("cert_government") || row.sourceFamilies.includes("regional_cyber_agency"))
+    )).toBe(true);
     expect(dailyPresetPacket.actorSpecificGapRows.length).toBe(dailyPresetPacket.rows.length);
     expect(dailyPresetPacket.actorSpecificGapRows.map((row) => row.actor)).toEqual(expect.arrayContaining([
       "APT29",
