@@ -374,6 +374,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeHostedObservation(input: HostedApifyProofObservation | undefined): Required<HostedApifyProofObservation> {
+  const inputRecord = isRecord(input) ? input : {};
   return {
     runId: input?.runId ?? null,
     datasetId: input?.datasetId ?? null,
@@ -389,7 +390,7 @@ function normalizeHostedObservation(input: HostedApifyProofObservation | undefin
     noLeakFailures: finiteNumberOrNull(input?.noLeakFailures),
     secondBatchAuditObserved: input?.secondBatchAuditObserved === true,
     falsePositiveInflationFailures: finiteNumberOrNull(input?.falsePositiveInflationFailures),
-    lastVerifiedAt: input?.lastVerifiedAt ?? null
+    lastVerifiedAt: input?.lastVerifiedAt ?? (typeof inputRecord.observedAt === "string" ? inputRecord.observedAt : null)
   };
 }
 
