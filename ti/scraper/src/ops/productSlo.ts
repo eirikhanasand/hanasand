@@ -2095,6 +2095,18 @@ export interface LiveProductSloDashboard {
           noLeakProof: "hash_only_public_or_metadata_reference";
           admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support" | "missing_buyer_action" | "weak_source_family_diversity" | "graph_only_speculation" | "unsupported_relationship_padding";
         };
+        programFgPriority?: {
+          whyCorroborationMatters: "converts_caveated_or_held_actor_row" | "adds_actor_alias_context" | "adds_victim_target_context" | "adds_sector_country_context" | "adds_ttp_tool_context" | "adds_dataset_or_impact_claim" | "adds_source_family_diversity" | "adds_freshness_proof" | "resolves_contradiction_or_alias_risk";
+          buyerActionEnabled: "admit_current_finding" | "admit_with_caveat" | "refresh_stale_actor_row" | "resolve_alias_or_contradiction" | "expand_next_public_search";
+          confidenceDelta: number;
+          freshnessDelta: number;
+          sourceFamilyDelta: number;
+          contradictionRisk: "low" | "medium" | "high";
+          parserAdmissionReason: string;
+          nextParserSlice: "current1000_alias_victim_ttp" | "current1000_source_family_freshness" | "current1000_contradiction_review" | "current1000_metadata_public_support";
+          noLeakProof: "hash_only_public_or_metadata_reference";
+          admissionBlocker: "none" | "stale_latest_error" | "unsupported_alias" | "generic_source_page" | "restricted_only" | "duplicate" | "graph_only_speculation" | "relationship_padding" | "missing_buyer_action";
+        };
         admissionState: "ready_for_parser";
         countsTowardFloorNow: false;
         noLeak: true;
