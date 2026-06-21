@@ -19,7 +19,7 @@ export class InMemoryScraperStore implements ScraperStore {
   saveCaptureWithDedupe(capture: RawCapture) {
     const prepared = prepareCapture(capture); enforceSensitiveMetadataOnly(prepared);
     const previous = this.captures.get(capture.id);
-    if (previous) { if (JSON.stringify(previous) !== JSON.stringify(prepared)) throw new Error(`Capture is immutable: ${capture.id}`); return { capture: previous, status: "duplicate", duplicateOf: previous.id, dedupeKey: captureDedupeKey(previous) }; }
+    if (previous) { if (previous.contentHash !== prepared.contentHash) throw new Error(`Capture is immutable: ${capture.id}`); return { capture: previous, status: "duplicate", duplicateOf: previous.id, dedupeKey: captureDedupeKey(previous) }; }
     const duplicate = this.findDuplicateCapture(prepared);
     if (duplicate) return { capture: duplicate, status: "duplicate", duplicateOf: duplicate.id, dedupeKey: captureDedupeKey(prepared) };
     return { capture: this.insertCapture(prepared, true), status: "inserted", dedupeKey: captureDedupeKey(prepared) };
