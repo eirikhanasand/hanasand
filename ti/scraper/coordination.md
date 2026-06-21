@@ -45,6 +45,7 @@ Every pass must directly improve one of:
 ## Handoff
 
 - 2026-06-21 Agent 08 completed hosted public corroboration lift for run `THMm2ZzYxW4HVPGJ6` / dataset `xLPoxMVY6cVjGsS4e`: 54 public corroboration rows are now handed to Agent 03 for parser admission toward 100 sellable rows / 52 sellable findings, with graph-only/restricted/stale/alias/generic/duplicate/contradiction rejects excluded from paid promotion.
+- 2026-06-21 Agent 05 completed dark/restricted metadata row lift: current useful metadata-only rows moved from 1,000 to 1,250, adding 250 Program GH parser-handoff rows with actor/group, victim/target or dataset claim, sector/country, freshness/date, source family, confidence, public support hash/pivot, buyer action, provenance hash, and no-leak proof. Projected rows remain 0 and blocked rows remain 0.
 
 Before stopping:
 - Commit and push.
