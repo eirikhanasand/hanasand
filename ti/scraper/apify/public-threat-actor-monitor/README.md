@@ -1,50 +1,53 @@
 # Public Threat Actor & Ransomware Activity Monitor
 
-Track public reporting and metadata about threat actors, ransomware groups, malware names, and campaigns.
+Monitor fresh public threat actor and ransomware activity in a clean, spreadsheet-ready dataset.
 
-The Actor monitors a 100-name default watchlist and returns machine-readable rows for:
+This Actor turns public reporting into normalized rows for CTI, SOC, brand-risk, and incident response workflows. It is designed for teams that want current actor, ransomware, malware, campaign, victim/target, sector, country, TTP, source, confidence, and freshness metadata without touching raw leaked material or private sources.
 
-- recent public activity,
-- clustered incident claims with first/last reporting times,
-- publisher counts and corroborating source IDs,
-- optional victim, affected-sector, country, and impact extraction,
-- likely targets,
-- observed TTPs,
-- source provenance and optional coverage metadata,
-- confidence and corroboration grade,
-- freshness and actionability flags,
-- scheduler polling, duplicate-run reuse, retry/backoff, and source-coverage gap state,
-- review reasons for stale, single-source, partial, contradicted, metadata-only, or actionable rows,
-- analysis facets for spreadsheet/API filtering by row type, claim type, evidence grade, freshness, source family, and safety boundary,
-- a compact buyer-value reason for every paid-row decision,
-- first/last-seen timestamps.
+## What You Get
 
-It does not return stolen data, credential values, private messages, payloads, raw leak contents, or protected/private forum material.
+- A 100-name default watchlist covering long-running state-linked, financially motivated, ransomware, malware, and ecosystem names.
+- One dataset row per public actor profile, recent activity item, target, TTP/tool, source-provenance item, dataset/impact note, or optional coverage gap.
+- Buyer-useful fields such as `actor`, `rowType`, `claimType`, `title`, `summary`, `victimName`, `affectedSectors`, `countries`, `impact`, `ttp`, `attackId`, `publisherCount`, `firstReportedAt`, `lastReportedAt`, `corroborationState`, `confidence`, `freshnessStatus`, `nextSearchPivots`, and `whyWorthPayingFor`.
+- Row-level billing guidance through `paidRowDecision`, `billingGuidance`, `buyerValueScore`, and `whyWorthPayingFor`, so buyers can separate chargeable findings from useful caveated leads.
+- Safe metadata only: no credential values, stolen files, malware payloads, private messages, raw leak contents, private forum material, authentication bypass, CAPTCHA bypass, or threat-actor interaction.
+
+Held rows, suppressed rows, and coverage-gap diagnostics are opt-in. The default run keeps the dataset focused on buyer-useful intelligence rows.
+
+Current local buyer preset proof: 607 safe rows across the 100-name default watchlist, 187 sellable rows, 420 caveated useful leads, 30.8% sellable rate, average buyer value `0.593`, and no held or coverage-gap rows in the paid default output. This is local proof only; hosted paid promotion still requires an observed hosted 100-name default rerun and Apify analytics proof.
+
+## Buyer Examples
+
+SOC team:
+- Run the default watchlist every morning and filter `paidRowDecision=sellable`, `freshnessStatus=current`, and `isActionable=true` to find actor activity worth triage.
+- Example row: APT29 activity with public reporting windows, cloud-account targeting context, source-family diversity, confidence, and next searches.
+
+CTI analyst:
+- Monitor a custom list of actors, malware names, and campaigns, then pivot on `nextSearchPivots`, `relationshipPivots`, `attackId`, and `corroborationState`.
+- Example row: Turla TTP activity with ATT&CK technique, tool context, first/last seen timestamps, confidence, and public source provenance.
+
+Brand monitoring team:
+- Track ransomware group mentions for victim or target context without collecting raw leak material.
+- Example row: Akira or LockBit victim-claim metadata with sector, country, claimed date, confidence, safety flags, and public corroboration state.
+
+Incident response team:
+- Use current rows to decide what needs enrichment, containment review, or executive reporting.
+- Example row: Scattered Spider targeting row with sector/country context, likely social-engineering TTPs, source families, caveat, and recommended next searches.
 
 ## Pricing
 
-The Actor is configured for Apify pay-per-event pricing, effective July 4, 2026. Hosted build `0.6.7` on Actor version `0.6` bills the built-in start event and default dataset item event automatically:
+The Actor uses Apify pay-per-event pricing.
 
-- `apify-actor-start`
-- `apify-default-dataset-item`
+- Dataset rows: `$3.00 / 1,000 rows`
+- Actor start: `$0.00005`
+- Platform usage: included for customers
+- Effective date: July 4, 2026
 
-Rows are priced at `$3.00 / 1,000`; Actor starts are `$0.00005`; platform usage is included for customers; Apify margin is 20%. This keeps customer cost tied to output volume rather than wall-clock runtime. The default dataset remains one row per normalized finding or public evidence item, and every row carries `paidRowDecision`, `paidRowReasonCodes`, `paidRowRemediationActions`, `whyWorthPayingFor`, `buyerValueScore`, `billingGuidance`, `graphQualityLift`, `graphQualityLiftReasonCodes`, `graphQualityLiftEvidence`, and `marketplaceGraphSignals` so buyers can separate sellable findings, sellable source-provenance rows, and caveated leads. Held rows, suppressed rows, and coverage-gap diagnostics are opt-in so paid runs do not bill for internal QA/remediation output. The `OUTPUT` key-value-store record includes compact monetization, paid-row quality, `monetizationReadiness`, dry-run `qualityLiftGate`, Program BO `graphLiftBatch2`, Program BP `marketplaceGraphSignals`, Program BT `revenueConversionChecklist`, Program CF `hundredRowConversionProof`, Program CL `marketplaceConversionRealRowSamplePack`, the Program CT `first100BuyerPreview`, `pricingProof`, and 12 `buyerSampleRows`. A run is paid-traffic-ready only when it has at least `100 sellable rows`, at least 25% chargeable findings, and average buyer value of at least 0.55.
-
-Current local buyer preset proof: 607 safe rows across the 100-name default watchlist, 187 sellable rows, 420 caveated useful leads, 30.8% sellable rate, average buyer value `0.593`, and no held or coverage-gap rows in the paid default output. This is local proof only. `OUTPUT.paidReleaseTruthBoard.hostedPaidReadinessProof` and `/v1/contracts#apifyStoreReadiness.storeReadiness.hostedPaidReadinessProof` keep it separate from hosted proof, mark it `countsTowardPaidPromotion=false`, and require `bun run check:hosted-apify-paid-readiness` plus a hosted 100-name Apify run before any public conversion or revenue claim.
-
-The Program CF 100-row progress surface is explicit in `OUTPUT.hundredRowConversionProof` and `/v1/contracts#apifyStoreReadiness.hundredRowConversionProgress`: current sellable rows, projected sellable rows from accepted repairs, one-repair-away rows, caveated useful rows, blocked rows, exact blockers, and the first paid-traffic experiment plan. Graph-only plans, proof-sized runs, and caveat-only runs do not count as production readiness. Paid conversion claims require real Apify analytics fields for Store views, unique users, trial runs, paid runs, runtime, platform usage, refunds, and conversion rates.
-
-The Program CL conversion sample pack is explicit in `OUTPUT.marketplaceConversionRealRowSamplePack` and `/v1/contracts#apifyStoreReadiness.marketplaceConversionRealRowSamplePack`. It contains only current safe sellable sample rows with actor/group, claim type, safe victim or target context, sector/country, dataset or impact claim, TTP/tool/CVE pivots, freshness, confidence, corroboration state, contradiction state, next buyer searches, provenance hash, and no-leak proof. Synthetic, graph-only, stale, restricted-only, caveat-only, held, and coverage-gap rows are listed as excluded from paid-readiness proof. Marketplace telemetry descriptors for Store views, actor runs, paid runs, retention, refund risk, cost/useful row, and useful-row density remain `external_unknown` until copied from Apify analytics or `/v1/ops/product-slo`.
-
-The Program CT first-100 preview is nested at `OUTPUT.marketplaceConversionRealRowSamplePack.first100BuyerPreview` and stays `blocked_preview_until_100_real_sellable_rows` until the release truth board confirms the real 100-row floor. It shows the current sellable count, useful-but-not-chargeable count, remaining row gap, top blocker buckets, required buyer fields, no-leak proof, freshness proof, and activation gates for the first-100 buyer sample pack without claiming production scale.
-
-The Program CU buyer release verdict is nested at `OUTPUT.paidReleaseTruthBoard.buyerPaidReleaseVerdict`. It is the compact buyer/operator go-no-go summary: useful samples are available, paid traffic remains held, the public listing should not be promoted, and Store telemetry, paid runs, refunds, payout readiness, and pricing state stay `external_unknown` until observed in Apify.
-
-The hosted paid readiness proof is nested at `OUTPUT.paidReleaseTruthBoard.hostedPaidReadinessProof`. It records the old hosted shape/safety run `OThlfd0uzSCNnedAO` as `historical_shape_safety_only` separately from the local 100-name proof and keeps both out of paid promotion until a hosted 100-name default run records run id, dataset id, dataset item count, sellable count, sellable finding count, caveated count, average buyer value, runtime, memory, usage cost, no-leak result, and Program CP `secondBatchAudit` from Apify. Run `APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=run bun run check:hosted-apify-paid-readiness` to create the hosted proof, or `APIFY_TOKEN=<token> TI_APIFY_HOSTED_PROOF_MODE=verify TI_APIFY_HOSTED_RUN_ID=<run id> bun run check:hosted-apify-paid-readiness` to import observed fields from an existing hosted run. Paste the complete observed proof once with `TI_APIFY_OBSERVED_PROOF_JSON='<json>' bun run check:hosted-apify-paid-readiness` or `TI_APIFY_OBSERVED_PROOF_PATH=docs/examples/hosted-apify-observed-proof.sample.json bun run check:hosted-apify-paid-readiness`; the checked-in sample is `sampleOnly=true` example data and is not production proof. Unknown fields stay `null` or `external_unknown`; payout state, pricing model, Store views, runs, unique users, paid users, refunds, and last verified timestamp must still be copied from Apify before paid promotion.
-
-Marketplace demand and payout state are not inferred from sample rows. Store views, unique users, starts, paid runs, refunds, platform usage cost, creator revenue, beneficiary state, payout method, and withdrawal readiness stay `null` or `unknown` until copied from Apify analytics or billing. The next manual verification step is recorded in `OUTPUT.revenueConversionChecklist.nextManualVerificationStep`.
+This keeps cost tied to output volume. A normal run writes one normalized dataset row for each public intelligence item returned. Coverage-gap and held diagnostic rows are disabled by default, so ordinary runs do not pay for source-repair notes unless you choose to include them.
 
 ## Input
+
+Leave `queries` empty to use the built-in 100-name watchlist. Add up to 100 custom actor, ransomware, malware, or campaign names when you want a narrower monitor.
 
 ```json
 {
@@ -59,7 +62,17 @@ Marketplace demand and payout state are not inferred from sample rows. Store vie
 }
 ```
 
-## Output Row
+Useful options:
+
+- `includeActivity`: recent public mentions, campaigns, claims, and reporting.
+- `includeTargets`: likely sectors, countries, regions, victims, or targets when available.
+- `includeTtps`: tactics, techniques, tools, malware, CVEs, and ATT&CK identifiers when available.
+- `includeSources`: public source-provenance rows that support the result.
+- `includeDatasets`: optional service coverage rows.
+- `includeCoverageGaps`: optional source coverage notes.
+- `includeHeldRows`: optional held or suppressed rows for QA.
+
+## Sample Dataset Row
 
 ```json
 {
@@ -70,6 +83,7 @@ Marketplace demand and payout state are not inferred from sample rows. Store vie
   "summary": "A dated public report describing an APT29 campaign. Reported by 2 publishers: Security Vendor A, Security Vendor B.",
   "claimType": "campaign",
   "affectedSectors": ["Technology and cloud services"],
+  "countries": ["United States"],
   "impact": "Reported credential or account compromise",
   "publisherCount": 2,
   "firstReportedAt": "2026-06-19T14:00:00.000Z",
@@ -81,20 +95,10 @@ Marketplace demand and payout state are not inferred from sample rows. Store vie
   "collectionMode": "live_search",
   "sourceCount": 4,
   "sourceFamilyCount": 2,
-  "activityCount": 3,
+  "sourceFamilies": ["clear_web", "public_channel"],
   "freshnessStatus": "current",
-  "schedulerDecision": "reuse_active_run",
-  "pollingHint": "source_gap_review",
-  "nextPollSeconds": 3,
-  "retryAfterSeconds": 3,
-  "duplicateRunReuse": true,
-  "sourceCoverageState": "thin",
-  "sourceCoverageGaps": ["missing_public_channel_evidence"],
-  "relationshipSummary": "APT42 has a campaign row with single_source public support.",
-  "relationshipPivots": ["claim:campaign", "source_family:clear_web"],
-  "whyActionable": ["Single-source row: useful as a lead, not a confirmed fact.", "Run is still polling; keep the row attached to the active run."],
-  "corroborationState": "single_source",
-  "nextSearchPivots": ["APT42 public channel", "APT42 clear_web"],
+  "corroborationState": "corroborated",
+  "nextSearchPivots": ["APT29 cloud account targeting", "APT29 Microsoft 365"],
   "paidRowDecision": "sellable",
   "billingGuidance": "charge",
   "whyWorthPayingFor": "fresh corroborated public signal with source-family diversity",
@@ -103,10 +107,6 @@ Marketplace demand and payout state are not inferred from sample rows. Store vie
   "isActionable": true,
   "reviewReasons": ["freshness:current", "evidence:corroborated", "actionable:monitor_or_triage"],
   "analysisFacets": ["claim:campaign", "evidence:corroborated", "freshness:current", "row:activity", "safety:metadata_only"],
-  "hasDarknetMetadata": false,
-  "hasPublicChannelCoverage": false,
-  "firstSeen": "2026-06-20T02:29:22.559Z",
-  "lastSeen": "2026-06-20T02:29:22.559Z",
   "rawContentIncluded": false,
   "safety": {
     "metadataOnly": true,
@@ -119,49 +119,31 @@ Marketplace demand and payout state are not inferred from sample rows. Store vie
 }
 ```
 
-## Public Proof Contract
+## Output
 
-`GET /v1/contracts` exposes `apifyStoreReadiness`, which mirrors the Actor default input, hosted build `0.6.7`, public proof run/dataset, hosted paid readiness proof, pricing hooks, conversion metric handoff, buyer-facing conversion proof, and safe sample output DTOs for `APT29`, `Volt Typhoon`, `Scattered Spider`, and `LockBit`.
+Each run writes:
 
-Each public proof DTO includes:
+- A default dataset of normalized public threat intelligence rows.
+- An `OUTPUT` record with run-level counts such as row count, sellable rows, caveated leads, average buyer value, and buyer sample rows.
 
-- `runId`, `buildVersion`, and `datasetId`,
-- query, row count, freshness, and source families,
-- the `safe_metadata_only.v1` safety contract,
-- a no-leak proof showing raw content, credentials, private content, and actor interaction are absent.
+Recommended filters:
 
-Run these before publication or after changing the listing contract:
-
-```bash
-bun run check
-bun run check:api-regression
-bun run check:apify-threat-actor-monitor
-bun run smoke:apify-threat-actor-monitor
-bun run check:apify-publication
-TI_SEARCH_READINESS_QUERY=APT29 bun run check:scraper-native-search
-TI_SEARCH_READINESS_QUERY='Volt Typhoon' bun run check:scraper-native-search
-TI_SEARCH_READINESS_QUERY='Scattered Spider' bun run check:scraper-native-search
-TI_SEARCH_READINESS_QUERY=LockBit bun run check:scraper-native-search
-```
+- `paidRowDecision=sellable`: rows that are current, safe, specific, and useful enough for paid monitoring.
+- `paidRowDecision=included_with_caveat`: useful leads that need analyst context.
+- `corroborationState=corroborated`: rows supported by more than one source or source family.
+- `freshnessStatus=current`: rows most suitable for SOC and incident-response review.
+- `billingGuidance=charge`: rows that should count as paid dataset items.
 
 ## Safety Boundary
 
-The Actor emits public metadata and summaries only. These fields are excluded:
+The Actor emits public metadata and summaries only. It excludes:
 
-- no credential values,
-- no leaked database rows,
-- no malware payloads,
-- no private/invite-only content,
-- no authentication or CAPTCHA bypass,
-- no threat actor interaction,
-- no raw darkweb URLs in public output.
+- credential values,
+- leaked database rows,
+- malware payloads,
+- private or invite-only content,
+- authentication or CAPTCHA bypass,
+- actor contact or interaction,
+- raw dark-web URLs in public output.
 
-## Using the results
-
-Each run writes one normalized dataset. Related reports are conservatively clustered into one activity row when their topic strongly overlaps within a three-day window. Filter `isActionable=true` for current findings with adequate confidence and at least one supporting source. Use `relationshipSummary`, `relationshipPivots`, `whyActionable`, `whyWorthPayingFor`, `corroborationState`, and `nextSearchPivots` to see the actor-to-victim/sector/country/TTP/source-family pivots that make a row worth investigating. Use `reviewReasons`, `analysisFacets`, `evidenceGrade`, `publisherCount`, and the source ID arrays to distinguish actionable rows from stale, partial, single-source, contradicted, or metadata-only claims. Use `schedulerDecision`, `pollingHint`, `nextPollSeconds`, `retryAfterSeconds`, `duplicateRunReuse`, and `sourceCoverageGaps` to decide whether downstream monitoring should poll again, wait for backoff, or treat the row as a source-coverage follow-up. Retain `provenanceHash` when merging repeated runs.
-
-For paid monitoring workflows, start with `paidRowDecision=sellable`, then inspect `included_with_caveat` rows as leads. Profile, target, TTP, and public source-provenance rows can be sellable when they are fresh or recent, actionable, safe, and supported by multiple public sources even if a source-family gap remains visible. Source-provenance rows are evidence rows, not confirmed incident claims. Single-source activity rows, stale rows, contradicted rows, and no-evidence rows are not promoted. Treat `coverage_gap_only` rows as source-expansion work, `hold` rows as not ready for promotion, and `suppress` rows as capability or context rows that should not be counted as paid findings until remediation adds evidence. Use `graphQualityLiftEvidence` to inspect relationship readiness, source corroboration, contradiction holds, freshness lift, no-leak state, and export-review eligibility for each paid-row decision. Use `marketplaceGraphSignals` to see actor/victim/sector/country/TTP/source-family links, freshness/change hints, confidence trend, contradiction state, next buyer pivots, and the recommended buyer action for the row. The field is safe metadata only: it never includes raw evidence bodies, raw unsafe URLs, credentials, private content, stolen files, or actor-interaction material. The run-level `paidRowQuality` object gives the same counts without scanning the whole dataset. The run-level `monetizationReadiness` object states whether the dataset is ready for paid traffic, the target sellable row floor, current sellable and useful row counts, blockers, and the next revenue action. The run-level `qualityLiftGate` compares accepted and rejected repair examples against proof run `iMQGeezZ8bx7WtlhQ` and the 100-name buyer preset, reporting accepted/rejected counts, sellable/fresh/useful rows added, cost-per-useful-row delta, projected row revenue delta, and owner handoffs. The run-level `graphLiftBatch2` uses live proof `OThlfd0uzSCNnedAO` / dataset `LSen2fYtwFTtOr7vK` as the newer baseline and explicitly rejects graph-only promotion for stale, single-source, contradicted, restricted-only, missing-ledger, and unrelated-actor context. The run-level `marketplaceGraphSignals` includes eight buyer-facing APT/ransomware examples, six graph-inflation rejection cases, and Agent 03/04/05 handoffs for parser, public-channel, and restricted-metadata blockers. These gates are dry-run only: they do not mutate sources, start collection, or count repairs unless buyer-visible paid-row output improves.
-
-The default watchlist contains 100 long-running state-linked, financially motivated, and malware/ecosystem names. Custom queries can monitor up to 100 actor, malware, ransomware, or campaign names in one run. Schedule the Actor to maintain a rolling feed; downstream systems can consume dataset items through the Apify API. Dataset coverage, held rows, and coverage-gap rows are disabled by default so ordinary runs contain buyer-useful intelligence and public evidence rows rather than internal diagnostics. Enable them for QA or source-repair workflows.
-
-Claims remain claims until corroborated. Confidence and evidence fields expose that distinction instead of presenting every public mention as confirmed activity.
+Claims remain claims until corroborated. Confidence, freshness, source, and caveat fields expose that distinction instead of presenting every public mention as confirmed activity.

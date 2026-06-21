@@ -1,18 +1,18 @@
 {
   "actorOutputSchemaVersion": 1,
   "title": "Threat intelligence output",
-  "description": "Normalized actor profiles, clustered incident claims, activity, targeting, TTP, source, and dataset coverage rows. The OUTPUT key-value record also exposes monetization readiness, 100-row conversion progress, the real-row marketplace conversion sample pack, a blocked first-100 buyer preview, the paid-release buyer verdict, and a graph public-corroboration paid-row unlock queue.",
+  "description": "Normalized public threat actor and ransomware activity rows with buyer summaries, recommended next actions, key pivots, confidence, freshness, and safe metadata.",
   "properties": {
     "dataset": {
       "type": "string",
       "title": "Threat intelligence rows",
-      "description": "The default dataset containing normalized public-intelligence rows.",
+      "description": "The default dataset containing normalized public threat intelligence rows.",
       "template": "{{links.apiDefaultDatasetUrl}}/items"
     },
     "summary": {
       "type": "string",
       "title": "Run summary",
-      "description": "The complete normalized output array stored as the OUTPUT record.",
+      "description": "Run-level counts and buyer sample rows stored as the OUTPUT record.",
       "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/OUTPUT"
     }
   }

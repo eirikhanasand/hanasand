@@ -57,13 +57,13 @@
     "includeCoverageGaps": {
       "title": "Include coverage gaps",
       "type": "boolean",
-      "description": "Add diagnostic rows that explain thin, stale, or missing source coverage and the recommended collection action. Disabled by default so paid runs contain buyer-useful rows instead of internal remediation rows.",
+      "description": "Add rows that explain thin, stale, or missing public coverage and the recommended source action. Disabled by default so normal runs stay focused on buyer-useful intelligence rows.",
       "default": false
     },
     "includeHeldRows": {
       "title": "Include held diagnostics",
       "type": "boolean",
-      "description": "Add held or suppressed rows for QA and source repair. Disabled by default because held rows are not buyer-payworthy dataset items.",
+      "description": "Add held or suppressed rows for quality review. Disabled by default because these rows are not buyer-payworthy dataset items.",
       "default": false
     }
   },
