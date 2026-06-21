@@ -1673,6 +1673,7 @@ function buildDailyActorPresetCanaryPacket(
         actor,
         atlasSourceIds,
         sourceFamilies,
+        supportMode: directActorRows.length > 0 ? "direct_actor_sources" as const : "default_watchlist_freshness_fallback" as const,
         schedulerCadenceSeconds,
         expectedFreshRowsPerDay,
         expectedUsefulRowsPerDay,
@@ -1707,6 +1708,24 @@ function buildDailyActorPresetCanaryPacket(
     .map((row) => row.atlasSourceId));
   const expectedFreshRowsPerDay = roundScore(rows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0));
   const expectedUsefulRowsPerDay = roundScore(rows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0));
+  const actorSpecificGapRows = rows.map((row) => {
+    const currentDirectSourceCount = row.supportMode === "direct_actor_sources" ? row.atlasSourceIds.length : 0;
+    const fallbackSourceCount = row.supportMode === "default_watchlist_freshness_fallback" ? row.atlasSourceIds.length : 0;
+    const requiredFamilies = dailyActorPresetRequiredFamilies(row.actor, row.sourceFamilies);
+    const acquisitionPriority = currentDirectSourceCount === 0
+      ? "p0_actor_specific_gap" as const
+      : row.sourceFamilies.length < 2 ? "p1_diversity_gap" as const : "p2_monitor" as const;
+    return {
+      actor: row.actor,
+      currentDirectSourceCount,
+      fallbackSourceCount,
+      requiredFamilies,
+      acquisitionPriority,
+      expectedFreshRowsPerDayNeeded: roundScore(Math.max(0, 2 - row.expectedFreshRowsPerDay)),
+      nextSourceCriteria: dailyActorPresetSourceCriteria(row.actor, requiredFamilies, acquisitionPriority),
+      ownerHandoff: acquisitionPriority === "p2_monitor" ? "agent_03_parser_repair" as const : "agent_04_source_acquisition" as const
+    };
+  });
 
   return {
     schemaVersion: "ti.source_atlas.daily_actor_preset_canary_packet.v1",
@@ -1725,13 +1744,39 @@ function buildDailyActorPresetCanaryPacket(
     expectedActorCoverageCount: rows.filter((row) => row.atlasSourceIds.length > 0 && !row.actor.includes("LockBit") && !row.actor.includes("Akira")).length,
     expectedRansomwareCoverageCount: rows.filter((row) => row.atlasSourceIds.length > 0 && (row.actor.includes("LockBit") || row.actor.includes("Akira"))).length,
     rows,
+    actorSpecificGapRows,
     ownerHandoffs: {
       agent02Scheduler: ["Use rows[].atlasSourceIds and schedulerCadenceSeconds to stage approval-only canary packets for the daily 100-name Actor preset after operator approval."],
       agent07Quality: ["Gate each actor row on canaryAcceptance before counting useful/fresh row lift or source-family diversity in paid output."],
-      agent09Apify: ["Expose dailyActorPresetCanaryPacket in /v1/sources/atlas so the Apify Actor can explain which reviewed sources support the daily paid preset."],
+      agent09Apify: ["Expose dailyActorPresetCanaryPacket in /v1/sources/atlas so the Apify Actor can explain which reviewed sources support the daily paid preset and which actor-specific gaps remain."],
       agent10Revenue: ["Measure expectedUsefulRowsPerDay against cost per useful row before increasing source-tier marketplace claims."]
     }
   };
+}
+
+function dailyActorPresetRequiredFamilies(
+  actor: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["rows"][number]["actor"],
+  currentFamilies: TiSourceAtlasFamily[]
+): TiSourceAtlasFamily[] {
+  const ransomwareFamilies: TiSourceAtlasFamily[] = ["ransomware_tracker", "public_channel_descriptor", "vendor_threat_blog", "cert_government"];
+  const actorFamilies: TiSourceAtlasFamily[] = ["vendor_threat_blog", "cert_government", "malware_researcher", "public_channel_descriptor", "cve_advisory"];
+  const cloudFamilies: TiSourceAtlasFamily[] = ["cloud_saas_security", "vendor_threat_blog", "cert_government", "public_channel_descriptor"];
+  const preferred = actor === "LockBit" || actor === "Akira"
+    ? ransomwareFamilies
+    : actor === "Scattered Spider" || actor === "Volt Typhoon"
+      ? cloudFamilies
+      : actorFamilies;
+  return preferred.filter((family) => !currentFamilies.includes(family)).slice(0, 3);
+}
+
+function dailyActorPresetSourceCriteria(
+  actor: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["rows"][number]["actor"],
+  requiredFamilies: TiSourceAtlasFamily[],
+  acquisitionPriority: TiSourceAtlasProductSourceLadderPacket["paidSourceTierPlan"]["highValueReplacementBatch"]["dailyActorPresetCanaryPacket"]["actorSpecificGapRows"][number]["acquisitionPriority"]
+): string {
+  if (acquisitionPriority === "p2_monitor") return `Keep ${actor} parser fixtures current and measure daily useful-row lift before adding more same-family sources.`;
+  const familyText = requiredFamilies.length > 0 ? requiredFamilies.join(", ") : "non-duplicate public source families";
+  return `Acquire reviewed public ${familyText} sources with current legal/robots review, parser-certifiable actor/victim/TTP fields, and no private/auth/CAPTCHA access before ${actor} can rely on more than default-watchlist freshness fallback.`;
 }
 
 function buildHighValueFreshnessPriorityQueue(

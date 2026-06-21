@@ -1969,6 +1969,7 @@ export interface TiSourceAtlasProductSourceLadderPacket {
           actor: "APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira";
           atlasSourceIds: string[];
           sourceFamilies: TiSourceAtlasFamily[];
+          supportMode: "direct_actor_sources" | "default_watchlist_freshness_fallback";
           schedulerCadenceSeconds: number;
           expectedFreshRowsPerDay: number;
           expectedUsefulRowsPerDay: number;
@@ -1987,6 +1988,16 @@ export interface TiSourceAtlasProductSourceLadderPacket {
             actorInteractionRequired: false;
             sourceActivationApplied: false;
           };
+        }>;
+        actorSpecificGapRows: Array<{
+          actor: "APT29" | "APT28" | "APT42" | "Volt Typhoon" | "Lazarus" | "Scattered Spider" | "FIN7" | "LockBit" | "Akira";
+          currentDirectSourceCount: number;
+          fallbackSourceCount: number;
+          requiredFamilies: TiSourceAtlasFamily[];
+          acquisitionPriority: "p0_actor_specific_gap" | "p1_diversity_gap" | "p2_monitor";
+          expectedFreshRowsPerDayNeeded: number;
+          nextSourceCriteria: string;
+          ownerHandoff: "agent_04_source_acquisition" | "agent_03_parser_repair";
         }>;
         ownerHandoffs: {
           agent02Scheduler: string[];

@@ -2003,6 +2003,7 @@ describe("source seed bundles", () => {
       row.rank > 0 &&
       row.atlasSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_")) &&
       row.sourceFamilies.length > 0 &&
+      ["direct_actor_sources", "default_watchlist_freshness_fallback"].includes(row.supportMode) &&
       row.schedulerCadenceSeconds > 0 &&
       row.expectedFreshRowsPerDay >= 0 &&
       row.expectedUsefulRowsPerDay >= 0 &&
@@ -2016,6 +2017,23 @@ describe("source seed bundles", () => {
       row.noLeakBoundary.crawlStarted === false &&
       row.noLeakBoundary.actorInteractionRequired === false &&
       row.noLeakBoundary.sourceActivationApplied === false
+    )).toBe(true);
+    expect(dailyPresetPacket.rows.some((row) => row.supportMode === "default_watchlist_freshness_fallback")).toBe(true);
+    expect(dailyPresetPacket.actorSpecificGapRows.length).toBe(dailyPresetPacket.rows.length);
+    expect(dailyPresetPacket.actorSpecificGapRows.map((row) => row.actor)).toEqual(expect.arrayContaining([
+      "APT29",
+      "APT42",
+      "LockBit",
+      "Akira"
+    ]));
+    expect(dailyPresetPacket.actorSpecificGapRows.some((row) => row.acquisitionPriority === "p0_actor_specific_gap")).toBe(true);
+    expect(dailyPresetPacket.actorSpecificGapRows.every((row) =>
+      row.currentDirectSourceCount >= 0 &&
+      row.fallbackSourceCount >= 0 &&
+      row.requiredFamilies.length > 0 &&
+      row.expectedFreshRowsPerDayNeeded >= 0 &&
+      (row.nextSourceCriteria.includes("current legal/robots review") || row.nextSourceCriteria.includes("parser fixtures")) &&
+      ["agent_04_source_acquisition", "agent_03_parser_repair"].includes(row.ownerHandoff)
     )).toBe(true);
     expect(dailyPresetPacket.ownerHandoffs.agent02Scheduler.join(" ")).toContain("daily 100-name Actor preset");
     expect(dailyPresetPacket.ownerHandoffs.agent09Apify.join(" ")).toContain("/v1/sources/atlas");
