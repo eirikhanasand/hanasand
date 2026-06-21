@@ -1,560 +1,102 @@
 // @ts-nocheck
-import type {
-  ExtractionProvenance,
-  GraphRelationshipReviewState,
-  GraphReviewAuditEntry,
-  GraphReviewDecision,
-  IntelligenceGraphNode,
-  IntelligenceRelationship,
-  ProgressiveEvidenceStage,
-  ProgressiveGraphDto,
-  ProgressiveGraphEvidence,
-  RelationshipDelta,
-  RelationshipDeltaDto,
-  RelationshipGraph,
-  RelationshipReviewActionAvailability,
-  RelationshipStixEligibility,
-  StixBundle,
-  StixExportOptions,
-  StixObject
-} from "../types.ts";
 import { clampScore, stableId } from "../utils.ts";
 
-const STAGE_WEIGHT: Record<ProgressiveEvidenceStage, number> = {
-  discovery: 0.35,
-  captured: 0.55,
-  extracted: 0.75,
-  reviewed: 0.9,
-  promoted: 1
-};
+const STAGES = ["discovery", "captured", "extracted", "reviewed", "promoted"];
+const PRIORITY = { promoted: 100, contradicted: 95, downgraded: 90, added: 70, updated: 45, stale: 20 };
 
-const STAGE_ORDER: ProgressiveEvidenceStage[] = ["discovery", "captured", "extracted", "reviewed", "promoted"];
-
-const DELTA_PRIORITY: Record<RelationshipDelta["kind"], number> = {
-  promoted: 100,
-  contradicted: 95,
-  downgraded: 90,
-  added: 70,
-  updated: 45,
-  stale: 20
-};
-
-const REVIEW_STATES: GraphRelationshipReviewState[] = [
-  "unreviewed",
-  "needs_review",
-  "accepted",
-  "rejected",
-  "superseded",
-  "contradicted",
-  "expired"
-];
-
-export function buildProgressiveGraphUpdate(
-  evidence: ProgressiveGraphEvidence[],
-  options: {
-    generatedAt: string;
-    previous?: RelationshipGraph;
-    staleAfterDays?: number;
+export function buildProgressiveGraphUpdate(evidence, options) {
+  const nodes = new Map(), relationships = new Map();
+  for (const item of evidence) for (const rel of item.relationships) {
+    const source = putNode(nodes, node(rel.source, item));
+    const target = putNode(nodes, node(rel.target, item));
+    merge(relationships, relationship(item, source, target, rel), item.stage);
   }
-): ProgressiveGraphDto {
-  const nodes = new Map<string, IntelligenceGraphNode>();
-  const relationships = new Map<string, IntelligenceRelationship>();
-
-  for (const item of evidence) {
-    for (const relationship of item.relationships) {
-      const source = addNode(nodes, nodeFromEvidence(relationship.source, item));
-      const target = addNode(nodes, nodeFromEvidence(relationship.target, item));
-      const edge = relationshipFromEvidence(item, source, target, relationship);
-      mergeRelationship(relationships, edge, item.stage);
-    }
-  }
-
-  const graph: RelationshipGraph = {
-    nodes: [...nodes.values()],
-    relationships: [...relationships.values()]
-  };
-
+  const graph = { nodes: [...nodes.values()], relationships: [...relationships.values()] };
   const deltas = relationshipDeltas(options.previous, graph, options.generatedAt, options.staleAfterDays ?? 30);
-
-  return {
-    stage: highestStage(evidence.map((item) => item.stage)),
-    graph,
-    deltas,
-    relationshipDeltas: buildRelationshipDeltaDtos(deltas),
-    generatedAt: options.generatedAt
-  };
+  return { stage: highest(evidence.map((e) => e.stage)), graph, deltas, relationshipDeltas: buildRelationshipDeltaDtos(deltas), generatedAt: options.generatedAt };
 }
 
-export function buildRelationshipDeltaDtos(deltas: RelationshipDelta[]): RelationshipDeltaDto[] {
-  const sorted = [...deltas].sort(compareRelationshipDeltas);
-  return sorted.map((item, index) => {
-    const stage = stageForRelationship(item.relationship);
-    const reviewReasons = reviewReasonsForDelta(item, stage);
-    return {
-      relationshipId: item.relationship.id,
-      kind: item.kind,
-      stage,
-      confidenceBefore: item.previous?.confidence,
-      confidenceAfter: item.relationship.confidence,
-      sourceIds: sourceIds(item.relationship),
-      firstSeenAt: item.relationship.firstSeenAt,
-      lastSeenAt: item.relationship.lastSeenAt,
-      requiresAnalystReview: reviewReasons.length > 0,
-      reviewReasons,
-      reviewState: relationshipReviewState(item.relationship),
-      reviewReason: reviewReason(item.relationship),
-      reviewActionAvailability: reviewActionAvailability(item.relationship),
-      stixEligibility: relationshipStixEligibility(item.relationship),
-      rank: index + 1,
-      sourceRef: item.relationship.sourceRef,
-      targetRef: item.relationship.targetRef,
-      relationshipType: item.relationship.type,
-      reason: item.reason
-    };
+export function buildRelationshipDeltaDtos(deltas) {
+  return [...deltas].sort(compareDeltas).map((delta, index) => {
+    const stage = stageOf(delta.relationship), reasons = reviewReasons(delta, stage);
+    return { relationshipId: delta.relationship.id, kind: delta.kind, stage, confidenceBefore: delta.previous?.confidence, confidenceAfter: delta.relationship.confidence, sourceIds: sourceIds(delta.relationship), firstSeenAt: delta.relationship.firstSeenAt, lastSeenAt: delta.relationship.lastSeenAt, requiresAnalystReview: reasons.length > 0, reviewReasons: reasons, reviewState: reviewState(delta.relationship), reviewReason: delta.relationship.properties?.reviewReason, reviewActionAvailability: actionAvailability(delta.relationship), stixEligibility: relationshipStixEligibility(delta.relationship), rank: index + 1, sourceRef: delta.relationship.sourceRef, targetRef: delta.relationship.targetRef, relationshipType: delta.relationship.type, reason: delta.reason };
   });
 }
 
-export function relationshipStixEligibility(relationship: IntelligenceRelationship): RelationshipStixEligibility {
-  const stage = stageForRelationship(relationship);
-  const promoted = relationship.properties?.promoted === true || stage === "promoted";
-  const accepted = relationshipReviewState(relationship) === "accepted";
-  const discoveryOnly = stage === "discovery" && !promoted;
-  return {
-    discoveryOnly,
-    captureBacked: stageIndex(stage) >= stageIndex("captured") || promoted,
-    extracted: stageIndex(stage) >= stageIndex("extracted") || promoted,
-    reviewed: stageIndex(stage) >= stageIndex("reviewed") || promoted,
-    promoted,
-    accepted,
-    includedByDefault: accepted || promoted
-  };
+export function relationshipStixEligibility(relationship) {
+  const stage = stageOf(relationship), promoted = relationship.properties?.promoted === true || stage === "promoted", accepted = reviewState(relationship) === "accepted";
+  return { discoveryOnly: stage === "discovery" && !promoted, captureBacked: idx(stage) >= idx("captured") || promoted, extracted: idx(stage) >= idx("extracted") || promoted, reviewed: idx(stage) >= idx("reviewed") || promoted, promoted, accepted, includedByDefault: accepted || promoted };
 }
 
-export function applyGraphReviewDecision(graph: RelationshipGraph, decision: GraphReviewDecision): RelationshipGraph {
-  return {
-    nodes: graph.nodes,
-    relationships: graph.relationships.map((relationship) =>
-      relationship.id === decision.relationshipId ? applyRelationshipReviewDecision(relationship, decision) : relationship
-    )
-  };
+export function applyGraphReviewDecision(graph, decision) {
+  return { nodes: graph.nodes, relationships: graph.relationships.map((rel) => rel.id === decision.relationshipId ? applyRelationshipReviewDecision(rel, decision) : rel) };
 }
 
-export function applyRelationshipReviewDecision(
-  relationship: IntelligenceRelationship,
-  decision: GraphReviewDecision
-): IntelligenceRelationship {
-  const fromState = relationshipReviewState(relationship);
-  const toState = reviewStateForDecision(decision.action);
-  const existingAudit = reviewAudit(relationship);
-  const auditEntry: GraphReviewAuditEntry = {
-    decisionId: decision.id,
-    relationshipId: relationship.id,
-    fromState,
-    toState,
-    action: decision.action,
-    reviewerId: decision.reviewerId,
-    reason: decision.reason,
-    decidedAt: decision.decidedAt,
-    sourceIds: uniqueSorted(decision.sourceIds),
-    evidenceIds: uniqueSorted(decision.evidenceIds),
-    supersedesRelationshipId: decision.supersedesRelationshipId
-  };
-
-  return {
-    ...relationship,
-    properties: {
-      ...relationship.properties,
-      reviewState: toState,
-      reviewDecisionId: decision.id,
-      reviewReason: decision.reason,
-      reviewedBy: decision.reviewerId,
-      reviewedAt: decision.decidedAt,
-      reviewSourceIds: auditEntry.sourceIds,
-      reviewEvidenceIds: auditEntry.evidenceIds,
-      supersedesRelationshipId: decision.supersedesRelationshipId,
-      contradicted: decision.action === "resolve_contradiction" ? false : relationship.properties?.contradicted === true || toState === "contradicted",
-      promoted: relationship.properties?.promoted === true || toState === "accepted",
-      reviewAudit: [...existingAudit, auditEntry]
-    }
-  };
+export function applyRelationshipReviewDecision(relationship, decision) {
+  const toState = decision.action === "accept" || decision.action === "resolve_contradiction" ? "accepted" : decision.action === "reject" ? "rejected" : decision.action === "supersede" ? "superseded" : "needs_review";
+  const audit = [...(relationship.properties?.reviewAudit ?? []), { decisionId: decision.id, relationshipId: decision.relationshipId, fromState: reviewState(relationship), toState, action: decision.action, reviewerId: decision.reviewerId, reason: decision.reason, decidedAt: decision.decidedAt, sourceIds: uniq(decision.sourceIds ?? []), evidenceIds: uniq(decision.evidenceIds ?? []), supersedesRelationshipId: decision.supersedesRelationshipId }];
+  return { ...relationship, properties: { ...relationship.properties, reviewState: toState, reviewDecisionId: decision.id, reviewReason: decision.reason, reviewedBy: decision.reviewerId, reviewedAt: decision.decidedAt, reviewSourceIds: audit.at(-1).sourceIds, reviewEvidenceIds: audit.at(-1).evidenceIds, supersedesRelationshipId: decision.supersedesRelationshipId, contradicted: decision.action === "resolve_contradiction" ? false : relationship.properties?.contradicted === true || toState === "contradicted", promoted: relationship.properties?.promoted === true || toState === "accepted", reviewAudit: audit } };
 }
 
-export function exportProgressiveGraphToStixBundle(
-  dto: ProgressiveGraphDto,
-  options: StixExportOptions
-): StixBundle {
-  const objects = new Map<string, StixObject>();
-  const identity: StixObject = {
-    type: "identity",
-    spec_version: "2.1",
-    id: stixId("identity", options.producerName),
-    created: options.generatedAt,
-    modified: options.generatedAt,
-    name: options.producerName,
-    x_ti_tenant_id: options.tenantId
-  };
+export function exportProgressiveGraphToStixBundle(dto, options) {
+  const objects = new Map(), identity = { type: "identity", spec_version: "2.1", id: stixId("identity", options.producerName), created: options.generatedAt, modified: options.generatedAt, name: options.producerName, x_ti_tenant_id: options.tenantId };
   objects.set(identity.id, identity);
-
-  const includeUnreviewedDiscovery = options.includeDiscoveryEvidence || options.includeUnreviewedDiscoveryContext;
-  const exportableRelationships = dto.graph.relationships.filter((relationship) =>
-    relationshipStixEligibility(relationship).includedByDefault || (includeUnreviewedDiscovery && stageForRelationship(relationship) === "discovery")
-  );
-  const referencedNodeIds = new Set(exportableRelationships.flatMap((relationship) => [relationship.sourceRef, relationship.targetRef]));
-
-  for (const node of dto.graph.nodes.filter((node) => referencedNodeIds.has(node.id))) {
-    objects.set(stixRefForNode(node), stixObjectForNode(node, options.generatedAt));
-  }
-
-  for (const relationship of exportableRelationships) {
-    objects.set(stixId("relationship", relationship.id), {
-      type: "relationship",
-      spec_version: "2.1",
-      id: stixId("relationship", relationship.id),
-      created: options.generatedAt,
-      modified: options.generatedAt,
-      relationship_type: relationship.type,
-      source_ref: stixRefForNodeId(dto.graph, relationship.sourceRef),
-      target_ref: stixRefForNodeId(dto.graph, relationship.targetRef),
-      confidence: Math.round(clampScore(relationship.confidence) * 100),
-      first_seen: relationship.firstSeenAt,
-      last_seen: relationship.lastSeenAt,
-      x_ti_provenance: relationship.provenance,
-      x_ti_stage: relationship.properties?.stage,
-      x_ti_delta_kind: dto.deltas.find((delta) => delta.relationship.id === relationship.id)?.kind,
-      x_ti_stix_eligibility: relationshipStixEligibility(relationship),
-      x_ti_review_state: relationshipReviewState(relationship),
-      x_ti_review_reason: reviewReason(relationship),
-      x_ti_review_audit: reviewAudit(relationship),
-      x_ti_requires_review: dto.relationshipDeltas.find((delta) => delta.relationshipId === relationship.id)?.requiresAnalystReview ?? false
-    });
-  }
-
-  return {
-    type: "bundle",
-    id: stixId("bundle", `${options.producerName}:${options.generatedAt}:progressive:${dto.stage}`),
-    objects: [...objects.values()]
-  };
+  const includeDiscovery = options.includeDiscoveryEvidence || options.includeUnreviewedDiscoveryContext;
+  const rels = dto.graph.relationships.filter((rel) => relationshipStixEligibility(rel).includedByDefault || includeDiscovery && stageOf(rel) === "discovery");
+  const nodeIds = new Set(rels.flatMap((rel) => [rel.sourceRef, rel.targetRef]));
+  for (const item of dto.graph.nodes.filter((n) => nodeIds.has(n.id))) objects.set(stixRef(item), stixNode(item, options.generatedAt));
+  for (const rel of rels) objects.set(stixId("relationship", rel.id), { type: "relationship", spec_version: "2.1", id: stixId("relationship", rel.id), created: options.generatedAt, modified: options.generatedAt, relationship_type: rel.type, source_ref: stixRefId(dto.graph, rel.sourceRef), target_ref: stixRefId(dto.graph, rel.targetRef), confidence: Math.round(clampScore(rel.confidence) * 100), first_seen: rel.firstSeenAt, last_seen: rel.lastSeenAt, x_ti_provenance: rel.provenance ?? [], x_ti_review_state: reviewState(rel), x_ti_review_audit: rel.properties?.reviewAudit ?? [], x_ti_stix_eligibility: relationshipStixEligibility(rel), x_ti_source_ids: sourceIds(rel), x_ti_evidence_stage: stageOf(rel), description: rel.properties?.reviewReason });
+  return { type: "bundle", id: stixId("bundle", `${options.producerName}:${options.generatedAt}`), objects: [...objects.values()] };
 }
 
-function nodeFromEvidence(
-  input: ProgressiveGraphEvidence["relationships"][number]["source"],
-  evidence: ProgressiveGraphEvidence
-): IntelligenceGraphNode {
-  return {
-    id: stableId("node", `${input.type}:${input.value.toLowerCase()}`),
-    type: input.type,
-    value: input.value,
-    confidence: stagedConfidence(input.confidence, evidence.stage),
-    provenance: [provenance(evidence)],
-    properties: { ...input.properties, aliases: input.aliases, stage: evidence.stage }
-  };
+function node(input, evidence) {
+  const id = stableId("node", `${input.type}:${norm(input.value)}`);
+  return { id, type: input.type, value: input.value, label: input.value, confidence: clampScore(input.confidence ?? 0.5), firstSeenAt: evidence.observedAt, lastSeenAt: evidence.observedAt, aliases: input.aliases ?? [], sourceIds: [evidence.sourceId], evidenceIds: [evidence.id], properties: { stage: evidence.stage } };
 }
-
-function relationshipFromEvidence(
-  evidence: ProgressiveGraphEvidence,
-  source: IntelligenceGraphNode,
-  target: IntelligenceGraphNode,
-  input: ProgressiveGraphEvidence["relationships"][number]
-): IntelligenceRelationship {
-  return {
-    id: stableId("rel", `${source.id}:${input.type}:${target.id}`),
-    sourceRef: source.id,
-    targetRef: target.id,
-    type: input.type,
-    confidence: stagedConfidence(input.confidence, evidence.stage),
-    firstSeenAt: evidence.observedAt,
-    lastSeenAt: evidence.observedAt,
-    provenance: [provenance(evidence)],
-    properties: {
-      ...input.properties,
-      stage: evidence.stage,
-      contradicted: input.contradicted === true,
-      promoted: evidence.stage === "promoted",
-      reviewState: reviewStateForEvidence(evidence.stage, input.contradicted === true),
-      evidenceId: evidence.id
-    }
-  };
+function relationship(evidence, source, target, input) {
+  const id = stableId("rel", `${source.id}:${input.type}:${target.id}`);
+  const stage = evidence.stage;
+  return { id, sourceRef: source.id, targetRef: target.id, type: input.type, confidence: staged(input.confidence ?? 0.5, stage), firstSeenAt: evidence.observedAt, lastSeenAt: evidence.observedAt, sourceIds: [evidence.sourceId], evidenceIds: [evidence.id], provenance: [prov(evidence)], properties: { stage, contradicted: input.contradicted === true, promoted: stage === "promoted", captureIds: evidence.captureId ? [evidence.captureId] : [], contentHashes: evidence.contentHash ? [evidence.contentHash] : [] } };
 }
-
-function addNode(nodes: Map<string, IntelligenceGraphNode>, node: IntelligenceGraphNode): IntelligenceGraphNode {
-  const existing = nodes.get(node.id);
-  if (!existing) {
-    nodes.set(node.id, node);
-    return node;
-  }
-  const provenance = mergeProvenance(existing.provenance, node.provenance);
-  const merged = {
-    ...existing,
-    confidence: aggregateConfidence(existing.confidence, node.confidence, provenance.length, false),
-    provenance,
-    properties: {
-      ...existing.properties,
-      ...node.properties,
-      stage: highestStage([String(existing.properties?.stage ?? "discovery") as ProgressiveEvidenceStage, String(node.properties?.stage ?? "discovery") as ProgressiveEvidenceStage])
-    }
-  };
-  nodes.set(node.id, merged);
-  return merged;
+function putNode(nodes, next) {
+  const prev = nodes.get(next.id);
+  if (!prev) nodes.set(next.id, next);
+  else nodes.set(next.id, { ...prev, confidence: Math.max(prev.confidence, next.confidence), firstSeenAt: minIso(prev.firstSeenAt, next.firstSeenAt), lastSeenAt: maxIso(prev.lastSeenAt, next.lastSeenAt), aliases: uniq([...(prev.aliases ?? []), ...(next.aliases ?? [])]), sourceIds: uniq([...(prev.sourceIds ?? []), ...next.sourceIds]), evidenceIds: uniq([...(prev.evidenceIds ?? []), ...next.evidenceIds]), properties: { ...prev.properties, stage: highest([prev.properties?.stage ?? "discovery", next.properties?.stage ?? "discovery"]) } });
+  return nodes.get(next.id);
 }
-
-function mergeRelationship(
-  relationships: Map<string, IntelligenceRelationship>,
-  relationship: IntelligenceRelationship,
-  stage: ProgressiveEvidenceStage
-): void {
-  const existing = relationships.get(relationship.id);
-  if (!existing) {
-    relationships.set(relationship.id, relationship);
-    return;
-  }
-  const provenance = mergeProvenance(existing.provenance, relationship.provenance);
-  const contradicted = Boolean(existing.properties?.contradicted || relationship.properties?.contradicted);
-  const nextStage = highestStage([String(existing.properties?.stage ?? "discovery") as ProgressiveEvidenceStage, stage]);
-  relationships.set(relationship.id, {
-    ...existing,
-    firstSeenAt: minIso(existing.firstSeenAt, relationship.firstSeenAt),
-    lastSeenAt: maxIso(existing.lastSeenAt, relationship.lastSeenAt),
-    confidence: aggregateConfidence(existing.confidence, relationship.confidence, provenance.length, contradicted),
-    provenance,
-    properties: {
-      ...existing.properties,
-      ...relationship.properties,
-      stage: nextStage,
-      promoted: nextStage === "promoted",
-      contradicted,
-      reviewState: reviewStateForEvidence(nextStage, contradicted),
-      supportCount: provenance.length
-    }
-  });
+function merge(map, next, stage) {
+  const prev = map.get(next.id);
+  if (!prev) return map.set(next.id, next);
+  const nextStage = highest([prev.properties?.stage ?? "discovery", stage]);
+  const contradicted = prev.properties?.contradicted === true || next.properties?.contradicted === true;
+  map.set(next.id, { ...prev, confidence: contradicted && next.properties?.contradicted ? Math.min(prev.confidence, next.confidence) : Math.max(prev.confidence, next.confidence), firstSeenAt: minIso(prev.firstSeenAt, next.firstSeenAt), lastSeenAt: maxIso(prev.lastSeenAt, next.lastSeenAt), sourceIds: uniq([...(prev.sourceIds ?? []), ...next.sourceIds]), evidenceIds: uniq([...(prev.evidenceIds ?? []), ...next.evidenceIds]), provenance: [...(prev.provenance ?? []), ...next.provenance], properties: { ...prev.properties, stage: nextStage, contradicted, promoted: prev.properties?.promoted === true || next.properties?.promoted === true || nextStage === "promoted", captureIds: uniq([...(prev.properties?.captureIds ?? []), ...(next.properties?.captureIds ?? [])]), contentHashes: uniq([...(prev.properties?.contentHashes ?? []), ...(next.properties?.contentHashes ?? [])]) } });
 }
-
-function relationshipDeltas(
-  previous: RelationshipGraph | undefined,
-  current: RelationshipGraph,
-  generatedAt: string,
-  staleAfterDays: number
-): RelationshipDelta[] {
-  const previousById = new Map((previous?.relationships ?? []).map((relationship) => [relationship.id, relationship]));
-  return current.relationships.map((relationship) => {
-    const previousRelationship = previousById.get(relationship.id);
-    if (relationship.properties?.contradicted === true) return delta("contradicted", relationship, previousRelationship, "Relationship evidence now includes a contradiction.");
-    if (isStale(relationship.lastSeenAt, generatedAt, staleAfterDays)) return delta("stale", relationship, previousRelationship, "Relationship is stale relative to polling threshold.");
-    if (!previousRelationship) return delta("added", relationship, undefined, "New graph relationship.");
-    if (relationship.properties?.promoted === true && previousRelationship.properties?.promoted !== true) return delta("promoted", relationship, previousRelationship, "Relationship was promoted.");
-    if (relationship.confidence + 0.001 < previousRelationship.confidence) return delta("downgraded", relationship, previousRelationship, "Relationship confidence decreased.");
-    return delta("updated", relationship, previousRelationship, "Relationship confidence, stage, or provenance changed.");
-  });
+function relationshipDeltas(previous, graph, generatedAt, staleAfterDays) {
+  const prev = new Map((previous?.relationships ?? []).map((rel) => [rel.id, rel]));
+  const deltas = graph.relationships.map((rel) => {
+    const old = prev.get(rel.id), kind = !old ? "added" : rel.properties?.contradicted ? "contradicted" : rel.properties?.promoted && !old.properties?.promoted ? "promoted" : rel.confidence < old.confidence ? "downgraded" : rel.confidence !== old.confidence || stageOf(rel) !== stageOf(old) ? "updated" : undefined;
+    return kind ? { kind, relationship: rel, previous: old, reason: reasonFor(kind) } : undefined;
+  }).filter(Boolean);
+  const staleCutoff = Date.parse(generatedAt) - staleAfterDays * 86_400_000;
+  for (const rel of graph.relationships) if (Date.parse(rel.lastSeenAt) < staleCutoff) deltas.push({ kind: "stale", relationship: rel, previous: prev.get(rel.id), reason: "relationship has not been refreshed within stale window" });
+  return deltas.sort(compareDeltas);
 }
-
-function compareRelationshipDeltas(left: RelationshipDelta, right: RelationshipDelta): number {
-  const priorityDelta = DELTA_PRIORITY[right.kind] - DELTA_PRIORITY[left.kind];
-  if (priorityDelta !== 0) return priorityDelta;
-
-  const leftReview = reviewReasonsForDelta(left, stageForRelationship(left.relationship)).length > 0 ? 1 : 0;
-  const rightReview = reviewReasonsForDelta(right, stageForRelationship(right.relationship)).length > 0 ? 1 : 0;
-  if (rightReview !== leftReview) return rightReview - leftReview;
-
-  const stageDelta = stageIndex(stageForRelationship(right.relationship)) - stageIndex(stageForRelationship(left.relationship));
-  if (stageDelta !== 0) return stageDelta;
-
-  const confidenceDelta = right.relationship.confidence - left.relationship.confidence;
-  if (Math.abs(confidenceDelta) > 0.0001) return confidenceDelta;
-
-  const recencyDelta = Date.parse(right.relationship.lastSeenAt) - Date.parse(left.relationship.lastSeenAt);
-  if (recencyDelta !== 0) return recencyDelta;
-
-  return left.relationship.id.localeCompare(right.relationship.id);
-}
-
-function reviewReasonsForDelta(delta: RelationshipDelta, stage: ProgressiveEvidenceStage): string[] {
-  const reasons: string[] = [];
-  if (delta.kind === "contradicted") reasons.push("contradicted evidence");
-  if (delta.kind === "downgraded") reasons.push("confidence downgraded");
-  if (delta.kind === "stale") reasons.push("stale relationship");
-  if (stage === "discovery") reasons.push("discovery-only evidence");
-  if (delta.relationship.confidence < 0.5) reasons.push("low confidence");
-  return reasons;
-}
-
-function reviewStateForEvidence(stage: ProgressiveEvidenceStage, contradicted: boolean): GraphRelationshipReviewState {
-  if (contradicted) return "contradicted";
-  if (stage === "promoted" || stage === "reviewed") return "accepted";
-  if (stage === "discovery") return "needs_review";
-  return "unreviewed";
-}
-
-function relationshipReviewState(relationship: IntelligenceRelationship): GraphRelationshipReviewState {
-  const state = String(relationship.properties?.reviewState ?? "");
-  if (REVIEW_STATES.includes(state as GraphRelationshipReviewState)) return state as GraphRelationshipReviewState;
-  return reviewStateForEvidence(stageForRelationship(relationship), relationship.properties?.contradicted === true);
-}
-
-function reviewStateForDecision(action: GraphReviewDecision["action"]): GraphRelationshipReviewState {
-  if (action === "accept" || action === "resolve_contradiction") return "accepted";
-  if (action === "reject") return "rejected";
-  if (action === "supersede") return "superseded";
-  if (action === "mark_contradicted") return "contradicted";
-  if (action === "expire") return "expired";
-  return "needs_review";
-}
-
-function reviewActionAvailability(relationship: IntelligenceRelationship): RelationshipReviewActionAvailability {
-  const state = relationshipReviewState(relationship);
-  return {
-    canAccept: state === "unreviewed" || state === "needs_review" || state === "contradicted",
-    canReject: state === "unreviewed" || state === "needs_review" || state === "contradicted",
-    canSupersede: state === "accepted" || state === "expired",
-    canResolveContradiction: state === "contradicted",
-    canExpire: state === "accepted" || state === "unreviewed" || state === "needs_review"
-  };
-}
-
-function reviewReason(relationship: IntelligenceRelationship): string | undefined {
-  const value = relationship.properties?.reviewReason;
-  return typeof value === "string" ? value : undefined;
-}
-
-function reviewAudit(relationship: IntelligenceRelationship): GraphReviewAuditEntry[] {
-  const value = relationship.properties?.reviewAudit;
-  return Array.isArray(value) ? value.filter(isGraphReviewAuditEntry) : [];
-}
-
-function isGraphReviewAuditEntry(value: unknown): value is GraphReviewAuditEntry {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<GraphReviewAuditEntry>;
-  return typeof candidate.decisionId === "string"
-    && typeof candidate.relationshipId === "string"
-    && typeof candidate.reviewerId === "string"
-    && typeof candidate.reason === "string"
-    && typeof candidate.decidedAt === "string";
-}
-
-function sourceIds(relationship: IntelligenceRelationship): string[] {
-  return uniqueSorted(relationship.provenance.map((item) => item.sourceId));
-}
-
-function uniqueSorted(values: string[]): string[] {
-  return [...new Set(values)].sort();
-}
-
-function stageForRelationship(relationship: IntelligenceRelationship): ProgressiveEvidenceStage {
-  const stage = String(relationship.properties?.stage ?? "discovery");
-  return STAGE_ORDER.includes(stage as ProgressiveEvidenceStage) ? stage as ProgressiveEvidenceStage : "discovery";
-}
-
-function stageIndex(stage: ProgressiveEvidenceStage): number {
-  return STAGE_ORDER.indexOf(stage);
-}
-
-function delta(
-  kind: RelationshipDelta["kind"],
-  relationship: IntelligenceRelationship,
-  previous: IntelligenceRelationship | undefined,
-  reason: string
-): RelationshipDelta {
-  return { kind, relationship, previous, reason };
-}
-
-function stagedConfidence(confidence: number, stage: ProgressiveEvidenceStage): number {
-  return clampScore(confidence * STAGE_WEIGHT[stage]);
-}
-
-function aggregateConfidence(left: number, right: number, supportCount: number, contradicted: boolean): number {
-  const supportBoost = Math.min(0.2, Math.max(0, supportCount - 1) * 0.04);
-  return clampScore(Math.max(left, right) * 0.75 + ((left + right) / 2) * 0.25 + supportBoost - (contradicted ? 0.2 : 0));
-}
-
-function provenance(evidence: ProgressiveGraphEvidence): ExtractionProvenance {
-  return {
-    sourceId: evidence.sourceId,
-    captureId: evidence.captureId ?? evidence.id,
-    url: evidence.url,
-    collectedAt: evidence.observedAt,
-    contentHash: evidence.contentHash,
-    extractorVersion: evidence.extractorVersion,
-    evidenceText: evidence.id,
-    ledgerIds: evidence.ledgerIds ?? [stableId("ledger", `${evidence.sourceId}:${evidence.captureId ?? evidence.id}:${evidence.contentHash}`)]
-  };
-}
-
-function mergeProvenance(left: ExtractionProvenance[], right: ExtractionProvenance[]): ExtractionProvenance[] {
-  const seen = new Set<string>();
-  return [...left, ...right].filter((item) => {
-    const key = `${item.captureId}:${item.url}:${item.contentHash}:${item.evidenceText}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function highestStage(stages: ProgressiveEvidenceStage[]): ProgressiveEvidenceStage {
-  return stages.sort((left, right) => STAGE_ORDER.indexOf(right) - STAGE_ORDER.indexOf(left))[0] ?? "discovery";
-}
-
-function isStale(lastSeenAt: string, generatedAt: string, staleAfterDays: number): boolean {
-  return Date.parse(generatedAt) - Date.parse(lastSeenAt) > staleAfterDays * 24 * 60 * 60_000;
-}
-
-function minIso(left: string, right: string): string {
-  return Date.parse(left) <= Date.parse(right) ? left : right;
-}
-
-function maxIso(left: string, right: string): string {
-  return Date.parse(left) >= Date.parse(right) ? left : right;
-}
-
-function stixObjectForNode(node: IntelligenceGraphNode, generatedAt: string): StixObject {
-  const type = node.type === "actor"
-    ? "intrusion-set"
-    : node.type === "malware" || node.type === "tool"
-      ? "malware"
-      : node.type === "victim" || node.type === "sector" || node.type === "country" || node.type === "region"
-        ? "identity"
-        : node.type === "attack-pattern"
-          ? "attack-pattern"
-          : node.type === "vulnerability"
-            ? "vulnerability"
-            : node.type === "indicator" || node.type === "infrastructure"
-              ? "indicator"
-              : "x-ti-entity";
-  return {
-    type,
-    spec_version: "2.1",
-    id: stixRefForNode(node),
-    created: generatedAt,
-    modified: generatedAt,
-    name: node.value,
-    confidence: Math.round(clampScore(node.confidence) * 100),
-    labels: [node.type],
-    x_ti_provenance: node.provenance,
-    x_ti_stage: node.properties?.stage
-  };
-}
-
-function stixRefForNodeId(graph: RelationshipGraph, nodeId: string): string {
-  const node = graph.nodes.find((item) => item.id === nodeId);
-  return node ? stixRefForNode(node) : stixId("x-ti-entity", nodeId);
-}
-
-function stixRefForNode(node: IntelligenceGraphNode): string {
-  if (node.type === "actor") return stixId("intrusion-set", node.value);
-  if (node.type === "malware" || node.type === "tool") return stixId("malware", node.value);
-  if (node.type === "victim" || node.type === "sector" || node.type === "country" || node.type === "region") return stixId("identity", `${node.type}:${node.value}`);
-  if (node.type === "attack-pattern") return stixId("attack-pattern", node.value);
-  if (node.type === "vulnerability") return stixId("vulnerability", node.value);
-  if (node.type === "indicator" || node.type === "infrastructure") return stixId("indicator", `${node.type}:${node.value}`);
-  return stixId("x-ti-entity", `${node.type}:${node.value}`);
-}
-
-function stixId(type: string, value: string): string {
-  const left = hashHex(`${type}:${value}`);
-  const right = hashHex(`${type}:${value}:right`);
-  const hex = `${left}${right}`.slice(0, 32);
-  return `${type}--${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-}
-
-function hashHex(value: string): string {
-  const hashed = Bun.hash(stableId("stix", value));
-  const asBigInt = typeof hashed === "bigint" ? hashed : BigInt(Math.trunc(hashed));
-  return BigInt.asUintN(64, asBigInt).toString(16).padStart(16, "0");
-}
+function compareDeltas(a, b) { return (PRIORITY[b.kind] ?? 0) - (PRIORITY[a.kind] ?? 0) || b.relationship.confidence - a.relationship.confidence || a.relationship.id.localeCompare(b.relationship.id); }
+function reviewReasons(delta, stage) { return uniq([delta.kind === "contradicted" ? "contradicted evidence" : "", delta.kind === "stale" ? "stale relationship" : "", stage === "discovery" ? "discovery-only evidence" : "", delta.relationship.confidence < 0.5 ? "low confidence" : ""]); }
+function actionAvailability(rel) { const state = reviewState(rel); return { accept: state !== "accepted", reject: state !== "rejected", supersede: true, resolveContradiction: rel.properties?.contradicted === true }; }
+function reviewState(rel) { return rel.properties?.reviewState ?? (rel.properties?.contradicted ? "contradicted" : stageOf(rel) === "promoted" ? "accepted" : stageOf(rel) === "discovery" ? "needs_review" : "unreviewed"); }
+function stageOf(rel) { const stage = rel.properties?.stage ?? "discovery"; return STAGES.includes(stage) ? stage : "discovery"; }
+function staged(confidence, stage) { return clampScore(confidence * ({ discovery: 0.35, captured: 0.55, extracted: 0.75, reviewed: 0.9, promoted: 1 }[stage] ?? 0.5) + confidence * 0.4); }
+function sourceIds(rel) { return uniq(rel.sourceIds ?? rel.provenance?.map((p) => p.sourceId) ?? []); }
+function prov(evidence) { return { evidenceId: evidence.id, sourceId: evidence.sourceId, captureId: evidence.captureId, observedAt: evidence.observedAt, urlHash: stableId("urlhash", evidence.url ?? ""), contentHash: evidence.contentHash, extractorVersion: evidence.extractorVersion, stage: evidence.stage }; }
+function stixNode(node, at) { const type = node.type === "actor" ? "threat-actor" : node.type === "attack-pattern" ? "attack-pattern" : node.type === "tool" ? "tool" : "identity"; return { type, spec_version: "2.1", id: stixRef(node), created: at, modified: at, name: node.value, aliases: node.aliases, confidence: Math.round(clampScore(node.confidence) * 100), x_ti_node_type: node.type }; }
+function stixRef(node) { return stixId(node.type === "actor" ? "threat-actor" : node.type === "attack-pattern" ? "attack-pattern" : node.type === "tool" ? "tool" : "identity", node.id); }
+function stixRefId(graph, id) { return stixRef(graph.nodes.find((node) => node.id === id) ?? { id, type: "identity" }); }
+function stixId(type, value) { const h = stableId("stix", value).replace(/^stix_/, "").padEnd(32, "0").slice(0, 32); return `${type}--${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`; }
+function reasonFor(kind) { return ({ promoted: "relationship promoted", contradicted: "relationship contradicted by newer evidence", downgraded: "relationship confidence downgraded", added: "relationship added", updated: "relationship updated", stale: "relationship stale" })[kind]; }
+function idx(stage) { return STAGES.indexOf(stage); }
+function highest(stages) { return stages.sort((a, b) => idx(b) - idx(a))[0] ?? "discovery"; }
+function norm(value) { return String(value).trim().toLowerCase(); }
+function minIso(a, b) { return Date.parse(a) <= Date.parse(b) ? a : b; }
+function maxIso(a, b) { return Date.parse(a) >= Date.parse(b) ? a : b; }
+function uniq(values) { return [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))); }
