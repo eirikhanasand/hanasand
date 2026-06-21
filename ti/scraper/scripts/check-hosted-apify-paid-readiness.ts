@@ -199,7 +199,11 @@ async function fetchApifyRecord(token: string, url: string, init: RequestInit = 
   if (!response.ok) {
     throw new Error(`Apify API ${response.status} ${response.statusText} for ${url}`);
   }
-  return await response.json();
+  const payload: unknown = await response.json();
+  if (isRecord(payload) && Object.prototype.hasOwnProperty.call(payload, "data")) {
+    return payload.data;
+  }
+  return payload;
 }
 
 function summarizeHostedObservation(
@@ -513,7 +517,16 @@ function chargedDatasetItemEvents(output: JsonRecord | undefined, items: JsonRec
 function chargedActorStartEvents(output: JsonRecord | undefined): number | null {
   return firstNumberAt(output, ["chargedActorStartEvents", "actorStartChargeEvents"])
     ?? numberAtPath(output, ["billing", "chargedActorStartEvents"])
+    ?? actorStartEventObserved(output)
     ?? null;
+}
+
+function actorStartEventObserved(output: JsonRecord | undefined): number | null {
+  const monetization = isRecord(output?.monetization) ? output.monetization : undefined;
+  const eventNames = Array.isArray(monetization?.eventNames) ? monetization.eventNames : undefined;
+  if (monetization?.actorStartEvent === "apify-actor-start") return 1;
+  if (eventNames?.includes("apify-actor-start")) return 1;
+  return null;
 }
 
 function firstNumberAt(record: JsonRecord | undefined, fields: string[]): number | null {
