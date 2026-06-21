@@ -442,6 +442,20 @@ function buildReleaseLadder(
     : current750State === "pass" && hosted100State === "pass" && hostedProofExecutionState !== "fail"
       ? "ready_for_private_paid_beta"
       : "hold_paid_release";
+  const privatePaidBetaReady = current750State === "pass"
+    && current1000State === "pass"
+    && hosted100State === "pass"
+    && pricingState !== "external_unknown"
+    && payoutState !== "external_unknown"
+    && analyticsObserved
+    && hostedObservedImportSafe
+    && observedCostPerUsefulRowUsd <= firstFiniteNumber(tier1000Gate.maximumCostPerUsefulRowUsd, 0.05);
+  const publicPaidTrafficReady = privatePaidBetaReady
+    && current1000LocalSellableState === "pass"
+    && hosted300State === "pass"
+    && marketplacePaidTrafficState === "pass"
+    && typeof marketplace.paidUsers === "number"
+    && typeof marketplace.refunds === "number";
   const revenueImpactBlockerBoard = [
     {
       rank: 1,
@@ -510,6 +524,92 @@ function buildReleaseLadder(
       localProgressIsNotHostedRevenue: true,
       publicPaidTrafficAllowedNow: releaseDecisionBoardDecision === "ready_for_public_paid_traffic",
       privatePaidBetaAllowedNow: releaseDecisionBoardDecision === "ready_for_private_paid_beta" || releaseDecisionBoardDecision === "ready_for_public_paid_traffic"
+    },
+    programDeReleaseBoard: {
+      schemaVersion: "ti.program_de_paid_beta_release_truth.v1",
+      decision: publicPaidTrafficReady ? "ready_for_public_paid_traffic" : privatePaidBetaReady ? "ready_for_private_paid_beta" : "hold_paid_release",
+      privatePaidBetaAllowedNow: privatePaidBetaReady,
+      publicPaidTrafficAllowedNow: publicPaidTrafficReady,
+      localProgressIsNotHostedRevenue: true,
+      thresholds: {
+        privatePaidBeta: {
+          current750Gate: "pass",
+          current1000UsefulRows: 1000,
+          hosted100ObservedProof: "pass",
+          pricingState: "observed",
+          payoutState: "observed",
+          analyticsVisibility: "observed",
+          noLeakProof: "pass",
+          costPerUsefulRowUsdAtMost: firstFiniteNumber(tier1000Gate.maximumCostPerUsefulRowUsd, 0.05)
+        },
+        publicPaidTraffic: {
+          current1000LocalSellableRows: 1000,
+          hosted300ObservedProof: "pass",
+          marketplacePaidTrafficGate: "pass",
+          conversionEvidence: "observed_paid_runs_and_refunds",
+          refunds: 0
+        }
+      },
+      privatePaidBetaGate: {
+        state: privatePaidBetaReady ? "pass" : "hold",
+        blockers: [
+          current750State === "pass" ? null : "current750_sellable_rows",
+          current1000State === "pass" ? null : "current1000_useful_rows",
+          hosted100State === "pass" ? null : "hosted100_observed_proof",
+          pricingState !== "external_unknown" ? null : "pricing_state_external_unknown",
+          payoutState !== "external_unknown" ? null : "payout_state_external_unknown",
+          analyticsObserved ? null : "analytics_external_unknown",
+          hostedObservedImportSafe ? null : "no_leak_proof_missing",
+          observedCostPerUsefulRowUsd <= firstFiniteNumber(tier1000Gate.maximumCostPerUsefulRowUsd, 0.05) ? null : "cost_per_useful_row_unobserved"
+        ].filter(Boolean),
+        observed: {
+          current750State,
+          current750Gap: Math.max(0, 750 - currentSellableRows),
+          current1000UsefulState: current1000State,
+          current1000UsefulGap: Math.max(0, 1000 - observedUsefulRows),
+          hosted100State,
+          pricingState,
+          payoutState,
+          analyticsObserved,
+          noLeakObserved: hostedObservedImportSafe,
+          costPerUsefulRowUsd: Number.isFinite(observedCostPerUsefulRowUsd) ? observedCostPerUsefulRowUsd : null
+        }
+      },
+      publicPaidTrafficGate: {
+        state: publicPaidTrafficReady ? "pass" : "hold",
+        blockers: [
+          privatePaidBetaReady ? null : "private_paid_beta_not_ready",
+          current1000LocalSellableState === "pass" ? null : "current1000_local_sellable_rows",
+          hosted300State === "pass" ? null : "hosted300_observed_proof",
+          marketplacePaidTrafficState === "pass" ? null : "marketplace_paid_traffic_gate",
+          typeof marketplace.paidUsers === "number" ? null : "paid_users_unobserved",
+          typeof marketplace.refunds === "number" ? null : "refunds_unobserved"
+        ].filter(Boolean),
+        observed: {
+          current1000LocalSellableState,
+          current1000SellableGap: Math.max(0, 1000 - currentSellableRows),
+          hosted300State,
+          marketplacePaidTrafficState,
+          storeViews: marketplace.storeViews ?? telemetry.storeViews,
+          actorRuns: marketplace.runs ?? telemetry.actorRuns,
+          paidUsers: marketplace.paidUsers,
+          refunds: marketplace.refunds
+        }
+      },
+      topRevenueActions: [
+        { rank: 1, owner: "agent_09", action: "import_hosted_100_and_300_observed_proof", expectedRowLift: 0, expectedConversionLift: "unblocks_private_beta_and_public_traffic_proof", proofCommand: "bun run check:hosted-apify-paid-readiness", state: hostedProofExecutionState },
+        { rank: 2, owner: "agent_03", action: "close_current750_sellable_row_gap", expectedRowLift: Math.max(0, 750 - currentSellableRows), expectedConversionLift: "unblocks_private_beta_local_gate", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: current750State },
+        { rank: 3, owner: "agent_10", action: "observe_current1000_useful_density_and_cost", expectedRowLift: Math.max(0, 1000 - observedUsefulRows), expectedConversionLift: "prevents_low_value_private_beta", proofCommand: "bun run check:paid-actor-release-audit", state: current1000State },
+        { rank: 4, owner: "agent_09", action: "import_pricing_payout_and_analytics", expectedRowLift: 0, expectedConversionLift: "unblocks_marketplace_revenue_truth", proofCommand: "manual_external_apify_console_or_api_verification_required", state: pricingState !== "external_unknown" && payoutState !== "external_unknown" && analyticsObserved ? "pass" : "hold" },
+        { rank: 5, owner: "agent_08", action: "increase_public_corroboration_for_1000_row_path", expectedRowLift: Math.max(0, 1000 - currentSellableRows), expectedConversionLift: "improves_source_diversity_and_sellable_density", proofCommand: "bun test src/tests/api.test.ts src/tests/ops.test.ts", state: current1000LocalSellableState }
+      ],
+      antiBloatGuard: {
+        coordinationOnlyCountsTowardRelease: false,
+        dtoOnlyCountsTowardRelease: false,
+        stixTaxiiOnlyCountsTowardRelease: false,
+        syntheticIndexRowsCountTowardRelease: false,
+        requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
+      }
     },
     current100LocalFloor: {
       state: currentSellableRows >= 100 ? "pass" : "hold",
