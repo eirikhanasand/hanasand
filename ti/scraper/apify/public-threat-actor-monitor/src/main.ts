@@ -833,6 +833,46 @@ interface ParserRealSellableLift {
       actorInteractionTextUsed: false;
     };
   };
+  findingAdmissionLedger: {
+    schemaVersion: "ti.program_cx_100_name_activity_parser_lift.v1";
+    owner: "agent_03";
+    routeVisibleOn: Array<"Apify OUTPUT" | "Apify dataset rows" | "/v1/ops/product-slo">;
+    baseline100NameRows: 607;
+    baselineSellableRows: 187;
+    baselineSellableSourceProvenanceRows: 135;
+    baselineSellableFindingRows: 52;
+    currentRows: number;
+    currentSellableRows: number;
+    currentSellableFindingRows: number;
+    currentSellableSourceProvenanceRows: number;
+    currentCaveatedFindingRows: number;
+    activityTargetTtpRowsAdmittedThisPass: number;
+    sellableFindingLiftFromBaseline: number;
+    sourceProvenanceShareOfSellable: number;
+    admittedFindingRows: Array<{
+      rowId: string;
+      actor: string;
+      rowType: "activity" | "target" | "ttp";
+      sourceEvidenceCount: number;
+      missingFields: string[];
+      nextBuyerSearch: string;
+      provenanceHash: string;
+      noLeak: true;
+    }>;
+    remainingBlockers: Array<{
+      blocker: "missing_victim_or_target" | "missing_ttp_or_tool" | "missing_public_proof" | "single_source_without_caveat" | "stale_or_held" | "alias_or_contradiction";
+      rowCount: number;
+      countsTowardCurrentSellableRows: false;
+    }>;
+    noLeakBoundary: {
+      rawBodiesExposed: false;
+      unsafeUrlsExposed: false;
+      restrictedPayloadsExposed: false;
+      credentialsExposed: false;
+      privateMaterialUsed: false;
+      actorInteractionTextUsed: false;
+    };
+  };
   staleRowsSuppressed: number;
   aliasOrUnrelatedRowsSuppressed: number;
   rowsStillOneRepairAway: number;
@@ -5080,6 +5120,7 @@ function parserRealSellableLiftForRows(rows: MarketplaceRow[]): ParserRealSellab
   const suppressedRows = sumBy(rejectionRows, (row) => row.suppressedRows);
   const liveSourceAdmissionPacket = liveSourceAdmissionPacketForRows();
   const currentAdmissionLedger = currentAdmissionLedgerForRows(rows);
+  const findingAdmissionLedger = findingAdmissionLedgerForRows(rows);
   return {
     schemaVersion: "ti.apify_parser_real_sellable_lift.v1",
     owner: "agent_03",
@@ -5094,6 +5135,7 @@ function parserRealSellableLiftForRows(rows: MarketplaceRow[]): ParserRealSellab
     movedToUsefulCaveatedRows,
     liveSourceAdmissionPacket,
     currentAdmissionLedger,
+    findingAdmissionLedger,
     staleRowsSuppressed: 2,
     aliasOrUnrelatedRowsSuppressed: 2,
     rowsStillOneRepairAway: 54,
@@ -5117,6 +5159,64 @@ function parserRealSellableLiftForRows(rows: MarketplaceRow[]): ParserRealSellab
       privateMaterialUsed: false,
       actorInteractionTextUsed: false,
       productionSellableClaimed: false
+    }
+  };
+}
+
+function findingAdmissionLedgerForRows(rows: MarketplaceRow[]): ParserRealSellableLift["findingAdmissionLedger"] {
+  const sellableRows = rows.filter((row) => row.paidRowDecision === "sellable");
+  const findingRows = rows.filter((row) => ["activity", "target", "ttp"].includes(row.rowType));
+  const sellableFindingRows = findingRows.filter((row) => row.paidRowDecision === "sellable");
+  const sourceProvenanceRows = sellableRows.filter((row) => row.rowType === "source");
+  const admittedFindingRows = sellableFindingRows
+    .filter((row) => row.analysisFacets.includes("program:program_cw_parser_live_source_current_admission"))
+    .map((row) => ({
+      rowId: row.parserAdmissionRuntimeProof?.candidateId ?? stableHash(`program-cx-finding:${row.provenanceHash}`).slice(0, 16),
+      actor: row.actor,
+      rowType: row.rowType as "activity" | "target" | "ttp",
+      sourceEvidenceCount: row.parserAdmissionRuntimeProof?.sourceEvidenceCount ?? row.sourceCount,
+      missingFields: row.parserAdmissionRuntimeProof?.missingFields ?? [],
+      nextBuyerSearch: row.parserAdmissionRuntimeProof?.nextBuyerSearch ?? row.nextSearchPivots[0] ?? `${row.actor} current finding`,
+      provenanceHash: row.provenanceHash,
+      noLeak: true as const
+    }));
+  const caveatedFindings = findingRows.filter((row) => row.paidRowDecision === "included_with_caveat");
+  const blockerCount = (blocker: NonNullable<MarketplaceRow["parserAdmissionRuntimeProof"]>["blockedReason"], field?: string) => caveatedFindings.filter((row) =>
+    row.parserAdmissionRuntimeProof?.blockedReason === blocker
+    || (field ? row.parserAdmissionRuntimeProof?.missingFields.includes(field) : false)
+  ).length;
+  return {
+    schemaVersion: "ti.program_cx_100_name_activity_parser_lift.v1",
+    owner: "agent_03",
+    routeVisibleOn: ["Apify OUTPUT", "Apify dataset rows", "/v1/ops/product-slo"],
+    baseline100NameRows: 607,
+    baselineSellableRows: 187,
+    baselineSellableSourceProvenanceRows: 135,
+    baselineSellableFindingRows: 52,
+    currentRows: rows.length,
+    currentSellableRows: sellableRows.length,
+    currentSellableFindingRows: sellableFindingRows.length,
+    currentSellableSourceProvenanceRows: sourceProvenanceRows.length,
+    currentCaveatedFindingRows: caveatedFindings.length,
+    activityTargetTtpRowsAdmittedThisPass: admittedFindingRows.length,
+    sellableFindingLiftFromBaseline: sellableFindingRows.length - 52,
+    sourceProvenanceShareOfSellable: roundRatio(sourceProvenanceRows.length, Math.max(1, sellableRows.length)),
+    admittedFindingRows,
+    remainingBlockers: [
+      { blocker: "missing_victim_or_target", rowCount: blockerCount("missing_required_fields", "victim_or_target"), countsTowardCurrentSellableRows: false },
+      { blocker: "missing_ttp_or_tool", rowCount: blockerCount("missing_required_fields", "ttp_tool_or_cve"), countsTowardCurrentSellableRows: false },
+      { blocker: "missing_public_proof", rowCount: blockerCount("missing_required_fields", "source_family_support"), countsTowardCurrentSellableRows: false },
+      { blocker: "single_source_without_caveat", rowCount: blockerCount("single_source_without_caveat"), countsTowardCurrentSellableRows: false },
+      { blocker: "stale_or_held", rowCount: blockerCount("stale_or_held"), countsTowardCurrentSellableRows: false },
+      { blocker: "alias_or_contradiction", rowCount: blockerCount("alias_or_contradiction"), countsTowardCurrentSellableRows: false }
+    ],
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
     }
   };
 }

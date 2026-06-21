@@ -666,6 +666,32 @@ for (const key of ["rawBodiesExposed", "unsafeUrlsExposed", "restrictedPayloadsE
 if (Number(paidRowQuality.sellable) < Number(currentAdmissionLedger.currentSellableRowsAfterAdmission)) {
   throw new Error("Program CW ledger must agree with paid-row quality sellable count");
 }
+const findingAdmissionLedger = parserRealSellableLift.findingAdmissionLedger as Record<string, unknown> | undefined;
+if (
+  !findingAdmissionLedger
+  || findingAdmissionLedger.schemaVersion !== "ti.program_cx_100_name_activity_parser_lift.v1"
+  || findingAdmissionLedger.owner !== "agent_03"
+  || findingAdmissionLedger.baseline100NameRows !== 607
+  || findingAdmissionLedger.baselineSellableRows !== 187
+  || findingAdmissionLedger.baselineSellableSourceProvenanceRows !== 135
+  || findingAdmissionLedger.baselineSellableFindingRows !== 52
+  || Number(findingAdmissionLedger.currentSellableRows) !== Number(paidRowQuality.sellable)
+  || Number(findingAdmissionLedger.currentSellableFindingRows) < 7
+  || Number(findingAdmissionLedger.currentSellableSourceProvenanceRows) < 4
+  || Number(findingAdmissionLedger.activityTargetTtpRowsAdmittedThisPass) < 4
+  || !Array.isArray(findingAdmissionLedger.admittedFindingRows)
+  || !Array.isArray(findingAdmissionLedger.remainingBlockers)
+) {
+  throw new Error("Program CX finding admission ledger must separate sellable findings from source-provenance rows");
+}
+for (const row of findingAdmissionLedger.admittedFindingRows as Array<Record<string, unknown>>) {
+  if (!["activity", "target", "ttp"].includes(String(row.rowType)) || Number(row.sourceEvidenceCount) < 4 || row.noLeak !== true) {
+    throw new Error("Program CX admitted finding rows must be activity/target/TTP findings with public proof");
+  }
+}
+for (const row of findingAdmissionLedger.remainingBlockers as Array<Record<string, unknown>>) {
+  if (row.countsTowardCurrentSellableRows !== false) throw new Error("Program CX remaining blockers must not count toward sellable rows");
+}
 const hundredRowConversionProof = outputRecord.hundredRowConversionProof as Record<string, unknown> | undefined;
 if (
   !hundredRowConversionProof

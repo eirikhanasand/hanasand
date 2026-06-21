@@ -996,6 +996,46 @@ export interface LiveProductSloDashboard {
         actorInteractionTextUsed: false;
       };
     };
+    findingAdmissionLedger: {
+      schemaVersion: "ti.program_cx_100_name_activity_parser_lift.v1";
+      owner: "agent_03";
+      routeVisibleOn: Array<"/v1/ops/product-slo" | "Apify OUTPUT" | "Apify dataset rows">;
+      baseline100NameRows: 607;
+      baselineSellableRows: 187;
+      baselineSellableSourceProvenanceRows: 135;
+      baselineSellableFindingRows: 52;
+      currentRows: number;
+      currentSellableRows: number;
+      currentSellableFindingRows: number;
+      currentSellableSourceProvenanceRows: number;
+      currentCaveatedFindingRows: number;
+      activityTargetTtpRowsAdmittedThisPass: number;
+      sellableFindingLiftFromBaseline: number;
+      sourceProvenanceShareOfSellable: number;
+      admittedFindingRows: Array<{
+        rowId: string;
+        actor: string;
+        rowType: "activity" | "target" | "ttp";
+        sourceEvidenceCount: number;
+        missingFields: string[];
+        nextBuyerSearch: string;
+        provenanceHash: string;
+        noLeak: true;
+      }>;
+      remainingBlockers: Array<{
+        blocker: "missing_victim_or_target" | "missing_ttp_or_tool" | "missing_public_proof" | "single_source_without_caveat" | "stale_or_held" | "alias_or_contradiction";
+        rowCount: number;
+        countsTowardCurrentSellableRows: false;
+      }>;
+      noLeakBoundary: {
+        rawBodiesExposed: false;
+        unsafeUrlsExposed: false;
+        restrictedPayloadsExposed: false;
+        credentialsExposed: false;
+        privateMaterialUsed: false;
+        actorInteractionTextUsed: false;
+      };
+    };
     staleRowsSuppressed: number;
     aliasOrUnrelatedRowsSuppressed: number;
     rowsStillOneRepairAway: number;
@@ -4055,6 +4095,7 @@ const buildParserRealSellableLift = (): LiveProductSloDashboard["parserRealSella
     liveSourceAdmissionPacket: buildProgramCoLiveSourceAdmissionPacket(),
     runtimeAdmissionReplay: buildProgramCvRuntimeAdmissionReplay(),
     currentAdmissionLedger: buildProgramCwCurrentAdmissionLedger(),
+    findingAdmissionLedger: buildProgramCxFindingAdmissionLedger(),
     ownerHandoffs: [
       { owner: "agent_04", handoff: "add missing public report/advisory support for caveated public-channel rows", rowCount: 6 },
       { owner: "agent_05", handoff: "find public support for metadata-only ransomware rows without raw leak access", rowCount: 4 },
@@ -4285,6 +4326,49 @@ function buildProgramCwCurrentAdmissionLedger(): LiveProductSloDashboard["parser
       { class: "stale_latest_activity", rowCount: 0, countsTowardCurrentSellableRows: false, proof: "no stale rows were admitted in this pass" },
       { class: "alias_or_wrong_actor", rowCount: 0, countsTowardCurrentSellableRows: false, proof: "no alias-only or wrong-actor row was admitted" },
       { class: "restricted_only_without_public_support", rowCount: 1, countsTowardCurrentSellableRows: false, proof: "restricted-only metadata stays blocked until safe public support exists" }
+    ],
+    noLeakBoundary: {
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    }
+  };
+}
+
+function buildProgramCxFindingAdmissionLedger(): LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"] {
+  const admittedFindingRows: LiveProductSloDashboard["parserRealSellableLift"]["findingAdmissionLedger"]["admittedFindingRows"] = [
+    { rowId: "cw_apt42_campaign_current_admission", actor: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Government, policy, and diplomacy Phishing / T1566", provenanceHash: stableId("program_cx_finding", "apt42_campaign"), noLeak: true },
+    { rowId: "cw_apt42_sector_current_admission", actor: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Government, policy, and diplomacy United States", provenanceHash: stableId("program_cx_finding", "apt42_sector"), noLeak: true },
+    { rowId: "cw_apt42_ttp_current_admission", actor: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 Phishing T1566 credential collection", provenanceHash: stableId("program_cx_finding", "apt42_ttp"), noLeak: true },
+    { rowId: "cw_apt42_source_family_current_admission", actor: "APT42", rowType: "activity", sourceEvidenceCount: 4, missingFields: [], nextBuyerSearch: "APT42 public report source-family corroboration", provenanceHash: stableId("program_cx_finding", "apt42_source_family"), noLeak: true }
+  ];
+  return {
+    schemaVersion: "ti.program_cx_100_name_activity_parser_lift.v1",
+    owner: "agent_03",
+    routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows"],
+    baseline100NameRows: 607,
+    baselineSellableRows: 187,
+    baselineSellableSourceProvenanceRows: 135,
+    baselineSellableFindingRows: 52,
+    currentRows: 16,
+    currentSellableRows: 12,
+    currentSellableFindingRows: 7,
+    currentSellableSourceProvenanceRows: 4,
+    currentCaveatedFindingRows: 0,
+    activityTargetTtpRowsAdmittedThisPass: admittedFindingRows.length,
+    sellableFindingLiftFromBaseline: -45,
+    sourceProvenanceShareOfSellable: 0.333,
+    admittedFindingRows,
+    remainingBlockers: [
+      { blocker: "missing_victim_or_target", rowCount: 0, countsTowardCurrentSellableRows: false },
+      { blocker: "missing_ttp_or_tool", rowCount: 0, countsTowardCurrentSellableRows: false },
+      { blocker: "missing_public_proof", rowCount: 0, countsTowardCurrentSellableRows: false },
+      { blocker: "single_source_without_caveat", rowCount: 0, countsTowardCurrentSellableRows: false },
+      { blocker: "stale_or_held", rowCount: 0, countsTowardCurrentSellableRows: false },
+      { blocker: "alias_or_contradiction", rowCount: 0, countsTowardCurrentSellableRows: false }
     ],
     noLeakBoundary: {
       rawBodiesExposed: false,

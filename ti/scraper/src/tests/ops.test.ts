@@ -1111,6 +1111,37 @@ describe("ops controls", () => {
       privateMaterialUsed: false,
       actorInteractionTextUsed: false
     });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger).toMatchObject({
+      schemaVersion: "ti.program_cx_100_name_activity_parser_lift.v1",
+      owner: "agent_03",
+      baseline100NameRows: 607,
+      baselineSellableRows: 187,
+      baselineSellableSourceProvenanceRows: 135,
+      baselineSellableFindingRows: 52,
+      currentRows: 16,
+      currentSellableRows: 12,
+      currentSellableFindingRows: 7,
+      currentSellableSourceProvenanceRows: 4,
+      currentCaveatedFindingRows: 0,
+      activityTargetTtpRowsAdmittedThisPass: 4,
+      sourceProvenanceShareOfSellable: 0.333
+    });
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.admittedFindingRows.every((row) =>
+      row.actor === "APT42" &&
+      ["activity", "target", "ttp"].includes(row.rowType) &&
+      row.sourceEvidenceCount >= 4 &&
+      row.missingFields.length === 0 &&
+      row.noLeak
+    )).toBe(true);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.remainingBlockers.every((row) => row.countsTowardCurrentSellableRows === false)).toBe(true);
+    expect(dashboard.parserRealSellableLift.findingAdmissionLedger.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    });
     expect(dashboard.qualityConversionGate).toMatchObject({
       schemaVersion: "ti.program_bq_paid_row_quality_conversion_gate.v1",
       routeVisibleOn: expect.arrayContaining(["/v1/ops/product-slo", "/v1/quality/evaluate", "/v1/intel/search", "/v1/contracts"]),
