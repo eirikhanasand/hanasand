@@ -131,6 +131,81 @@ describe("hosted Apify paid readiness operator action board", () => {
     expect(checklist.operatorActionBoard.stillBlockedAfterCommand.join(" ")).toContain("300 sellable rows and 150 finding rows");
   }));
 
+  test("real hosted Program FH baseline reports exact hosted100 shortfall without unlocking paid readiness", () => withHostedProofEnv({}, () => {
+    const partial = observedProof({
+      runId: "THMm2ZzYxW4HVPGJ6",
+      buildId: "L7LtCqLsKT6Luq04R",
+      datasetId: "xLPoxMVY6cVjGsS4e",
+      datasetItemCount: 313,
+      sellableRows: 46,
+      sellableFindingCount: 31,
+      caveatedRows: 194,
+      averageBuyerValueScore: 0.585,
+      runtimeSeconds: 12.216,
+      memoryMbytes: 23.375,
+      usageUsd: 0.0047,
+      costUsd: 0.0047,
+      chargedEventCount: 314,
+      chargedDatasetItemEvents: 313,
+      chargedActorStartEvents: 1,
+      noLeakFailures: 0,
+      secondBatchAuditObserved: undefined,
+      falsePositiveInflationFailures: null,
+      publicListingStatus: "draft_copy_ready_not_promoted"
+    }) as Partial<HostedApifyObservedProofImport>;
+    delete partial.storeViews;
+    delete partial.runs;
+    delete partial.uniqueUsers;
+    delete partial.paidUsers;
+    delete partial.refunds;
+    delete partial.pricingModel;
+    delete partial.payoutEnabled;
+    delete partial.payoutState;
+    delete partial.analyticsVisible;
+    delete partial.conversionRate;
+    delete partial.listingVisibility;
+
+    const proof = buildHostedApifyPaidReadinessProof({
+      hasToken: true,
+      observedProof: partial as HostedApifyObservedProofImport,
+      readObservedProofFromEnvironment: false
+    });
+    const board = proof.programFgObservedEvidenceBoard;
+    const checklist = proof.hostedProofOperatorChecklist;
+
+    expect(proof.status).toBe("verified_hold");
+    expect(proof.hostedProofImportPath.externalBlocker).toBe("hosted_100_name_run_below_paid_floor");
+    expect(checklist.gateEffects.hosted100.state).toBe("hold");
+    expect(checklist.gateEffects.hosted100.reason).toContain("hosted100_below_threshold: observed 46 sellable rows and 31 finding rows; needs +54 sellable rows and +21 finding rows");
+    expect(checklist.operatorActionBoard.stillBlockedAfterCommand).toContain("hosted100_below_threshold: observed 46 sellable rows and 31 finding rows; needs +54 sellable rows and +21 finding rows");
+    expect(board).toMatchObject({
+      importState: "proof_imported_but_insufficient",
+      hostedProofState: "insufficient",
+      releaseBlockerState: "proof_imported_but_insufficient",
+      observedHostedRun: {
+        runId: "THMm2ZzYxW4HVPGJ6",
+        buildId: "L7LtCqLsKT6Luq04R",
+        datasetId: "xLPoxMVY6cVjGsS4e",
+        chargedDatasetItemEvents: 313,
+        chargedActorStartEvents: 1
+      }
+    });
+    expect(board.insufficientFields).toEqual(expect.arrayContaining(["hosted100", "marketplace_truth"]));
+    expect(board.marketplaceMissingFieldsOnlyTemplate).toMatchObject({
+      schemaVersion: "ti.program_fh_marketplace_missing_fields_template.v1",
+      safeToCommit: true,
+      containsSecrets: false,
+      missingFields: expect.arrayContaining(["storeViews", "pricingModel", "payoutEnabled", "analyticsVisible", "listingVisibility"]),
+      fields: {
+        storeViews: null,
+        pricingModel: "external_unknown",
+        payoutEnabled: "external_unknown",
+        analyticsVisible: "external_unknown",
+        listingVisibility: "external_unknown"
+      }
+    });
+  }));
+
   test("production hosted300 proof holds hosted500 below 500-row and 275-finding gate", () => withHostedProofEnv({}, () => {
     const proof = buildHostedApifyPaidReadinessProof({
       observedProof: observedProof({
