@@ -258,7 +258,7 @@ export function evaluateSearchQualityGate(input: SearchQualityGateInput): Search
 function calibrationQualityNotes(dto: LiveActorIntelligenceDto, calibration: ExtractionCalibrationReport | undefined): ExtractionQualityNoteCode[] {
   if (!calibration) return [];
   const activeStages = Object.entries(dto.datasets.evidenceStageCounts)
-    .filter(([, count]) => count > 0)
+    .filter(([, count]) => Number(count) > 0)
     .map(([stage]) => stage);
   const notes = calibration.evidenceStageReports
     .filter((report) => activeStages.includes(report.evidenceStage))
