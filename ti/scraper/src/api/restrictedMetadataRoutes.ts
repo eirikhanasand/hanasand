@@ -154,12 +154,13 @@ function filterRestrictedMetadataApplyPlan(
 ): RestrictedMetadataApplyPlan {
   return summarizeRestrictedMetadataApplyPlan({
     ...applyPlan,
-    actions: applyPlan.actions.filter((action) => selectedActions.has(action.action))
+    actions: applyPlan.actions.filter((action: RestrictedMetadataApplyPlanItem) => selectedActions.has(action.action))
   });
 }
 
 function summarizeRestrictedMetadataApplyPlan(applyPlan: RestrictedMetadataApplyPlan): RestrictedMetadataApplyPlan {
-  const count = (predicate: (action: RestrictedMetadataApplyPlanItem) => boolean) => applyPlan.actions.filter(predicate).length;
+  const count = (predicate: (action: RestrictedMetadataApplyPlanItem) => boolean) =>
+    applyPlan.actions.filter((action: RestrictedMetadataApplyPlanItem) => predicate(action)).length;
   return {
     ...applyPlan,
     summary: {
@@ -176,9 +177,9 @@ function apiSafeRestrictedMetadataApplyPlan(applyPlan: RestrictedMetadataApplyPl
     ...applyPlan,
     analystOperations: {
       ...applyPlan.analystOperations,
-      packets: applyPlan.analystOperations.packets.map((packet) => ({
+      packets: applyPlan.analystOperations.packets.map((packet: any) => ({
         ...packet,
-        whatWasNotAccessed: packet.whatWasNotAccessed.map((value) => value === "raw leaked files" ? "restricted files" : value)
+        whatWasNotAccessed: (packet.whatWasNotAccessed ?? []).map((value: string) => value === "raw leaked files" ? "restricted files" : value)
       }))
     }
   };
