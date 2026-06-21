@@ -1217,6 +1217,10 @@ const PAYWORTHY_REPAIR_SHORTFALL = PAYWORTHY_REPAIR_TARGET_COUNT - PAYWORTHY_REP
 const PAYWORTHY_REPAIR_DUPLICATE_COUNT = 108;
 const PAYWORTHY_REPAIR_LEGAL_COUNT = 262;
 const PAYWORTHY_REPAIR_NOT_READY_COUNT = 624;
+const PAID_ACTOR_PROJECTED_ROWS_AFTER_PARSER_ADMISSION = 250;
+const PAID_ACTOR_NEXT_SELLABLE_ROW_GATE = 300;
+const PAID_ACTOR_REMAINING_ROWS_AFTER_PARSER_ADMISSION =
+  PAID_ACTOR_NEXT_SELLABLE_ROW_GATE - PAID_ACTOR_PROJECTED_ROWS_AFTER_PARSER_ADMISSION;
 
 function buildPayworthyRepairQueue(
   records: TiSourceAtlasRecord[],
@@ -3703,6 +3707,7 @@ function buildSourceEconomicsSourcePackCandidates(
     projectedPayworthyLift,
     projectedPayworthySourceCount,
     projectedPayworthyRate: roundScore(projectedPayworthySourceCount / PAYWORTHY_REPAIR_EVALUATED_COUNT),
+    paidActorGatePrioritization: buildSourcePackPaidActorGatePrioritization(packs),
     packs,
     guardrails: {
       noRegistryMutation: true,
@@ -3721,6 +3726,84 @@ function buildSourceEconomicsSourcePackCandidates(
       agent10RevenueMeasurement: ["Measure payworthy-source count, useful-row rate, fresh-row rate, and cost/useful-row after explicit approval."]
     }
   };
+}
+
+function buildSourcePackPaidActorGatePrioritization(
+  packs: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"]
+): TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["paidActorGatePrioritization"] {
+  const reviewRows = packs
+    .map((pack) => {
+      const gateScore = sourcePackPaidActorGateScore(pack);
+      return { pack, gateScore };
+    })
+    .sort((left, right) =>
+      right.gateScore - left.gateScore ||
+      right.pack.expectedFreshRowsPerDay - left.pack.expectedFreshRowsPerDay ||
+      left.pack.packId.localeCompare(right.pack.packId)
+    )
+    .slice(0, 8)
+    .map(({ pack }, index) => ({
+      packId: pack.packId,
+      packRank: pack.rank,
+      priority: (index < 3 ? "p0" : index < 6 ? "p1" : "p2") as "p0" | "p1" | "p2",
+      family: pack.family,
+      acquisitionMode: pack.acquisitionMode,
+      expectedPayworthyLift: pack.expectedPayworthyLift,
+      expectedFreshRowsPerDay: pack.expectedFreshRowsPerDay,
+      expectedUsefulEvidenceItemsPerDay: pack.expectedUsefulEvidenceItemsPerDay,
+      expectedSourceFamilyDiversityLift: sourcePackExpectedFamilyDiversityLift(pack),
+      actorGateReason: sourcePackPaidActorGateReason(pack),
+      requiredProof: pack.requiredProof,
+      ownerHandoff: sourcePackPaidActorGateOwner(pack),
+      countsTowardPaidGateNow: false as const,
+      noActivationBoundary: { ...pack.noActivationBoundary }
+    }));
+  return {
+    schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1",
+    gate: "daily_100_name_paid_actor_300_row_gate",
+    projectedRowsAfterParserAdmission: PAID_ACTOR_PROJECTED_ROWS_AFTER_PARSER_ADMISSION,
+    nextSellableRowGate: PAID_ACTOR_NEXT_SELLABLE_ROW_GATE,
+    remainingSellableRowsAfterParserAdmission: PAID_ACTOR_REMAINING_ROWS_AFTER_PARSER_ADMISSION,
+    projectedSourcePackRowsCountNow: false,
+    countsTowardPaidGateNow: false,
+    reviewRows
+  };
+}
+
+function sourcePackPaidActorGateScore(pack: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number]): number {
+  const proofPenalty = pack.requiredProof.length * 0.015;
+  const freshnessLift = Math.min(0.32, pack.expectedFreshRowsPerDay / 260);
+  const evidenceLift = Math.min(0.28, pack.expectedUsefulEvidenceItemsPerDay / 320);
+  const payworthyLift = Math.min(0.3, pack.expectedPayworthyLift / 420);
+  const modeBoost = pack.acquisitionMode === "public_source_pack" ? 0.08 : pack.acquisitionMode === "parser_repair_pack" ? 0.05 : 0.02;
+  return roundScore(payworthyLift + freshnessLift + evidenceLift + modeBoost - proofPenalty);
+}
+
+function sourcePackExpectedFamilyDiversityLift(pack: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number]): number {
+  return pack.acquisitionMode === "replacement_pack" ? 2 : 1;
+}
+
+function sourcePackPaidActorGateReason(pack: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number]): string {
+  const family = pack.family.replaceAll("_", " ");
+  if (pack.acquisitionMode === "parser_repair_pack") {
+    return `${family} pack is prioritized because parser certification can turn reviewed source coverage into fresh paid Actor rows after daily run proof.`;
+  }
+  if (pack.acquisitionMode === "legal_review_pack") {
+    return `${family} pack is prioritized only after legal/robots review because its fresh-row lift is blocked from paid counting now.`;
+  }
+  if (pack.acquisitionMode === "replacement_pack") {
+    return `${family} pack is prioritized for source-family diversity and replacement lift after duplicate/low-yield sources are held.`;
+  }
+  return `${family} pack is prioritized because approved public sources can improve source-family diversity and fresh-row proof for the 300-row gate.`;
+}
+
+function sourcePackPaidActorGateOwner(
+  pack: TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["packs"][number]
+): TiSourceAtlasReliabilityEconomicsPacket["sourcePackCandidates"]["paidActorGatePrioritization"]["reviewRows"][number]["ownerHandoff"] {
+  if (pack.acquisitionMode === "parser_repair_pack") return "agent03_parser_certification";
+  if (pack.acquisitionMode === "legal_review_pack") return "agent01_source_pack_review";
+  if (pack.requiredProof.includes("daily_actor_run_delta")) return "agent10_paid_gate_measurement";
+  return "agent01_source_pack_review";
 }
 
 function sourceEconomicsFamilyPackCandidate(

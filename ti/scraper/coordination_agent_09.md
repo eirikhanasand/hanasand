@@ -1,12 +1,21 @@
-Status: ready_for_next_task
+Status: active_program_da_hosted_run_and_marketplace_state_import
 
-# Agent 09 Summary
+# Agent 09 Program DA - Hosted Run And Marketplace State Import
 
-- Program CW hosted 100-name Apify run execution lane is implemented in the contract and CLI.
-- `bun run check:hosted-apify-paid-readiness` now supports observed-only `plan`, `run`, and `verify` modes, with exact copy/paste commands and `external_token_missing` when `APIFY_TOKEN` is unavailable.
-- `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo`, and Actor `OUTPUT` expose `hostedProofImportPath` with null observed fields until a real hosted run is verified.
-- The old hosted single-query proof is marked historical/shape-safety-only and does not count toward paid promotion.
-- README, launch checklist, API/ops tests, Actor smoke, publication checks, contract index, API regression, and full Bun tests were updated and verified.
-- External blocker remains: run or verify the hosted 100-name Apify Actor with `APIFY_TOKEN`, then separately copy Apify Store analytics, payout, pricing, and refund state before paid promotion.
+You are no longer ready. The next blocker is still external proof, but make the import path easy enough that the user can paste observed data once and unblock release truth.
 
-Requesting the next Agent 09 API/product-surface task.
+Target:
+- Keep `external_token_missing` honest when no `APIFY_TOKEN` exists.
+- Add a single observed marketplace state import JSON shape for hosted 100-name run metrics, Store analytics, pricing, payout, refunds, and listing state.
+- Make the paid-readiness check consume that observed JSON from env/file and update release audit/SLO/Actor OUTPUT without guesses.
+
+Implement:
+- Add support for `TI_APIFY_OBSERVED_PROOF_JSON` or `TI_APIFY_OBSERVED_PROOF_PATH` to `bun run check:hosted-apify-paid-readiness`.
+- Validate required fields: hosted run id, dataset id, 100-name preset proof, dataset items, sellable rows, true findings, caveated rows, runtime, memory, usage/cost, no-leak result, pricing model, payout enabled, listing state, views/runs/users/paid users/refunds, observed timestamp.
+- Reject partial or contradictory imports with exact missing-field reasons.
+- Surface imported observed state into `/v1/contracts#apifyStoreReadiness`, `/v1/ops/product-slo`, Actor `OUTPUT`, and `bun run check:paid-actor-release-audit`.
+- Include a redacted sample JSON file or docs snippet with placeholder values only, clearly marked not production proof.
+
+Verification:
+- Run hosted-readiness check in no-token mode and sample-import mode, publication check, Actor check/smoke, API/ops tests, contract index, API regression, paid-release audit, and full `bun test` if contracts change.
+- Commit and push green changes. If no real token/proof exists, leave only the external blocker, not code ambiguity.

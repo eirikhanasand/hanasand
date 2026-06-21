@@ -38,6 +38,7 @@ import {
   schedulerWorkerRuntimeFixtures,
   schedulerApplyPlanApiContract,
   executeSchedulerSourceGapWorkerEntry,
+  runSchedulerSourceGapWorkerLoop,
   rehearseSchedulerSourceGapEnqueue,
   simulateSchedulerExecution,
   simulateFairnessEnforcement,
@@ -1912,6 +1913,87 @@ describe("scheduler production readiness", () => {
     expect(workerAppliedReceipt.allowedOperations).toEqual(["inspect_daily_actor_source_gap_plan", "findOrRegisterRun", "enqueueTasks"]);
     expect(workerAppliedRepository.runs()).toHaveLength(queueTaskSpecs.length);
     expect(workerAppliedRepository.tasks()).toHaveLength(queueTaskSpecs.length);
+
+    const loopBlockedRepository = new InMemorySchedulerQueueRepository();
+    const loopBlockedReceipt = runSchedulerSourceGapWorkerLoop(daily, loopBlockedRepository, {
+      loopId: "source_gap_loop_01",
+      workerId: "worker_source_gap_loop_01",
+      workerPartition: "background_sweep",
+      apply: true,
+      sourceGapEnqueueEnabled: true,
+      postgresQueueEnabled: true,
+      postgresDsnConfigured: true,
+      executorAvailable: true,
+      sourcePolicyCurrent: true,
+      paidRowGateOpen: true,
+      metadataReviewCurrent: true,
+      now
+    });
+    expect(loopBlockedReceipt).toMatchObject({
+      schemaVersion: "ti.scheduler_source_gap_worker_loop.v1",
+      loopId: "source_gap_loop_01",
+      disabledByDefault: true,
+      willMutate: false,
+      pollIntervalSeconds: 15,
+      shutdownDeadlineSeconds: daily.sourceGapExecutionReadiness.workerDrain.controlledShutdownDeadlineSeconds,
+      commitPolicy: "return_blocked_receipt",
+      nextLoopAction: "sleep_until_next_poll",
+      entry: {
+        decision: "blocked_before_repository",
+        nextWorkerAction: "return_without_mutation"
+      }
+    });
+    expect(loopBlockedReceipt.partitionPlan).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        workerPartition: "interactive_actor_search",
+        taskIds: expect.arrayContaining(["dryrun_interactive_live_search_tier_100_apt29_safe_public_sources"]),
+        visibleStates: ["searching"],
+        drainBehavior: "finish_or_checkpoint_before_shutdown"
+      }),
+      expect.objectContaining({
+        workerPartition: "public_channel_window",
+        taskIds: expect.arrayContaining(["dryrun_public_channel_probe_tier_1000_apt42_public_channel"]),
+        visibleStates: ["partial"],
+        drainBehavior: "checkpoint_and_requeue_by_reuse_key"
+      }),
+      expect.objectContaining({
+        workerPartition: "restricted_metadata_approval",
+        taskIds: expect.arrayContaining(["dryrun_restricted_darknet_metadata_sweep_tier_4000_lockbit_approved_dark_metadata"]),
+        visibleStates: ["metadata_review"],
+        drainBehavior: "metadata_review_hold"
+      })
+    ]));
+    expect(loopBlockedRepository.runs()).toEqual([]);
+    expect(loopBlockedRepository.tasks()).toEqual([]);
+
+    const loopAppliedRepository = new InMemorySchedulerQueueRepository();
+    const loopAppliedReceipt = runSchedulerSourceGapWorkerLoop(daily, loopAppliedRepository, {
+      loopId: "source_gap_loop_02",
+      workerMutationEnabled: true,
+      apply: true,
+      sourceGapEnqueueEnabled: true,
+      postgresQueueEnabled: true,
+      postgresDsnConfigured: true,
+      executorAvailable: true,
+      sourcePolicyCurrent: true,
+      paidRowGateOpen: true,
+      metadataReviewCurrent: true,
+      now
+    });
+    expect(loopAppliedReceipt).toMatchObject({
+      willMutate: true,
+      commitPolicy: "single_repository_handoff_after_all_gates",
+      nextLoopAction: "handoff_to_repository_adapter",
+      entry: {
+        decision: "ready_for_explicit_repository_apply",
+        rehearsal: {
+          mutatedRunCount: queueTaskSpecs.length,
+          mutatedTaskCount: queueTaskSpecs.length
+        }
+      }
+    });
+    expect(loopAppliedRepository.runs()).toHaveLength(queueTaskSpecs.length);
+    expect(loopAppliedRepository.tasks()).toHaveLength(queueTaskSpecs.length);
     expect(daily.sourceGapExecutionReadiness.drainExecution).toEqual(expect.arrayContaining([
       expect.objectContaining({
         step: "finish_active_dataset_emit",

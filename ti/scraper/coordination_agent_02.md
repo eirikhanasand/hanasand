@@ -37,6 +37,14 @@ Side-tool support priority:
 - Green so far: `bun test src/tests/schedulerProduction.test.ts` and `bun run check`.
 - Next: continue from worker entry receipt into a real disabled-by-default worker loop adapter only after shared Agent 03/05/08/09/10 paid-row changes settle.
 
+## Progress - 2026-06-21 06:17 CEST
+
+- Added `runSchedulerSourceGapWorkerLoop`, a disabled-by-default loop wrapper around the source-gap worker entry.
+- The loop groups daily Actor source-gap work by worker partition, preserves drain behavior for interactive freshness, public-channel partials, and restricted metadata review, and returns `sleep_until_next_poll` while gates are closed.
+- Explicit apply still performs a single repository handoff after all normal source-gap gates plus `workerMutationEnabled`; it does not duplicate enqueue calls per partition.
+- Green so far: `bun run check` and `bun test src/tests/schedulerProduction.test.ts`.
+- Next: wire this loop receipt into a real worker runner or route-visible operations surface only when the shared paid-row/hosted-proof worktree is stable.
+
 ## Progress - 2026-06-21 01:13 CEST
 
 - Added a disabled-by-default source-gap enqueue adapter preview under `scheduler.dailyActorRunPlan.sourceGapExecutionReadiness.enqueueAdapterPreview`.

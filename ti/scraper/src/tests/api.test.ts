@@ -11065,6 +11065,25 @@ describe("api v1", () => {
       family.estimatedDailySchedulerTasks > 0 &&
       family.topSourceIds.every((sourceId) => sourceId.startsWith("atlas_src_"))
     )).toBe(true);
+    expect(atlasResponse.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization).toMatchObject({
+      schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1",
+      gate: "daily_100_name_paid_actor_300_row_gate",
+      projectedRowsAfterParserAdmission: 250,
+      nextSellableRowGate: 300,
+      remainingSellableRowsAfterParserAdmission: 50,
+      countsTowardPaidGateNow: false
+    });
+    expect(atlasResponse.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization.reviewRows.length).toBeGreaterThan(0);
+    expect(atlasResponse.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization.reviewRows.every((row) =>
+      row.packId.startsWith("ti_source_atlas_source_pack_candidate_") &&
+      row.countsTowardPaidGateNow === false &&
+      row.noActivationBoundary.sourcePackImported === false &&
+      row.noActivationBoundary.sourceActivationApplied === false &&
+      row.noActivationBoundary.registryMutationPlanned === false &&
+      row.noActivationBoundary.crawlEnqueued === false &&
+      row.noActivationBoundary.rawUrlsExposed === false &&
+      row.noActivationBoundary.rawPayloadsExposed === false
+    )).toBe(true);
     expect(Object.values(atlasResponse.sourceEconomics.marketplaceValueBreakdown).every((value) => typeof value === "number")).toBe(true);
     expect(atlasResponse.sourceEconomics.degradationQueues.map((queue) => queue.queue)).toEqual(expect.arrayContaining(["stale", "noisy_duplicate", "legal_blocked", "parser_broken", "low_yield", "high_cost"]));
     expect(atlasResponse.sourceEconomics.degradationQueues.every((queue) => queue.willMutate === false && queue.willStartCrawling === false)).toBe(true);

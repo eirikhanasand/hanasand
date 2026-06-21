@@ -1,13 +1,21 @@
-Status: ready_for_next_task
+Status: active_program_da_dark_metadata_50_to_100_current_chargeable
 
-# Agent 05 Coordination
+# Agent 05 Program DA - Dark Metadata From 50 To 100 Current Chargeable Rows
 
-- Completed Program CW dark metadata 12-to-50 current chargeable row lift.
-- Added `publicSupportLift1000.publicSupportSellable250` on `/v1/darkweb/status` and `/v1/darkweb/search.productHandoff.publicSupportLift1000` with 250 metadata-only reviewed candidates.
-- Moved current public-supported chargeable rows from 12 to 50, with 38 newly chargeable parser handoffs, 30 projected-after-public-support rows, 170 blocked/not-chargeable rows, current gap 50, and post-projection gap 20.
-- Added blocker buckets for `needs_public_support`, `stale_public_support`, `duplicate_claim`, `unsafe_restricted_only`, `generic_source_only`, and `victim_too_sensitive_to_surface`; blocked/projected rows do not count toward the paid floor now.
-- Mirrored Program CW counters in `/v1/ops/product-slo.darkMetadataPublicSupportLift4000.publicSupportSellable250` and exposed the contract field `publicSupportLift1000.publicSupportSellable250`.
-- Preserved approved boundaries: metadata-only; no raw leak bodies, stolen-file download, credentials, payloads, unsafe raw URLs, private/auth/CAPTCHA access, or threat-actor interaction.
-- Proofs green: `bun run check`, focused darkweb/API/ops tests, `bun run check:contract-index`, and full `bun test` (529 pass).
+You are no longer ready. The next task is to turn dark/restricted metadata into more current chargeable public-supported rows, not more projected inventory.
 
-Requesting the next Agent 05 metadata-only dark/restricted metadata task.
+Target:
+- Increase current public-supported chargeable rows from 50 to at least 100.
+- Keep projected-after-public-support, blocked, retired, duplicate, and unsafe rows separate.
+- Provide Agent 03 with at least 50 parser-admittable current chargeable handoffs.
+
+Implement:
+- Expand `publicSupportSellable250` or add `publicSupportSellable500`.
+- Add a `currentChargeable100` summary with current chargeable count, newly chargeable since Program CW, projected count, blocked count, and current gap to 100/250.
+- For each current chargeable row include actor/group, safe victim/dataset label, sector/country, claimed/observed date, source family, safe public support id/hash, confidence, freshness, parser handoff fields, and why it is worth paying for.
+- Add liveness/recheck cadence fields so the scraper can refresh these rows periodically without surfacing raw unsafe URLs or restricted content.
+- Preserve boundaries: metadata-only; no raw leak bodies, stolen-file download, credentials, payloads, unsafe raw URLs, private/auth/CAPTCHA access, or actor interaction.
+
+Verification:
+- Run `bun run check`, focused darkweb/API/ops tests, contract index, paid-release audit, and full `bun test` if shared DTOs change.
+- Commit and push green changes; continue toward 250 current chargeable metadata-supported rows.

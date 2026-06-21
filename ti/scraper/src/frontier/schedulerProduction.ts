@@ -86,6 +86,9 @@ import type {
   SchedulerSourceGapEnqueueRehearsalReceipt,
   SchedulerSourceGapWorkerEntryOptions,
   SchedulerSourceGapWorkerEntryReceipt,
+  SchedulerSourceGapWorkerLoopOptions,
+  SchedulerSourceGapWorkerLoopReceipt,
+  SchedulerSourceGapWorkerPartition,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -189,6 +192,9 @@ export type {
   SchedulerSourceCadenceHint,
   SchedulerSourceGapWorkerEntryOptions,
   SchedulerSourceGapWorkerEntryReceipt,
+  SchedulerSourceGapWorkerLoopOptions,
+  SchedulerSourceGapWorkerLoopReceipt,
+  SchedulerSourceGapWorkerPartition,
   SchedulerSoakEvaluation,
   SchedulerSoakScenario,
   SchedulerSoakTelemetryFixture,
@@ -2757,6 +2763,77 @@ export function executeSchedulerSourceGapWorkerEntry(
     rehearsal,
     nextWorkerAction: rehearsal.willMutate ? "handoff_to_repository_adapter" : "return_without_mutation"
   };
+}
+
+export function runSchedulerSourceGapWorkerLoop(
+  plan: SchedulerDailyActorRunPlanDto,
+  repository: SchedulerQueueRepository,
+  options: SchedulerSourceGapWorkerLoopOptions = {}
+): SchedulerSourceGapWorkerLoopReceipt {
+  const now = options.now ?? new Date();
+  const entry = executeSchedulerSourceGapWorkerEntry(plan, repository, { ...options, now });
+  const readinessByPartition = new Map<SchedulerSourceGapWorkerPartition, {
+    taskIds: string[];
+    reuseKeys: string[];
+    visibleStates: Array<"searching" | "partial" | "metadata_review">;
+    drainBehavior: "finish_or_checkpoint_before_shutdown" | "checkpoint_and_requeue_by_reuse_key" | "metadata_review_hold";
+  }>();
+  const taskIdByReuseKey = new Map(plan.sourceGapExecutionReadiness.queueTaskSpecs.map((spec) => [spec.task.sourceConcurrencyKey, spec.task.id]));
+
+  for (const readiness of plan.sourceGapExecutionReadiness.readinessByClosure) {
+    const partition = readiness.workerPartition;
+    const current = readinessByPartition.get(partition) ?? {
+      taskIds: [],
+      reuseKeys: [],
+      visibleStates: [],
+      drainBehavior: sourceGapLoopDrainBehavior(readiness.visibleStateAfterDecision)
+    };
+    const taskId = taskIdByReuseKey.get(readiness.reuseKey);
+    if (taskId && !current.taskIds.includes(taskId)) {
+      current.taskIds.push(taskId);
+    }
+    if (!current.reuseKeys.includes(readiness.reuseKey)) {
+      current.reuseKeys.push(readiness.reuseKey);
+    }
+    if (!current.visibleStates.includes(readiness.visibleStateAfterDecision)) {
+      current.visibleStates.push(readiness.visibleStateAfterDecision);
+    }
+    current.drainBehavior = sourceGapLoopDrainBehavior(readiness.visibleStateAfterDecision);
+    readinessByPartition.set(partition, current);
+  }
+
+  return {
+    schemaVersion: "ti.scheduler_source_gap_worker_loop.v1",
+    generatedAt: now.toISOString(),
+    loopId: options.loopId ?? "source_gap_worker_loop_dry_run",
+    disabledByDefault: true,
+    willMutate: entry.rehearsal.willMutate,
+    pollIntervalSeconds: options.pollIntervalSeconds ?? 15,
+    shutdownDeadlineSeconds: options.shutdownDeadlineSeconds ?? plan.sourceGapExecutionReadiness.workerDrain.controlledShutdownDeadlineSeconds,
+    partitionPlan: [...readinessByPartition.entries()].map(([workerPartition, value]) => ({
+      workerPartition,
+      taskIds: value.taskIds,
+      reuseKeys: value.reuseKeys,
+      visibleStates: value.visibleStates,
+      drainBehavior: value.drainBehavior
+    })),
+    entry,
+    commitPolicy: entry.rehearsal.willMutate ? "single_repository_handoff_after_all_gates" : "return_blocked_receipt",
+    nextLoopAction: entry.rehearsal.willMutate ? "handoff_to_repository_adapter" : "sleep_until_next_poll",
+    forbiddenOperations: entry.forbiddenOperations
+  };
+}
+
+function sourceGapLoopDrainBehavior(
+  visibleState: "searching" | "partial" | "metadata_review"
+): SchedulerSourceGapWorkerLoopReceipt["partitionPlan"][number]["drainBehavior"] {
+  if (visibleState === "metadata_review") {
+    return "metadata_review_hold";
+  }
+  if (visibleState === "partial") {
+    return "checkpoint_and_requeue_by_reuse_key";
+  }
+  return "finish_or_checkpoint_before_shutdown";
 }
 
 export function buildSchedulerInteractiveSearchFreshness(input: {

@@ -1403,6 +1403,38 @@ export interface TiSourceAtlasReliabilityEconomicsPacket {
     projectedPayworthyLift: number;
     projectedPayworthySourceCount: number;
     projectedPayworthyRate: number;
+    paidActorGatePrioritization: {
+      schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1";
+      gate: "daily_100_name_paid_actor_300_row_gate";
+      projectedRowsAfterParserAdmission: number;
+      nextSellableRowGate: number;
+      remainingSellableRowsAfterParserAdmission: number;
+      projectedSourcePackRowsCountNow: false;
+      countsTowardPaidGateNow: false;
+      reviewRows: Array<{
+        packId: string;
+        packRank: number;
+        priority: "p0" | "p1" | "p2";
+        family: TiSourceAtlasFamily;
+        acquisitionMode: "public_source_pack" | "parser_repair_pack" | "legal_review_pack" | "replacement_pack";
+        expectedPayworthyLift: number;
+        expectedFreshRowsPerDay: number;
+        expectedUsefulEvidenceItemsPerDay: number;
+        expectedSourceFamilyDiversityLift: number;
+        actorGateReason: string;
+        requiredProof: Array<"operator_approval" | "legal_review_current" | "parser_certified" | "dedupe_pass" | "daily_actor_run_delta" | "no_leak_review">;
+        ownerHandoff: "agent01_source_pack_review" | "agent03_parser_certification" | "agent07_quality_gate" | "agent09_marketplace_proof" | "agent10_paid_gate_measurement";
+        countsTowardPaidGateNow: false;
+        noActivationBoundary: {
+          sourcePackImported: false;
+          sourceActivationApplied: false;
+          registryMutationPlanned: false;
+          crawlEnqueued: false;
+          rawUrlsExposed: false;
+          rawPayloadsExposed: false;
+        };
+      }>;
+    };
     packs: Array<{
       rank: number;
       packId: string;

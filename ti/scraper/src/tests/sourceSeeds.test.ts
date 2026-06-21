@@ -1502,6 +1502,33 @@ describe("source seed bundles", () => {
     expect(atlas.sourceEconomics.sourcePackCandidates.candidatePackCount).toBe(atlas.sourceEconomics.sourcePackCandidates.packs.length);
     expect(atlas.sourceEconomics.sourcePackCandidates.projectedPayworthyLift).toBeLessThanOrEqual(1412);
     expect(atlas.sourceEconomics.sourcePackCandidates.projectedPayworthySourceCount).toBeLessThanOrEqual(2880);
+    expect(atlas.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization).toMatchObject({
+      schemaVersion: "ti.source_atlas.source_pack_paid_actor_gate_prioritization.v1",
+      gate: "daily_100_name_paid_actor_300_row_gate",
+      projectedRowsAfterParserAdmission: 250,
+      nextSellableRowGate: 300,
+      remainingSellableRowsAfterParserAdmission: 50,
+      projectedSourcePackRowsCountNow: false,
+      countsTowardPaidGateNow: false
+    });
+    expect(atlas.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization.reviewRows.length).toBeGreaterThan(0);
+    expect(atlas.sourceEconomics.sourcePackCandidates.paidActorGatePrioritization.reviewRows.every((row) =>
+      row.packId.startsWith("ti_source_atlas_source_pack_candidate_") &&
+      row.packRank > 0 &&
+      ["p0", "p1", "p2"].includes(row.priority) &&
+      row.expectedPayworthyLift > 0 &&
+      row.expectedFreshRowsPerDay >= 0 &&
+      row.expectedSourceFamilyDiversityLift > 0 &&
+      row.requiredProof.includes("operator_approval") &&
+      row.requiredProof.includes("daily_actor_run_delta") &&
+      row.countsTowardPaidGateNow === false &&
+      row.noActivationBoundary.sourcePackImported === false &&
+      row.noActivationBoundary.sourceActivationApplied === false &&
+      row.noActivationBoundary.registryMutationPlanned === false &&
+      row.noActivationBoundary.crawlEnqueued === false &&
+      row.noActivationBoundary.rawUrlsExposed === false &&
+      row.noActivationBoundary.rawPayloadsExposed === false
+    )).toBe(true);
     expect(atlas.sourceEconomics.sourcePackCandidates.packs.length).toBeGreaterThan(5);
     expect(atlas.sourceEconomics.sourcePackCandidates.packs.every((pack) =>
       pack.packId.startsWith("ti_source_atlas_source_pack_candidate_") &&

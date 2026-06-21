@@ -1547,7 +1547,7 @@ export interface SchedulerSourceGapEnqueueRehearsalReceipt {
   emittedDeltaCount: number;
 }
 
-export type SchedulerSourceGapWorkerPartition = SchedulerWorkerWorkload | "background_sweep";
+export type SchedulerSourceGapWorkerPartition = SchedulerWorkerWorkload | "background_sweep" | "background_source_sweep";
 
 export interface SchedulerSourceGapWorkerEntryOptions extends SchedulerSourceGapEnqueueRehearsalOptions {
   workerId?: string;
@@ -1572,6 +1572,33 @@ export interface SchedulerSourceGapWorkerEntryReceipt {
   forbiddenOperations: Array<"network_fetch" | "lease_task" | "ack_task" | "raw_url_output" | "payload_download" | "credential_access" | "actor_interaction">;
   rehearsal: SchedulerSourceGapEnqueueRehearsalReceipt;
   nextWorkerAction: "return_without_mutation" | "handoff_to_repository_adapter";
+}
+
+export interface SchedulerSourceGapWorkerLoopOptions extends SchedulerSourceGapWorkerEntryOptions {
+  loopId?: string;
+  pollIntervalSeconds?: number;
+  shutdownDeadlineSeconds?: number;
+}
+
+export interface SchedulerSourceGapWorkerLoopReceipt {
+  schemaVersion: "ti.scheduler_source_gap_worker_loop.v1";
+  generatedAt: string;
+  loopId: string;
+  disabledByDefault: true;
+  willMutate: boolean;
+  pollIntervalSeconds: number;
+  shutdownDeadlineSeconds: number;
+  partitionPlan: Array<{
+    workerPartition: SchedulerSourceGapWorkerPartition;
+    taskIds: string[];
+    reuseKeys: string[];
+    visibleStates: Array<"searching" | "partial" | "metadata_review">;
+    drainBehavior: "finish_or_checkpoint_before_shutdown" | "checkpoint_and_requeue_by_reuse_key" | "metadata_review_hold";
+  }>;
+  entry: SchedulerSourceGapWorkerEntryReceipt;
+  commitPolicy: "return_blocked_receipt" | "single_repository_handoff_after_all_gates";
+  nextLoopAction: "sleep_until_next_poll" | "handoff_to_repository_adapter";
+  forbiddenOperations: SchedulerSourceGapWorkerEntryReceipt["forbiddenOperations"];
 }
 
 export interface SchedulerInteractiveSearchFreshnessDto {
