@@ -2539,9 +2539,11 @@ export function buildSchedulerDailyActorRunPlan(input: {
     schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1",
     routeVisible: true,
     paidActorFloor: {
-      gate: "hosted_300_sellable_rows",
-      targetSellableRows: 300,
+      gate: "current_500_sellable_rows",
+      previousLocalGate: "current_300_sellable_rows",
+      targetSellableRows: 500,
       currentLocalSellableRows: 300,
+      currentLocalGapRows: 200,
       hostedObservedSellableRows: null,
       hostedProofRequired: true,
       countsTowardHostedPaidGateNow: false
@@ -2556,28 +2558,37 @@ export function buildSchedulerDailyActorRunPlan(input: {
     },
     admissionInputs: [
       {
-        inputId: "parser_current_local_lift",
+        inputId: "parser_current_500_lift",
         owner: "agent_03",
         schedulerUse: "raise_daily_actor_cadence",
-        rows: 50,
-        countsTowardLocalFloorNow: true,
+        rows: 200,
+        targetRows: 500,
+        currentRows: 300,
+        gapRows: 200,
+        countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "run_100_name_preset_after_source_sweeps"
       },
       {
-        inputId: "dark_metadata_chargeable_support",
+        inputId: "dark_metadata_250_chargeable_support",
         owner: "agent_05",
         schedulerUse: "reserve_metadata_review",
-        rows: darkMetadataGapQueries.length,
+        rows: 100,
+        targetRows: 250,
+        currentRows: 150,
+        gapRows: 100,
         countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "schedule_metadata_review_before_emit"
       },
       {
-        inputId: "graph_public_corroboration_handoff",
+        inputId: "graph_public_300_corroboration_handoff",
         owner: "agent_08",
         schedulerUse: "reserve_public_corroboration",
-        rows: 175,
+        rows: 125,
+        targetRows: 300,
+        currentRows: 175,
+        gapRows: 125,
         countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "schedule_public_corroboration_before_emit"
@@ -2587,6 +2598,9 @@ export function buildSchedulerDailyActorRunPlan(input: {
         owner: "agent_01",
         schedulerUse: "hold_as_review_only",
         rows: 0,
+        targetRows: 0,
+        currentRows: 0,
+        gapRows: 0,
         countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "keep_review_only_no_enqueue"
@@ -2596,6 +2610,9 @@ export function buildSchedulerDailyActorRunPlan(input: {
         owner: "agent_09",
         schedulerUse: "hold_until_external_proof",
         rows: 0,
+        targetRows: 300,
+        currentRows: 0,
+        gapRows: 300,
         countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "wait_for_hosted_proof_import"
@@ -2606,7 +2623,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
         actionId: "daily_actor_100_name_preset",
         visibleState: "searching",
         cadence: "daily",
-        reason: "local 300-row gate is ready; hosted paid promotion remains held until observed hosted proof is imported",
+        reason: "local 300-row gate is passed; current 500-row gate needs 200 additional current sellable rows and hosted paid promotion remains held until observed hosted proof is imported",
         protectedBy: ["duplicate_run_reuse", "paid_row_gate", "no_leak_gate", "hosted_proof_gate"]
       },
       {
@@ -2640,8 +2657,8 @@ export function buildSchedulerDailyActorRunPlan(input: {
     ],
     nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
     uiSummary: {
-      headline: "local_300_gate_ready_hosted_proof_held",
-      operatorMessage: "Run the 100-name Actor preset after public corroboration and approved metadata review sweeps; keep hosted paid promotion held until external proof is imported.",
+      headline: "local_300_gate_passed_current_500_gate_next",
+      operatorMessage: "Run the 100-name Actor preset after public corroboration and approved metadata review sweeps; protect the 200-row current500 gap and keep hosted paid promotion held until external proof is imported.",
       suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
     }
   };

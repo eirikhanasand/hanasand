@@ -1554,9 +1554,11 @@ describe("scheduler production readiness", () => {
       schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1",
       routeVisible: true,
       paidActorFloor: {
-        gate: "hosted_300_sellable_rows",
-        targetSellableRows: 300,
+        gate: "current_500_sellable_rows",
+        previousLocalGate: "current_300_sellable_rows",
+        targetSellableRows: 500,
         currentLocalSellableRows: 300,
+        currentLocalGapRows: 200,
         hostedObservedSellableRows: null,
         hostedProofRequired: true,
         countsTowardHostedPaidGateNow: false
@@ -1570,23 +1572,29 @@ describe("scheduler production readiness", () => {
       },
       nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
       uiSummary: {
-        headline: "local_300_gate_ready_hosted_proof_held",
+        headline: "local_300_gate_passed_current_500_gate_next",
         suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
       }
     });
     expect(daily.paidRowCadenceInputs.admissionInputs).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        inputId: "parser_current_local_lift",
+        inputId: "parser_current_500_lift",
         owner: "agent_03",
-        rows: 50,
-        countsTowardLocalFloorNow: true,
+        rows: 200,
+        targetRows: 500,
+        currentRows: 300,
+        gapRows: 200,
+        countsTowardLocalFloorNow: false,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "run_100_name_preset_after_source_sweeps"
       }),
       expect.objectContaining({
-        inputId: "graph_public_corroboration_handoff",
+        inputId: "graph_public_300_corroboration_handoff",
         owner: "agent_08",
-        rows: 175,
+        rows: 125,
+        targetRows: 300,
+        currentRows: 175,
+        gapRows: 125,
         countsTowardLocalFloorNow: false,
         nextCadenceAction: "schedule_public_corroboration_before_emit"
       }),
@@ -1594,6 +1602,9 @@ describe("scheduler production readiness", () => {
         inputId: "hosted_observed_proof",
         owner: "agent_09",
         rows: 0,
+        targetRows: 300,
+        currentRows: 0,
+        gapRows: 300,
         countsTowardHostedPaidGateNow: false,
         nextCadenceAction: "wait_for_hosted_proof_import"
       })

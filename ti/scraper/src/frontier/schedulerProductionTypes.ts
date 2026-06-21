@@ -1356,9 +1356,11 @@ export interface SchedulerDailyActorRunPlanDto {
     schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1";
     routeVisible: true;
     paidActorFloor: {
-      gate: "hosted_300_sellable_rows";
-      targetSellableRows: 300;
+      gate: "current_500_sellable_rows";
+      previousLocalGate: "current_300_sellable_rows";
+      targetSellableRows: 500;
       currentLocalSellableRows: number;
+      currentLocalGapRows: number;
       hostedObservedSellableRows: number | null;
       hostedProofRequired: true;
       countsTowardHostedPaidGateNow: false;
@@ -1372,10 +1374,13 @@ export interface SchedulerDailyActorRunPlanDto {
       promotionState: "local_gate_ready_hosted_gate_held";
     };
     admissionInputs: Array<{
-      inputId: "parser_current_local_lift" | "dark_metadata_chargeable_support" | "graph_public_corroboration_handoff" | "source_pack_gate_alignment" | "hosted_observed_proof";
+      inputId: "parser_current_500_lift" | "dark_metadata_250_chargeable_support" | "graph_public_300_corroboration_handoff" | "source_pack_gate_alignment" | "hosted_observed_proof";
       owner: "agent_01" | "agent_03" | "agent_05" | "agent_08" | "agent_09" | "agent_02";
       schedulerUse: "raise_daily_actor_cadence" | "reserve_metadata_review" | "reserve_public_corroboration" | "hold_as_review_only" | "hold_until_external_proof";
       rows: number;
+      targetRows: number;
+      currentRows: number;
+      gapRows: number;
       countsTowardLocalFloorNow: boolean;
       countsTowardHostedPaidGateNow: boolean;
       nextCadenceAction: "run_100_name_preset_after_source_sweeps" | "schedule_metadata_review_before_emit" | "schedule_public_corroboration_before_emit" | "keep_review_only_no_enqueue" | "wait_for_hosted_proof_import";
@@ -1389,7 +1394,7 @@ export interface SchedulerDailyActorRunPlanDto {
     }>;
     nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps";
     uiSummary: {
-      headline: "local_300_gate_ready_hosted_proof_held";
+      headline: "local_300_gate_passed_current_500_gate_next";
       operatorMessage: string;
       suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid";
     };
