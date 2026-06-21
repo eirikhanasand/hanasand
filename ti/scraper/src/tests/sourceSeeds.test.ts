@@ -2825,6 +2825,45 @@ describe("source seed bundles", () => {
       "public_research_feed",
       "government_cert"
     ]));
+    const waveSources = response.activationWaves.flatMap((wave) => wave.sources);
+    const rolloutSources = response.executionReadiness.publicRollout50;
+    const expectedUsefulSourceRowsPerDay = waveSources.reduce((sum, source) =>
+      sum + source.expectedEvidenceYield * Math.ceil(86400 / Math.max(3600, source.freshnessCadenceSeconds)), 0);
+
+    expect(waveSources).toHaveLength(60);
+    expect(rolloutSources).toHaveLength(50);
+    expect(waveSources.every((source) =>
+      source.url.startsWith("https://") &&
+      !source.url.includes("example.com") &&
+      source.actorGroups.length > 0 &&
+      source.buyerUse.length > 20 &&
+      source.freshnessCadenceSeconds <= 21600
+    )).toBe(true);
+    expect(Array.from(new Set(waveSources.map((source) => source.expectedRowType)))).toEqual(expect.arrayContaining([
+      "actor_activity",
+      "ransomware_victim",
+      "cve_advisory",
+      "malware_infrastructure",
+      "sector_country",
+      "campaign_report"
+    ]));
+    expect(Array.from(new Set(waveSources.map((source) => source.parserPath)))).toEqual(expect.arrayContaining([
+      "rss",
+      "static_html",
+      "official_api",
+      "text_feed"
+    ]));
+    expect(rolloutSources.every((source) =>
+      source.actorGroups.length > 0 &&
+      source.expectedRowType.length > 0 &&
+      source.parserPath.length > 0 &&
+      source.buyerUse.length > 20 &&
+      source.freshnessCadenceSeconds === source.schedulerBudget.cadenceSeconds
+    )).toBe(true);
+    expect(waveSources.find((source) => source.sourceName === "RustSec Advisory Database")).toMatchObject({ sourceType: "static_web", parserPath: "static_html" });
+    expect(waveSources.find((source) => source.sourceName === "Abuse.ch URLhaus")).toMatchObject({ sourceType: "api", parserPath: "text_feed" });
+    expect(waveSources.find((source) => source.sourceName === "Mandiant Threat Intelligence")).toMatchObject({ sourceType: "rss", parserPath: "rss" });
+    expect(Number(expectedUsefulSourceRowsPerDay.toFixed(1))).toBeGreaterThan(300);
     expect(response.activationWaves.every((wave) => wave.dryRun && wave.willMutate === false && wave.willStartCrawling === false)).toBe(true);
     expect(response.activationWaves.flatMap((wave) => wave.sources).every((source) =>
       source.approvalScope === "safe_public_auto" &&
@@ -2904,6 +2943,11 @@ describe("source seed bundles", () => {
       (source.robotsReviewAgeDays === "not_required" || source.robotsReviewAgeDays <= 90) &&
       source.parserOwner === "agent_03" &&
       source.parserCompatible &&
+      source.actorGroups.length > 0 &&
+      source.expectedRowType.length > 0 &&
+      source.parserPath.length > 0 &&
+      source.buyerUse.length > 0 &&
+      source.freshnessCadenceSeconds === source.schedulerBudget.cadenceSeconds &&
       source.expectedCaptureYield >= source.expectedEvidenceYield &&
       source.schedulerBudget.estimatedDailyTasks > 0 &&
       source.postActivationDriftChecks.includes("scheduler_queue_budget")

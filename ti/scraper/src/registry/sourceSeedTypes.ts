@@ -2995,6 +2995,11 @@ export interface SourceActivationExecutionSource {
   robotsReviewAgeDays: number | "not_required";
   parserOwner: "agent_03";
   parserCompatible: boolean;
+  actorGroups: string[];
+  expectedRowType: SourceActivationWaveSource["expectedRowType"];
+  parserPath: SourceActivationWaveSource["parserPath"];
+  buyerUse: string;
+  freshnessCadenceSeconds: number;
   schedulerBudget: SourceActivationWaveSource["schedulerBudget"];
   expectedCaptureYield: number;
   expectedEvidenceYield: number;
