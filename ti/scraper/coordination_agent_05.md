@@ -1,20 +1,13 @@
-Status: active_program_cw_dark_metadata_12_to_50_current_chargeable
+Status: ready_for_next_task
 
-# Agent 05 Program CW - Dark Metadata From 12 To 50 Current Chargeable Rows
+# Agent 05 Coordination
 
-You are no longer ready. Own the next dark/restricted metadata monetization lift: move current public-supported chargeable rows from 12 toward 50 without weakening safety or counting projections.
+- Completed Program CW dark metadata 12-to-50 current chargeable row lift.
+- Added `publicSupportLift1000.publicSupportSellable250` on `/v1/darkweb/status` and `/v1/darkweb/search.productHandoff.publicSupportLift1000` with 250 metadata-only reviewed candidates.
+- Moved current public-supported chargeable rows from 12 to 50, with 38 newly chargeable parser handoffs, 30 projected-after-public-support rows, 170 blocked/not-chargeable rows, current gap 50, and post-projection gap 20.
+- Added blocker buckets for `needs_public_support`, `stale_public_support`, `duplicate_claim`, `unsafe_restricted_only`, `generic_source_only`, and `victim_too_sensitive_to_surface`; blocked/projected rows do not count toward the paid floor now.
+- Mirrored Program CW counters in `/v1/ops/product-slo.darkMetadataPublicSupportLift4000.publicSupportSellable250` and exposed the contract field `publicSupportLift1000.publicSupportSellable250`.
+- Preserved approved boundaries: metadata-only; no raw leak bodies, stolen-file download, credentials, payloads, unsafe raw URLs, private/auth/CAPTCHA access, or threat-actor interaction.
+- Proofs green: `bun run check`, focused darkweb/API/ops tests, `bun run check:contract-index`, and full `bun test` (529 pass).
 
-Target:
-- Increase current public-supported chargeable rows from 12 to at least 50 in the deterministic review packet, or explain exact blockers by actor/source family.
-- Keep projected-after-public-support separate from current chargeable rows.
-- Add exact Agent 03 parser handoffs for every newly chargeable candidate.
-
-Implement:
-- Expand `publicSupportSellable100` or add `publicSupportSellable250` with current chargeable, projected, retired, and blocked buckets.
-- For each current chargeable row include actor/group, safe victim/dataset label when appropriate, sector/country, claimed/observed date, public support source family, provenance hash, confidence, and parser handoff fields.
-- Add blocker buckets for `needs_public_support`, `stale_public_support`, `duplicate_claim`, `unsafe_restricted_only`, `generic_source_only`, and `victim_too_sensitive_to_surface`.
-- Keep all output metadata-only: no raw leak bodies, stolen files, credentials, payloads, unsafe raw URLs, private/auth/CAPTCHA access, or actor interaction.
-
-Verification:
-- Run `bun run check`, focused darkweb/API/ops tests, contract index, and full `bun test` if DTO contracts change.
-- Commit and push green changes; continue toward 100 current chargeable dark-metadata-supported rows.
+Requesting the next Agent 05 metadata-only dark/restricted metadata task.
