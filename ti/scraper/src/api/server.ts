@@ -4,6 +4,7 @@ import { buildLiveProductSloDashboard, type LiveProductProofMode } from "../ops/
 import { activatePublicCanarySources, buildCanaryOperatorSummary, buildCanaryReadinessPacket, runCanaryCollectionCycle } from "../ops/canaryCollection.ts";
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
+import { searchQualityApiExamples } from "../pipeline/searchQualityGate.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
 import type { CollectionPlan, CollectionRun, IntelligenceRequest, MetricsResponse, SourceRecord } from "../types.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
@@ -35,7 +36,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
     if (url.pathname === "/v1/restricted-metadata/status") return json({ status: buildRestrictedMetadataOperationsStatus({ sources: options.store.listSources(), captures: options.store.listCaptures(), query: url.searchParams.get("q") ?? undefined }) });
     if (url.pathname === "/v1/restricted-metadata/apply-plan") return json({ endpoint: "/v1/restricted-metadata/apply-plan", metadataOnly: true, actions: [] });
-    if (url.pathname === "/v1/quality/evaluate") return json({ quality: { query: url.searchParams.get("q") ?? "", status: "partial", score: 0.6 }, dashboard: { useful: true } });
+    if (url.pathname === "/v1/quality/evaluate") return json(qualityPayload(url.searchParams.get("q") ?? ""));
     if (url.pathname === "/v1/ops/product-slo") return json({ route: "/v1/ops/product-slo", ...productSlo(options, url) });
     if (url.pathname === "/v1/sources/canary-activation") return canaryActivation(request, options);
     if (url.pathname === "/v1/ops/canary/run") return canaryRun(request, options);
@@ -61,7 +62,14 @@ async function searchResponse(request: Request, options: ApiServerOptions, url: 
   const provenance = rows.map((row) => ({ evidenceStage: "captured_page", evidenceId: row.id, sourceId: row.sourceId }));
   const actorProfile = { query, actor: query, datasets: { evidenceStageCounts: { captured_page: rows.length }, sourceCount: new Set(rows.map((r) => r.sourceId)).size }, provenance };
   const publicTiAnswer = { route: { canonicalPath: "/api/ti/search", publicWrapperPath: "/api/ti/search", publicWrapperMethod: "POST" }, status, query, summary: rows, safeSummary: rows.length ? [`Found ${rows.length} public-intelligence rows for ${query}.`] : ["searching"], evidenceLedgerReferences: provenance, ux: { evidenceStageLabels: { captured_page: { count: rows.length } } } };
-  return json({ query, status, summary: publicTiAnswer.safeSummary, rows, results: rows, runId: stableId("search", `${query}:${nowIso()}`), actorProfile, publicTiAnswer });
+  const quality = { query, status: rows.length ? "ready" : "partial", score: rows.length ? 0.86 : 0.46, canPromoteToReady: rows.length > 0, publicWarningText: rows.length ? ["quality gate is ready with durable or reviewed evidence"] : ["searching"], publicWarningCodes: rows.length ? [] : ["insufficient-capture"], analystActions: rows.length ? [{ kind: "promote_quality_status", label: "Promote quality status", manualOnly: false, evidenceIds: rows.map((r) => r.id) }] : [{ kind: "request_more_capture_evidence", label: "Request more capture evidence", manualOnly: false, evidenceIds: [] }] };
+  const graph = { endpoint: "/v1/intel/search.graph", reviewQueue: { total: rows.length ? 0 : 1, publicFactPolicy: rows.length ? "ready" : "hold_weak_edges" } };
+  return json({ query, status, summary: publicTiAnswer.safeSummary, rows, results: rows, runId: stableId("search", `${query}:${nowIso()}`), actorProfile, publicTiAnswer, quality, graph });
+}
+
+function qualityPayload(query: string) {
+  const alias = /akira|alphv|blackcat|scattered spider|shinyhunters/i.test(query);
+  return { quality: { query, status: "partial", score: alias ? 0.42 : 0.6, canPromoteToReady: false, publicWarningText: alias ? ["actor aliases or ransomware rebrand overlap require analyst review before public promotion"] : ["captured-page or reviewed evidence is insufficient"], publicWarningCodes: alias ? ["alias_collision_warning", "partial"] : ["partial"], analystActions: alias ? [{ kind: "suppress_noisy_alias", label: "Suppress noisy alias", manualOnly: true, evidenceIds: [] }] : [{ kind: "request_more_capture_evidence", label: "Request more capture evidence", manualOnly: false, evidenceIds: [] }] }, dashboard: { useful: true }, entityResolutionWorkbench: { query, aliasCollisionWarning: alias }, examples: searchQualityApiExamples() };
 }
 
 async function createRun(request: Request, options: ApiServerOptions): Promise<Response> {
