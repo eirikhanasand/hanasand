@@ -562,55 +562,66 @@ describe("darkweb metadata index contracts", () => {
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
       candidateCount: 500,
-      previousCurrentChargeableRows: 150,
-      currentChargeableRows: 250,
-      newlyChargeableRows: 100,
+      previousCurrentChargeableRows: 250,
+      currentChargeableRows: 500,
+      newlyChargeableRows: 250,
       projectedAfterPublicSupportRows: 0,
-      blockedOrRetiredRows: 250,
+      blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 250,
-        newlyChargeableSinceProgramCw: 200,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramCw: 450,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 250,
+        blockedOrRetiredCount: 0,
         currentGapTo100: 0,
         currentGapTo250: 0,
         projectedGapTo250AfterPublicSupport: 0,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 250,
-        newlyChargeableSinceProgramDa: 150,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDa: 400,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 250,
+        blockedOrRetiredCount: 0,
         currentGapTo150: 0,
         currentGapTo250: 0,
         projectedGapTo250AfterPublicSupport: 0,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 250,
-        newlyChargeableSinceProgramDc: 100,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDc: 350,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 250,
+        blockedOrRetiredCount: 0,
         currentGapTo250: 0,
-        currentGapTo500: 250,
+        currentGapTo500: 0,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable500: {
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDd: 250,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 0,
+        currentGapTo500: 0,
+        currentGapTo1000: 500,
+        parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 250,
+        current_sellable_public_supported: 500,
         projected_after_public_support: 0,
-        blocked_not_chargeable: 250
+        blocked_not_chargeable: 0
       },
       countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"]
     });
     expect(status.publicSupportSellable500).toEqual(status.publicSupportLift1000.publicSupportSellable500);
     expect(status.publicSupportLift1000.publicSupportSellable500.rows).toHaveLength(500);
-    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(250);
-    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramCw)).toHaveLength(200);
-    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDa)).toHaveLength(150);
-    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDc)).toHaveLength(100);
-    expect(status.publicSupportLift1000.publicSupportSellable500.newlyChargeableParserHandoffRows).toHaveLength(100);
-    expect(Object.values(status.publicSupportLift1000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(250);
+    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(500);
+    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramCw)).toHaveLength(450);
+    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDa)).toHaveLength(400);
+    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDc)).toHaveLength(350);
+    expect(status.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDd)).toHaveLength(250);
+    expect(status.publicSupportLift1000.publicSupportSellable500.newlyChargeableParserHandoffRows).toHaveLength(250);
+    expect(Object.values(status.publicSupportLift1000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(0);
     expect(Object.keys(status.publicSupportLift1000.publicSupportSellable500.blockerBucketCounts).sort()).toEqual([
       "contradiction_false_claim_hold",
       "contradiction_hold",
@@ -1528,36 +1539,45 @@ describe("darkweb metadata index contracts", () => {
     expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable250.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(50);
     expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500).toMatchObject({
       candidateCount: 500,
-      previousCurrentChargeableRows: 150,
-      currentChargeableRows: 250,
-      newlyChargeableRows: 100,
+      previousCurrentChargeableRows: 250,
+      currentChargeableRows: 500,
+      newlyChargeableRows: 250,
       projectedAfterPublicSupportRows: 0,
-      blockedOrRetiredRows: 250,
+      blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 250,
+        currentChargeableCount: 500,
         currentGapTo100: 0,
         currentGapTo250: 0,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 250,
-        newlyChargeableSinceProgramDa: 150,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDa: 400,
         currentGapTo150: 0,
         currentGapTo250: 0,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 250,
-        newlyChargeableSinceProgramDc: 100,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDc: 350,
         currentGapTo250: 0,
-        currentGapTo500: 250,
+        currentGapTo500: 0,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable500: {
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDd: 250,
+        currentGapTo500: 0,
+        currentGapTo1000: 500,
+        parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       }
     });
-    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.newlyChargeableParserHandoffRows).toHaveLength(100);
-    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(250);
-    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDa)).toHaveLength(150);
-    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDc)).toHaveLength(100);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.newlyChargeableParserHandoffRows).toHaveLength(250);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.countsTowardSellableFloorNow)).toHaveLength(500);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDa)).toHaveLength(400);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDc)).toHaveLength(350);
+    expect(firstPage.productHandoff.publicSupportLift1000.publicSupportSellable500.rows.filter((row) => row.newlyChargeableSinceProgramDd)).toHaveLength(250);
     expect(firstPage.productHandoff.publicSupportLift1000.metricMovement).toMatchObject({
       repairCandidatesAdded: 100,
       likelySellableRowsAfterPublicSupport: 80,

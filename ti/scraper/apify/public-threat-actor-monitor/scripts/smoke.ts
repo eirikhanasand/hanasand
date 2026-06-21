@@ -1520,7 +1520,7 @@ const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, 
 if (
   !graphPublicUnlockCounts
   || Number(graphPublicUnlockCounts.admitted_by_parser) !== 0
-  || Number(graphPublicUnlockCounts.ready_for_parser) !== 300
+  || Number(graphPublicUnlockCounts.ready_for_parser) !== 500
   || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 500
   || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
   || Number(graphPublicUnlockCounts.needs_public_source) !== 6
@@ -1542,9 +1542,9 @@ const graphPublicNeedsPublicSource = graphPublicUnlockQueue.needs_public_source 
 const graphPublicParserHandoff = graphPublicUnlockQueue.parserAdmissionHandoff as Array<Record<string, unknown>> | undefined;
 if (
   !Array.isArray(graphPublicParserHandoff)
-  || graphPublicParserHandoff.length !== 300
+  || graphPublicParserHandoff.length !== 500
   || !Array.isArray(graphPublicCurrentAdmission)
-  || graphPublicCurrentAdmission.length !== 300
+  || graphPublicCurrentAdmission.length !== 500
   || !graphPublicParserHandoff.every((row) =>
     typeof row.actor === "string"
     && typeof row.victimOrTarget === "string"

@@ -2735,7 +2735,7 @@ export function buildSchedulerDailyActorRunPlan(input: {
     nextSchedulerAction: "run_daily_actor_after_source_gap_sweeps",
     uiSummary: {
       headline: "current_750_sellable_gate_active_current_1000_useful_gate_next",
-      operatorMessage: "Run the 100-name Actor preset after Program DD parser, public corroboration, and approved metadata sweeps; current750 remains held on a 250 sellable-row gap, and current1000 remains held until the 393 useful-row gap, fresh-density proof, source-family diversity, no-leak proof, and cost/useful-row proof are observed.",
+      operatorMessage: "Run the 100-name Actor preset after Program DD parser, public corroboration, and approved metadata sweeps; current750 remains held until 250 more observed current sellable rows are admitted, and current1000 remains held until the 393 useful-row gap, fresh-density proof, source-family diversity, no-leak proof, and cost/useful-row proof are observed.",
       suppressedClaim: "do_not_count_projection_or_review_only_rows_as_paid"
     }
   };

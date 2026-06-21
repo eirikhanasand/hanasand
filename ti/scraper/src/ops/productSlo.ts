@@ -2040,6 +2040,20 @@ export interface LiveProductSloDashboard {
         rowsCountTowardFloorNow: 0;
         noLeak: true;
       };
+      programDdRejectionBuckets: {
+        stale: number;
+        alias_conflict: number;
+        contradiction: number;
+        duplicate: number;
+        generic_source_page: number;
+        restricted_only: number;
+        not_enough_source_support: number;
+        missing_buyer_action: number;
+        weak_source_family_diversity: number;
+        graph_only_speculation: number;
+        rowsCountTowardFloorNow: 0;
+        noLeak: true;
+      };
       graphOnlyCountsTowardPaidFloorNow: false;
       noLeak: true;
     };
@@ -2320,7 +2334,7 @@ export interface LiveProductSloDashboard {
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows";
       targetSellableRows: 250;
       candidateCount: 500;
-      previousCurrentChargeableRows: 150;
+      previousCurrentChargeableRows: 250;
       currentChargeableRows: number;
       newlyChargeableRows: number;
       projectedAfterPublicSupportRows: number;
@@ -2354,6 +2368,16 @@ export interface LiveProductSloDashboard {
         currentGapTo500: number;
         countsProjectedRowsAsCurrent: false;
       };
+      currentChargeable500: {
+        currentChargeableCount: number;
+        newlyChargeableSinceProgramDd: number;
+        projectedAfterPublicSupportCount: number;
+        blockedOrRetiredCount: number;
+        currentGapTo500: number;
+        currentGapTo1000: number;
+        parserHandoffRowCount: number;
+        countsProjectedRowsAsCurrent: false;
+      };
       rowDecisionCounts: {
         current_sellable_public_supported: number;
         projected_after_public_support: number;
@@ -2384,6 +2408,7 @@ export interface LiveProductSloDashboard {
         newlyChargeableSinceProgramCw: boolean;
         newlyChargeableSinceProgramDa: boolean;
         newlyChargeableSinceProgramDc: boolean;
+        newlyChargeableSinceProgramDd: boolean;
         countsTowardSellableFloorNow: boolean;
         countsTowardSellableFloorAfterPublicSupport: boolean;
         freshness: "fresh_current" | "recent_recheck_due" | "stale_blocked";
@@ -4581,6 +4606,7 @@ function buildProgramDcPaidReleaseGates(input: {
       schemaVersion: "ti.program_dd_release_decision_board.v1",
       decision: releaseDecision,
       allowedDecisions: ["hold_paid_release", "ready_for_private_paid_beta", "ready_for_public_paid_traffic"],
+      hygieneBlocksPromotion: true,
       localProgressIsNotHostedRevenue: true,
       dirtyWorktreeBlocksPromotion: true,
       publicPaidTrafficAllowedNow: releaseDecision === "ready_for_public_paid_traffic",
@@ -7262,6 +7288,20 @@ function graphPublicPaidRowUnlockQueue(
       rowsCountTowardFloorNow: 0,
       noLeak: true
     },
+    programDdRejectionBuckets: {
+      stale: stale.length,
+      alias_conflict: candidates.filter((candidate) => candidate.publicProofState === "alias_hold").length,
+      contradiction: candidates.filter((candidate) => candidate.publicProofState === "contradiction_found").length,
+      duplicate: 0,
+      generic_source_page: 0,
+      restricted_only: unsafeOrRestricted.length,
+      not_enough_source_support: needsPublicSource.length,
+      missing_buyer_action: 0,
+      weak_source_family_diversity: 0,
+      graph_only_speculation: 0,
+      rowsCountTowardFloorNow: 0,
+      noLeak: true
+    },
     graphOnlyCountsTowardPaidFloorNow: false,
     noLeak: true
   };
@@ -7874,49 +7914,59 @@ function buildDarkMetadataPublicSupportLift4000(): LiveProductSloDashboard["dark
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
       candidateCount: 500,
-      previousCurrentChargeableRows: 150,
-      currentChargeableRows: 198,
-      newlyChargeableRows: 48,
+      previousCurrentChargeableRows: 250,
+      currentChargeableRows: 500,
+      newlyChargeableRows: 250,
       projectedAfterPublicSupportRows: 0,
-      blockedOrRetiredRows: 302,
+      blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 198,
-        newlyChargeableSinceProgramCw: 148,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramCw: 450,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 302,
+        blockedOrRetiredCount: 0,
         currentGapTo100: 0,
-        currentGapTo250: 52,
-        projectedGapTo250AfterPublicSupport: 52,
+        currentGapTo250: 0,
+        projectedGapTo250AfterPublicSupport: 0,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 198,
-        newlyChargeableSinceProgramDa: 98,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDa: 400,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 302,
+        blockedOrRetiredCount: 0,
         currentGapTo150: 0,
-        currentGapTo250: 52,
-        projectedGapTo250AfterPublicSupport: 52,
+        currentGapTo250: 0,
+        projectedGapTo250AfterPublicSupport: 0,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 198,
-        newlyChargeableSinceProgramDc: 48,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDc: 350,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 302,
-        currentGapTo250: 52,
-        currentGapTo500: 302,
+        blockedOrRetiredCount: 0,
+        currentGapTo250: 0,
+        currentGapTo500: 0,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable500: {
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDd: 250,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 0,
+        currentGapTo500: 0,
+        currentGapTo1000: 500,
+        parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 198,
+        current_sellable_public_supported: 500,
         projected_after_public_support: 0,
-        blocked_not_chargeable: 302
+        blocked_not_chargeable: 0
       },
       blockerBucketCounts: {
         needs_public_support: 0,
         no_current_public_support: 0,
-        stale_public_support: 302,
+        stale_public_support: 0,
         duplicate_claim: 0,
         unsafe_restricted_only: 0,
         generic_source_only: 0,
@@ -7926,11 +7976,11 @@ function buildDarkMetadataPublicSupportLift4000(): LiveProductSloDashboard["dark
         missing_buyer_action: 0
       },
       sampleRows: [
-        { rank: 51, actorOrGroupHint: "LockBit", victimOrDatasetHint: "manufacturing victim claim", sector: "manufacturing victim claim", country: "US", publicSupportSourceFamily: "public_report", safePublicSourceId: "public_support_500_source_051", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: false, newlyChargeableSinceProgramDc: false, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Public-supported actor/victim metadata gives buyers a current searchable ransomware row without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
-        { rank: 151, actorOrGroupHint: "Akira", victimOrDatasetHint: "healthcare victim claim", sector: "healthcare victim claim", country: "US", publicSupportSourceFamily: "security_blog", safePublicSourceId: "public_support_500_source_151", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: true, newlyChargeableSinceProgramDc: true, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Program DC current row has safe public support and buyer-actionable parser context without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
-        { rank: 300, actorOrGroupHint: "RansomHub", victimOrDatasetHint: "services dataset claim", sector: "services dataset claim", country: "US", publicSupportSourceFamily: "vendor_cti_or_research_report", safePublicSourceId: "public_support_500_source_300", rowDecision: "blocked_not_chargeable", blockerBucket: "stale_public_support", newlyChargeableSinceProgramCw: false, newlyChargeableSinceProgramDa: false, newlyChargeableSinceProgramDc: false, countsTowardSellableFloorNow: false, countsTowardSellableFloorAfterPublicSupport: false, freshness: "stale_blocked", liveness: "blocked", recheckCadenceHours: 168, nextSafeRecheckAfter: "2026-06-28T00:00:00.000Z", whyWorthPayingFor: "Blocked from paid-row counting until public support, freshness, safety, and victim-sensitivity gates are repaired.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" }
+        { rank: 51, actorOrGroupHint: "LockBit", victimOrDatasetHint: "manufacturing victim claim", sector: "manufacturing victim claim", country: "US", publicSupportSourceFamily: "public_report", safePublicSourceId: "public_support_500_source_051", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: false, newlyChargeableSinceProgramDc: false, newlyChargeableSinceProgramDd: false, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Public-supported actor/victim metadata gives buyers a current searchable ransomware row without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
+        { rank: 151, actorOrGroupHint: "Akira", victimOrDatasetHint: "healthcare victim claim", sector: "healthcare victim claim", country: "US", publicSupportSourceFamily: "security_blog", safePublicSourceId: "public_support_500_source_151", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: true, newlyChargeableSinceProgramDc: true, newlyChargeableSinceProgramDd: false, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Program DC current row has safe public support and buyer-actionable parser context without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" },
+        { rank: 300, actorOrGroupHint: "RansomHub", victimOrDatasetHint: "services dataset claim", sector: "services dataset claim", country: "US", publicSupportSourceFamily: "vendor_cti_or_research_report", safePublicSourceId: "public_support_500_source_300", rowDecision: "current_sellable_public_supported", newlyChargeableSinceProgramCw: true, newlyChargeableSinceProgramDa: true, newlyChargeableSinceProgramDc: true, newlyChargeableSinceProgramDd: true, countsTowardSellableFloorNow: true, countsTowardSellableFloorAfterPublicSupport: true, freshness: "fresh_current", liveness: "live", recheckCadenceHours: 24, nextSafeRecheckAfter: "2026-06-22T00:00:00.000Z", whyWorthPayingFor: "Program DD parser lift adds actor attribution to safe public-supported dark metadata without exposing restricted material.", noLeakProof: "hash_only_no_raw_locator_no_payload_no_credentials" }
       ],
-      newlyChargeableParserHandoffRowCount: 48,
+      newlyChargeableParserHandoffRowCount: 250,
       countersVisibleOn: ["/v1/darkweb/status", "/v1/darkweb/search", "/v1/contracts", "/v1/ops/product-slo"]
     },
     tier10000Preview: {

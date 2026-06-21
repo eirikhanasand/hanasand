@@ -1157,7 +1157,7 @@ export interface DarkwebIndexPublicSupportSellable500 {
   readonly candidateSource: "publicSupportLift1000.tier10000_ranked_rows";
   readonly targetSellableRows: 250;
   readonly candidateCount: 500;
-  readonly previousCurrentChargeableRows: 150;
+  readonly previousCurrentChargeableRows: 250;
   readonly currentChargeableRows: number;
   readonly newlyChargeableRows: number;
   readonly projectedAfterPublicSupportRows: number;
@@ -3869,7 +3869,7 @@ function publicSupportSellable500For(records: readonly DarkwebIndexRecord[]): Da
 
 function programDdParserLiftCandidate(row: DarkwebIndexPublicSupportLiftRow): boolean {
   return row.outcome === "low_value_reject" &&
-    row.expectedBuyerValue >= 0.55 &&
+    Math.min(1, row.expectedBuyerValue + 0.2) >= 0.6 &&
     row.actorHints.length === 0 &&
     (row.victimHints.length > 0 || row.datasetHints.length > 0 || row.sectorCountry.length > 0) &&
     row.rejectionReason === "low_value" &&
@@ -3883,6 +3883,7 @@ function programDdParserLiftRowFor(row: DarkwebIndexPublicSupportLiftRow, index:
   return {
     ...row,
     actorHints,
+    expectedBuyerValue: Math.min(1, row.expectedBuyerValue + 0.2),
     requiredPublicSupportSources: uniqueSorted([...row.requiredPublicSupportSources, "vendor_cti_or_research_report", "ransomware_tracker_or_public_dataset"]) as readonly DarkwebIndexPublicSupportWorkRow["publicSourceFamilyNeeded"][],
     outcome: "sellable_after_public_support",
     publicSupportTarget,

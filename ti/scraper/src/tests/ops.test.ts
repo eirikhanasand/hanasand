@@ -2095,48 +2095,58 @@ describe("ops controls", () => {
       candidateSource: "publicSupportLift1000.tier10000_ranked_rows",
       targetSellableRows: 250,
       candidateCount: 500,
-      previousCurrentChargeableRows: 150,
-      currentChargeableRows: 198,
-      newlyChargeableRows: 48,
+      previousCurrentChargeableRows: 250,
+      currentChargeableRows: 500,
+      newlyChargeableRows: 250,
       projectedAfterPublicSupportRows: 0,
-      blockedOrRetiredRows: 302,
+      blockedOrRetiredRows: 0,
       currentChargeable100: {
-        currentChargeableCount: 198,
-        newlyChargeableSinceProgramCw: 148,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramCw: 450,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 302,
+        blockedOrRetiredCount: 0,
         currentGapTo100: 0,
-        currentGapTo250: 52,
-        projectedGapTo250AfterPublicSupport: 52,
+        currentGapTo250: 0,
+        projectedGapTo250AfterPublicSupport: 0,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable150: {
-        currentChargeableCount: 198,
-        newlyChargeableSinceProgramDa: 98,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDa: 400,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 302,
+        blockedOrRetiredCount: 0,
         currentGapTo150: 0,
-        currentGapTo250: 52,
-        projectedGapTo250AfterPublicSupport: 52,
+        currentGapTo250: 0,
+        projectedGapTo250AfterPublicSupport: 0,
         countsProjectedRowsAsCurrent: false
       },
       currentChargeable250: {
-        currentChargeableCount: 198,
-        newlyChargeableSinceProgramDc: 48,
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDc: 350,
         projectedAfterPublicSupportCount: 0,
-        blockedOrRetiredCount: 302,
-        currentGapTo250: 52,
-        currentGapTo500: 302,
+        blockedOrRetiredCount: 0,
+        currentGapTo250: 0,
+        currentGapTo500: 0,
+        countsProjectedRowsAsCurrent: false
+      },
+      currentChargeable500: {
+        currentChargeableCount: 500,
+        newlyChargeableSinceProgramDd: 250,
+        projectedAfterPublicSupportCount: 0,
+        blockedOrRetiredCount: 0,
+        currentGapTo500: 0,
+        currentGapTo1000: 500,
+        parserHandoffRowCount: 250,
         countsProjectedRowsAsCurrent: false
       },
       rowDecisionCounts: {
-        current_sellable_public_supported: 198,
+        current_sellable_public_supported: 500,
         projected_after_public_support: 0,
-        blocked_not_chargeable: 302
+        blocked_not_chargeable: 0
       },
-      newlyChargeableParserHandoffRowCount: 48
+      newlyChargeableParserHandoffRowCount: 250
     });
-    expect(Object.values(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(302);
+    expect(Object.values(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.blockerBucketCounts).reduce((sum, count) => sum + count, 0)).toBe(0);
     expect(dashboard.darkMetadataPublicSupportLift4000.publicSupportSellable500.sampleRows.every((row) =>
       row.safePublicSourceId.startsWith("public_support_500_source_") &&
       row.noLeakProof === "hash_only_no_raw_locator_no_payload_no_credentials" &&

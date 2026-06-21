@@ -1956,6 +1956,20 @@ interface GraphPublicCorroborationPivotPacket {
       rowsCountTowardFloorNow: 0;
       noLeak: true;
     };
+    programDdRejectionBuckets: {
+      stale: number;
+      alias_conflict: number;
+      contradiction: number;
+      duplicate: number;
+      generic_source_page: number;
+      restricted_only: number;
+      not_enough_source_support: number;
+      missing_buyer_action: number;
+      weak_source_family_diversity: number;
+      graph_only_speculation: number;
+      rowsCountTowardFloorNow: 0;
+      noLeak: true;
+    };
     graphOnlyCountsTowardPaidFloorNow: false;
     noLeak: true;
   };
@@ -8478,6 +8492,20 @@ function graphPublicOutputPaidRowUnlockQueue(
       not_enough_source_support: needsPublicSource.length,
       missing_buyer_action: 0,
       weak_source_family_diversity: 0,
+      rowsCountTowardFloorNow: 0,
+      noLeak: true
+    },
+    programDdRejectionBuckets: {
+      stale: stale.length,
+      alias_conflict: candidates.filter((row) => row.publicProofState === "alias_hold").length,
+      contradiction: candidates.filter((row) => row.publicProofState === "contradiction_found").length,
+      duplicate: 0,
+      generic_source_page: 0,
+      restricted_only: unsafeOrRestricted.length,
+      not_enough_source_support: needsPublicSource.length,
+      missing_buyer_action: 0,
+      weak_source_family_diversity: 0,
+      graph_only_speculation: 0,
       rowsCountTowardFloorNow: 0,
       noLeak: true
     },

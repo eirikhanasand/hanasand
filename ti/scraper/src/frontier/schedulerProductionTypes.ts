@@ -1356,9 +1356,9 @@ export interface SchedulerDailyActorRunPlanDto {
     schemaVersion: "ti.scheduler_paid_row_cadence_inputs.v1";
     routeVisible: true;
     paidActorFloor: {
-      gate: "current_750_sellable_rows";
+      gate: "current_1000_useful_rows";
       previousLocalGate: "current_500_sellable_rows";
-      targetSellableRows: 750;
+      targetSellableRows: 500;
       currentLocalSellableRows: number;
       currentLocalGapRows: number;
       targetUsefulRows: 1000;
