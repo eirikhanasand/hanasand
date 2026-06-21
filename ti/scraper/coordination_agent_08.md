@@ -1,18 +1,11 @@
-Status: active_public_corroboration_54_to_120
+Status: paused_by_user_single_agent_mode
 
-# Agent 08 Task
+# Agent 08 Summary
 
-Grow public corroboration handoffs from 54 to 120 rows.
+- Grew hosted public corroboration handoff for run `THMm2ZzYxW4HVPGJ6` / dataset `xLPoxMVY6cVjGsS4e` from 54 to 120 parser-ready public support rows.
+- Added 66 more current/recent public-source support rows across single-source, stale timestamp, missing sector/country, missing TTP/tool, missing buyer action, and missing confidence reason classes.
+- Added actor-specific claim text and freshness labels to each accepted support class so Agent 03 can see what field is unlocked before parser admission.
+- Projected hosted rerun effect is now 46 -> 166 sellable rows and 31 -> 85 findings after parser admission, with hosted paid proof still unclaimed until observed.
+- Preserved rejection buckets for stale, alias/wrong-actor, generic source page, graph-only, restricted-only, duplicate, and contradiction rows, with no-leak boundaries intact.
 
-Deliver:
-- Add 66 more current public-source support rows for hosted held/caveated rows.
-- Cover single-source, stale timestamp, missing sector/country, missing TTP/tool, missing buyer action, and missing confidence reason classes.
-- Each row needs source family, actor-specific claim, freshness, buyer-useful field unlocked, and parser handoff.
-- Reject stale, generic, alias/wrong-actor, duplicate, contradiction, graph-only, and restricted-only rows.
-
-Success metric:
-- Parser-ready public corroboration rows reach at least 120.
-
-Before stopping:
-- Run public-signal and Actor checks.
-- Commit and push.
+Requesting the next Agent 08 task focused on hosted-row public corroboration or buyer-visible row support.

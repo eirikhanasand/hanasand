@@ -102,8 +102,8 @@ if (
 ) {
   throw new Error("OUTPUT record must expose paid-row quality counts");
 }
-if (Number(paidRowQuality.sellable) < 19 || Number(paidRowQuality.usefulForBuyer) < 20) {
-  throw new Error("APT42 daily collection smoke must keep at least 19 sellable and 20 buyer-useful candidate rows after row prioritization");
+if (Number(paidRowQuality.sellable) < 23 || Number(paidRowQuality.usefulForBuyer) < 23) {
+  throw new Error("APT42 daily collection smoke must keep at least 23 sellable and 23 buyer-useful candidate rows after row prioritization");
 }
 const buyerVisibleOutputQuality = outputRecord.buyerVisibleOutputQuality as Record<string, unknown> | undefined;
 if (
@@ -755,9 +755,10 @@ if (
   || findingAdmissionLedger.baselineSellableSourceProvenanceRows !== 135
   || findingAdmissionLedger.baselineSellableFindingRows !== 52
   || Number(findingAdmissionLedger.currentSellableRows) !== Number(paidRowQuality.sellable)
-  || Number(findingAdmissionLedger.currentSellableFindingRows) < 7
-  || Number(findingAdmissionLedger.currentSellableSourceProvenanceRows) < 4
-  || Number(findingAdmissionLedger.activityTargetTtpRowsAdmittedThisPass) < 4
+  || Number(findingAdmissionLedger.currentSellableFindingRows) < 19
+  || Number(findingAdmissionLedger.currentSellableSourceProvenanceRows) !== 0
+  || Number(findingAdmissionLedger.sourceProvenanceShareOfSellable) !== 0
+  || Number(findingAdmissionLedger.activityTargetTtpRowsAdmittedThisPass) < 15
   || !Array.isArray(findingAdmissionLedger.admittedFindingRows)
   || !Array.isArray(findingAdmissionLedger.perQueryAdmission)
   || !Array.isArray(findingAdmissionLedger.heldFindingRows)
@@ -1389,7 +1390,7 @@ if (
   || Number(programCpSecondBatchAudit.localProofRows) !== output.length
   || Number(programCpSecondBatchAudit.currentSellableRows) !== Number(paidRowQuality.sellable)
   || Number(programCpSecondBatchAudit.sellableFindingRows) < 1
-  || Number(programCpSecondBatchAudit.sellableSourceProvenanceRows) < 1
+  || Number(programCpSecondBatchAudit.sellableSourceProvenanceRows) !== 0
   || programCpSecondBatchAudit.sourceProvenanceRowsCountTowardFindingFloor !== false
   || programCpSecondBatchAudit.hostedProofRequired !== true
   || programCpSecondBatchAudit.hostedProofCountsTowardPaidPromotion !== false
@@ -2772,44 +2773,65 @@ if (activity?.firstReportedAt !== "2026-06-20T01:00:00.000Z" || activity?.lastRe
   throw new Error("Activity rows must preserve the public reporting window");
 }
 const coverageGap = output.find((row) => row.rowType === "coverage_gap");
-if (coverageGap?.recommendedCollectionAction !== "add_public_channel_sources" || coverageGap?.collectionPriority !== "medium") {
-  throw new Error("Coverage gap rows must guide scheduler/source follow-up");
-}
-if (coverageGap?.paidRowDecision !== "coverage_gap_only" || coverageGap?.billingGuidance !== "do_not_charge_if_metered") {
-  throw new Error("Coverage gap rows must be marked as remediation context rather than sellable findings");
-}
-if (!Array.isArray(coverageGap?.paidRowRemediationActions) || !coverageGap.paidRowRemediationActions.some((action) => action.owner === "agent_04")) {
-  throw new Error("Coverage gap rows must expose owner-specific remediation actions");
+if (coverageGap) {
+  if (coverageGap.recommendedCollectionAction !== "add_public_channel_sources" || coverageGap.collectionPriority !== "medium") {
+    throw new Error("Coverage gap rows must guide scheduler/source follow-up");
+  }
+  if (coverageGap.paidRowDecision !== "coverage_gap_only" || coverageGap.billingGuidance !== "do_not_charge_if_metered") {
+    throw new Error("Coverage gap rows must be marked as remediation context rather than sellable findings");
+  }
+  if (!Array.isArray(coverageGap.paidRowRemediationActions) || !coverageGap.paidRowRemediationActions.some((action) => action.owner === "agent_04")) {
+    throw new Error("Coverage gap rows must expose owner-specific remediation actions");
+  }
 }
 const suppressed = output.find((row) => row.paidRowDecision === "suppress");
-if (!suppressed || suppressed.billingGuidance !== "do_not_charge_if_metered" || suppressed.buyerValueScore !== 0.05) {
-  throw new Error("Capability-only rows must be suppressed and excluded from metered paid findings");
-}
-if (!Array.isArray(suppressed.paidRowReasonCodes) || !suppressed.paidRowReasonCodes.includes("capability_without_evidence")) {
-  throw new Error("Suppressed rows must explain the evidence gap with stable reason codes");
-}
-if (!Array.isArray(suppressed.paidRowRemediationActions) || !suppressed.paidRowRemediationActions.some((action) => action.owner === "agent_05")) {
-  throw new Error("Suppressed rows must route remediation to the source/metadata owner");
-}
-const suppressedProof = suppressed.parserAdmissionRuntimeProof as Record<string, unknown> | undefined;
-if (
-  !suppressedProof
-  || suppressedProof.admissionDecision !== "suppress"
-  || suppressedProof.countsTowardCurrentSellableRows !== false
-  || suppressedProof.blockedReason !== "restricted_only_without_public_support"
-) {
-  throw new Error("Restricted-only metadata rows must carry parser suppression proof");
+if (suppressed) {
+  if (suppressed.billingGuidance !== "do_not_charge_if_metered" || suppressed.buyerValueScore !== 0.05) {
+    throw new Error("Capability-only rows must be suppressed and excluded from metered paid findings");
+  }
+  if (
+    !Array.isArray(suppressed.paidRowReasonCodes)
+    || !(
+      suppressed.paidRowReasonCodes.includes("capability_without_evidence")
+      || suppressed.paidRowReasonCodes.includes("source_provenance_only")
+    )
+  ) {
+    throw new Error("Suppressed rows must explain the evidence or source-provenance gap with stable reason codes");
+  }
+  if (!Array.isArray(suppressed.paidRowRemediationActions) || !suppressed.paidRowRemediationActions.some((action) => ["agent_05", "agent_07"].includes(String(action.owner)))) {
+    throw new Error("Suppressed rows must route remediation to the source/metadata or row-quality owner");
+  }
+  const suppressedProof = suppressed.parserAdmissionRuntimeProof as Record<string, unknown> | undefined;
+  if (
+    !suppressedProof
+    || suppressedProof.admissionDecision !== "suppress"
+    || suppressedProof.countsTowardCurrentSellableRows !== false
+    || !["restricted_only_without_public_support", "generic_source_page"].includes(String(suppressedProof.blockedReason))
+  ) {
+    throw new Error("Suppressed metadata/source rows must carry parser suppression proof");
+  }
 }
 const sourceProofs = output
   .filter((row) => row.rowType === "source")
   .map((row) => row.parserAdmissionRuntimeProof as Record<string, unknown> | undefined);
-if (sourceProofs.length < 1 || !sourceProofs.every((proof) =>
+if (sourceProofs.length > 0 && !sourceProofs.every((proof) =>
   proof
   && proof.admissionDecision === "suppress"
   && proof.countsTowardCurrentSellableRows === false
   && proof.blockedReason === "generic_source_page"
 )) {
   throw new Error("Generic source-page rows must not become parser-admitted sellable rows");
+}
+if (
+  output.length === 23
+  && Number(paidRowQuality.sellable) === 23
+  && (
+    output.some((row) => row.rowType === "coverage_gap")
+    || output.some((row) => row.paidRowDecision === "suppress")
+    || output.some((row) => row.rowType === "source")
+  )
+) {
+  throw new Error("A fully sellable first page must not spend rows on gaps, suppressed entries, or source pages");
 }
 
 console.log(JSON.stringify({

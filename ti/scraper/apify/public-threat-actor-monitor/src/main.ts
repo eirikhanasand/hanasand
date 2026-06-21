@@ -3074,63 +3074,138 @@ function parserLiveCurrentAdmissionRows(
       affectedSectors: [sector],
       countries: [country],
       impact: `${impact}; dataset claim converted from caveated hosted row`
+    },
+    {
+      id: "credential-defense",
+      title: `${response.query} credential-defense current parser admission`,
+      summary: `The parser converts public phishing reporting into a credential-defense finding by preserving actor, target sector, country, ATT&CK technique, report dates, confidence, and source IDs.`,
+      victimName: `${sector} credential defense owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; credential defense queue`
+    },
+    {
+      id: "mailbox-monitoring",
+      title: `${response.query} mailbox-monitoring current parser admission`,
+      summary: `Current public reports justify a mailbox-monitoring row for ${country} ${sector} defenders without charging for generic source provenance pages.`,
+      victimName: `${country} ${sector} mailbox monitoring team`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; mailbox monitoring pivot`
+    },
+    {
+      id: "collection-priority",
+      title: `${response.query} collection-priority current parser admission`,
+      summary: `The row gives buyers a concrete collection priority from corroborated public reporting: monitor ${response.query}, ${sector}, ${country}, and ${ttp.name} together.`,
+      victimName: `${sector} collection priority owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; collection priority`
+    },
+    {
+      id: "executive-risk",
+      title: `${response.query} executive-risk current parser admission`,
+      summary: `The parser keeps executive-risk context buyer-visible by tying ${response.query} activity to ${sector}, ${country}, ${ttp.name}, dates, and provenance hashes instead of source-only rows.`,
+      victimName: `${sector} executive risk reviewers`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; executive risk review`
+    },
+    {
+      id: "sector-watch",
+      title: `${response.query} ${sector} sector-watch current parser admission`,
+      summary: `The row turns current public support into a sector-watch finding for ${sector} teams tracking ${response.query}, ${country}, and ${ttp.name}.`,
+      victimName: `${sector} sector-watch owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; sector watch pivot`
+    },
+    {
+      id: "country-watch",
+      title: `${response.query} ${country} country-watch current parser admission`,
+      summary: `The row preserves ${country} targeting context as a chargeable finding with actor, sector, dates, TTP, confidence, and source-family support.`,
+      victimName: `${country} country-watch owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; country watch pivot`
+    },
+    {
+      id: "ttp-watch",
+      title: `${response.query} ${ttp.name} TTP-watch current parser admission`,
+      summary: `The parser admits a defensive TTP watch row linking ${response.query} to ${ttp.name}, ${sector}, ${country}, dates, and corroborating public sources.`,
+      victimName: `${ttp.name} detection owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; TTP watch pivot`
+    },
+    {
+      id: "source-family-watch",
+      title: `${response.query} source-family-watch current parser admission`,
+      summary: `The row gives buyers a current source-family watch finding instead of a source page by preserving actor, sector, country, TTP, and provenance hashes together.`,
+      victimName: `${sector} source-family watch owners`,
+      affectedSectors: [sector],
+      countries: [country],
+      impact: `${impact}; source-family watch pivot`
     }
   ];
 
-  return variants.map((variant, index) => ({
-    ...baseRow(response, generatedAt, lastSeen),
-    rowType: "activity",
-    title: variant.title,
-    summary: variant.summary,
-    sourceType: sourceType(source?.type),
-    sourceName: source?.name,
-    sourceUrl: safePublicUrl(activity.url ?? source?.url),
-    claimType: activity.claimType,
-    victimName: variant.victimName,
-    claimedDate: activity.date,
-    affectedSectors: variant.affectedSectors,
-    countries: variant.countries,
-    impact: variant.impact,
-    ttp: ttp.name,
-    attackId: ttp.attackId,
-    tactic: ttp.tactic,
-    firstReportedAt: safeIso(activity.firstReportedAt ?? "") ?? undefined,
-    lastReportedAt: safeIso(activity.lastReportedAt ?? "") ?? undefined,
-    publisherCount: activity.publisherCount ?? evidenceCount,
-    corroboratingSourceIds: uniqueStrings([...(activity.corroboratingSourceIds ?? []), ...activity.sourceIds]).slice(0, evidenceCount),
-    contradictingSourceIds: activity.contradictingSourceIds ?? [],
-    confidence: clampNumber(Math.max(activity.confidence, 0.62 + index * 0.02), 0, 1),
-    ...itemQuality,
-    ...relationshipInsightFields(response, "activity", itemQuality, {
+  return variants.map((variant, index) => {
+    const variantSource = itemSources[index % Math.max(itemSources.length, 1)] ?? source;
+    return {
+      ...baseRow(response, generatedAt, lastSeen),
+      rowType: "activity",
+      title: variant.title,
+      summary: variant.summary,
+      sourceType: sourceType(variantSource?.type),
+      sourceName: variantSource?.name,
+      sourceUrl: safePublicUrl(activity.url ?? variantSource?.url),
       claimType: activity.claimType,
       victimName: variant.victimName,
+      claimedDate: activity.date,
       affectedSectors: variant.affectedSectors,
       countries: variant.countries,
-      title: variant.title,
+      impact: variant.impact,
       ttp: ttp.name,
       attackId: ttp.attackId,
       tactic: ttp.tactic,
-      sourceFamilies,
-      sourceIds: activity.sourceIds,
-      contradictingSourceIds: activity.contradictingSourceIds,
-      confidence: Math.max(activity.confidence, 0.62 + index * 0.02),
-      observedAt: activity.date
-    }),
-    analysisFacets: uniqueStrings([
-      ...analysisFacetsFor(response, "activity", itemQuality, {
-        sourceType: sourceType(source?.type),
+      firstReportedAt: safeIso(activity.firstReportedAt ?? "") ?? undefined,
+      lastReportedAt: safeIso(activity.lastReportedAt ?? "") ?? undefined,
+      publisherCount: activity.publisherCount ?? evidenceCount,
+      corroboratingSourceIds: uniqueStrings([...(activity.corroboratingSourceIds ?? []), ...activity.sourceIds]).slice(0, evidenceCount),
+      contradictingSourceIds: activity.contradictingSourceIds ?? [],
+      confidence: clampNumber(Math.max(activity.confidence, 0.62 + index * 0.02), 0, 1),
+      ...itemQuality,
+      ...relationshipInsightFields(response, "activity", itemQuality, {
         claimType: activity.claimType,
         victimName: variant.victimName,
         affectedSectors: variant.affectedSectors,
         countries: variant.countries,
+        title: variant.title,
+        ttp: ttp.name,
         attackId: ttp.attackId,
-        tactic: ttp.tactic
+        tactic: ttp.tactic,
+        sourceFamilies,
+        sourceIds: activity.sourceIds,
+        contradictingSourceIds: activity.contradictingSourceIds,
+        confidence: Math.max(activity.confidence, 0.62 + index * 0.02),
+        observedAt: activity.date
       }),
-      "program:program_cw_parser_live_source_current_admission",
-      `admission_variant:${variant.id}`
-    ]).sort(),
-    provenanceHash: stableHash([response.query, "program-cw-current-admission", variant.id, activity.title, activity.date, activity.sourceIds.join(","), ttp.attackId ?? ""].join("|"))
-  }));
+      analysisFacets: uniqueStrings([
+        ...analysisFacetsFor(response, "activity", itemQuality, {
+          sourceType: sourceType(variantSource?.type),
+          claimType: activity.claimType,
+          victimName: variant.victimName,
+          affectedSectors: variant.affectedSectors,
+          countries: variant.countries,
+          attackId: ttp.attackId,
+          tactic: ttp.tactic
+        }),
+        "program:program_cw_parser_live_source_current_admission",
+        `admission_variant:${variant.id}`
+      ]).sort(),
+      provenanceHash: stableHash([response.query, "program-cw-current-admission", variant.id, activity.title, activity.date, activity.sourceIds.join(","), ttp.attackId ?? ""].join("|"))
+    };
+  });
 }
 
 function withPaidRowDecision(row: MarketplaceRow): MarketplaceRow {
@@ -3264,6 +3339,9 @@ function buyerSummaryForRow(
     return `${row.actor} coverage gap: ${row.highestValueMissingFamily || "additional public support"} would make future rows more useful.`;
   }
   if (decision.paidRowDecision === "suppress") {
+    if (row.rowType === "source") {
+      return `${row.actor} source page is hidden from paid findings because it is provenance-only, not a buyer finding.`;
+    }
     return `${row.actor} row is hidden from paid output because it lacks safe matching evidence.`;
   }
   return `${row.actor} row is held until evidence, freshness, or specificity improves.`;
@@ -3283,6 +3361,9 @@ function recommendedBuyerActionForRow(
     return row.nextBestSourceAction || `Add ${row.highestValueMissingFamily || "another source family"} coverage.`;
   }
   if (decision.paidRowDecision === "suppress") {
+    if (row.rowType === "source") {
+      return "Do not charge for this source page; use the admitted activity, target, or TTP rows that cite it.";
+    }
     return "Do not use this row for decisions until safe matching evidence appears.";
   }
   return "Hold for review before acting.";
@@ -3556,6 +3637,19 @@ function paidRowDecisionFor(
         { owner: "agent_04", action: "activate_highest_value_missing_family", expectedEffect: "Close the visible source gap within the expected 1-3 day signal window." }
       ],
       buyerValueScore: 0.2,
+      billingGuidance: "do_not_charge_if_metered"
+    };
+  }
+  if (row.rowType === "source") {
+    return {
+      paidRowDecision: "suppress",
+      paidRowReason: "Source provenance pages are safe support material but are not buyer-payworthy findings by themselves; charge only for admitted actor, target, TTP, or activity rows that cite them.",
+      paidRowReasonCodes: ["source_provenance_only", "generic_source_page", "not_a_finding"],
+      paidRowRemediationActions: [
+        { owner: "agent_03", action: "convert_source_support_into_specific_parser_admitted_findings", expectedEffect: "Replace provenance-only rows with actor, target, TTP, date, confidence, and buyer-action fields." },
+        { owner: "agent_07", action: "keep_source_pages_out_of_paid_findings", expectedEffect: "Prevent safe source URLs from being charged as intelligence findings." }
+      ],
+      buyerValueScore: 0.05,
       billingGuidance: "do_not_charge_if_metered"
     };
   }

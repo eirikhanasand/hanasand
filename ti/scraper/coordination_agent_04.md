@@ -1,4 +1,4 @@
-Status: active_source_quality_replacement_next_batch
+Status: paused_by_user_single_agent_mode
 
 # Agent 04 Task
 

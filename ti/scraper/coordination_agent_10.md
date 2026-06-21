@@ -1,4 +1,4 @@
-Status: active_store_conversion_next_pass
+Status: paused_by_user_single_agent_mode
 
 # Agent 10 Task
 

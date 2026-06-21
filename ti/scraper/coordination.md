@@ -49,7 +49,7 @@ Every pass must directly improve one of:
 - Agent 03: focused Actor smoke reached 19 sellable rows and 14 sellable findings.
 - Agent 04: payworthy source density reached 1,604/4,000 and 1,169.284 expected fresh rows/day.
 - Agent 05: useful metadata-only dark/restricted rows reached 1,250.
-- Agent 08: public corroboration handoff reached 54 rows.
+- Agent 08: public corroboration handoff reached 120 rows; projected hosted rerun after parser admission is 166 sellable rows and 85 findings, with hosted paid proof still unclaimed until observed.
 
 Before stopping:
 - Commit and push.

@@ -1291,11 +1291,18 @@ describe("ops controls", () => {
       schemaVersion: "ti.program_fh_hosted_public_corroboration_lift.v1",
       owner: "agent_08",
       observedHostedRun: { runId: "THMm2ZzYxW4HVPGJ6", datasetId: "xLPoxMVY6cVjGsS4e", baselineSellableRows: 46, baselineSellableFindings: 31, baselineCaveatedRows: 194, noLeakFailures: 0 },
-      projectedHostedRerunEffect: { baselineSellableRows: 46, acceptedCorroborationRows: 54, expectedSellableRowsAfterParserAdmission: 100, baselineSellableFindings: 31, expectedFindingRowsAfterParserAdmission: 52, hostedPaidProofClaimed: false }
+      projectedHostedRerunEffect: { baselineSellableRows: 46, acceptedCorroborationRows: 120, expectedSellableRowsAfterParserAdmission: 166, baselineSellableFindings: 31, expectedFindingRowsAfterParserAdmission: 85, hostedPaidProofClaimed: false }
     });
     expect(dashboard.graphPublicCorroborationPivotPacket.hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.map((row) => row.class)).toEqual(expect.arrayContaining(["single_source", "stale_timestamp", "missing_sector_country", "missing_ttp_tool", "missing_buyer_action", "missing_confidence_reason"]));
-    expect(dashboard.graphPublicCorroborationPivotPacket.hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(54);
-    expect(dashboard.graphPublicCorroborationPivotPacket.hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.every((row) => row.parserHandoff.length > 0 && row.provenanceHash.length > 0 && row.countsTowardPaidPromotionNow === false && row.noLeak)).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(120);
+    expect(dashboard.graphPublicCorroborationPivotPacket.hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.every((row) =>
+      row.actorSpecificClaim.length > 40 &&
+      ["current_public_source", "recent_public_source"].includes(row.freshness) &&
+      row.parserHandoff.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.countsTowardPaidPromotionNow === false &&
+      row.noLeak
+    )).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.hostedDefaultPublicCorroborationLift.rejectedPublicCorroborationRows.every((row) => row.buyerVisibleMetricImproved === "none" && row.countsTowardPaidPromotionNow === false && row.noLeak)).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.hostedDefaultPublicCorroborationLift.noLeakBoundary).toMatchObject({ rawBodiesExposed: false, unsafeUrlsExposed: false, restrictedPayloadsExposed: false, credentialsExposed: false, privateMaterialUsed: false, actorInteractionTextUsed: false });
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_parser_admission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(25);

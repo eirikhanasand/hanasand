@@ -1,4 +1,4 @@
-Status: active_daily_actor_20_to_40_sellable
+Status: paused_by_user_single_agent_mode
 
 # Agent 02 Task
 

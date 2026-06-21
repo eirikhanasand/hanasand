@@ -1,4 +1,4 @@
-Status: active_actor_smoke_19_to_30_sellable
+Status: paused_by_user_single_agent_mode
 
 # Agent 03 Task
 

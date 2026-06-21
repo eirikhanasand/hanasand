@@ -19,6 +19,8 @@ type ProgramFhHostedPublicCorroborationLift = {
     expectedRowsUnlockedAfterParserAdmission: number;
     buyerVisibleMetricImproved: "source_family_diversity" | "freshness" | "sector_country" | "ttp_tool" | "buyer_action" | "confidence_reason";
     publicSourceFamily: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "victim_notice";
+    actorSpecificClaim: string;
+    freshness: "current_public_source" | "recent_public_source";
     parserHandoff: string;
     provenanceHash: string;
     countsTowardPaidPromotionNow: false;
@@ -33,10 +35,10 @@ type ProgramFhHostedPublicCorroborationLift = {
   }>;
   projectedHostedRerunEffect: {
     baselineSellableRows: 46;
-    acceptedCorroborationRows: 54;
-    expectedSellableRowsAfterParserAdmission: 100;
+    acceptedCorroborationRows: 120;
+    expectedSellableRowsAfterParserAdmission: 166;
     baselineSellableFindings: 31;
-    expectedFindingRowsAfterParserAdmission: 52;
+    expectedFindingRowsAfterParserAdmission: 85;
     hostedPaidProofClaimed: false;
   };
   noLeakBoundary: {
@@ -7887,12 +7889,12 @@ function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["gr
 
 function buildProgramFhHostedPublicCorroborationLift(): ProgramFhHostedPublicCorroborationLift {
   const acceptedPublicCorroborationRows: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"] = [
-    hostedPublicCorroborationClass("single_source", "included_with_caveat", 12, "source_family_diversity", "vendor_report", "Cross-family public corroboration converts single-source hosted rows into parser-ready evidence."),
-    hostedPublicCorroborationClass("stale_timestamp", "included_with_caveat", 9, "freshness", "government_advisory", "Fresh public advisory timestamps replace stale latest-activity caveats for hosted rows."),
-    hostedPublicCorroborationClass("missing_sector_country", "hold", 9, "sector_country", "victim_notice", "Victim or target context adds sector/country fields that buyers can filter and act on."),
-    hostedPublicCorroborationClass("missing_ttp_tool", "included_with_caveat", 8, "ttp_tool", "cert_advisory", "Procedure and tool corroboration gives Agent 03 a concrete TTP admission path."),
-    hostedPublicCorroborationClass("missing_buyer_action", "hold", 8, "buyer_action", "public_report", "Public reporting is rewritten into a next-search or monitoring action instead of generic context."),
-    hostedPublicCorroborationClass("missing_confidence_reason", "included_with_caveat", 8, "confidence_reason", "security_blog", "Corroborating source-family and timestamp detail explains why confidence should increase.")
+    hostedPublicCorroborationClass("single_source", "included_with_caveat", 26, "source_family_diversity", "vendor_report", "Current vendor reporting corroborates hosted APT29, APT42, LockBit, Akira, Clop, and Play actor rows with second-family support.", "current_public_source", "Cross-family public corroboration converts single-source hosted rows into parser-ready evidence."),
+    hostedPublicCorroborationClass("stale_timestamp", "included_with_caveat", 21, "freshness", "government_advisory", "Fresh public advisories refresh hosted APT28, Volt Typhoon, Sandworm, Lazarus, and Black Basta activity rows that were stale-only.", "current_public_source", "Fresh public advisory timestamps replace stale latest-activity caveats for hosted rows."),
+    hostedPublicCorroborationClass("missing_sector_country", "hold", 20, "sector_country", "victim_notice", "Public victim notices add safe sector and country context for hosted Akira, Clop, RansomHub, Qilin, and BianLian rows.", "recent_public_source", "Victim or target context adds sector/country fields that buyers can filter and act on."),
+    hostedPublicCorroborationClass("missing_ttp_tool", "included_with_caveat", 18, "ttp_tool", "cert_advisory", "CERT and advisory reporting ties hosted APT42, Turla, FIN7, Scattered Spider, and ransomware rows to concrete TTP/tool pivots.", "current_public_source", "Procedure and tool corroboration gives Agent 03 a concrete TTP admission path."),
+    hostedPublicCorroborationClass("missing_buyer_action", "hold", 18, "buyer_action", "public_report", "Public reports convert hosted caveated actor and ransomware leads into next-search, monitor, or enrichment actions.", "recent_public_source", "Public reporting is rewritten into a next-search or monitoring action instead of generic context."),
+    hostedPublicCorroborationClass("missing_confidence_reason", "included_with_caveat", 17, "confidence_reason", "security_blog", "Security-blog corroboration explains confidence changes for hosted APT, ransomware, and public-channel rows without exposing unsafe material.", "recent_public_source", "Corroborating source-family and timestamp detail explains why confidence should increase.")
   ];
   return {
     schemaVersion: "ti.program_fh_hosted_public_corroboration_lift.v1",
@@ -7910,10 +7912,10 @@ function buildProgramFhHostedPublicCorroborationLift(): ProgramFhHostedPublicCor
     ],
     projectedHostedRerunEffect: {
       baselineSellableRows: 46,
-      acceptedCorroborationRows: 54,
-      expectedSellableRowsAfterParserAdmission: 100,
+      acceptedCorroborationRows: 120,
+      expectedSellableRowsAfterParserAdmission: 166,
       baselineSellableFindings: 31,
-      expectedFindingRowsAfterParserAdmission: 52,
+      expectedFindingRowsAfterParserAdmission: 85,
       hostedPaidProofClaimed: false
     },
     noLeakBoundary: {
@@ -7933,6 +7935,8 @@ function hostedPublicCorroborationClass(
   expectedRowsUnlockedAfterParserAdmission: number,
   buyerVisibleMetricImproved: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number]["buyerVisibleMetricImproved"],
   publicSourceFamily: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number]["publicSourceFamily"],
+  actorSpecificClaim: string,
+  freshness: ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number]["freshness"],
   parserHandoff: string
 ): ProgramFhHostedPublicCorroborationLift["acceptedPublicCorroborationRows"][number] {
   return {
@@ -7941,8 +7945,10 @@ function hostedPublicCorroborationClass(
     expectedRowsUnlockedAfterParserAdmission,
     buyerVisibleMetricImproved,
     publicSourceFamily,
+    actorSpecificClaim,
+    freshness,
     parserHandoff,
-    provenanceHash: stableId("program-fh-hosted-public-corroboration", `${rowClass}:${publicSourceFamily}:${expectedRowsUnlockedAfterParserAdmission}`),
+    provenanceHash: stableId("program-fh-hosted-public-corroboration", `${rowClass}:${publicSourceFamily}:${expectedRowsUnlockedAfterParserAdmission}:${actorSpecificClaim}`),
     countsTowardPaidPromotionNow: false,
     noLeak: true
   };

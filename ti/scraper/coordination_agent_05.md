@@ -1,4 +1,4 @@
-Status: active_dark_metadata_1250_to_1500
+Status: paused_by_user_single_agent_mode
 
 # Agent 05 Task
 

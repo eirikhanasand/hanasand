@@ -1442,7 +1442,7 @@ describe("api v1", () => {
         schemaVersion: string;
         owner: string;
         observedHostedRun: { runId: string; buildId: string; datasetId: string; baselineSellableRows: number; baselineSellableFindings: number; baselineCaveatedRows: number; noLeakFailures: number; checkerStatus: string };
-        acceptedPublicCorroborationRows: Array<{ class: string; expectedRowsUnlockedAfterParserAdmission: number; buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }>;
+        acceptedPublicCorroborationRows: Array<{ class: string; expectedRowsUnlockedAfterParserAdmission: number; buyerVisibleMetricImproved: string; actorSpecificClaim: string; freshness: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }>;
         rejectedPublicCorroborationRows: Array<{ reason: string; buyerVisibleMetricImproved: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }>;
         projectedHostedRerunEffect: { baselineSellableRows: number; acceptedCorroborationRows: number; expectedSellableRowsAfterParserAdmission: number; baselineSellableFindings: number; expectedFindingRowsAfterParserAdmission: number; hostedPaidProofClaimed: boolean };
         noLeakBoundary: Record<string, boolean>;
@@ -1463,17 +1463,19 @@ describe("api v1", () => {
       },
       projectedHostedRerunEffect: {
         baselineSellableRows: 46,
-        acceptedCorroborationRows: 54,
-        expectedSellableRowsAfterParserAdmission: 100,
+        acceptedCorroborationRows: 120,
+        expectedSellableRowsAfterParserAdmission: 166,
         baselineSellableFindings: 31,
-        expectedFindingRowsAfterParserAdmission: 52,
+        expectedFindingRowsAfterParserAdmission: 85,
         hostedPaidProofClaimed: false
       }
     });
     expect(hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.map((row) => row.class)).toEqual(expect.arrayContaining(["single_source", "stale_timestamp", "missing_sector_country", "missing_ttp_tool", "missing_buyer_action", "missing_confidence_reason"]));
-    expect(hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(54);
+    expect(hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(120);
     expect(hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.every((row) =>
       row.buyerVisibleMetricImproved !== "none" &&
+      row.actorSpecificClaim.length > 40 &&
+      ["current_public_source", "recent_public_source"].includes(row.freshness) &&
       row.parserHandoff.length > 0 &&
       row.provenanceHash.length > 0 &&
       row.countsTowardPaidPromotionNow === false &&
@@ -5364,17 +5366,19 @@ describe("api v1", () => {
       },
       projectedHostedRerunEffect: {
         baselineSellableRows: 46,
-        acceptedCorroborationRows: 54,
-        expectedSellableRowsAfterParserAdmission: 100,
+        acceptedCorroborationRows: 120,
+        expectedSellableRowsAfterParserAdmission: 166,
         baselineSellableFindings: 31,
-        expectedFindingRowsAfterParserAdmission: 52,
+        expectedFindingRowsAfterParserAdmission: 85,
         hostedPaidProofClaimed: false
       }
     });
     expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { acceptedPublicCorroborationRows: Array<{ class: string; expectedRowsUnlockedAfterParserAdmission: number; buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).acceptedPublicCorroborationRows).map((row) => row.class)).toEqual(expect.arrayContaining(["single_source", "stale_timestamp", "missing_sector_country", "missing_ttp_tool", "missing_buyer_action", "missing_confidence_reason"]));
-    expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { acceptedPublicCorroborationRows: Array<{ expectedRowsUnlockedAfterParserAdmission: number; buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).acceptedPublicCorroborationRows).reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(54);
-    expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { acceptedPublicCorroborationRows: Array<{ buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).acceptedPublicCorroborationRows).every((row) =>
+    expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { acceptedPublicCorroborationRows: Array<{ expectedRowsUnlockedAfterParserAdmission: number; buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).acceptedPublicCorroborationRows).reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(120);
+    expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { acceptedPublicCorroborationRows: Array<{ buyerVisibleMetricImproved: string; actorSpecificClaim: string; freshness: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).acceptedPublicCorroborationRows).every((row) =>
       row.buyerVisibleMetricImproved !== "none" &&
+      row.actorSpecificClaim.length > 40 &&
+      ["current_public_source", "recent_public_source"].includes(row.freshness) &&
       row.parserHandoff.length > 0 &&
       row.provenanceHash.length > 0 &&
       row.countsTowardPaidPromotionNow === false &&
