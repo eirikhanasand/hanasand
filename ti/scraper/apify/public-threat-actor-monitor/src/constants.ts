@@ -1,7 +1,7 @@
 export const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
 export const ACTOR_START_EVENT = "apify-actor-start";
 export const DATASET_ITEM_EVENT = "apify-default-dataset-item";
-export const MAX_QUERIES_PER_RUN = 160;
+export const MAX_QUERIES_PER_RUN = 260;
 
 export const DEFAULT_QUERIES = [
   "APT29", "APT28", "APT42", "Lazarus Group", "Volt Typhoon",
@@ -34,5 +34,24 @@ export const DEFAULT_QUERIES = [
   "LockBitSupp", "BlackMatter", "Cloak", "AvosLocker", "Mespinoza",
   "Pysa", "Nefilim", "NetWalker", "Egregor", "Dharma",
   "LockFile", "Maui", "Yanluowang", "Cicada3301", "Arcus Media",
-  "Space Bears", "WereWolves", "Meow"
+  "Space Bears", "WereWolves", "Meow", "Dragonfly", "Energetic Bear",
+  "Berserk Bear", "Cozy Bear", "Fancy Bear", "Equation Group", "Duqu",
+  "DarkHotel", "Sofacy", "Sednit", "Hafnium", "Nobelium",
+  "Midnight Blizzard", "CozyDuke", "UAC-0056", "UAC-0099", "Void Blizzard",
+  "Forest Blizzard", "Secret Blizzard", "Seashell Blizzard", "Cadet Blizzard", "Emerald Sleet",
+  "Diamond Sleet", "Sapphire Sleet", "Ruby Sleet", "Crimson Sandstorm", "Mint Sandstorm",
+  "Peach Sandstorm", "Pioneer Kitten", "Fox Kitten", "Moses Staff", "Agrius",
+  "Molerats", "Gaza Cybergang", "Tropic Trooper", "Lotus Blossom", "Naikon",
+  "Higaisa", "TA445", "TA456", "TA427", "TA450",
+  "TA471", "TA569", "TA578", "TA585", "TA596",
+  "Lumma Stealer", "RedLine Stealer", "Raccoon Stealer", "Vidar", "FormBook",
+  "Agent Tesla", "AsyncRAT", "Remcos", "DarkGate", "SocGholish",
+  "IcedID", "Bumblebee", "QakBot", "Emotet", "TrickBot",
+  "Dridex", "SmokeLoader", "Amadey", "DanaBot", "Zloader",
+  "XWorm", "NetSupport RAT", "DarkComet", "Cobalt Strike", "Sliver",
+  "Brute Ratel", "PlugX", "ShadowPad", "Covenant", "Mythic",
+  "Storm-1175", "Winnti", "Black Basta ransomware", "Akira ransomware", "Play ransomware",
+  "Remcos RAT", "Hunters International ransomware", "Qilin ransomware", "GuLoader", "Medusa ransomware",
+  "Rhysida ransomware", "SideCopy", "ScarCruft", "Grandoreiro", "OceanLotus",
+  "APT32", "Earth Lusca", "StealC", "Atomic Stealer"
 ];
