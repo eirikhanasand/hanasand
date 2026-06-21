@@ -1437,6 +1437,58 @@ describe("api v1", () => {
       actorInteractionTextUsed: false,
       hostedPaidProofClaimed: false
     });
+    const hostedDefaultPublicCorroborationLift = (response.graphPublicCorroborationPivotPacket as {
+      hostedDefaultPublicCorroborationLift: {
+        schemaVersion: string;
+        owner: string;
+        observedHostedRun: { runId: string; buildId: string; datasetId: string; baselineSellableRows: number; baselineSellableFindings: number; baselineCaveatedRows: number; noLeakFailures: number; checkerStatus: string };
+        acceptedPublicCorroborationRows: Array<{ class: string; expectedRowsUnlockedAfterParserAdmission: number; buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }>;
+        rejectedPublicCorroborationRows: Array<{ reason: string; buyerVisibleMetricImproved: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }>;
+        projectedHostedRerunEffect: { baselineSellableRows: number; acceptedCorroborationRows: number; expectedSellableRowsAfterParserAdmission: number; baselineSellableFindings: number; expectedFindingRowsAfterParserAdmission: number; hostedPaidProofClaimed: boolean };
+        noLeakBoundary: Record<string, boolean>;
+      };
+    }).hostedDefaultPublicCorroborationLift;
+    expect(hostedDefaultPublicCorroborationLift).toMatchObject({
+      schemaVersion: "ti.program_fh_hosted_public_corroboration_lift.v1",
+      owner: "agent_08",
+      observedHostedRun: {
+        runId: "THMm2ZzYxW4HVPGJ6",
+        buildId: "L7LtCqLsKT6Luq04R",
+        datasetId: "xLPoxMVY6cVjGsS4e",
+        baselineSellableRows: 46,
+        baselineSellableFindings: 31,
+        baselineCaveatedRows: 194,
+        noLeakFailures: 0,
+        checkerStatus: "verified_hold"
+      },
+      projectedHostedRerunEffect: {
+        baselineSellableRows: 46,
+        acceptedCorroborationRows: 54,
+        expectedSellableRowsAfterParserAdmission: 100,
+        baselineSellableFindings: 31,
+        expectedFindingRowsAfterParserAdmission: 52,
+        hostedPaidProofClaimed: false
+      }
+    });
+    expect(hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.map((row) => row.class)).toEqual(expect.arrayContaining(["single_source", "stale_timestamp", "missing_sector_country", "missing_ttp_tool", "missing_buyer_action", "missing_confidence_reason"]));
+    expect(hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(54);
+    expect(hostedDefaultPublicCorroborationLift.acceptedPublicCorroborationRows.every((row) =>
+      row.buyerVisibleMetricImproved !== "none" &&
+      row.parserHandoff.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.countsTowardPaidPromotionNow === false &&
+      row.noLeak
+    )).toBe(true);
+    expect(hostedDefaultPublicCorroborationLift.rejectedPublicCorroborationRows.map((row) => row.reason)).toEqual(expect.arrayContaining(["stale_latest_activity", "alias_or_wrong_actor", "generic_source_page", "graph_only", "restricted_only", "duplicate_claim", "contradiction"]));
+    expect(hostedDefaultPublicCorroborationLift.rejectedPublicCorroborationRows.every((row) => row.buyerVisibleMetricImproved === "none" && row.countsTowardPaidPromotionNow === false && row.noLeak)).toBe(true);
+    expect(hostedDefaultPublicCorroborationLift.noLeakBoundary).toMatchObject({
+      rawBodiesExposed: false,
+      unsafeUrlsExposed: false,
+      restrictedPayloadsExposed: false,
+      credentialsExposed: false,
+      privateMaterialUsed: false,
+      actorInteractionTextUsed: false
+    });
     expect((response.darkMetadataPublicSupportLift4000 as {
       first100RepairQueue: Array<{ countsTowardSellableFloorNow: boolean; noLeakProof: string }>;
       tier10000Preview: { evaluatedCandidateCount: number; projectedSellableAfterPublicSupport: number; usefulWithCaveat: number; acceptedValueDensity: number; expansionDecision: string; countsTowardSellableFloorNow: boolean };
@@ -5115,6 +5167,7 @@ describe("api v1", () => {
       };
       hostedPaidReadinessProof: Record<string, unknown>;
       hostedDefaultParserLift: Record<string, unknown>;
+      hostedDefaultPublicCorroborationLift: Record<string, unknown>;
       programDcReleaseGates: Record<string, unknown>;
     };
     expect(readinessPaidReleaseTruthBoard.observedMarketplaceTelemetry).toMatchObject({
@@ -5285,6 +5338,42 @@ describe("api v1", () => {
     )).toBe(true);
     expect(((readinessPaidReleaseTruthBoard.hostedDefaultParserLift as { rejectionBuckets: Array<{ countsTowardHostedPaidFloor: boolean; noLeak: boolean }> }).rejectionBuckets).every((row) =>
       row.countsTowardHostedPaidFloor === false && row.noLeak
+    )).toBe(true);
+    expect(readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift).toMatchObject({
+      schemaVersion: "ti.program_fh_hosted_public_corroboration_lift.v1",
+      owner: "agent_08",
+      observedHostedRun: {
+        runId: "THMm2ZzYxW4HVPGJ6",
+        buildId: "L7LtCqLsKT6Luq04R",
+        datasetId: "xLPoxMVY6cVjGsS4e",
+        baselineSellableRows: 46,
+        baselineSellableFindings: 31,
+        baselineCaveatedRows: 194,
+        noLeakFailures: 0,
+        checkerStatus: "verified_hold"
+      },
+      projectedHostedRerunEffect: {
+        baselineSellableRows: 46,
+        acceptedCorroborationRows: 54,
+        expectedSellableRowsAfterParserAdmission: 100,
+        baselineSellableFindings: 31,
+        expectedFindingRowsAfterParserAdmission: 52,
+        hostedPaidProofClaimed: false
+      }
+    });
+    expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { acceptedPublicCorroborationRows: Array<{ class: string; expectedRowsUnlockedAfterParserAdmission: number; buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).acceptedPublicCorroborationRows).map((row) => row.class)).toEqual(expect.arrayContaining(["single_source", "stale_timestamp", "missing_sector_country", "missing_ttp_tool", "missing_buyer_action", "missing_confidence_reason"]));
+    expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { acceptedPublicCorroborationRows: Array<{ expectedRowsUnlockedAfterParserAdmission: number; buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).acceptedPublicCorroborationRows).reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(54);
+    expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { acceptedPublicCorroborationRows: Array<{ buyerVisibleMetricImproved: string; parserHandoff: string; provenanceHash: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).acceptedPublicCorroborationRows).every((row) =>
+      row.buyerVisibleMetricImproved !== "none" &&
+      row.parserHandoff.length > 0 &&
+      row.provenanceHash.length > 0 &&
+      row.countsTowardPaidPromotionNow === false &&
+      row.noLeak
+    )).toBe(true);
+    expect(((readinessPaidReleaseTruthBoard.hostedDefaultPublicCorroborationLift as { rejectedPublicCorroborationRows: Array<{ buyerVisibleMetricImproved: string; countsTowardPaidPromotionNow: boolean; noLeak: boolean }> }).rejectedPublicCorroborationRows).every((row) =>
+      row.buyerVisibleMetricImproved === "none" &&
+      row.countsTowardPaidPromotionNow === false &&
+      row.noLeak
     )).toBe(true);
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { requiredSignals: string[]; blockers: string[]; noLeakProof: Record<string, boolean> } }).paidRowIntegrityGate.requiredSignals).toEqual(expect.arrayContaining(["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]));
     expect((readinessPaidReleaseTruthBoard.hostedPaidReadinessProof as { paidRowIntegrityGate: { blockers: string[] } }).paidRowIntegrityGate.blockers).toEqual(expect.arrayContaining(["hosted_100_name_cp_second_batch_audit_not_yet_observed", "source_provenance_rows_do_not_count_as_findings", "stale_alias_generic_graph_restricted_rows_must_be_zero"]));

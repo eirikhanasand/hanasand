@@ -1217,7 +1217,14 @@ function checkPaidCountIntegrity(
   const hostedDefaultProjected = record(hostedDefaultParserLift.projectedAfterParserLift);
   const hostedDefaultAcceptedRows = Array.isArray(hostedDefaultParserLift.acceptedRowClasses) ? hostedDefaultParserLift.acceptedRowClasses.filter(isRecord) : [];
   const hostedDefaultRejections = Array.isArray(hostedDefaultParserLift.rejectionBuckets) ? hostedDefaultParserLift.rejectionBuckets.filter(isRecord) : [];
-  const graphQueue = record(record(productSlo.graphPublicCorroborationPivotPacket).paidRowUnlockQueue);
+  const graphPublicPacket = record(productSlo.graphPublicCorroborationPivotPacket);
+  const hostedPublicCorroborationLift = record(graphPublicPacket.hostedDefaultPublicCorroborationLift);
+  const hostedPublicObservedRun = record(hostedPublicCorroborationLift.observedHostedRun);
+  const hostedPublicProjected = record(hostedPublicCorroborationLift.projectedHostedRerunEffect);
+  const hostedPublicAcceptedRows = Array.isArray(hostedPublicCorroborationLift.acceptedPublicCorroborationRows) ? hostedPublicCorroborationLift.acceptedPublicCorroborationRows.filter(isRecord) : [];
+  const hostedPublicRejectedRows = Array.isArray(hostedPublicCorroborationLift.rejectedPublicCorroborationRows) ? hostedPublicCorroborationLift.rejectedPublicCorroborationRows.filter(isRecord) : [];
+  const hostedPublicNoLeakBoundary = record(hostedPublicCorroborationLift.noLeakBoundary);
+  const graphQueue = record(graphPublicPacket.paidRowUnlockQueue);
   const graphCounts = record(graphQueue.counts);
   const darkSupportLift = record(productSlo.darkMetadataPublicSupportLift4000);
   const darkSellable250 = record(darkSupportLift.publicSupportSellable250);
@@ -1339,6 +1346,30 @@ function checkPaidCountIntegrity(
   for (const row of hostedDefaultRejections) {
     if (row.countsTowardHostedPaidFloor !== false) failures.push(`hosted_default_rejection_${row.reason}_counts_now`);
     if (row.noLeak !== true) failures.push(`hosted_default_rejection_${row.reason}_missing_no_leak`);
+  }
+  if (hostedPublicCorroborationLift.schemaVersion !== "ti.program_fh_hosted_public_corroboration_lift.v1") failures.push("hosted_public_corroboration_lift_missing");
+  if (hostedPublicCorroborationLift.owner !== "agent_08") failures.push("hosted_public_corroboration_lift_wrong_owner");
+  if (hostedPublicObservedRun.runId !== "THMm2ZzYxW4HVPGJ6" || hostedPublicObservedRun.datasetId !== "xLPoxMVY6cVjGsS4e") failures.push("hosted_public_corroboration_lift_wrong_run");
+  if (numberValue(hostedPublicObservedRun.baselineSellableRows) !== 46 || numberValue(hostedPublicObservedRun.baselineSellableFindings) !== 31) failures.push("hosted_public_corroboration_lift_wrong_baseline");
+  if (numberValue(hostedPublicProjected.acceptedCorroborationRows) < 54) failures.push("hosted_public_corroboration_lift_accepted_below_54");
+  if (numberValue(hostedPublicProjected.expectedSellableRowsAfterParserAdmission) < 100 || numberValue(hostedPublicProjected.expectedFindingRowsAfterParserAdmission) < 52) failures.push("hosted_public_corroboration_lift_projected_below_floor");
+  if (hostedPublicProjected.hostedPaidProofClaimed !== false) failures.push("hosted_public_corroboration_lift_claimed_paid_proof");
+  if (hostedPublicAcceptedRows.length < 6) failures.push("hosted_public_corroboration_lift_missing_accepted_classes");
+  if (hostedPublicAcceptedRows.reduce((sum, row) => sum + numberValue(row.expectedRowsUnlockedAfterParserAdmission), 0) < 54) failures.push("hosted_public_corroboration_lift_row_sum_below_54");
+  for (const row of hostedPublicAcceptedRows) {
+    if (row.buyerVisibleMetricImproved === "none") failures.push("hosted_public_corroboration_lift_missing_buyer_metric");
+    if (typeof row.parserHandoff !== "string" || row.parserHandoff.length === 0) failures.push("hosted_public_corroboration_lift_missing_parser_handoff");
+    if (typeof row.provenanceHash !== "string" || row.provenanceHash.length === 0) failures.push("hosted_public_corroboration_lift_missing_provenance");
+    if (row.countsTowardPaidPromotionNow !== false) failures.push("hosted_public_corroboration_lift_row_counts_now");
+    if (row.noLeak !== true) failures.push("hosted_public_corroboration_lift_row_missing_no_leak");
+  }
+  for (const row of hostedPublicRejectedRows) {
+    if (row.buyerVisibleMetricImproved !== "none") failures.push(`hosted_public_corroboration_rejection_${row.reason}_improves_metric`);
+    if (row.countsTowardPaidPromotionNow !== false) failures.push(`hosted_public_corroboration_rejection_${row.reason}_counts_now`);
+    if (row.noLeak !== true) failures.push(`hosted_public_corroboration_rejection_${row.reason}_missing_no_leak`);
+  }
+  for (const [key, value] of Object.entries(hostedPublicNoLeakBoundary)) {
+    if (value !== false) failures.push(`hosted_public_corroboration_no_leak_${key}`);
   }
   if (projected300Effect.countsProjectedRowsAsPaid !== false) failures.push("public_support_admission_counts_projected_rows_as_paid");
   for (const row of publicSupportAcceptedRows) {

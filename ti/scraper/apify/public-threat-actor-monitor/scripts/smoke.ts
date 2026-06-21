@@ -1,3 +1,5 @@
+import { assertHostedDefaultParserLift } from "./hostedDefaultParserLiftSmoke.ts";
+
 const root = new URL("..", import.meta.url).pathname;
 const storage = `${root}/.apify-smoke-storage`;
 
@@ -618,62 +620,7 @@ for (const requiredActor of ["APT29", "APT28", "APT42", "Volt Typhoon", "Lazarus
 if (liveSourceRows.filter((row) => row.admissionDecision === "sellable").length !== 30) throw new Error("Program CO admission packet must include 30 sellable candidate rows");
 if (liveSourceRows.filter((row) => row.admissionDecision === "useful_caveated").length !== 6) throw new Error("Program CO admission packet must include 6 useful caveated rows");
 if (liveSourceRows.filter((row) => row.admissionDecision === "suppress").length !== 4) throw new Error("Program CO admission packet must include 4 suppression rows");
-const hostedDefaultParserLift = parserRealSellableLift.hostedDefaultParserLift as Record<string, unknown> | undefined;
-const hostedDefaultObservedRun = hostedDefaultParserLift?.observedHostedRun as Record<string, unknown> | undefined;
-const hostedDefaultLift = hostedDefaultParserLift?.parserLift as Record<string, unknown> | undefined;
-const hostedDefaultProjected = hostedDefaultParserLift?.projectedAfterParserLift as Record<string, unknown> | undefined;
-if (
-  !hostedDefaultParserLift
-  || hostedDefaultParserLift.schemaVersion !== "ti.program_fh_hosted_default_parser_lift.v1"
-  || hostedDefaultParserLift.owner !== "agent_03"
-  || !Array.isArray(hostedDefaultParserLift.routeVisibleOn)
-  || !(hostedDefaultParserLift.routeVisibleOn as string[]).includes("/v1/contracts#apifyStoreReadiness")
-  || hostedDefaultObservedRun?.runId !== "THMm2ZzYxW4HVPGJ6"
-  || hostedDefaultObservedRun?.buildId !== "L7LtCqLsKT6Luq04R"
-  || hostedDefaultObservedRun?.datasetId !== "xLPoxMVY6cVjGsS4e"
-  || hostedDefaultObservedRun?.baselineSellableRows !== 46
-  || hostedDefaultObservedRun?.baselineSellableFindings !== 31
-  || hostedDefaultObservedRun?.baselineCaveatedRows !== 194
-  || hostedDefaultObservedRun?.noLeakFailures !== 0
-  || hostedDefaultLift?.newlyAdmittedSellableRows !== 54
-  || hostedDefaultLift?.newlyAdmittedFindingRows !== 21
-  || hostedDefaultLift?.sourceProvenanceRowsDoNotCountAsFindings !== true
-  || hostedDefaultProjected?.sellableRows !== 100
-  || hostedDefaultProjected?.sellableFindings !== 52
-  || hostedDefaultProjected?.sellableGap !== 0
-  || hostedDefaultProjected?.findingGap !== 0
-  || hostedDefaultParserLift.countsTowardPaidPromotionNow !== false
-  || hostedDefaultParserLift.countsTowardHostedRerunExpectation !== true
-  || !Array.isArray(hostedDefaultParserLift.acceptedRowClasses)
-  || !Array.isArray(hostedDefaultParserLift.rejectionBuckets)
-) {
-  throw new Error("Program FH hosted default parser lift must expose the 46-to-100 hosted rerun expectation without unlocking paid promotion");
-}
-for (const row of hostedDefaultParserLift.acceptedRowClasses as Array<Record<string, unknown>>) {
-  const requiredFields = row.requiredFields as string[] | undefined;
-  if (
-    !Array.isArray(requiredFields)
-    || !requiredFields.includes("current_public_support")
-    || !requiredFields.includes("actor_specific")
-    || !requiredFields.includes("finding_context")
-    || !requiredFields.includes("freshness_not_stale")
-    || !requiredFields.includes("provenance_hash")
-    || !requiredFields.includes("no_leak")
-    || !requiredFields.includes("buyer_action")
-    || typeof row.buyerAction !== "string"
-    || row.buyerAction.length === 0
-    || typeof row.confidenceReason !== "string"
-    || row.confidenceReason.length === 0
-    || row.noLeak !== true
-  ) {
-    throw new Error("Program FH accepted classes must require public support, specificity, buyer action, confidence, and no-leak proof");
-  }
-}
-for (const row of hostedDefaultParserLift.rejectionBuckets as Array<Record<string, unknown>>) {
-  if (row.countsTowardHostedPaidFloor !== false || row.noLeak !== true) {
-    throw new Error("Program FH rejection buckets must remain outside hosted paid floor");
-  }
-}
+assertHostedDefaultParserLift(parserRealSellableLift);
 const currentAdmissionLedger = parserRealSellableLift.currentAdmissionLedger as Record<string, unknown> | undefined;
 if (
   !currentAdmissionLedger
@@ -1570,6 +1517,65 @@ if (
   || !Array.isArray(graphPublicCorroborationPivotPacket.ownerHandoffs)
 ) {
   throw new Error("OUTPUT record must expose Program CY graph public corroboration pivots");
+}
+const hostedPublicCorroborationLift = graphPublicCorroborationPivotPacket.hostedDefaultPublicCorroborationLift as Record<string, unknown> | undefined;
+const hostedPublicObservedRun = hostedPublicCorroborationLift?.observedHostedRun as Record<string, unknown> | undefined;
+const hostedPublicProjected = hostedPublicCorroborationLift?.projectedHostedRerunEffect as Record<string, unknown> | undefined;
+const hostedPublicAcceptedRows = Array.isArray(hostedPublicCorroborationLift?.acceptedPublicCorroborationRows)
+  ? hostedPublicCorroborationLift.acceptedPublicCorroborationRows as Array<Record<string, unknown>>
+  : [];
+const hostedPublicRejectedRows = Array.isArray(hostedPublicCorroborationLift?.rejectedPublicCorroborationRows)
+  ? hostedPublicCorroborationLift.rejectedPublicCorroborationRows as Array<Record<string, unknown>>
+  : [];
+if (
+  !hostedPublicCorroborationLift
+  || hostedPublicCorroborationLift.schemaVersion !== "ti.program_fh_hosted_public_corroboration_lift.v1"
+  || hostedPublicCorroborationLift.owner !== "agent_08"
+  || hostedPublicObservedRun?.runId !== "THMm2ZzYxW4HVPGJ6"
+  || hostedPublicObservedRun?.buildId !== "L7LtCqLsKT6Luq04R"
+  || hostedPublicObservedRun?.datasetId !== "xLPoxMVY6cVjGsS4e"
+  || hostedPublicObservedRun?.baselineSellableRows !== 46
+  || hostedPublicObservedRun?.baselineSellableFindings !== 31
+  || hostedPublicObservedRun?.baselineCaveatedRows !== 194
+  || hostedPublicObservedRun?.noLeakFailures !== 0
+  || hostedPublicProjected?.baselineSellableRows !== 46
+  || hostedPublicProjected?.acceptedCorroborationRows !== 54
+  || hostedPublicProjected?.expectedSellableRowsAfterParserAdmission !== 100
+  || hostedPublicProjected?.baselineSellableFindings !== 31
+  || hostedPublicProjected?.expectedFindingRowsAfterParserAdmission !== 52
+  || hostedPublicProjected?.hostedPaidProofClaimed !== false
+  || hostedPublicAcceptedRows.length < 6
+  || hostedPublicRejectedRows.length < 7
+) {
+  throw new Error("Program FH hosted public corroboration lift must expose the hosted 46-to-100 handoff without claiming paid proof");
+}
+for (const rowClass of ["single_source", "stale_timestamp", "missing_sector_country", "missing_ttp_tool", "missing_buyer_action", "missing_confidence_reason"]) {
+  if (!hostedPublicAcceptedRows.some((row) => row.class === rowClass)) throw new Error(`Program FH hosted public corroboration lift must include ${rowClass}`);
+}
+if (hostedPublicAcceptedRows.reduce((sum, row) => sum + Number(row.expectedRowsUnlockedAfterParserAdmission ?? 0), 0) !== 54) {
+  throw new Error("Program FH hosted public corroboration lift must hand off 54 rows for parser admission");
+}
+for (const row of hostedPublicAcceptedRows) {
+  if (
+    row.buyerVisibleMetricImproved === "none"
+    || typeof row.parserHandoff !== "string"
+    || row.parserHandoff.length === 0
+    || typeof row.provenanceHash !== "string"
+    || row.provenanceHash.length === 0
+    || row.countsTowardPaidPromotionNow !== false
+    || row.noLeak !== true
+  ) {
+    throw new Error("Program FH accepted public corroboration rows must be buyer-visible, provenance-backed, no-leak, and not paid-counted");
+  }
+}
+for (const row of hostedPublicRejectedRows) {
+  if (row.buyerVisibleMetricImproved !== "none" || row.countsTowardPaidPromotionNow !== false || row.noLeak !== true) {
+    throw new Error("Program FH rejected public corroboration rows must stay outside paid promotion");
+  }
+}
+const hostedPublicNoLeak = hostedPublicCorroborationLift.noLeakBoundary as Record<string, unknown> | undefined;
+if (!hostedPublicNoLeak || Object.values(hostedPublicNoLeak).some((value) => value !== false)) {
+  throw new Error("Program FH hosted public corroboration lift must keep no-leak boundaries closed");
 }
 const graphPublicUnlockQueue = graphPublicCorroborationPivotPacket.paidRowUnlockQueue as Record<string, unknown>;
 const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, unknown> | undefined;
