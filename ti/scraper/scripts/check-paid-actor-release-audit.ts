@@ -219,7 +219,9 @@ function checkHostedPaidReadinessProof(
   const localCountsOut = routeCopies.every((proof) => record(proof.localProof).countsTowardPaidPromotion === false);
   const hostedCountsOut = routeCopies.every((proof) => record(proof.latestHostedProof).countsTowardPaidPromotion === false);
   const marketplace = routeCopies.map((proof) => record(proof.marketplaceConversionInputs));
-  const observedOnly = marketplace.every((values) =>
+  const importPaths = routeCopies.map((proof) => record(proof.hostedProofImportPath));
+  const observedProofImports = importPaths.map((path) => record(path.observedProofImport));
+  const emptyMarketplaceHold = marketplace.every((values) =>
     values.storeViews === null
     && values.runs === null
     && values.uniqueUsers === null
@@ -230,6 +232,19 @@ function checkHostedPaidReadinessProof(
     && values.publicListingStatus === "draft_copy_ready_not_promoted"
     && values.unknownMeansNoClaim === true
   );
+  const importedMarketplaceObserved = marketplace.every((values) =>
+    numberValue(values.storeViews) !== null
+    && numberValue(values.runs) !== null
+    && numberValue(values.uniqueUsers) !== null
+    && numberValue(values.paidUsers) !== null
+    && numberValue(values.refunds) !== null
+    && values.payoutEnabled === true
+    && typeof values.pricingModel === "string"
+    && values.pricingModel !== "external_unknown"
+    && typeof values.lastVerifiedAt === "string"
+    && values.unknownMeansNoClaim === true
+  ) && observedProofImports.every((entry) => entry.schemaVersion === "ti.hosted_apify_observed_proof_import_path.v1" && entry.validationState === "accepted" && entry.sampleOnly === false);
+  const observedOnly = emptyMarketplaceHold || importedMarketplaceObserved;
   const hasManualSteps = routeCopies.every((proof) => Array.isArray(proof.manualVerificationSteps) && proof.manualVerificationSteps.length >= 4);
   const paidReady = routeCopies.some((proof) => proof.status === "paid_floor_hosted_proof");
   const ok = commandOk && statusOk && localCountsOut && hostedCountsOut && observedOnly && hasManualSteps;
@@ -254,6 +269,8 @@ function checkHostedPaidReadinessProof(
       localCountsOut,
       hostedCountsOut,
       observedOnly,
+      emptyMarketplaceHold,
+      importedMarketplaceObserved,
       hasManualSteps
     }
   };
@@ -324,8 +341,14 @@ function buildReleaseLadder(
   const pricingState = String(marketplace.pricingModel ?? telemetry.pricingState ?? "external_unknown");
   const payoutState = String(marketplace.payoutEnabled ?? telemetry.payoutState ?? "external_unknown");
   const analyticsObserved = ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds"].every((field) => marketplace[field] !== null && marketplace[field] !== undefined);
-  const marketplaceObservedOnly = ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds"].every((field) => marketplace[field] === null)
+  const observedProofImport = record(hostedImportPath.observedProofImport);
+  const marketplaceEmptyHold = ["storeViews", "runs", "uniqueUsers", "paidUsers", "refunds"].every((field) => marketplace[field] === null)
     && marketplace.unknownMeansNoClaim === true;
+  const marketplaceImportedSafely = observedProofImport.validationState === "accepted"
+    && observedProofImport.sampleOnly === false
+    && analyticsObserved
+    && pricingState !== "external_unknown"
+    && payoutState !== "external_unknown";
 
   const tier1000MinimumSellableRows = firstFiniteNumber(tier1000Gate.minimumSellableRows, 300);
   const tier1000MinimumRows = firstFiniteNumber(tier1000Gate.minimumRows, 1000);
@@ -345,7 +368,7 @@ function buildReleaseLadder(
       && hostedObservedDatasetRows >= 300
         ? "pass"
         : "hold";
-  const marketplacePromotionState = !marketplaceObservedOnly
+  const marketplacePromotionState = !(marketplaceEmptyHold || marketplaceImportedSafely)
     ? "fail"
     : hosted100State === "pass" && hosted300State === "pass" && pricingState !== "external_unknown" && payoutState !== "external_unknown" && analyticsObserved
       ? "pass"
@@ -517,7 +540,8 @@ function buildReleaseLadder(
       pricingState,
       payoutState,
       analyticsObserved,
-      observedOnly: marketplaceObservedOnly,
+      observedOnly: marketplaceEmptyHold || marketplaceImportedSafely,
+      observedProofImportState: observedProofImport.validationState ?? "missing",
       hosted100GateRequired: true,
       hosted300GateRequired: true,
       publicListingStatus: marketplace.publicListingStatus,
