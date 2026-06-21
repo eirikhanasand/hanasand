@@ -225,6 +225,13 @@ Progress update 2026-06-21 06:03 CEST:
 - Metadata-only candidates stay blocked from paid Actor rows until public support replays through the read model; the queue does not mutate queues, activate sources, crawl, embed restricted rows, or expose raw leak material.
 - Continue next with completed public-support replay receipts or a repository/audit mapper for these public-support candidates if cross-agent rows are still pending.
 
+Progress update 2026-06-21 06:44 CEST:
+- Continued with the disabled Postgres repository/audit boundary for searchable metadata public-support candidates.
+- Added `ti.evidence_searchable_source_metadata_public_support_repository.v1` on `/v1/evidence/cutover-report.readModelCutover.searchableSourceMetadataPublicSupportRepository`.
+- Public-support queue runs and candidates now map to `evidence_searchable_source_public_support_queue_runs` and `evidence_searchable_source_public_support_candidates`, then stay held behind `TI_SEARCHABLE_SOURCE_METADATA_PUBLIC_SUPPORT_REPOSITORY_ENABLED`.
+- The repository status persists zero rows, mutates zero queues, activates zero sources, starts no crawling, promotes zero Actor rows, and keeps restricted/leak rows metadata-only.
+- Continue next with completed public-support replay receipts when Agent 01/04/07 produce completed support rows, or with another measurable read-model path that makes metadata-supported rows sellable.
+
 You completed retention/search consistency pieces. Now own the complete evidence backbone. The product cannot become enterprise-grade until raw captures, extracted text, claim ledgers, object refs, indexes, graph relationships, and public answers all replay from durable, auditable evidence.
 
 ## Main Agent Update - 2026-06-20 17:05 CEST

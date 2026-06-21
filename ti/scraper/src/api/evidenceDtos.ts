@@ -36,11 +36,13 @@ import {
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
   buildEvidenceSearchableSourceMetadataPublicSupportQueue,
+  createEvidenceSearchableSourceMetadataPublicSupportRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   evidenceActorDatasetConsumerExecutionToPostgresRows,
   evidenceActorDatasetSourceGapConsumerQueueToPostgresRows,
   evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows,
+  evidenceSearchableSourceMetadataPublicSupportQueueToPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
   executeEvidencePromotionTransactionPlan,
@@ -62,6 +64,7 @@ import {
   type EvidencePromotionTransactionPlan,
   type EvidenceSearchableSourceMetadataCatalog,
   type EvidenceSearchableSourceMetadataPublicSupportQueue,
+  type EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus,
   type EvidenceSearchReadModelBackendWriteSet,
   type EvidenceSearchReadModelPromotionReplay,
   type EvidenceSearchReadModelReadiness
@@ -206,6 +209,7 @@ export interface EvidenceSearchReadModelCutoverDto {
   };
   searchableSourceMetadataCatalog: EvidenceSearchableSourceMetadataCatalog;
   searchableSourceMetadataPublicSupportQueue: EvidenceSearchableSourceMetadataPublicSupportQueue;
+  searchableSourceMetadataPublicSupportRepository: EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus;
   readiness: {
     embedded: EvidenceSearchReadModelReadiness;
     postgres: EvidenceSearchReadModelReadiness;
@@ -458,6 +462,11 @@ function buildEvidenceSearchReadModelCutoverDto(
   const writeSet = buildEvidenceSearchReadModelBackendWriteSet(handoff, { generatedAt });
   const searchableSourceMetadataCatalog = buildEvidenceSearchableSourceMetadataCatalog(writeSet, { generatedAt });
   const searchableSourceMetadataPublicSupportQueue = buildEvidenceSearchableSourceMetadataPublicSupportQueue(searchableSourceMetadataCatalog, { generatedAt });
+  const searchableSourceMetadataPublicSupportRows = evidenceSearchableSourceMetadataPublicSupportQueueToPostgresRows(searchableSourceMetadataPublicSupportQueue);
+  const searchableSourceMetadataPublicSupportRepository = createEvidenceSearchableSourceMetadataPublicSupportRepository().persistPublicSupportRows(
+    searchableSourceMetadataPublicSupportRows,
+    { generatedAt }
+  );
   const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(writeSet, {
     query,
     normalizedQuery: handoff.normalizedQuery,
@@ -523,6 +532,7 @@ function buildEvidenceSearchReadModelCutoverDto(
     },
     searchableSourceMetadataCatalog,
     searchableSourceMetadataPublicSupportQueue,
+    searchableSourceMetadataPublicSupportRepository,
     readiness: {
       embedded,
       postgres,

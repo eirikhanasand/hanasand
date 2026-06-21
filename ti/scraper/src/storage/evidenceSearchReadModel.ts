@@ -335,6 +335,84 @@ export interface EvidenceSearchableSourceMetadataPublicSupportCandidate {
   noLeak: true;
 }
 
+export interface EvidenceSearchableSourceMetadataPublicSupportPostgresRows {
+  public_support_queue_runs: EvidenceSearchableSourceMetadataPublicSupportQueueRunRow[];
+  public_support_candidates: EvidenceSearchableSourceMetadataPublicSupportCandidateRow[];
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportQueueRunRow {
+  queue_id: string;
+  generated_at: string;
+  source_catalog_schema: EvidenceSearchableSourceMetadataPublicSupportQueue["sourceCatalog"];
+  product_surface: EvidenceSearchableSourceMetadataPublicSupportQueue["productSurface"];
+  dry_run: true;
+  will_mutate_queues: false;
+  will_activate_sources: false;
+  will_start_crawling: false;
+  counts: EvidenceSearchableSourceMetadataPublicSupportQueue["counts"];
+  no_leak: true;
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportCandidateRow {
+  candidate_id: string;
+  queue_id: string;
+  source_catalog_row_id: string;
+  document_id: string;
+  source_id?: string;
+  capture_id?: string;
+  claim_ledger_entry_id?: string;
+  source_family: EvidenceSearchableSourceMetadataPublicSupportCandidate["sourceFamily"];
+  target_use: EvidenceSearchableSourceMetadataPublicSupportCandidate["targetUse"];
+  owner_agents: EvidenceSearchableSourceMetadataPublicSupportCandidate["ownerAgents"];
+  required_public_support: EvidenceSearchableSourceMetadataPublicSupportCandidate["requiredPublicSupport"];
+  buyer_visible_fields: EvidenceSearchableSourceMetadataPublicSupportCandidate["buyerVisibleFields"];
+  promotion_gate: EvidenceSearchableSourceMetadataPublicSupportCandidate["promotionGate"];
+  no_leak: true;
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus {
+  schemaVersion: "ti.evidence_searchable_source_metadata_public_support_repository.v1";
+  generatedAt: string;
+  backend: "postgres_searchable_source_metadata_public_support";
+  enabled: false;
+  disabledByDefault: true;
+  liveBackendConnection: false;
+  willPersistRows: false;
+  willMutateQueues: false;
+  willActivateSources: false;
+  willStartCrawling: false;
+  willPromoteActorRows: false;
+  failClosedWithoutExplicitEnable: true;
+  requiredFeatureFlags: ["TI_SEARCHABLE_SOURCE_METADATA_PUBLIC_SUPPORT_REPOSITORY_ENABLED"];
+  requiredTables: ["evidence_searchable_source_public_support_queue_runs", "evidence_searchable_source_public_support_candidates"];
+  acceptedRowCounts: {
+    queueRuns: number;
+    supportCandidates: number;
+  };
+  persistedRowCounts: {
+    queueRuns: 0;
+    supportCandidates: 0;
+  };
+  heldRowCounts: {
+    queueRuns: number;
+    supportCandidates: number;
+  };
+  blockedReasons: string[];
+  replayReady: boolean;
+  canReplayWithoutRawEvidence: true;
+  guardrails: EvidenceSearchableSourceMetadataPublicSupportQueue["guardrails"];
+  safeOutput: EvidenceSearchReadModelSafety;
+}
+
+export interface EvidenceSearchableSourceMetadataPublicSupportRepository {
+  readonly backend: "postgres_searchable_source_metadata_public_support";
+  readonly enabled: false;
+  persistPublicSupportRows(
+    rows: EvidenceSearchableSourceMetadataPublicSupportPostgresRows,
+    input?: { generatedAt?: string }
+  ): EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus;
+}
+
 export interface EvidenceSearchReadModelPromotionReplay {
   schemaVersion: "ti.evidence_search_read_model_promotion_replay.v1";
   generatedAt: string;
@@ -1739,6 +1817,125 @@ export function buildEvidenceSearchableSourceMetadataPublicSupportQueue(
     noLeakGuarantees: { ...catalog.noLeakGuarantees },
     safeOutput: SAFE_OUTPUT
   };
+}
+
+export function evidenceSearchableSourceMetadataPublicSupportQueueToPostgresRows(
+  queue: EvidenceSearchableSourceMetadataPublicSupportQueue
+): EvidenceSearchableSourceMetadataPublicSupportPostgresRows {
+  const counts: EvidenceSearchableSourceMetadataPublicSupportQueue["counts"] = {
+    supportCandidates: queue.candidates.length,
+    restrictedMetadataCandidates: queue.candidates.filter((candidate) => candidate.sourceFamily === "restricted_metadata").length,
+    darkMetadataCandidates: queue.candidates.filter((candidate) => candidate.sourceFamily === "dark_metadata").length,
+    likelyActorRowUnlocks: queue.candidates.filter((candidate) => candidate.targetUse === "public_supported_actor_row").length,
+    caveatedContextRows: queue.candidates.filter((candidate) => candidate.targetUse === "stronger_caveated_context").length
+  };
+  return {
+    public_support_queue_runs: [{
+      queue_id: queue.queueId,
+      generated_at: queue.generatedAt,
+      source_catalog_schema: queue.sourceCatalog,
+      product_surface: queue.productSurface,
+      dry_run: true,
+      will_mutate_queues: false,
+      will_activate_sources: false,
+      will_start_crawling: false,
+      counts,
+      no_leak: true
+    }],
+    public_support_candidates: queue.candidates.map((candidate) => ({
+      candidate_id: candidate.candidateId,
+      queue_id: queue.queueId,
+      source_catalog_row_id: candidate.sourceCatalogRowId,
+      document_id: candidate.documentId,
+      source_id: candidate.sourceId,
+      capture_id: candidate.captureId,
+      claim_ledger_entry_id: candidate.claimLedgerEntryId,
+      source_family: candidate.sourceFamily,
+      target_use: candidate.targetUse,
+      owner_agents: [...candidate.ownerAgents],
+      required_public_support: [...candidate.requiredPublicSupport],
+      buyer_visible_fields: [...candidate.buyerVisibleFields],
+      promotion_gate: candidate.promotionGate,
+      no_leak: true
+    }))
+  };
+}
+
+export function buildDisabledEvidenceSearchableSourceMetadataPublicSupportRepositoryStatus(
+  rows: EvidenceSearchableSourceMetadataPublicSupportPostgresRows,
+  input: { generatedAt?: string } = {}
+): EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus {
+  const run = rows.public_support_queue_runs[0];
+  const generatedAt = input.generatedAt ?? run?.generated_at ?? nowIso();
+  const replayBlockers = [
+    !run ? "missing_public_support_queue_run" : null,
+    run && rows.public_support_candidates.length !== run.counts.supportCandidates ? "public_support_candidate_count_mismatch" : null,
+    rows.public_support_queue_runs.some((row) => row.no_leak !== true) ? "public_support_queue_run_no_leak_failed" : null,
+    rows.public_support_candidates.some((row) => row.no_leak !== true) ? "public_support_candidate_no_leak_failed" : null,
+    rows.public_support_queue_runs.some((row) => row.will_mutate_queues || row.will_activate_sources || row.will_start_crawling) ? "public_support_queue_mutation_flag_failed" : null,
+    rows.public_support_candidates.some((row) => row.promotion_gate !== "blocked_until_public_support_replay") ? "public_support_candidate_promotion_gate_failed" : null
+  ].filter((blocker): blocker is string => Boolean(blocker));
+
+  return {
+    schemaVersion: "ti.evidence_searchable_source_metadata_public_support_repository.v1",
+    generatedAt,
+    backend: "postgres_searchable_source_metadata_public_support",
+    enabled: false,
+    disabledByDefault: true,
+    liveBackendConnection: false,
+    willPersistRows: false,
+    willMutateQueues: false,
+    willActivateSources: false,
+    willStartCrawling: false,
+    willPromoteActorRows: false,
+    failClosedWithoutExplicitEnable: true,
+    requiredFeatureFlags: ["TI_SEARCHABLE_SOURCE_METADATA_PUBLIC_SUPPORT_REPOSITORY_ENABLED"],
+    requiredTables: ["evidence_searchable_source_public_support_queue_runs", "evidence_searchable_source_public_support_candidates"],
+    acceptedRowCounts: {
+      queueRuns: rows.public_support_queue_runs.length,
+      supportCandidates: rows.public_support_candidates.length
+    },
+    persistedRowCounts: {
+      queueRuns: 0,
+      supportCandidates: 0
+    },
+    heldRowCounts: {
+      queueRuns: rows.public_support_queue_runs.length,
+      supportCandidates: rows.public_support_candidates.length
+    },
+    blockedReasons: [
+      "searchable_source_metadata_public_support_repository_disabled",
+      "postgres_searchable_source_metadata_public_support_not_configured",
+      ...replayBlockers
+    ],
+    replayReady: replayBlockers.length === 0,
+    canReplayWithoutRawEvidence: true,
+    guardrails: {
+      explicitOperatorApprovalRequired: true,
+      publicSupportRequiredBeforePaidRow: true,
+      restrictedRowsMetadataOnly: true,
+      sourceActivationNotApplied: true,
+      crawlingNotStarted: true,
+      restrictedEmbeddingsDisabled: true
+    },
+    safeOutput: SAFE_OUTPUT
+  };
+}
+
+class DisabledEvidenceSearchableSourceMetadataPublicSupportRepository implements EvidenceSearchableSourceMetadataPublicSupportRepository {
+  readonly backend = "postgres_searchable_source_metadata_public_support" as const;
+  readonly enabled = false as const;
+
+  persistPublicSupportRows(
+    rows: EvidenceSearchableSourceMetadataPublicSupportPostgresRows,
+    input: { generatedAt?: string } = {}
+  ): EvidenceSearchableSourceMetadataPublicSupportRepositoryStatus {
+    return buildDisabledEvidenceSearchableSourceMetadataPublicSupportRepositoryStatus(rows, input);
+  }
+}
+
+export function createEvidenceSearchableSourceMetadataPublicSupportRepository(): EvidenceSearchableSourceMetadataPublicSupportRepository {
+  return new DisabledEvidenceSearchableSourceMetadataPublicSupportRepository();
 }
 
 export function buildEvidenceSearchReadModelPromotionReplay(

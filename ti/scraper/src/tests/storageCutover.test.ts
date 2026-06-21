@@ -67,12 +67,14 @@ import {
   createEvidenceActorDatasetSourceGapRepairReplayRepository,
   buildEvidenceSearchableSourceMetadataCatalog,
   buildEvidenceSearchableSourceMetadataPublicSupportQueue,
+  createEvidenceSearchableSourceMetadataPublicSupportRepository,
   buildEvidenceSearchReadModelBackendWriteSet,
   buildEvidenceSearchReadModelPromotionReplay,
   createEvidenceSearchReadModelRepository,
   evidenceActorDatasetConsumerExecutionToPostgresRows,
   evidenceActorDatasetSourceGapConsumerQueueToPostgresRows,
   evidenceActorDatasetSourceGapRepairReplayLedgerToPostgresRows,
+  evidenceSearchableSourceMetadataPublicSupportQueueToPostgresRows,
   evidencePromotionExecutionFromPostgresRows,
   evidencePromotionExecutionToPostgresRows,
   executeEvidenceActorDatasetConsumerHandoff,
@@ -2048,6 +2050,85 @@ describe("evidence storage cutover", () => {
     expect(searchableSourceMetadataPublicSupportQueueSerialized).not.toContain(restrictedRaw);
     expect(searchableSourceMetadataPublicSupportQueueSerialized).not.toContain("tenant/source/private-key");
     expect(searchableSourceMetadataPublicSupportQueueSerialized).not.toContain(".onion");
+
+    const searchableSourceMetadataPublicSupportRows = evidenceSearchableSourceMetadataPublicSupportQueueToPostgresRows(searchableSourceMetadataPublicSupportQueue);
+    expect(searchableSourceMetadataPublicSupportRows.public_support_queue_runs).toHaveLength(1);
+    expect(searchableSourceMetadataPublicSupportRows.public_support_candidates).toHaveLength(searchableSourceMetadataPublicSupportQueue.candidates.length);
+    expect(searchableSourceMetadataPublicSupportRows.public_support_queue_runs[0]).toMatchObject({
+      queue_id: searchableSourceMetadataPublicSupportQueue.queueId,
+      source_catalog_schema: "ti.evidence_searchable_source_metadata_catalog.v1",
+      product_surface: "apify_public_threat_actor_monitor",
+      dry_run: true,
+      will_mutate_queues: false,
+      will_activate_sources: false,
+      will_start_crawling: false,
+      no_leak: true
+    });
+    expect(searchableSourceMetadataPublicSupportRows.public_support_candidates.every((row) =>
+      row.queue_id === searchableSourceMetadataPublicSupportQueue.queueId &&
+      row.required_public_support.includes("public_report_source") &&
+      row.required_public_support.includes("freshness_timestamp") &&
+      row.promotion_gate === "blocked_until_public_support_replay" &&
+      row.no_leak === true
+    )).toBe(true);
+    const searchableSourceMetadataPublicSupportRepository = createEvidenceSearchableSourceMetadataPublicSupportRepository();
+    const searchableSourceMetadataPublicSupportRepositoryStatus = searchableSourceMetadataPublicSupportRepository.persistPublicSupportRows(
+      searchableSourceMetadataPublicSupportRows,
+      { generatedAt: "2026-05-24T21:44:42.000Z" }
+    );
+    expect(searchableSourceMetadataPublicSupportRepositoryStatus).toMatchObject({
+      schemaVersion: "ti.evidence_searchable_source_metadata_public_support_repository.v1",
+      backend: "postgres_searchable_source_metadata_public_support",
+      enabled: false,
+      disabledByDefault: true,
+      liveBackendConnection: false,
+      willPersistRows: false,
+      willMutateQueues: false,
+      willActivateSources: false,
+      willStartCrawling: false,
+      willPromoteActorRows: false,
+      failClosedWithoutExplicitEnable: true,
+      requiredFeatureFlags: ["TI_SEARCHABLE_SOURCE_METADATA_PUBLIC_SUPPORT_REPOSITORY_ENABLED"],
+      requiredTables: ["evidence_searchable_source_public_support_queue_runs", "evidence_searchable_source_public_support_candidates"],
+      acceptedRowCounts: {
+        queueRuns: 1,
+        supportCandidates: searchableSourceMetadataPublicSupportQueue.candidates.length
+      },
+      persistedRowCounts: {
+        queueRuns: 0,
+        supportCandidates: 0
+      },
+      heldRowCounts: {
+        queueRuns: 1,
+        supportCandidates: searchableSourceMetadataPublicSupportQueue.candidates.length
+      },
+      blockedReasons: [
+        "searchable_source_metadata_public_support_repository_disabled",
+        "postgres_searchable_source_metadata_public_support_not_configured"
+      ],
+      replayReady: true,
+      canReplayWithoutRawEvidence: true,
+      guardrails: {
+        explicitOperatorApprovalRequired: true,
+        publicSupportRequiredBeforePaidRow: true,
+        restrictedRowsMetadataOnly: true,
+        sourceActivationNotApplied: true,
+        crawlingNotStarted: true,
+        restrictedEmbeddingsDisabled: true
+      },
+      safeOutput: {
+        rawBodiesExposed: false,
+        objectKeysExposed: false,
+        unsafeUrlsExposed: false,
+        credentialsExposed: false,
+        restrictedRawContentExposed: false,
+        actorInteractionExposed: false
+      }
+    });
+    const searchableSourceMetadataPublicSupportRepositorySerialized = JSON.stringify(searchableSourceMetadataPublicSupportRepositoryStatus);
+    expect(searchableSourceMetadataPublicSupportRepositorySerialized).not.toContain(restrictedRaw);
+    expect(searchableSourceMetadataPublicSupportRepositorySerialized).not.toContain("tenant/source/private-key");
+    expect(searchableSourceMetadataPublicSupportRepositorySerialized).not.toContain(".onion");
 
     const promotionReplay = buildEvidenceSearchReadModelPromotionReplay(backendWriteSet, {
       query: "APT29",
