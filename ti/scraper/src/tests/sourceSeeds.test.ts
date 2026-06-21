@@ -1379,6 +1379,12 @@ describe("source seed bundles", () => {
       row.noLeakBoundary.sourceActivationApplied === false
     )).toBe(true);
     expect(atlas.publicMonitorSourceGapHandoff.summary.queryCount).toBe(atlas.publicMonitorSourceGapHandoff.queryRows.length);
+    expect(atlas.publicMonitorSourceGapHandoff.summary.freshnessCanarySourceCount).toBeGreaterThan(0);
+    expect(atlas.publicMonitorSourceGapHandoff.summary.expectedFreshRowsPerDay).toBeGreaterThan(0);
+    expect(atlas.publicMonitorSourceGapHandoff.summary.expectedUsefulRowsPerDay).toBeGreaterThan(0);
+    expect(atlas.publicMonitorSourceGapHandoff.summary.expectedFreshRowsPerDay).toBe(
+      Number(atlas.publicMonitorSourceGapHandoff.queryRows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0).toFixed(3))
+    );
     expect(atlas.publicMonitorSourceGapHandoff.handoffs.agent04CoverageValue).toContain("queryRows.freshnessCanarySourceIds");
     expect(atlas.publicMonitorSourceGapHandoff.handoffs.agent09PublicMonitorApi).toContain("publicMonitorSourceGapHandoff.queryRows");
     expect(JSON.stringify(atlas.publicMonitorSourceGapHandoff)).not.toContain("https://");

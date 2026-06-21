@@ -23,6 +23,8 @@ When coherent, update this file, commit, push, and continue into the next source
 
 # Agent 04 Summary
 
+- Added public-monitor gap summary totals for freshness canary source count plus expected fresh/useful rows per day, derived from per-query freshness canaries so Agent 09/10 can consume buyer-visible lift without recomputing query rows.
+- Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.
 - Added per-query `freshnessCanarySourceIds`, expected fresh rows/day, and expected useful rows/day to `publicMonitorSourceGapHandoff` so Apify/public-monitor gap rows can prefer ready, current-review sources that should improve buyer-visible freshness first.
 - Verification is green for this pass: `bun run check`, `bun test src/tests/sourceSeeds.test.ts`, `bun run check:route-inventory`, `bun run check:contract-index`, and full `bun test` with 529 passing tests.
 - Added freshness-first activation canary fields to `/v1/sources/atlas`: 25 p0 source ids, expected fresh/useful rows per day, acceptance criteria, and rollback triggers derived from the high-value freshness queue without starting crawls or mutating registry state.

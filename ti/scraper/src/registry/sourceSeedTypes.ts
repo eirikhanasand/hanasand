@@ -1225,6 +1225,9 @@ export interface TiSourceAtlasPublicMonitorSourceGapHandoff {
     partialCount: number;
     readyCount: number;
     recommendedCandidateCount: number;
+    freshnessCanarySourceCount: number;
+    expectedFreshRowsPerDay: number;
+    expectedUsefulRowsPerDay: number;
     descriptorOnlyHoldCount: number;
     parserCertificationHoldCount: number;
   };

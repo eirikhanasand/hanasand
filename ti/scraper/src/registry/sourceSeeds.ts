@@ -863,6 +863,7 @@ function buildTiSourceAtlasPublicMonitorSourceGapHandoff(input: { records: TiSou
     };
   });
   const allRecommendedIds = uniqueStrings(rows.flatMap((row) => row.recommendedAtlasSourceIds));
+  const allFreshnessCanaryIds = uniqueStrings(rows.flatMap((row) => row.freshnessCanarySourceIds));
   const relevantRecords = input.records.filter((record) => allRecommendedIds.includes(record.id) || rows.some((row) => row.queryClass === "ransomware_victim" && record.queryClassCoverage.includes(row.queryClass)));
   return {
     schemaVersion: "ti.source_atlas.public_monitor_gap_handoff.v1",
@@ -880,6 +881,9 @@ function buildTiSourceAtlasPublicMonitorSourceGapHandoff(input: { records: TiSou
       partialCount: rows.filter((row) => row.publicMonitorState === "partial").length,
       readyCount: rows.filter((row) => row.publicMonitorState === "ready").length,
       recommendedCandidateCount: allRecommendedIds.length,
+      freshnessCanarySourceCount: allFreshnessCanaryIds.length,
+      expectedFreshRowsPerDay: roundScore(rows.reduce((sum, row) => sum + row.expectedFreshRowsPerDay, 0)),
+      expectedUsefulRowsPerDay: roundScore(rows.reduce((sum, row) => sum + row.expectedUsefulRowsPerDay, 0)),
       descriptorOnlyHoldCount: relevantRecords.filter((record) => record.activationReadiness.state === "descriptor_only_hold").length,
       parserCertificationHoldCount: relevantRecords.filter((record) => record.activationReadiness.state === "needs_parser_certification").length
     },
