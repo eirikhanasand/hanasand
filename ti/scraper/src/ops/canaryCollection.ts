@@ -21,7 +21,8 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   for (const task of tasks) options.frontier.enqueueTask(task);
   const counters: any = { leasedTaskCount: 0, completedTaskCount: 0, failedTaskCount: 0, insertedCaptureCount: 0, duplicateCaptureCount: 0, incidentCount: 0, retryScheduledCount: 0, retryExhaustedCount: 0 };
   const latestCaptureIds: string[] = [], errors: any[] = [];
-  for (let i = 0; i < maxTasks; i++) await runLeasedTask(options, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors);
+  const concurrency = Math.max(1, Math.min(maxTasks, Number(options.maxConcurrentTasks ?? 5)));
+  for (let done = 0; done < maxTasks; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, maxTasks - done) }, () => runLeasedTask(options, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
   options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: counters.failedTaskCount ? "failed" : "completed", createdAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, error: errors[0]?.message });
   return { generatedAt, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, activeSourceCount: due.length, queuedTaskCount: tasks.length, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
@@ -39,7 +40,7 @@ async function runLeasedTask(options: any, generatedAt: string, fetcher: any, mo
   const task = leased.task, source = options.store.getSource?.(task.sourceId); counters.leasedTaskCount++;
   try {
     if (!source) throw new Error("source missing");
-    const collected = await fetchItem(source, task, fetcher, mode, generatedAt, maxBytes);
+    const collected = await fetchItem(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000);
     let pipeline = processCollectedItem(collected);
     if (pipeline.capture.body && options.objectStore) pipeline = { ...pipeline, capture: externalize(pipeline.capture, options.objectStore) };
     const duplicate = options.store.findDuplicateCapture?.(pipeline.capture), saved = options.store.savePipelineResult(pipeline);
