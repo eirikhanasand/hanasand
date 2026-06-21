@@ -43,18 +43,18 @@ checks.push(checkObservedTelemetry(paidReleaseTruthBoard));
 
 const failingChecks = checks.filter((check) => check.status === "fail");
 const holdingChecks = checks.filter((check) => check.status === "hold");
-const releaseDecision = failingChecks.length > 0
-  ? "fail_release_hygiene"
-  : holdingChecks.length > 0
-    ? "hold_paid_release"
-    : "ready_for_paid_release";
+const ladderDecision = String(record(releaseLadder.releaseDecisionBoard).decision ?? "hold_paid_release");
+const releaseDecision = ladderDecision === "ready_for_private_paid_beta" || ladderDecision === "ready_for_public_paid_traffic"
+  ? ladderDecision
+  : "hold_paid_release";
 
 const packet = {
   ok: failingChecks.length === 0,
   command,
   generatedAt,
   releaseDecision,
-  safeToPromotePaidTraffic: releaseDecision === "ready_for_paid_release",
+  releaseHygiene: failingChecks.length > 0 ? "fail" : "pass",
+  safeToPromotePaidTraffic: releaseDecision === "ready_for_public_paid_traffic" && failingChecks.length === 0,
   releaseLadder,
   summary: {
     pass: checks.filter((check) => check.status === "pass").length,
@@ -406,6 +406,13 @@ function buildReleaseLadder(
     : currentSellableRows >= 500 && trueFindingShare >= 0.55 && sourceProvenanceShare <= 0.4
       ? "pass"
       : "hold";
+  const localSellableGateState = (requiredRows: number): "pass" | "hold" | "fail" => current500UnsafeCredit
+    ? "fail"
+    : currentSellableRows >= requiredRows && trueFindingShare >= 0.55 && sourceProvenanceShare <= 0.4
+      ? "pass"
+      : "hold";
+  const current750State = localSellableGateState(750);
+  const current1000LocalSellableState = localSellableGateState(1000);
   const observedUsefulRows = proofRows;
   const observedUsefulDensity = Number.isFinite(observedUsefulRows) ? roundRatio(observedUsefulRows, tier1000MinimumRows) : Number.NaN;
   const observedFreshDensity = numberValue(tier1000Gate.freshRowDensity);
@@ -430,9 +437,80 @@ function buildReleaseLadder(
     : marketplacePromotionState === "pass" && hostedProofExecutionState === "pass"
       ? "pass"
       : "hold";
+  const releaseDecisionBoardDecision = marketplacePaidTrafficState === "pass" && current1000LocalSellableState === "pass" && current1000State === "pass"
+    ? "ready_for_public_paid_traffic"
+    : current750State === "pass" && hosted100State === "pass" && hostedProofExecutionState !== "fail"
+      ? "ready_for_private_paid_beta"
+      : "hold_paid_release";
+  const revenueImpactBlockerBoard = [
+    {
+      rank: 1,
+      blocker: "hosted_proof_gap",
+      owner: "agent_09",
+      state: hostedProofExecutionState,
+      revenueImpact: "blocks public paid traffic and private beta proof",
+      observedGap: hosted300State === "pass" ? 0 : 300 - (Number.isFinite(hostedObservedSellableRows) ? Math.min(300, hostedObservedSellableRows) : 0),
+      nextOwnerAction: "Import observed hosted Apify proof with run, dataset, no-leak, second-batch, false-positive, usage, and cost fields."
+    },
+    {
+      rank: 2,
+      blocker: "pricing_payout_analytics_gap",
+      owner: "agent_09",
+      state: marketplacePaidTrafficState,
+      revenueImpact: "blocks public marketplace promotion",
+      observedGap: analyticsObserved && pricingState !== "external_unknown" && payoutState !== "external_unknown" ? 0 : 1,
+      nextOwnerAction: "Import observed Store analytics, pricing model, payout state, refunds, listing status, and last verified timestamp."
+    },
+    {
+      rank: 3,
+      blocker: "parser_current_750_gap",
+      owner: "agent_03",
+      state: current750State,
+      revenueImpact: "blocks private paid beta confidence and 1,000-row ladder progress",
+      observedGap: Math.max(0, 750 - currentSellableRows),
+      nextOwnerAction: "Admit current source-backed rows without graph-only, restricted-only, stale, duplicate, generic, or projected credit."
+    },
+    {
+      rank: 4,
+      blocker: "dark_metadata_public_support_gap",
+      owner: "agent_05",
+      state: darkCurrentChargeableRows >= 500 ? "pass" : "hold",
+      revenueImpact: "limits parser admission supply for current750/current1000",
+      observedGap: Math.max(0, 500 - darkCurrentChargeableRows),
+      nextOwnerAction: "Lift dark metadata public-supported current chargeable rows while keeping restricted-only rows out of paid counts."
+    },
+    {
+      rank: 5,
+      blocker: "public_corroboration_gap",
+      owner: "agent_08",
+      state: graphRowsReadyAfterParserAdmission >= 500 ? "pass" : "hold",
+      revenueImpact: "limits source diversity and parser-ready public proof",
+      observedGap: Math.max(0, 500 - graphRowsReadyAfterParserAdmission),
+      nextOwnerAction: "Grow parser-ready public corroboration rows while graph-only rows keep zero current paid-floor credit."
+    },
+    {
+      rank: 6,
+      blocker: "useful_row_density_gap",
+      owner: "agent_10",
+      state: current1000State,
+      revenueImpact: "blocks current1000 useful-row proof and cost/useful-row confidence",
+      observedGap: Math.max(0, 1000 - observedUsefulRows),
+      nextOwnerAction: "Keep current1000 held until useful density, fresh density, source diversity, no-leak, and cost/useful-row proof are observed."
+    }
+  ];
   return {
     schemaVersion: "ti.paid_actor_release_ladder_audit.v1",
-    status: "hold_paid_release",
+    status: releaseDecisionBoardDecision,
+    releaseDecisionBoard: {
+      schemaVersion: "ti.program_dd_release_decision_board.v1",
+      decision: releaseDecisionBoardDecision,
+      allowedDecisions: ["hold_paid_release", "ready_for_private_paid_beta", "ready_for_public_paid_traffic"],
+      hygieneBlocksPromotion: true,
+      dirtyWorktreeBlocksPromotion: true,
+      localProgressIsNotHostedRevenue: true,
+      publicPaidTrafficAllowedNow: releaseDecisionBoardDecision === "ready_for_public_paid_traffic",
+      privatePaidBetaAllowedNow: releaseDecisionBoardDecision === "ready_for_private_paid_beta" || releaseDecisionBoardDecision === "ready_for_public_paid_traffic"
+    },
     current100LocalFloor: {
       state: currentSellableRows >= 100 ? "pass" : "hold",
       currentSellableRows,
@@ -541,6 +619,36 @@ function buildReleaseLadder(
       },
       nextOwnerAction: `Agent 03: close ${Math.max(0, 500 - currentSellableRows)} current sellable rows to the 500 gate while keeping true findings >=55% and source-provenance share <=40%.`
     },
+    current750Gate: {
+      state: current750State,
+      requiredSellableRows: 750,
+      observedSellableRows: currentSellableRows,
+      sellableRowGap: Math.max(0, 750 - currentSellableRows),
+      requiredTrueFindingShare: 0.55,
+      observedTrueFindingShare: trueFindingShare,
+      maximumSourceProvenanceShare: 0.4,
+      observedSourceProvenanceShare: sourceProvenanceShare,
+      forbiddenCreditObserved: {
+        projectedRowsCountTowardCurrent: darkChargeable250.countsProjectedRowsAsCurrent !== false,
+        graphRowsCountTowardFloorNow,
+        restrictedOnlyRowsCountTowardFloorNow: false,
+        staleLatestErrorRowsCountTowardFloorNow: false,
+        sampleProofRowsCountTowardFloorNow: observedProofImportSampleOnly
+      },
+      nextOwnerAction: `Agent 03: close ${Math.max(0, 750 - currentSellableRows)} current sellable rows to the 750 gate while preserving true-finding and source-provenance quality.`
+    },
+    current1000LocalSellableGate: {
+      state: current1000LocalSellableState,
+      requiredSellableRows: 1000,
+      observedSellableRows: currentSellableRows,
+      sellableRowGap: Math.max(0, 1000 - currentSellableRows),
+      requiredTrueFindingShare: 0.55,
+      observedTrueFindingShare: trueFindingShare,
+      maximumSourceProvenanceShare: 0.4,
+      observedSourceProvenanceShare: sourceProvenanceShare,
+      countsProjectedRowsAsPaid: false,
+      nextOwnerAction: `Agent 03/05/08: add ${Math.max(0, 1000 - currentSellableRows)} observed current sellable rows from parser, dark metadata public support, and public corroboration without unsafe paid credit.`
+    },
     current1000Gate: {
       state: current1000State,
       requiredUsefulRows: 1000,
@@ -560,6 +668,14 @@ function buildReleaseLadder(
       observedCostPerUsefulRowUsd,
       countsProjectedRowsAsPaid: tier1000Gate.countsProjectedRowsAsPaid,
       nextOwnerAction: "Agent 10: keep this gate on hold until useful-row density, fresh-row density, source-family diversity, no-leak proof, and cost/useful-row evidence are observed, not projected."
+    },
+    nonMonetizingWorkGuard: {
+      state: "pass",
+      architectureOnlyCountsTowardRevenue: false,
+      coordinationOnlyCountsTowardRevenue: false,
+      schemaOnlyCountsTowardRevenue: false,
+      requiresBuyerVisibleMetricMovement: true,
+      proofField: "productSlo.nonMonetizingWorkDetector"
     },
     hosted100Proof: {
       state: hostedStatus === "paid_floor_hosted_proof" && hostedSellableRows >= 100 && hostedQuerySetCount >= 100 ? "pass" : "hold",
@@ -754,6 +870,7 @@ function buildReleaseLadder(
       noInventedExternalMetrics: marketplaceEmptyHold || marketplaceImportedSafely,
       nextOwnerAction: "Agent 09: import observed Store analytics, pricing, payout, listing, refunds, and hosted proof before marketplace promotion or paid traffic."
     },
+    revenueImpactBlockerBoard,
     nextBuyerVisibleBlockers: [
       `Agent 03: current local sellable rows are ${currentSellableRows}; close ${Math.max(0, 500 - currentSellableRows)} rows to the current500 gate while keeping true findings >=55% and source-provenance share <=40%.`,
       `Agent 05: dark metadata has ${darkCurrentChargeableRows} current chargeable rows, ${Math.max(0, 250 - darkCurrentChargeableRows)} rows still needed for a 250-current dark lane, and ${darkProjectedRows} projected rows that must remain excluded until public support is current.`,
@@ -809,6 +926,8 @@ function checkReleaseLadder(releaseLadder: Record<string, unknown>): AuditCheck 
   const current300 = record(releaseLadder.current300Gate);
   const local300Unlock = record(releaseLadder.local300UnlockRequirements);
   const current500 = record(releaseLadder.current500Gate);
+  const current750 = record(releaseLadder.current750Gate);
+  const current1000LocalSellable = record(releaseLadder.current1000LocalSellableGate);
   const current1000 = record(releaseLadder.current1000Gate);
   const hosted100 = record(releaseLadder.hosted100Gate);
   const hosted300 = record(releaseLadder.hosted300Gate);
@@ -821,6 +940,8 @@ function checkReleaseLadder(releaseLadder: Record<string, unknown>): AuditCheck 
   const current250Passed = current250.state === "pass";
   const current300Passed = current300.state === "pass" && local300Unlock.state === "pass";
   const current500Passed = current500.state === "pass";
+  const current750Passed = current750.state === "pass";
+  const current1000LocalSellablePassed = current1000LocalSellable.state === "pass";
   const current1000Passed = current1000.state === "pass";
   const hosted100Passed = hosted100.state === "pass";
   const hosted300Passed = hosted300.state === "pass";
@@ -833,6 +954,8 @@ function checkReleaseLadder(releaseLadder: Record<string, unknown>): AuditCheck 
     current300,
     local300Unlock,
     current500,
+    current750,
+    current1000LocalSellable,
     current1000,
     hosted100,
     hosted300,
@@ -844,9 +967,9 @@ function checkReleaseLadder(releaseLadder: Record<string, unknown>): AuditCheck 
   ].filter((gate) => gate.state === "fail");
   return {
     name: "monetization_release_ladder",
-    status: failedGates.length > 0 ? "fail" : localPassed && current250Passed && current300Passed && current500Passed && current1000Passed && hosted100Passed && hosted300Passed && hostedProofExecutionPassed && tier1000Passed && marketplacePromotionPassed ? "pass" : localPassed ? "hold" : "fail",
+    status: failedGates.length > 0 ? "fail" : localPassed && current250Passed && current300Passed && current500Passed && current750Passed && current1000LocalSellablePassed && current1000Passed && hosted100Passed && hosted300Passed && hostedProofExecutionPassed && tier1000Passed && marketplacePromotionPassed ? "pass" : localPassed ? "hold" : "fail",
     message: localPassed && failedGates.length === 0
-      ? "local 100-row floor is passed; current 250/300/500/1000 local gates, hosted proof execution, and marketplace paid traffic remain explicit ladder steps"
+      ? "local 100-row floor is passed; current 250/300/500/750/1000 local gates, hosted proof execution, and marketplace paid traffic remain explicit ladder steps"
       : "local 100-row paid floor is not passed, so higher release gates cannot be evaluated",
     remediation: localPassed ? [
       ...((Array.isArray(releaseLadder.nextBuyerVisibleBlockers) ? releaseLadder.nextBuyerVisibleBlockers : []) as string[]),

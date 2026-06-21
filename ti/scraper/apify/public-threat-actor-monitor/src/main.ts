@@ -1846,6 +1846,20 @@ interface GraphPublicCorroborationPivotPacket {
         corroborationStrength: "single_source" | "cross_family" | "multi_family_strong";
         freshnessRisk: "low" | "medium" | "high";
       };
+      programDdPriority: {
+        gapContribution: number;
+        findingLikely: boolean;
+        sourceProvenanceOnlyRisk: "low" | "medium" | "high";
+        preferredParserAction: "admit_as_current_finding" | "admit_with_caveat" | "hold_for_source_support" | "hold_for_review";
+        admissionBlocker: "none" | "stale" | "alias_conflict" | "contradiction" | "duplicate" | "generic_source_page" | "restricted_only" | "not_enough_source_support" | "missing_buyer_action" | "weak_source_family_diversity" | "graph_only_speculation";
+        sourceFamilyDiversityLift: number;
+        corroborationStrength: "single_source" | "cross_family" | "multi_family_strong";
+        contradictionRisk: "low" | "medium" | "high";
+        freshnessRisk: "low" | "medium" | "high";
+        buyerVisibleValue: "fresh_activity" | "victim_or_target_context" | "sector_country_context" | "ttp_or_tool_context" | "source_family_diversity" | "alias_or_contradiction_review";
+        noLeakProof: "hash_only_public_or_metadata_reference";
+        nextPivot: "parser_admission" | "source_family_review" | "freshness_recheck" | "contradiction_review";
+      };
       admissionState: "ready_for_parser";
       countsTowardFloorNow: false;
       noLeak: true;
@@ -8694,6 +8708,7 @@ function graphPublicOutputParserAdmissionHandoffRow(input: {
     ...input,
     programDbPriority: graphPublicOutputProgramDbPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission),
     programDcPriority: graphPublicOutputProgramDcPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays),
+    programDdPriority: graphPublicOutputProgramDdPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.contradictionState),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
@@ -8730,6 +8745,45 @@ function graphPublicOutputProgramDcPriority(
     sourceFamilyDiversityLift,
     corroborationStrength: sourceFamilyDiversityLift >= 3 ? "multi_family_strong" : sourceFamilyDiversityLift === 2 ? "cross_family" : "single_source",
     freshnessRisk: freshnessAgeDays <= 21 ? "low" : freshnessAgeDays <= 45 ? "medium" : "high"
+  };
+}
+
+function graphPublicOutputProgramDdPriority(
+  sourceFamily: GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number,
+  freshnessAgeDays: number,
+  contradictionState: GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["contradictionState"]
+): GraphPublicCorroborationPivotPacket["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programDdPriority"] {
+  const sourceProvenanceOnlyRisk = sourceFamily === "public_channel" || sourceFamily === "restricted_metadata_public_support" ? "medium" : "low";
+  const sourceFamilyDiversityLift = sourceFamily === "public_channel" ? 1 : sourceFamily === "restricted_metadata_public_support" ? 2 : 3;
+  const contradictionRisk = contradictionState === "none" ? "low" : contradictionState === "review_hold" ? "medium" : "high";
+  const freshnessRisk = freshnessAgeDays <= 14 ? "low" : freshnessAgeDays <= 45 ? "medium" : "high";
+  const admissionBlocker =
+    contradictionRisk === "high" ? "contradiction"
+      : freshnessRisk === "high" ? "stale"
+        : sourceFamilyDiversityLift < 2 ? "weak_source_family_diversity"
+          : "none";
+  return {
+    gapContribution: admissionBlocker === "none" ? Math.min(5, expectedPaidRowLiftAfterParserAdmission + sourceFamilyDiversityLift) : 0,
+    findingLikely: admissionBlocker === "none" && expectedPaidRowLiftAfterParserAdmission >= 2 && sourceProvenanceOnlyRisk !== "medium",
+    sourceProvenanceOnlyRisk,
+    preferredParserAction: admissionBlocker === "none"
+      ? sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding"
+      : "hold_for_source_support",
+    admissionBlocker,
+    sourceFamilyDiversityLift,
+    corroborationStrength: sourceFamilyDiversityLift >= 3 ? "multi_family_strong" : sourceFamilyDiversityLift === 2 ? "cross_family" : "single_source",
+    contradictionRisk,
+    freshnessRisk,
+    buyerVisibleValue: expectedPaidRowLiftAfterParserAdmission >= 3
+      ? "victim_or_target_context"
+      : sourceFamilyDiversityLift >= 3
+        ? "source_family_diversity"
+        : freshnessRisk === "low"
+          ? "fresh_activity"
+          : "alias_or_contradiction_review",
+    noLeakProof: "hash_only_public_or_metadata_reference",
+    nextPivot: admissionBlocker === "contradiction" ? "contradiction_review" : admissionBlocker === "stale" ? "freshness_recheck" : "parser_admission"
   };
 }
 

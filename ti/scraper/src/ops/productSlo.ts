@@ -496,10 +496,15 @@ export interface LiveProductSloDashboard {
     hostedPaidReadinessProof: HostedApifyPaidReadinessProof;
     programDcReleaseGates: {
       schemaVersion: "ti.program_dc_paid_release_gates.v1";
+      releaseDecisionBoard: Record<string, unknown>;
       current500Gate: Record<string, unknown>;
+      current750Gate: Record<string, unknown>;
+      current1000LocalSellableGate: Record<string, unknown>;
       current1000Gate: Record<string, unknown>;
       hostedProofExecutionGate: Record<string, unknown>;
       marketplacePaidTrafficGate: Record<string, unknown>;
+      revenueImpactBlockerBoard: Array<Record<string, unknown>>;
+      nonMonetizingWorkGuard: Record<string, unknown>;
     };
     blockerBuckets: Array<{
       blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
@@ -7322,6 +7327,72 @@ function graphPublicParserAdmissionHandoff(
     sourceFamily: theme.sourceFamily,
     expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 8 === 0 ? 1 : 0)
   }))));
+  const programDdActors = [
+    { actor: "APT29", sector: "cloud services", country: "United States", ttpOrTool: "Cloud Accounts / T1078.004" },
+    { actor: "APT28", sector: "defense", country: "Europe", ttpOrTool: "Spearphishing Attachment / T1566.001" },
+    { actor: "APT42", sector: "civil society", country: "United Kingdom", ttpOrTool: "Credential Harvesting" },
+    { actor: "Turla", sector: "government", country: "Europe", ttpOrTool: "Encrypted Channel / T1573" },
+    { actor: "Volt Typhoon", sector: "telecommunications", country: "United States", ttpOrTool: "Valid Accounts / T1078" },
+    { actor: "Lazarus Group", sector: "financial services", country: "global", ttpOrTool: "Supply Chain Compromise / T1195" },
+    { actor: "Scattered Spider", sector: "hospitality", country: "United States", ttpOrTool: "Help Desk Social Engineering" },
+    { actor: "Mustang Panda", sector: "diplomatic", country: "Southeast Asia", ttpOrTool: "Malware Delivery" },
+    { actor: "OilRig", sector: "energy", country: "Middle East", ttpOrTool: "PowerShell / T1059.001" },
+    { actor: "Kimsuky", sector: "research", country: "South Korea", ttpOrTool: "Spearphishing Link / T1566.002" },
+    { actor: "Sandworm", sector: "energy", country: "Ukraine", ttpOrTool: "Industrial Control System Impact" },
+    { actor: "FIN7", sector: "retail", country: "United States", ttpOrTool: "Point-of-Sale Malware" },
+    { actor: "MuddyWater", sector: "government", country: "Middle East", ttpOrTool: "Command and Scripting Interpreter / T1059" },
+    { actor: "Storm-0978", sector: "government", country: "Europe", ttpOrTool: "Malware Delivery" },
+    { actor: "LockBit", sector: "manufacturing", country: "Europe", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Akira", sector: "healthcare", country: "North America", ttpOrTool: "Exfiltration" },
+    { actor: "Clop", sector: "professional services", country: "global", ttpOrTool: "Exploit Public-Facing Application / T1190" },
+    { actor: "Black Basta", sector: "industrial", country: "Germany", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "RansomHub", sector: "services", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Qilin", sector: "professional services", country: "United Kingdom", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "BianLian", sector: "legal", country: "United States", ttpOrTool: "Exfiltration" },
+    { actor: "Medusa", sector: "education", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "BlackCat", sector: "energy", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Play", sector: "healthcare", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" },
+    { actor: "Royal", sector: "multi-sector", country: "United States", ttpOrTool: "Data Encrypted for Impact / T1486" }
+  ];
+  const programDdThemes: Array<{
+    victimSuffix: string;
+    sourceFamily: Handoff["sourceFamily"];
+    expectedPaidRowLiftAfterParserAdmission: number;
+  }> = [
+    { victimSuffix: "fresh activity public report", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "government advisory defensive context", sourceFamily: "government_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "vendor report TTP corroboration", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "CERT advisory procedure context", sourceFamily: "cert_advisory", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "security blog tooling context", sourceFamily: "security_blog", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "victim notice sector context", sourceFamily: "victim_notice", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "public channel corroboration context", sourceFamily: "public_channel", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "metadata public-support pivot", sourceFamily: "restricted_metadata_public_support", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "source-family diversity row", sourceFamily: "public_report", expectedPaidRowLiftAfterParserAdmission: 2 },
+    { victimSuffix: "buyer action summary row", sourceFamily: "vendor_report", expectedPaidRowLiftAfterParserAdmission: 2 }
+  ];
+  const programDdRows = programDdActors.flatMap((actorRow, actorIndex) => programDdThemes.map((theme, themeIndex) => ({
+    actor: actorRow.actor,
+    victimOrTarget: `${actorRow.actor} ${theme.victimSuffix}`,
+    sector: actorRow.sector,
+    country: actorRow.country,
+    ttpOrTool: actorRow.ttpOrTool,
+    sourceFamily: theme.sourceFamily,
+    expectedPaidRowLiftAfterParserAdmission: theme.expectedPaidRowLiftAfterParserAdmission + ((actorIndex + themeIndex) % 9 === 0 ? 1 : 0)
+  }))).map((row, index) => graphPublicParserAdmissionHandoffRow({
+    handoffId: `dd_structured_${String(index + 1).padStart(3, "0")}`,
+    candidateId: `dd_structured_public_${String(index + 1).padStart(3, "0")}`,
+    actor: row.actor,
+    victimOrTarget: row.victimOrTarget,
+    sector: row.sector,
+    country: row.country,
+    ttpOrTool: row.ttpOrTool,
+    sourceFamily: row.sourceFamily,
+    freshnessAgeDays: 4 + (index % 10) * 3,
+    contradictionState: "none",
+    provenanceHash: stableId("program-dd-graph-public-parser-handoff", `${row.actor}:${row.victimOrTarget}:${index}`),
+    buyerReason: `${row.actor} ${row.victimOrTarget} adds buyer-visible public corroboration for Agent 03 parser admission without graph-only paid credit.`,
+    expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
+  }));
   const supplementalRows = supplementalActors.map((row, index) => graphPublicParserAdmissionHandoffRow({
     handoffId: `cz_structured_${String(index + 1).padStart(2, "0")}`,
     candidateId: `cz_structured_public_${String(index + 1).padStart(2, "0")}`,
@@ -7337,7 +7408,7 @@ function graphPublicParserAdmissionHandoff(
     buyerReason: `${row.actor} ${row.victimOrTarget} gives Agent 03 a concrete public-supported finding candidate.`,
     expectedPaidRowLiftAfterParserAdmission: row.expectedPaidRowLiftAfterParserAdmission
   }));
-  return [...fromReadyRows, ...supplementalRows].slice(0, 300);
+  return [...fromReadyRows, ...programDdRows, ...supplementalRows].slice(0, 500);
 }
 
 function graphPublicParserAdmissionHandoffRow(input: {
@@ -7359,6 +7430,7 @@ function graphPublicParserAdmissionHandoffRow(input: {
     ...input,
     programDbPriority: graphPublicProgramDbPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission),
     programDcPriority: graphPublicProgramDcPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays),
+    programDdPriority: graphPublicProgramDdPriority(input.sourceFamily, input.expectedPaidRowLiftAfterParserAdmission, input.freshnessAgeDays, input.victimOrTarget, input.ttpOrTool),
     admissionState: "ready_for_parser",
     countsTowardFloorNow: false,
     noLeak: true
@@ -7395,6 +7467,41 @@ function graphPublicProgramDcPriority(
     sourceFamilyDiversityLift,
     corroborationStrength: sourceFamilyDiversityLift >= 3 ? "multi_family_strong" : sourceFamilyDiversityLift === 2 ? "cross_family" : "single_source",
     freshnessRisk: freshnessAgeDays <= 21 ? "low" : freshnessAgeDays <= 45 ? "medium" : "high"
+  };
+}
+
+function graphPublicProgramDdPriority(
+  sourceFamily: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["sourceFamily"],
+  expectedPaidRowLiftAfterParserAdmission: number,
+  freshnessAgeDays: number,
+  victimOrTarget: string,
+  ttpOrTool: string | null
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"]["parserAdmissionHandoff"][number]["programDdPriority"] {
+  const sourceProvenanceOnlyRisk = sourceFamily === "restricted_metadata_public_support" ? "medium" : sourceFamily === "public_channel" ? "medium" : "low";
+  const sourceFamilyDiversityLift = sourceFamily === "public_channel" ? 2 : sourceFamily === "restricted_metadata_public_support" ? 2 : 4;
+  const freshnessRisk = freshnessAgeDays <= 21 ? "low" : freshnessAgeDays <= 45 ? "medium" : "high";
+  const buyerVisibleValue = victimOrTarget.includes("victim") || victimOrTarget.includes("dataset")
+    ? "victim_or_target_context"
+    : victimOrTarget.includes("sector")
+      ? "sector_country_context"
+      : ttpOrTool
+        ? "ttp_or_tool_context"
+        : sourceFamilyDiversityLift >= 4
+          ? "source_family_diversity"
+          : "fresh_activity";
+  return {
+    gapContribution: Math.min(5, expectedPaidRowLiftAfterParserAdmission + (sourceFamilyDiversityLift >= 4 ? 2 : 1)),
+    findingLikely: expectedPaidRowLiftAfterParserAdmission >= 2 && freshnessRisk !== "high",
+    sourceProvenanceOnlyRisk,
+    preferredParserAction: sourceProvenanceOnlyRisk === "medium" ? "admit_with_caveat" : "admit_as_current_finding",
+    admissionBlocker: "none",
+    sourceFamilyDiversityLift,
+    corroborationStrength: sourceFamilyDiversityLift >= 4 ? "multi_family_strong" : "cross_family",
+    contradictionRisk: "low",
+    freshnessRisk,
+    buyerVisibleValue,
+    noLeakProof: "hash_only_public_or_metadata_reference",
+    nextPivot: freshnessRisk === "high" ? "freshness_recheck" : "parser_admission"
   };
 }
 

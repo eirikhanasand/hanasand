@@ -1093,9 +1093,9 @@ describe("ops controls", () => {
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) &&
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk)
     )).toBe(true);
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 300, ready_for_current_admission: 300, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff).toHaveLength(300);
-    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_current_admission).toHaveLength(300);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts).toEqual({ admitted_by_parser: 0, ready_for_parser: 500, ready_for_current_admission: 500, ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, contradicted_or_alias_hold: 6, stale: 4, stale_recheck: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff).toHaveLength(500);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_current_admission).toHaveLength(500);
     expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.parserAdmissionHandoff.every((row) =>
       row.actor.length > 0 &&
       row.victimOrTarget.length > 0 &&

@@ -1521,7 +1521,7 @@ if (
   !graphPublicUnlockCounts
   || Number(graphPublicUnlockCounts.admitted_by_parser) !== 0
   || Number(graphPublicUnlockCounts.ready_for_parser) !== 300
-  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 300
+  || Number(graphPublicUnlockCounts.ready_for_current_admission) !== 500
   || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
   || Number(graphPublicUnlockCounts.needs_public_source) !== 6
   || Number(graphPublicUnlockCounts.contradicted) !== 6
