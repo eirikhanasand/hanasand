@@ -709,6 +709,41 @@ export interface ProgramBdQualityEvaluationPackDto {
 	          nextAction: string;
 	          countsTowardPaidFloorNow: false;
 	        }>;
+	        secondBatchAudit: {
+	          schemaVersion: "ti.program_cp_second_batch_candidate_audit.v1";
+	          auditedPreset: "100_name_paid_preset";
+	          localProofRows: 607;
+	          currentSellableRows: 187;
+	          sellableFindingRows: 52;
+	          sellableSourceProvenanceRows: 135;
+	          sourceProvenanceRowsCountTowardFindingFloor: false;
+	          localProofPassed100RowFloor: true;
+	          hostedProofRequired: true;
+	          hostedProofCountsTowardPaidPromotion: false;
+	          externalMarketplaceVerificationRequired: true;
+	          staleLatestActivitySellableRows: 0;
+	          aliasOrWrongActorSellableRows: 0;
+	          genericSourcePageSellableRows: 0;
+	          graphOnlySellableRows: 0;
+	          restrictedOnlySellableRows: 0;
+	          caveatedRowsCountTowardChargeable: false;
+	          findingAdmissionRequiredSignals: Array<"current_public_support" | "actor_specific" | "finding_context" | "freshness_not_stale" | "provenance_hash" | "no_leak" | "buyer_action">;
+	          rowInflationGuards: Array<{
+	            guard: "source_provenance_padding" | "stale_latest_activity" | "alias_or_wrong_actor" | "generic_source_page" | "graph_only" | "restricted_only" | "caveated_as_chargeable";
+	            countsTowardPaidPromotion: false;
+	            proof: string;
+	            owner: "agent_03" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+	          }>;
+	          noLeakProof: {
+	            rawEvidenceExposed: false;
+	            unsafeUrlsExposed: false;
+	            restrictedPayloadsExposed: false;
+	            objectKeysExposed: false;
+	            privateMaterialExposed: false;
+	            accountMaterialExposed: false;
+	            actorInteractionContentExposed: false;
+	          };
+	        };
 	        noLeakProof: {
 	          rawEvidenceExposed: false;
 	          unsafeUrlsExposed: false;
@@ -1471,6 +1506,44 @@ function buildProgramCpHardening(): ProgramBdQualityEvaluationPackDto["paidRowQu
       { owner: "agent_09", blocker: "marketplace_wording", rowsBlocked: 7, expectedSellableRowsAfterRepair: 0, nextAction: "Label caveated rows as useful context, not chargeable confirmations.", countsTowardPaidFloorNow: false },
       { owner: "agent_10", blocker: "paid_release_accounting", rowsBlocked: 84, expectedSellableRowsAfterRepair: 0, nextAction: "Keep paid traffic blocked until the 100-row floor is real.", countsTowardPaidFloorNow: false }
     ],
+    secondBatchAudit: {
+      schemaVersion: "ti.program_cp_second_batch_candidate_audit.v1",
+      auditedPreset: "100_name_paid_preset",
+      localProofRows: 607,
+      currentSellableRows: 187,
+      sellableFindingRows: 52,
+      sellableSourceProvenanceRows: 135,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      localProofPassed100RowFloor: true,
+      hostedProofRequired: true,
+      hostedProofCountsTowardPaidPromotion: false,
+      externalMarketplaceVerificationRequired: true,
+      staleLatestActivitySellableRows: 0,
+      aliasOrWrongActorSellableRows: 0,
+      genericSourcePageSellableRows: 0,
+      graphOnlySellableRows: 0,
+      restrictedOnlySellableRows: 0,
+      caveatedRowsCountTowardChargeable: false,
+      findingAdmissionRequiredSignals: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"],
+      rowInflationGuards: [
+        { guard: "source_provenance_padding", countsTowardPaidPromotion: false, proof: "The 100-name proof has 135 sellable source-provenance rows, but they cannot inflate the sellable finding floor without parser-extracted activity/target/TTP context.", owner: "agent_07" },
+        { guard: "stale_latest_activity", countsTowardPaidPromotion: false, proof: "Second-batch paid rows reject stale/latest-activity wording unless current public evidence is present.", owner: "agent_07" },
+        { guard: "alias_or_wrong_actor", countsTowardPaidPromotion: false, proof: "Actor alias or wrong-family uncertainty blocks paid admission.", owner: "agent_07" },
+        { guard: "generic_source_page", countsTowardPaidPromotion: false, proof: "Generic source pages support provenance but not paid findings.", owner: "agent_03" },
+        { guard: "graph_only", countsTowardPaidPromotion: false, proof: "Graph-only rows remain out of paid promotion until public corroboration exists.", owner: "agent_08" },
+        { guard: "restricted_only", countsTowardPaidPromotion: false, proof: "Restricted-only metadata remains held without safe public support.", owner: "agent_05" },
+        { guard: "caveated_as_chargeable", countsTowardPaidPromotion: false, proof: "Caveated rows are useful context, not chargeable confirmations.", owner: "agent_09" }
+      ],
+      noLeakProof: {
+        rawEvidenceExposed: false,
+        unsafeUrlsExposed: false,
+        restrictedPayloadsExposed: false,
+        objectKeysExposed: false,
+        privateMaterialExposed: false,
+        accountMaterialExposed: false,
+        actorInteractionContentExposed: false
+      }
+    },
     noLeakProof: {
       rawEvidenceExposed: false,
       unsafeUrlsExposed: false,

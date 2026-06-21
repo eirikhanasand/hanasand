@@ -1,4 +1,4 @@
-Status: active_program_cp_second_batch_candidate_audit
+Status: active_program_cp_hosted_proof_audit
 
 # Agent 07 Coordination
 
@@ -7,12 +7,16 @@ Status: active_program_cp_second_batch_candidate_audit
 - Preserved true-positive proof rows with current public support, actor specificity, victim/dataset context, provenance hashes, buyer action, and no-leak boundaries.
 - Added fastest repair handoffs for Agents 03/04/05/06/07/08/09/10 and kept projected/caveated/held rows excluded from the 100-row paid floor.
 - Fixed Apify marketplace graph-signal drift so public-evidence sellable rows expose buyer-ready marketplace signals while graph export eligibility remains stricter.
+- Completed Program CP second-batch candidate audit across Apify `OUTPUT`, `/v1/ops/product-slo`, `/v1/quality/evaluate`, and `/v1/intel/search`.
+- Added `secondBatchAudit` proof separating sellable findings from sellable source-provenance rows: 607 local proof rows, 187 sellable rows, 52 sellable findings, and 135 source-provenance rows that do not count toward the finding floor.
+- Added row-inflation guards for source-provenance padding, stale/latest activity, alias or wrong actor, generic source pages, graph-only rows, restricted-only rows, and caveated-as-chargeable rows, with hosted proof and external marketplace verification still required before paid promotion.
+- Apify smoke now verifies dynamic APT42 counts: 16 rows, 12 sellable rows, 7 sellable findings, 4 sellable source-provenance rows, zero stale/alias/generic/graph-only/restricted sellable finding inflation, and no-leak proof.
 - Verification passed: `bun run check`, focused API/ops tests, Apify check/smoke, route inventory, contract index, and full `bun test` (529 pass).
 
-# Current Task: Program CP Second Batch Candidate Audit
+# Current Task: Program CP Hosted Proof Audit
 
-Continue auditing the first-100 paid row path and Apify smoke rows for remaining buyer-visible row inflation. Prioritize:
-- Cross-check second-batch candidate rows for stale latest-activity wording, actor alias collisions, wrong primary actor, and generic source-page evidence.
-- Add suppression/admission proof only where it changes buyer-visible paid-row trust or moves concrete rows toward the 100-row floor.
-- Keep true positives chargeable only when fresh/current public support, actor specificity, context, provenance hash, no-leak proof, and buyer action all survive the gate.
+Continue auditing the hosted 100-name paid proof path. Prioritize:
+- Ensure hosted Apify proof cannot promote local-only, source-provenance-only, stale/latest, alias/wrong-actor, generic source-page, graph-only, restricted-only, or caveated-only rows into paid findings.
+- Keep paid promotion blocked until hosted 100-name evidence, Apify marketplace telemetry, payout/pricing status, and analytics are observed rather than inferred.
+- Preserve uncertainty, provenance hashes, buyer actions, no-leak boundaries, and row-level reasons for partial public answers.
 - Continue producing actionable handoffs to Agents 03/04/05/06/08/09/10.

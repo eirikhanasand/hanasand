@@ -1212,6 +1212,41 @@ interface FalsePositiveSuppressionGate {
       nextAction: string;
       countsTowardPaidFloorNow: false;
     }>;
+    secondBatchAudit: {
+      schemaVersion: "ti.apify_program_cp_second_batch_candidate_audit.v1";
+      auditedPreset: "smoke_fixture" | "100_name_paid_preset";
+      localProofRows: number;
+      currentSellableRows: number;
+      sellableFindingRows: number;
+      sellableSourceProvenanceRows: number;
+      sourceProvenanceRowsCountTowardFindingFloor: false;
+      localProofPassed100RowFloor: boolean;
+      hostedProofRequired: true;
+      hostedProofCountsTowardPaidPromotion: false;
+      externalMarketplaceVerificationRequired: true;
+      staleLatestActivitySellableRows: number;
+      aliasOrWrongActorSellableRows: number;
+      genericSourcePageSellableRows: number;
+      graphOnlySellableRows: number;
+      restrictedOnlySellableRows: number;
+      caveatedRowsCountTowardChargeable: false;
+      findingAdmissionRequiredSignals: Array<"current_public_support" | "actor_specific" | "finding_context" | "freshness_not_stale" | "provenance_hash" | "no_leak" | "buyer_action">;
+      rowInflationGuards: Array<{
+        guard: "source_provenance_padding" | "stale_latest_activity" | "alias_or_wrong_actor" | "generic_source_page" | "graph_only" | "restricted_only" | "caveated_as_chargeable";
+        countsTowardPaidPromotion: false;
+        proof: string;
+        owner: "agent_03" | "agent_05" | "agent_07" | "agent_08" | "agent_09" | "agent_10";
+      }>;
+      noLeakProof: {
+        rawEvidenceExposed: false;
+        unsafeUrlsExposed: false;
+        restrictedPayloadsExposed: false;
+        objectKeysExposed: false;
+        privateMaterialExposed: false;
+        accountMaterialExposed: false;
+        actorInteractionContentExposed: false;
+      };
+    };
     noLeakProof: {
       rawEvidenceExposed: false;
       unsafeUrlsExposed: false;
@@ -5956,7 +5991,35 @@ function falsePositiveSuppressionGateForRows(rows: MarketplaceRow[]): FalsePosit
 }
 
 function programCpHardeningForRows(rows: MarketplaceRow[]): FalsePositiveSuppressionGate["programCpHardening"] {
-  const currentChargeableRows = rows.filter((row) => row.paidRowDecision === "sellable" && (row.buyerValueScore ?? 0) >= 0.55 && row.provenanceHash).length || 3;
+  const sellableRows = rows.filter((row) => row.paidRowDecision === "sellable");
+  const currentChargeableRows = sellableRows.filter((row) => (row.buyerValueScore ?? 0) >= 0.55 && row.provenanceHash).length || 3;
+  const sellableFindingRows = sellableRows.filter((row) => ["activity", "target", "ttp"].includes(row.rowType));
+  const sellableSourceProvenanceRows = sellableRows.filter((row) => row.rowType === "source");
+  const staleLatestActivitySellableRows = sellableRows.filter((row) =>
+    row.freshnessStatus === "stale"
+    || row.reviewReasons.some((reason) => reason.includes("stale") || reason.includes("latest_activity"))
+    || row.parserAdmissionRuntimeProof?.blockedReason === "stale_or_held"
+  ).length;
+  const aliasOrWrongActorSellableRows = sellableRows.filter((row) =>
+    row.contradictionHints.length > 0
+    || row.reviewReasons.some((reason) => reason.includes("alias") || reason.includes("wrong_actor") || reason.includes("unrelated_actor"))
+    || row.parserAdmissionRuntimeProof?.blockedReason === "alias_or_contradiction"
+  ).length;
+  const genericSourcePageSellableRows = sellableRows.filter((row) =>
+    row.rowType !== "source"
+    && (
+    row.parserAdmissionRuntimeProof?.blockedReason === "generic_source_page"
+    || row.reviewReasons.some((reason) => reason.includes("generic_source") || reason.includes("source_page_only"))
+    )
+  ).length;
+  const graphOnlySellableRows = sellableRows.filter((row) =>
+    row.sourceFamilies.length === 0
+    && row.relationshipPivots.length > 0
+  ).length;
+  const restrictedOnlySellableRows = sellableRows.filter((row) =>
+    row.sourceType === "darknet_metadata"
+    || row.parserAdmissionRuntimeProof?.blockedReason === "restricted_only_without_public_support"
+  ).length;
   return {
     schemaVersion: "ti.apify_program_cp_paid_row_false_positive_freshness_hardening.v1",
     activeCandidatePoolRowsAudited: 100,
@@ -6003,6 +6066,44 @@ function programCpHardeningForRows(rows: MarketplaceRow[]): FalsePositiveSuppres
       { owner: "agent_09", blocker: "marketplace_wording", rowsBlocked: 7, expectedSellableRowsAfterRepair: 0, nextAction: "Label caveated rows as useful context, not chargeable confirmations.", countsTowardPaidFloorNow: false },
       { owner: "agent_10", blocker: "paid_release_accounting", rowsBlocked: 84, expectedSellableRowsAfterRepair: 0, nextAction: "Keep paid traffic blocked until the 100-row floor is real.", countsTowardPaidFloorNow: false }
     ],
+    secondBatchAudit: {
+      schemaVersion: "ti.apify_program_cp_second_batch_candidate_audit.v1",
+      auditedPreset: rows.length >= 100 ? "100_name_paid_preset" : "smoke_fixture",
+      localProofRows: rows.length,
+      currentSellableRows: sellableRows.length,
+      sellableFindingRows: sellableFindingRows.length,
+      sellableSourceProvenanceRows: sellableSourceProvenanceRows.length,
+      sourceProvenanceRowsCountTowardFindingFloor: false,
+      localProofPassed100RowFloor: rows.length >= 100 && sellableRows.length >= 100,
+      hostedProofRequired: true,
+      hostedProofCountsTowardPaidPromotion: false,
+      externalMarketplaceVerificationRequired: true,
+      staleLatestActivitySellableRows,
+      aliasOrWrongActorSellableRows,
+      genericSourcePageSellableRows,
+      graphOnlySellableRows,
+      restrictedOnlySellableRows,
+      caveatedRowsCountTowardChargeable: false,
+      findingAdmissionRequiredSignals: ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"],
+      rowInflationGuards: [
+        { guard: "source_provenance_padding", countsTowardPaidPromotion: false, proof: "Source-provenance rows can be useful paid evidence rows, but they do not count as extracted activity/target/TTP findings for the paid finding floor.", owner: "agent_07" },
+        { guard: "stale_latest_activity", countsTowardPaidPromotion: false, proof: "Rows with stale freshness or latest-activity wording require current public support before paid promotion.", owner: "agent_07" },
+        { guard: "alias_or_wrong_actor", countsTowardPaidPromotion: false, proof: "Alias collisions, wrong-family matches, and unrelated co-mentions stay held until actor specificity is repaired.", owner: "agent_07" },
+        { guard: "generic_source_page", countsTowardPaidPromotion: false, proof: "Generic landing/source pages need parser-extracted finding context before they can become paid findings.", owner: "agent_03" },
+        { guard: "graph_only", countsTowardPaidPromotion: false, proof: "Graph-only pivots require safe public source corroboration before paid promotion.", owner: "agent_08" },
+        { guard: "restricted_only", countsTowardPaidPromotion: false, proof: "Restricted-only metadata cannot become a paid confirmation without safe public support.", owner: "agent_05" },
+        { guard: "caveated_as_chargeable", countsTowardPaidPromotion: false, proof: "Caveated useful rows remain context unless the chargeable-row evidence contract is met.", owner: "agent_09" }
+      ],
+      noLeakProof: {
+        rawEvidenceExposed: false,
+        unsafeUrlsExposed: false,
+        restrictedPayloadsExposed: false,
+        objectKeysExposed: false,
+        privateMaterialExposed: false,
+        accountMaterialExposed: false,
+        actorInteractionContentExposed: false
+      }
+    },
     noLeakProof: {
       rawEvidenceExposed: false,
       unsafeUrlsExposed: false,

@@ -984,6 +984,45 @@ for (const owner of ["agent_03", "agent_04", "agent_05", "agent_06", "agent_07",
 if (!(programCpHardening.fastestRepairsTo100 as Array<Record<string, unknown>>).every((row) => row.countsTowardPaidFloorNow === false && typeof row.nextAction === "string" && row.nextAction.length > 0)) {
   throw new Error("Program CP repair rows must remain excluded from paid floor until repaired");
 }
+const programCpSecondBatchAudit = programCpHardening.secondBatchAudit as Record<string, unknown> | undefined;
+if (
+  !programCpSecondBatchAudit
+  || programCpSecondBatchAudit.schemaVersion !== "ti.apify_program_cp_second_batch_candidate_audit.v1"
+  || !["smoke_fixture", "100_name_paid_preset"].includes(String(programCpSecondBatchAudit.auditedPreset))
+  || Number(programCpSecondBatchAudit.localProofRows) !== output.length
+  || Number(programCpSecondBatchAudit.currentSellableRows) !== Number(paidRowQuality.sellable)
+  || Number(programCpSecondBatchAudit.sellableFindingRows) < 1
+  || Number(programCpSecondBatchAudit.sellableSourceProvenanceRows) < 1
+  || programCpSecondBatchAudit.sourceProvenanceRowsCountTowardFindingFloor !== false
+  || programCpSecondBatchAudit.hostedProofRequired !== true
+  || programCpSecondBatchAudit.hostedProofCountsTowardPaidPromotion !== false
+  || programCpSecondBatchAudit.externalMarketplaceVerificationRequired !== true
+  || Number(programCpSecondBatchAudit.staleLatestActivitySellableRows) !== 0
+  || Number(programCpSecondBatchAudit.aliasOrWrongActorSellableRows) !== 0
+  || Number(programCpSecondBatchAudit.genericSourcePageSellableRows) !== 0
+  || Number(programCpSecondBatchAudit.graphOnlySellableRows) !== 0
+  || Number(programCpSecondBatchAudit.restrictedOnlySellableRows) !== 0
+  || programCpSecondBatchAudit.caveatedRowsCountTowardChargeable !== false
+  || !Array.isArray(programCpSecondBatchAudit.findingAdmissionRequiredSignals)
+  || !Array.isArray(programCpSecondBatchAudit.rowInflationGuards)
+) {
+  throw new Error("Program CP second-batch audit must separate real sellable findings from source-provenance padding and keep hosted promotion blocked");
+}
+for (const signal of ["current_public_support", "actor_specific", "finding_context", "freshness_not_stale", "provenance_hash", "no_leak", "buyer_action"]) {
+  if (!(programCpSecondBatchAudit.findingAdmissionRequiredSignals as string[]).includes(signal)) {
+    throw new Error(`Program CP second-batch audit must require ${signal}`);
+  }
+}
+for (const guard of ["source_provenance_padding", "stale_latest_activity", "alias_or_wrong_actor", "generic_source_page", "graph_only", "restricted_only", "caveated_as_chargeable"]) {
+  if (!(programCpSecondBatchAudit.rowInflationGuards as Array<Record<string, unknown>>).some((row) => row.guard === guard && row.countsTowardPaidPromotion === false && typeof row.proof === "string" && row.proof.length > 0)) {
+    throw new Error(`Program CP second-batch audit must block ${guard} inflation`);
+  }
+}
+for (const key of ["rawEvidenceExposed", "unsafeUrlsExposed", "restrictedPayloadsExposed", "objectKeysExposed", "privateMaterialExposed", "accountMaterialExposed", "actorInteractionContentExposed"]) {
+  if ((programCpSecondBatchAudit.noLeakProof as Record<string, unknown> | undefined)?.[key] !== false) {
+    throw new Error(`Program CP second-batch no-leak proof must keep ${key} false`);
+  }
+}
 const paidRowAudit100 = outputRecord.paidRowAudit100 as Record<string, unknown> | undefined;
 if (
   !paidRowAudit100
