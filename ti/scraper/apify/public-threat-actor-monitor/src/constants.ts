@@ -1,7 +1,7 @@
 export const DEFAULT_API_BASE = "https://api.hanasand.com/api/ti/search";
 export const ACTOR_START_EVENT = "apify-actor-start";
 export const DATASET_ITEM_EVENT = "apify-default-dataset-item";
-export const MAX_QUERIES_PER_RUN = 100;
+export const MAX_QUERIES_PER_RUN = 160;
 
 export const DEFAULT_QUERIES = [
   "APT29", "APT28", "APT42", "Lazarus Group", "Volt Typhoon",
@@ -24,5 +24,15 @@ export const DEFAULT_QUERIES = [
   "TA416", "TA428", "TA459", "TA551", "TA558",
   "TA577", "TA570", "TA866", "TA2541", "Carbanak",
   "Cobalt Group", "Lapsus$", "Storm-0501", "Storm-0978", "Storm-1811",
-  "Raspberry Robin"
+  "Raspberry Robin", "Interlock", "Fog", "HellCat", "Luna Moth",
+  "Karakurt", "RansomHouse", "Vice Society", "Monti", "Money Message",
+  "Mallox", "RansomEXX", "Abyss", "3AM", "Knight",
+  "NoName057(16)", "Killnet", "Anonymous Sudan", "SiegedSec", "GhostSec",
+  "Dark Pink", "Winter Vivern", "TA473", "FIN6", "FIN12",
+  "UNC3944", "UNC4841", "UNC5221", "UNC5174", "UNC5537",
+  "Storm-0558", "Storm-1152", "Storm-1283", "Storm-1567", "Embargo",
+  "LockBitSupp", "BlackMatter", "Cloak", "AvosLocker", "Mespinoza",
+  "Pysa", "Nefilim", "NetWalker", "Egregor", "Dharma",
+  "LockFile", "Maui", "Yanluowang", "Cicada3301", "Arcus Media",
+  "Space Bears", "WereWolves", "Meow"
 ];
