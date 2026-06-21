@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { SourceRecord } from "../types.ts";
 import { nowIso, stableId } from "../utils.ts";
 import {

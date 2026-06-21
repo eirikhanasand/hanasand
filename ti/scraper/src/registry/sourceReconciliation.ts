@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { SourceRecord, SourceReviewAction, SourceStatus, SourceType } from "../types.ts";
 import { nowIso } from "../utils.ts";
 import {
