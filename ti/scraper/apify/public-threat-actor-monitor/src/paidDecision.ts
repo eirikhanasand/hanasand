@@ -1,5 +1,6 @@
 import type { MarketplaceRow } from "./types.ts";
 import { caveatedLead, capabilityWithoutEvidence, coverageGap, noEvidenceHold, parserAdmittedSellable, publicEvidenceSellable, publicFindingSellable, sourceProvenance, strongSellable, unsupportedContext } from "./paidDecision/decisions.ts";
+import { currentLiveActivitySellable, isSellableCurrentLiveActivity } from "./paidDecision/liveActivity.ts";
 import { isCorroboratedPublicFinding, isSellablePublicEvidenceRow } from "./paidDecision/predicates.ts";
 export { isCorroboratedPublicFinding, isSellablePublicEvidenceRow } from "./paidDecision/predicates.ts";
 export { whyWorthPayingFor } from "./paidDecision/reasons.ts";
@@ -20,6 +21,7 @@ export function paidRowDecisionFor(
   if (isStrongSellable(row)) return strongSellable();
   if (isCorroboratedPublicFinding(row)) return publicFindingSellable();
   if (isSellablePublicEvidenceRow(row)) return publicEvidenceSellable();
+  if (isSellableCurrentLiveActivity(row)) return currentLiveActivitySellable();
   if (row.isActionable || row.evidenceGrade === "single_source" || row.coverageStatus === "thin") {
     return caveatedLead(row);
   }
