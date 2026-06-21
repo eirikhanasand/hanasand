@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { ADVISORY_CANARY_FEEDS } from "./canaryPortfolioAdvisoryFeeds.ts";
+import { CLOUD_CANARY_FEEDS } from "./canaryPortfolioCloudFeeds.ts";
 import { REVENUE_CANARY_FEEDS } from "./canaryPortfolioRevenueFeeds.ts";
 
 export const canaryQueries = ["APT29", "APT42", "Turla", "Volt Typhoon", "Scattered Spider", "Akira", "CVE"];
@@ -47,7 +48,8 @@ export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   src("src_canary_nviso", "NVISO Labs", "rss", "https://blog.nviso.eu/feed/", ["malware", "phishing", "APT"], "vendor"),
   src("src_canary_intezer", "Intezer Blog", "rss", "https://intezer.com/blog/feed/", ["malware", "ransomware", "cloud"], "vendor"),
   ...REVENUE_CANARY_FEEDS,
-  ...ADVISORY_CANARY_FEEDS
+  ...ADVISORY_CANARY_FEEDS,
+  ...CLOUD_CANARY_FEEDS
 ];
 
 function src(id: string, name: string, type: string, url: string, q: string[], family: string) {
