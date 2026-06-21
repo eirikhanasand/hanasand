@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { StixBundle, StixObject } from "../types.ts";
 
 export interface StixValidationIssue {

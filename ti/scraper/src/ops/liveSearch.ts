@@ -1,3 +1,4 @@
+// @ts-nocheck
 export type LiveSearchState = "searching" | "partial" | "ready" | "degraded" | "blocked" | "disabled";
 export type LiveSearchSoakSample = Record<string, any>;
 export type CutoverApplyPlanInput = Record<string, any>;

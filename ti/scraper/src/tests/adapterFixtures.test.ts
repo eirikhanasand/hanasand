@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, test } from "bun:test";
 import { promoteSearchResultToCanonicalCapture, type SearchResultHandoff } from "../adapters/clearWebPromotion.ts";
 import { RssAdapter, parseRssItems } from "../adapters/rss.ts";

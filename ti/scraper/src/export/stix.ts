@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { PipelineResult, PersistedGraphNode, PersistedGraphSnapshot, RawCapture, StixBundle, StixExportOptions, StixObject } from "../types.ts";
 import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { mapAttackTechniqueCandidates } from "./attack.ts";

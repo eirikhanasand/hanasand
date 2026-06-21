@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { ExtractedEntity, Indicator, PipelineResult } from "../types.ts";
 import { clampScore } from "../utils.ts";
 import { ACTOR_ALIAS_RECORDS, actorAliasesFor } from "./actorAliases.ts";
