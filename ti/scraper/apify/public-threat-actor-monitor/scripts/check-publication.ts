@@ -192,6 +192,7 @@ const contractMentions: Array<[string, string[]]> = [
   ["real-row conversion sample pack", ["marketplaceConversionRealRowSamplePack", "ti.apify_marketplace_conversion_real_row_sample_pack.v1"]],
   ["first-100 buyer preview", ["first100BuyerPreview", "ti.apify_first_100_real_rows_buyer_preview.v1", "blocked_preview_until_100_real_sellable_rows"]],
   ["buyer paid-release verdict", ["buyerPaidReleaseVerdict", "ti.program_cu_buyer_paid_release_verdict.v1", "draft_copy_ready_not_promoted"]],
+  ["hosted paid readiness proof", ["hostedPaidReadinessProof", "ti.hosted_apify_paid_readiness_proof.v1", "check:hosted-apify-paid-readiness"]],
   ["real-row proof exclusions", ["synthetic, graph-only, stale, restricted-only, caveat-only, held, and coverage-gap rows", "excluded from paid-readiness proof"]],
   ["external unknown marketplace telemetry", ["external_unknown", "cost/useful row", "useful-row density"]],
   ["external analytics only", ["Store views", "paid runs", "runtime", "platform usage", "conversion rates"]]

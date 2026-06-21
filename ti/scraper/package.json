@@ -14,6 +14,7 @@
     "check:deploy-hygiene": "bun run scripts/check-deploy-hygiene.ts",
     "check:deployment-drift": "bun run scripts/check-deployment-drift.ts",
     "check:paid-actor-release-audit": "bun run scripts/check-paid-actor-release-audit.ts",
+    "check:hosted-apify-paid-readiness": "bun run scripts/check-hosted-apify-paid-readiness.ts",
     "check:contract-index": "bun run scripts/check-contract-index.ts",
     "check:api-regression": "bun run scripts/check-api-regression.ts",
     "check:api-gateway": "bun run scripts/check-api-gateway.ts",

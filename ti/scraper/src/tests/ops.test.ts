@@ -616,6 +616,38 @@ describe("ops controls", () => {
     expect(dashboard.paidReleaseTruthBoard.buyerPaidReleaseVerdict.releaseBlockers.every((gate) => gate.buyerMessage.length > 0)).toBe(true);
     expect(dashboard.paidReleaseTruthBoard.buyerPaidReleaseVerdict.operatorRecordingRule.recordOnlyObservedApifyValues).toEqual(expect.arrayContaining(["paidRuns", "refunds", "payoutState", "pricingState"]));
     expect(dashboard.paidReleaseTruthBoard.buyerPaidReleaseVerdict.operatorRecordingRule.proofPaths.join(" ")).toContain("Apify Console");
+    expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof).toMatchObject({
+      schemaVersion: "ti.hosted_apify_paid_readiness_proof.v1",
+      status: "external_token_missing",
+      command: "bun run check:hosted-apify-paid-readiness",
+      tokenState: "external_token_missing",
+      paidTrafficAllowed: false,
+      countsTowardPaidPromotion: false,
+      localProof: {
+        defaultQueryCount: 100,
+        sellableRows: 187,
+        countsTowardPaidPromotion: false
+      },
+      latestHostedProof: {
+        runId: "OThlfd0uzSCNnedAO",
+        querySetCount: 1,
+        sellableRows: 4,
+        proofDecision: "shape_safety_proof",
+        countsTowardPaidPromotion: false
+      },
+      marketplaceConversionInputs: {
+        storeViews: null,
+        runs: null,
+        uniqueUsers: null,
+        paidUsers: null,
+        refunds: null,
+        payoutEnabled: "external_unknown",
+        pricingModel: "external_unknown",
+        publicListingStatus: "draft_copy_ready_not_promoted",
+        unknownMeansNoClaim: true
+      }
+    });
+    expect(dashboard.paidReleaseTruthBoard.hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("100-name");
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect(dashboard.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(dashboard.scaleStepGates).toMatchObject({
@@ -925,13 +957,13 @@ describe("ops controls", () => {
       graphOnlyRowsExcludedFromFloor: 30,
       projectedSellableRowsAfterPublicCorroboration: 42,
       publicProofMetrics: {
-        pivotsTested: 22,
-        publicProofFound: 10,
-        rowsUnlockedForParserAdmission: 18,
-        rowsRejectedAsStaleOrAmbiguous: 6,
+        pivotsTested: 24,
+        publicProofFound: 14,
+        rowsUnlockedForParserAdmission: 25,
+        rowsRejectedAsStaleOrAmbiguous: 4,
         contradictionsFound: 2,
-        queuedForNextPublicSearch: 8,
-        projectedBuyerValueLift: 0.83,
+        queuedForNextPublicSearch: 6,
+        projectedBuyerValueLift: 1.17,
         countsTowardPaidFloorNow: false
       }
     });
@@ -942,6 +974,13 @@ describe("ops controls", () => {
       row.candidateVictimOrTarget.length > 0 &&
       row.expectedBuyerFieldLift.length > 0 &&
       row.relationshipSupport.length > 0 &&
+      row.proofUrlHash.length > 0 &&
+      row.sourceType.length > 0 &&
+      row.candidateFields.actor === row.actor &&
+      row.candidateFields.victimOrTarget.length > 0 &&
+      row.contradictionStatus.length > 0 &&
+      row.parserHandoffReason.length > 0 &&
+      row.worthPayingForReason.length > 0 &&
       row.nextPublicCorroborationPivot.queryText.length > 0 &&
       row.nextPublicCorroborationPivot.expectedSourceFamily.length > 0 &&
       row.nextPublicCorroborationPivot.repairsRowField.length > 0 &&
@@ -949,16 +988,23 @@ describe("ops controls", () => {
       row.rowUnlockRequiresNonGraphEvidence === true &&
       row.noLeak
     )).toBe(true);
-    expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.publicProofState === "public_proof_found").reduce((sum, row) => sum + row.measuredRowsUnlockedForParserAdmission, 0)).toBe(18);
+    expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.publicProofState === "public_proof_found").reduce((sum, row) => sum + row.measuredRowsUnlockedForParserAdmission, 0)).toBe(25);
+    expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.publicProofState === "public_proof_found").every((row) => row.countsTowardProductionSellableRowsAfterParserAdmission === true)).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.publicProofState === "queued_for_search").every((row) => row.measuredRowsUnlockedForParserAdmission === 0)).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.candidates.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) =>
       row.expectedSellableRowsUnlockedAfterPublicProof === 0 &&
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) &&
       ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk)
     )).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.counts).toEqual({ ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, stale: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_parser_admission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(25);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.ready_for_parser_admission.every((row) => row.countsTowardFloorNow === false && row.proofUrlHash.length > 0 && row.noLeak)).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.needs_public_source.some((row) => row.sourceClass === "restricted_metadata_public_support")).toBe(true);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.graphOnlyCountsTowardPaidFloorNow).toBe(false);
+    expect(dashboard.graphPublicCorroborationPivotPacket.paidRowUnlockQueue.noLeak).toBe(true);
     expect(dashboard.graphPublicCorroborationPivotPacket.integrationHandoffs).toEqual(expect.arrayContaining([
       expect.objectContaining({ owner: "agent_03", expectedRowsUnlockedForAdmission: 9, countsTowardPaidFloorNow: false }),
-      expect.objectContaining({ owner: "agent_05", expectedRowsUnlockedForAdmission: 0, countsTowardPaidFloorNow: false })
+      expect.objectContaining({ owner: "agent_05", expectedRowsUnlockedForAdmission: 3, countsTowardPaidFloorNow: false })
     ]));
     expect(dashboard.graphPublicCorroborationPivotPacket.ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect(dashboard.graphPublicCorroborationPivotPacket.noLeakBoundary).toMatchObject({ rawEvidenceBodies: false, unsafeUrls: false, objectKeys: false, credentials: false, payloadLinks: false, privateMaterial: false, actorInteraction: false });

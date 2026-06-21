@@ -40,6 +40,7 @@ import type { WorkerSupervisor } from "../ops/supervisor.ts";
 import { buildLiveActorIntelligenceDto, buildPublicIntelAnswerDto } from "../pipeline/actorProfileFusion.ts";
 import { buildActiveLearningCandidateQueueDto, buildActorProfileReviewWorkbenchDto, buildAnalystFeedbackLearningLoopDto, buildAnalystFeedbackLoopDto, buildAnalystQualityReviewQueueDto, buildQualityRegressionSuiteDto } from "../pipeline/analystFeedback.ts";
 import { buildAttackMappingQualityDto } from "../pipeline/attackMappingQuality.ts";
+import { buildHostedApifyPaidReadinessProof } from "../contracts/hostedApifyPaidReadiness.ts";
 import { buildEntityResolutionWorkbenchDto } from "../pipeline/entityResolution.ts";
 import { buildCtiEvaluationDatasetPackDto, buildEvaluationDatasetGovernanceDto, buildQualityRuntimeValueGatesDto } from "../pipeline/evaluation.ts";
 import type { EvidenceStage, StagedEvidenceInput } from "../pipeline/intelligenceProfiles.ts";
@@ -10709,6 +10710,7 @@ function buildApifyStoreReadinessContract(input: {
     observedMarketplaceTelemetry,
     paidReleaseRunbook,
     buyerPaidReleaseVerdict,
+    hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
     blockerBuckets: [
       { blocker: "already_chargeable", owner: "agent_10", rowDeltaTo100: 0, expectedRowGain: 3, confidence: "observed", risk: "current smoke rows prove safe output shape only", fastestNextTask: "keep chargeable rows visible while repair buckets create 97 more real rows", coordinationFile: "coordination_agent_10.md", countsTowardPaidFloorNow: true },
       { blocker: "missing_public_support", owner: "agent_04", rowDeltaTo100: 28, expectedRowGain: 28, confidence: "medium", risk: "single-source or unsupported rows stay caveated/held", fastestNextTask: "attach safe public corroboration to highest-value actor/ransomware rows", coordinationFile: "coordination_agent_04.md", countsTowardPaidFloorNow: false },
@@ -10768,6 +10770,7 @@ function buildApifyStoreReadinessContract(input: {
         payoutMonetizationStatus: "external_verification_required",
         latestBuild: "tracked_by_apify_after_publish",
         latestProofRun: "documented_below",
+        hostedPaidReadinessProof: "external_token_missing_manual_verification_required",
         datasetSample: "complete",
         knownBlockers: "explicit"
       },
@@ -10823,6 +10826,7 @@ function buildApifyStoreReadinessContract(input: {
         proofDecision: "local_paid_floor_pass_hosted_proof_required",
         productionBlockers: ["hosted_100_name_apify_run_not_yet_verified", "external_payout_pricing_analytics_not_yet_verified"]
       },
+      hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
       publicationFiles: ["README.md", "CHANGELOG.md", ".actor/actor.json", ".actor/INPUT_SCHEMA.json", ".actor/DATASET_SCHEMA.json", ".actor/OUTPUT_SCHEMA.json", "LAUNCH_CHECKLIST.md"]
     },
     defaultSampleInput,
@@ -10869,7 +10873,7 @@ function buildApifyStoreReadinessContract(input: {
       checks: [
         { id: "listing_copy", state: "ready", proofField: "README pricing and Public Proof Contract" },
         { id: "sample_rows", state: "ready", proofField: "apifyStoreReadiness.buyerSampleRows" },
-        { id: "production_sellable_rows", state: "blocked", proofField: "apifyStoreReadiness.storeReadiness.latestProofRun.sellableRows", blocker: "production paid traffic requires at least 100 sellable rows" },
+        { id: "production_sellable_rows", state: "blocked", proofField: "apifyStoreReadiness.storeReadiness.hostedPaidReadinessProof.latestHostedProof.sellableRows", blocker: "production paid traffic requires a hosted 100-name run with at least 100 sellable rows" },
         { id: "pricing_shape", state: "ready", proofField: "apifyStoreReadiness.pricingProof" },
         { id: "marketplace_telemetry", state: "missing", proofField: "apifyStoreReadiness.marketplaceTelemetryInputContract", blocker: "Apify analytics not externally copied yet" },
         { id: "payout_setup", state: "missing", proofField: "apifyStoreReadiness.payoutReadiness", blocker: "beneficiary, payout method, and withdrawal readiness require external billing verification" },

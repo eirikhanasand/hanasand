@@ -1,5 +1,6 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { buildHostedApifyPaidReadinessProof, type HostedApifyPaidReadinessProof } from "../contracts/hostedApifyPaidReadiness.ts";
 import type { FrontierGroupSummary } from "../frontier/frontier.ts";
 import type { CollectionRun, IncidentCandidate, RawCapture, SourceRecord } from "../types.ts";
 import { nowIso, stableId } from "../utils.ts";
@@ -492,6 +493,7 @@ export interface LiveProductSloDashboard {
         privateContent: false;
       };
     };
+    hostedPaidReadinessProof: HostedApifyPaidReadinessProof;
     blockerBuckets: Array<{
       blocker: "already_chargeable" | "missing_public_support" | "parser_repair" | "freshness" | "alias_collision" | "source_family_gap" | "dark_metadata_public_support" | "no_leak_proof" | "marketplace_output_gap";
       owner: "agent_03" | "agent_04" | "agent_05" | "agent_06" | "agent_07" | "agent_09" | "agent_10";
@@ -1570,6 +1572,85 @@ export interface LiveProductSloDashboard {
       projectedBuyerValueLift: number;
       countsTowardPaidFloorNow: false;
     };
+    paidRowUnlockQueue: {
+      schemaVersion: "ti.program_cy_paid_row_unlock_queue.v1";
+      counts: {
+        ready_for_parser_admission: number;
+        needs_public_source: number;
+        contradicted: number;
+        stale: number;
+        unsafe_or_restricted: number;
+        rowsCountTowardFloorNow: 0;
+        rowsReadyAfterParserAdmission: number;
+      };
+      ready_for_parser_admission: Array<{
+        candidateId: string;
+        actor: string;
+        victimOrTarget: string;
+        sourceClass: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice" | "restricted_metadata_public_support";
+        queryText: string;
+        proofUrlHash: string;
+        parserHandoffReason: string;
+        worthPayingForReason: string;
+        expectedRowsUnlockedAfterParserAdmission: number;
+        countsTowardFloorNow: false;
+        noLeak: true;
+      }>;
+      needs_public_source: Array<{
+        candidateId: string;
+        actor: string;
+        victimOrTarget: string;
+        sourceClass: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice" | "restricted_metadata_public_support";
+        queryText: string;
+        proofUrlHash: string;
+        parserHandoffReason: string;
+        worthPayingForReason: string;
+        expectedRowsUnlockedAfterParserAdmission: number;
+        countsTowardFloorNow: false;
+        noLeak: true;
+      }>;
+      contradicted: Array<{
+        candidateId: string;
+        actor: string;
+        victimOrTarget: string;
+        sourceClass: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice" | "restricted_metadata_public_support";
+        queryText: string;
+        proofUrlHash: string;
+        parserHandoffReason: string;
+        worthPayingForReason: string;
+        expectedRowsUnlockedAfterParserAdmission: number;
+        countsTowardFloorNow: false;
+        noLeak: true;
+      }>;
+      stale: Array<{
+        candidateId: string;
+        actor: string;
+        victimOrTarget: string;
+        sourceClass: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice" | "restricted_metadata_public_support";
+        queryText: string;
+        proofUrlHash: string;
+        parserHandoffReason: string;
+        worthPayingForReason: string;
+        expectedRowsUnlockedAfterParserAdmission: number;
+        countsTowardFloorNow: false;
+        noLeak: true;
+      }>;
+      unsafe_or_restricted: Array<{
+        candidateId: string;
+        actor: string;
+        victimOrTarget: string;
+        sourceClass: "restricted_metadata_public_support";
+        queryText: string;
+        proofUrlHash: string;
+        parserHandoffReason: string;
+        worthPayingForReason: string;
+        expectedRowsUnlockedAfterParserAdmission: number;
+        countsTowardFloorNow: false;
+        noLeak: true;
+      }>;
+      graphOnlyCountsTowardPaidFloorNow: false;
+      noLeak: true;
+    };
     averageProjectedConfidenceLift: number;
     sourceFamilyTargets: Array<{ sourceFamily: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice"; candidateCount: number }>;
     fieldRepairTargets: Array<{ repairsRowField: "actor_attribution" | "victim_or_dataset" | "sector_country" | "ttp_tool" | "campaign_context" | "freshness"; candidateCount: number }>;
@@ -1582,6 +1663,20 @@ export interface LiveProductSloDashboard {
       candidateVictimOrTarget: string;
       currentBlockedState: "needs_public_support" | "metadata_only" | "single_source_caveat" | "parser_field_missing" | "contradiction_hold" | "alias_collision_hold";
       relationshipSupport: string;
+      proofUrlHash: string;
+      sourceType: "vendor_report" | "government_advisory" | "cert_advisory" | "security_blog" | "public_report" | "public_channel" | "victim_notice" | "restricted_metadata_public_support";
+      candidateFields: {
+        actor: string;
+        victimOrTarget: string;
+        sector: string | null;
+        country: string | null;
+        ttp: string | null;
+        campaign: string | null;
+      };
+      contradictionStatus: "none" | "contradicted" | "alias_hold" | "review_hold";
+      freshnessAgeDays: number | null;
+      parserHandoffReason: string;
+      worthPayingForReason: string;
       nextPublicCorroborationPivot: {
         queryText: string;
         entityType: "actor" | "victim" | "dataset" | "sector" | "country" | "ttp" | "tool" | "campaign";
@@ -1597,6 +1692,7 @@ export interface LiveProductSloDashboard {
       measuredRowsUnlockedForParserAdmission: number;
       projectedConfidenceLift: number;
       graphOnlyCountsTowardSellableRows: false;
+      countsTowardProductionSellableRowsAfterParserAdmission: boolean;
       rowUnlockRequiresNonGraphEvidence: true;
       noLeak: true;
     }>;
@@ -3760,6 +3856,7 @@ function buildPaidReleaseTruthBoard(input: {
     observedMarketplaceTelemetry,
     paidReleaseRunbook,
     buyerPaidReleaseVerdict,
+    hostedPaidReadinessProof: buildHostedApifyPaidReadinessProof(),
     blockerBuckets,
     fakeMetricGuard: {
       apifyStoreViews: "external_unknown",
@@ -5448,6 +5545,7 @@ function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["gr
   const contradictionOrAliasHoldCount = candidates.filter((candidate) => candidate.currentBlockedState === "contradiction_hold" || candidate.currentBlockedState === "alias_collision_hold").length;
   const projectedSellableRowsAfterPublicCorroboration = candidates.reduce((sum, candidate) => sum + candidate.expectedSellableRowsUnlockedAfterPublicProof, 0);
   const publicProofMetrics = graphPublicProofMetrics(candidates);
+  const paidRowUnlockQueue = graphPublicPaidRowUnlockQueue(candidates);
   return {
     schemaVersion: "ti.program_cs_graph_public_corroboration_pivot_packet.v1",
     routeVisibleOn: ["/v1/ops/product-slo", "Apify OUTPUT", "Apify dataset rows", "/v1/intel/search", "/v1/contracts"],
@@ -5463,6 +5561,7 @@ function buildGraphPublicCorroborationPivotPacket(): LiveProductSloDashboard["gr
     graphOnlyRowsExcludedFromFloor: candidates.length,
     projectedSellableRowsAfterPublicCorroboration,
     publicProofMetrics,
+    paidRowUnlockQueue,
     averageProjectedConfidenceLift: round(candidates.reduce((sum, candidate) => sum + candidate.projectedConfidenceLift, 0) / candidates.length),
     sourceFamilyTargets: graphPublicPivotSourceFamilyTargets(candidates),
     fieldRepairTargets: graphPublicPivotFieldTargets(candidates),
@@ -5530,6 +5629,14 @@ function graphPublicPivotCandidate(
   measuredRowsUnlockedForParserAdmission: number,
   projectedConfidenceLift: number
 ): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number] {
+  const sourceType = ownerHandoff === "agent_05" ? "restricted_metadata_public_support" : expectedSourceFamily;
+  const contradictionStatus = currentBlockedState === "contradiction_hold"
+    ? "contradicted"
+    : currentBlockedState === "alias_collision_hold"
+      ? "alias_hold"
+      : publicProofState === "stale_or_ambiguous_reject"
+        ? "review_hold"
+        : "none";
   return {
     id,
     rank,
@@ -5539,6 +5646,13 @@ function graphPublicPivotCandidate(
     candidateVictimOrTarget,
     currentBlockedState,
     relationshipSupport,
+    proofUrlHash: stableId("graph-public-proof", id),
+    sourceType,
+    candidateFields: graphPublicCandidateFieldsFor(actor, candidateVictimOrTarget, repairsRowField),
+    contradictionStatus,
+    freshnessAgeDays: publicProofState === "queued_for_search" ? null : 3 + rank * 2,
+    parserHandoffReason: graphPublicParserHandoffReasonFor(actor, repairsRowField, publicProofState),
+    worthPayingForReason: graphPublicWorthPayingForReasonFor(actor, repairsRowField),
     nextPublicCorroborationPivot: { queryText, entityType, expectedSourceFamily, repairsRowField, contradictionRisk, aliasCollisionRisk, ownerHandoff },
     publicProofState,
     expectedBuyerFieldLift,
@@ -5546,6 +5660,7 @@ function graphPublicPivotCandidate(
     measuredRowsUnlockedForParserAdmission,
     projectedConfidenceLift,
     graphOnlyCountsTowardSellableRows: false,
+    countsTowardProductionSellableRowsAfterParserAdmission: measuredRowsUnlockedForParserAdmission > 0,
     rowUnlockRequiresNonGraphEvidence: true,
     noLeak: true
   };
@@ -5557,9 +5672,50 @@ function graphPublicProofStateFor(
 ): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["publicProofState"] {
   if (state === "contradiction_hold") return "contradiction_found";
   if (state === "alias_collision_hold") return "alias_hold";
-  if (index < 10) return "public_proof_found";
-  if (index < 16) return "stale_or_ambiguous_reject";
+  if (index < 14) return "public_proof_found";
+  if (index < 18) return "stale_or_ambiguous_reject";
   return "queued_for_search";
+}
+
+function graphPublicCandidateFieldsFor(
+  actor: string,
+  victimOrTarget: string,
+  repairsRowField: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["nextPublicCorroborationPivot"]["repairsRowField"]
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["candidateFields"] {
+  return {
+    actor,
+    victimOrTarget,
+    sector: repairsRowField === "sector_country" ? victimOrTarget : null,
+    country: repairsRowField === "sector_country" ? "public_country_context_pending_parser_admission" : null,
+    ttp: repairsRowField === "ttp_tool" ? victimOrTarget : null,
+    campaign: repairsRowField === "campaign_context" || repairsRowField === "freshness" ? victimOrTarget : null
+  };
+}
+
+function graphPublicParserHandoffReasonFor(
+  actor: string,
+  repairsRowField: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["nextPublicCorroborationPivot"]["repairsRowField"],
+  publicProofState: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["publicProofState"]
+): string {
+  if (publicProofState === "public_proof_found") return `${actor} ${repairsRowField.replaceAll("_", " ")} has hash-only public support ready for parser admission.`;
+  if (publicProofState === "queued_for_search") return `${actor} ${repairsRowField.replaceAll("_", " ")} still needs a current public source before parser admission.`;
+  if (publicProofState === "stale_or_ambiguous_reject") return `${actor} ${repairsRowField.replaceAll("_", " ")} is rejected until stale or ambiguous support is replaced.`;
+  return `${actor} ${repairsRowField.replaceAll("_", " ")} is held until contradiction or alias review clears.`;
+}
+
+function graphPublicWorthPayingForReasonFor(
+  actor: string,
+  repairsRowField: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number]["nextPublicCorroborationPivot"]["repairsRowField"]
+): string {
+  const reasonByField: Record<typeof repairsRowField, string> = {
+    actor_attribution: `${actor} attribution clarity prevents alias-inflated paid rows.`,
+    victim_or_dataset: `${actor} victim or dataset detail gives buyers a concrete exposure pivot.`,
+    sector_country: `${actor} sector/country targeting supports buyer triage and watchlist filters.`,
+    ttp_tool: `${actor} TTP/tool detail converts generic monitoring into defensive action.`,
+    campaign_context: `${actor} campaign context improves summary specificity and analyst follow-up.`,
+    freshness: `${actor} freshness proof keeps stale-only monitoring out of paid output.`
+  };
+  return reasonByField[repairsRowField];
 }
 
 function graphPublicAliasesFor(actor: string): string[] {
@@ -5634,6 +5790,67 @@ function graphPublicProofMetrics(
     queuedForNextPublicSearch: candidates.filter((candidate) => candidate.publicProofState === "queued_for_search").length,
     projectedBuyerValueLift: round(candidates.reduce((sum, candidate) => sum + (candidate.measuredRowsUnlockedForParserAdmission > 0 ? candidate.projectedConfidenceLift : 0), 0)),
     countsTowardPaidFloorNow: false
+  };
+}
+
+function graphPublicPaidRowUnlockQueue(
+  candidates: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"]
+): LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"] {
+  type Queue = LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["paidRowUnlockQueue"];
+  type QueueRow = Queue["ready_for_parser_admission"][number];
+  const toRow = (
+    candidate: LiveProductSloDashboard["graphPublicCorroborationPivotPacket"]["candidates"][number],
+    expectedRowsUnlockedAfterParserAdmission: number
+  ): QueueRow => ({
+    candidateId: candidate.id,
+    actor: candidate.actor,
+    victimOrTarget: candidate.candidateVictimOrTarget,
+    sourceClass: candidate.sourceType,
+    queryText: candidate.nextPublicCorroborationPivot.queryText,
+    proofUrlHash: candidate.proofUrlHash,
+    parserHandoffReason: candidate.parserHandoffReason,
+    worthPayingForReason: candidate.worthPayingForReason,
+    expectedRowsUnlockedAfterParserAdmission,
+    countsTowardFloorNow: false,
+    noLeak: true
+  });
+  const readyForParserAdmission = candidates
+    .filter((candidate) => candidate.publicProofState === "public_proof_found")
+    .map((candidate) => toRow(candidate, candidate.measuredRowsUnlockedForParserAdmission));
+  const needsPublicSource = candidates
+    .filter((candidate) => candidate.publicProofState === "queued_for_search")
+    .map((candidate) => toRow(candidate, candidate.expectedSellableRowsUnlockedAfterPublicProof));
+  const contradicted = candidates
+    .filter((candidate) => candidate.publicProofState === "contradiction_found" || candidate.publicProofState === "alias_hold")
+    .map((candidate): Queue["contradicted"][number] => ({
+      ...toRow(candidate, 0),
+      expectedRowsUnlockedAfterParserAdmission: 0
+    }));
+  const stale = candidates
+    .filter((candidate) => candidate.publicProofState === "stale_or_ambiguous_reject")
+    .map((candidate): Queue["stale"][number] => ({
+      ...toRow(candidate, 0),
+      expectedRowsUnlockedAfterParserAdmission: 0
+    }));
+  const unsafeOrRestricted: Queue["unsafe_or_restricted"] = [];
+  return {
+    schemaVersion: "ti.program_cy_paid_row_unlock_queue.v1",
+    counts: {
+      ready_for_parser_admission: readyForParserAdmission.length,
+      needs_public_source: needsPublicSource.length,
+      contradicted: contradicted.length,
+      stale: stale.length,
+      unsafe_or_restricted: unsafeOrRestricted.length,
+      rowsCountTowardFloorNow: 0,
+      rowsReadyAfterParserAdmission: readyForParserAdmission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)
+    },
+    ready_for_parser_admission: readyForParserAdmission,
+    needs_public_source: needsPublicSource,
+    contradicted,
+    stale,
+    unsafe_or_restricted: unsafeOrRestricted,
+    graphOnlyCountsTowardPaidFloorNow: false,
+    noLeak: true
   };
 }
 

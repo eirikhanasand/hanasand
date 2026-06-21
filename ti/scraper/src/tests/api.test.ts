@@ -622,6 +622,52 @@ describe("api v1", () => {
     expect(buyerPaidReleaseVerdict.releaseBlockers.every((gate) => gate.buyerMessage.length > 0)).toBe(true);
     expect(buyerPaidReleaseVerdict.operatorRecordingRule.recordOnlyObservedApifyValues).toEqual(expect.arrayContaining(["paidRuns", "refunds", "payoutState", "pricingState"]));
     expect(buyerPaidReleaseVerdict.operatorRecordingRule.proofPaths.join(" ")).toContain("Apify Console");
+    const hostedPaidReadinessProof = (response.paidReleaseTruthBoard as {
+      hostedPaidReadinessProof: {
+        schemaVersion: string;
+        status: string;
+        command: string;
+        tokenState: string;
+        paidTrafficAllowed: boolean;
+        countsTowardPaidPromotion: boolean;
+        localProof: { defaultQueryCount: number; sellableRows: number; countsTowardPaidPromotion: boolean };
+        latestHostedProof: { runId: string; querySetCount: number; sellableRows: number; proofDecision: string; countsTowardPaidPromotion: boolean };
+        marketplaceConversionInputs: Record<string, null | string | boolean>;
+        manualVerificationSteps: string[];
+      };
+    }).hostedPaidReadinessProof;
+    expect(hostedPaidReadinessProof).toMatchObject({
+      schemaVersion: "ti.hosted_apify_paid_readiness_proof.v1",
+      status: "external_token_missing",
+      command: "bun run check:hosted-apify-paid-readiness",
+      tokenState: "external_token_missing",
+      paidTrafficAllowed: false,
+      countsTowardPaidPromotion: false,
+      localProof: {
+        defaultQueryCount: 100,
+        sellableRows: 187,
+        countsTowardPaidPromotion: false
+      },
+      latestHostedProof: {
+        runId: "OThlfd0uzSCNnedAO",
+        querySetCount: 1,
+        sellableRows: 4,
+        proofDecision: "shape_safety_proof",
+        countsTowardPaidPromotion: false
+      },
+      marketplaceConversionInputs: {
+        storeViews: null,
+        runs: null,
+        uniqueUsers: null,
+        paidUsers: null,
+        refunds: null,
+        payoutEnabled: "external_unknown",
+        pricingModel: "external_unknown",
+        publicListingStatus: "draft_copy_ready_not_promoted",
+        unknownMeansNoClaim: true
+      }
+    });
+    expect(hostedPaidReadinessProof.manualVerificationSteps.join(" ")).toContain("100-name");
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ class: string; countsTowardPaidFloor: boolean }> }).exclusionProof.map((row) => row.class)).toEqual(expect.arrayContaining(["synthetic_rows", "graph_only_rows", "restricted_only_metadata", "caveated_rows", "stale_rows", "generic_source_pages", "projected_rows"]));
     expect((response.paidReleaseTruthBoard as { exclusionProof: Array<{ countsTowardPaidFloor: boolean }> }).exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect((response.scaleStepGates as {
@@ -1491,25 +1537,33 @@ describe("api v1", () => {
       graphOnlyRowsExcludedFromFloor: 30,
       projectedSellableRowsAfterPublicCorroboration: 42,
       publicProofMetrics: {
-        pivotsTested: 22,
-        publicProofFound: 10,
-        rowsUnlockedForParserAdmission: 18,
-        rowsRejectedAsStaleOrAmbiguous: 6,
+        pivotsTested: 24,
+        publicProofFound: 14,
+        rowsUnlockedForParserAdmission: 25,
+        rowsRejectedAsStaleOrAmbiguous: 4,
         contradictionsFound: 2,
-        queuedForNextPublicSearch: 8,
-        projectedBuyerValueLift: 0.83,
+        queuedForNextPublicSearch: 6,
+        projectedBuyerValueLift: 1.17,
         countsTowardPaidFloorNow: false
       }
     });
-    const graphPublicPivots = (response.graphPublicCorroborationPivotPacket as { candidates: Array<{ rank: number; actor: string; aliases: string[]; candidateVictimOrTarget: string; currentBlockedState: string; publicProofState: string; expectedBuyerFieldLift: string; expectedSellableRowsUnlockedAfterPublicProof: number; measuredRowsUnlockedForParserAdmission: number; relationshipSupport: string; graphOnlyCountsTowardSellableRows: boolean; rowUnlockRequiresNonGraphEvidence: boolean; noLeak: boolean; nextPublicCorroborationPivot: { queryText: string; expectedSourceFamily: string; repairsRowField: string; contradictionRisk: string; aliasCollisionRisk: string } }> }).candidates;
+    const graphPublicPivots = (response.graphPublicCorroborationPivotPacket as { candidates: Array<{ rank: number; actor: string; aliases: string[]; candidateVictimOrTarget: string; currentBlockedState: string; publicProofState: string; expectedBuyerFieldLift: string; expectedSellableRowsUnlockedAfterPublicProof: number; measuredRowsUnlockedForParserAdmission: number; relationshipSupport: string; proofUrlHash: string; sourceType: string; candidateFields: { actor: string; victimOrTarget: string }; contradictionStatus: string; freshnessAgeDays: number | null; parserHandoffReason: string; worthPayingForReason: string; graphOnlyCountsTowardSellableRows: boolean; countsTowardProductionSellableRowsAfterParserAdmission: boolean; rowUnlockRequiresNonGraphEvidence: boolean; noLeak: boolean; nextPublicCorroborationPivot: { queryText: string; expectedSourceFamily: string; repairsRowField: string; contradictionRisk: string; aliasCollisionRisk: string } }> }).candidates;
     expect(graphPublicPivots.map((row) => row.actor)).toEqual(expect.arrayContaining(["APT29", "APT28", "APT42", "Turla", "Volt Typhoon", "Lazarus Group", "LockBit", "Akira", "Clop", "Black Basta", "RansomHub", "Qilin", "Sandworm", "NOBELIUM", "Carbanak", "Conti", "8Base"]));
-    expect(graphPublicPivots.every((row) => row.rank > 0 && row.aliases.length > 0 && row.candidateVictimOrTarget.length > 0 && row.expectedBuyerFieldLift.length > 0 && row.relationshipSupport.length > 0 && row.nextPublicCorroborationPivot.queryText.length > 0 && row.nextPublicCorroborationPivot.expectedSourceFamily.length > 0 && row.nextPublicCorroborationPivot.repairsRowField.length > 0 && row.graphOnlyCountsTowardSellableRows === false && row.rowUnlockRequiresNonGraphEvidence === true && row.noLeak)).toBe(true);
-    expect(graphPublicPivots.filter((row) => row.publicProofState === "public_proof_found").reduce((sum, row) => sum + row.measuredRowsUnlockedForParserAdmission, 0)).toBe(18);
+    expect(graphPublicPivots.every((row) => row.rank > 0 && row.aliases.length > 0 && row.candidateVictimOrTarget.length > 0 && row.expectedBuyerFieldLift.length > 0 && row.relationshipSupport.length > 0 && row.proofUrlHash.length > 0 && row.sourceType.length > 0 && row.candidateFields.actor === row.actor && row.candidateFields.victimOrTarget.length > 0 && row.contradictionStatus.length > 0 && row.parserHandoffReason.length > 0 && row.worthPayingForReason.length > 0 && row.nextPublicCorroborationPivot.queryText.length > 0 && row.nextPublicCorroborationPivot.expectedSourceFamily.length > 0 && row.nextPublicCorroborationPivot.repairsRowField.length > 0 && row.graphOnlyCountsTowardSellableRows === false && row.rowUnlockRequiresNonGraphEvidence === true && row.noLeak)).toBe(true);
+    expect(graphPublicPivots.filter((row) => row.publicProofState === "public_proof_found").reduce((sum, row) => sum + row.measuredRowsUnlockedForParserAdmission, 0)).toBe(25);
+    expect(graphPublicPivots.filter((row) => row.publicProofState === "public_proof_found").every((row) => row.countsTowardProductionSellableRowsAfterParserAdmission === true)).toBe(true);
     expect(graphPublicPivots.filter((row) => row.publicProofState === "queued_for_search").every((row) => row.measuredRowsUnlockedForParserAdmission === 0)).toBe(true);
     expect(graphPublicPivots.filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold").every((row) => row.expectedSellableRowsUnlockedAfterPublicProof === 0 && ["medium", "high"].includes(row.nextPublicCorroborationPivot.contradictionRisk) && ["medium", "high"].includes(row.nextPublicCorroborationPivot.aliasCollisionRisk))).toBe(true);
+    const graphPublicUnlockQueue = (response.graphPublicCorroborationPivotPacket as { paidRowUnlockQueue: { counts: { ready_for_parser_admission: number; needs_public_source: number; contradicted: number; stale: number; unsafe_or_restricted: number; rowsCountTowardFloorNow: number; rowsReadyAfterParserAdmission: number }; ready_for_parser_admission: Array<{ expectedRowsUnlockedAfterParserAdmission: number; countsTowardFloorNow: boolean; proofUrlHash: string; noLeak: boolean }>; needs_public_source: Array<{ sourceClass: string; countsTowardFloorNow: boolean; noLeak: boolean }>; graphOnlyCountsTowardPaidFloorNow: boolean; noLeak: boolean } }).paidRowUnlockQueue;
+    expect(graphPublicUnlockQueue.counts).toEqual({ ready_for_parser_admission: 14, needs_public_source: 6, contradicted: 6, stale: 4, unsafe_or_restricted: 0, rowsCountTowardFloorNow: 0, rowsReadyAfterParserAdmission: 25 });
+    expect(graphPublicUnlockQueue.ready_for_parser_admission.reduce((sum, row) => sum + row.expectedRowsUnlockedAfterParserAdmission, 0)).toBe(25);
+    expect(graphPublicUnlockQueue.ready_for_parser_admission.every((row) => row.countsTowardFloorNow === false && row.proofUrlHash.length > 0 && row.noLeak)).toBe(true);
+    expect(graphPublicUnlockQueue.needs_public_source.some((row) => row.sourceClass === "restricted_metadata_public_support")).toBe(true);
+    expect(graphPublicUnlockQueue.graphOnlyCountsTowardPaidFloorNow).toBe(false);
+    expect(graphPublicUnlockQueue.noLeak).toBe(true);
     expect((response.graphPublicCorroborationPivotPacket as { integrationHandoffs: Array<{ owner: string; candidateIds: string[]; expectedRowsUnlockedForAdmission: number; countsTowardPaidFloorNow: boolean }> }).integrationHandoffs).toEqual(expect.arrayContaining([
       expect.objectContaining({ owner: "agent_03", expectedRowsUnlockedForAdmission: 9, countsTowardPaidFloorNow: false }),
-      expect.objectContaining({ owner: "agent_05", expectedRowsUnlockedForAdmission: 0, countsTowardPaidFloorNow: false })
+      expect.objectContaining({ owner: "agent_05", expectedRowsUnlockedForAdmission: 3, countsTowardPaidFloorNow: false })
     ]));
     expect((response.graphPublicCorroborationPivotPacket as { ownerHandoffs: Array<{ owner: string }> }).ownerHandoffs.map((row) => row.owner)).toEqual(expect.arrayContaining(["agent_03", "agent_04", "agent_05", "agent_07", "agent_08", "agent_09", "agent_10"]));
     expect((response.graphPublicCorroborationPivotPacket as { noLeakBoundary: Record<string, boolean> }).noLeakBoundary).toMatchObject({ rawEvidenceBodies: false, unsafeUrls: false, objectKeys: false, credentials: false, payloadLinks: false, privateMaterial: false, actorInteraction: false });
@@ -4584,6 +4638,7 @@ describe("api v1", () => {
         releaseBlockers: Array<{ gate: string; state: string; observed: number | string; countsTowardPaidRelease: boolean }>;
         operatorRecordingRule: { externalValuesStayUnknownUntilObserved: boolean; recordOnlyObservedApifyValues: string[] };
       };
+      hostedPaidReadinessProof: Record<string, unknown>;
     };
     expect(readinessPaidReleaseTruthBoard.observedMarketplaceTelemetry).toMatchObject({
       schemaVersion: "ti.program_cx_observed_marketplace_telemetry_contract.v1",
@@ -4639,6 +4694,43 @@ describe("api v1", () => {
       expect.objectContaining({ gate: "pricing_state", state: "external_unknown", observed: "external_unknown", countsTowardPaidRelease: false })
     ]));
     expect(readinessPaidReleaseTruthBoard.buyerPaidReleaseVerdict.operatorRecordingRule.recordOnlyObservedApifyValues).toEqual(expect.arrayContaining(["paidRuns", "refunds", "payoutState", "pricingState"]));
+    expect(readinessPaidReleaseTruthBoard.hostedPaidReadinessProof).toMatchObject({
+      schemaVersion: "ti.hosted_apify_paid_readiness_proof.v1",
+      status: "external_token_missing",
+      command: "bun run check:hosted-apify-paid-readiness",
+      localProof: {
+        defaultQueryCount: 100,
+        sellableRows: 187,
+        countsTowardPaidPromotion: false
+      },
+      latestHostedProof: {
+        runId: "OThlfd0uzSCNnedAO",
+        querySetCount: 1,
+        sellableRows: 4,
+        countsTowardPaidPromotion: false
+      },
+      marketplaceConversionInputs: {
+        storeViews: null,
+        runs: null,
+        uniqueUsers: null,
+        paidUsers: null,
+        refunds: null,
+        payoutEnabled: "external_unknown",
+        pricingModel: "external_unknown",
+        publicListingStatus: "draft_copy_ready_not_promoted",
+        unknownMeansNoClaim: true
+      }
+    });
+    const readinessStoreReadiness = apifyStoreReadiness.storeReadiness as typeof apifyStoreReadiness.storeReadiness & {
+      hostedPaidReadinessProof: Record<string, unknown>;
+    };
+    expect(readinessStoreReadiness.hostedPaidReadinessProof).toMatchObject({
+      schemaVersion: "ti.hosted_apify_paid_readiness_proof.v1",
+      status: "external_token_missing",
+      command: "bun run check:hosted-apify-paid-readiness",
+      paidTrafficAllowed: false,
+      countsTowardPaidPromotion: false
+    });
     expect(apifyStoreReadiness.paidReleaseTruthBoard.exclusionProof.every((row) => row.countsTowardPaidFloor === false)).toBe(true);
     expect(apifyStoreReadiness.revenueConversionChecklist).toMatchObject({
       schemaVersion: "ti.apify_revenue_conversion_checklist.v1",

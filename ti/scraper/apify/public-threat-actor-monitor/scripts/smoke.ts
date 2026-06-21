@@ -1209,25 +1209,64 @@ if (
   || Number(graphPublicCorroborationPivotPacket.contradictionOrAliasHoldCount) !== 6
   || Number(graphPublicCorroborationPivotPacket.graphOnlyRowsExcludedFromFloor) !== 30
   || Number(graphPublicCorroborationPivotPacket.projectedSellableRowsAfterPublicCorroboration) !== 42
+  || !graphPublicCorroborationPivotPacket.publicProofMetrics
+  || Number((graphPublicCorroborationPivotPacket.publicProofMetrics as Record<string, unknown>).pivotsTested) !== 24
+  || Number((graphPublicCorroborationPivotPacket.publicProofMetrics as Record<string, unknown>).publicProofFound) !== 14
+  || Number((graphPublicCorroborationPivotPacket.publicProofMetrics as Record<string, unknown>).rowsUnlockedForParserAdmission) !== 25
+  || (graphPublicCorroborationPivotPacket.publicProofMetrics as Record<string, unknown>).countsTowardPaidFloorNow !== false
+  || !graphPublicCorroborationPivotPacket.paidRowUnlockQueue
   || !Array.isArray(graphPublicCorroborationPivotPacket.candidates)
   || graphPublicCorroborationPivotPacket.candidates.length !== 30
   || !Array.isArray(graphPublicCorroborationPivotPacket.ownerHandoffs)
 ) {
-  throw new Error("OUTPUT record must expose Program CS graph public corroboration pivots");
+  throw new Error("OUTPUT record must expose Program CY graph public corroboration pivots");
+}
+const graphPublicUnlockQueue = graphPublicCorroborationPivotPacket.paidRowUnlockQueue as Record<string, unknown>;
+const graphPublicUnlockCounts = graphPublicUnlockQueue.counts as Record<string, unknown> | undefined;
+if (
+  !graphPublicUnlockCounts
+  || Number(graphPublicUnlockCounts.ready_for_parser_admission) !== 14
+  || Number(graphPublicUnlockCounts.needs_public_source) !== 6
+  || Number(graphPublicUnlockCounts.contradicted) !== 6
+  || Number(graphPublicUnlockCounts.stale) !== 4
+  || Number(graphPublicUnlockCounts.unsafe_or_restricted) !== 0
+  || Number(graphPublicUnlockCounts.rowsCountTowardFloorNow) !== 0
+  || Number(graphPublicUnlockCounts.rowsReadyAfterParserAdmission) !== 25
+  || graphPublicUnlockQueue.graphOnlyCountsTowardPaidFloorNow !== false
+  || graphPublicUnlockQueue.noLeak !== true
+) {
+  throw new Error("Program CY paid row unlock queue must separate parser-ready, source-needed, contradicted, stale, and restricted buckets");
+}
+const graphPublicReadyUnlocks = graphPublicUnlockQueue.ready_for_parser_admission as Array<Record<string, unknown>> | undefined;
+const graphPublicNeedsPublicSource = graphPublicUnlockQueue.needs_public_source as Array<Record<string, unknown>> | undefined;
+if (
+  !Array.isArray(graphPublicReadyUnlocks)
+  || graphPublicReadyUnlocks.reduce((sum, row) => sum + Number(row.expectedRowsUnlockedAfterParserAdmission ?? 0), 0) !== 25
+  || !graphPublicReadyUnlocks.every((row) => row.countsTowardFloorNow === false && typeof row.proofUrlHash === "string" && row.proofUrlHash.length > 0 && row.noLeak === true)
+  || !Array.isArray(graphPublicNeedsPublicSource)
+  || !graphPublicNeedsPublicSource.some((row) => row.sourceClass === "restricted_metadata_public_support")
+) {
+  throw new Error("Program CY paid row unlock queue must expose hash-only parser and public-support handoff rows");
 }
 const graphPublicPivots = graphPublicCorroborationPivotPacket.candidates as Array<Record<string, unknown>>;
 if (!graphPublicPivots.every((row) => {
   const pivot = row.nextPublicCorroborationPivot as Record<string, unknown> | undefined;
   return typeof row.relationshipSupport === "string"
+    && typeof row.proofUrlHash === "string"
+    && typeof row.sourceType === "string"
+    && typeof row.parserHandoffReason === "string"
+    && typeof row.worthPayingForReason === "string"
+    && typeof row.candidateFields === "object"
     && pivot
     && typeof pivot.queryText === "string"
     && typeof pivot.expectedSourceFamily === "string"
     && typeof pivot.repairsRowField === "string"
     && row.graphOnlyCountsTowardSellableRows === false
+    && (row.publicProofState !== "public_proof_found" || row.countsTowardProductionSellableRowsAfterParserAdmission === true)
     && row.rowUnlockRequiresNonGraphEvidence === true
     && row.noLeak === true;
 })) {
-  throw new Error("Program CS graph public pivots must expose public search text, repair field, floor exclusion, and no-leak proof");
+  throw new Error("Program CY graph public pivots must expose hash-only handoff fields, floor exclusion, and no-leak proof");
 }
 if (!graphPublicPivots
   .filter((row) => row.currentBlockedState === "contradiction_hold" || row.currentBlockedState === "alias_collision_hold")
@@ -1512,6 +1551,38 @@ if (
   || buyerPaidReleaseNoLeakProof.privateContent !== false
 ) {
   throw new Error("Program CU buyer verdict must explain sample policy, observed-only operator recording, and no-leak proof");
+}
+const hostedPaidReadinessProof = paidReleaseTruthBoard.hostedPaidReadinessProof as Record<string, unknown> | undefined;
+const hostedPaidLocalProof = hostedPaidReadinessProof?.localProof as Record<string, unknown> | undefined;
+const latestHostedProof = hostedPaidReadinessProof?.latestHostedProof as Record<string, unknown> | undefined;
+const hostedMarketplaceInputs = hostedPaidReadinessProof?.marketplaceConversionInputs as Record<string, unknown> | undefined;
+if (
+  !hostedPaidReadinessProof
+  || hostedPaidReadinessProof.schemaVersion !== "ti.hosted_apify_paid_readiness_proof.v1"
+  || hostedPaidReadinessProof.status !== "external_token_missing"
+  || hostedPaidReadinessProof.command !== "bun run check:hosted-apify-paid-readiness"
+  || hostedPaidReadinessProof.paidTrafficAllowed !== false
+  || hostedPaidReadinessProof.countsTowardPaidPromotion !== false
+  || !hostedPaidLocalProof
+  || hostedPaidLocalProof.defaultQueryCount !== 100
+  || hostedPaidLocalProof.sellableRows !== 187
+  || hostedPaidLocalProof.countsTowardPaidPromotion !== false
+  || !latestHostedProof
+  || latestHostedProof.runId !== "OThlfd0uzSCNnedAO"
+  || latestHostedProof.querySetCount !== 1
+  || latestHostedProof.sellableRows !== 4
+  || latestHostedProof.countsTowardPaidPromotion !== false
+  || !hostedMarketplaceInputs
+  || hostedMarketplaceInputs.storeViews !== null
+  || hostedMarketplaceInputs.runs !== null
+  || hostedMarketplaceInputs.uniqueUsers !== null
+  || hostedMarketplaceInputs.paidUsers !== null
+  || hostedMarketplaceInputs.refunds !== null
+  || hostedMarketplaceInputs.payoutEnabled !== "external_unknown"
+  || hostedMarketplaceInputs.pricingModel !== "external_unknown"
+  || hostedMarketplaceInputs.publicListingStatus !== "draft_copy_ready_not_promoted"
+) {
+  throw new Error("Hosted paid-readiness proof must keep local and single-query hosted proof out of paid promotion until 100-name hosted Apify metrics are observed");
 }
 if (!paidReleaseBuckets.every((bucket) =>
   typeof bucket.owner === "string"

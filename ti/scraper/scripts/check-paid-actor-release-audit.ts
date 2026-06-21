@@ -30,6 +30,7 @@ const sloPaidReleaseTruthBoard = record(productSlo.paidReleaseTruthBoard);
 checks.push(checkNoStalePaidPresetCopy(productSlo, contracts));
 checks.push(checkLocalActorProof(apifyStoreReadiness));
 checks.push(checkHostedActorProof(apifyStoreReadiness));
+checks.push(checkHostedPaidReadinessProof(apifyStoreReadiness, paidReleaseTruthBoard, sloPaidReleaseTruthBoard));
 checks.push(checkPaidFloorGate(apifyStoreReadiness, productSlo));
 checks.push(checkPayoutPricingListing(apifyStoreReadiness, paidReleaseTruthBoard));
 checks.push(checkNoLeakProof(paidReleaseTruthBoard, sloPaidReleaseTruthBoard));
@@ -196,6 +197,60 @@ function checkHostedActorProof(apifyStoreReadiness: Record<string, unknown>): Au
       "Do not buy paid traffic or claim conversion until hosted proof and marketplace telemetry are observed."
     ],
     details: { runId: latestProofRun.runId, datasetId: latestProofRun.datasetId, querySetCount: querySet.length, sellableRows, proofDecision: latestProofRun.proofDecision }
+  };
+}
+
+function checkHostedPaidReadinessProof(
+  apifyStoreReadiness: Record<string, unknown>,
+  paidReleaseTruthBoard: Record<string, unknown>,
+  sloPaidReleaseTruthBoard: Record<string, unknown>
+): AuditCheck {
+  const storeProof = record(record(apifyStoreReadiness.storeReadiness).hostedPaidReadinessProof);
+  const contractProof = record(paidReleaseTruthBoard.hostedPaidReadinessProof);
+  const sloProof = record(sloPaidReleaseTruthBoard.hostedPaidReadinessProof);
+  const routeCopies = [storeProof, contractProof, sloProof];
+  const commandOk = routeCopies.every((proof) => proof.command === "bun run check:hosted-apify-paid-readiness");
+  const statusOk = routeCopies.every((proof) => ["external_token_missing", "hosted_proof_missing", "verified_hold", "paid_floor_hosted_proof"].includes(String(proof.status)));
+  const localCountsOut = routeCopies.every((proof) => record(proof.localProof).countsTowardPaidPromotion === false);
+  const hostedCountsOut = routeCopies.every((proof) => record(proof.latestHostedProof).countsTowardPaidPromotion === false);
+  const marketplace = routeCopies.map((proof) => record(proof.marketplaceConversionInputs));
+  const observedOnly = marketplace.every((values) =>
+    values.storeViews === null
+    && values.runs === null
+    && values.uniqueUsers === null
+    && values.paidUsers === null
+    && values.refunds === null
+    && values.payoutEnabled === "external_unknown"
+    && values.pricingModel === "external_unknown"
+    && values.publicListingStatus === "draft_copy_ready_not_promoted"
+    && values.unknownMeansNoClaim === true
+  );
+  const hasManualSteps = routeCopies.every((proof) => Array.isArray(proof.manualVerificationSteps) && proof.manualVerificationSteps.length >= 4);
+  const paidReady = routeCopies.some((proof) => proof.status === "paid_floor_hosted_proof");
+  const ok = commandOk && statusOk && localCountsOut && hostedCountsOut && observedOnly && hasManualSteps;
+  return {
+    name: "hosted_paid_readiness_proof",
+    status: ok && paidReady ? "pass" : ok ? "hold" : "fail",
+    message: ok && paidReady
+      ? "hosted paid-readiness proof is verified and marketplace state is observed"
+      : ok
+        ? "hosted paid-readiness proof is explicit and truthfully held until token, 100-name hosted run, payout, pricing, and conversion telemetry are observed"
+        : "hosted paid-readiness proof is missing or mixes local/shape proof with paid promotion",
+    remediation: ok ? [
+      "Run bun run check:hosted-apify-paid-readiness with Apify access, then record the hosted 100-name run id, dataset id, counts, usage cost, payout, pricing, and conversion telemetry."
+    ] : [
+      "Expose hostedPaidReadinessProof on /v1/contracts#apifyStoreReadiness.storeReadiness, /v1/contracts#apifyStoreReadiness.paidReleaseTruthBoard, and /v1/ops/product-slo.paidReleaseTruthBoard.",
+      "Keep local proof and old hosted shape/safety proof marked countsTowardPaidPromotion=false.",
+      "Keep marketplace conversion inputs null/external_unknown until copied from Apify."
+    ],
+    details: {
+      statuses: routeCopies.map((proof) => proof.status),
+      commandOk,
+      localCountsOut,
+      hostedCountsOut,
+      observedOnly,
+      hasManualSteps
+    }
   };
 }
 
