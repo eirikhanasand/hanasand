@@ -1,0 +1,13 @@
+export type DarkwebIndexNetwork = "tor" | "i2p" | "freenet";
+export type DarkwebIndexCategory = "forum" | "marketplace" | "leak_extortion" | "paste" | "directory" | "blog" | "research" | "email_contact" | "mirror" | "service" | "abuse" | "unknown";
+export type DarkwebIndexLegalTriage = "benign" | "news_or_research" | "marketplace_or_illicit" | "leak_or_extortion" | "malware_or_payload" | "credential_or_abuse" | "unknown_requires_review" | "blocked_unsafe";
+export type DarkwebIndexLiveness = "live" | "dead" | "intermittent" | "blocked_by_policy" | "requires_review" | "unknown";
+export type DarkwebIndexReviewState = "approved_metadata_only" | "needs_review" | "legal_hold" | "blocked_unsafe" | "false_positive_review";
+export type DarkwebIndexSourceType = "directory" | "seed_list" | "analyst_import" | "public_report" | "safe_search_result" | "internal_discovery";
+export type DarkwebIndexSourceApprovalState = "approved_metadata_only" | "pending_legal_review" | "disabled_kill_switch" | "blocked_unsafe";
+export type DarkwebIndexPublicHandoffDecision = "sellable_with_public_support" | "useful_caveated_metadata" | "needs_public_corroboration" | "reject_low_value" | "blocked_unsafe";
+export type DarkwebIndexRecord = any;
+export type DarkwebIndexStatusDto = any;
+export type DarkwebIndexSearchDto = any;
+export type DarkwebIndexContractDto = any;
+export type DarkwebIndexNoLeakSerialization = any;
