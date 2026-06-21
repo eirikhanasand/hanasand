@@ -400,6 +400,16 @@ function buildReleaseLadder(
       && hostedObservedDatasetRows >= 300
         ? "pass"
         : "hold";
+  const hosted500State = hostedObservedIntegrityFailed
+    || observedProofImportInvalid
+    ? "fail"
+    : hostedObservedProofPresent
+      && observedProofImportAccepted
+      && hostedObservedSellableRows >= 500
+      && hostedObservedFindingRows >= 275
+      && hostedObservedDatasetRows >= 500
+        ? "pass"
+        : "hold";
   const marketplacePromotionState = !(marketplaceEmptyHold || marketplaceImportedSafely)
     ? "fail"
     : hosted100State === "pass" && hosted300State === "pass" && pricingState !== "external_unknown" && payoutState !== "external_unknown" && analyticsObserved
@@ -461,9 +471,16 @@ function buildReleaseLadder(
   const publicPaidTrafficReady = privatePaidBetaReady
     && current1000LocalSellableState === "pass"
     && hosted300State === "pass"
+    && hosted500State === "pass"
     && marketplacePaidTrafficState === "pass"
     && typeof marketplace.paidUsers === "number"
     && typeof marketplace.refunds === "number";
+  const observedCostPerUsefulRowUsdForFg = Number.isFinite(observedCostPerUsefulRowUsd) ? observedCostPerUsefulRowUsd : null;
+  const costPerUsefulRowGuardState = observedCostPerUsefulRowUsdForFg === null
+    ? "unknown"
+    : observedCostPerUsefulRowUsdForFg <= firstFiniteNumber(tier1000Gate.maximumCostPerUsefulRowUsd, 0.05)
+      ? "pass"
+      : "fail";
   const revenueImpactBlockerBoard = [
     {
       rank: 1,
@@ -616,6 +633,73 @@ function buildReleaseLadder(
         dtoOnlyCountsTowardRelease: false,
         stixTaxiiOnlyCountsTowardRelease: false,
         syntheticIndexRowsCountTowardRelease: false,
+        requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
+      }
+    },
+    programFgPrivateBetaDecision: {
+      schemaVersion: "ti.program_fg_private_beta_release_decision.v1",
+      routeVisibleOn: ["/v1/ops/product-slo", "/v1/contracts#apifyStoreReadiness", "Apify OUTPUT", "bun run check:paid-actor-release-audit", "coordination_agent_10.md"],
+      decision: publicPaidTrafficReady ? "ready_for_public_paid_traffic" : privatePaidBetaReady ? "ready_for_private_paid_beta" : "hold_paid_release",
+      privatePaidBetaAllowedNow: privatePaidBetaReady,
+      publicPaidTrafficAllowedNow: publicPaidTrafficReady,
+      decisionSeparation: {
+        privateBetaDoesNotRequirePublicConversionEvidence: true,
+        publicPaidTrafficRequiresPrivateBetaPlusConversionAndRefundEvidence: true,
+        local1000RowsAloneCannotUnlockHostedRelease: true
+      },
+      costPerUsefulRowGuard: {
+        state: costPerUsefulRowGuardState,
+        observedCostPerUsefulRowUsd: observedCostPerUsefulRowUsdForFg,
+        maximumCostPerUsefulRowUsd: firstFiniteNumber(tier1000Gate.maximumCostPerUsefulRowUsd, 0.05),
+        source: "hosted observed cost/useful rows only",
+        localCostEstimateCounts: false
+      },
+      observedEvidence: {
+        importState: record(hostedProof.programFgObservedEvidenceBoard).importState ?? "no_proof_imported",
+        hostedProofState: record(hostedProof.programFgObservedEvidenceBoard).hostedProofState ?? "missing",
+        marketplaceTruthState: record(hostedProof.programFgObservedEvidenceBoard).marketplaceTruthState ?? "external_unknown",
+        releaseBlockerState: record(hostedProof.programFgObservedEvidenceBoard).releaseBlockerState ?? "no_proof_imported"
+      },
+      privateBetaGate: {
+        state: privatePaidBetaReady ? "pass" : "hold",
+        blockers: [
+          current1000LocalSellableState === "pass" ? null : "current1000_local_sellable_rows",
+          current1000State === "pass" ? null : "current1000_useful_rows",
+          hosted100State === "pass" ? null : "hosted100_observed_proof",
+          pricingState !== "external_unknown" ? null : "pricing_state_external_unknown",
+          payoutState !== "external_unknown" ? null : "payout_state_external_unknown",
+          analyticsObserved ? null : "analytics_external_unknown",
+          hostedObservedImportSafe ? null : "no_leak_proof_missing",
+          costPerUsefulRowGuardState === "pass" ? null : "cost_per_useful_row_unobserved_or_above_limit"
+        ].filter(Boolean),
+        proofFields: ["programDcReleaseGates.current1000LocalSellableGate", "programDcReleaseGates.current1000Gate", "hostedPaidReadinessProof.programFgObservedEvidenceBoard", "hostedPaidReadinessProof.conversionPayoutTruth"]
+      },
+      publicPaidTrafficGate: {
+        state: publicPaidTrafficReady ? "pass" : "hold",
+        blockers: [
+          privatePaidBetaReady ? null : "private_paid_beta_not_ready",
+          hosted300State === "pass" ? null : "hosted300_observed_proof",
+          hosted500State === "pass" ? null : "hosted500_observed_proof",
+          marketplacePaidTrafficState === "pass" ? null : "marketplace_paid_traffic_gate",
+          typeof marketplace.paidUsers === "number" ? null : "paid_users_unobserved",
+          marketplace.refunds === 0 ? null : "refunds_unobserved_or_nonzero"
+        ].filter(Boolean)
+      },
+      orderedRevenueBlockers: [
+        { rank: 1, blocker: "current1000_local_sellable_rows", state: current1000LocalSellableState, observed: currentSellableRows, required: 1000, proofField: "releaseLadder.current1000LocalSellableGate" },
+        { rank: 2, blocker: "current1000_useful_rows", state: current1000State, observed: observedUsefulRows, required: 1000, proofField: "releaseLadder.current1000Gate" },
+        { rank: 3, blocker: "hosted100_300_500_observed_proof", state: hosted100State === "pass" && hosted300State === "pass" && hosted500State === "pass" ? "pass" : "hold", observed: record(hostedProof.programFgObservedEvidenceBoard).hostedProofState ?? "missing", required: "hosted100 for private beta; hosted300 and hosted500 for public paid traffic", proofField: "hostedPaidReadinessProof.programFgObservedEvidenceBoard" },
+        { rank: 4, blocker: "pricing_payout_analytics", state: pricingState !== "external_unknown" && payoutState !== "external_unknown" && analyticsObserved ? "pass" : "external_unknown", observed: { pricing: pricingState, payout: payoutState, analytics: analyticsObserved }, required: "observed pricing, payout readiness, and Store analytics visibility", proofField: "hostedPaidReadinessProof.conversionPayoutTruth" },
+        { rank: 5, blocker: "conversion_refunds", state: typeof marketplace.paidUsers === "number" && marketplace.refunds === 0 ? "pass" : "external_unknown", observed: { paidUsers: marketplace.paidUsers ?? null, refunds: marketplace.refunds ?? null }, required: "public traffic only: observed paid users/runs and zero refunds", proofField: "hostedPaidReadinessProof.conversionPayoutTruth.analytics" },
+        { rank: 6, blocker: "no_leak_and_stale_latest_proof", state: hostedObservedImportSafe ? "pass" : "hold", observed: { noLeakFailures: hostedObservedNoLeakFailures, staleLatestRowsBlocked: true }, required: "no leaks and zero stale/latest-error paid rows", proofField: "hostedPaidReadinessProof.hostedProofImportPath.observedFields" },
+        { rank: 7, blocker: "dirty_tree_and_test_hygiene", state: "pass", observed: "checked_by_release_audit", required: "clean tree and green Bun checks before release", proofField: "bun run check:paid-actor-release-audit" }
+      ],
+      antiBloatGuard: {
+        coordinationOnlyCountsTowardRelease: false,
+        dtoOnlyCountsTowardRelease: false,
+        stixTaxiiOnlyCountsTowardRelease: false,
+        syntheticIndexRowsCountTowardRelease: false,
+        localOnlyProofCountsTowardHostedRelease: false,
         requiresBuyerVisibleRowsOrObservedHostedRevenueProof: true
       }
     },
