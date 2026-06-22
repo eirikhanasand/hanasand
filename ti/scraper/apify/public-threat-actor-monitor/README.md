@@ -1,1 +1,80 @@
-# Public Threat Actor & Ransomware Activity Monitor Monitor fresh public threat actor and ransomware activity in a clean, spreadsheet-ready dataset. This Actor turns public reporting into normalized rows for CTI, SOC, brand-risk, and incident response workflows. It is designed for teams that want current actor, ransomware, malware, campaign, victim/target, sector, country, TTP, source, confidence, and freshness metadata without touching raw leaked material or private sources. ## What You Get - A 100-name default watchlist covering long-running state-linked, financially motivated, ransomware, malware, and ecosystem names. - One dataset row per recent activity item, target, TTP/tool, dataset/impact note, or optional source-coverage gap. - Buyer-useful fields such as `actor`, `rowType`, `buyerSummary`, `recommendedBuyerAction`, `keyPivots`, `claimType`, `title`, `summary`, `victimName`, `affectedSectors`, `countries`, `impact`, `ttp`, `attackId`, `publisherCount`, `firstReportedAt`, `lastReportedAt`, `corroborationState`, `confidence`, `freshnessStatus`, `nextSearchPivots`, and `whyWorthPayingFor`. - Row-level billing guidance through `paidRowDecision`, `billingGuidance`, `buyerValueScore`, and `whyWorthPayingFor`, so buyers can separate chargeable findings from useful caveated leads. - Safe metadata only: no credential values, stolen files, malware payloads, private messages, raw leak contents, private forum material, authentication bypass, CAPTCHA bypass, or threat-actor interaction. Held rows, suppressed rows, and coverage-gap diagnostics are opt-in. The default run keeps the dataset focused on buyer-useful intelligence rows. Current focused sample baseline: the default 100-name watchlist returns 400 safe metadata rows, 400 sellable rows, 400 buyer-useful rows, 100% sellable rate, average buyer value `0.86`, and no source-only, held, suppressed, or coverage-gap rows when enough chargeable findings exist. ## Buyer Examples SOC team: - Run the default watchlist every morning and filter `paidRowDecision=sellable`, `freshnessStatus=current`, and `isActionable=true` to find actor activity worth triage. - Example row: APT29 activity with public reporting windows, cloud-account targeting context, source-family diversity, confidence, and next searches. CTI analyst: - Monitor a custom list of actors, malware names, and campaigns, then pivot on `nextSearchPivots`, `relationshipPivots`, `attackId`, and `corroborationState`. - Example row: Turla TTP activity with ATT&CK technique, tool context, first/last seen timestamps, confidence, and public source provenance. Brand monitoring team: - Track ransomware group mentions for victim or target context without collecting raw leak material. - Example row: Akira or LockBit victim-claim metadata with sector, country, claimed date, confidence, safety flags, and public corroboration state. Incident response team: - Use current rows to decide what needs enrichment, containment review, or executive reporting. - Example row: Scattered Spider targeting row with sector/country context, likely social-engineering TTPs, source families, caveat, and recommended next searches. ## Pricing The Actor uses Apify pay-per-event pricing. - Dataset rows: `$3.00 / 1,000 rows` - Actor start: `$0.00005` - Platform usage: included for customers - Effective date: July 4, 2026 This keeps cost tied to output volume. A normal run writes one normalized dataset row for each public intelligence item returned. Coverage-gap and held diagnostic rows are disabled by default, so ordinary runs do not pay for source-repair notes unless you choose to include them. ## Input Leave `queries` empty to use the built-in 100-name watchlist. Add up to 100 custom actor, ransomware, malware, or campaign names when you want a narrower monitor. ```json { "maxRowsPerQuery": 4, "includeActivity": true, "includeTargets": true, "includeTtps": true, "includeSources": true, "includeDatasets": false, "includeCoverageGaps": false, "includeHeldRows": false } ``` Useful options: - `includeActivity`: recent public mentions, campaigns, claims, and reporting. - `includeTargets`: likely sectors, countries, regions, victims, or targets when available. - `includeTtps`: tactics, techniques, tools, malware, CVEs, and ATT&CK identifiers when available. - `includeSources`: optional public source context. Source-only rows are not counted as chargeable findings. - `includeDatasets`: optional service coverage rows. - `includeCoverageGaps`: optional source coverage notes. - `includeHeldRows`: optional held or suppressed rows for QA. ## Sample Dataset Row ```json { "query": "APT29", "rowType": "activity", "actor": "APT29", "title": "APT29 targets cloud accounts", "summary": "A dated public report describing an APT29 campaign. Reported by 2 publishers: Security Vendor A, Security Vendor B.", "claimType": "campaign", "affectedSectors": ["Technology and cloud services"], "countries": ["United States"], "impact": "Reported credential or account compromise", "publisherCount": 2, "firstReportedAt": "2026-06-19T14:00:00.000Z", "lastReportedAt": "2026-06-20T08:30:00.000Z", "corroboratingSourceIds": ["source:a", "source:b"], "contradictingSourceIds": [], "sourceType": "clear_web", "confidence": 0.64, "collectionMode": "live_search", "sourceCount": 4, "sourceFamilyCount": 2, "sourceFamilies": ["clear_web", "public_channel"], "freshnessStatus": "current", "corroborationState": "corroborated", "nextSearchPivots": ["APT29 cloud account targeting", "APT29 Microsoft 365"], "buyerSummary": "current APT29 activity row: Technology and cloud services. fresh corroborated public signal with source-family diversity.", "recommendedBuyerAction": "Triage now; pivot on APT29, Technology and cloud services, source:clear_web.", "keyPivots": ["APT29", "Technology and cloud services", "source:clear_web", "APT29 public channel"], "paidRowDecision": "sellable", "billingGuidance": "charge", "whyWorthPayingFor": "fresh corroborated public signal with source-family diversity", "buyerValueScore": 0.78, "evidenceGrade": "corroborated", "isActionable": true, "reviewReasons": ["freshness:current", "evidence:corroborated", "actionable:monitor_or_triage"], "analysisFacets": ["claim:campaign", "evidence:corroborated", "freshness:current", "row:activity", "safety:metadata_only"], "rawContentIncluded": false, "safety": { "metadataOnly": true, "credentialsIncluded": false, "stolenFilesIncluded": false, "privateContentIncluded": false, "actorInteraction": false }, "provenanceHash": "..." } ``` ## Output Each run writes: - A default dataset of normalized public threat intelligence rows. - An `OUTPUT` record with run-level counts such as row count, sellable rows, caveated leads, average buyer value, and buyer sample rows. Recommended filters: - `paidRowDecision=sellable`: rows that are current, safe, specific, and useful enough for paid monitoring. - `paidRowDecision=included_with_caveat`: useful leads that need analyst context. - `corroborationState=corroborated`: rows supported by more than one source or source family. - `freshnessStatus=current`: rows most suitable for SOC and incident-response review. - `billingGuidance=charge`: rows that should count as paid dataset items. ## FAQ How fresh is the data? Rows include `freshnessStatus`, `firstReportedAt`, and `lastReportedAt`. The default watchlist is meant for daily monitoring; current rows are sorted before caveated context. Do you include dark-web material? Only safe metadata and public corroboration are surfaced. Raw leak contents, credential values, private messages, stolen files, payloads, and unsafe URLs are not returned. What makes a row sellable? A sellable row needs a specific actor or group, useful target or TTP context, freshness, confidence, source support, recommended action, and safe output fields. Can I monitor my own list? Yes. Pass up to 100 actor, ransomware, malware, campaign, sector, or brand terms in `queries`. ## Safety Boundary The Actor emits public metadata and summaries only. It excludes: - credential values, - leaked database rows, - malware payloads, - private or invite-only content, - authentication or CAPTCHA bypass, - actor contact or interaction, - raw dark-web URLs in public output. Claims remain claims until corroborated. Confidence, freshness, source, and caveat fields expose that distinction instead of presenting every public mention as confirmed activity.
+# Fresh Threat Actor & Ransomware Activity Monitor
+
+Monitor public ransomware victim-claim metadata and fresh public threat actor activity in a clean dataset. The default run uses a 30-group high-yield ransomware preset and returns more than 10,000 safe metadata rows when the public source pages are reachable.
+
+## What You Get
+
+- Victim-claim archive rows for groups such as LockBit, Qilin, Akira, Play, Clop, RansomHub, ALPHV, DragonForce, BianLian, Black Basta, Medusa, SafePay, 8Base, Lynx, Everest, Conti, Rhysida, Cactus, Royal, and Hive.
+- Fresh/current rows where recent public claims exist, plus historical rows clearly marked by `freshnessStatus`.
+- Fields for `actor`, `victimName`, `affectedSectors`, `countries`, `claimedDate`, `sourceUrl`, `confidence`, `paidRowDecision`, `buyerValueScore`, `whyWorthPayingFor`, and `nextSearchPivots`.
+- Safe metadata only: no credential values, stolen files, malware payloads, private messages, raw leak contents, authentication bypass, CAPTCHA bypass, or threat-actor interaction.
+
+## Default Input
+
+The default preset is tuned for broad ransomware monitoring and archive search:
+
+```json
+{
+  "maxRowsPerQuery": 500,
+  "includeActivity": true,
+  "includeTargets": true,
+  "includeTtps": true,
+  "includeSources": true,
+  "includeDatasets": false,
+  "includeCoverageGaps": false,
+  "includeHeldRows": false
+}
+```
+
+Custom runs can replace `queries` with actor, ransomware, malware, campaign, sector, or brand terms.
+
+## Pricing
+
+The Actor uses Apify pay-per-event pricing.
+
+- Dataset rows: `$3.00 / 1,000 rows`
+- Actor start: `$0.00005`
+- Platform usage: included for customers
+
+Rows are priced by output volume, so buyers can estimate cost before scheduling a run.
+
+## Good Uses
+
+- SOC teams can filter `freshnessStatus=current` or `recent` for daily triage.
+- CTI teams can search historical victim claims by actor, victim, sector, country, or date.
+- Brand monitoring teams can check whether an organization appears in public ransomware victim metadata.
+- Incident response teams can pivot from victim claims into public corroboration and defensive follow-up.
+
+## Sample Row
+
+```json
+{
+  "query": "Qilin",
+  "rowType": "activity",
+  "actor": "Qilin",
+  "title": "Qilin victim claim: Example Corp",
+  "claimType": "victim_claim",
+  "victimName": "Example Corp",
+  "affectedSectors": ["Healthcare"],
+  "countries": ["US"],
+  "claimedDate": "2026-06-20T00:00:00.000Z",
+  "sourceType": "clear_web",
+  "collectionMode": "ransomware_live_group_page",
+  "freshnessStatus": "current",
+  "paidRowDecision": "sellable",
+  "billingGuidance": "charge",
+  "whyWorthPayingFor": "specific public intelligence row ready for analyst triage",
+  "rawContentIncluded": false,
+  "safety": {
+    "metadataOnly": true,
+    "credentialsIncluded": false,
+    "stolenFilesIncluded": false,
+    "privateContentIncluded": false,
+    "actorInteraction": false
+  }
+}
+```
+
+## Notes
+
+Claims are public claims, not confirmed breaches. Use `confidence`, `freshnessStatus`, `sourceUrl`, `corroborationState`, and `nextSearchPivots` to decide what needs follow-up.
