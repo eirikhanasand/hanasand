@@ -40,7 +40,8 @@ function isMetadataOnly(capture: any) {
 }
 
 function cleanSummary(value: unknown) {
-  return String(value ?? "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+  return String(value ?? "").replace(/<[^>]+>/g, " ").replace(/<[^>\s]{1,24}(?=\s|$)/g, " ")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
     .replace(/&quot;/g, "\"").replace(/&#39;|&apos;/g, "'")
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));

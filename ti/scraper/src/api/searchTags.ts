@@ -4,7 +4,7 @@ const TAGS = [
   "ransomware", "breach", "malware", "phishing", "exploit", "cve", "apt", "leak",
   "victim", "botnet", "ddos", "supply-chain", "zero-day", "infrastructure", "c2",
   "credential", "infostealer", "intrusion", "extortion", "loader", "mobile", "identity", "detection",
-  "advisory", "exposed", "webshell"
+  "advisory", "exposed", "webshell", "fraud", "smishing"
 ];
 
 const PHRASES: Array<[RegExp, string]> = [
@@ -16,6 +16,7 @@ const PHRASES: Array<[RegExp, string]> = [
   [/\b(info.?stealer|stealer|stolen session|session cookie|working login|credential log)\b/i, "infostealer"],
   [/\bactive(?:ly)? exploit/i, "exploit"],
   [/\bcredential(?:s)?\b/i, "credential"],
+  [/\bcard fraud|payment fraud|account takeover|ATO\b/i, "fraud"],
   [/\bexpos(?:ed|ure|ing)\b/i, "exposed"],
   [/\bweb shell|webshell\b/i, "webshell"]
 ];

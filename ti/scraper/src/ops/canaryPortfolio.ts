@@ -5,9 +5,9 @@ import { EXPLOIT_CANARY_FEEDS } from "./canaryPortfolioExploitFeeds.ts";
 import { IDENTITY_CANARY_FEEDS } from "./canaryPortfolioIdentityFeeds.ts";
 import { INCIDENT_CANARY_FEEDS } from "./canaryPortfolioIncidentFeeds.ts";
 import { JOURNALISM_CANARY_FEEDS } from "./canaryPortfolioJournalismFeeds.ts";
+import { MOBILE_FRAUD_CANARY_FEEDS } from "./canaryPortfolioMobileFraudFeeds.ts";
 import { REVENUE_CANARY_FEEDS } from "./canaryPortfolioRevenueFeeds.ts";
 export const canaryQueries = ["APT29", "APT42", "Turla", "Volt Typhoon", "Scattered Spider", "Akira", "CVE"];
-
 export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   src("src_canary_cisa_alerts", "CISA Cybersecurity Alerts", "rss", "https://www.cisa.gov/cybersecurity-advisories/all.xml", ["APT29", "Volt Typhoon", "CVE"], "government"),
   src("src_canary_cisa_known_exploited", "CISA Known Exploited Vulnerabilities", "static_web", "https://www.cisa.gov/known-exploited-vulnerabilities-catalog", ["CVE"], "government"),
@@ -52,7 +52,7 @@ export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   src("src_canary_intezer", "Intezer Blog", "rss", "https://intezer.com/blog/feed/", ["malware", "ransomware", "cloud"], "vendor"),
   ...REVENUE_CANARY_FEEDS,
   ...ADVISORY_CANARY_FEEDS, ...INCIDENT_CANARY_FEEDS, ...EXPLOIT_CANARY_FEEDS,
-  ...JOURNALISM_CANARY_FEEDS, ...IDENTITY_CANARY_FEEDS, ...CLOUD_CANARY_FEEDS
+  ...JOURNALISM_CANARY_FEEDS, ...IDENTITY_CANARY_FEEDS, ...MOBILE_FRAUD_CANARY_FEEDS, ...CLOUD_CANARY_FEEDS
 ];
 
 function src(id: string, name: string, type: string, url: string, q: string[], family: string) {
