@@ -79,8 +79,8 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         <div className='grid h-full w-full min-w-0 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] items-stretch gap-3 lg:grid-cols-[minmax(20rem,0.78fr)_minmax(18rem,0.74fr)_minmax(20rem,0.9fr)] lg:grid-rows-1 xl:grid-cols-[minmax(22rem,0.72fr)_minmax(22rem,0.82fr)_minmax(24rem,0.94fr)]'>
             <section className='grid min-h-0 min-w-0 content-center gap-4 rounded-lg border border-white/10 bg-white/[0.035] p-4 sm:p-5'>
                 <div>
-                    <h2 className='text-lg font-medium text-bright/92'>Load test launcher</h2>
-                    <p className='mt-1.5 max-w-2xl text-sm leading-6 text-bright/52'>Start a scan, share the generated test link, then revisit the result when the run finishes.</p>
+                    <h2 className='text-lg font-semibold text-bright/92'>Service check launcher</h2>
+                    <p className='mt-1.5 max-w-2xl text-sm leading-6 text-bright/52'>Start a permitted endpoint check, share the result link, then revisit the report when it finishes.</p>
                 </div>
                 <form onSubmit={handleSubmit} className='grid gap-4'>
                     <ErrorNotice compact message={error as string | null} />
@@ -97,7 +97,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                             disabled={!isValidLink}
                             className='h-10 rounded-lg bg-bright/88 px-3.5 text-sm font-medium text-background/90 transition hover:bg-bright disabled:cursor-not-allowed disabled:bg-white/[0.055] disabled:text-bright/34'
                         >
-                            Start scan
+                            Start check
                         </button>
                     </div>
                 </form>

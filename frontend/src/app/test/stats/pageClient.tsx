@@ -63,13 +63,13 @@ export default function TestStatsPageClient() {
                     <div>
                         <div className='flex items-center gap-2'>
                             <ChartColumn className='h-4 w-4 stroke-orange-500' />
-                            <h1 className='text-base font-medium text-bright/92'>Test results</h1>
+                            <h1 className='text-base font-semibold text-bright/92'>Service check results</h1>
                         </div>
-                        <p className='mt-1.5 text-sm leading-5 text-bright/50'>Find a run by scan id, then open the full report.</p>
+                        <p className='mt-1.5 text-sm leading-5 text-bright/50'>Find a check by scan id, then open the full report.</p>
                     </div>
                     <Link href='/test' className='inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-xs font-medium text-bright/62 transition hover:bg-white/[0.07] hover:text-bright/82'>
                         <ArrowLeft className='h-4 w-4' />
-                        New run
+                        New check
                     </Link>
                 </div>
                 <form onSubmit={handleSubmit} className='grid gap-3'>

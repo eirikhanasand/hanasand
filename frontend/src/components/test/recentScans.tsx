@@ -19,7 +19,7 @@ export default function RecentScans({ title, empty, scans, mine = false, classNa
             <div className='flex items-center justify-between gap-3'>
                 <div>
                     <h2 className='text-sm font-semibold text-bright'>{title}</h2>
-                    <p className='text-xs text-bright/45'>{mine ? 'Your most recent load tests' : 'Latest load tests across the service'}</p>
+                    <p className='text-xs text-bright/45'>{mine ? 'Your most recent service checks' : 'Latest permitted checks across the service'}</p>
                 </div>
             </div>
             {!scans.length && (

@@ -106,8 +106,8 @@ function LeftSide({
             <div className='flex-1 overflow-auto pr-1'>
                 <div className='flex flex-wrap items-start justify-between gap-3 border-b border-white/8 pb-3'>
                     <div>
-                        <h1 className='text-base font-medium text-bright/92'>Run metadata</h1>
-                        <p className='mt-1 text-xs leading-5 text-bright/44'>Live status, configuration, and recent activity.</p>
+                        <h1 className='text-base font-semibold text-bright/92'>Check details</h1>
+                        <p className='mt-1 text-xs leading-5 text-bright/44'>Live status, target, and recent activity.</p>
                     </div>
                     <div className='flex items-center gap-2'>
                         {isConnected ? (
