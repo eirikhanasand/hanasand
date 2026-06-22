@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     }
 
     return (
-        <div className='h-full px-2 pb-2'>
+        <div className='h-full bg-[#f7f8fb] px-2 pb-2 text-[#171a21]'>
             <div className='grid h-full min-h-0 gap-2 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-start'>
                 <DashboardSidebar
                     id={id}

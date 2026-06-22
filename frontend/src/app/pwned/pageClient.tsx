@@ -48,22 +48,22 @@ export default function PwnedPageClient() {
     }
 
     return (
-        <div className='rounded-xl border border-white/10 bg-dark/70 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-md md:p-5'>
+        <div className='rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-[0_20px_70px_rgba(26,35,55,0.10)] md:p-6'>
             <div className='grid gap-5'>
                 <div className='flex items-start justify-between gap-4'>
                     <div className='grid gap-1'>
-                        <div className='flex items-center gap-2 text-lg font-semibold text-bright/88'>
-                            <Eye className={`h-5 w-5 ${didSearch ? breached ? 'text-red-300' : 'text-emerald-300' : 'text-[#f0a17a]'}`} />
+                        <div className='flex items-center gap-2 text-lg font-semibold text-[#171a21]'>
+                            <Eye className={`h-5 w-5 ${didSearch ? breached ? 'text-[#b42318]' : 'text-[#147a3b]' : 'text-[#3056d3]'}`} />
                             {didSearch ? 'Password check result' : 'Check password exposure'}
                         </div>
-                        <p className='text-sm leading-6 text-bright/45'>
+                        <p className='text-sm leading-6 text-[#596170]'>
                             {didSearch
                                 ? breached ? 'The exact password was found in breach data.' : 'No exact match was found in the indexed breach data.'
                                 : 'Search for an exact password match without storing it in the browser.'}
                         </p>
                     </div>
                     {didSearch ? (
-                        <div className={`grid h-10 w-10 place-items-center rounded-lg border ${breached ? 'border-red-400/20 bg-red-500/10 text-red-200' : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'}`}>
+                        <div className={`grid h-10 w-10 place-items-center rounded-lg border ${breached ? 'border-[#fecdca] bg-[#fff1f0] text-[#b42318]' : 'border-[#bde8ca] bg-[#e9f8ef] text-[#147a3b]'}`}>
                             {breached ? <ShieldX className='h-4 w-4' /> : <ShieldCheck className='h-4 w-4' />}
                         </div>
                     ) : null}
@@ -75,7 +75,7 @@ export default function PwnedPageClient() {
                     <form onSubmit={handleSubmit} className='grid gap-3'>
                         <ErrorNotice compact message={error} />
                         <label className='grid gap-2'>
-                            <span className='text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>Password</span>
+                            <span className='text-xs font-semibold uppercase text-[#3056d3]'>Password</span>
                             <input
                                 type='password'
                                 placeholder='Enter password to check'
@@ -83,13 +83,13 @@ export default function PwnedPageClient() {
                                 value={password}
                                 required
                                 autoComplete='off'
-                                className='h-11 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm text-bright outline-none transition placeholder:text-bright/28 focus:border-[#f07d33]/55 focus:bg-white/[0.065]'
+                                className='h-11 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                             />
                         </label>
                         <button
                             type='submit'
                             disabled={!canSubmit}
-                            className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-semibold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/5 disabled:text-bright/35'
+                            className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
                         >
                             <Search className='h-4 w-4' />
                             {busy ? 'Checking...' : 'Check password'}
@@ -102,14 +102,14 @@ export default function PwnedPageClient() {
                         <button
                             type='button'
                             onClick={clear}
-                            className='inline-flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 text-sm font-medium text-bright/60 transition hover:bg-white/7 hover:text-bright'
+                            className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:border-[#bdc7d5]'
                         >
                             <ArrowLeft className='h-4 w-4' />
                             Check another
                         </button>
                     </div>
                 ) : (
-                    <p className='text-xs leading-5 text-bright/32'>
+                    <p className='text-xs leading-5 text-[#667085]'>
                         Exact matches only. Partial passwords and longer variants are not treated as matches.
                     </p>
                 )}

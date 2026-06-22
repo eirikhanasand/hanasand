@@ -60,7 +60,7 @@ export default async function page() {
         }))
 
     return (
-        <div className='min-h-[90.5vh] px-4 py-4 md:px-16 lg:px-32'>
+        <div className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
             <StatusDashboard
                 metrics={endpointMetrics}
                 domainMetrics={subdomainMetrics}

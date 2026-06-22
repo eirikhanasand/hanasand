@@ -3,9 +3,9 @@ import { Cell, Pie, PieChart } from 'recharts'
 export default function Speedometer({ name, tps }: { name: string, tps: number }) {
 
     function getColor(value: number) {
-        if (value < 40) return '#10B981AA'
-        if (value < 70) return '#F59E0BAA'
-        return '#EF4444AA'
+        if (value < 40) return '#147a3b'
+        if (value < 70) return '#8a5a00'
+        return '#b42318'
     }
 
     const activeColor = getColor(tps)
@@ -16,8 +16,8 @@ export default function Speedometer({ name, tps }: { name: string, tps: number }
     ]
 
     return (
-        <div className='relative flex h-60 w-full flex-col items-center justify-center rounded-3xl border border-bright/10 bg-bright/5 p-6 shadow-xl backdrop-blur-md'>
-            <div className='mb-4 text-lg font-semibold tracking-wide text-bright/80 drop-shadow'>
+        <div className='relative flex h-60 w-full flex-col items-center justify-center rounded-lg border border-[#dfe5ee] bg-white p-6 shadow-sm'>
+            <div className='mb-4 text-lg font-semibold text-[#171a21]'>
                 {name}
             </div>
 
@@ -33,8 +33,8 @@ export default function Speedometer({ name, tps }: { name: string, tps: number }
                                 style={{
                                     transform: `rotate(${deg}deg) translateY(-90px)`,
                                     backgroundColor: long
-                                        ? 'rgba(255,255,255,0.8)'
-                                        : 'rgba(255,255,255,0.3)',
+                                        ? '#667085'
+                                        : '#d8dee9',
                                 }}
                             />
                         )
@@ -60,28 +60,21 @@ export default function Speedometer({ name, tps }: { name: string, tps: number }
                             {data.map((_, index) => (
                                 <Cell
                                     key={`cell-${index}`}
-                                    fill={index === 0 ? activeColor : 'rgba(255,255,255,0.1)'}
+                                    fill={index === 0 ? activeColor : '#eef1f5'}
                                 />
                             ))}
                         </Pie>
                     </PieChart>
                 </div>
 
-                <div
-                    className='absolute bottom-2.5 h-20 w-40 rounded-full opacity-50 blur-2xl'
-                    style={{
-                        background: `radial-gradient(circle at center, ${activeColor}, transparent 70%)`,
-                    }}
-                />
-
                 <div className='absolute inset-0 flex flex-col items-center justify-end pb-4'>
                     <div
-                        className='text-4xl font-bold drop-shadow-lg'
+                        className='text-4xl font-bold'
                         style={{ color: activeColor }}
                     >
                         {tps.toFixed(1)}
                     </div>
-                    <div className='text-sm text-bright/60'>req/s</div>
+                    <div className='text-sm text-[#667085]'>req/s</div>
                 </div>
             </div>
         </div>

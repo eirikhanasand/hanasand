@@ -76,17 +76,17 @@ export default function DashboardSidebar({
         .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
     return (
-        <aside className={`dashboard-sidebar-sticky h-fit max-h-full overflow-auto rounded-xl border border-white/10 bg-background/82 p-2 backdrop-blur-md ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
+        <aside className={`dashboard-sidebar-sticky h-fit max-h-full overflow-auto rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2 py-1'}`}>
                 {compact ? (
-                    <LayoutDashboard className='h-4 w-4 text-bright/70' />
+                    <LayoutDashboard className='h-4 w-4 text-[#596170]' />
                 ) : (
                     <>
                         <div>
-                            <p className='text-[0.62rem] font-semibold uppercase tracking-[0.24em] text-bright/32'>Workspace</p>
-                            <h2 className='mt-1 text-sm font-semibold text-bright/86'>Dashboard</h2>
+                            <p className='text-[0.62rem] font-semibold uppercase text-[#3056d3]'>Workspace</p>
+                            <h2 className='mt-1 text-sm font-semibold text-[#171a21]'>Dashboard</h2>
                         </div>
-                        <LayoutDashboard className='h-4 w-4 text-bright/55' />
+                        <LayoutDashboard className='h-4 w-4 text-[#667085]' />
                     </>
                 )}
             </div>
@@ -104,8 +104,8 @@ export default function DashboardSidebar({
                                 compact ? 'justify-center' : 'gap-3'
                             } ${
                                 active
-                                    ? 'border-white/12 bg-white/10 text-bright'
-                                    : 'border-transparent text-bright/52 hover:border-white/8 hover:bg-white/6 hover:text-bright/82'
+                                    ? 'border-[#b8c5ff] bg-[#eef3ff] text-[#3056d3]'
+                                    : 'border-transparent text-[#596170] hover:border-[#dfe5ee] hover:bg-[#f8fafc] hover:text-[#171a21]'
                             }`}
                         >
                             {item.icon}

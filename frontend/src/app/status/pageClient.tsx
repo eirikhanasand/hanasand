@@ -64,20 +64,23 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
     const liveDomains = domainsSortedByTps.filter(domain => domain.tps > 0)
     const livePeakTps = liveDomains.reduce((highest, domain) => Math.max(highest, domain.tps), 0)
     const statusTone = {
-        up: 'border-emerald-400/20 bg-emerald-500/10 text-emerald-100',
-        degraded: 'border-amber-400/20 bg-amber-500/10 text-amber-100',
-        down: 'border-red-400/20 bg-red-500/10 text-red-100',
+        up: 'border-[#bde8ca] bg-[#e9f8ef] text-[#11612f]',
+        degraded: 'border-[#f8df9b] bg-[#fff8e1] text-[#8a5a00]',
+        down: 'border-[#fecdca] bg-[#fff1f0] text-[#912018]',
     }
 
     return (
-        <div className='grid min-h-full gap-4 pb-6'>
+        <div className='mx-auto grid min-h-full max-w-7xl gap-6 pb-6'>
             <section className='grid gap-4'>
                 <div className='flex flex-wrap items-start justify-between gap-4'>
                     <div>
-                        <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Status</p>
-                        <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Service Status</h1>
+                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Status</p>
+                        <h1 className='mt-2 text-4xl font-semibold tracking-normal text-[#171a21]'>Service health</h1>
+                        <p className='mt-3 max-w-2xl text-sm leading-6 text-[#596170]'>
+                            Public availability for the Hanasand web, monitoring, and notification surfaces.
+                        </p>
                     </div>
-                    <div className={`rounded-full border px-6 py-2 text-sm font-semibold ${statusTone[serviceStatus.overall]}`}>
+                    <div className={`rounded-lg border px-4 py-2 text-sm font-semibold ${statusTone[serviceStatus.overall]}`}>
                         {serviceStatus.overall.toUpperCase()}
                     </div>
                 </div>
@@ -86,80 +89,80 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                     {serviceStatus.checks.map(check => {
                         const Icon = check.status === 'up' ? BadgeCheck : check.status === 'degraded' ? ShieldAlert : Activity
                         return (
-                            <div key={`${check.service}-${check.check_name}`} className='glass-card rounded-lg p-4'>
+                            <div key={`${check.service}-${check.check_name}`} className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
                                 <div className='flex items-start justify-between gap-4'>
-                                    <div className={`icon-tile ${check.status === 'up' ? 'bg-emerald-500/12 text-emerald-300' : check.status === 'degraded' ? 'bg-amber-500/12 text-amber-300' : 'bg-red-500/12 text-red-300'}`}>
+                                    <div className={`grid h-10 w-10 place-items-center rounded-lg border ${check.status === 'up' ? 'border-[#bde8ca] bg-[#e9f8ef] text-[#147a3b]' : check.status === 'degraded' ? 'border-[#f8df9b] bg-[#fff8e1] text-[#8a5a00]' : 'border-[#fecdca] bg-[#fff1f0] text-[#b42318]'}`}>
                                         <Icon className='h-4 w-4' />
                                     </div>
-                                    <span className={`rounded-full text-xs font-semibold ${statusTone[check.status]}`}>
+                                    <span className={`grid h-8 w-8 place-items-center rounded-lg border text-xs font-semibold ${statusTone[check.status]}`}>
                                         {check.status === 'up'
-                                            ? <CheckCircle className='w-4 h-4 stroke-green-500' />
+                                            ? <CheckCircle className='w-4 h-4' />
                                             : check.status === 'degraded'
-                                                ? <AlertCircle className='w-4 h-4 stroke-amber-500' />
-                                                : <XCircle className='w-4 h-4 stroke-red-500' />
+                                                ? <AlertCircle className='w-4 h-4' />
+                                                : <XCircle className='w-4 h-4' />
                                         }
                                     </span>
                                 </div>
-                                <p className='mt-5 text-xs uppercase tracking-[0.22em] text-bright/35'>{check.service}</p>
-                                <h3 className='mt-2 text-lg font-semibold text-bright'>{check.check_name}</h3>
-                                <div className='mt-4 grid gap-2 text-sm text-bright/55'>
-                                    <div className='flex items-center gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2'>
-                                        <HeartPulse className='h-4 w-4 shrink-0 text-emerald-300' />
-                                        <span className='text-bright/60'>Uptime</span>
-                                        <span className='ml-auto font-medium text-bright'>{check.uptime_30d}%</span>
+                                <p className='mt-5 text-xs font-semibold uppercase text-[#667085]'>{check.service}</p>
+                                <h3 className='mt-2 text-lg font-semibold text-[#171a21]'>{check.check_name}</h3>
+                                <div className='mt-4 grid gap-2 text-sm text-[#596170]'>
+                                    <div className='flex items-center gap-2 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] px-3 py-2'>
+                                        <HeartPulse className='h-4 w-4 shrink-0 text-[#147a3b]' />
+                                        <span>Uptime</span>
+                                        <span className='ml-auto font-semibold text-[#171a21]'>{check.uptime_30d}%</span>
                                     </div>
-                                    <div className='flex items-center gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2'>
-                                        <Timer className='h-4 w-4 shrink-0 text-sky-300' />
-                                        <span className='text-bright/60'>Latency</span>
-                                        <span className='ml-auto font-medium text-bright'>{check.latency_ms}ms</span>
+                                    <div className='flex items-center gap-2 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] px-3 py-2'>
+                                        <Timer className='h-4 w-4 shrink-0 text-[#3056d3]' />
+                                        <span>Latency</span>
+                                        <span className='ml-auto font-semibold text-[#171a21]'>{check.latency_ms}ms</span>
                                     </div>
-                                    <div className='flex items-center gap-2 rounded-xl border border-white/10 bg-black/18 px-3 py-2'>
-                                        <Binoculars className='h-4 w-4 shrink-0 text-orange-300' />
-                                        <span className='text-bright/60'>Last check</span>
-                                        <span className='ml-auto text-right font-medium text-bright'>{relativeTime(check.checked_at, now)}</span>
+                                    <div className='flex items-center gap-2 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] px-3 py-2'>
+                                        <Binoculars className='h-4 w-4 shrink-0 text-[#667085]' />
+                                        <span>Last check</span>
+                                        <span className='ml-auto text-right font-semibold text-[#171a21]'>{relativeTime(check.checked_at, now)}</span>
                                     </div>
                                 </div>
                                 {check.message && <ErrorNotice compact className='mt-3' message={check.message} />}
                             </div>
                         )
                     })}
-                    {!serviceStatus.checks.length && <div className='glass-card rounded-lg p-4 text-sm text-bright/45'>
-                        No monitor samples yet. Run `npm run monitor` from the API folder once, then cron will keep it warm.
+                    {!serviceStatus.checks.length && <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm text-[#596170] shadow-sm'>
+                        No public monitor checks are available yet.
                     </div>}
                 </div>
             </section>
 
             <section className='grid gap-3 md:grid-cols-3'>
-                <div className='glass-card rounded-lg p-4'>
-                    <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Live feed</p>
+                <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Live traffic</p>
                     <div className='mt-3 flex items-end justify-between gap-3'>
                         <div>
-                            <h3 className='text-lg font-semibold text-bright'>{liveDomains.length > 0 ? 'Active' : 'Idle'}</h3>
-                            <p className='mt-1 text-sm text-bright/55'>
+                            <h3 className='text-lg font-semibold text-[#171a21]'>{liveDomains.length > 0 ? 'Active' : 'Idle'}</h3>
+                            <p className='mt-1 text-sm text-[#596170]'>
                                 {liveDomains.length > 0
                                     ? `${liveDomains.length} domain${liveDomains.length === 1 ? '' : 's'} reporting right now`
                                     : 'No domains are reporting live TPS right now'}
                             </p>
                         </div>
-                        <div className='rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-100'>
+                        <div className='rounded-lg border border-[#bde8ca] bg-[#e9f8ef] px-3 py-1 text-sm font-semibold text-[#11612f]'>
                             {livePeakTps.toFixed(2)} TPS
                         </div>
                     </div>
                 </div>
 
-                <div className='glass-card rounded-lg p-4'>
-                    <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Domain summary</p>
-                    <h3 className='mt-3 text-lg font-semibold text-bright'>{serverDomainMetrics.length} cards loaded</h3>
-                    <p className='mt-1 text-sm text-bright/55'>
+                <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Domain summary</p>
+                    <h3 className='mt-3 text-lg font-semibold text-[#171a21]'>{serverDomainMetrics.length} domains tracked</h3>
+                    <p className='mt-1 text-sm text-[#596170]'>
                         Hourly, daily, weekly, and total counters from the CDN summary cache.
                     </p>
                 </div>
 
-                <div className='glass-card rounded-lg p-4'>
-                    <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Monitor snapshot</p>
-                    <h3 className='mt-3 text-lg font-semibold text-bright'>{relativeTime(serviceStatus.generated_at, now)}</h3>
-                    <p className='mt-1 text-sm text-bright/55'>
-                        Last generated health sample for the service checks above.
+                <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Monitor snapshot</p>
+                    <h3 className='mt-3 text-lg font-semibold text-[#171a21]'>{relativeTime(serviceStatus.generated_at, now)}</h3>
+                    <p className='mt-1 text-sm text-[#596170]'>
+                        Latest health check for the services above.
                     </p>
                 </div>
             </section>
@@ -167,7 +170,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
             {/* Live traffic */}
             <div className='flex items-center justify-between gap-4'>
                 <div>
-                    <h2 className='text-lg font-semibold text-bright'>Live traffic</h2>
+                    <h2 className='text-lg font-semibold text-[#171a21]'>Traffic snapshot</h2>
                 </div>
             </div>
             <div className='mt-4 grid gap-4 md:grid-cols-3 lg:grid-cols-5'>
@@ -176,41 +179,41 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                     name={domain.name}
                     tps={domain.tps} />
                 )}
-                {!domainsSortedByTps.length && <EmptyTrafficCard text='Waiting for the first live traffic sample.' />}
+                {!domainsSortedByTps.length && <EmptyTrafficCard text='Waiting for the first live traffic reading.' />}
             </div>
 
             {/* Metrics */}
-            <h1 className='font-semibold text-lg text-bright'>Most visited subdomains</h1>
+            <h1 className='font-semibold text-lg text-[#171a21]'>Most visited subdomains</h1>
             <div className='grid md:grid-cols-5 gap-4'>
                 {serverDomainMetrics.map((d, i) => (
-                    <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
+                    <div key={i} className='flex flex-col gap-1 rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm shadow-sm'>
                         <Marquee
                             text={clampMetricLabel(d.value)}
                             className='w-full'
-                            innerClassName='font-semibold text-bright/90'
+                            innerClassName='font-semibold text-[#171a21]'
                         />
-                        <span className='text-xs text-almostbright'>Hourly: {d.hits_hour ?? 0}</span>
-                        <span className='text-xs text-almostbright'>Daily: {d.hits_today}</span>
-                        <span className='text-xs text-almostbright'>Weekly: {d.hits_last_week}</span>
-                        <span className='text-xs text-almostbright'>Total: {d.hits_total}</span>
+                        <span className='text-xs text-[#667085]'>Hourly: {d.hits_hour ?? 0}</span>
+                        <span className='text-xs text-[#667085]'>Daily: {d.hits_today}</span>
+                        <span className='text-xs text-[#667085]'>Weekly: {d.hits_last_week}</span>
+                        <span className='text-xs text-[#667085]'>Total: {d.hits_total}</span>
                     </div>
                 ))}
                 {!serverDomainMetrics.length && <EmptyTrafficCard text='Subdomain rankings will appear after traffic is recorded.' />}
             </div>
 
             {/* Top endpoints */}
-            <h1 className='font-semibold text-lg text-bright'>Top endpoints</h1>
+            <h1 className='font-semibold text-lg text-[#171a21]'>Top endpoints</h1>
             <div className='grid md:grid-cols-5 gap-4'>
                 {serverMetrics.map((m, i) => (
-                    <div key={i} className='flex flex-col gap-1 rounded-2xl glass-card p-4 text-sm'>
+                    <div key={i} className='flex flex-col gap-1 rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm shadow-sm'>
                         <Marquee
                             text={clampMetricLabel(m.value)}
                             className='w-full'
-                            innerClassName='font-semibold text-bright/90'
+                            innerClassName='font-semibold text-[#171a21]'
                         />
-                        <span className='text-xs text-almostbright'>Today: {m.hits_today}</span>
-                        <span className='text-xs text-almostbright'>Last Week: {m.hits_last_week}</span>
-                        <span className='text-xs text-almostbright'>Total: {m.hits_total}</span>
+                        <span className='text-xs text-[#667085]'>Today: {m.hits_today}</span>
+                        <span className='text-xs text-[#667085]'>Last Week: {m.hits_last_week}</span>
+                        <span className='text-xs text-[#667085]'>Total: {m.hits_total}</span>
                     </div>
                 ))}
                 {!serverMetrics.length && <EmptyTrafficCard text='Endpoint rankings will appear after traffic is recorded.' />}
@@ -221,7 +224,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
 
 function EmptyTrafficCard({ text }: { text: string }) {
     return (
-        <div className='glass-card rounded-2xl p-4 text-sm text-bright/45 md:col-span-2'>
+        <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm text-[#596170] shadow-sm md:col-span-2'>
             {text}
         </div>
     )

@@ -17,7 +17,7 @@ for (const heading of ['Live traffic', 'Most visited subdomains', 'Top endpoints
 }
 
 for (const emptyState of [
-    'Waiting for the first live traffic sample.',
+    'Waiting for the first live traffic reading.',
     'Subdomain rankings will appear after traffic is recorded.',
     'Endpoint rankings will appear after traffic is recorded.',
 ]) {
