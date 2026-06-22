@@ -1,6 +1,6 @@
 # Fresh Threat Actor & Ransomware Activity Monitor
 
-Monitor public ransomware victim-claim metadata and fresh public threat actor activity in a clean dataset. The default run uses a 30-group high-yield ransomware preset and returns more than 10,000 safe metadata rows when the public source pages are reachable.
+Monitor public ransomware victim-claim metadata and fresh public threat actor activity in a clean dataset. The default run uses a 136-group high-yield ransomware preset and returns more than 20,000 safe metadata rows when the public source pages are reachable when the public source pages are reachable.
 
 ## What You Get
 

@@ -12,7 +12,7 @@ export function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
     .sort(sortSources).slice(0, 8).map((source) => ({ ...source, queries: [...source.queries].sort() }));
   return {
     schemaVersion: "ti.apify_daily_collection_run.v1",
-    preset: "30-group-ransomware-victim-archive",
+    preset: "136-group-ransomware-victim-archive",
     refreshedSourceCount: refreshedSources.length,
     candidateRowsProduced: candidateRows.length,
     freshCandidateRowsProduced: freshCandidateRows.length,

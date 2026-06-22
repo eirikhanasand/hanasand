@@ -24,7 +24,7 @@ rejectCategory("AUTOMATION");
 rejectCategory("NEWS");
 rejectTerms(buyerText, ["helloWorld", "placeholder", "TODO", "as an AI", "AI-generated", "ChatGPT", "language model"]);
 rejectTerms(buyerText, ["governance", "DTO", "readiness theater", "agent_"]);
-requireMentions(readme, ["public ransomware victim-claim metadata", "Safe metadata only", "no credential values", "pay-per-event", "30-group high-yield ransomware preset", "10,000", "paidRowDecision", "buyerValueScore", "nextSearchPivots"]);
+requireMentions(readme, ["public ransomware victim-claim metadata", "Safe metadata only", "no credential values", "pay-per-event", "136-group high-yield ransomware preset", "20,000", "paidRowDecision", "buyerValueScore", "nextSearchPivots"]);
 checkExampleInput();
 checkDatasetSchema();
 checkFixtureFreshness();
@@ -38,7 +38,7 @@ console.log(JSON.stringify({ ok: true, title: manifest.title, categories: manife
 function checkExampleInput() {
   const parsed = parseObject(manifest.exampleRunInput?.body);
   if (!parsed) return failures.push("Missing parseable exampleRunInput.body");
-  if (!Array.isArray(parsed.queries) || parsed.queries.length < 30) failures.push("Example input should use the 30-group high-yield ransomware preset");
+  if (!Array.isArray(parsed.queries) || parsed.queries.length < 136) failures.push("Example input should use the 136-group high-yield ransomware preset");
   if (parsed.maxRowsPerQuery !== 500) failures.push("Example input should request 500 rows per high-yield group");
   if (parsed.includeCoverageGaps !== false) failures.push("Example input should disable coverage gaps");
   if (parsed.includeHeldRows !== false) failures.push("Example input should disable held rows");

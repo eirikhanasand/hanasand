@@ -23,7 +23,25 @@ const SLUGS: Record<string, string> = {
   anubis: "anubis", threeam: "threeam", "3am": "threeam", lorenz: "lorenz",
   warlock: "warlock", cicada3301: "cicada3301", direwolf: "direwolf",
   karakurt: "karakurt", avoslocker: "avoslocker", beast: "beast",
-  quantum: "quantum", ransomed: "ransomed"
+  quantum: "quantum", ransomed: "ransomed", medusalocker: "medusalocker",
+  blacklock: "blacklock", lv: "lv", braincipher: "BrainCipher",
+  flocker: "flocker", maze: "maze", chaos: "chaos", darkvault: "darkvault",
+  krybit: "krybit", losttrust: "losttrust", mallox: "mallox", tengu: "tengu",
+  trigona: "trigona", knight: "knight", nitrogen: "nitrogen", crypto24: "crypto24",
+  termite: "termite", midas: "midas", blackshrantac: "blackshrantac",
+  donutleaks: "donutleaks", gunra: "gunra", ailock: "AiLock",
+  darkleakmarket: "darkleakmarket", dragon: "dragonransomware", dragonransomware: "dragonransomware",
+  embargo: "embargo", securotrop: "securotrop", ciphbit: "ciphbit",
+  helldown: "helldown", insomnia: "insomnia", nokoyawa: "nokoyawa",
+  arvinclub: "arvinclub", spook: "spook", lamashtu: "lamashtu",
+  dan0n: "dAn0n", obscura: "obscura", wannacry: "wannacry",
+  blackmatter: "blackmatter", marketo: "marketo", suncrypt: "suncrypt",
+  alphalocker: "alphalocker", blacknevas: "blacknevas",
+  metaencryptor: "metaencryptor", frag: "frag", moneymessage: "moneymessage",
+  payloadbin: "payloadbin", onyx: "onyx", kelvinsecurity: "kelvinsecurity",
+  m3rx: "m3rx", netwalker: "netwalker", werewolves: "werewolves",
+  doppelpaymer: "doppelpaymer", fulcrumsec: "fulcrumsec", kraken: "kraken",
+  vect: "vect", lapsus: "lapsus$", radar: "radar"
 };
 
 export function ransomwareLiveGroupUrl(query: string): string | undefined {
