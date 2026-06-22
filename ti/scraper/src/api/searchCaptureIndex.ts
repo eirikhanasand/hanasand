@@ -47,6 +47,7 @@ function sourceHints(source: any) {
 function scoreDoc(doc: SearchDoc, terms: string[]) {
   let score = 0;
   for (const term of terms) {
+    if (term === "loader" && /\b(spec loader|classloader|class loader|bootloader|preloader)\b/i.test(doc.text)) continue;
     const re = termRegex(term);
     if (re.test(doc.title)) score += 6;
     if (re.test(doc.text)) score += 2;

@@ -4,6 +4,7 @@ const MATCHERS = [
   [/\b(infrastructure|domain|dns|c2|command and control|bulletproof|hosting|ip address)\b/i, "infrastructure c2"],
   [/\b(info.?stealer|stealer|stolen session|session cookie|working login|credential log)\b/i, "infostealer credential identity"],
   [/\b(initial access|lateral movement|persistence|hands-on-keyboard|backdoor|remote access trojan)\b/i, "intrusion"],
+  [/\b([a-z0-9._-]*loader|dropper|postinstall payload)\b/i, "loader malware"],
   [/\bzero.day|0.day|actively exploited|exploited in the wild\b/i, "zero-day"]
 ] as const;
 

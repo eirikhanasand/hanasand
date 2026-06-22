@@ -16,6 +16,7 @@ const PHRASES: Array<[RegExp, string]> = [
   [/\b(APT\d+|Volt Typhoon|Salt Typhoon|Flax Typhoon|Sandworm|Gamaredon|Lazarus|Kimsuky|Turla|UAC-\d+|Scattered Spider)\b/i, "apt"],
   [/\b(initial access|lateral movement|persistence|hands-on-keyboard|backdoor|remote access trojan)\b/i, "intrusion"],
   [/\b(info.?stealer|stealer|stolen session|session cookie|working login|credential log)\b/i, "infostealer"],
+  [/\b([a-z0-9._-]*loader|dropper|postinstall payload)\b/i, "loader"],
   [/\bactive(?:ly)? exploit/i, "exploit"],
   [/\bcredential(?:s)?\b/i, "credential"],
   [/\bcard fraud|payment fraud|account takeover|ATO\b/i, "fraud"],
