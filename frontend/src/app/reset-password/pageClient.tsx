@@ -11,6 +11,10 @@ type ResetPasswordPageProps = {
     userId: string
 }
 
+const authInputClass = 'h-10 rounded-lg border border-[#d8dee9] bg-white px-3.5 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+const authPrimaryButtonClass = 'group flex h-10 w-full items-center justify-between rounded-lg bg-[#171a21] px-3.5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
+const authSecondaryLinkClass = 'flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#596170] transition hover:border-[#b9c2d0] hover:bg-[#f8fafc] hover:text-[#171a21]'
+
 export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
     const router = useRouter()
     const [busy, setBusy] = useState(false)
@@ -60,30 +64,30 @@ export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
     const missingResetSession = tokenLoaded && (!userId || !resetToken)
 
     return (
-        <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+        <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-[#f7f8fb] px-4 py-10 text-[#171a21] md:px-10'>
             <div className='grid w-full max-w-[392px] gap-4'>
-                <div className='grid justify-items-center gap-2 pb-3 text-center'>
-                    <h1 className='font-serif text-[46px] font-semibold leading-none tracking-normal text-bright md:text-[54px]'>Hanasand</h1>
-                    <div className='h-px w-12 rounded-full bg-orange-300/60' />
+                <div className='grid justify-items-center gap-2 pb-2 text-center'>
+                    <h1 className='text-[40px] font-semibold leading-none tracking-normal text-[#171a21]'>Hanasand</h1>
+                    <p className='text-sm font-medium text-[#667085]'>Update your console password.</p>
                 </div>
 
-                <div className='grid w-full gap-4 rounded-lg border border-white/10 bg-white/[0.045] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] backdrop-blur-xl md:p-5'>
+                <div className='grid w-full gap-4 rounded-lg border border-[#e4e7ec] bg-white p-4 shadow-[0_18px_55px_rgba(16,24,40,0.08)] md:p-5'>
                     <div className='grid gap-1 px-1'>
-                        <div className='flex items-center justify-center gap-2 text-bright'>
-                            <KeyRound className='h-4 w-4 text-orange-200/80' />
+                        <div className='flex items-center justify-center gap-2 text-[#171a21]'>
+                            <KeyRound className='h-4 w-4 text-[#3056d3]' />
                             <h2 className='text-base font-medium tracking-normal'>New password</h2>
                         </div>
-                        <p className='text-center text-xs leading-5 text-bright/50'>Choose a new password for your Hanasand account.</p>
+                        <p className='text-center text-xs leading-5 text-[#667085]'>Choose a new password for your Hanasand account.</p>
                     </div>
 
                     <ErrorNotice compact message={error as string | null} />
                     {done ? <ErrorNotice compact variant='success' message='Password updated. Redirecting to login.' /> : null}
                     {!tokenLoaded ? (
-                        <p className='rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-center text-xs text-bright/52'>Preparing reset session...</p>
+                        <p className='rounded-lg border border-[#e4e7ec] bg-[#f8fafc] px-3 py-2 text-center text-xs text-[#667085]'>Preparing reset session...</p>
                     ) : missingResetSession ? (
                         <div className='grid gap-3'>
                             <ErrorNotice compact variant='info' message='This reset link is missing or expired. Request a new code from the login page.' />
-                            <Link href='/login' className='flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm font-medium text-bright/78 transition hover:bg-white/[0.075]'>
+                            <Link href='/login' className={authSecondaryLinkClass}>
                                 <ArrowLeft className='h-4 w-4' />
                                 Back to login
                             </Link>
@@ -94,20 +98,20 @@ export default function ResetPasswordPage({ userId }: ResetPasswordPageProps) {
                                 type='password'
                                 name='password'
                                 placeholder='New password'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm font-normal text-bright outline-none transition placeholder:text-bright/32 focus:border-orange-300/50 focus:bg-white/[0.075]'
+                                className={authInputClass}
                                 required
                             />
                             <input
                                 type='password'
                                 name='confirmPassword'
                                 placeholder='Confirm password'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3 text-sm font-normal text-bright outline-none transition placeholder:text-bright/32 focus:border-orange-300/50 focus:bg-white/[0.075]'
+                                className={authInputClass}
                                 required
                             />
                             <button
                                 type='submit'
                                 disabled={busy || done}
-                                className='group flex h-10 w-full items-center justify-between rounded-lg bg-bright/88 px-3 text-sm font-medium text-background/90 shadow-[0_10px_30px_rgba(255,255,255,0.08)] transition hover:bg-bright/94 disabled:cursor-not-allowed disabled:opacity-60'
+                                className={authPrimaryButtonClass}
                             >
                                 {busy ? 'Saving...' : 'Set password'}
                                 <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1' />

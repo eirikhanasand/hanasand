@@ -86,23 +86,23 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
     }
 
     return (
-        <div className='grid overflow-hidden rounded-xl border border-white/10 bg-dark/70 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-md md:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]'>
+        <div className='grid overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-[0_20px_70px_rgba(26,35,55,0.10)] md:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]'>
             <div
-                className={`hidden min-h-[420px] place-items-center border-r border-white/10 bg-black/16 p-6 transition md:grid ${isDragging ? 'bg-[#f07d33]/8' : ''}`}
+                className={`hidden min-h-[420px] place-items-center border-r border-[#e0e5ed] bg-[#f8fafc] p-6 transition md:grid ${isDragging ? 'bg-[#eef3ff]' : ''}`}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
             >
                 <label
                     htmlFor='fileInputDesktop'
-                    className='grid cursor-pointer place-items-center gap-4 rounded-xl border border-dashed border-white/14 bg-white/[0.035] p-10 text-center transition hover:border-[#f07d33]/45 hover:bg-[#f07d33]/8'
+                    className='grid cursor-pointer place-items-center gap-4 rounded-lg border border-dashed border-[#cfd7e4] bg-white p-10 text-center transition hover:border-[#3056d3] hover:bg-[#eef3ff]'
                 >
-                    <span className='grid h-12 w-12 place-items-center rounded-xl bg-white/[0.055] text-[#f0a17a]'>
+                    <span className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe5ee] bg-[#f8fafc] text-[#3056d3]'>
                         <UploadCloud className='h-5 w-5' />
                     </span>
                     <span className='grid gap-1'>
-                        <span className='text-sm font-medium text-bright/82'>Drop media here</span>
-                        <span className='text-xs leading-5 text-bright/42'>Images and videos are supported.</span>
+                        <span className='text-sm font-semibold text-[#171a21]'>Drop media here</span>
+                        <span className='text-xs leading-5 text-[#667085]'>Images and videos are supported.</span>
                     </span>
                     <input
                         id='fileInputDesktop'
@@ -115,14 +115,14 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             </div>
             <div className='grid gap-5 p-4 sm:p-6'>
                 <div className='grid gap-1'>
-                    <h1 className='text-lg font-semibold text-bright/88'>Upload media</h1>
-                    <p className='text-sm leading-6 text-bright/45'>Choose a file or paste a fetchable media URL.</p>
+                    <h1 className='text-lg font-semibold text-[#171a21]'>Upload media</h1>
+                    <p className='text-sm leading-6 text-[#596170]'>Choose a file or paste a fetchable media URL.</p>
                 </div>
 
                 <div className='grid gap-3'>
                     <label
                         htmlFor='fileInputMobile'
-                        className='flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.055] px-4 text-sm font-medium text-bright/76 transition hover:bg-white/8 hover:text-bright'
+                        className='flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'
                     >
                         <ImageIcon className='h-4 w-4' />
                         Choose photo or video
@@ -136,7 +136,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                     </label>
                     <label
                         htmlFor='cameraInput'
-                        className='flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 text-sm font-medium text-bright/62 transition hover:bg-white/6 hover:text-bright md:hidden'
+                        className='flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:border-[#bdc7d5] md:hidden'
                     >
                         <Camera className='h-4 w-4' />
                         Use camera
@@ -150,7 +150,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                         />
                     </label>
                     <label className='grid gap-2'>
-                        <span className='flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>
+                        <span className='flex items-center gap-2 text-xs font-semibold uppercase text-[#3056d3]'>
                             <LinkIcon className='h-3.5 w-3.5' />
                             URL
                         </span>
@@ -162,7 +162,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                                 const pastedText = e.clipboardData.getData('text')
                                 handlePasteOrChange(pastedText)
                             }}
-                            className='h-11 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm text-bright outline-none transition placeholder:text-bright/28 focus:border-[#f07d33]/55 focus:bg-white/[0.065]'
+                            className='h-11 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                         />
                     </label>
                 </div>
@@ -170,7 +170,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
                 {isFetching ? <ErrorNotice compact variant='info' message='Fetching media preview...' /> : null}
                 {message ? <ErrorNotice compact variant='info' message={message} /> : null}
 
-                <Link href='/gallery' className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 text-sm font-medium text-bright/58 transition hover:bg-white/6 hover:text-bright'>
+                <Link href='/gallery' className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:border-[#bdc7d5]'>
                     <GalleryHorizontalEnd className='h-4 w-4' />
                     My uploads
                 </Link>

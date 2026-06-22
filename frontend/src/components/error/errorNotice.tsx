@@ -15,18 +15,33 @@ type ErrorNoticeProps = {
 const variants = {
     error: {
         icon: AlertCircle,
-        accent: 'bg-[#f07d33]',
-        iconTone: 'text-[#f0a17a]',
+        accent: 'bg-[#b42318]',
+        iconTone: 'text-[#b42318]',
+        shell: 'border-[#fecdca] bg-[#fff1f0] text-[#912018]',
+        title: 'text-[#912018]',
+        body: 'text-[#912018]',
+        button: 'border-[#fecdca] bg-white text-[#912018] hover:bg-[#fff7f6]',
+        secondary: 'text-[#912018] hover:bg-[#fff7f6]',
     },
     info: {
         icon: Info,
-        accent: 'bg-sky-300/80',
-        iconTone: 'text-sky-200/80',
+        accent: 'bg-[#3056d3]',
+        iconTone: 'text-[#3056d3]',
+        shell: 'border-[#b8c5ff] bg-[#eef3ff] text-[#2546a8]',
+        title: 'text-[#2546a8]',
+        body: 'text-[#344054]',
+        button: 'border-[#b8c5ff] bg-white text-[#2546a8] hover:bg-[#f8faff]',
+        secondary: 'text-[#2546a8] hover:bg-[#f8faff]',
     },
     success: {
         icon: CheckCircle2,
-        accent: 'bg-emerald-300/80',
-        iconTone: 'text-emerald-200/80',
+        accent: 'bg-[#147a3b]',
+        iconTone: 'text-[#147a3b]',
+        shell: 'border-[#bde8ca] bg-[#e9f8ef] text-[#11612f]',
+        title: 'text-[#11612f]',
+        body: 'text-[#11612f]',
+        button: 'border-[#bde8ca] bg-white text-[#11612f] hover:bg-[#f6fff9]',
+        secondary: 'text-[#11612f] hover:bg-[#f6fff9]',
     },
 }
 
@@ -49,20 +64,20 @@ export default function ErrorNotice({
     const Icon = tone.icon
 
     return (
-        <div className={`relative overflow-hidden rounded-lg border border-white/10 bg-white/[0.045] text-bright/76 shadow-[0_12px_34px_rgba(0,0,0,0.18)] backdrop-blur-md ${compact ? 'px-3 py-2' : 'px-3.5 py-3'} ${className}`}>
+        <div className={`relative overflow-hidden rounded-lg border shadow-sm ${tone.shell} ${compact ? 'px-3 py-2' : 'px-3.5 py-3'} ${className}`}>
             <div className={`absolute inset-y-2 left-0 w-0.5 rounded-r ${tone.accent}`} />
             <div className='flex min-w-0 items-start gap-2.5'>
                 <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone.iconTone}`} />
                 <div className='min-w-0 flex-1'>
-                    {title ? <p className='text-xs font-medium text-bright/86'>{title}</p> : null}
-                    <p className={`${compact ? 'text-xs' : 'text-sm'} font-normal leading-5 text-bright/64`}>{message}</p>
+                    {title ? <p className={`text-xs font-semibold ${tone.title}`}>{title}</p> : null}
+                    <p className={`${compact ? 'text-xs' : 'text-sm'} font-normal leading-5 ${tone.body}`}>{message}</p>
                     {(actionLabel && onAction) || (secondaryActionLabel && onSecondaryAction) ? (
                         <div className='mt-2 flex flex-wrap gap-2'>
                             {actionLabel && onAction ? (
                                 <button
                                     type='button'
                                     onClick={onAction}
-                                    className='rounded-md border border-bright/10 bg-bright/[0.055] px-2.5 py-1 text-xs font-semibold text-bright/72 transition hover:bg-bright/10 hover:text-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f07d33]'
+                                    className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3056d3] ${tone.button}`}
                                 >
                                     {actionLabel}
                                 </button>
@@ -71,7 +86,7 @@ export default function ErrorNotice({
                                 <button
                                     type='button'
                                     onClick={onSecondaryAction}
-                                    className='rounded-md px-2.5 py-1 text-xs font-semibold text-bright/48 transition hover:bg-bright/8 hover:text-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f07d33]'
+                                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#3056d3] ${tone.secondary}`}
                                 >
                                     {secondaryActionLabel}
                                 </button>

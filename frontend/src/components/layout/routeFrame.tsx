@@ -22,6 +22,14 @@ export default function RouteFrame({ children, serverPath }: { children: ReactNo
         || pathname === '/pwned'
         || pathname === '/status'
         || pathname === '/gallery'
+        || pathname === '/upload'
+        || pathname === '/login'
+        || pathname === '/register'
+        || pathname === '/reset-password'
+        || pathname === '/account-pending-deletion'
+        || pathname === '/reserved-usernames'
+        || pathname === '/g'
+        || pathname.startsWith('/g/')
         || pathname === '/eirik'
         || pathname.startsWith('/eirik/')
 

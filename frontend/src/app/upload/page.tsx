@@ -36,23 +36,23 @@ export default function Page() {
 
     if (isUploaded) {
         return (
-            <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+            <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-[#f7f8fb] px-4 py-10 text-[#171a21] md:px-10'>
                 <div className='grid w-full max-w-xl gap-3'>
-                    <div className='rounded-xl border border-white/10 bg-dark/70 p-3 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-md'>
+                    <div className='rounded-lg border border-[#dfe5ee] bg-white p-3 shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
                         <div className='grid gap-4'>
-                            <div className='flex items-center gap-2 text-sm font-medium text-emerald-100/78'>
-                                <span className='grid h-7 w-7 place-items-center rounded-lg bg-emerald-400/12 text-emerald-200'>
+                            <div className='flex items-center gap-2 text-sm font-semibold text-[#11612f]'>
+                                <span className='grid h-7 w-7 place-items-center rounded-lg border border-[#bde8ca] bg-[#e9f8ef] text-[#147a3b]'>
                                     <Check className='h-4 w-4' />
                                 </span>
                                 Uploaded
                             </div>
-                            <div className='grid place-items-center rounded-lg border border-white/8 bg-black/20 p-2'>
+                            <div className='grid place-items-center rounded-lg border border-[#e0e5ed] bg-[#f8fafc] p-2'>
                                 <Image alt='Uploaded image' src={url} height={300} width={348} className='max-h-[360px] w-auto rounded-lg object-contain' />
                             </div>
                             <button
                                 type='button'
                                 onClick={() => copy({ text: url, setDidCopy })}
-                                className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${didCopy === true ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/[0.045] text-bright/72 hover:bg-white/7 hover:text-bright'}`}
+                                className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${didCopy === true ? 'border-[#bde8ca] bg-[#e9f8ef] text-[#11612f]' : 'border-[#d8dee9] bg-white text-[#596170] hover:border-[#bdc7d5] hover:text-[#171a21]'}`}
                             >
                                 <LinkIcon className='h-4 w-4 shrink-0' />
                                 <span className='min-w-0 truncate'>{url}</span>
@@ -62,7 +62,7 @@ export default function Page() {
                     <button
                         type='button'
                         onClick={handleReset}
-                        className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-4 text-sm font-medium text-bright/68 transition hover:bg-white/7 hover:text-bright'
+                        className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:border-[#bdc7d5]'
                     >
                         <RotateCcw className='h-4 w-4' />
                         Upload another
@@ -73,8 +73,13 @@ export default function Page() {
     }
 
     return (
-        <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+        <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-[#f7f8fb] px-4 py-10 text-[#171a21] md:px-10'>
             <div className='w-full max-w-4xl'>
+                <div className='mb-6 grid gap-2'>
+                    <p className='text-sm font-semibold uppercase text-[#3056d3]'>Personal archive</p>
+                    <h1 className='text-3xl font-semibold tracking-normal md:text-4xl'>Upload media</h1>
+                    <p className='max-w-2xl text-sm leading-6 text-[#596170]'>A small media utility kept from the earlier Hanasand workspace, aligned with the current product surface.</p>
+                </div>
                 <Upload
                     url={url}
                     setUrl={setUrl}

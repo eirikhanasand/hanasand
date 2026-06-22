@@ -64,7 +64,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
             <button
                 type='button'
                 onClick={() => copy({ text: fullUrl, setDidCopy })}
-                className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${didCopy === true ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/[0.045] text-bright/72 hover:bg-white/7 hover:text-bright'}`}
+                className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${didCopy === true ? 'border-[#bde8ca] bg-[#e9f8ef] text-[#11612f]' : 'border-[#d8dee9] bg-white text-[#596170] hover:border-[#bdc7d5] hover:text-[#171a21]'}`}
             >
                 {didCopy === true ? <Check className='h-4 w-4 shrink-0' /> : <Copy className='h-4 w-4 shrink-0' />}
                 <span className='min-w-0 truncate'>{fullUrl}</span>
@@ -76,11 +76,11 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
         <form onSubmit={handleSubmit} className='grid gap-3'>
             <ErrorNotice compact message={error} />
             <label className='grid gap-2'>
-                <span className='text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>Shortcut</span>
-                <div className='flex h-11 overflow-hidden rounded-lg border border-white/10 bg-white/[0.045] focus-within:border-[#f07d33]/55 focus-within:bg-white/[0.065]'>
-                    <span className='flex items-center border-r border-white/8 px-3 text-sm text-bright/32'>/g/</span>
+                <span className='text-xs font-semibold uppercase text-[#3056d3]'>Shortcut</span>
+                <div className='flex h-11 overflow-hidden rounded-lg border border-[#d8dee9] bg-white focus-within:border-[#3056d3] focus-within:ring-4 focus-within:ring-[#dce6ff]'>
+                    <span className='flex items-center border-r border-[#e4e7ec] bg-[#f8fafc] px-3 text-sm text-[#667085]'>/g/</span>
                     <input
-                        className='min-w-0 flex-1 bg-transparent px-3 text-sm text-bright outline-none placeholder:text-bright/28'
+                        className='min-w-0 flex-1 bg-transparent px-3 text-sm text-[#171a21] outline-none placeholder:text-[#8c95a5]'
                         placeholder='team-notes'
                         onChange={(e) => setId(e.target.value)}
                         value={id}
@@ -89,12 +89,12 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
                 {shortcutError ? <span className='text-xs text-[#f0a17a]'>{shortcutError}</span> : null}
             </label>
             <label className='grid gap-2'>
-                <span className='flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-bright/34'>
+                <span className='flex items-center gap-2 text-xs font-semibold uppercase text-[#3056d3]'>
                     <LinkIcon className='h-3.5 w-3.5' />
                     Destination
                 </span>
                 <input
-                    className='h-11 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm text-bright outline-none transition placeholder:text-bright/28 focus:border-[#f07d33]/55 focus:bg-white/[0.065]'
+                    className='h-11 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                     placeholder='https://example.com'
                     onChange={(e) => setPath(e.target.value)}
                     value={path}
@@ -105,7 +105,7 @@ export default function LinkPageClient({ serverId, created }: { serverId?: strin
             <button
                 type='submit'
                 disabled={!canSubmit}
-                className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-semibold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/5 disabled:text-bright/35'
+                className='inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
             >
                 <Plus className='h-4 w-4' />
                 {busy ? 'Creating...' : 'Create shortcut'}

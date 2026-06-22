@@ -17,6 +17,10 @@ type LoginPageProps = {
     serverExpired: boolean
 }
 
+const authInputClass = 'h-10 rounded-lg border border-[#d8dee9] bg-white px-3.5 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+const authPrimaryButtonClass = 'group inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
+const authGhostButtonClass = 'inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-[#596170] transition hover:bg-[#f8fafc] hover:text-[#171a21] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
+
 export default function LoginPage({ path, serverInternal, serverExpired }: LoginPageProps) {
     const router = useRouter()
     const [mode, setMode] = useState<'login' | 'signup' | 'request-reset' | 'verify-reset'>('login')
@@ -215,14 +219,14 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     }, [router])
 
     return (
-        <section className='grid min-h-[90.5vh] w-full place-items-center px-4 py-8 md:px-10'>
+        <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-[#f7f8fb] px-4 py-10 text-[#171a21] md:px-10'>
             <div className='grid w-full max-w-[392px] gap-4'>
                 <div className='grid justify-items-center gap-2 pb-3 text-center'>
-                    <h1 className='font-serif text-[46px] font-semibold leading-none text-bright'>Hanasand</h1>
-                    <div className='h-px w-11 bg-bright/20' />
+                    <h1 className='text-[42px] font-semibold leading-none tracking-normal text-[#171a21]'>Hanasand</h1>
+                    <p className='text-sm leading-6 text-[#596170]'>Sign in to the console.</p>
                 </div>
 
-                <div className='grid w-full gap-3 rounded-lg border border-white/10 bg-dark/70 p-3 shadow-[0_14px_42px_rgba(0,0,0,0.24)] backdrop-blur-md'>
+                <div className='grid w-full gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
                     {(expired && path) && <ErrorNotice variant='info' message={`Token expired. You will be redirected back to ${path} after reauthenticating.`} />}
                     {(internal && path) && <ErrorNotice message={`${path} is internal. Please log in.`} />}
 
@@ -238,21 +242,21 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     type='text'
                                     name='username'
                                     placeholder='Username'
-                                    className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
+                                    className={authInputClass}
                                     required
                                 />
                                 <input
                                     type='password'
                                     name='password'
                                     placeholder='Password'
-                                    className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
+                                    className={authInputClass}
                                     required
                                 />
                                 <div className='mt-1 flex items-center gap-3'>
                                     <button
                                         type='submit'
                                         disabled={!hydrated}
-                                        className='group inline-flex h-9 min-w-24 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white'
+                                        className={`${authPrimaryButtonClass} min-w-24`}
                                     >
                                         Log in
                                         <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
@@ -261,7 +265,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                         type='button'
                                         disabled={!hydrated}
                                         onClick={() => changeMode('signup')}
-                                        className='inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78 disabled:cursor-not-allowed disabled:text-bright/25'
+                                        className={authGhostButtonClass}
                                     >
                                         Sign up
                                     </button>
@@ -269,7 +273,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                         type='button'
                                         disabled={!hydrated}
                                         onClick={() => changeMode('request-reset')}
-                                        className='ml-auto h-9 rounded-lg px-2 text-sm font-semibold text-bright/42 transition hover:bg-white/6 hover:text-bright/72 disabled:cursor-not-allowed disabled:text-bright/25'
+                                        className='ml-auto h-9 rounded-lg px-2 text-sm font-semibold text-[#667085] transition hover:bg-[#f8fafc] hover:text-[#171a21] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
                                     >
                                         Forgot?
                                     </button>
@@ -290,17 +294,17 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 value={signupUsername}
                                 onChange={(e) => setSignupUsername(e.target.value)}
                                 placeholder='Username'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
+                                className={authInputClass}
                                 required
                             />
-                            {reservedUsername && <p className='px-1 text-xs font-semibold text-orange-100/70'>Reserved username.</p>}
+                            {reservedUsername && <p className='px-1 text-xs font-semibold text-[#8a5a00]'>Reserved username.</p>}
                             <input
                                 type='text'
                                 name='name'
                                 value={signupName}
                                 onChange={(e) => setSignupName(e.target.value)}
                                 placeholder='Name'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
+                                className={authInputClass}
                                 required
                             />
                             <input
@@ -309,11 +313,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 value={signupPassword}
                                 onChange={(e) => setSignupPassword(e.target.value)}
                                 placeholder='Password'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
+                                className={authInputClass}
                                 required
                             />
                             {signupPassword && !signupPasswordIsValid && (
-                                <p className='px-1 text-xs leading-5 text-bright/45'>
+                                <p className='px-1 text-xs leading-5 text-[#667085]'>
                                     16 chars, 2 lowercase, 2 uppercase, 2 numbers, 2 symbols.
                                 </p>
                             )}
@@ -321,7 +325,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 <button
                                     type='submit'
                                     disabled={!hydrated || busy || !canCreateAccount}
-                                    className='group inline-flex h-9 min-w-36 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/5 disabled:text-bright/35'
+                                    className={`${authPrimaryButtonClass} min-w-36`}
                                 >
                                     {busy ? 'Creating' : 'Create account'}
                                     <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
@@ -329,7 +333,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 <button
                                     type='button'
                                     onClick={() => changeMode('login')}
-                                    className='inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'
+                                    className={authGhostButtonClass}
                                 >
                                     Log in
                                 </button>
@@ -343,19 +347,19 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 type='text'
                                 name='resetUserId'
                                 placeholder='Username'
-                                className='h-10 rounded-lg border border-white/10 bg-white/[0.055] px-3.5 text-sm font-medium text-bright outline-none transition placeholder:text-bright/35 focus:border-[#f07d33]/55 focus:bg-white/[0.075]'
+                                className={authInputClass}
                                 required
                             />
                             <div className='mt-1 flex items-center gap-3'>
                                 <button
                                     type='submit'
                                     disabled={busy}
-                                    className='group inline-flex h-9 min-w-28 items-center justify-center gap-2 rounded-lg bg-bright px-4 text-sm font-bold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60'
+                                    className={`${authPrimaryButtonClass} min-w-28`}
                                 >
                                     {busy ? 'Sending' : 'Send code'}
                                     <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                 </button>
-                                <button type='button' onClick={() => changeMode('login')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
+                                <button type='button' onClick={() => changeMode('login')} className={authGhostButtonClass}>
                                     Back
                                 </button>
                             </div>
@@ -371,10 +375,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 onComplete={verifyResetCode}
                             />
                             <div className='mt-1 flex items-center gap-3'>
-                                <button type='button' onClick={() => changeMode('request-reset')} className='h-9 rounded-lg px-3 text-sm font-semibold text-bright/52 transition hover:bg-white/6 hover:text-bright/78'>
+                                <button type='button' onClick={() => changeMode('request-reset')} className={authGhostButtonClass}>
                                     Again
                                 </button>
-                                <p className='ml-auto text-xs font-medium text-bright/38'>
+                                <p className='ml-auto text-xs font-medium text-[#667085]'>
                                     {busy ? 'Verifying...' : 'Verifies automatically'}
                                 </p>
                             </div>
@@ -461,7 +465,7 @@ function ResetCodeInput({
                                 inputsRef.current[index + 1]?.focus()
                             }
                         }}
-                        className='h-11 rounded-lg border border-white/10 bg-white/[0.055] text-center text-base font-semibold text-bright outline-none transition focus:border-[#f07d33]/55 focus:bg-white/[0.075] disabled:cursor-not-allowed disabled:opacity-55'
+                        className='h-11 rounded-lg border border-[#d8dee9] bg-white text-center text-base font-semibold text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff] disabled:cursor-not-allowed disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
                     />
                 ))}
             </div>
