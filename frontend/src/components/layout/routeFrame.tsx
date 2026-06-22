@@ -5,37 +5,15 @@ import { usePathname } from 'next/navigation'
 import Footer from '@/components/footer/footer'
 import BackgroundSketches from '@/components/background/backgroundSketches'
 import isSharePath from '@/utils/routes/isSharePath'
+import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 
 export default function RouteFrame({ children, serverPath }: { children: ReactNode, serverPath: string }) {
     const pathname = usePathname() || serverPath
     const isShare = isSharePath(pathname)
     const isDashboard = pathname.startsWith('/dashboard')
     const isProfile = pathname.startsWith('/profile')
-    const isAppSurface = isShare || pathname.startsWith('/ai') || isDashboard || isProfile
-    const isPublicProduct = pathname === '/'
-        || pathname === '/pricing'
-        || pathname === '/contact'
-        || pathname === '/developers'
-        || pathname === '/about'
-        || pathname === '/ti'
-        || pathname.startsWith('/ti/')
-        || pathname === '/pwned'
-        || pathname === '/status'
-        || pathname === '/gallery'
-        || pathname === '/upload'
-        || pathname === '/login'
-        || pathname === '/register'
-        || pathname === '/reset-password'
-        || pathname === '/account-pending-deletion'
-        || pathname === '/reserved-usernames'
-        || pathname === '/g'
-        || pathname.startsWith('/g/')
-        || pathname === '/ai'
-        || pathname.startsWith('/ai/')
-        || pathname === '/s'
-        || pathname.startsWith('/s/')
-        || pathname === '/eirik'
-        || pathname.startsWith('/eirik/')
+    const isPublicProduct = isPublicProductPath(pathname)
+    const isAppSurface = !isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile)
 
     const frameSizing = isAppSurface
         ? 'mt-[7.5vh] h-[92.5vh]'

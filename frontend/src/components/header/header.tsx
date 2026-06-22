@@ -11,6 +11,7 @@ import Menu from '@/components/menu/menu'
 import Link from 'next/link'
 import ViewModeToggle from './viewModeToggle'
 import isSharePath from '@/utils/routes/isSharePath'
+import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 
 const productItems = [
     { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, and monitored metadata.', href: '/ti', icon: Radar },
@@ -65,7 +66,8 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
     const isAI = pathname.endsWith('/ai') || pathname.includes('/ai/')
     const isDashboard = pathname.startsWith('/dashboard')
     const isProfile = pathname.startsWith('/profile')
-    const isAppSurface = isShare || isAI || isDashboard || isProfile
+    const isPublicProduct = isPublicProductPath(pathname)
+    const isAppSurface = !isPublicProduct && (isShare || isAI || isDashboard || isProfile)
 
     if (!isAppSurface) {
         return (
