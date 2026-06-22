@@ -1,5 +1,6 @@
 import type { MarketplaceRow } from "./types.ts";
 import { caveatedLead, capabilityWithoutEvidence, coverageGap, noEvidenceHold, parserAdmittedSellable, publicEvidenceSellable, publicFindingSellable, sourceProvenance, strongSellable, unsupportedContext } from "./paidDecision/decisions.ts";
+import { historicalVictimSellable, isSellableHistoricalVictim } from "./paidDecision/historicalVictims.ts";
 import { currentLiveActivitySellable, isSellableCurrentLiveActivity } from "./paidDecision/liveActivity.ts";
 import { isCorroboratedPublicFinding, isSellablePublicEvidenceRow } from "./paidDecision/predicates.ts";
 export { isCorroboratedPublicFinding, isSellablePublicEvidenceRow } from "./paidDecision/predicates.ts";
@@ -17,6 +18,7 @@ export function paidRowDecisionFor(
   if (row.rowType === "coverage_gap") return coverageGap();
   if (row.rowType === "source") return sourceProvenance();
   if (parserAdmissionRuntimeProof?.countsTowardCurrentSellableRows) return parserAdmittedSellable();
+  if (isSellableHistoricalVictim(row)) return historicalVictimSellable();
   if (hasHoldCondition(row)) return noEvidenceHold(row);
   if (isStrongSellable(row)) return strongSellable();
   if (isCorroboratedPublicFinding(row)) return publicFindingSellable();

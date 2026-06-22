@@ -1,7 +1,8 @@
 import type { MarketplaceRow } from "../types.ts";
 
-export function whyWorthPayingFor(row: MarketplaceRow, decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">): string {
+export function whyWorthPayingFor(row: MarketplaceRow, decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance" | "paidRowReasonCodes">): string {
   if (decision.billingGuidance === "charge") {
+    if (decision.paidRowReasonCodes?.includes("historical_victim_claim")) return "searchable public ransomware victim-claim archive row with safe metadata and pivots";
     if (row.sourceFamilyCount >= 2) return "fresh corroborated public signal with source-family diversity";
     return "specific public intelligence row ready for analyst triage";
   }

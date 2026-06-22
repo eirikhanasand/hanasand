@@ -12,14 +12,17 @@
     "dataset": "./DATASET_SCHEMA.json"
   },
   "readme": "../README.md",
-  "categories": ["SECURITY", "MONITORING"],
+  "categories": [
+    "SECURITY",
+    "MONITORING"
+  ],
   "exampleRunInput": {
-    "body": "{\n  \"maxRowsPerQuery\": 25,\n  \"includeActivity\": true,\n  \"includeTargets\": true,\n  \"includeTtps\": true,\n  \"includeSources\": true,\n  \"includeDatasets\": false,\n  \"includeCoverageGaps\": false,\n  \"includeHeldRows\": false\n}",
+    "body": "{\n  \"queries\": [\n    \"LockBit3\",\n    \"Qilin\",\n    \"Akira\",\n    \"Play\",\n    \"Clop\",\n    \"LockBit2\",\n    \"RansomHub\",\n    \"INC Ransom\",\n    \"ALPHV\",\n    \"DragonForce\",\n    \"BianLian\",\n    \"Black Basta\",\n    \"Medusa\",\n    \"TheGentlemen\",\n    \"SafePay\",\n    \"8Base\",\n    \"Lynx\",\n    \"Everest\",\n    \"Conti\",\n    \"Dispossessor\",\n    \"LockBit5\",\n    \"Pysa\",\n    \"Hunters\",\n    \"NightSpire\",\n    \"KillSec\",\n    \"Sinobi\",\n    \"Rhysida\",\n    \"Cactus\",\n    \"Royal\",\n    \"Hive\"\n  ],\n  \"maxRowsPerQuery\": 500,\n  \"includeActivity\": true,\n  \"includeTargets\": true,\n  \"includeTtps\": true,\n  \"includeSources\": true,\n  \"includeDatasets\": false,\n  \"includeCoverageGaps\": false,\n  \"includeHeldRows\": false\n}",
     "contentType": "application/json; charset=utf-8"
   },
   "defaultRunOptions": {
     "build": "latest",
     "memoryMbytes": 1024,
-    "timeoutSecs": 600
+    "timeoutSecs": 1200
   }
 }

@@ -1,6 +1,7 @@
 import { APT_QUERIES } from "./watchlist/apt.ts";
 import { ALIAS_LIFT_QUERIES, ALIAS_MARGIN_QUERIES } from "./watchlist/aliasLift.ts";
 import { COMMERCIAL_LIFT_QUERIES } from "./watchlist/commercialLift.ts";
+import { HIGH_YIELD_RANSOMWARE_QUERIES } from "./watchlist/highYieldRansomware.ts";
 import { MALWARE_TOOL_QUERIES } from "./watchlist/malwareTools.ts";
 import { MEASURED_LIFT_QUERIES } from "./watchlist/measuredLift.ts";
 import { RANSOMWARE_QUERIES } from "./watchlist/ransomware.ts";
@@ -21,3 +22,6 @@ export const DEFAULT_QUERIES = [
   ...ALIAS_LIFT_QUERIES,
   ...ALIAS_MARGIN_QUERIES
 ];
+
+export const DEFAULT_RUNTIME_QUERIES = HIGH_YIELD_RANSOMWARE_QUERIES;
+export const DEFAULT_MAX_ROWS_PER_QUERY = 500;

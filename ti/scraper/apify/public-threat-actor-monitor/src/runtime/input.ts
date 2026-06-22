@@ -1,5 +1,5 @@
 import type { ActorInput } from "../types.ts";
-import { DEFAULT_API_BASE, DEFAULT_QUERIES, MAX_QUERIES_PER_RUN } from "../constants.ts";
+import { DEFAULT_API_BASE, DEFAULT_MAX_ROWS_PER_QUERY, DEFAULT_RUNTIME_QUERIES, MAX_QUERIES_PER_RUN } from "../constants.ts";
 import { clampInt, uniqueStrings } from "../utils.ts";
 import { readRemoteApifyInput } from "./remoteInput.ts";
 
@@ -9,8 +9,8 @@ export function normalizeInput(input: ActorInput): NormalizedInput {
   const queries = uniqueStrings([...(input.queries ?? []), ...(input.query ? [input.query] : [])]).slice(0, MAX_QUERIES_PER_RUN);
   return {
     query: input.query ?? "",
-    queries: queries.length ? queries : DEFAULT_QUERIES,
-    maxRowsPerQuery: clampInt(input.maxRowsPerQuery, 1, 500, 40),
+    queries: queries.length ? queries : DEFAULT_RUNTIME_QUERIES,
+    maxRowsPerQuery: clampInt(input.maxRowsPerQuery, 1, 500, DEFAULT_MAX_ROWS_PER_QUERY),
     includeActivity: input.includeActivity ?? true,
     includeTargets: input.includeTargets ?? true,
     includeTtps: input.includeTtps ?? true,
