@@ -7,7 +7,7 @@ export async function fetchPublicNewsFallback(query: string): Promise<TiSearchRe
   try {
     const response = await fetch(url, { headers: { "user-agent": "hanasand-ti-apify-actor/0.6 public-news-fallback" } });
     if (!response.ok) return undefined;
-    const items = parseNewsRss(await response.text()).filter((item) => isRelevantRecent(query, item.title, item.pubDate));
+    const items = parseNewsRss(await response.text(), 12).filter((item) => isRelevantRecent(query, item.title, item.pubDate));
     return items.length ? newsFallbackResponse(query, items) : undefined;
   } catch {
     return undefined;

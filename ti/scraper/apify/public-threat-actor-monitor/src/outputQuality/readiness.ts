@@ -1,7 +1,7 @@
 import type { MarketplaceRow } from "../types.ts";
 import type { paidRowQualitySummary } from "../outputQuality.ts";
 
-export const PRODUCTION_SELLABLE_ROW_FLOOR = 5000;
+export const PRODUCTION_SELLABLE_ROW_FLOOR = 10000;
 
 export function monetizationReadinessForRows(rows: MarketplaceRow[], quality: ReturnType<typeof paidRowQualitySummary>) {
   const rateTargetSellableRows = Math.ceil(rows.length * 0.25);

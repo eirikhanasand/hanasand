@@ -16,7 +16,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const useful = value(input.actorRun?.usefulRowCount) ?? sum(input.queryMeasurements?.map((item) => item.usefulRowCount));
   const fresh = value(input.actorRun?.freshRowCount) ?? sum(input.queryMeasurements?.map((item) => item.freshRowCount));
   const sellable = value(input.actorRun?.sellableRowCount) ?? Math.min(useful ?? 0, rows ?? 0);
-  const target = value(input.actorRun?.targetSellableRows) ?? 5000;
+  const target = value(input.actorRun?.targetSellableRows) ?? 10000;
   const usefulRate = rate(useful, rows);
   const freshRate = rate(fresh, rows);
   const marketplace = marketplaceTelemetry(input.marketplace);

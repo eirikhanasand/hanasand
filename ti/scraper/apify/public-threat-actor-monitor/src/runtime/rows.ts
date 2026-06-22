@@ -23,7 +23,7 @@ export function outputRowsFor(response: Parameters<typeof normalizeResponse>[0],
 }
 
 export function needsNewsFallback(rows: MarketplaceRow[]): boolean {
-  return rows.filter((row) => row.paidRowDecision === "sellable").length < 3;
+  return rows.filter((row) => row.paidRowDecision === "sellable").length < 10;
 }
 
 type RankedRow = { row: MarketplaceRow; index: number };

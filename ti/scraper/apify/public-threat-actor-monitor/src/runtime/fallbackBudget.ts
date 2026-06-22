@@ -7,7 +7,7 @@ export interface NewsFallbackBudget {
 }
 
 export function createNewsFallbackBudget(queryCount: number): NewsFallbackBudget {
-  const limit = Math.min(500, Math.max(25, Math.ceil(queryCount * 0.35)));
+  const limit = Math.min(2_500, Math.max(100, Math.ceil(queryCount * 0.75)));
   return {
     attempts: 0,
     used: 0,

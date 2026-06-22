@@ -10,7 +10,7 @@ export function normalizeInput(input: ActorInput): NormalizedInput {
   return {
     query: input.query ?? "",
     queries: queries.length ? queries : DEFAULT_QUERIES,
-    maxRowsPerQuery: clampInt(input.maxRowsPerQuery, 1, 100, 25),
+    maxRowsPerQuery: clampInt(input.maxRowsPerQuery, 1, 500, 40),
     includeActivity: input.includeActivity ?? true,
     includeTargets: input.includeTargets ?? true,
     includeTtps: input.includeTtps ?? true,
