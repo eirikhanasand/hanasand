@@ -18,6 +18,16 @@ export interface TiSearchResponse {
         confidence: number
         sourceIds: string[]
         url?: string
+        claimType?: 'campaign' | 'victim_claim' | 'malware_activity' | 'vulnerability_exploitation' | 'infrastructure_activity' | 'general_activity'
+        victimName?: string
+        affectedSectors?: string[]
+        countries?: string[]
+        impact?: string
+        firstReportedAt?: string
+        lastReportedAt?: string
+        publisherCount?: number
+        corroboratingSourceIds?: string[]
+        contradictingSourceIds?: string[]
     }>
     targets: Array<{
         sector: string
@@ -190,15 +200,24 @@ export interface TiVictimNotificationPacket {
 }
 
 export default async function searchThreatIntel(query: string): Promise<TiSearchResponse | null> {
-    const response = await fetch(`${config.url.api}/ti/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-    })
+    let response: Response
+    try {
+        response = await fetch(`${config.url.api}/ti/search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        })
+    } catch {
+        return null
+    }
 
     if (!response.ok) {
         return null
     }
 
-    return await response.json() as TiSearchResponse
+    try {
+        return await response.json() as TiSearchResponse
+    } catch {
+        return null
+    }
 }

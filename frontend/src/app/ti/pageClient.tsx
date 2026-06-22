@@ -1,23 +1,29 @@
 'use client'
 
-import searchThreatIntel, { TiOperationalStatus, TiSearchResponse } from '@/utils/ti/search'
-import { Activity, AlertTriangle, Clock3, Database, ExternalLink, Gauge, GitBranch, Globe2, ListChecks, Radar, RefreshCw, Search, ShieldCheck, Target, TimerReset, Waypoints } from 'lucide-react'
-import { FormEvent, useEffect, useState } from 'react'
+import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
+import { Activity, BellRing, Building2, Database, ExternalLink, Globe2, Radar, Search, ShieldCheck, Target, Waypoints } from 'lucide-react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 
 export default function TiPageClient({ initialResult }: { initialResult: TiSearchResponse | null }) {
     const [query, setQuery] = useState(initialResult?.query ?? '')
     const [result, setResult] = useState<TiSearchResponse | null>(initialResult)
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
+    const activeQueryRef = useRef(initialResult?.query.trim().toLowerCase() ?? '')
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+        activeQueryRef.current = query.trim().toLowerCase()
+    }, [query])
 
     useEffect(() => {
         if (!result?.refreshAfterSeconds || result.status === 'ready') return
         const expectedQuery = result.query
+        const expectedKey = expectedQuery.trim().toLowerCase()
         const timer = window.setTimeout(async () => {
             const next = await searchThreatIntel(expectedQuery)
-            if (next) {
+            if (next && activeQueryRef.current === expectedKey) {
                 setResult(next)
-                setQuery(next.query)
             }
         }, Math.max(3, result.refreshAfterSeconds) * 1000)
 
@@ -26,11 +32,14 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
 
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
-        const clean = query.trim()
+        const form = new FormData(event.currentTarget)
+        const clean = String(form.get('query') ?? inputRef.current?.value ?? query).trim()
         if (!clean || busy) return
 
         setBusy(true)
         setError('')
+        setQuery(clean)
+        activeQueryRef.current = clean.toLowerCase()
         setResult(searchingResult(clean))
         try {
             const next = await searchThreatIntel(clean)
@@ -38,7 +47,9 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
                 setError('The TI service did not return results.')
                 return
             }
-            setResult(next)
+            if (activeQueryRef.current === clean.toLowerCase()) {
+                setResult(next)
+            }
         } finally {
             setBusy(false)
         }
@@ -53,6 +64,8 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
                     <label className='grid flex-1 gap-2'>
                         <span className='text-xs font-semibold uppercase text-[#3056d3]'>Threat intelligence search</span>
                         <input
+                            ref={inputRef}
+                            name='query'
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder='Company, actor, domain, CVE, supplier...'
@@ -61,7 +74,7 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
                     </label>
                     <button
                         type='submit'
-                        disabled={busy || query.trim().length === 0}
+                        disabled={busy}
                         className='inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#98a2b3]'
                     >
                         <Search className='h-4 w-4' />
@@ -78,15 +91,16 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
 
 function Results({ result }: { result: TiSearchResponse }) {
     const sourceUrlById = new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)]))
+    const collectionSources = result.collectionStrategy?.sourcePosture ?? defaultCollectionSources()
+    const datasets = result.datasets.length ? result.datasets : defaultDatasets()
+    const sources = result.sources.length ? result.sources : defaultSourceLinks()
+    const alertItems = alertItemsFor(result)
     return (
         <div className='grid gap-6'>
             <section className='grid gap-4 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm lg:grid-cols-[1.25fr_0.75fr]'>
                 <div className='grid gap-3'>
                     <div className='flex flex-wrap items-center gap-2'>
                         <h1 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>{result.query}</h1>
-                        <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-medium uppercase text-[#667085]'>
-                            {result.mode}
-                        </span>
                         {result.status ? (
                             <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-medium uppercase text-[#3056d3]'>
                                 {result.status}
@@ -104,15 +118,9 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Confidence' value={`${Math.round(result.confidence * 100)}%`} />
                     <Metric icon={<Activity className='h-4 w-4' />} label='Updated' value={formatDate(result.generatedAt || result.lastSeen)} />
                     <Metric icon={<Database className='h-4 w-4' />} label='Sources' value={`${result.sources.length}`} />
-                    {result.runId ? <Metric icon={<Radar className='h-4 w-4' />} label='Run' value={result.runId} /> : null}
+                    <Metric icon={<BellRing className='h-4 w-4' />} label='Alerting' value={result.status === 'ready' || result.status === 'partial' ? 'Active' : 'Watching'} />
                 </div>
             </section>
-
-            <AnalystLoopPanel result={result} />
-
-            <CollectionStrategyPanel result={result} />
-
-            <OperationalStatusPanel result={result} />
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
                 <Panel title='Recent Activity' icon={<Radar className='h-4 w-4' />}>
@@ -130,6 +138,20 @@ function Results({ result }: { result: TiSearchResponse }) {
                         )}) : <EmptyLine text={result.status === 'searching' ? 'Searching' : 'No activity returned yet.'} />}
                 </Panel>
 
+                <Panel title='Company Exposure' icon={<Building2 className='h-4 w-4' />}>
+                    {alertItems.length ? alertItems.map(item => (
+                        <div key={item.title} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
+                            <div className='flex items-center justify-between gap-3'>
+                                <h2 className='text-sm font-semibold text-[#171a21]'>{item.title}</h2>
+                                <span className={`rounded-lg px-2 py-1 text-xs ${rowToneClass(item.tone)}`}>{item.state}</span>
+                            </div>
+                            <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                        </div>
+                    )) : <EmptyLine text='No company exposure returned yet.' />}
+                </Panel>
+            </section>
+
+            <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
                 <Panel title='Targeting' icon={<Target className='h-4 w-4' />}>
                     {result.targets.length ? result.targets.map(item => (
                         <div key={item.sector} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
@@ -155,12 +177,12 @@ function Results({ result }: { result: TiSearchResponse }) {
                     ))}
                 </Panel>
 
-                <Panel title='Datasets And Coverage' icon={<Globe2 className='h-4 w-4' />}>
-                    {result.datasets.map(item => (
+                <Panel title='Source Coverage' icon={<Globe2 className='h-4 w-4' />}>
+                    {datasets.map(item => (
                         <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
                             <div className='flex items-center justify-between gap-3'>
                                 <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
-                                <span className='text-xs text-[#667085]'>{item.status}</span>
+                                <span className='text-xs text-[#667085]'>{formatLabel(item.status)}</span>
                             </div>
                             <p className='text-sm leading-6 text-[#596170]'>{item.coverage}</p>
                         </EvidenceBox>
@@ -169,23 +191,8 @@ function Results({ result }: { result: TiSearchResponse }) {
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Provenance' icon={<ExternalLink className='h-4 w-4' />}>
-                    {result.sources.map(source => {
-                        const href = source.url || linkFromText(source.provenance)
-                        return (
-                            <EvidenceBox key={source.id} href={href}>
-                                <h2 className='inline-flex items-center gap-1 text-sm font-semibold text-[#171a21]'>{source.name}{href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}</h2>
-                                <p className='text-xs text-[#667085]'>{source.id} · {source.type}</p>
-                                <p className='text-sm leading-6 text-[#596170]'>{source.provenance}</p>
-                            </EvidenceBox>
-                        )})}
-                </Panel>
-
-                <Panel title='Notes' icon={<ShieldCheck className='h-4 w-4' />}>
-                    {result.notes.map(note => (
-                        <p key={note} className='border-b border-[#eef1f5] py-3 text-sm leading-6 text-[#596170] last:border-b-0'>{note}</p>
-                    ))}
-                </Panel>
+                <CoverageStrategyPanel sources={collectionSources} />
+                <SourceLinksPanel sources={sources} />
             </section>
         </div>
     )
@@ -228,67 +235,96 @@ function searchingResult(query: string): TiSearchResponse {
         recentActivity: [],
         targets: [],
         ttps: [],
-        datasets: [],
-        sources: [],
-        notes: [],
-        analystLoop: {
-            resultState: 'queued',
-            headline: 'Submitting this search to the live TI scheduler.',
-            nextSteps: [
-                { state: 'queued', label: 'Queued', detail: 'Waiting for scraper scheduler telemetry.', tone: 'watch' }
-            ],
-            runStatusClarity: {
-                queuedTasks: 0,
-                reviewTasks: 0,
-                rejectedSources: 0,
-                blockedUnsafeTargets: 0,
-                meaningfulWorkCount: 0,
-                summary: 'Submitting search'
-            },
-            metadataReviewInbox: [],
-            sourceActivationWorkflow: {
-                required: false,
-                dryRunOnly: true,
-                actions: []
-            }
-        },
-        operationalStatus: {
-            state: 'searching',
-            headline: 'Submitting this search to the live TI scheduler.',
-            queue: {
-                selectedTasks: 0,
-                queuedTasks: 0,
-                leasedTasks: 0,
-                reviewTasks: 0,
-                maxAgeSeconds: 0,
-                p95AgeSeconds: 0,
-                nextPollSeconds: 3,
-                backpressureState: 'submitting',
-                cursorContinuity: 'pending'
-            },
-            workers: {
-                leaseState: 'waiting for scheduler',
-                retryDebt: 0,
-                deadLetters: 0,
-                backoffState: 'clear',
-                concurrency: 'waiting for scheduler telemetry',
-                fairness: 'pending'
-            },
-            budgets: [],
-            fairness: {
-                ok: true,
-                worstShare: 0
-            },
-            aging: [
-                { label: 'Oldest queued task', seconds: 0, tone: 'ok' },
-                { label: 'p95 queued age', seconds: 0, tone: 'ok' }
-            ],
-            controls: [],
-            notes: [
-                'Queue, leases, retries, and budget lanes will appear as soon as the scraper returns scheduler state.'
-            ]
-        }
+        datasets: defaultDatasets(),
+        sources: defaultSourceLinks(),
+        notes: []
     }
+}
+
+function defaultDatasets(): TiSearchResponse['datasets'] {
+    return [
+        {
+            name: 'Ransomware victim claims',
+            type: 'darknet_metadata',
+            coverage: 'Recent company names, actor names, claimed dates, sector/country context, and claimed-data descriptions from monitored extortion sources and public indexes.',
+            status: 'available',
+            url: 'https://ransomware.live/'
+        },
+        {
+            name: 'Actor infrastructure monitoring',
+            type: 'darknet_metadata',
+            coverage: 'Metadata-first checks against actor-controlled public leak infrastructure so watched companies can be alerted when a new mention appears.',
+            status: 'metadata_only'
+        },
+        {
+            name: 'Vulnerability and exploitation context',
+            type: 'clear_web',
+            coverage: 'Recent NVD/CISA and public advisory context for CVEs, affected products, exploitation status, and actor-linked vulnerability activity.',
+            status: 'available',
+            url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog'
+        },
+        {
+            name: 'Company and supplier watchlists',
+            type: 'vendor_report',
+            coverage: 'Customer-specific names, domains, brands, subsidiaries, and vendors matched against new actor claims and captured metadata.',
+            status: 'planned'
+        }
+    ]
+}
+
+function defaultCollectionSources(): NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture'] {
+    return [
+        {
+            source: 'RansomLook and ransomware.live',
+            role: 'primary_seed',
+            summary: 'Used as starting coverage for recent victim claims, actor names, company names, claimed dates, sector/country context, and claimed-data descriptions.',
+            buyerValue: 'Good seed data lets a small team detect obvious company mentions immediately, then spend engineering effort on direct verification and alert speed.'
+        },
+        {
+            source: 'Direct actor infrastructure collection',
+            role: 'owned_collection_target',
+            summary: 'Metadata-first collection from actor-controlled public leak/extortion infrastructure where policy allows.',
+            buyerValue: 'This is the valuable part: faster discovery, verified claim changes, freshness deltas, and watchlist alerts that are not just copied from another public index.'
+        },
+        {
+            source: 'Infostealer and credential-exposure metadata',
+            role: 'owned_collection_target',
+            summary: 'Company/domain exposure metadata routed through review without credential values, raw dumps, or unsafe redistribution.',
+            buyerValue: 'Buyers care when their domain, vendor, executive, or portfolio company appears in fresh exposure metadata; the value is the alert and triage context, not dump access.'
+        },
+        {
+            source: 'NVD, CISA KEV, and public advisories',
+            role: 'corroboration',
+            summary: 'Used for enrichment, prioritization, and vulnerability context around actor activity.',
+            buyerValue: 'Public vulnerability data is not the product by itself, but it makes exposure alerts more actionable for security teams deciding what to patch or investigate first.'
+        }
+    ]
+}
+
+function defaultSourceLinks(): TiSearchResponse['sources'] {
+    return [
+        {
+            id: 'ransomware-live',
+            name: 'ransomware.live',
+            type: 'victim_claim_seed',
+            provenance: 'https://ransomware.live/',
+            url: 'https://ransomware.live/'
+        },
+        {
+            id: 'ransomlook',
+            name: 'RansomLook',
+            type: 'victim_claim_seed',
+            provenance: 'https://www.ransomlook.io/',
+            url: 'https://www.ransomlook.io/'
+        },
+        {
+            id: 'cisa-kev',
+            name: 'CISA Known Exploited Vulnerabilities',
+            type: 'vulnerability_context',
+            provenance: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog',
+            url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog'
+        }
+    ]
 }
 
 function formatDate(value: string) {
@@ -310,144 +346,11 @@ function Panel({ title, icon, children }: { title: string; icon: React.ReactNode
     )
 }
 
-function AnalystLoopPanel({ result }: { result: TiSearchResponse }) {
-    const loop = result.analystLoop
-    if (!loop) return null
-    const packet = loop.victimNotificationPacket
-
+function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture'] }) {
     return (
-        <section className='grid gap-4 border border-[#dfe5ee] bg-white p-4'>
-            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
-                <div className='grid gap-2'>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        <span className={`inline-flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold uppercase outline ${resultStateClass(loop.resultState)}`}>
-                            {loop.resultState === 'blocked_unsafe_target' || loop.resultState === 'needs_source_activation' ? <AlertTriangle className='h-3.5 w-3.5' /> : <ListChecks className='h-3.5 w-3.5' />}
-                            {formatLabel(loop.resultState)}
-                        </span>
-                        <h2 className='text-base font-semibold text-[#171a21]'>Analyst loop</h2>
-                    </div>
-                    <p className='max-w-4xl text-sm leading-6 text-[#596170]'>{loop.headline}</p>
-                </div>
-                <div className='grid gap-1 text-xs text-[#667085] lg:text-right'>
-                    <span>{loop.runStatusClarity.queuedTasks} queued · {loop.runStatusClarity.reviewTasks} review</span>
-                    <span>{loop.runStatusClarity.blockedUnsafeTargets} unsafe blocked · {loop.runStatusClarity.rejectedSources} rejected</span>
-                </div>
-            </div>
-
-            <div className='grid gap-2 md:grid-cols-2 xl:grid-cols-5'>
-                {loop.nextSteps.map(step => (
-                    <div key={`${step.state}-${step.label}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
-                        <p className={`text-xs font-semibold uppercase ${stepToneText(step.tone)}`}>{formatLabel(step.state)}</p>
-                        <h3 className='mt-2 text-sm font-semibold text-[#171a21]'>{step.label}</h3>
-                        <p className='mt-1 text-xs leading-5 text-[#667085]'>{step.detail}</p>
-                    </div>
-                ))}
-            </div>
-
-            {loop.metadataReviewInbox.length ? (
-                <div className='grid gap-3'>
-                    <h3 className='text-sm font-semibold text-[#344054]'>Metadata review inbox</h3>
-                    <div className='grid gap-3 lg:grid-cols-2'>
-                        {loop.metadataReviewInbox.map(item => (
-                            <div key={item.id} className='grid gap-3 rounded-lg border border-amber-200/15 bg-amber-200/[0.045] p-3'>
-                                <div className='flex flex-wrap items-center justify-between gap-2'>
-                                    <h4 className='text-sm font-semibold text-[#171a21]'>{item.company || item.victim || 'Unattributed leak claim'}</h4>
-                                    <span className='rounded-lg bg-amber-200/10 px-2 py-1 text-xs text-amber-100/75'>{formatLabel(item.status)}</span>
-                                </div>
-                                <div className='grid gap-2 text-sm text-[#596170]'>
-                                    {item.affectedAccounts ? <p><strong className='text-[#171a21]'>{item.affectedAccounts}</strong> claimed affected</p> : null}
-                                    {item.datasetSize ? <p><strong className='text-[#171a21]'>{item.datasetSize}</strong> claimed dataset size</p> : null}
-                                    {item.accountSubjects ? <p>{item.accountSubjects}</p> : null}
-                                    {item.actorStatement ? <p className='leading-6'>{item.actorStatement}</p> : null}
-                                </div>
-                                <div className='flex flex-wrap gap-2 text-xs text-[#667085]'>
-                                    {item.claimedDate ? <span>{item.claimedDate}</span> : null}
-                                    {item.sourceHash ? <span>hash {item.sourceHash}</span> : null}
-                                    <span>{Math.round(item.confidence * 100)}% metadata confidence</span>
-                                </div>
-                                <div className='flex flex-wrap gap-2'>
-                                    {item.allowedActions.map(action => (
-                                        <span key={action} className='rounded-lg border border-[#dfe5ee] px-2 py-1 text-xs text-[#596170]'>{formatLabel(action)}</span>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ) : null}
-
-            {packet ? (
-                <div className='grid gap-3 rounded-lg border border-[#3056d3]/15 bg-[#3056d3]/[0.045] p-3'>
-                    <h3 className='text-sm font-semibold text-[#344054]'>Victim notification packet</h3>
-                    <p className='text-sm leading-6 text-[#596170]'>{packet.claimSummary}</p>
-                    <div className='grid gap-2 text-xs text-[#667085] md:grid-cols-2'>
-                        {packet.affectedAccounts ? <span>Accounts: {packet.affectedAccounts}</span> : null}
-                        {packet.datasetSize ? <span>Dataset: {packet.datasetSize}</span> : null}
-                        {packet.sourceHash ? <span>Source hash: {packet.sourceHash}</span> : null}
-                        <span>Confidence: {Math.round(packet.confidence * 100)}%</span>
-                    </div>
-                    {packet.actorStatement ? <p className='text-sm leading-6 text-[#596170]'>{packet.actorStatement}</p> : null}
-                    <div className='grid gap-1'>
-                        {packet.whatWasNotAccessed.map(item => (
-                            <p key={item} className='text-xs leading-5 text-[#667085]'>{item}</p>
-                        ))}
-                    </div>
-                    <p className='text-xs leading-5 text-[#667085]'>{packet.recommendedAction}</p>
-                </div>
-            ) : null}
-
-            {loop.sourceActivationWorkflow.actions.length ? (
-                <div className='grid gap-2'>
-                    <h3 className='text-sm font-semibold text-[#344054]'>Source activation workflow</h3>
-                    {loop.sourceActivationWorkflow.actions.map(action => (
-                        <div key={`${action.action}-${action.reason}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
-                            <div className='flex flex-wrap items-center justify-between gap-2'>
-                                <p className='text-sm font-semibold text-[#171a21]'>{formatLabel(action.action)}</p>
-                                <span className='rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{formatLabel(action.execution)}</span>
-                            </div>
-                            <p className='mt-1 text-xs leading-5 text-[#667085]'>{action.reason}</p>
-                        </div>
-                    ))}
-                </div>
-            ) : null}
-        </section>
-    )
-}
-
-function CollectionStrategyPanel({ result }: { result: TiSearchResponse }) {
-    const strategy = result.collectionStrategy
-    if (!strategy) return null
-
-    return (
-        <section className='grid gap-4 border border-[#dfe5ee] bg-white p-4'>
-            <div className='grid gap-2'>
-                <div className='flex flex-wrap items-center gap-2'>
-                    <span className='inline-flex items-center gap-2 rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold uppercase text-[#3056d3]'>
-                        <Radar className='h-3.5 w-3.5' />
-                        Collection strategy
-                    </span>
-                    <h2 className='text-base font-semibold text-[#171a21]'>Own the capture, use indexes as leads</h2>
-                </div>
-                <p className='max-w-5xl text-sm leading-6 text-[#596170]'>{strategy.thesis}</p>
-            </div>
-
-            <div className='grid gap-3 lg:grid-cols-[1fr_1fr]'>
-                <div className='grid gap-2'>
-                    <h3 className='text-sm font-semibold text-[#344054]'>Product focus</h3>
-                    <div className='flex flex-wrap gap-2'>
-                        {strategy.productFocus.map(item => (
-                            <span key={item} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#596170]'>{item}</span>
-                        ))}
-                    </div>
-                </div>
-                <div className='grid gap-2'>
-                    <h3 className='text-sm font-semibold text-[#344054]'>Distribution</h3>
-                    <p className='text-sm leading-6 text-[#596170]'>{strategy.distribution.summary}</p>
-                </div>
-            </div>
-
-            <div className='grid gap-3 lg:grid-cols-2'>
-                {strategy.sourcePosture.map(source => (
+        <Panel title='Collection Mix' icon={<Database className='h-4 w-4' />}>
+            <div className='grid gap-3'>
+                {sources.filter(source => source.role !== 'rejected_paid_rows').slice(0, 4).map(source => (
                     <div key={`${source.source}-${source.role}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
                         <div className='flex flex-wrap items-center justify-between gap-2'>
                             <h3 className='text-sm font-semibold text-[#171a21]'>{source.source}</h3>
@@ -458,156 +361,26 @@ function CollectionStrategyPanel({ result }: { result: TiSearchResponse }) {
                     </div>
                 ))}
             </div>
-
-            <div className='grid gap-3 rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
-                <h3 className='text-sm font-semibold text-[#344054]'>Owned collection boundary</h3>
-                <p className='text-sm leading-6 text-[#596170]'>{strategy.ownedCollection.summary}</p>
-                <div className='grid gap-3 md:grid-cols-2'>
-                    <div className='grid gap-1'>
-                        {strategy.ownedCollection.requirements.slice(0, 6).map(item => (
-                            <p key={item} className='text-xs leading-5 text-[#667085]'>{item}</p>
-                        ))}
-                    </div>
-                    <div className='grid gap-1'>
-                        {strategy.ownedCollection.prohibited.slice(0, 6).map(item => (
-                            <p key={item} className='text-xs leading-5 text-[#667085]'>{item}</p>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </section>
+        </Panel>
     )
 }
 
-function OperationalStatusPanel({ result }: { result: TiSearchResponse }) {
-    const status = result.operationalStatus
-    if (!status) return null
-
+function SourceLinksPanel({ sources }: { sources: TiSearchResponse['sources'] }) {
     return (
-        <section className='grid gap-4 border border-[#dfe5ee] bg-white p-4'>
-            <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
-                <div className='grid gap-2'>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        <span className={`inline-flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold uppercase outline ${statusToneClass(status.state)}`}>
-                            {status.state === 'blocked' || status.state === 'degraded' ? <AlertTriangle className='h-3.5 w-3.5' /> : <Gauge className='h-3.5 w-3.5' />}
-                            {status.state.replaceAll('_', ' ')}
-                        </span>
-                        <h2 className='text-base font-semibold text-[#171a21]'>Scraper workload</h2>
-                    </div>
-                    <p className='max-w-4xl text-sm leading-6 text-[#596170]'>{status.headline}</p>
-                </div>
-                <div className='flex flex-wrap gap-2 text-xs text-[#667085] lg:justify-end'>
-                    {status.queue.nextPollSeconds !== undefined ? <span className='rounded-lg border border-[#dfe5ee] px-2 py-1'>poll {status.queue.nextPollSeconds}s</span> : null}
-                    {status.queue.cursorContinuity ? <span className='rounded-lg border border-[#dfe5ee] px-2 py-1'>{formatLabel(status.queue.cursorContinuity)}</span> : null}
-                    {status.queue.backpressureState ? <span className='rounded-lg border border-[#dfe5ee] px-2 py-1'>{formatLabel(status.queue.backpressureState)}</span> : null}
-                </div>
+        <Panel title='Evidence Links' icon={<ExternalLink className='h-4 w-4' />}>
+            <div className='grid gap-1'>
+                {sources.slice(0, 8).map(source => {
+                    const href = source.url || linkFromText(source.provenance)
+                    return (
+                        <EvidenceBox key={source.id} href={href}>
+                            <h2 className='inline-flex items-center gap-1 text-sm font-semibold text-[#171a21]'>{source.name}{href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}</h2>
+                            <p className='text-xs text-[#667085]'>{formatLabel(source.type)}</p>
+                            <p className='text-sm leading-6 text-[#596170]'>{source.url ? source.url : readableSourceText(source.provenance)}</p>
+                        </EvidenceBox>
+                    )
+                })}
             </div>
-
-            <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                <OperationalMetric icon={<ListChecks className='h-4 w-4' />} label='Queue' value={`${status.queue.queuedTasks} queued`} detail={`${status.queue.selectedTasks} selected · ${status.queue.reviewTasks} review`} />
-                <OperationalMetric icon={<Activity className='h-4 w-4' />} label='Leases' value={`${status.queue.leasedTasks} leased`} detail={status.workers.leaseState} />
-                <OperationalMetric icon={<RefreshCw className='h-4 w-4' />} label='Retry/backoff' value={`${status.workers.retryDebt} retry debt`} detail={status.workers.backoffState} />
-                <OperationalMetric icon={<AlertTriangle className='h-4 w-4' />} label='Dead letters' value={`${status.workers.deadLetters}`} detail={status.workers.deadLetters ? 'operator attention' : 'clear'} />
-            </div>
-
-            <div className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <div className='grid gap-3'>
-                    <h3 className='text-sm font-semibold text-[#344054]'>Budget lanes</h3>
-                    {status.budgets.length ? (
-                        <div className='grid gap-2'>
-                            {status.budgets.slice(0, 6).map((budget) => (
-                                <BudgetLane key={budget.workClass} budget={budget} />
-                            ))}
-                        </div>
-                    ) : (
-                        <p className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3 text-sm text-[#667085]'>Waiting for scheduler budget lanes.</p>
-                    )}
-                </div>
-
-                <div className='grid gap-3'>
-                    <h3 className='text-sm font-semibold text-[#344054]'>Fairness and aging</h3>
-                    <div className='grid gap-2'>
-                        <OperationalRow icon={<GitBranch className='h-4 w-4' />} label='Per-source fairness' value={status.workers.fairness} detail={status.fairness.worstGroup ? `${status.fairness.worstGroup} · ${formatPercent(status.fairness.worstShare)}` : formatPercent(status.fairness.worstShare)} tone={status.fairness.ok ? 'ok' : 'bad'} />
-                        <OperationalRow icon={<Clock3 className='h-4 w-4' />} label='Oldest queued' value={formatDuration(status.queue.maxAgeSeconds)} detail='max age' tone={toneFromAging(status.aging[0]?.tone)} />
-                        <OperationalRow icon={<TimerReset className='h-4 w-4' />} label='p95 queue age' value={formatDuration(status.queue.p95AgeSeconds)} detail='aging pressure' tone={toneFromAging(status.aging[1]?.tone)} />
-                        <OperationalRow icon={<Gauge className='h-4 w-4' />} label='Concurrency' value={status.workers.concurrency} detail={status.workers.memoryPressure !== undefined ? `memory ${formatPercent(status.workers.memoryPressure)}` : 'worker budget'} tone='ok' />
-                    </div>
-                </div>
-            </div>
-
-            {status.controls.length ? (
-                <div className='grid gap-3'>
-                    <h3 className='text-sm font-semibold text-[#344054]'>Canary controls</h3>
-                    <div className='grid gap-2 lg:grid-cols-2'>
-                        {status.controls.slice(0, 4).map((control) => (
-                            <div key={`${control.scenario ?? 'control'}-${control.action}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
-                                <div className='flex items-start justify-between gap-3'>
-                                    <div>
-                                        <p className='text-sm font-semibold text-[#171a21]'>{formatLabel(control.action)}</p>
-                                        <p className='mt-1 text-xs text-[#667085]'>{control.scenario ? formatLabel(control.scenario) : 'scheduler control'}</p>
-                                    </div>
-                                    <span className='shrink-0 rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>
-                                        q {signed(control.queueDelta)} · w {signed(control.workerDelta)}
-                                    </span>
-                                </div>
-                                <p className='mt-2 text-xs leading-5 text-[#667085]'>{control.rollback}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ) : null}
-
-            <div className='grid gap-2'>
-                {status.notes.slice(0, 4).map((note) => (
-                    <p key={note} className='text-xs leading-5 text-[#667085]'>{note}</p>
-                ))}
-            </div>
-        </section>
-    )
-}
-
-function OperationalMetric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
-    return (
-        <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3'>
-            <div className='flex items-center justify-between gap-3 text-[#667085]'>
-                <span className='inline-flex items-center gap-2 text-xs font-medium uppercase'>{icon}{label}</span>
-            </div>
-            <p className='mt-2 text-xl font-semibold text-[#171a21]'>{value}</p>
-            <p className='mt-1 text-xs text-[#667085]'>{detail}</p>
-        </div>
-    )
-}
-
-function BudgetLane({ budget }: { budget: TiOperationalStatus['budgets'][number] }) {
-    const used = Math.min(1, (budget.queued + budget.leased) / Math.max(1, budget.budgetSlots))
-    const tone = budget.action === 'accept' ? 'ok' : budget.action === 'pause_noisy_source' ? 'bad' : 'watch'
-
-    return (
-        <div className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
-            <div className='flex items-start justify-between gap-3'>
-                <div>
-                    <p className='text-sm font-semibold text-[#171a21]'>{formatLabel(budget.workClass)}</p>
-                    <p className='mt-1 text-xs text-[#667085]'>{budget.queued} queued · {budget.leased} leased · {budget.retryDebt} retries</p>
-                </div>
-                <span className={`shrink-0 rounded-lg px-2 py-1 text-xs ${rowToneClass(tone)}`}>{formatLabel(budget.action)}</span>
-            </div>
-            <div className='mt-3 h-1.5 overflow-hidden rounded-full bg-[#eef1f5]'>
-                <div className={`h-full rounded-full ${tone === 'bad' ? 'bg-red-300/70' : tone === 'watch' ? 'bg-amber-300/70' : 'bg-[#3056d3]/80'}`} style={{ width: `${Math.round(used * 100)}%` }} />
-            </div>
-            <p className='mt-2 text-xs text-[#667085]'>{budget.budgetSlots} slots · oldest {formatDuration(budget.maxAgeSeconds)}</p>
-        </div>
-    )
-}
-
-function OperationalRow({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: string; detail: string; tone: 'ok' | 'watch' | 'bad' }) {
-    return (
-        <div className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
-            <div className='min-w-0'>
-                <p className='inline-flex items-center gap-2 text-xs font-medium uppercase text-[#667085]'>{icon}{label}</p>
-                <p className='mt-1 truncate text-sm font-semibold text-[#171a21]'>{value}</p>
-            </div>
-            <span className={`shrink-0 rounded-lg px-2 py-1 text-xs ${rowToneClass(tone)}`}>{detail}</span>
-        </div>
+        </Panel>
     )
 }
 
@@ -624,55 +397,14 @@ function EmptyLine({ text }: { text: string }) {
     return <p className='py-3 text-sm text-[#667085]'>{text}</p>
 }
 
-function statusToneClass(state: TiOperationalStatus['state']) {
-    if (state === 'blocked') return 'bg-red-400/10 text-red-100/80 outline-red-300/20'
-    if (state === 'degraded') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
-    if (state === 'metadata_review' || state === 'needs_source_activation') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
-    if (state === 'queued' || state === 'searching') return 'bg-[#eef3ff] text-[#3056d3] outline-[#3056d3]/25'
-    return 'bg-emerald-300/10 text-emerald-100/80 outline-emerald-200/20'
-}
-
-function resultStateClass(state: NonNullable<TiSearchResponse['status']>) {
-    if (state === 'blocked_unsafe_target') return 'bg-red-400/10 text-red-100/80 outline-red-300/20'
-    if (state === 'metadata_review' || state === 'needs_source_activation') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
-    if (state === 'queued' || state === 'searching' || state === 'partial') return 'bg-[#eef3ff] text-[#3056d3] outline-[#3056d3]/25'
-    return 'bg-emerald-300/10 text-emerald-100/80 outline-emerald-200/20'
-}
-
-function stepToneText(tone: 'ok' | 'watch' | 'bad') {
-    if (tone === 'bad') return 'text-red-100/75'
-    if (tone === 'watch') return 'text-amber-100/75'
-    return 'text-emerald-100/75'
-}
-
 function rowToneClass(tone: 'ok' | 'watch' | 'bad') {
-    if (tone === 'bad') return 'bg-red-400/10 text-red-100/75'
-    if (tone === 'watch') return 'bg-amber-300/10 text-amber-100/75'
-    return 'bg-emerald-300/10 text-emerald-100/75'
-}
-
-function toneFromAging(tone?: 'ok' | 'watch' | 'bad'): 'ok' | 'watch' | 'bad' {
-    return tone ?? 'ok'
+    if (tone === 'bad') return 'bg-[#fee4e2] text-[#b42318]'
+    if (tone === 'watch') return 'bg-[#fff4d6] text-[#8a5a00]'
+    return 'bg-[#e9f8ef] text-[#147a3b]'
 }
 
 function formatLabel(value: string) {
     return value.replaceAll('_', ' ')
-}
-
-function formatPercent(value: number) {
-    return `${Math.round(value * 100)}%`
-}
-
-function formatDuration(seconds: number) {
-    if (!Number.isFinite(seconds) || seconds <= 0) return '0s'
-    if (seconds < 60) return `${Math.round(seconds)}s`
-    if (seconds < 3600) return `${Math.round(seconds / 60)}m`
-    return `${Math.round(seconds / 3600)}h`
-}
-
-function signed(value: number) {
-    if (value > 0) return `+${value}`
-    return `${value}`
 }
 
 function linkFromText(value: string) {
@@ -685,4 +417,36 @@ function linkFromText(value: string) {
         return undefined
     }
     return undefined
+}
+
+function readableSourceText(value: string) {
+    if (/^https?:\/\//i.test(value)) return value
+    return value.replace(/^Scraper run [^;]+;\s*/i, '').replace(/^Live query text;\s*/i, '')
+}
+
+function alertItemsFor(result: TiSearchResponse) {
+    const fromReview = result.analystLoop?.metadataReviewInbox.map(item => ({
+        title: item.company || item.victim || 'Exposure mention',
+        detail: [item.affectedAccounts, item.datasetSize, item.actorStatement].filter(Boolean).join(' · ') || item.provenance,
+        state: 'review',
+        tone: 'watch' as const
+    })) ?? []
+    const fromActivity = result.recentActivity
+        .filter(item => item.victimName || item.claimType === 'victim_claim' || /victim|leak|claim|stolen|exfiltrat/i.test(`${item.title} ${item.detail}`))
+        .map(item => ({
+            title: item.victimName || item.title,
+            detail: item.impact || item.detail,
+            state: 'matched',
+            tone: 'ok' as const
+        }))
+    if (fromReview.length || fromActivity.length) return [...fromReview, ...fromActivity].slice(0, 5)
+    if (result.status === 'searching' || result.status === 'queued') {
+        return [{
+            title: 'Watching for company matches',
+            detail: 'The search is checking actor claims, public indexes, and captured metadata for company, vendor, domain, and brand mentions.',
+            state: 'watching',
+            tone: 'watch' as const
+        }]
+    }
+    return []
 }
