@@ -1,7 +1,7 @@
 // @ts-nocheck
 const TERM_RE = /\b(APT|ransomware|RaaS|breach|CVE-\d|malware|phishing|exploit|exploited|vulnerability|vulnerabilities|victim|leak|intrusion|campaign|credential|espionage|backdoor|botnet|supply-chain|zero-day|data leak|threat actor|attack|compromised|exposed|exfiltration|trojan|wiper|RAT|C2|command and control)\b/i;
 const BAD_RE = /\b(test fixture|example\.test|proof-only|synthetic|webinar|newsletter|conference|podcast|product launch|press release|request a demo|book a demo|schedule a demo|launches free|free \d+-day|free .* assessment|free .* trial|buyer'?s guide|whitepaper|case study|sponsored|award|awards|named top vendor|recognizes .* as the best|what is application security testing|what is managed cloud security|practical guide|why halcyon|mythos era|new standard for url analysis)\b/i;
-const BAD_SOURCE_RE = /\b(src_canary_halcyon|src_canary_jamf)\b/i;
+const BAD_SOURCE_RE = /\b(src_canary_halcyon|src_canary_jamf|src_canary_wired_security|src_canary_healthcareinfosec|src_canary_securityledger)\b/i;
 
 export function isSellableIntelText(input: { text: string; title?: string; sourceId?: string; publishedAt?: string; collectedAt?: string; now?: string }) {
   const text = clean(`${input.title ?? ""} ${input.text ?? ""}`);
