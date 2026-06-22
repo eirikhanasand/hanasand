@@ -64,12 +64,12 @@ export default function AIPageClient({
     }
 
     return (
-        <div className={`${compact ? 'h-screen' : 'h-full'} relative w-full overflow-hidden`}>
+        <div className={`${compact ? 'h-screen' : 'h-full'} enterprise-console relative w-full overflow-hidden bg-[#f7f8fb] text-[#171a21]`}>
             <div className='flex h-full min-h-0 flex-col'>
                 {showHeader ? (
-                    <div className='flex h-14 items-center justify-between border-b border-bright/10 px-5'>
+                    <div className='flex h-14 items-center justify-between border-b border-[#e0e5ed] bg-white px-5'>
                         <div className='min-w-0'>
-                            <p className='truncate text-sm font-semibold text-[#eeeeea]'>
+                            <p className='truncate text-sm font-semibold text-[#171a21]'>
                                 {ai.activeConversation?.title || 'Workspace'}
                             </p>
                         </div>
@@ -78,11 +78,11 @@ export default function AIPageClient({
                                 type='button'
                                 onClick={() => setDetailsOpen((prev) => !prev)}
                                 aria-label={detailsOpen ? 'Hide workspace details' : 'Show workspace details'}
-                                className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${detailsOpen ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#8d8d89] hover:bg-bright/8 hover:text-[#eeeeea]'}`}
+                                className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${detailsOpen ? 'bg-[#eef3ff] text-[#3056d3]' : 'text-[#667085] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}
                             >
                                 <PanelRight className='h-4 w-4' />
                             </button>
-                            <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm text-[#b7b7b2] transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
+                            <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[#596170] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                                 Editor
                                 <SquareArrowOutUpRight className='h-4 w-4' />
                             </Link>
@@ -210,8 +210,8 @@ export default function AIPageClient({
 
 function runtimeStateSummary(runtimeState: AIRuntimeState) {
     if (runtimeState.connectedClientCount > 0) {
-        return `${runtimeState.connectedClientCount} model${runtimeState.connectedClientCount === 1 ? '' : 's'} connected`
+        return `${runtimeState.connectedClientCount} model${runtimeState.connectedClientCount === 1 ? '' : 's'} available`
     }
 
-    return 'No model connected'
+    return 'No model available'
 }

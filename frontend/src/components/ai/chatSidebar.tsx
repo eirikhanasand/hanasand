@@ -33,15 +33,15 @@ export default function ChatSidebar(props: ChatSidebarProps) {
     const [showArchived, setShowArchived] = useState(false)
     const [searchOpen, setSearchOpen] = useState(false)
     return (
-        <aside className='flex min-h-0 flex-col border-r border-bright/10 p-4'>
+        <aside className='flex min-h-0 flex-col border-r border-[#e0e5ed] bg-white p-4'>
             <div className='flex items-center justify-between gap-2 pb-4'>
-                <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-full px-3 text-sm font-medium text-[#f1eee7] transition-colors hover:bg-bright/8'>
+                <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#2b2f39]'>
                     <MessageSquarePlus className='h-4 w-4' />
                     New
                 </button>
                 <div className='flex items-center gap-1'>
                     <IconButton label='Search chats' icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
-                    <Link href='/s' aria-label='Open editor' className='grid h-9 w-9 place-items-center rounded-full text-[#a0a09b] transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
+                    <Link href='/s' aria-label='Open editor' className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                         <SquareArrowOutUpRight className='h-4 w-4' />
                     </Link>
                 </div>
@@ -49,17 +49,17 @@ export default function ChatSidebar(props: ChatSidebarProps) {
 
             {searchOpen ? (
                 <label className='relative mb-3 block'>
-                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#858581]' />
+                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#667085]' />
                     <input
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         placeholder='Search chats'
-                        className='w-full rounded-full border border-bright/10 bg-transparent py-2.5 pl-10 pr-3 text-sm text-[#eeeeea] outline-none placeholder:text-[#777772]'
+                        className='w-full rounded-lg border border-[#d8dee9] bg-white py-2.5 pl-10 pr-3 text-sm text-[#171a21] outline-none placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                     />
                 </label>
             ) : null}
 
-            <div className='mb-3 flex items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
+            <div className='mb-3 flex items-center justify-between px-1 text-[11px] font-semibold uppercase text-[#667085]'>
                 <span>Chat</span>
                 <span>{conversations.length}</span>
             </div>
@@ -73,8 +73,8 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                 onSelectConversation={onSelectConversation}
             />
 
-            <div className='mt-5 border-t border-bright/10 pt-4'>
-                <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex w-full items-center justify-between px-1 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
+            <div className='mt-5 border-t border-[#e0e5ed] pt-4'>
+                <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex w-full items-center justify-between px-1 text-[11px] font-semibold uppercase text-[#667085]'>
                     <span>Archived</span>
                     <span>{archivedConversations.length}</span>
                 </button>
@@ -115,7 +115,7 @@ function ConversationList({
 }) {
     if (!conversations.length) {
         return (
-            <div className='px-1 py-3 text-sm text-[#858581]'>
+            <div className='px-1 py-3 text-sm text-[#667085]'>
                 No {archived ? 'archived' : 'active'} chats yet.
             </div>
         )
@@ -135,7 +135,7 @@ function ConversationList({
                             onSelectConversation(conversation.id)
                         }
                     }}
-                    className={`group flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-bright/10 text-[#f1eee7]' : 'text-[#d3d3ce] hover:bg-bright/8'}`}
+                    className={`group flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-[#eef3ff] text-[#2546a8]' : 'text-[#344054] hover:bg-[#f8fafc]'}`}
                 >
                     <div className='min-w-0 flex-1 overflow-hidden'>
                         <div className='truncate text-sm'>{conversation.title}</div>
@@ -165,7 +165,7 @@ function ConversationList({
 
 function IconButton({ label, icon, active = false, onClick }: { label: string, icon: React.ReactNode, active?: boolean, onClick: () => void }) {
     return (
-        <button type='button' aria-label={label} onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-full transition-colors ${active ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#a0a09b] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
+        <button type='button' aria-label={label} onClick={onClick} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${active ? 'bg-[#eef3ff] text-[#3056d3]' : 'text-[#667085] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}>
             {icon}
         </button>
     )
@@ -183,7 +183,7 @@ function MiniButton({
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
 }) {
     return (
-        <button type='button' aria-label={label} onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-full transition-colors ${danger ? 'text-[#d29a95] hover:bg-red-500/10' : 'text-[#a0a09b] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
+        <button type='button' aria-label={label} onClick={onClick} className={`grid h-7 w-7 place-items-center rounded-lg transition-colors ${danger ? 'text-[#b42318] hover:bg-[#fff1f0]' : 'text-[#667085] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}>
             {icon}
         </button>
     )

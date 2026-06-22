@@ -219,8 +219,8 @@ const DESIGN_MEMORY_STORAGE_KEY = 'hanasand:share-design-memory:v1'
 const costModes: { id: ShareChatCostMode, label: string, detail: string }[] = [
     { id: 'draft', label: 'Cheap draft', detail: 'fast sketch' },
     { id: 'standard', label: 'Standard', detail: 'balanced' },
-    { id: 'verified', label: 'Verified', detail: 'proof first' },
-    { id: 'priority', label: 'Priority', detail: 'paid lane' },
+    { id: 'verified', label: 'Verified', detail: 'check first' },
+    { id: 'priority', label: 'Priority', detail: 'fast pass' },
 ]
 
 export default function ShareChat({
@@ -278,8 +278,8 @@ export default function ShareChat({
     const primaryAction = pendingEdit?.status === 'pending'
         ? proofApplyBlocked
             ? {
-                label: retryingProof ? 'Checking proof...' : 'Run proof again',
-                detail: 'Run the browser proof again before applying.',
+                label: retryingProof ? 'Checking...' : 'Run browser check again',
+                detail: 'Run the browser check again before applying.',
                 disabled: retryingProof || !lastBrowserCalls.length,
                 onClick: retryBrowserProof,
             }
@@ -299,7 +299,7 @@ export default function ShareChat({
             : lastRun?.status === 'error'
                 ? {
                     label: 'Ask for a fix',
-                    detail: 'The last proof run found a problem. Describe what you want changed or retry verification.',
+                    detail: 'The last browser check found a problem. Describe what you want changed or retry verification.',
                     disabled: false,
                     onClick: () => inputRef.current?.focus(),
                 }
@@ -455,7 +455,7 @@ export default function ShareChat({
                 setMessages((current) => [...current, {
                     id: randomId(),
                     role: 'tool',
-                    content: `Browser verification queued for ${boundedBrowserCalls.length} target${boundedBrowserCalls.length === 1 ? '' : 's'}. You can keep reviewing while proof runs.`,
+                    content: `Browser check queued for ${boundedBrowserCalls.length} target${boundedBrowserCalls.length === 1 ? '' : 's'}. You can keep reviewing while it runs.`,
                     createdAt: new Date().toISOString(),
                 }])
                 setLastRun({
@@ -549,7 +549,7 @@ export default function ShareChat({
                 setBrowserProofJobs((current) => current.map((job) => job.url === url ? { ...job, status: issue ? 'error' : 'completed', error: issue } : job))
             } else {
                 hadIssues = true
-                setBrowserProofJobs((current) => current.map((job) => job.url === url ? { ...job, status: 'error', error: 'Browser proof did not return.' } : job))
+                setBrowserProofJobs((current) => current.map((job) => job.url === url ? { ...job, status: 'error', error: 'Browser check did not return.' } : job))
             }
         }
         if (proofQueueRunRef.current !== runId) {
@@ -612,7 +612,7 @@ export default function ShareChat({
         setMessages((current) => [...current, {
             id: randomId(),
             role: 'tool',
-            content: `Browser proof retry queued for ${lastBrowserCalls.length} target${lastBrowserCalls.length === 1 ? '' : 's'}.`,
+            content: `Browser check retry queued for ${lastBrowserCalls.length} target${lastBrowserCalls.length === 1 ? '' : 's'}.`,
             createdAt: new Date().toISOString(),
         }])
         void processBrowserProofQueue(proofRunId, lastBrowserCalls, pendingEdit?.changes.length || 0, lastRun?.tokenCap || 2200, runStartedAt)
@@ -679,7 +679,7 @@ export default function ShareChat({
     }
 
     return (
-        <section className={`flex flex-col overflow-hidden rounded-lg border border-bright/8 bg-black/10 ${
+        <section className={`enterprise-console flex flex-col overflow-hidden rounded-lg border border-bright/8 bg-black/10 ${
             mode === 'workspace' ? 'h-full min-h-0 shadow-2xl shadow-black/20' : 'h-[calc(100%-3.5rem)] min-h-[32rem]'
         }`}>
             <div className='flex items-center justify-between border-b border-bright/8 px-3 py-2'>
@@ -711,7 +711,7 @@ export default function ShareChat({
             </div>
             <div className='border-b border-bright/8 bg-black/8 px-3 py-2'>
                 <div className='flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
-                    <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>No auto-apply</span>
+                    <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>You approve changes</span>
                     <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>Current file context</span>
                     <span className='min-w-0 truncate text-bright/38'>{share?.path || share?.alias || 'Workspace root'}</span>
                 </div>
@@ -725,7 +725,7 @@ export default function ShareChat({
                     </div>
                     <div className='mb-2 grid gap-1.5 text-[11px] text-bright/58 sm:grid-cols-4'>
                         <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label='Build' value='Reviewable changes' />
-                        <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Verify' value='Visible proof' />
+                        <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Check' value='Browser review' />
                         <PlainMetric icon={<Globe2 className='h-3.5 w-3.5' />} label='Deploy' value='Publish checks' />
                         <PlainMetric icon={<RotateCw className='h-3.5 w-3.5' />} label='Recover' value='Rollback path' />
                     </div>
@@ -761,7 +761,7 @@ export default function ShareChat({
                     </div>
                     <div className='mt-2 grid gap-2 text-[11px] text-bright/58 sm:grid-cols-3'>
                         <PlainMetric icon={<FileText className='h-3.5 w-3.5' />} label={pendingEdit?.status === 'pending' ? 'Changes waiting for review' : 'Project files'} value={pendingEdit?.status === 'pending' ? `${pendingEdit.changes.length}` : treePaths.length ? `${treePaths.length}` : '1'} />
-                        <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Visible proof' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
+                        <PlainMetric icon={<Eye className='h-3.5 w-3.5' />} label='Browser check' value={browserProofJobs.length ? `${browserProofJobs.filter((job) => job.status === 'completed').length}/${browserProofJobs.length}` : browserEvidence.length ? 'Done' : 'Not run yet'} />
                         <PlainMetric icon={<ShieldCheck className='h-3.5 w-3.5' />} label='Safety' value='You approve changes' />
                     </div>
                     {designMemory ? (
@@ -786,8 +786,8 @@ export default function ShareChat({
                         <span className='font-semibold text-bright/70'>Last run</span>
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{formatRunDuration(lastRun.durationMs)}</span>
                         <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.pendingChanges} edit{lastRun.pendingChanges === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} browser proof{lastRun.browserProofs === 1 ? '' : 's'}</span>
-                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{(lastRun.tokenCap / 1000).toFixed(1)}k cap</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{lastRun.browserProofs} browser check{lastRun.browserProofs === 1 ? '' : 's'}</span>
+                        <span className='rounded-full border border-bright/8 px-2 py-0.5 text-bright/50'>{(lastRun.tokenCap / 1000).toFixed(1)}k budget</span>
                         <span className={`rounded-full border px-2 py-0.5 ${
                             lastRun.status === 'completed'
                                 ? 'border-emerald-300/15 text-emerald-100/62'
@@ -818,7 +818,7 @@ export default function ShareChat({
                                             ? 'border-red-300/15 text-red-100/70'
                                             : 'border-amber-200/15 text-amber-50/70'
                                 }`}>
-                                    {job.status === 'running' ? 'Checking' : job.status === 'queued' ? 'Proof queued' : job.status === 'completed' ? 'Looks good' : 'Needs fix'}
+                                    {job.status === 'running' ? 'Checking' : job.status === 'queued' ? 'Check queued' : job.status === 'completed' ? 'Looks good' : 'Needs fix'}
                                 </span>
                             ))}
                         </div>
@@ -835,11 +835,11 @@ export default function ShareChat({
                     <div className='flex items-center justify-between gap-3 rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5 text-[11px] text-bright/62'>
                         <div className='flex min-w-0 items-center gap-1.5'>
                             <Globe2 className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
-                            <span className='shrink-0 font-semibold text-bright/68'>Proof target</span>
+                            <span className='shrink-0 font-semibold text-bright/68'>Check target</span>
                             <span className='truncate text-bright/42'>{proofTarget.label}</span>
                             <span className='truncate text-bright/52'>{proofTarget.url}</span>
                         </div>
-                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open proof target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
+                        <a href={proofTarget.url} target='_blank' rel='noopener noreferrer' aria-label='Open check target' className='grid h-7 w-7 shrink-0 place-items-center rounded-md text-bright/45 transition hover:bg-bright/8 hover:text-bright'>
                             <ExternalLink className='h-3.5 w-3.5' />
                         </a>
                     </div>
@@ -852,7 +852,7 @@ export default function ShareChat({
                         <div className='flex min-w-0 items-start gap-1.5'>
                             <ScanSearch className='h-3.5 w-3.5 shrink-0 text-[#f07d33]' />
                             <div className='min-w-0'>
-                                <p className='truncate font-semibold text-bright/72'>Browser proof: {browserEvidence[0].title || 'Untitled page'}</p>
+                                <p className='truncate font-semibold text-bright/72'>Browser check: {browserEvidence[0].title || 'Untitled page'}</p>
                                 <p className='truncate text-bright/42'>A real browser inspected the rendered result and saved review evidence.</p>
                             </div>
                         </div>
@@ -977,7 +977,7 @@ export default function ShareChat({
                                     className='inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-bright px-3 text-xs font-semibold text-background transition hover:bg-bright/88 disabled:cursor-default disabled:opacity-55'
                                 >
                                     {pendingEdit.status === 'applying' ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <Check className='h-3.5 w-3.5' />}
-                                    {pendingEdit.status === 'applied' ? 'Applied' : proofApplyBlocked ? 'Retry proof first' : 'Applying'}
+                                    {pendingEdit.status === 'applied' ? 'Applied' : proofApplyBlocked ? 'Run check first' : 'Applying'}
                                 </button>
                             ) : null}
                         </div>
@@ -989,7 +989,7 @@ export default function ShareChat({
                     ) : null}
                     {proofApplyBlocked ? (
                         <div className='mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300/10 bg-red-950/15 px-2 py-1.5 text-xs text-red-100/72'>
-                            <span>{lastRun?.status === 'queued' ? 'Browser proof is queued before these changes can be applied.' : 'Browser proof needs retry before these changes can be applied.'}</span>
+                            <span>{lastRun?.status === 'queued' ? 'Browser check is queued before these changes can be applied.' : 'Browser check needs retry before these changes can be applied.'}</span>
                             {lastBrowserCalls.length ? (
                                 <button
                                     type='button'
@@ -998,7 +998,7 @@ export default function ShareChat({
                                     className='inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-red-200/15 px-2.5 text-[11px] font-medium text-red-50/82 transition hover:bg-red-100/10 disabled:cursor-default disabled:opacity-55'
                                 >
                                     {retryingProof ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : <RotateCw className='h-3.5 w-3.5' />}
-                                    Retry proof
+                                    Retry check
                                 </button>
                             ) : null}
                         </div>
@@ -1196,10 +1196,10 @@ function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence 
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2'>
                         <ClipboardCheck className='h-4 w-4 text-[#f07d33]' />
-                        <h4 className='text-sm font-semibold text-bright/84'>Production proof for this review</h4>
+                        <h4 className='text-sm font-semibold text-bright/84'>Production check for this review</h4>
                     </div>
                     <p className='mt-1 text-xs leading-5 text-bright/48'>
-                        {evidence ? 'Rendered screenshots, logs, and safe journey checks are attached to the review.' : 'No durable production proof has finished for this review yet.'}
+                        {evidence ? 'Rendered screenshots, logs, and journey checks are attached to the review.' : 'No production check has finished for this review yet.'}
                     </p>
                 </div>
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${
@@ -1218,7 +1218,7 @@ function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence 
                     <span className='font-medium text-bright/68'>{screenshotState}</span>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
-                    <span className='block text-bright/35'>Journey proof</span>
+                    <span className='block text-bright/35'>Journey check</span>
                     <span className='font-medium text-bright/68'>{journeyState}</span>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-bright/[0.035] px-2 py-1.5'>
@@ -1235,7 +1235,7 @@ function ReviewEvidencePanel({ evidence, lastRun }: { evidence: BrowserEvidence 
                 <div className='mt-2 grid gap-2 text-xs text-bright/58 sm:grid-cols-2'>
                     <EvidenceList title='Page address' items={evidence?.url ? [evidence.url] : []} />
                     <EvidenceList title='Screenshot path' items={evidence?.screenshotPath ? [evidence.screenshotPath] : []} />
-                    <EvidenceList title='Journey proof' items={journey ? [
+                    <EvidenceList title='Journey check' items={journey ? [
                         `${journey.filledControls || 0}/${journey.fillableControls || 0} fields safely filled`,
                         `Mutation avoided: ${journey.readiness?.submitWithoutMutationAvoided ? 'yes' : 'unknown'}`,
                         `Critical path: ${journeyLabels.length ? journeyLabels.join(', ') : 'not detected'}`,
@@ -1376,7 +1376,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         evidenceTargets.length ? `Browser evidence targets:\n${evidenceTargets.join('\n')}` : 'Browser evidence target: use the current share or preview URL once it exists.',
         'When the user asks whether a preview, public page, mobile page, pricing, contact, accessibility, or visual state works, request browser evidence using the best target above, for example:',
         `<hanasand-tool>{"action":"browser_task","url":"${previewUrl || shareEvidenceUrl || 'https://hanasand.com/s'}","captureScreenshot":true,"timeoutMs":16000}</hanasand-tool>`,
-        'Use browser evidence before claiming a page works. If a screenshot is unavailable, say so briefly and use headings, links, buttons, forms, errors, and viewport proof.',
+        'Use browser evidence before claiming a page works. If a screenshot is unavailable, say so briefly and use headings, links, buttons, forms, errors, and viewport checks.',
         designMemory ? [
             'Brand/style memory for this builder:',
             `- ${designMemory.summary}`,
@@ -1399,7 +1399,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         ].join('\n') : null,
         'Quality gates:',
         '- Define acceptance criteria from the user request before claiming success.',
-        '- Treat build, smoke, browser proof, mobile viewport, accessibility basics, broken links, and critical journeys as separate gates.',
+        '- Treat build, smoke, browser checks, mobile viewport, accessibility basics, broken links, and critical journeys as separate gates.',
         '- Say exactly what was not verified. Never turn a missing check into success wording.',
         '- Prevent silent fake success: do not use fallback/sample/mock/demo data while claiming live production behavior.',
         '- For forms, checkout, auth, booking, and dashboard CRUD, include a concrete critical journey test or state that it remains unverified.',
@@ -1442,7 +1442,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
             '- Users may be reacting to agents that edit before reading, miss repeated references, hallucinate test coverage, ignore failing tests, or call newly broken behavior an existing issue after context loss.',
             '- Before changing files, restate the exact regression or invariant to preserve, name the files/surfaces that must stay working, and prefer reading current content over guessing.',
             '- Never mark tests as skipped, ignored, or out of scope to make a run pass unless the user explicitly asks. Treat failing tests and browser evidence as product signals, not obstacles.',
-            '- If verification is incomplete, say what was not verified. Do not claim full success from AI-generated checks alone; prefer real build output, real tests, real DOM selectors, and browser proof.',
+            '- If verification is incomplete, say what was not verified. Do not claim full success from generated checks alone; prefer real build output, real tests, real DOM selectors, and browser evidence.',
             '- When context may be stale or compacted, compare against the current file/tree and keep a small change ledger so regressions remain attributable.',
         ].join('\n') : null,
         sandboxSafetyMode ? [
@@ -1475,10 +1475,10 @@ function costModeInstruction(mode: ShareChatCostMode) {
         return 'Cost mode: cheap draft. Make the smallest useful first version, avoid broad rewrites, and leave expensive verification for later.'
     }
     if (mode === 'verified') {
-        return 'Cost mode: verified. Spend extra effort on acceptance criteria, browser proof requests, mobile/a11y basics, and clear not-verified items.'
+        return 'Cost mode: verified. Spend extra effort on acceptance criteria, browser checks, mobile/a11y basics, and clear not-verified items.'
     }
     if (mode === 'priority') {
-        return 'Cost mode: priority. Use the paid lane for faster progress, but still avoid wasted rewrites and platform-error retry loops.'
+        return 'Cost mode: priority. Move faster, but still avoid wasted rewrites and platform-error retry loops.'
     }
     return 'Cost mode: standard. Balance useful progress, context size, and verification.'
 }
@@ -1727,7 +1727,7 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                 <div className='flex min-w-0 items-center gap-2'>
                     <ScanSearch className='h-4 w-4 shrink-0 text-[#f07d33]' />
                     <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold text-bright/84'>Browser proof</p>
+                        <p className='truncate text-sm font-semibold text-bright/84'>Browser check</p>
                         <p className='truncate text-xs text-bright/42'>{issues.length ? 'Needs a fix before publishing.' : 'Rendered screenshot and safe journey checks finished.'}</p>
                     </div>
                 </div>
@@ -1736,8 +1736,8 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                 </a>
             </div>
             <div className='border-b border-bright/8 px-3 py-2 text-xs leading-5 text-bright/58'>
-                <p>Production proof visible for {evidence.url}.</p>
-                <p>Browser proof visible for {evidence.url}.</p>
+                <p>Production check finished for {evidence.url}.</p>
+                <p>Browser check finished for {evidence.url}.</p>
             </div>
             <div className='grid gap-2 p-3 text-xs text-bright/62 sm:grid-cols-2'>
                 <EvidenceList title='Visible sections' items={structure.headings} />
@@ -1753,7 +1753,7 @@ function BrowserEvidenceCard({ evidence }: { evidence: BrowserEvidence }) {
                     <p className='mt-1 text-bright/72'>{evidence.screenshotPath ? 'Saved for review' : 'Screenshot not available yet'}</p>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Journey proof</p>
+                    <p className='text-[10px] font-semibold uppercase tracking-[0.18em] text-bright/38'>Journey check</p>
                     <p className='mt-1 text-bright/72'>{journey?.readiness?.submitWithoutMutationAvoided ? 'Dry-run completed safely' : journey ? 'Rendered journey inspected' : 'Not available yet'}</p>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-black/16 p-2'>
@@ -1996,7 +1996,7 @@ function acceptanceCriteriaForPrompt(prompt: string): AcceptanceCriterion[] {
     if (/\b(checkout|payment|subscription|billing|invoice|cart)\b/.test(lower)) criteria.push({ id: 'checkout-journey', label: 'Checkout or billing journey has real failure states', reason: 'Payment paths cannot be cosmetic.' })
     if (/\b(auth|login|session|password|account|permission)\b/.test(lower)) criteria.push({ id: 'auth-journey', label: 'Auth/session states are represented and testable', reason: 'Auth bugs create high support load.' })
     if (/\b(book|booking|reservation|appointment|calendar|availability)\b/.test(lower)) criteria.push({ id: 'booking-journey', label: 'Booking flow covers availability and confirmation', reason: 'Booking UX must prove the primary task.' })
-    if (/\b(dashboard|crud|admin|table|records|edit|delete|archive)\b/.test(lower)) criteria.push({ id: 'dashboard-crud', label: 'Dashboard CRUD path is testable', reason: 'Operational users need create, read, update, and safe delete proof.' })
+    if (/\b(dashboard|crud|admin|table|records|edit|delete|archive)\b/.test(lower)) criteria.push({ id: 'dashboard-crud', label: 'Dashboard CRUD path is testable', reason: 'Operational users need create, read, update, and safe delete checks.' })
     return criteria
 }
 
@@ -2103,7 +2103,7 @@ function reviewDesignDifferentiation(content: string, prompt: string, pendingCha
             ? 'Design has specific tokens, assets, hierarchy, and responsive signals.'
             : status === 'failed'
                 ? 'Design risks looking generic or AI-generated.'
-                : 'Some design proof is still missing.',
+                : 'Some design checks are still missing.',
         issues,
         strengths,
     }
@@ -2131,7 +2131,7 @@ function genericCopyIssue(content: string) {
         'lorem ipsum',
     ]
     const count = genericPhrases.filter((phrase) => content.toLowerCase().includes(phrase)).length
-    return count ? 'Copy contains generic AI-builder phrases; replace them with business-specific proof and constraints.' : null
+    return count ? 'Copy contains generic builder phrases; replace them with business-specific evidence and constraints.' : null
 }
 
 function missingTokenIssue(content: string) {
@@ -2196,12 +2196,12 @@ function getPlainProjectState({
         return { label: 'Editing', detail: 'Preparing the project changes for your review.', tone: 'working' }
     }
     if (activeProofs || lastRunStatus === 'queued') {
-        return { label: 'Verifying', detail: 'Opening the rendered page, saving proof, and checking whether the visible result still works.', tone: 'working' }
+        return { label: 'Verifying', detail: 'Opening the rendered page and checking whether the visible result still works.', tone: 'working' }
     }
     if (pendingStatus === 'pending') {
         return {
             label: 'Needs you',
-            detail: proofApplyBlocked ? 'Browser proof needs retry before you apply the changes.' : 'Review the summary and proof, then apply or discard the changes.',
+            detail: proofApplyBlocked ? 'Browser check needs retry before you apply the changes.' : 'Review the summary and checks, then apply or discard the changes.',
             tone: 'attention',
         }
     }
@@ -2215,11 +2215,11 @@ function getPlainProjectState({
 }
 
 function friendlyActivityMessage(content: string) {
-    if (/Browser verification queued|Browser proof retry queued/i.test(content)) {
-        return { title: 'Proof queued', detail: content }
+    if (/Browser verification queued|Browser proof retry queued|Browser check queued|Browser check retry queued/i.test(content)) {
+        return { title: 'Browser check queued', detail: content }
     }
-    if (/Browser proof visible|Production proof visible/i.test(content)) {
-        return { title: 'Production proof finished', detail: 'The result below shows what the browser verified and what remains unproven.' }
+    if (/Browser proof visible|Production proof visible|Browser check finished|Production check finished/i.test(content)) {
+        return { title: 'Production check finished', detail: 'The result below shows what the browser checked and what remains unverified.' }
     }
     if (/Applied \d+ file change/i.test(content)) {
         return { title: 'Changes applied', detail: 'The approved updates are now part of the project.' }
@@ -2268,7 +2268,7 @@ function summarizeBrowserEvidence(evidence: BrowserEvidence) {
     const issueCount = evidence.pageErrors?.filter(Boolean).length || 0
     const journey = evidence.journeyProof
     return [
-        `Production proof visible for ${evidence.url}.`,
+        `Production check finished for ${evidence.url}.`,
         `Headings: ${structure.headings?.slice(0, 3).join(', ') || '<none>'}.`,
         `Links/buttons/forms: ${(structure.links?.length || 0)}/${(structure.buttons?.length || 0)}/${((structure.inputs?.length || 0) + (structure.forms?.length || 0))}.`,
         `Viewport: ${structure.hasViewportMeta ? 'present' : 'missing/unknown'}. Screenshot: ${evidence.screenshotPath ? 'available' : 'not available yet'}.`,
@@ -2338,7 +2338,7 @@ function buildVisibleBuildReply(rawContent: string, pendingChanges: PendingShare
         ? `Prepared ${pendingChanges.length} reviewable change${pendingChanges.length === 1 ? '' : 's'}.`
         : 'I checked the request and did not prepare file changes.'
     const proofNote = browserProofs
-        ? 'Production proof is running, so you can review the summary while Hanasand verifies the visible result.'
+        ? 'Production check is running, so you can review the summary while Hanasand verifies the visible result.'
         : ''
     const reviewNote = pendingChanges.length
         ? 'Open What changed for the summary. Advanced diffs stay collapsed for developers.'
@@ -2446,7 +2446,7 @@ function inferDesignBrief(prompt: string, treePaths: string[]): DesignBrief | nu
             tokenPlan: ['clinical neutral base', 'calm blue/green accent', 'large readable type', 'high contrast states'],
         },
         agency: {
-            layoutMoves: ['proof-led hero', 'case-study strips', 'process and handoff sections'],
+            layoutMoves: ['evidence-led hero', 'case-study strips', 'process and handoff sections'],
             assetPipeline: ['project thumbnail slots', 'client-logo placeholders marked as pending', 'icons for strategy/design/build'],
             tokenPlan: ['editorial type scale', 'restrained accent', 'portfolio spacing rhythm', 'case-study cards with varied composition'],
         },

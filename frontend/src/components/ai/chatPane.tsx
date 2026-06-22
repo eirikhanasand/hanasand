@@ -53,7 +53,7 @@ export default function ChatPane({
         : awaitingResponse
             ? 'Waiting for the current agent turn to finish.'
             : !hasReadyModel
-                ? 'Model lane not connected yet. You can still open the editor, attach context, or sign in to continue when a runner is available.'
+                ? 'Model unavailable. You can still open the editor, attach context, or sign in to continue when capacity is available.'
                 : null
     const lastMessageKey = useMemo(() => {
         const lastMessage = activeConversation?.messages.at(-1)
@@ -76,28 +76,28 @@ export default function ChatPane({
         const selectedName = activeConversation?.preferredModel || activeConversation?.activeModel
         return clients.find((client) => client.name === selectedName) || clients[0] || null
     }, [activeConversation?.activeModel, activeConversation?.preferredModel, clients])
-    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Model lane unavailable'
+    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Model unavailable'
 
     return (
         <Fragment>
             <section className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-                <div className='relative z-10 border-b border-bright/10 px-7 py-5'>
+                <div className='relative z-10 border-b border-[#e0e5ed] bg-white px-7 py-5'>
                     <div className='flex items-center justify-between gap-4'>
                         <div className='min-w-0'>
-                            <h1 className='truncate text-base font-semibold tracking-[-0.02em] text-[#f3f0e8]'>{activeConversation?.title || 'New chat'}</h1>
+                            <h1 className='truncate text-base font-semibold tracking-normal text-[#171a21]'>{activeConversation?.title || 'New chat'}</h1>
                             <div className='relative mt-1 inline-block'>
                                 <button
                                     type='button'
                                     onClick={() => setModelMenuOpen((prev) => !prev)}
                                     disabled={!clients.length}
-                                    className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-medium text-[#f0a63a] transition-colors hover:text-[#ffc46d] disabled:cursor-not-allowed disabled:text-[#777772]'
+                                    className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-semibold text-[#3056d3] transition-colors hover:text-[#2546a8] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
                                     title={selectedModelLabel}
                                 >
-                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Model lane unavailable'}</span>
+                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Model unavailable'}</span>
                                     {clients.length ? <ChevronDown className='h-3.5 w-3.5 shrink-0' /> : null}
                                 </button>
                                 {modelMenuOpen && clients.length ? (
-                                    <div className='absolute left-0 top-full z-30 mt-2 w-[min(26rem,calc(100vw-3rem))] overflow-hidden rounded-lg border border-[#3a3328] bg-[#171615] shadow-[0_18px_60px_rgba(0,0,0,0.32)]'>
+                                    <div className='absolute left-0 top-full z-30 mt-2 w-[min(26rem,calc(100vw-3rem))] overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-[0_18px_60px_rgba(26,35,55,0.14)]'>
                                         {clients.map((client) => {
                                             const active = client.name === selectedClient?.name
                                             return (
@@ -109,10 +109,10 @@ export default function ChatPane({
                                                         onPreferredModelChange(client.name)
                                                         setModelMenuOpen(false)
                                                     }}
-                                                    className={`block w-full px-3 py-2.5 text-left transition-colors ${active ? 'bg-[#2a2116] text-[#ffc46d]' : 'text-[#d8d4ca] hover:bg-[#22201d] hover:text-[#ffc46d]'}`}
+                                                    className={`block w-full px-3 py-2.5 text-left transition-colors ${active ? 'bg-[#eef3ff] text-[#2546a8]' : 'text-[#344054] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}
                                                 >
                                                     <span className='block truncate text-sm font-medium'>{modelLabel(client)}</span>
-                                                    <span className='mt-0.5 block truncate text-xs text-[#8d8d89]'>{client.name}</span>
+                                                    <span className='mt-0.5 block truncate text-xs text-[#667085]'>{client.name}</span>
                                                 </button>
                                             )
                                         })}
@@ -123,7 +123,7 @@ export default function ChatPane({
                         <div className='flex items-center gap-2'>
                             <Link
                                 href='/s'
-                                className='grid h-9 w-9 place-items-center rounded-full text-[#a6a39b] transition-colors hover:bg-bright/8 hover:text-[#f2eee5]'
+                                className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'
                                 aria-label='Import context'
                             >
                                 <FolderKanban className='h-4 w-4 shrink-0' />
@@ -134,7 +134,7 @@ export default function ChatPane({
                                 accent={isThinking}
                             />
                             {latestArtifacts.length ? (
-                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs transition-colors ${showArtifacts ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#9a9a95] hover:bg-bright/8 hover:text-[#eeeeea]'}`}>
+                                <button type='button' onClick={() => setShowArtifacts((prev) => !prev)} className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition-colors ${showArtifacts ? 'bg-[#eef3ff] text-[#2546a8]' : 'text-[#667085] hover:bg-[#f8fafc] hover:text-[#171a21]'}`}>
                                     <PanelRightOpen className='h-3.5 w-3.5' />
                                     Artifacts
                                 </button>
@@ -148,9 +148,9 @@ export default function ChatPane({
                         {!activeConversation?.messages.length ? (
                             <EmptyComposerState tooltip={emptyTooltip} hasReadyModel={hasReadyModel} />
                         ) : activeConversation.messages.map((message) => (
-                            <article key={message.id} className={`max-w-3xl rounded-[1.25rem] border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#464640] bg-[#272724]/95 text-[#f1eee7] shadow-[0_18px_60px_rgba(0,0,0,0.22)]' : message.error ? 'border-[#5d3835] bg-[#241b1a] text-[#e6c1bd]' : message.role === 'tool' ? 'border-[#333331] bg-[#1d1d1d] text-[#d3d3ce]' : 'border-transparent bg-transparent text-[#eeeeea]'}`}>
+                            <article key={message.id} className={`max-w-3xl rounded-lg border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#dfe5ee] bg-white text-[#171a21] shadow-sm' : message.error ? 'border-[#fecdca] bg-[#fff1f0] text-[#912018]' : message.role === 'tool' ? 'border-[#dfe5ee] bg-[#f8fafc] text-[#344054]' : 'border-transparent bg-transparent text-[#171a21]'}`}>
                                 {message.role === 'tool' || message.role === 'assistant' ? (
-                                    <div className='mb-2 flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-[#777772]'>
+                                    <div className='mb-2 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase text-[#667085]'>
                                         <span>{message.role === 'tool' ? toolLabel(message) : message.role}</span>
                                         <span>{message.role === 'assistant' ? (message.modelName || activeConversation.activeModel || 'assistant') : null}</span>
                                     </div>
@@ -174,8 +174,8 @@ export default function ChatPane({
                     </div>
 
                     {showArtifacts ? (
-                        <aside className='min-h-0 border-t border-bright/10 xl:border-t-0 xl:border-l'>
-                            <div className='border-b border-bright/10 px-4 py-3 text-[11px] uppercase tracking-[0.16em] text-[#858581]'>
+                        <aside className='min-h-0 border-t border-[#e0e5ed] bg-white xl:border-t-0 xl:border-l'>
+                            <div className='border-b border-[#e0e5ed] px-4 py-3 text-[11px] font-semibold uppercase text-[#667085]'>
                                 Workspace output
                             </div>
                             <div className='min-h-0 space-y-3 overflow-y-auto p-4'>
@@ -183,10 +183,10 @@ export default function ChatPane({
                                     <section key={group.kind} className='space-y-3'>
                                         <div className='flex items-center justify-between gap-3'>
                                             <div>
-                                                <div className='text-[10px] uppercase tracking-[0.16em] text-[#858581]'>{group.label}</div>
-                                                <div className='mt-1 text-xs text-[#9a9a95]'>{group.artifacts.length} item{group.artifacts.length === 1 ? '' : 's'}</div>
+                                                <div className='text-[10px] font-semibold uppercase text-[#667085]'>{group.label}</div>
+                                                <div className='mt-1 text-xs text-[#596170]'>{group.artifacts.length} item{group.artifacts.length === 1 ? '' : 's'}</div>
                                             </div>
-                                            <div className='rounded-full border border-bright/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#858581]'>
+                                            <div className='rounded-full border border-[#d8dee9] px-2.5 py-1 text-[10px] font-semibold uppercase text-[#667085]'>
                                                 {group.kind}
                                             </div>
                                         </div>
@@ -198,8 +198,8 @@ export default function ChatPane({
                     ) : null}
                 </div>
 
-                <div className='relative z-10 border-t border-bright/10 px-4 py-4 md:px-12 xl:px-24'>
-                    <div className='mx-auto flex min-h-14 max-w-5xl items-center gap-2 rounded-full border border-bright/10 bg-background/75 px-4 shadow-[0_18px_52px_rgba(0,0,0,0.18)]'>
+                <div className='relative z-10 border-t border-[#e0e5ed] bg-white px-4 py-4 md:px-12 xl:px-24'>
+                    <div className='mx-auto flex min-h-14 max-w-5xl items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 shadow-sm focus-within:border-[#3056d3] focus-within:ring-4 focus-within:ring-[#dce6ff]'>
                         <textarea
                             value={composer}
                             onChange={(event) => onComposerChange(event.target.value)}
@@ -209,10 +209,10 @@ export default function ChatPane({
                                     onSend()
                                 }
                             }}
-                            placeholder='Ask Hanasand AI to build, inspect, debug, scaffold, or ship something...'
+                            placeholder='Ask Hanasand to build, inspect, debug, scaffold, or ship something...'
                             readOnly={readOnly}
                             rows={1}
-                            className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-[#eeeeea] outline-none placeholder:text-[#777772]'
+                            className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-[#171a21] outline-none placeholder:text-[#8c95a5]'
                         />
                         <button
                             type='button'
@@ -221,13 +221,13 @@ export default function ChatPane({
                             title={composerBlockedReason || undefined}
                             disabled={Boolean(composerBlockedReason) || !composer.trim()}
                             onClick={onSend}
-                            className='grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f0eee6] text-[#171717] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45'
+                            className='grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#171a21] text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45'
                         >
                             {awaitingResponse ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <ArrowUp className='h-3.5 w-3.5 stroke-[2.8]' />}
                         </button>
                     </div>
                     {composerBlockedReason ? (
-                        <div id='ai-composer-blocked-reason' className='mx-auto mt-2 max-w-5xl px-4 text-xs text-[#9a9a95]'>
+                        <div id='ai-composer-blocked-reason' className='mx-auto mt-2 max-w-5xl px-4 text-xs text-[#667085]'>
                             {composerBlockedReason}
                         </div>
                     ) : null}
@@ -244,23 +244,23 @@ function EmptyComposerState({ tooltip, hasReadyModel }: { tooltip: string, hasRe
     return (
         <div className='flex h-full min-h-[28rem] items-center justify-center'>
             <div className='max-w-xl text-center'>
-                <div className='mx-auto grid h-14 w-14 place-items-center rounded-full border border-bright/10 text-[#d3d3ce]'>
+                <div className='mx-auto grid h-14 w-14 place-items-center rounded-lg border border-[#dfe5ee] bg-white text-[#3056d3]'>
                     <Bot className='h-6 w-6' />
                 </div>
-                <h2 className='mt-7 text-2xl font-semibold tracking-[-0.035em] text-[#f3f0e8]'>
+                <h2 className='mt-7 text-2xl font-semibold tracking-normal text-[#171a21]'>
                     {greeting}
                 </h2>
-                <p className='mt-3 text-sm leading-6 text-[#9a9a95]'>
+                <p className='mt-3 text-sm leading-6 text-[#596170]'>
                     {hasReadyModel
                         ? tooltip
-                        : 'Attach a workspace or open the editor while a model lane is unavailable. The handoff, files, deploy state, and review context stay visible either way.'}
+                        : 'Attach a workspace or open the editor while the model is unavailable. The handoff, files, deploy state, and review context stay visible either way.'}
                 </p>
                 {!hasReadyModel ? (
-                    <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-[#b7b7b2]'>
-                        <Link href='/s' className='rounded-full border border-bright/10 px-3 py-1.5 transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
+                    <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-[#596170]'>
+                        <Link href='/s' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                             Open editor
                         </Link>
-                        <Link href='/login' className='rounded-full border border-bright/10 px-3 py-1.5 transition-colors hover:bg-bright/8 hover:text-[#eeeeea]'>
+                        <Link href='/login' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                             Sign in
                         </Link>
                     </div>
