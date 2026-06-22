@@ -430,7 +430,7 @@ function readableSourceText(value: string) {
 function alertItemsFor(result: TiSearchResponse) {
     const fromReview = result.analystLoop?.metadataReviewInbox.map(item => ({
         title: item.company || item.victim || 'Exposure mention',
-        detail: [item.affectedAccounts, item.datasetSize, item.actorStatement].filter(Boolean).join(' · ') || item.provenance,
+        detail: [item.affectedAccounts, item.datasetSize, item.actorStatement].filter(Boolean).join(' · ') || 'Review the captured mention before customer alerting.',
         state: 'review',
         tone: 'watch' as const
     })) ?? []
