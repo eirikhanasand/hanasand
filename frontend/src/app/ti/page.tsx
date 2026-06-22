@@ -12,7 +12,7 @@ export default async function Page({ searchParams }: TiPageProps) {
     const initialResult = query ? await searchThreatIntel(query) : null
 
     return (
-        <main className='min-h-[90.5vh] w-full px-4 py-8 md:px-8'>
+        <main className='min-h-[calc(100vh-4.5rem)] w-full bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
             <TiPageClient initialResult={initialResult} />
         </main>
     )

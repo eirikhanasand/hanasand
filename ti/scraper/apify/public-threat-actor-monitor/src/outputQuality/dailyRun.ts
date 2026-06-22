@@ -12,19 +12,21 @@ export function dailyCollectionRunForRows(rows: MarketplaceRow[]) {
     .sort(sortSources).slice(0, 8).map((source) => ({ ...source, queries: [...source.queries].sort() }));
   return {
     schemaVersion: "ti.apify_daily_collection_run.v1",
-    preset: "136-group-ransomware-victim-archive",
+    preset: "ransomlook-ransomwarelive-victim-claims-plus-cve-context",
     refreshedSourceCount: refreshedSources.length,
     candidateRowsProduced: candidateRows.length,
     freshCandidateRowsProduced: freshCandidateRows.length,
     sellableRowsProduced: rows.filter((row) => row.paidRowDecision === "sellable").length,
     liveDataRealRowsProduced: live.liveDataRealRowCount,
     sellableLiveDataRealRowsProduced: live.sellableLiveDataRealRowCount,
+    recentPayworthyLiveDataRealRowsProduced: live.recentPayworthyLiveDataRealRowCount,
     distinctHostedSourceFindings: live.distinctHostedSourceFindingCount,
+    distinctRecentPayworthyHostedSourceFindings: live.distinctRecentPayworthyHostedSourceFindingCount,
     caveatedCandidateRowsProduced: rows.filter((row) => row.paidRowDecision === "included_with_caveat").length,
     refreshedSources,
-    nextCollectionAction: live.sellableLiveDataRealRowCount >= PRODUCTION_SELLABLE_ROW_FLOOR
-      ? "keep daily refresh cadence and measure hosted conversion"
-      : "replace fixture and default-watchlist rows with hosted live-collected distinct public-source findings"
+    nextCollectionAction: live.recentPayworthyLiveDataRealRowCount >= PRODUCTION_SELLABLE_ROW_FLOOR
+      ? "keep the daily refresh running and watch customer searches, exports, and repeat runs"
+      : "add more recent public claim and CVE sources so the feed keeps growing with current items"
   };
 }
 

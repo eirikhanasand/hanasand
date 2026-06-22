@@ -1,4 +1,5 @@
 import type { TiSearchResponse } from "../types.ts";
+import { DEFAULT_MAX_ROWS_PER_QUERY } from "../constants.ts";
 import { parseRansomwareLiveCards } from "./ransomwareLiveCards.ts";
 import { ransomwareLiveGroupUrl } from "./ransomwareLiveGroups.ts";
 import { ransomwareLiveCardResponse } from "./ransomwareLiveResponse.ts";
@@ -17,6 +18,6 @@ async function fetchRansomwareLiveGroup(query: string): Promise<TiSearchResponse
   if (!url) return undefined;
   const response = await fetch(url, { headers: { "user-agent": "hanasand-ti-apify-actor/0.8 metadata-only" } }).catch(() => undefined);
   if (!response?.ok) return undefined;
-  const cards = parseRansomwareLiveCards(await response.text(), 500);
+  const cards = parseRansomwareLiveCards(await response.text(), DEFAULT_MAX_ROWS_PER_QUERY);
   return cards.length ? ransomwareLiveCardResponse(query, cards, url) : undefined;
 }

@@ -11,7 +11,7 @@ export default async function layout({ children }: { children: ReactNode }) {
     const Cookies = await cookies()
     const Headers = await headers()
     const token = Boolean(Cookies.get('access_token')?.value) || false
-    const theme = Cookies.get('theme')?.value || 'dark'
+    const theme = Cookies.get('theme')?.value || 'light'
     const path = Headers.get('x-current-path') || ''
 
     return (

@@ -46,9 +46,18 @@ const SLUGS: Record<string, string> = {
 
 export function ransomwareLiveGroupUrl(query: string): string | undefined {
   const slug = SLUGS[normalizeGroup(query)];
-  return slug ? `https://www.ransomware.live/group/${slug}` : undefined;
+  if (slug) return `https://www.ransomware.live/group/${slug}`;
+  const directSlug = directGroupSlug(query);
+  return directSlug ? `https://www.ransomware.live/group/${directSlug}` : undefined;
 }
 
 function normalizeGroup(query: string): string {
   return query.toLowerCase().replace(/\b(ransomware|ransom|group|gang)\b/g, "").replace(/[^a-z0-9]/g, "");
+}
+
+function directGroupSlug(query: string): string | undefined {
+  const direct = query.trim();
+  if (!direct || direct.length > 80 || direct.includes("/") || direct.includes("?") || direct.includes("#")) return undefined;
+  if (/^[A-Za-z0-9_$%.-]+$/.test(direct)) return direct;
+  return encodeURIComponent(direct.replace(/\s+/g, " "));
 }

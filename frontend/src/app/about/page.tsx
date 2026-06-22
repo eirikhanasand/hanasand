@@ -1,16 +1,104 @@
 import type { Metadata } from 'next'
-import Article from '@/components/articles/article'
+import Link from 'next/link'
+import { ArrowRight, Building2, CheckCircle2, Radar, ShieldCheck, Waypoints } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
-    title: 'About',
-    description: 'Background, context, and project notes for Hanasand.',
+    title: 'About Hanasand',
+    description: 'Hanasand builds company exposure monitoring and ransomware actor intelligence from recent, reviewable metadata.',
     path: '/about',
-    keywords: ['hanasand about', 'developer profile', 'portfolio'],
+    keywords: ['hanasand about', 'threat intelligence company', 'ransomware monitoring'],
 })
 
-export default function page() {
+const principles = [
+    {
+        title: 'Direct monitoring finds the signal',
+        detail: 'Public indexes help corroborate coverage while direct source checks, freshness logic, and company watchlists create the alert value.',
+        icon: Radar,
+    },
+    {
+        title: 'Metadata is the product surface',
+        detail: 'The useful buyer fields are actor, company, claim, timing, source, sector, country, review state, and delivery history.',
+        icon: Waypoints,
+    },
+    {
+        title: 'Alerts should be fast and usable',
+        detail: 'The goal is notification packets a security team can route, review, and act on quickly.',
+        icon: ShieldCheck,
+    },
+]
+
+const focus = [
+    'Ransomware victim claims and actor-page changes',
+    'Company, domain, brand, subsidiary, and supplier watchlists',
+    'Actor overviews shaped for UI navigation and analyst review',
+    'Bloom-filter style exposure checks where sensitive data should stay out of dashboards',
+]
+
+export default function AboutPage() {
     return (
-        <Article id='readme' />
+        <main className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] text-[#171a21]'>
+            <section className='border-b border-[#e3e7ee] bg-white'>
+                <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
+                    <div className='grid gap-5'>
+                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Company</p>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Hanasand is building the operating surface for company exposure monitoring.</h1>
+                        <p className='max-w-2xl text-lg leading-8 text-[#596170]'>
+                            The product centers on high-speed, reviewable threat intelligence: recent mentions, actor context, company matching, and clean delivery.
+                        </p>
+                        <div className='flex flex-wrap gap-3'>
+                            <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                                Open intelligence search
+                                <ArrowRight className='h-4 w-4' />
+                            </Link>
+                            <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                                Contact sales
+                            </Link>
+                        </div>
+                    </div>
+
+                    <div className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
+                        <div className='rounded-lg border border-[#e2e8f0] bg-white p-5'>
+                            <div className='flex items-center gap-3'>
+                                <span className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3]'>
+                                    <Building2 className='h-5 w-5' />
+                                </span>
+                                <div>
+                                    <h2 className='text-lg font-semibold'>Current product focus</h2>
+                                    <p className='text-sm text-[#667085]'>Monitoring workflows for buyers who need recent exposure signals.</p>
+                                </div>
+                            </div>
+                            <div className='mt-5 grid gap-3'>
+                                {focus.map((item) => (
+                                    <div key={item} className='flex items-start gap-2 text-sm leading-6 text-[#3d4656]'>
+                                        <CheckCircle2 className='mt-1 h-4 w-4 shrink-0 text-[#147a3b]' />
+                                        <span>{item}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section className='bg-[#f7f8fb]'>
+                <div className='mx-auto grid max-w-7xl gap-4 px-4 py-12 md:px-8 lg:grid-cols-3'>
+                    {principles.map((item) => {
+                        const Icon = item.icon
+                        return (
+                            <article key={item.title} className='grid gap-4 rounded-lg border border-[#e0e5ed] bg-white p-5 shadow-sm'>
+                                <span className='grid h-11 w-11 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3]'>
+                                    <Icon className='h-5 w-5' />
+                                </span>
+                                <div className='grid gap-2'>
+                                    <h2 className='text-lg font-semibold'>{item.title}</h2>
+                                    <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                </div>
+                            </article>
+                        )
+                    })}
+                </div>
+            </section>
+        </main>
     )
 }

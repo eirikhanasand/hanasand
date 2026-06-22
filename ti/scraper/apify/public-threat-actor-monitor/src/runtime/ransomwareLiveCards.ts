@@ -6,6 +6,11 @@ export interface RansomwareLiveCard {
   country?: string;
   sector?: string;
   description?: string;
+  dataSize?: string;
+  website?: string;
+  postUrl?: string;
+  publicUrl?: string;
+  matchedSearchTerm?: string;
 }
 
 export function parseRansomwareLiveCards(html: string, limit: number): RansomwareLiveCard[] {
@@ -30,7 +35,7 @@ function card(html: string): RansomwareLiveCard | undefined {
 }
 
 function isJunkVictim(victim: string): boolean {
-  return /new\s+blog|blog\s+domain|mirror\s+domain|onion\s+domain|test\s+post/i.test(victim);
+  return /new\s+blog|blog\s+domain|mirror\s+domain|onion\s+domain|\b(test|example|fixture|demo|sample)\b/i.test(victim);
 }
 
 function sector(html: string): string | undefined {

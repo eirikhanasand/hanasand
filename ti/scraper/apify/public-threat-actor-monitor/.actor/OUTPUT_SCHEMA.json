@@ -1,7 +1,7 @@
 {
   "actorOutputSchemaVersion": 1,
   "title": "Threat intelligence output",
-  "description": "Normalized public threat actor and ransomware activity rows with buyer summaries, recommended next actions, key pivots, confidence, freshness, and safe metadata.",
+  "description": "Normalized public threat actor and ransomware activity rows with buyer summaries, recommended next actions, key pivots, confidence, freshness, and metadata.",
   "properties": {
     "dataset": {
       "type": "string",

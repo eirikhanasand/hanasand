@@ -1,1 +1,116 @@
-{"title":"Public Threat Actor Monitor input","type":"object","schemaVersion":1,"properties":{"queries":{"title":"Actors or groups","type":"array","description":"Threat actor, ransomware group, malware, or campaign names to monitor. Leave the prefilled high-yield ransomware set for a broad victim-claim archive run, or replace with your own actors.","editor":"stringList","prefill":["LockBit3","Qilin","Akira","Play","Clop","LockBit2","RansomHub","INC Ransom","ALPHV","DragonForce","BianLian","Black Basta","Medusa","TheGentlemen","SafePay","8Base","Lynx","Everest","Conti","Dispossessor","LockBit5","Pysa","Hunters","NightSpire","KillSec","Sinobi","Rhysida","Cactus","Royal","Hive","RansomHouse","Fog","Vice Society","BlackSuit","DevMan","Babuk2","Stormous","Coinbase Cartel","Handala","FunkSec","Malas","WorldLeaks","Cloak","APT73","BlackByte","Nova","Avaddon","Meow","Snatch","Sarcoma","Space Bears","Ragnar Locker","ShinyHunters","NoEscape","RAWorld","SilentRansomGroup","Toufan","ElDorado","Interlock","Monti","Cuba","PayoutsKing","Arcus Media","Pear","REvil","Abyss","Genesis","Kairos","RansomEXX","Anubis","3AM","Lorenz","Warlock","Cicada3301","DireWolf","Karakurt","AvosLocker","Beast","Quantum","Ransomed","MedusaLocker","BlackLock","LV","BrainCipher","Flocker","Maze","Chaos","DarkVault","Krybit","LostTrust","Mallox","Tengu","Trigona","Knight","Nitrogen","Crypto24","Termite","Midas","BlackShrantac","DonutLeaks","Gunra","AILock","DarkLeakMarket","Dragon Ransomware","Embargo","Securotrop","CiphBit","HellDown","Insomnia","Nokoyawa","ArvinClub","Spook","Lamashtu","Dan0n","Obscura","WannaCry","BlackMatter","Marketo","SunCrypt","AlphaLocker","BlackNevas","MetaEncryptor","Frag","Money Message","PayloadBin","Onyx","KelvinSecurity","M3RX","NetWalker","WereWolves","DoppelPaymer","FulcrumSec","Kraken","Vect","Lapsus$","Radar"]},"query":{"title":"Single actor or group","type":"string","description":"Optional single query. Used when queries is empty.","editor":"textfield"},"maxRowsPerQuery":{"title":"Max rows per query","type":"integer","description":"Maximum normalized dataset rows returned per query. Use 500 for broad ransomware victim-claim archive runs.","default":500,"minimum":1,"maximum":500},"includeActivity":{"title":"Include recent activity","type":"boolean","description":"Return rows for recent public mentions, claims, and reporting when available.","default":true},"includeTargets":{"title":"Include targeting","type":"boolean","description":"Return rows for likely sectors, countries, or regions associated with the query.","default":true},"includeTtps":{"title":"Include TTPs","type":"boolean","description":"Return rows for observed techniques, tactics, tools, and mapped ATT&CK identifiers when available.","default":true},"includeSources":{"title":"Include source coverage","type":"boolean","description":"Return source provenance rows used to support the result.","default":true},"includeDatasets":{"title":"Include dataset coverage","type":"boolean","description":"Add service coverage rows. Leave disabled when you only need actor intelligence and evidence.","default":false},"includeCoverageGaps":{"title":"Include coverage gaps","type":"boolean","description":"Add rows that explain thin, stale, or missing public coverage and the recommended source action. Disabled by default so normal runs stay focused on buyer-useful intelligence rows.","default":false},"includeHeldRows":{"title":"Include held diagnostics","type":"boolean","description":"Add held or suppressed rows for quality review. Disabled by default because these rows are not buyer-payworthy dataset items.","default":false}},"required":[]}
+{
+  "title": "Public Threat Actor Monitor input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "runMode": {
+      "title": "Run size",
+      "type": "string",
+      "description": "Use preview for a quick buyer sample. Use full for larger monitoring and archive exports.",
+      "enum": [
+        "preview",
+        "full"
+      ],
+      "enumTitles": [
+        "Preview - capped sample",
+        "Full - large export"
+      ],
+      "default": "preview",
+      "editor": "select"
+    },
+    "queries": {
+      "title": "Actors or groups",
+      "type": "array",
+      "description": "Company names, ransomware groups, CVE IDs, sectors, brands, or watchlist terms to check. Keep the list short for preview runs; use full mode for broad monitoring.",
+      "editor": "stringList",
+      "prefill": [
+        "qilin",
+        "akira",
+        "lockbit3",
+        "play",
+        "clop"
+      ]
+    },
+    "query": {
+      "title": "Single actor or group",
+      "type": "string",
+      "description": "Optional single query. Used when queries is empty.",
+      "editor": "textfield"
+    },
+    "watchlistTerms": {
+      "title": "Company or vendor watchlist",
+      "type": "array",
+      "description": "Company names, brands, domains, suppliers, or portfolio companies to prioritize when they appear in recent victim claims.",
+      "editor": "stringList",
+      "prefill": [
+        "example.com",
+        "Example Company"
+      ]
+    },
+    "onlyWatchlistMatches": {
+      "title": "Only return watchlist matches",
+      "type": "boolean",
+      "description": "Return only rows that match the company/vendor watchlist. Leave off for broad monitoring.",
+      "default": false
+    },
+    "maxTotalRows": {
+      "title": "Max total rows",
+      "type": "integer",
+      "description": "Hard cap for the whole run. Preview defaults to 500 so buyers can inspect the dataset without a large bill.",
+      "default": 500,
+      "minimum": 1,
+      "maximum": 250000
+    },
+    "maxRowsPerQuery": {
+      "title": "Max rows per query",
+      "type": "integer",
+      "description": "Maximum rows per query before the total run cap is applied. Preview defaults to 250; full exports can use up to 6000.",
+      "default": 250,
+      "minimum": 1,
+      "maximum": 6000
+    },
+    "includeActivity": {
+      "title": "Include recent activity",
+      "type": "boolean",
+      "description": "Return rows for recent public mentions, claims, and reporting when available.",
+      "default": true
+    },
+    "includeTargets": {
+      "title": "Include targeting",
+      "type": "boolean",
+      "description": "Add sector and country context rows. Leave off for compact previews.",
+      "default": false
+    },
+    "includeTtps": {
+      "title": "Include TTPs",
+      "type": "boolean",
+      "description": "Add technique and CVE pivot rows. Leave off for compact previews.",
+      "default": false
+    },
+    "includeSources": {
+      "title": "Include source coverage",
+      "type": "boolean",
+      "description": "Add source reference rows. Activity rows still include source links.",
+      "default": false
+    },
+    "includeDatasets": {
+      "title": "Include dataset coverage",
+      "type": "boolean",
+      "description": "Add service coverage rows. Leave disabled when you only need actor intelligence and evidence.",
+      "default": false
+    },
+    "includeCoverageGaps": {
+      "title": "Include coverage gaps",
+      "type": "boolean",
+      "description": "Add rows that explain where more monitoring coverage would help. Disabled by default so normal runs stay focused on usable findings.",
+      "default": false
+    },
+    "includeHeldRows": {
+      "title": "Include held diagnostics",
+      "type": "boolean",
+      "description": "Add review rows that did not make the main feed. Disabled by default.",
+      "default": false
+    }
+  },
+  "required": []
+}

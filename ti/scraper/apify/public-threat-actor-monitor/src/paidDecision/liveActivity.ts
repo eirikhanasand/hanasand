@@ -8,9 +8,14 @@ export function isSellableCurrentLiveActivity(row: MarketplaceRow): boolean {
     row.sourceUrl !== undefined &&
     row.confidence >= 0.58 &&
     (row.freshnessStatus === "current" || row.freshnessStatus === "recent") &&
+    !hasTestMarker(row) &&
     !row.contradictionHints.length &&
     !row.reviewReasons.some((reason) => reason.startsWith("hold:")) &&
     hasBuyerContext(row);
+}
+
+function hasTestMarker(row: MarketplaceRow): boolean {
+  return /\b(test|example|fixture|demo|sample)\b/i.test([row.title, row.summary, row.victimName, row.actor, row.query].join(" "));
 }
 
 export function currentLiveActivitySellable(): Decision {

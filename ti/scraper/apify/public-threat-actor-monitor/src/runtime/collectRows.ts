@@ -24,7 +24,7 @@ async function rowsForResponse(
   budget: NewsFallbackBudget
 ): Promise<MarketplaceRow[]> {
   let rows = outputRowsFor(response, input);
-  if (needsNewsFallback(rows) && budget.tryUse()) {
+  if (!["ransomware_live_victims_json", "ransomlook_recent", "ransomlook_rss", "ransomlook_posts", "ransomlook_search", "dls_monitor_recent"].includes(response.mode) && needsNewsFallback(rows) && budget.tryUse()) {
     const fallback = await fetchPublicNewsFallback(response.query);
     if (fallback) {
       rows = outputRowsFor(fallback, input);

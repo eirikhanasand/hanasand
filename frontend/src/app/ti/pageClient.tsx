@@ -48,27 +48,27 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
 
     return (
         <div className='mx-auto grid w-full max-w-7xl gap-6'>
-            <form onSubmit={submit} className='grid gap-3 border-b border-white/10 pb-5'>
+            <form onSubmit={submit} className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm md:p-5'>
                 <div className='flex flex-col gap-3 md:flex-row md:items-end'>
                     <label className='grid flex-1 gap-2'>
-                        <span className='text-xs font-semibold uppercase text-bright/40'>Threat intelligence search</span>
+                        <span className='text-xs font-semibold uppercase text-[#3056d3]'>Threat intelligence search</span>
                         <input
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
-                            placeholder='Actor, ransomware group, CVE, malware...'
-                            className='h-12 rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm text-bright outline-none transition placeholder:text-bright/25 focus:border-[#6bc9d8]/60 focus:bg-white/[0.065]'
+                            placeholder='Company, actor, domain, CVE, supplier...'
+                            className='h-12 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                         />
                     </label>
                     <button
                         type='submit'
                         disabled={busy || query.trim().length === 0}
-                        className='inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-bright px-5 text-sm font-semibold text-background transition hover:bg-white disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-bright/35'
+                        className='inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#98a2b3]'
                     >
                         <Search className='h-4 w-4' />
                         {busy ? 'Searching' : 'Search'}
                     </button>
                 </div>
-                {error ? <p className='text-sm text-red-300'>{error}</p> : null}
+                {error ? <p className='text-sm text-red-600'>{error}</p> : null}
             </form>
 
             {visible ? <Results result={visible} /> : <EmptyState />}
@@ -80,23 +80,23 @@ function Results({ result }: { result: TiSearchResponse }) {
     const sourceUrlById = new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)]))
     return (
         <div className='grid gap-6'>
-            <section className='grid gap-4 border-b border-white/10 pb-6 lg:grid-cols-[1.25fr_0.75fr]'>
+            <section className='grid gap-4 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm lg:grid-cols-[1.25fr_0.75fr]'>
                 <div className='grid gap-3'>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <h1 className='text-3xl font-semibold text-bright md:text-4xl'>{result.query}</h1>
-                        <span className='rounded-md border border-white/10 bg-white/[0.045] px-2 py-1 text-xs font-medium uppercase text-bright/55'>
+                        <h1 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>{result.query}</h1>
+                        <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-medium uppercase text-[#667085]'>
                             {result.mode}
                         </span>
                         {result.status ? (
-                            <span className='rounded-md border border-[#6bc9d8]/25 bg-[#6bc9d8]/10 px-2 py-1 text-xs font-medium uppercase text-[#9fe8f1]'>
+                            <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-medium uppercase text-[#3056d3]'>
                                 {result.status}
                             </span>
                         ) : null}
                     </div>
-                    <p className='max-w-4xl text-sm leading-6 text-bright/62'>{result.summary}</p>
+                    <p className='max-w-4xl text-sm leading-6 text-[#596170]'>{result.summary}</p>
                     <div className='flex flex-wrap gap-2'>
                         {result.aliases.map(alias => (
-                            <span key={alias} className='rounded-md bg-white/[0.055] px-2 py-1 text-xs text-bright/62'>{alias}</span>
+                            <span key={alias} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{alias}</span>
                         ))}
                     </div>
                 </div>
@@ -110,6 +110,8 @@ function Results({ result }: { result: TiSearchResponse }) {
 
             <AnalystLoopPanel result={result} />
 
+            <CollectionStrategyPanel result={result} />
+
             <OperationalStatusPanel result={result} />
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
@@ -119,21 +121,21 @@ function Results({ result }: { result: TiSearchResponse }) {
                         return (
                             <EvidenceBox key={`${item.date}-${item.title}`} href={href}>
                                 <div className='flex items-center justify-between gap-3'>
-                                    <h2 className='text-sm font-semibold text-bright/82'>{item.title}</h2>
-                                    <span className='text-xs text-bright/38'>{item.date}</span>
+                                    <h2 className='text-sm font-semibold text-[#171a21]'>{item.title}</h2>
+                                    <span className='text-xs text-[#667085]'>{item.date}</span>
                                 </div>
-                                <p className='text-sm leading-6 text-bright/55'>{item.detail}</p>
-                                <p className='inline-flex items-center gap-1 text-xs text-bright/35'>Confidence {Math.round(item.confidence * 100)}% · {item.sourceIds.join(', ')}{href ? <ExternalLink className='h-3 w-3 text-[#6bc9d8]' /> : null}</p>
+                                <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                <p className='inline-flex items-center gap-1 text-xs text-[#667085]'>Confidence {Math.round(item.confidence * 100)}% · {item.sourceIds.join(', ')}{href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}</p>
                             </EvidenceBox>
                         )}) : <EmptyLine text={result.status === 'searching' ? 'Searching' : 'No activity returned yet.'} />}
                 </Panel>
 
                 <Panel title='Targeting' icon={<Target className='h-4 w-4' />}>
                     {result.targets.length ? result.targets.map(item => (
-                        <div key={item.sector} className='grid gap-1 border-b border-white/8 py-3 last:border-b-0'>
-                            <h2 className='text-sm font-semibold text-bright/82'>{item.sector}</h2>
-                            <p className='text-xs text-bright/38'>{item.regions.join(', ')}</p>
-                            <p className='text-sm leading-6 text-bright/55'>{item.rationale}</p>
+                        <div key={item.sector} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
+                            <h2 className='text-sm font-semibold text-[#171a21]'>{item.sector}</h2>
+                            <p className='text-xs text-[#667085]'>{item.regions.join(', ')}</p>
+                            <p className='text-sm leading-6 text-[#596170]'>{item.rationale}</p>
                         </div>
                     )) : <EmptyLine text='No targeting returned yet.' />}
                 </Panel>
@@ -142,13 +144,13 @@ function Results({ result }: { result: TiSearchResponse }) {
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
                 <Panel title='Observed Tradecraft' icon={<Waypoints className='h-4 w-4' />}>
                     {result.ttps.map(item => (
-                        <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-white/8 py-3 last:border-b-0'>
+                        <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                             <div className='flex flex-wrap items-center gap-2'>
-                                <h2 className='text-sm font-semibold text-bright/82'>{item.name}</h2>
-                                {item.attackId ? <span className='text-xs text-[#6bc9d8]'>{item.attackId}</span> : null}
+                                <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
+                                {item.attackId ? <span className='text-xs text-[#3056d3]'>{item.attackId}</span> : null}
                             </div>
-                            <p className='text-xs text-bright/38'>{item.tactic}</p>
-                            <p className='text-sm leading-6 text-bright/55'>{item.detail}</p>
+                            <p className='text-xs text-[#667085]'>{item.tactic}</p>
+                            <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
                         </div>
                     ))}
                 </Panel>
@@ -157,10 +159,10 @@ function Results({ result }: { result: TiSearchResponse }) {
                     {result.datasets.map(item => (
                         <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
                             <div className='flex items-center justify-between gap-3'>
-                                <h2 className='text-sm font-semibold text-bright/82'>{item.name}</h2>
-                                <span className='text-xs text-bright/38'>{item.status}</span>
+                                <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
+                                <span className='text-xs text-[#667085]'>{item.status}</span>
                             </div>
-                            <p className='text-sm leading-6 text-bright/55'>{item.coverage}</p>
+                            <p className='text-sm leading-6 text-[#596170]'>{item.coverage}</p>
                         </EvidenceBox>
                     ))}
                 </Panel>
@@ -172,16 +174,16 @@ function Results({ result }: { result: TiSearchResponse }) {
                         const href = source.url || linkFromText(source.provenance)
                         return (
                             <EvidenceBox key={source.id} href={href}>
-                                <h2 className='inline-flex items-center gap-1 text-sm font-semibold text-bright/82'>{source.name}{href ? <ExternalLink className='h-3 w-3 text-[#6bc9d8]' /> : null}</h2>
-                                <p className='text-xs text-bright/38'>{source.id} · {source.type}</p>
-                                <p className='text-sm leading-6 text-bright/55'>{source.provenance}</p>
+                                <h2 className='inline-flex items-center gap-1 text-sm font-semibold text-[#171a21]'>{source.name}{href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}</h2>
+                                <p className='text-xs text-[#667085]'>{source.id} · {source.type}</p>
+                                <p className='text-sm leading-6 text-[#596170]'>{source.provenance}</p>
                             </EvidenceBox>
                         )})}
                 </Panel>
 
                 <Panel title='Notes' icon={<ShieldCheck className='h-4 w-4' />}>
                     {result.notes.map(note => (
-                        <p key={note} className='border-b border-white/8 py-3 text-sm leading-6 text-bright/55 last:border-b-0'>{note}</p>
+                        <p key={note} className='border-b border-[#eef1f5] py-3 text-sm leading-6 text-[#596170] last:border-b-0'>{note}</p>
                     ))}
                 </Panel>
             </section>
@@ -190,7 +192,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 }
 
 function EvidenceBox({ href, children }: { href?: string; children: React.ReactNode }) {
-    const className = `grid gap-1 border-b border-white/8 py-3 last:border-b-0 ${href ? 'rounded-md px-2 transition hover:border-[#6bc9d8]/20 hover:bg-[#6bc9d8]/5 focus:outline-none focus:ring-1 focus:ring-[#6bc9d8]/35' : ''}`
+    const className = `grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0 ${href ? 'rounded-lg px-2 transition hover:border-[#3056d3]/20 hover:bg-[#3056d3]/5 focus:outline-none focus:ring-1 focus:ring-[#3056d3]/35' : ''}`
     if (!href) return <div className={className}>{children}</div>
     return (
         <a href={href} target='_blank' rel='noopener noreferrer' className={className} title={href}>
@@ -201,11 +203,11 @@ function EvidenceBox({ href, children }: { href?: string; children: React.ReactN
 
 function EmptyState() {
     return (
-        <section className='grid min-h-[48vh] place-items-center border border-white/10 bg-white/[0.025] px-5 py-10 text-center'>
+        <section className='grid min-h-[48vh] place-items-center border border-[#dfe5ee] bg-white px-5 py-10 text-center'>
             <div className='grid max-w-xl gap-3'>
-                <Radar className='mx-auto h-8 w-8 text-[#6bc9d8]' />
-                <h1 className='text-2xl font-semibold text-bright'>Search threat intelligence</h1>
-                <p className='text-sm leading-6 text-bright/52'>Enter an actor, ransomware group, CVE, malware family, sector, or victim name.</p>
+                <Radar className='mx-auto h-8 w-8 text-[#3056d3]' />
+                <h1 className='text-2xl font-semibold text-[#171a21]'>Search threat intelligence</h1>
+                <p className='text-sm leading-6 text-[#667085]'>Enter an actor, ransomware group, CVE, malware family, sector, or victim name.</p>
             </div>
         </section>
     )
@@ -298,9 +300,9 @@ function formatDate(value: string) {
 
 function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
     return (
-        <section className='border border-white/10 bg-white/[0.025] p-4'>
-            <div className='mb-2 flex items-center gap-2 text-sm font-semibold text-bright/82'>
-                <span className='text-[#6bc9d8]'>{icon}</span>
+        <section className='border border-[#dfe5ee] bg-white p-4'>
+            <div className='mb-2 flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                <span className='text-[#3056d3]'>{icon}</span>
                 {title}
             </div>
             {children}
@@ -314,19 +316,19 @@ function AnalystLoopPanel({ result }: { result: TiSearchResponse }) {
     const packet = loop.victimNotificationPacket
 
     return (
-        <section className='grid gap-4 border border-white/10 bg-white/[0.025] p-4'>
+        <section className='grid gap-4 border border-[#dfe5ee] bg-white p-4'>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div className='grid gap-2'>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <span className={`inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold uppercase outline ${resultStateClass(loop.resultState)}`}>
+                        <span className={`inline-flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold uppercase outline ${resultStateClass(loop.resultState)}`}>
                             {loop.resultState === 'blocked_unsafe_target' || loop.resultState === 'needs_source_activation' ? <AlertTriangle className='h-3.5 w-3.5' /> : <ListChecks className='h-3.5 w-3.5' />}
                             {formatLabel(loop.resultState)}
                         </span>
-                        <h2 className='text-base font-semibold text-bright/88'>Analyst loop</h2>
+                        <h2 className='text-base font-semibold text-[#171a21]'>Analyst loop</h2>
                     </div>
-                    <p className='max-w-4xl text-sm leading-6 text-bright/58'>{loop.headline}</p>
+                    <p className='max-w-4xl text-sm leading-6 text-[#596170]'>{loop.headline}</p>
                 </div>
-                <div className='grid gap-1 text-xs text-bright/45 lg:text-right'>
+                <div className='grid gap-1 text-xs text-[#667085] lg:text-right'>
                     <span>{loop.runStatusClarity.queuedTasks} queued · {loop.runStatusClarity.reviewTasks} review</span>
                     <span>{loop.runStatusClarity.blockedUnsafeTargets} unsafe blocked · {loop.runStatusClarity.rejectedSources} rejected</span>
                 </div>
@@ -334,38 +336,38 @@ function AnalystLoopPanel({ result }: { result: TiSearchResponse }) {
 
             <div className='grid gap-2 md:grid-cols-2 xl:grid-cols-5'>
                 {loop.nextSteps.map(step => (
-                    <div key={`${step.state}-${step.label}`} className='rounded-md border border-white/8 bg-black/15 p-3'>
+                    <div key={`${step.state}-${step.label}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
                         <p className={`text-xs font-semibold uppercase ${stepToneText(step.tone)}`}>{formatLabel(step.state)}</p>
-                        <h3 className='mt-2 text-sm font-semibold text-bright/84'>{step.label}</h3>
-                        <p className='mt-1 text-xs leading-5 text-bright/45'>{step.detail}</p>
+                        <h3 className='mt-2 text-sm font-semibold text-[#171a21]'>{step.label}</h3>
+                        <p className='mt-1 text-xs leading-5 text-[#667085]'>{step.detail}</p>
                     </div>
                 ))}
             </div>
 
             {loop.metadataReviewInbox.length ? (
                 <div className='grid gap-3'>
-                    <h3 className='text-sm font-semibold text-bright/78'>Metadata review inbox</h3>
+                    <h3 className='text-sm font-semibold text-[#344054]'>Metadata review inbox</h3>
                     <div className='grid gap-3 lg:grid-cols-2'>
                         {loop.metadataReviewInbox.map(item => (
-                            <div key={item.id} className='grid gap-3 rounded-md border border-amber-200/15 bg-amber-200/[0.045] p-3'>
+                            <div key={item.id} className='grid gap-3 rounded-lg border border-amber-200/15 bg-amber-200/[0.045] p-3'>
                                 <div className='flex flex-wrap items-center justify-between gap-2'>
-                                    <h4 className='text-sm font-semibold text-bright/88'>{item.company || item.victim || 'Unattributed leak claim'}</h4>
-                                    <span className='rounded-md bg-amber-200/10 px-2 py-1 text-xs text-amber-100/75'>{formatLabel(item.status)}</span>
+                                    <h4 className='text-sm font-semibold text-[#171a21]'>{item.company || item.victim || 'Unattributed leak claim'}</h4>
+                                    <span className='rounded-lg bg-amber-200/10 px-2 py-1 text-xs text-amber-100/75'>{formatLabel(item.status)}</span>
                                 </div>
-                                <div className='grid gap-2 text-sm text-bright/58'>
-                                    {item.affectedAccounts ? <p><strong className='text-bright/80'>{item.affectedAccounts}</strong> claimed affected</p> : null}
-                                    {item.datasetSize ? <p><strong className='text-bright/80'>{item.datasetSize}</strong> claimed dataset size</p> : null}
+                                <div className='grid gap-2 text-sm text-[#596170]'>
+                                    {item.affectedAccounts ? <p><strong className='text-[#171a21]'>{item.affectedAccounts}</strong> claimed affected</p> : null}
+                                    {item.datasetSize ? <p><strong className='text-[#171a21]'>{item.datasetSize}</strong> claimed dataset size</p> : null}
                                     {item.accountSubjects ? <p>{item.accountSubjects}</p> : null}
                                     {item.actorStatement ? <p className='leading-6'>{item.actorStatement}</p> : null}
                                 </div>
-                                <div className='flex flex-wrap gap-2 text-xs text-bright/42'>
+                                <div className='flex flex-wrap gap-2 text-xs text-[#667085]'>
                                     {item.claimedDate ? <span>{item.claimedDate}</span> : null}
                                     {item.sourceHash ? <span>hash {item.sourceHash}</span> : null}
                                     <span>{Math.round(item.confidence * 100)}% metadata confidence</span>
                                 </div>
                                 <div className='flex flex-wrap gap-2'>
                                     {item.allowedActions.map(action => (
-                                        <span key={action} className='rounded-md border border-white/10 px-2 py-1 text-xs text-bright/55'>{formatLabel(action)}</span>
+                                        <span key={action} className='rounded-lg border border-[#dfe5ee] px-2 py-1 text-xs text-[#596170]'>{formatLabel(action)}</span>
                                     ))}
                                 </div>
                             </div>
@@ -375,39 +377,104 @@ function AnalystLoopPanel({ result }: { result: TiSearchResponse }) {
             ) : null}
 
             {packet ? (
-                <div className='grid gap-3 rounded-md border border-[#6bc9d8]/15 bg-[#6bc9d8]/[0.045] p-3'>
-                    <h3 className='text-sm font-semibold text-bright/78'>Victim notification packet</h3>
-                    <p className='text-sm leading-6 text-bright/58'>{packet.claimSummary}</p>
-                    <div className='grid gap-2 text-xs text-bright/45 md:grid-cols-2'>
+                <div className='grid gap-3 rounded-lg border border-[#3056d3]/15 bg-[#3056d3]/[0.045] p-3'>
+                    <h3 className='text-sm font-semibold text-[#344054]'>Victim notification packet</h3>
+                    <p className='text-sm leading-6 text-[#596170]'>{packet.claimSummary}</p>
+                    <div className='grid gap-2 text-xs text-[#667085] md:grid-cols-2'>
                         {packet.affectedAccounts ? <span>Accounts: {packet.affectedAccounts}</span> : null}
                         {packet.datasetSize ? <span>Dataset: {packet.datasetSize}</span> : null}
                         {packet.sourceHash ? <span>Source hash: {packet.sourceHash}</span> : null}
                         <span>Confidence: {Math.round(packet.confidence * 100)}%</span>
                     </div>
-                    {packet.actorStatement ? <p className='text-sm leading-6 text-bright/55'>{packet.actorStatement}</p> : null}
+                    {packet.actorStatement ? <p className='text-sm leading-6 text-[#596170]'>{packet.actorStatement}</p> : null}
                     <div className='grid gap-1'>
                         {packet.whatWasNotAccessed.map(item => (
-                            <p key={item} className='text-xs leading-5 text-bright/42'>{item}</p>
+                            <p key={item} className='text-xs leading-5 text-[#667085]'>{item}</p>
                         ))}
                     </div>
-                    <p className='text-xs leading-5 text-bright/50'>{packet.recommendedAction}</p>
+                    <p className='text-xs leading-5 text-[#667085]'>{packet.recommendedAction}</p>
                 </div>
             ) : null}
 
             {loop.sourceActivationWorkflow.actions.length ? (
                 <div className='grid gap-2'>
-                    <h3 className='text-sm font-semibold text-bright/78'>Source activation workflow</h3>
+                    <h3 className='text-sm font-semibold text-[#344054]'>Source activation workflow</h3>
                     {loop.sourceActivationWorkflow.actions.map(action => (
-                        <div key={`${action.action}-${action.reason}`} className='rounded-md border border-white/8 bg-black/15 p-3'>
+                        <div key={`${action.action}-${action.reason}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
                             <div className='flex flex-wrap items-center justify-between gap-2'>
-                                <p className='text-sm font-semibold text-bright/82'>{formatLabel(action.action)}</p>
-                                <span className='rounded-md bg-white/[0.055] px-2 py-1 text-xs text-bright/50'>{formatLabel(action.execution)}</span>
+                                <p className='text-sm font-semibold text-[#171a21]'>{formatLabel(action.action)}</p>
+                                <span className='rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{formatLabel(action.execution)}</span>
                             </div>
-                            <p className='mt-1 text-xs leading-5 text-bright/45'>{action.reason}</p>
+                            <p className='mt-1 text-xs leading-5 text-[#667085]'>{action.reason}</p>
                         </div>
                     ))}
                 </div>
             ) : null}
+        </section>
+    )
+}
+
+function CollectionStrategyPanel({ result }: { result: TiSearchResponse }) {
+    const strategy = result.collectionStrategy
+    if (!strategy) return null
+
+    return (
+        <section className='grid gap-4 border border-[#dfe5ee] bg-white p-4'>
+            <div className='grid gap-2'>
+                <div className='flex flex-wrap items-center gap-2'>
+                    <span className='inline-flex items-center gap-2 rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold uppercase text-[#3056d3]'>
+                        <Radar className='h-3.5 w-3.5' />
+                        Collection strategy
+                    </span>
+                    <h2 className='text-base font-semibold text-[#171a21]'>Own the capture, use indexes as leads</h2>
+                </div>
+                <p className='max-w-5xl text-sm leading-6 text-[#596170]'>{strategy.thesis}</p>
+            </div>
+
+            <div className='grid gap-3 lg:grid-cols-[1fr_1fr]'>
+                <div className='grid gap-2'>
+                    <h3 className='text-sm font-semibold text-[#344054]'>Product focus</h3>
+                    <div className='flex flex-wrap gap-2'>
+                        {strategy.productFocus.map(item => (
+                            <span key={item} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#596170]'>{item}</span>
+                        ))}
+                    </div>
+                </div>
+                <div className='grid gap-2'>
+                    <h3 className='text-sm font-semibold text-[#344054]'>Distribution</h3>
+                    <p className='text-sm leading-6 text-[#596170]'>{strategy.distribution.summary}</p>
+                </div>
+            </div>
+
+            <div className='grid gap-3 lg:grid-cols-2'>
+                {strategy.sourcePosture.map(source => (
+                    <div key={`${source.source}-${source.role}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
+                        <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <h3 className='text-sm font-semibold text-[#171a21]'>{source.source}</h3>
+                            <span className='rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{formatLabel(source.role)}</span>
+                        </div>
+                        <p className='mt-2 text-sm leading-6 text-[#596170]'>{source.summary}</p>
+                        <p className='mt-2 text-xs leading-5 text-[#667085]'>{source.buyerValue}</p>
+                    </div>
+                ))}
+            </div>
+
+            <div className='grid gap-3 rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
+                <h3 className='text-sm font-semibold text-[#344054]'>Owned collection boundary</h3>
+                <p className='text-sm leading-6 text-[#596170]'>{strategy.ownedCollection.summary}</p>
+                <div className='grid gap-3 md:grid-cols-2'>
+                    <div className='grid gap-1'>
+                        {strategy.ownedCollection.requirements.slice(0, 6).map(item => (
+                            <p key={item} className='text-xs leading-5 text-[#667085]'>{item}</p>
+                        ))}
+                    </div>
+                    <div className='grid gap-1'>
+                        {strategy.ownedCollection.prohibited.slice(0, 6).map(item => (
+                            <p key={item} className='text-xs leading-5 text-[#667085]'>{item}</p>
+                        ))}
+                    </div>
+                </div>
+            </div>
         </section>
     )
 }
@@ -417,22 +484,22 @@ function OperationalStatusPanel({ result }: { result: TiSearchResponse }) {
     if (!status) return null
 
     return (
-        <section className='grid gap-4 border border-white/10 bg-white/[0.025] p-4'>
+        <section className='grid gap-4 border border-[#dfe5ee] bg-white p-4'>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div className='grid gap-2'>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <span className={`inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold uppercase outline ${statusToneClass(status.state)}`}>
+                        <span className={`inline-flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold uppercase outline ${statusToneClass(status.state)}`}>
                             {status.state === 'blocked' || status.state === 'degraded' ? <AlertTriangle className='h-3.5 w-3.5' /> : <Gauge className='h-3.5 w-3.5' />}
                             {status.state.replaceAll('_', ' ')}
                         </span>
-                        <h2 className='text-base font-semibold text-bright/88'>Scraper workload</h2>
+                        <h2 className='text-base font-semibold text-[#171a21]'>Scraper workload</h2>
                     </div>
-                    <p className='max-w-4xl text-sm leading-6 text-bright/58'>{status.headline}</p>
+                    <p className='max-w-4xl text-sm leading-6 text-[#596170]'>{status.headline}</p>
                 </div>
-                <div className='flex flex-wrap gap-2 text-xs text-bright/45 lg:justify-end'>
-                    {status.queue.nextPollSeconds !== undefined ? <span className='rounded-md border border-white/10 px-2 py-1'>poll {status.queue.nextPollSeconds}s</span> : null}
-                    {status.queue.cursorContinuity ? <span className='rounded-md border border-white/10 px-2 py-1'>{formatLabel(status.queue.cursorContinuity)}</span> : null}
-                    {status.queue.backpressureState ? <span className='rounded-md border border-white/10 px-2 py-1'>{formatLabel(status.queue.backpressureState)}</span> : null}
+                <div className='flex flex-wrap gap-2 text-xs text-[#667085] lg:justify-end'>
+                    {status.queue.nextPollSeconds !== undefined ? <span className='rounded-lg border border-[#dfe5ee] px-2 py-1'>poll {status.queue.nextPollSeconds}s</span> : null}
+                    {status.queue.cursorContinuity ? <span className='rounded-lg border border-[#dfe5ee] px-2 py-1'>{formatLabel(status.queue.cursorContinuity)}</span> : null}
+                    {status.queue.backpressureState ? <span className='rounded-lg border border-[#dfe5ee] px-2 py-1'>{formatLabel(status.queue.backpressureState)}</span> : null}
                 </div>
             </div>
 
@@ -445,7 +512,7 @@ function OperationalStatusPanel({ result }: { result: TiSearchResponse }) {
 
             <div className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
                 <div className='grid gap-3'>
-                    <h3 className='text-sm font-semibold text-bright/78'>Budget lanes</h3>
+                    <h3 className='text-sm font-semibold text-[#344054]'>Budget lanes</h3>
                     {status.budgets.length ? (
                         <div className='grid gap-2'>
                             {status.budgets.slice(0, 6).map((budget) => (
@@ -453,12 +520,12 @@ function OperationalStatusPanel({ result }: { result: TiSearchResponse }) {
                             ))}
                         </div>
                     ) : (
-                        <p className='rounded-md border border-white/8 bg-black/15 p-3 text-sm text-bright/42'>Waiting for scheduler budget lanes.</p>
+                        <p className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3 text-sm text-[#667085]'>Waiting for scheduler budget lanes.</p>
                     )}
                 </div>
 
                 <div className='grid gap-3'>
-                    <h3 className='text-sm font-semibold text-bright/78'>Fairness and aging</h3>
+                    <h3 className='text-sm font-semibold text-[#344054]'>Fairness and aging</h3>
                     <div className='grid gap-2'>
                         <OperationalRow icon={<GitBranch className='h-4 w-4' />} label='Per-source fairness' value={status.workers.fairness} detail={status.fairness.worstGroup ? `${status.fairness.worstGroup} · ${formatPercent(status.fairness.worstShare)}` : formatPercent(status.fairness.worstShare)} tone={status.fairness.ok ? 'ok' : 'bad'} />
                         <OperationalRow icon={<Clock3 className='h-4 w-4' />} label='Oldest queued' value={formatDuration(status.queue.maxAgeSeconds)} detail='max age' tone={toneFromAging(status.aging[0]?.tone)} />
@@ -470,20 +537,20 @@ function OperationalStatusPanel({ result }: { result: TiSearchResponse }) {
 
             {status.controls.length ? (
                 <div className='grid gap-3'>
-                    <h3 className='text-sm font-semibold text-bright/78'>Canary controls</h3>
+                    <h3 className='text-sm font-semibold text-[#344054]'>Canary controls</h3>
                     <div className='grid gap-2 lg:grid-cols-2'>
                         {status.controls.slice(0, 4).map((control) => (
-                            <div key={`${control.scenario ?? 'control'}-${control.action}`} className='rounded-md border border-white/8 bg-black/15 p-3'>
+                            <div key={`${control.scenario ?? 'control'}-${control.action}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
                                 <div className='flex items-start justify-between gap-3'>
                                     <div>
-                                        <p className='text-sm font-semibold text-bright/82'>{formatLabel(control.action)}</p>
-                                        <p className='mt-1 text-xs text-bright/42'>{control.scenario ? formatLabel(control.scenario) : 'scheduler control'}</p>
+                                        <p className='text-sm font-semibold text-[#171a21]'>{formatLabel(control.action)}</p>
+                                        <p className='mt-1 text-xs text-[#667085]'>{control.scenario ? formatLabel(control.scenario) : 'scheduler control'}</p>
                                     </div>
-                                    <span className='shrink-0 rounded-md bg-white/[0.055] px-2 py-1 text-xs text-bright/52'>
+                                    <span className='shrink-0 rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>
                                         q {signed(control.queueDelta)} · w {signed(control.workerDelta)}
                                     </span>
                                 </div>
-                                <p className='mt-2 text-xs leading-5 text-bright/48'>{control.rollback}</p>
+                                <p className='mt-2 text-xs leading-5 text-[#667085]'>{control.rollback}</p>
                             </div>
                         ))}
                     </div>
@@ -492,7 +559,7 @@ function OperationalStatusPanel({ result }: { result: TiSearchResponse }) {
 
             <div className='grid gap-2'>
                 {status.notes.slice(0, 4).map((note) => (
-                    <p key={note} className='text-xs leading-5 text-bright/42'>{note}</p>
+                    <p key={note} className='text-xs leading-5 text-[#667085]'>{note}</p>
                 ))}
             </div>
         </section>
@@ -501,12 +568,12 @@ function OperationalStatusPanel({ result }: { result: TiSearchResponse }) {
 
 function OperationalMetric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
     return (
-        <div className='rounded-md border border-white/10 bg-black/15 p-3'>
-            <div className='flex items-center justify-between gap-3 text-bright/38'>
+        <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3'>
+            <div className='flex items-center justify-between gap-3 text-[#667085]'>
                 <span className='inline-flex items-center gap-2 text-xs font-medium uppercase'>{icon}{label}</span>
             </div>
-            <p className='mt-2 text-xl font-semibold text-bright/88'>{value}</p>
-            <p className='mt-1 text-xs text-bright/42'>{detail}</p>
+            <p className='mt-2 text-xl font-semibold text-[#171a21]'>{value}</p>
+            <p className='mt-1 text-xs text-[#667085]'>{detail}</p>
         </div>
     )
 }
@@ -516,59 +583,59 @@ function BudgetLane({ budget }: { budget: TiOperationalStatus['budgets'][number]
     const tone = budget.action === 'accept' ? 'ok' : budget.action === 'pause_noisy_source' ? 'bad' : 'watch'
 
     return (
-        <div className='rounded-md border border-white/8 bg-black/15 p-3'>
+        <div className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
             <div className='flex items-start justify-between gap-3'>
                 <div>
-                    <p className='text-sm font-semibold text-bright/82'>{formatLabel(budget.workClass)}</p>
-                    <p className='mt-1 text-xs text-bright/42'>{budget.queued} queued · {budget.leased} leased · {budget.retryDebt} retries</p>
+                    <p className='text-sm font-semibold text-[#171a21]'>{formatLabel(budget.workClass)}</p>
+                    <p className='mt-1 text-xs text-[#667085]'>{budget.queued} queued · {budget.leased} leased · {budget.retryDebt} retries</p>
                 </div>
-                <span className={`shrink-0 rounded-md px-2 py-1 text-xs ${rowToneClass(tone)}`}>{formatLabel(budget.action)}</span>
+                <span className={`shrink-0 rounded-lg px-2 py-1 text-xs ${rowToneClass(tone)}`}>{formatLabel(budget.action)}</span>
             </div>
-            <div className='mt-3 h-1.5 overflow-hidden rounded-full bg-white/8'>
-                <div className={`h-full rounded-full ${tone === 'bad' ? 'bg-red-300/70' : tone === 'watch' ? 'bg-amber-300/70' : 'bg-[#6bc9d8]/80'}`} style={{ width: `${Math.round(used * 100)}%` }} />
+            <div className='mt-3 h-1.5 overflow-hidden rounded-full bg-[#eef1f5]'>
+                <div className={`h-full rounded-full ${tone === 'bad' ? 'bg-red-300/70' : tone === 'watch' ? 'bg-amber-300/70' : 'bg-[#3056d3]/80'}`} style={{ width: `${Math.round(used * 100)}%` }} />
             </div>
-            <p className='mt-2 text-xs text-bright/38'>{budget.budgetSlots} slots · oldest {formatDuration(budget.maxAgeSeconds)}</p>
+            <p className='mt-2 text-xs text-[#667085]'>{budget.budgetSlots} slots · oldest {formatDuration(budget.maxAgeSeconds)}</p>
         </div>
     )
 }
 
 function OperationalRow({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: string; detail: string; tone: 'ok' | 'watch' | 'bad' }) {
     return (
-        <div className='flex items-center justify-between gap-3 rounded-md border border-white/8 bg-black/15 p-3'>
+        <div className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
             <div className='min-w-0'>
-                <p className='inline-flex items-center gap-2 text-xs font-medium uppercase text-bright/38'>{icon}{label}</p>
-                <p className='mt-1 truncate text-sm font-semibold text-bright/82'>{value}</p>
+                <p className='inline-flex items-center gap-2 text-xs font-medium uppercase text-[#667085]'>{icon}{label}</p>
+                <p className='mt-1 truncate text-sm font-semibold text-[#171a21]'>{value}</p>
             </div>
-            <span className={`shrink-0 rounded-md px-2 py-1 text-xs ${rowToneClass(tone)}`}>{detail}</span>
+            <span className={`shrink-0 rounded-lg px-2 py-1 text-xs ${rowToneClass(tone)}`}>{detail}</span>
         </div>
     )
 }
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
     return (
-        <div className='flex items-center justify-between gap-4 border border-white/10 bg-white/[0.025] px-3 py-2'>
-            <span className='inline-flex items-center gap-2 text-bright/48'>{icon}{label}</span>
-            <span className='font-semibold text-bright/80'>{value}</span>
+        <div className='flex items-center justify-between gap-4 border border-[#dfe5ee] bg-white px-3 py-2'>
+            <span className='inline-flex items-center gap-2 text-[#667085]'>{icon}{label}</span>
+            <span className='font-semibold text-[#171a21]'>{value}</span>
         </div>
     )
 }
 
 function EmptyLine({ text }: { text: string }) {
-    return <p className='py-3 text-sm text-bright/42'>{text}</p>
+    return <p className='py-3 text-sm text-[#667085]'>{text}</p>
 }
 
 function statusToneClass(state: TiOperationalStatus['state']) {
     if (state === 'blocked') return 'bg-red-400/10 text-red-100/80 outline-red-300/20'
     if (state === 'degraded') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
     if (state === 'metadata_review' || state === 'needs_source_activation') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
-    if (state === 'queued' || state === 'searching') return 'bg-[#6bc9d8]/10 text-[#9fe8f1] outline-[#6bc9d8]/25'
+    if (state === 'queued' || state === 'searching') return 'bg-[#eef3ff] text-[#3056d3] outline-[#3056d3]/25'
     return 'bg-emerald-300/10 text-emerald-100/80 outline-emerald-200/20'
 }
 
 function resultStateClass(state: NonNullable<TiSearchResponse['status']>) {
     if (state === 'blocked_unsafe_target') return 'bg-red-400/10 text-red-100/80 outline-red-300/20'
     if (state === 'metadata_review' || state === 'needs_source_activation') return 'bg-amber-300/10 text-amber-100/80 outline-amber-200/20'
-    if (state === 'queued' || state === 'searching' || state === 'partial') return 'bg-[#6bc9d8]/10 text-[#9fe8f1] outline-[#6bc9d8]/25'
+    if (state === 'queued' || state === 'searching' || state === 'partial') return 'bg-[#eef3ff] text-[#3056d3] outline-[#3056d3]/25'
     return 'bg-emerald-300/10 text-emerald-100/80 outline-emerald-200/20'
 }
 

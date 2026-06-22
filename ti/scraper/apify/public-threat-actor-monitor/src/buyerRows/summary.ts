@@ -1,31 +1,66 @@
 import type { MarketplaceRow } from "../types.ts";
+import { displayValue, sentenceCase } from "./display.ts";
 
 export function buyerSummaryForRow(
   row: MarketplaceRow,
   decision: Pick<MarketplaceRow, "paidRowDecision" | "billingGuidance">,
   whyWorthPaying: string
 ): string {
-  const freshness = row.freshnessStatus === "unknown" ? "observed" : row.freshnessStatus;
+  const freshness = sentenceCase(row.freshnessStatus === "unknown" ? "observed" : row.freshnessStatus);
+  const actor = displayValue(row.actor);
   const subject = row.victimName ?? row.sector ?? row.ttp ?? row.sourceName ?? row.title;
-  if (decision.paidRowDecision === "sellable") return `${freshness} ${row.actor} ${row.rowType} row: ${subject}. ${whyWorthPaying}.`;
-  if (decision.paidRowDecision === "included_with_caveat") return `${freshness} ${row.actor} lead: ${subject}. Useful context, but corroboration is still thin.`;
-  if (decision.paidRowDecision === "coverage_gap_only") return `${row.actor} coverage gap: ${row.highestValueMissingFamily || "additional public support"} would make future rows more useful.`;
-  if (decision.paidRowDecision === "suppress") {
-    if (row.rowType === "source") return `${row.actor} source page is hidden from paid findings because it is provenance-only, not a buyer finding.`;
-    return `${row.actor} row is hidden from paid output because it lacks safe matching evidence.`;
+  const dataClaim = row.claimedDataSummary ? ` Claimed data: ${row.claimedDataSummary}.` : "";
+  if (decision.paidRowDecision === "sellable" && row.claimType === "victim_claim" && row.victimName) {
+    const value = row.claimedDataSummary
+      ? "Includes company, actor, date, source link, claimed data, and review pivots."
+      : "Includes company, actor, date, source link, and review pivots.";
+    return `${freshness} ${actor} victim claim: ${subject}.${dataClaim} ${value}`;
   }
-  return `${row.actor} row is held until evidence, freshness, or specificity improves.`;
+  if (decision.paidRowDecision === "sellable") return `${freshness} ${actor} signal: ${subject}.${dataClaim} ${sentenceCase(whyWorthPaying)}.`;
+  if (decision.paidRowDecision === "included_with_caveat") return `${freshness} ${actor} lead: ${subject}. Use it as a watchlist lead while checking the linked source.`;
+  if (decision.paidRowDecision === "coverage_gap_only") return `${actor}: add ${row.highestValueMissingFamily || "another public source"} to improve monitoring coverage.`;
+  if (decision.paidRowDecision === "suppress") {
+    if (row.rowType === "source") return `${actor} source reference kept for traceability.`;
+    return `${actor} item kept out of the main feed until the match is clearer.`;
+  }
+  return `${actor} item needs a clearer source, date, or entity match.`;
 }
 
 export function recommendedBuyerActionForRow(row: MarketplaceRow, decision: Pick<MarketplaceRow, "paidRowDecision">): string {
-  if (decision.paidRowDecision === "sellable") return `Triage now; pivot on ${keyPivotsForRow(row).slice(0, 3).join(", ") || row.actor}.`;
-  if (decision.paidRowDecision === "included_with_caveat") return `Use as a lead and collect corroboration from ${row.highestValueMissingFamily || "another public source family"}.`;
-  if (decision.paidRowDecision === "coverage_gap_only") return row.nextBestSourceAction || `Add ${row.highestValueMissingFamily || "another source family"} coverage.`;
-  if (decision.paidRowDecision === "suppress") {
-    if (row.rowType === "source") return "Do not charge for this source page; use the admitted activity, target, or TTP rows that cite it.";
-    return "Do not use this row for decisions until safe matching evidence appears.";
+  if (decision.paidRowDecision === "sellable" && row.claimType === "victim_claim" && row.victimName) {
+    const pivots = actionPivotsForRow(row).join(", ");
+    return row.claimedDataTypes?.length
+      ? `Open the source link, confirm the company match, and route ${pivots || row.victimName} to incident response, legal, or vendor risk review.`
+      : `Open the source link, confirm the company match, and keep ${pivots || row.victimName} on the ransomware watchlist.`;
   }
-  return "Hold for review before acting.";
+  if (decision.paidRowDecision === "sellable") return row.claimedDataTypes?.length
+    ? `Open the source link, confirm the match, and route ${actionPivotsForRow(row).join(", ") || displayValue(row.actor)} to the right owner.`
+    : `Open the source link, confirm the match, and use ${actionPivotsForRow(row).join(", ") || displayValue(row.actor)} as context for related activity rows.`;
+  if (decision.paidRowDecision === "included_with_caveat") return `Review the linked source and keep ${row.actor} on the watchlist.`;
+  if (decision.paidRowDecision === "coverage_gap_only") return row.nextBestSourceAction || `Add ${row.highestValueMissingFamily || "another public source"} coverage.`;
+  if (decision.paidRowDecision === "suppress") {
+    if (row.rowType === "source") return "Use this as a source reference for related activity rows.";
+    return "Review before using in a customer-facing workflow.";
+  }
+  return "Review source, date, and entity match before acting.";
 }
 
-import { keyPivotsForRow } from "./pivots.ts";
+function actionPivotsForRow(row: MarketplaceRow): string[] {
+  return uniqueValues([
+    displayValue(row.actor),
+    row.victimName ?? "",
+    row.victimWebsite ?? "",
+    ...(row.affectedSectors ?? []),
+    ...(row.countries ?? [])
+  ].filter(Boolean)).slice(0, 4);
+}
+
+function uniqueValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = value.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}

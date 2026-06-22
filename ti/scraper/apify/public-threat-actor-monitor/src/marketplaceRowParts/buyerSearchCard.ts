@@ -27,6 +27,6 @@ export interface BuyerSearchCard {
     noRawLeakData: true;
     noUnsafeUrls: true;
     noCredentials: true;
-    restrictedMaterial: "metadata_only_or_suppressed";
+    restrictedMaterial: "not_included";
   };
 }

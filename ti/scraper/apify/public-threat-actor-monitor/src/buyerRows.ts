@@ -1,7 +1,7 @@
 import type { MarketplaceRow } from "./types.ts";
 import { uniqueStrings } from "./utils.ts";
 import { confidenceLabelForRow, recentActivityForRow, cardStatus } from "./buyerRows/cardFields.ts";
-import { cardPivots, keyPivotsForRow } from "./buyerRows/pivots.ts";
+import { cardPivots, cleanBuyerPivots, keyPivotsForRow } from "./buyerRows/pivots.ts";
 import { buyerSummaryForRow, recommendedBuyerActionForRow } from "./buyerRows/summary.ts";
 
 export function buyerSearchCardForRow(
@@ -12,7 +12,7 @@ export function buyerSearchCardForRow(
   const { victimsTargets, ttpTools, sourcePivots } = cardPivots(row);
   const nextSearches = uniqueStrings([
     ...keyPivotsForRow(row),
-    ...row.nextSearchPivots
+    ...cleanBuyerPivots(row.nextSearchPivots)
   ]).slice(0, 6);
   return {
     schemaVersion: "ti.apify_buyer_search_card.v1",
@@ -39,7 +39,7 @@ export function buyerSearchCardForRow(
       noRawLeakData: true,
       noUnsafeUrls: true,
       noCredentials: true,
-      restrictedMaterial: "metadata_only_or_suppressed"
+      restrictedMaterial: "not_included"
     }
   };
 }

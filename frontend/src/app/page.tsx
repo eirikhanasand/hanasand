@@ -1,108 +1,78 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Activity, ArrowUpRight, CheckCircle2, Code2, Gauge, GitBranch, KeyRound, Link2, LockKeyhole, Rocket, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowRight, Building2, ChevronRight, ExternalLink, MessageCircle, Search, ShieldCheck, Waypoints } from 'lucide-react'
 import LogoutClient from '@/components/logout/logoutClient'
 import { buildRouteMetadata } from './seo'
 
 export const metadata: Metadata = buildRouteMetadata({
-    title: 'Hanasand',
-    description: 'Hanasand is a self-hosted AI workspace for building, reviewing, verifying, and deploying small software projects.',
+    title: 'Hanasand Threat Intelligence',
+    description: 'Monitor ransomware victim claims, actor infrastructure, and company exposure with high-speed metadata-first threat intelligence.',
     path: '/',
-    keywords: ['hanasand', 'ai workspace', 'self-hosted app builder', 'code review', 'deployment evidence'],
+    keywords: ['hanasand', 'threat intelligence', 'ransomware monitoring', 'dark web monitoring', 'company exposure alerts'],
 })
 
-const primaryTools = [
+const examples = [
     {
-        title: 'Production workspace',
-        description: 'Open the shared project surface for reviewable work and handoffs.',
-        href: '/s',
-        icon: Link2,
+        title: 'Company exposure monitor',
+        slug: 'hanasand/company-exposure-monitor',
+        detail: 'Watch company names, domains, suppliers, brands, and portfolio companies across recent victim-claim metadata.',
+        badge: 'Live alerts',
+        signal: '12 min median refresh',
+        icon: Building2,
     },
     {
-        title: 'System status',
-        description: 'Check service health, latency, and recent incidents.',
-        href: '/status',
-        icon: Activity,
+        title: 'Ransomware actor overview',
+        slug: 'hanasand/actor-overview',
+        detail: 'Map actors to victims, claimed data, infrastructure changes, source history, sectors, and review state.',
+        badge: 'Graph ready',
+        signal: 'Actor and victim pivots',
+        icon: Waypoints,
     },
     {
-        title: 'AI assistant',
-        description: 'Plan, edit, and verify project work in the AI workspace.',
-        href: '/ai',
-        icon: Sparkles,
-    },
-    {
-        title: 'Operations dashboard',
-        description: 'Review queues, projects, infrastructure, and production activity.',
-        href: '/dashboard/overview',
-        icon: Gauge,
-    },
-]
-
-const secondaryLinks = [
-    { label: 'Dashboard', href: '/dashboard/overview' },
-    { label: 'AI workspace', href: '/ai' },
-    { label: 'Service status', href: '/status' },
-]
-
-const workflow = [
-    {
-        title: 'Describe the change',
-        detail: 'Start with a goal, repo, or blank workspace and keep the conversation tied to files.',
-        icon: Sparkles,
-    },
-    {
-        title: 'Review real edits',
-        detail: 'Inspect generated files, apply changes deliberately, and keep handoff context visible.',
-        icon: Code2,
-    },
-    {
-        title: 'Verify before release',
-        detail: 'Use browser proof, build checks, deploy state, and rollback notes before calling work done.',
-        icon: CheckCircle2,
-    },
-]
-
-const trustSignals = [
-    {
-        title: 'Self-hosted control',
-        detail: 'Designed around portable source, Dockerized services, and explicit production checks.',
+        title: 'Dark web metadata index',
+        slug: 'hanasand/darkweb-metadata-index',
+        detail: 'Normalized actor, company, URL, note, claim, and timing fields from leak and extortion infrastructure.',
+        badge: 'Indexed feeds',
+        signal: 'Company and actor pivots',
         icon: ShieldCheck,
     },
+]
+
+const solutions = [
     {
-        title: 'Evidence-first workflow',
-        detail: 'The product favors visible logs, screenshots, status, and changed files over vague success copy.',
-        icon: GitBranch,
+        title: 'Threat Monitoring',
+        detail: 'High-speed ransomware and exposure notifications for watched companies and vendors.',
+        href: '/ti',
     },
     {
-        title: 'Deploy-aware handoffs',
-        detail: 'Release and recovery context stays close to the workspace instead of disappearing into terminal scrollback.',
-        icon: Rocket,
+        title: 'Bloom Filter',
+        detail: 'Private breach and password-exposure checks without turning sensitive material into a dashboard.',
+        href: '/pwned',
+    },
+    {
+        title: 'AI Workspace',
+        detail: 'The existing Hanasand workspace for building, reviewing, and deploying small software projects.',
+        href: '/ai',
+    },
+    {
+        title: 'Share Workspaces',
+        detail: 'Public project handoffs, previews, and controlled collaboration links.',
+        href: '/s',
     },
 ]
 
-const launchFit = [
-    {
-        label: 'Best for',
-        value: 'Technical founders and small teams that want AI speed without giving up source, review, or deployment control.',
-    },
-    {
-        label: 'Replaces',
-        value: 'Scattered chat threads, one-off prototypes, manual smoke notes, and terminal-only deploy handoffs.',
-    },
-    {
-        label: 'Requires',
-        value: 'A project owner who can connect a repo, model lane, or server target and review generated changes before release.',
-    },
-    {
-        label: 'Not for',
-        value: 'Pure no-code buyers who want a hosted template marketplace and never want to inspect files or runtime state.',
-    },
+const stats = [
+    ['Current focus', 'Company exposure alerts'],
+    ['Collection model', 'Owned metadata capture'],
+    ['Public indexes', 'Seed and corroboration'],
+    ['Product surface', 'hanasand.com'],
 ]
 
-const operatingRequirements = [
-    'Connect a repo, workspace, or server target before relying on deploy handoffs.',
-    'Keep at least one model lane or human reviewer available for generated changes.',
-    'Run build, browser, and rollback checks before treating AI work as production-ready.',
+const feedRows = [
+    ['Akira', 'Ntd Apparel', '62 GB claimed', 'current'],
+    ['Aurora', 'Aerospace & Advanced Composites GmbH', '123 GB claimed', 'current'],
+    ['RansomHouse', 'Irec Sas', 'new victim claim', 'recent'],
+    ['Qilin', 'Supplier watchlist match', 'metadata review', 'review'],
 ]
 
 export default async function Page({
@@ -114,119 +84,145 @@ export default async function Page({
     const logout = Boolean(Array.isArray(params.logout) ? params.logout[0] : params.logout) || false
 
     return (
-        <main className='mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 py-6 text-bright md:px-8 md:py-10'>
+        <main className='min-h-full bg-[#f7f8fb] text-[#16181d]'>
             <LogoutClient logoutServer={logout} />
-            <section className='grid min-h-[calc(100vh-8rem)] content-center gap-8'>
-                <div className='max-w-3xl'>
-                    <p className='mb-4 text-xs font-medium uppercase tracking-[0.24em] text-bright/38'>Self-hosted AI workspace</p>
-                    <h1 className='text-4xl font-semibold text-bright md:text-6xl'>Build, review, verify, deploy.</h1>
-                    <p className='mt-5 max-w-2xl text-base leading-7 text-bright/55'>
-                        Hanasand keeps AI work tied to source files, browser evidence, deploy state, and handoff history so small software projects can move from prompt to production without losing control.
-                    </p>
-                    <div className='mt-7 flex flex-wrap gap-3'>
-                        <Link href='/s' className='inline-flex items-center gap-2 rounded-lg border border-bright/12 bg-bright/10 px-4 py-2.5 text-sm font-medium text-bright transition-colors hover:bg-bright/14'>
-                            Open workspace
-                            <ArrowUpRight className='h-4 w-4' />
+
+            <section className='border-b border-[#e3e7ee] bg-[radial-gradient(circle_at_1px_1px,rgba(24,32,52,0.09)_1px,transparent_0)] bg-[length:22px_22px]'>
+                <div className='mx-auto grid w-full max-w-7xl content-start gap-10 px-4 pb-12 pt-16 md:px-8 md:pt-24 lg:pt-28'>
+                    <div className='mx-auto grid max-w-5xl justify-items-center gap-6 text-center'>
+                        <Link href='/ti' className='inline-flex items-center gap-2 rounded-full border border-[#b8c5ff] bg-white px-3 py-1.5 text-sm font-medium text-[#2442a8] shadow-sm'>
+                            <span className='rounded-full bg-[#e7edff] px-2 py-0.5 text-xs'>New</span>
+                            Direct actor-infrastructure monitoring is moving to hanasand.com
+                            <ArrowRight className='h-4 w-4' />
                         </Link>
-                        <Link href='/login' className='inline-flex items-center gap-2 rounded-lg border border-bright/10 px-4 py-2.5 text-sm font-medium text-bright/70 transition-colors hover:bg-bright/8 hover:text-bright'>
-                            <KeyRound className='h-4 w-4' />
-                            Log in
-                        </Link>
-                    </div>
-                </div>
 
-                <div className='grid gap-3 md:grid-cols-3'>
-                    {workflow.map((step) => {
-                        const Icon = step.icon
-                        return (
-                            <div key={step.title} className='glass-card rounded-lg p-5'>
-                                <div className='grid h-10 w-10 place-items-center rounded-lg bg-[#f07d33]/12 text-orange-200'>
-                                    <Icon className='h-4.5 w-4.5' />
-                                </div>
-                                <h2 className='mt-5 text-base font-medium text-bright'>{step.title}</h2>
-                                <p className='mt-2 text-sm leading-6 text-bright/48'>{step.detail}</p>
-                            </div>
-                        )
-                    })}
-                </div>
-
-                <div className='grid gap-3 md:grid-cols-2'>
-                    {primaryTools.map((tool) => {
-                        const Icon = tool.icon
-                        return (
-                            <Link
-                                key={tool.href}
-                                href={tool.href}
-                                className='group glass-card rounded-lg p-5 transition-colors hover:border-bright/18 hover:bg-bright/8'
-                            >
-                                <div className='flex items-start justify-between gap-4'>
-                                    <div className='grid h-10 w-10 place-items-center rounded-lg bg-bright/8 text-bright/70 transition-colors group-hover:text-bright'>
-                                        <Icon className='h-4.5 w-4.5' />
-                                    </div>
-                                    <ArrowUpRight className='h-4 w-4 text-bright/30 transition-colors group-hover:text-bright/65' />
-                                </div>
-                                <h2 className='mt-5 text-lg font-medium text-bright'>{tool.title}</h2>
-                                <p className='mt-2 max-w-md text-sm leading-6 text-bright/48'>{tool.description}</p>
-                            </Link>
-                        )
-                    })}
-                </div>
-
-                <div className='grid gap-3 md:grid-cols-3'>
-                    {trustSignals.map((signal) => {
-                        const Icon = signal.icon
-                        return (
-                            <div key={signal.title} className='rounded-lg border border-bright/8 px-4 py-3'>
-                                <div className='flex items-center gap-2 text-sm font-medium text-bright/80'>
-                                    <Icon className='h-4 w-4 text-bright/42' />
-                                    {signal.title}
-                                </div>
-                                <p className='mt-2 text-sm leading-6 text-bright/45'>{signal.detail}</p>
-                            </div>
-                        )
-                    })}
-                </div>
-
-                <div className='rounded-lg border border-bright/8 p-5'>
-                    <div className='flex flex-col gap-2 md:flex-row md:items-end md:justify-between'>
-                        <div>
-                            <p className='text-xs font-medium uppercase tracking-[0.2em] text-bright/38'>Launch fit</p>
-                            <h2 className='mt-2 text-xl font-semibold text-bright'>For shipping real software, not just demos.</h2>
+                        <div className='grid gap-4'>
+                            <h1 className='text-5xl font-semibold tracking-normal text-[#111318] md:text-7xl'>
+                                Hanasand Threat Intelligence
+                            </h1>
+                            <p className='mx-auto max-w-3xl text-lg leading-8 text-[#596170] md:text-xl'>
+                                High-speed company exposure alerts and actor overviews built from metadata-first collection, source corroboration, and reviewable evidence.
+                            </p>
                         </div>
-                        <p className='max-w-xl text-sm leading-6 text-bright/48'>
-                            Hanasand is strongest when teams need the AI workspace, editor, status surface, and deploy evidence in one self-hosted loop.
+
+                        <form action='/ti' className='grid w-full max-w-3xl gap-3 rounded-lg border border-[#d8dee9] bg-white p-2 shadow-[0_20px_60px_rgba(28,38,61,0.10)] md:grid-cols-[1fr_auto]'>
+                            <label className='flex min-w-0 items-center gap-3 px-3'>
+                                <Search className='h-5 w-5 shrink-0 text-[#697386]' />
+                                <input
+                                    name='q'
+                                    aria-label='Search threat intelligence'
+                                    placeholder='Search company, actor, domain, CVE'
+                                    className='h-12 min-w-0 flex-1 bg-transparent text-base font-medium text-[#171a21] outline-none placeholder:text-[#8c95a5]'
+                                />
+                            </label>
+                            <button type='submit' className='inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                                Search intelligence
+                                <ChevronRight className='h-4 w-4' />
+                            </button>
+                        </form>
+                    </div>
+
+                    <div className='grid gap-4 lg:grid-cols-3'>
+                        {examples.map((item) => {
+                            const Icon = item.icon
+                            return (
+                                <Link key={item.slug} href='/ti' className='group overflow-hidden rounded-lg border border-[#e0e5ed] bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9d2df] hover:shadow-[0_18px_50px_rgba(26,35,55,0.12)]'>
+                                    <div className='grid gap-4 p-5'>
+                                        <div className='flex items-start justify-between gap-3'>
+                                            <div className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3]'>
+                                                <Icon className='h-5 w-5' />
+                                            </div>
+                                            <span className='rounded-full bg-[#eef3ff] px-2.5 py-1 text-xs font-semibold text-[#3056d3]'>{item.badge}</span>
+                                        </div>
+                                        <div className='grid gap-1'>
+                                            <h2 className='text-lg font-semibold text-[#171a21]'>{item.title}</h2>
+                                            <p className='font-mono text-sm text-[#737c8c]'>{item.slug}</p>
+                                        </div>
+                                        <p className='min-h-16 text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                    </div>
+                                    <div className='flex items-center justify-between border-t border-[#eef1f5] bg-[#f8fafc] px-5 py-3 text-sm'>
+                                        <span className='font-medium text-[#2b3340]'>{item.signal}</span>
+                                        <span className='inline-flex items-center gap-1 font-semibold text-[#3056d3]'>Open <ExternalLink className='h-3.5 w-3.5' /></span>
+                                    </div>
+                                </Link>
+                            )
+                        })}
+                    </div>
+                </div>
+            </section>
+
+            <section className='border-b border-[#e3e7ee] bg-white'>
+                <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:py-18'>
+                    <div className='grid content-start gap-5'>
+                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Monitoring workflow</p>
+                        <h2 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>Find the company mention before it becomes a forwarded screenshot.</h2>
+                        <p className='text-base leading-7 text-[#596170]'>
+                            Public ransomware indexes are useful starting points. Hanasand is being shaped around direct metadata collection, freshness checks, actor-page changes, and clean notification packets for real buyer workflows.
                         </p>
-                    </div>
-                    <div className='mt-5 grid gap-3 md:grid-cols-2'>
-                        {launchFit.map((item) => (
-                            <div key={item.label} className='rounded-lg bg-bright/[0.035] px-4 py-3'>
-                                <div className='text-[11px] font-medium uppercase tracking-[0.16em] text-bright/36'>{item.label}</div>
-                                <p className='mt-2 text-sm leading-6 text-bright/58'>{item.value}</p>
-                            </div>
-                        ))}
-                    </div>
-                    <div className='mt-4 rounded-lg border border-bright/8 bg-background/30 px-4 py-3'>
-                        <div className='text-[11px] font-medium uppercase tracking-[0.16em] text-bright/36'>Operating checklist</div>
-                        <div className='mt-3 grid gap-2 md:grid-cols-3'>
-                            {operatingRequirements.map((item) => (
-                                <div key={item} className='flex min-w-0 items-start gap-2 text-sm leading-6 text-bright/52'>
-                                    <CheckCircle2 className='mt-1 h-3.5 w-3.5 shrink-0 text-[#f07d33]/80' />
-                                    <span>{item}</span>
+                        <div className='grid gap-3'>
+                            {stats.map(([label, value]) => (
+                                <div key={label} className='grid grid-cols-[10rem_1fr] gap-4 border-b border-[#eef1f5] py-3 text-sm'>
+                                    <span className='text-[#737c8c]'>{label}</span>
+                                    <span className='font-semibold text-[#171a21]'>{value}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
-                </div>
 
-                <div className='flex flex-wrap items-center gap-2 text-sm text-bright/45'>
-                    <LockKeyhole className='h-4 w-4' />
-                    {secondaryLinks.map((link) => (
-                        <Link key={link.href} href={link.href} className='rounded-lg px-3 py-1.5 transition-colors hover:bg-bright/8 hover:text-bright/75'>
-                            {link.label}
-                        </Link>
-                    ))}
+                    <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
+                        <div className='rounded-lg border border-[#e2e8f0] bg-white'>
+                            <div className='flex items-center justify-between border-b border-[#eef1f5] px-4 py-3'>
+                                <div>
+                                    <h3 className='text-sm font-semibold text-[#171a21]'>Exposure queue</h3>
+                                    <p className='text-xs text-[#737c8c]'>Recent actor claims matched to watchlist terms</p>
+                                </div>
+                                <span className='rounded-full bg-[#e9f8ef] px-2.5 py-1 text-xs font-semibold text-[#147a3b]'>Live</span>
+                            </div>
+                            <div className='divide-y divide-[#eef1f5]'>
+                                {feedRows.map(([actor, victim, data, state]) => (
+                                    <div key={`${actor}-${victim}`} className='grid gap-3 px-4 py-3 md:grid-cols-[8rem_1fr_9rem_5rem] md:items-center'>
+                                        <span className='text-sm font-semibold text-[#171a21]'>{actor}</span>
+                                        <span className='truncate text-sm text-[#3d4656]'>{victim}</span>
+                                        <span className='text-sm text-[#596170]'>{data}</span>
+                                        <span className='w-fit rounded-full border border-[#dfe6f1] bg-[#f8fafc] px-2 py-1 text-xs font-medium text-[#596170]'>{state}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
+
+            <section className='bg-[#f7f8fb]'>
+                <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8'>
+                    <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
+                        <div className='grid gap-2'>
+                            <p className='text-sm font-semibold uppercase text-[#3056d3]'>Solutions</p>
+                            <h2 className='text-3xl font-semibold text-[#171a21]'>The existing Hanasand products, repositioned.</h2>
+                        </div>
+                        <Link href='/dashboard/overview' className='inline-flex w-fit items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 py-2.5 text-sm font-semibold text-[#171a21] shadow-sm transition hover:border-[#bdc7d5]'>
+                            Go to Console
+                            <ArrowRight className='h-4 w-4' />
+                        </Link>
+                    </div>
+
+                    <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
+                        {solutions.map((solution) => (
+                            <Link key={solution.title} href={solution.href} className='grid gap-4 rounded-lg border border-[#e0e5ed] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9d2df]'>
+                                <div className='flex items-center justify-between gap-3'>
+                                    <h3 className='text-base font-semibold text-[#171a21]'>{solution.title}</h3>
+                                    <ArrowRight className='h-4 w-4 text-[#3056d3]' />
+                                </div>
+                                <p className='text-sm leading-6 text-[#596170]'>{solution.detail}</p>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <Link href='/ai' aria-label='Open AI agent' className='fixed bottom-6 right-6 z-50 grid h-14 w-14 place-items-center rounded-full bg-[#0877ff] text-white shadow-[0_16px_40px_rgba(8,119,255,0.35)] transition hover:bg-[#0067df]'>
+                <MessageCircle className='h-6 w-6' />
+            </Link>
         </main>
     )
 }

@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { searchThreatIntel, type TiSearchResponse } from '#utils/ti/search.ts'
+import { collectionStrategy, searchThreatIntel, type TiSearchResponse } from '#utils/ti/search.ts'
 
 interface SearchBody {
     query?: string
@@ -49,6 +49,6 @@ async function safeSearch(query: string): Promise<TiSearchResponse> {
         return await searchThreatIntel({ query })
     } catch {
         const generatedAt = new Date().toISOString()
-        return { query, generatedAt, mode: 'live_search', status: 'searching', summary: 'Searching', confidence: 0, lastSeen: generatedAt, aliases: [], recentActivity: [], targets: [], ttps: [], datasets: [], sources: [], notes: ['transient_search_failure'] }
+        return { query, generatedAt, mode: 'live_search', status: 'searching', summary: 'Searching', confidence: 0, lastSeen: generatedAt, aliases: [], recentActivity: [], targets: [], ttps: [], datasets: [], sources: [], notes: ['transient_search_failure'], collectionStrategy: collectionStrategy() }
     }
 }

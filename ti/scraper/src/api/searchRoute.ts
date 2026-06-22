@@ -2,6 +2,7 @@ import type { ApiServerOptions } from "./serverTypes.ts";
 import { json, numberQuery, readJson } from "./http.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { findSearchCaptures } from "./searchCaptureIndex.ts";
+import { collectionStrategy } from "./collectionStrategy.ts";
 import { rowFromCapture } from "./searchRows.ts";
 
 export async function searchResponse(request: Request, options: ApiServerOptions, url: URL): Promise<Response> {
@@ -16,7 +17,7 @@ export async function searchResponse(request: Request, options: ApiServerOptions
   const publicTiAnswer = { route: { canonicalPath: "/api/ti/search", publicWrapperPath: "/api/ti/search", publicWrapperMethod: "POST" }, status, query, summary: rows, safeSummary: rows.length ? [`Found ${rows.length} public-intelligence rows for ${query}.`] : ["searching"], evidenceLedgerReferences: provenance, ux: { evidenceStageLabels: { captured_page: { count: rows.length } } } };
   const quality = qualityFromRows(query, rows);
   const graph = { endpoint: "/v1/intel/search.graph", reviewQueue: { total: rows.length ? 0 : 1, publicFactPolicy: rows.length ? "ready" : "hold_weak_edges" } };
-  return json({ query, status, summary: publicTiAnswer.safeSummary, rows, results: rows, runId: stableId("search", `${query}:${nowIso()}`), actorProfile, publicTiAnswer, quality, graph });
+  return json({ query, status, summary: publicTiAnswer.safeSummary, rows, results: rows, runId: stableId("search", `${query}:${nowIso()}`), actorProfile, publicTiAnswer, quality, graph, collectionStrategy: collectionStrategy() });
 }
 
 function qualityFromRows(query: string, rows: Array<{ id: string }>) {

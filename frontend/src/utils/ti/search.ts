@@ -49,6 +49,30 @@ export interface TiSearchResponse {
     notes: string[]
     operationalStatus?: TiOperationalStatus
     analystLoop?: TiAnalystLoop
+    collectionStrategy?: TiCollectionStrategy
+}
+
+export interface TiCollectionStrategy {
+    thesis: string
+    productFocus: string[]
+    sourcePosture: Array<{
+        source: string
+        role: 'primary_seed' | 'corroboration' | 'context_only' | 'rejected_paid_rows' | 'owned_collection_target'
+        summary: string
+        buyerValue: string
+        limitations?: string
+    }>
+    ownedCollection: {
+        priority: 'primary'
+        summary: string
+        requirements: string[]
+        prohibited: string[]
+    }
+    distribution: {
+        primarySurface: 'hanasand.com'
+        secondarySurface: 'apify'
+        summary: string
+    }
 }
 
 export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation'

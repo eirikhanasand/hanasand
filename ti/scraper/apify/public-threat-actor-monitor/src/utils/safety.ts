@@ -12,6 +12,7 @@ export function safePublicUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
   try {
     const parsed = new URL(url);
+    if (parsed.hostname.toLowerCase().endsWith(".onion")) return undefined;
     if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed.toString();
   } catch {
     return undefined;

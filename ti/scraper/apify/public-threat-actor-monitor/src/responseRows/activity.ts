@@ -8,7 +8,7 @@ export function activityRows(response: TiSearchResponse, generatedAt: string, la
     const source = itemSources.find((candidate) => sourceType(candidate?.type) !== "system") ?? itemSources[0];
     const evidenceCount = itemSources.filter((candidate) => sourceType(candidate?.type) !== "system").length;
     const itemQuality = qualityFields(response, item.date, item.confidence, evidenceCount);
-    const activityTtp = response.ttps[0];
+    const activityTtp = item.ttp || item.attackId || item.tactic ? { name: item.ttp ?? item.attackId ?? "activity", attackId: item.attackId, tactic: item.tactic ?? "activity" } : response.ttps[0];
     return {
       ...baseRow(response, generatedAt, lastSeen),
       rowType: "activity",
@@ -19,10 +19,16 @@ export function activityRows(response: TiSearchResponse, generatedAt: string, la
       sourceUrl: safePublicUrl(item.url ?? source?.url),
       claimType: item.claimType,
       victimName: item.victimName,
+      matchedSearchTerm: item.matchedSearchTerm,
       claimedDate: item.date,
       affectedSectors: item.affectedSectors,
       countries: item.countries,
       impact: item.impact,
+      victimWebsite: item.victimWebsite,
+      claimedDataSummary: item.claimedDataSummary,
+      claimedDataSize: item.claimedDataSize,
+      claimedDataTypes: item.claimedDataTypes,
+      actorPostUrl: safePublicUrl(item.actorPostUrl),
       ttp: activityTtp?.name,
       attackId: activityTtp?.attackId,
       tactic: activityTtp?.tactic,
@@ -40,10 +46,10 @@ export function activityRows(response: TiSearchResponse, generatedAt: string, la
   });
 }
 
-function insight(item: TiSearchResponse["recentActivity"][number], itemSources: Array<TiSearchResponse["sources"][number] | undefined>, activityTtp: TiSearchResponse["ttps"][number] | undefined) {
-  return { claimType: item.claimType, victimName: item.victimName, affectedSectors: item.affectedSectors, countries: item.countries, title: item.title, ttp: activityTtp?.name, attackId: activityTtp?.attackId, tactic: activityTtp?.tactic, sourceFamilies: itemSources.map((candidate) => sourceType(candidate?.type)).filter(isEvidenceSourceFamily), sourceIds: item.sourceIds, contradictingSourceIds: item.contradictingSourceIds, confidence: item.confidence, observedAt: item.date };
+function insight(item: TiSearchResponse["recentActivity"][number], itemSources: Array<TiSearchResponse["sources"][number] | undefined>, activityTtp: Pick<TiSearchResponse["ttps"][number], "name" | "attackId" | "tactic"> | undefined) {
+  return { claimType: item.claimType, victimName: item.victimName, matchedSearchTerm: item.matchedSearchTerm, affectedSectors: item.affectedSectors, countries: item.countries, title: item.title, ttp: activityTtp?.name, attackId: activityTtp?.attackId, tactic: activityTtp?.tactic, sourceFamilies: itemSources.map((candidate) => sourceType(candidate?.type)).filter(isEvidenceSourceFamily), sourceIds: item.sourceIds, contradictingSourceIds: item.contradictingSourceIds, confidence: item.confidence, observedAt: item.date };
 }
 
-function facets(item: TiSearchResponse["recentActivity"][number], source: TiSearchResponse["sources"][number] | undefined, activityTtp: TiSearchResponse["ttps"][number] | undefined) {
+function facets(item: TiSearchResponse["recentActivity"][number], source: TiSearchResponse["sources"][number] | undefined, activityTtp: Pick<TiSearchResponse["ttps"][number], "attackId" | "tactic"> | undefined) {
   return { sourceType: sourceType(source?.type), claimType: item.claimType, victimName: item.victimName, affectedSectors: item.affectedSectors, countries: item.countries, attackId: activityTtp?.attackId, tactic: activityTtp?.tactic };
 }

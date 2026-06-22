@@ -1,1 +1,127 @@
-const root = new URL("..", import.meta.url).pathname; const storage = `${root}/.apify-smoke-storage`;  await Bun.spawn(["rm", "-rf", storage], { stdout: "inherit", stderr: "inherit" }).exited; await Bun.spawn(["mkdir", "-p", `${storage}/key_value_stores/default`], { stdout: "inherit", stderr: "inherit" }).exited; await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify({   includeDatasets: true,   includeCoverageGaps: true,   includeHeldRows: true,   maxRowsPerQuery: 4 }, null, 2));  const proc = Bun.spawn({   cmd: ["bun", "run", "src/main.ts"],   cwd: root,   env: {     ...process.env,     APIFY_LOCAL_STORAGE_DIR: storage,     TI_ACTOR_FIXTURE_PATH: `${root}/fixtures/apt42.json`   },   stdout: "inherit",   stderr: "inherit" });  const code = await proc.exited; if (code !== 0) process.exit(code);  const outputRecord = await Bun.file(`${storage}/key_value_stores/default/OUTPUT.json`).json() as Record<string, any>; const rows = outputRecord.rows as Array<Record<string, any>>;  assert(outputRecord.outputContract === "safe_metadata_only.v1", "safe metadata output contract"); assert(Array.isArray(rows) && rows.length >= 100, "at least 100 output rows"); assertNoInternalPackets(outputRecord); assertRows(rows); assertMonetization(outputRecord.monetization, rows.length); assertPaidQuality(outputRecord.paidRowQuality); assertBuyerQuality(outputRecord.buyerVisibleOutputQuality, rows.length); assertDailyCollection(outputRecord.dailyCollectionRun); assertReadiness(outputRecord.monetizationReadiness); assertRevenueChecklist(outputRecord.revenueConversionChecklist);  function assert(condition: unknown, message: string): asserts condition {   if (!condition) throw new Error(`Smoke failed: ${message}`); }  function assertNoInternalPackets(record: Record<string, unknown>) {   const removed = [     "qualityLiftGate",     "parserCaptureLiftGate",     "graphLiftBatch2",     "hundredRowConversionProof",     "paidReleaseTruthBoard",     "fakeTractionGuards"   ];   for (const key of removed) assert(!(key in record), `removed internal packet ${key}`); }  function assertRows(rows: Array<Record<string, any>>) {   for (const row of rows) {     const card = row.buyerSearchCard;     assert(typeof row.buyerSummary === "string" && row.buyerSummary.length >= 24, "buyer summary");     assert(typeof row.recommendedBuyerAction === "string" && row.recommendedBuyerAction.length >= 12, "buyer action");     assert(Array.isArray(row.keyPivots) && row.keyPivots.length > 0, "key pivots");     assert(card?.schemaVersion === "ti.apify_buyer_search_card.v1", "buyer card schema");     assert(typeof card.actor === "string" && card.actor.length > 0, "buyer card actor");     assert(Array.isArray(card.recentActivity) && card.recentActivity.length > 0, "recent activity");     assert(Array.isArray(card.sourcePivots) && card.sourcePivots.length > 0, "source pivots");     assert(Array.isArray(card.nextSearches) && card.nextSearches.length > 0, "next searches");     assert(card.safety?.noRawLeakData === true, "no raw leak data");     assert(card.safety?.noUnsafeUrls === true, "no unsafe URLs");     assert(card.safety?.noCredentials === true, "no credentials");     const buyerText = `${row.buyerSummary} ${row.recommendedBuyerAction} ${card.summary}`;     assert(!/\b(agent_\d+|proof|blocker|governance|internal)\b/i.test(buyerText), "buyer text avoids internal wording");   } }  function assertMonetization(monetization: Record<string, any>, rowCount: number) {   assert(monetization?.enabled === false, "local monetization disabled");   assert(["missing_actor_run_id", "missing_apify_token"].includes(String(monetization.skippedReason)), "monetization skip reason");   assert(monetization.pricingModel === "pay_per_event", "pricing model");   assert(monetization.billingMode === "apify_synthetic_events", "billing mode");   assert(monetization.datasetItemCount === rowCount, "dataset item count");   assert(monetization.eventNames.includes("apify-actor-start"), "start event");   assert(monetization.eventNames.includes("apify-default-dataset-item"), "dataset event"); }  function assertPaidQuality(quality: Record<string, any>) {   assert(Number(quality?.sellable) >= 100, "100 sellable rows");   assert(Number(quality?.usefulForBuyer) >= 100, "100 useful rows");   assert(typeof quality.averageBuyerValueScore === "number", "buyer value score"); }  function assertBuyerQuality(quality: Record<string, any>, rowCount: number) {   assert(quality?.schemaVersion === "ti.apify_buyer_visible_output_quality.v1", "buyer quality schema");   assert(quality.rowCount === rowCount, "buyer quality row count");   assert(quality.rowsWithBuyerSearchCard === rowCount, "card coverage");   assert(quality.completeBuyerSearchCards === rowCount, "complete cards");   assert(Number(quality.buyerReadyCards) >= 100, "buyer-ready cards");   assert(quality.noLeakFailures === 0, "no leak failures"); }  function assertDailyCollection(run: Record<string, any>) {   assert(run?.schemaVersion === "ti.apify_daily_collection_run.v1", "daily collection schema");   assert(run.preset === "389-name-default-watchlist", "daily collection preset");   assert(Number(run.candidateRowsProduced) >= 20, "candidate rows");   assert(Number(run.freshCandidateRowsProduced) >= 20, "fresh candidate rows");   assert(Number(run.sellableRowsProduced) >= 19, "sellable daily rows");   assert(Array.isArray(run.refreshedSources) && run.refreshedSources.length >= 3, "refreshed sources"); }  function assertReadiness(readiness: Record<string, any>) {   assert(["ready_for_paid_traffic", "blocked_for_paid_traffic"].includes(String(readiness?.status)), "readiness status");   assert(readiness.minimumProductionSellableRows === 2000, "readiness floor");   assert(Number(readiness.sellableRows) >= 100, "readiness sellable rows");   assert(readiness.status === (readiness.sellableRows >= readiness.minimumProductionSellableRows ? "ready_for_paid_traffic" : "blocked_for_paid_traffic"), "readiness matches floor"); }  function assertRevenueChecklist(checklist: Record<string, any>) {   assert(checklist?.schemaVersion === "ti.apify_revenue_conversion_checklist.v1", "revenue checklist schema");   assert(["ready", "missing"].includes(String(checklist.telemetryState)), "telemetry state");   assert(Array.isArray(checklist.checks) && checklist.checks.length > 0, "revenue checks"); }
+const root = new URL("..", import.meta.url).pathname;
+const storage = `${root}/.apify-smoke-storage`;
+
+await Bun.spawn(["rm", "-rf", storage], { stdout: "inherit", stderr: "inherit" }).exited;
+await Bun.spawn(["mkdir", "-p", `${storage}/key_value_stores/default`], { stdout: "inherit", stderr: "inherit" }).exited;
+await Bun.write(`${storage}/key_value_stores/default/INPUT.json`, JSON.stringify({
+  includeDatasets: true,
+  includeCoverageGaps: true,
+  includeHeldRows: true,
+  maxRowsPerQuery: 4
+}, null, 2));
+
+const proc = Bun.spawn({
+  cmd: ["bun", "run", "src/main.ts"],
+  cwd: root,
+  env: {
+    ...process.env,
+    APIFY_LOCAL_STORAGE_DIR: storage,
+    TI_ACTOR_FIXTURE_PATH: `${root}/fixtures/apt42.json`
+  },
+  stdout: "inherit",
+  stderr: "inherit"
+});
+
+const code = await proc.exited;
+if (code !== 0) process.exit(code);
+
+const outputRecord = await Bun.file(`${storage}/key_value_stores/default/OUTPUT.json`).json() as Record<string, any>;
+const rows = await Bun.file(`${root}/output.json`).json() as Array<Record<string, any>>;
+
+assert(outputRecord.outputContract === "safe_metadata_only.v1", "safe metadata output contract");
+assert(!("rows" in outputRecord), "output summary omits row payload");
+assert(Array.isArray(rows) && rows.length >= 100, "at least 100 output rows");
+assertNoInternalPackets(outputRecord);
+assertRows(rows);
+assertMonetization(outputRecord.monetization, rows.length);
+assertPaidQuality(outputRecord.paidRowQuality);
+assertBuyerQuality(outputRecord.buyerVisibleOutputQuality, rows.length);
+assertDailyCollection(outputRecord.dailyCollectionRun);
+assertReadiness(outputRecord.monetizationReadiness);
+assertRevenueChecklist(outputRecord.revenueConversionChecklist);
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(`Smoke failed: ${message}`);
+}
+
+function assertNoInternalPackets(record: Record<string, unknown>) {
+  const removed = [
+    "qualityLiftGate",
+    "parserCaptureLiftGate",
+    "graphLiftBatch2",
+    "hundredRowConversionProof",
+    "paidReleaseTruthBoard",
+    "fakeTractionGuards"
+  ];
+  for (const key of removed) assert(!(key in record), `removed internal packet ${key}`);
+}
+
+function assertRows(rows: Array<Record<string, any>>) {
+  for (const row of rows) {
+    const card = row.buyerSearchCard;
+    assert(typeof row.buyerSummary === "string" && row.buyerSummary.length >= 24, "buyer summary");
+    assert(typeof row.recommendedBuyerAction === "string" && row.recommendedBuyerAction.length >= 12, "buyer action");
+    assert(Array.isArray(row.keyPivots) && row.keyPivots.length > 0, "key pivots");
+    assert(card?.schemaVersion === "ti.apify_buyer_search_card.v1", "buyer card schema");
+    assert(typeof card.actor === "string" && card.actor.length > 0, "buyer card actor");
+    assert(Array.isArray(card.recentActivity) && card.recentActivity.length > 0, "recent activity");
+    assert(Array.isArray(card.sourcePivots) && card.sourcePivots.length > 0, "source pivots");
+    assert(Array.isArray(card.nextSearches) && card.nextSearches.length > 0, "next searches");
+    assert(card.safety?.noRawLeakData === true, "no raw leak data");
+    assert(card.safety?.noUnsafeUrls === true, "no unsafe URLs");
+    assert(card.safety?.noCredentials === true, "no credentials");
+    const buyerText = `${row.buyerSummary} ${row.recommendedBuyerAction} ${card.summary}`;
+    assert(!/\b(agent_\d+|proof|blocker|governance|internal)\b/i.test(buyerText), "buyer text avoids internal wording");
+  }
+}
+
+function assertMonetization(monetization: Record<string, any>, rowCount: number) {
+  assert(monetization?.enabled === false, "local monetization disabled");
+  assert(["missing_actor_run_id", "missing_apify_token"].includes(String(monetization.skippedReason)), "monetization skip reason");
+  assert(monetization.pricingModel === "pay_per_event", "pricing model");
+  assert(monetization.billingMode === "apify_synthetic_events", "billing mode");
+  assert(monetization.datasetItemCount === rowCount, "dataset item count");
+  assert(monetization.eventNames.includes("apify-actor-start"), "start event");
+  assert(monetization.eventNames.includes("apify-default-dataset-item"), "dataset event");
+}
+
+function assertPaidQuality(quality: Record<string, any>) {
+  assert(Number(quality?.sellable) >= 100, "100 sellable rows");
+  assert(Number(quality?.usefulForBuyer) >= 100, "100 useful rows");
+  assert(typeof quality.averageBuyerValueScore === "number", "buyer value score");
+}
+
+function assertBuyerQuality(quality: Record<string, any>, rowCount: number) {
+  assert(quality?.schemaVersion === "ti.apify_buyer_visible_output_quality.v1", "buyer quality schema");
+  assert(quality.rowCount === rowCount, "buyer quality row count");
+  assert(quality.rowsWithBuyerSearchCard === rowCount, "card coverage");
+  assert(quality.completeBuyerSearchCards === rowCount, "complete cards");
+  assert(Number(quality.buyerReadyCards) >= 100, "buyer-ready cards");
+  assert(quality.noLeakFailures === 0, "no leak failures");
+}
+
+function assertDailyCollection(run: Record<string, any>) {
+  assert(run?.schemaVersion === "ti.apify_daily_collection_run.v1", "daily collection schema");
+  assert(run.preset === "ransomlook-ransomwarelive-victim-claims-plus-cve-context", "daily collection preset");
+  assert(Number(run.candidateRowsProduced) >= 20, "candidate rows");
+  assert(Number(run.freshCandidateRowsProduced) >= 20, "fresh candidate rows");
+  assert(Number(run.sellableRowsProduced) >= 19, "sellable daily rows");
+  assert(typeof run.recentPayworthyLiveDataRealRowsProduced === "number", "recent payworthy live rows");
+  assert(typeof run.distinctRecentPayworthyHostedSourceFindings === "number", "recent payworthy hosted findings");
+  assert(Array.isArray(run.refreshedSources) && run.refreshedSources.length >= 3, "refreshed sources");
+}
+
+function assertReadiness(readiness: Record<string, any>) {
+  assert(["ready_for_paid_traffic", "blocked_for_paid_traffic"].includes(String(readiness?.status)), "readiness status");
+  assert(readiness.minimumProductionSellableRows === 200_000, "readiness floor");
+  assert(Number(readiness.sellableRows) >= 100, "readiness sellable rows");
+  assert(typeof readiness.recentPayworthyLiveRows === "number", "recent payworthy readiness rows");
+  assert(typeof readiness.distinctRecentPayworthyHostedSourceFindings === "number", "recent payworthy readiness findings");
+  assert(readiness.status === (readiness.recentPayworthyLiveRows >= readiness.minimumProductionSellableRows ? "ready_for_paid_traffic" : "blocked_for_paid_traffic"), "readiness matches strict recent live floor");
+}
+
+function assertRevenueChecklist(checklist: Record<string, any>) {
+  assert(checklist?.schemaVersion === "ti.apify_revenue_conversion_checklist.v1", "revenue checklist schema");
+  assert(["ready", "missing"].includes(String(checklist.telemetryState)), "telemetry state");
+  assert(Array.isArray(checklist.checks) && checklist.checks.length > 0, "revenue checks");
+}

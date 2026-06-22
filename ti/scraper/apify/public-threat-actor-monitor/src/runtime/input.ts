@@ -7,14 +7,22 @@ export type NormalizedInput = Required<ActorInput> & { queries: string[]; apiBas
 
 export function normalizeInput(input: ActorInput): NormalizedInput {
   const queries = uniqueStrings([...(input.queries ?? []), ...(input.query ? [input.query] : [])]).slice(0, MAX_QUERIES_PER_RUN);
+  const watchlistTerms = uniqueStrings(input.watchlistTerms ?? []).slice(0, MAX_QUERIES_PER_RUN);
+  const runMode = input.runMode === "full" ? "full" : "preview";
+  const defaultMaxRowsPerQuery = runMode === "full" ? DEFAULT_MAX_ROWS_PER_QUERY : 250;
+  const defaultMaxTotalRows = runMode === "full" ? 250_000 : 500;
   return {
     query: input.query ?? "",
     queries: queries.length ? queries : DEFAULT_RUNTIME_QUERIES,
-    maxRowsPerQuery: clampInt(input.maxRowsPerQuery, 1, 500, DEFAULT_MAX_ROWS_PER_QUERY),
+    watchlistTerms,
+    onlyWatchlistMatches: input.onlyWatchlistMatches ?? false,
+    runMode,
+    maxRowsPerQuery: clampInt(input.maxRowsPerQuery, 1, DEFAULT_MAX_ROWS_PER_QUERY, defaultMaxRowsPerQuery),
+    maxTotalRows: clampInt(input.maxTotalRows, 1, 250_000, defaultMaxTotalRows),
     includeActivity: input.includeActivity ?? true,
-    includeTargets: input.includeTargets ?? true,
-    includeTtps: input.includeTtps ?? true,
-    includeSources: input.includeSources ?? true,
+    includeTargets: input.includeTargets ?? runMode === "full",
+    includeTtps: input.includeTtps ?? runMode === "full",
+    includeSources: input.includeSources ?? false,
     includeDatasets: input.includeDatasets ?? false,
     includeCoverageGaps: input.includeCoverageGaps ?? false,
     includeHeldRows: input.includeHeldRows ?? false,
