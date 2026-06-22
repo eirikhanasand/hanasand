@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "id": "high-value-exposure-source-candidates-2026-06-22",
+  "name": "High Value Exposure Source Candidates",
+  "description": "Dry-run source-atlas candidates focused on sellable exposure monitoring: company mentions, actor-page changes, phishing/brand abuse, malware infrastructure, breach/stealer-log domain exposure, and direct ransomware verification. Importing this file must not start crawling or activate sources.",
+  "generatedAt": "2026-06-22T16:30:00.000Z",
+  "disabledByDefault": true,
+  "activationPolicy": {
+    "defaultState": "candidate",
+    "approvalRequired": true,
+    "canaryRequired": true,
+    "mustNotAutoActivate": true,
+    "forbiddenOperations": [
+      "credential_value_collection",
+      "raw_leak_download",
+      "malware_payload_download",
+      "private_or_invite_only_access",
+      "captcha_bypass",
+      "threat_actor_interaction",
+      "silent_commercial_api_use_without_terms_review"
+    ]
+  },
+  "sources": [
+    {
+      "id": "candidate_urlscan_watchlist_search",
+      "name": "urlscan.io public and account search",
+      "type": "api",
+      "url": "https://urlscan.io/docs/api/",
+      "accessMethod": "api_key",
+      "status": "candidate",
+      "risk": "medium",
+      "trustScore": 0.78,
+      "language": "en",
+      "sourceFamily": "phishing_brand_infrastructure",
+      "commercialValueScore": 0.86,
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Use only approved API access and visibility modes. Do not submit customer-private URLs as public scans. Store metadata, result links, screenshot hashes, domains, IPs, ASNs, page titles, verdicts, and first-seen timestamps.",
+      "found": "urlscan documents APIs for URL submissions, scan results, and search over existing scans by attributes such as domains, IPs, ASNs, and hashes.",
+      "gives": [
+        "new phishing and impersonation pages for watched brands/domains",
+        "rendered-page metadata, result links, screenshot/page hashes, domains, IPs, ASNs, and first-seen timing",
+        "corroboration for actor infrastructure and customer-domain exposure"
+      ],
+      "whyWorthPaying": "A startup can turn public/urlscan-visible web observations into customer-specific alerts: 'your brand/domain appeared in a suspicious scan today', clustered with hosting, cert, redirect, and page metadata. The buyer pays for speed, filtering, and watchlist matching, not for the raw urlscan API.",
+      "watchlistFields": ["domain", "brand", "subsidiary", "executive_name", "product_name"],
+      "outputRows": ["brand_impersonation_signal", "phishing_page_signal", "infrastructure_activity"],
+      "activationNextSteps": [
+        "terms and quota review",
+        "build watchlist query canary for 25 owned domains",
+        "store only metadata and urlscan result URLs",
+        "dedupe by submitted URL hash, final domain, page hash, and screenshot hash"
+      ]
+    },
+    {
+      "id": "candidate_hibp_domain_stealer_breach_metadata",
+      "name": "Have I Been Pwned domain breach and stealer-log metadata",
+      "type": "api",
+      "url": "https://haveibeenpwned.com/API/v3",
+      "accessMethod": "api_key_paid_plan",
+      "status": "candidate",
+      "risk": "medium",
+      "trustScore": 0.9,
+      "language": "en",
+      "sourceFamily": "breach_stealer_domain_exposure",
+      "commercialValueScore": 0.88,
+      "crawlFrequencySeconds": 21600,
+      "legalNotes": "Requires subscription/API key and domain ownership verification where applicable. Store breach names, data classes, breach dates, stealer-log domain metadata, and counts only. Do not store passwords, raw emails beyond customer-authorized scope, or credential values.",
+      "found": "HIBP v3 documents domain search, breach metadata, and stealer-log endpoints including website-domain and email-domain stealer-log lookups.",
+      "gives": [
+        "verified breach metadata for customer domains",
+        "stealer-log domain exposure metadata without credential values",
+        "data classes, dates, breach names, and affected-domain context"
+      ],
+      "whyWorthPaying": "Security teams pay when a monitored corporate domain or vendor domain shows fresh exposure and they get a clean notification with affected service/domain context. HIBP supplies trusted raw metadata; the sellable layer is domain authorization, triage, correlation with ransomware/actor activity, and clean customer workflow.",
+      "watchlistFields": ["owned_domain", "vendor_domain", "portfolio_domain"],
+      "outputRows": ["domain_breach_exposure", "stealer_domain_exposure"],
+      "activationNextSteps": [
+        "confirm subscription and permitted use",
+        "implement domain-verification workflow",
+        "store counts and metadata only",
+        "route sensitive results to customer-specific authenticated views"
+      ]
+    },
+    {
+      "id": "candidate_threatfox_recent_iocs",
+      "name": "ThreatFox recent IOC API",
+      "type": "api",
+      "url": "https://threatfox.abuse.ch/api/",
+      "accessMethod": "auth_key",
+      "status": "candidate",
+      "risk": "medium",
+      "trustScore": 0.82,
+      "language": "en",
+      "sourceFamily": "recent_ioc_enrichment",
+      "commercialValueScore": 0.72,
+      "crawlFrequencySeconds": 3600,
+      "legalNotes": "Use Auth-Key and terms review. Recent IOCs only for defensive enrichment and correlation. Do not imply victim compromise from an IOC match alone.",
+      "found": "ThreatFox documents recent IOC queries, IOC search, malware-family queries, tag queries, and IOC expiration after six months from the API/export surface.",
+      "gives": [
+        "recent IOCs with first-seen timing",
+        "malware-family and tag pivots for actor/campaign enrichment",
+        "freshness-limited infrastructure context for customer alerts"
+      ],
+      "whyWorthPaying": "ThreatFox is not a unique paid row source, but it makes company alerts more useful: when a ransomware claim or phishing page appears, we can attach fresh malware/infrastructure context and avoid stale IOC noise.",
+      "watchlistFields": ["domain", "ip", "malware_family", "actor_alias"],
+      "outputRows": ["infrastructure_activity", "malware_activity_context"],
+      "activationNextSteps": [
+        "terms and commercial API review",
+        "build seven-day IOC freshness canary",
+        "attach only to actor/company alerts as enrichment",
+        "suppress expired or stale indicators"
+      ]
+    },
+    {
+      "id": "candidate_urlhaus_active_malware_urls",
+      "name": "URLhaus active malware URL metadata",
+      "type": "api",
+      "url": "https://urlhaus.abuse.ch/api/",
+      "accessMethod": "auth_key",
+      "status": "candidate",
+      "risk": "medium",
+      "trustScore": 0.82,
+      "language": "en",
+      "sourceFamily": "active_malware_distribution",
+      "commercialValueScore": 0.74,
+      "crawlFrequencySeconds": 600,
+      "legalNotes": "Use URLhaus metadata and feeds for defensive monitoring only. Never download payloads. Respect fair-use/commercial API terms and minimum fetch intervals.",
+      "found": "URLhaus documents API and feed access for malware URLs, active malware distribution sites, RPZ hostnames, IDS rules, and recent/active database dumps with frequent generation.",
+      "gives": [
+        "active malware distribution URL and hostname metadata",
+        "recent/active infrastructure signals for domains and hosts",
+        "malware-family and payload-reference context without downloading payloads"
+      ],
+      "whyWorthPaying": "For a monitored company, this is valuable when its domains, vendors, or lookalikes appear in active malware infrastructure. The startup value is matching, dedupe, freshness scoring, and routing only relevant active signals into alerts.",
+      "watchlistFields": ["domain", "hostname", "vendor_domain", "brand_lookalike"],
+      "outputRows": ["active_malware_url_signal", "infrastructure_activity"],
+      "activationNextSteps": [
+        "commercial terms review",
+        "metadata-only adapter that blocks payload endpoints",
+        "freshness gate for active or recently-added records",
+        "dedupe by normalized URL, host, and URLhaus ID"
+      ]
+    },
+    {
+      "id": "candidate_ransomwarelive_seed_direct_verify",
+      "name": "ransomware.live victim/group/infostealer seed plus direct verification",
+      "type": "api_and_public_web",
+      "url": "https://www.ransomware.live/",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "risk": "medium",
+      "trustScore": 0.74,
+      "language": "en",
+      "sourceFamily": "ransomware_victim_claim_seed",
+      "commercialValueScore": 0.84,
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Use as seed and corroboration. Do not resell unchanged public rows as final product. Direct verification must remain metadata-only and must not fetch leaked files, negotiation material, credentials, or payloads.",
+      "found": "ransomware.live presents victim, group, search, notification, statistics, and infostealer-oriented surfaces for ransomware monitoring.",
+      "gives": [
+        "actor names, victim names, claimed dates, sectors/countries where available",
+        "seed URLs and actor-page candidates for direct metadata verification",
+        "infostealer-oriented public context for later authorized exposure monitoring"
+      ],
+      "whyWorthPaying": "Everyone can index public ransomware.live rows; the sellable layer is using it to discover what to verify directly, alert customers faster, detect claim changes, and attach company/vendor watchlist matching.",
+      "watchlistFields": ["company", "subsidiary", "vendor", "domain", "sector", "country"],
+      "outputRows": ["victim_claim_seed", "victim_claim_verified_metadata", "actor_page_change"],
+      "activationNextSteps": [
+        "keep public rows as seed/corroboration",
+        "derive actor-page candidates into restricted metadata review",
+        "store direct verification timestamps and page-change summaries",
+        "separate public-index source from owned direct-check source"
+      ]
+    },
+    {
+      "id": "candidate_certificate_transparency_brand_watch",
+      "name": "Certificate Transparency brand and domain watch",
+      "type": "public_log_search",
+      "url": "https://crt.sh/",
+      "accessMethod": "public_http",
+      "status": "candidate",
+      "risk": "low",
+      "trustScore": 0.78,
+      "language": "en",
+      "sourceFamily": "brand_domain_drift",
+      "commercialValueScore": 0.8,
+      "crawlFrequencySeconds": 900,
+      "legalNotes": "Monitor public certificate transparency data for owned domains, vendor domains, and brand-like names. Do not claim compromise from a certificate alone; route as suspicious domain/brand drift.",
+      "found": "Certificate Transparency logs expose newly issued certificates that can be searched for domains and brand-like names through public CT search surfaces such as crt.sh.",
+      "gives": [
+        "new subdomains and lookalike certificates",
+        "brand/domain drift before phishing pages are reported elsewhere",
+        "entity-resolution pivots for urlscan, URLhaus, and customer watchlists"
+      ],
+      "whyWorthPaying": "Customers pay for early warning on suspicious domain and certificate creation tied to their brand, executives, products, or vendors. The raw logs are public; the product value is matching, scoring, and correlating with phishing/malware/ransomware signals.",
+      "watchlistFields": ["owned_domain", "brand", "product_name", "vendor_domain"],
+      "outputRows": ["brand_domain_drift", "certificate_watch_signal"],
+      "activationNextSteps": [
+        "pick approved CT query backend",
+        "build fuzzy brand matching with false-positive controls",
+        "correlate with urlscan and URLhaus before high-severity alerting",
+        "dedupe by certificate fingerprint and normalized name"
+      ]
+    }
+  ]
+}

@@ -23,6 +23,27 @@ The source registry controls what the scraper may collect and how each source sh
 - Public Telegram/channel sources where legal and API-safe.
 - Search-result discovery sources that produce current, corroborated leads.
 
+## High-Value Exposure Candidate Pack
+`seeds/high_value_exposure_source_candidates.json` is the current sellable-source expansion pack.
+It is dry-run only and must not activate crawling by import. The pack prioritizes sources that
+help customer monitoring rather than generic CTI volume:
+
+- `urlscan.io` for brand/domain phishing and suspicious page discovery.
+- `Have I Been Pwned` domain, breach, and stealer-log metadata for authorized customer domains.
+- `ThreatFox` recent IOC metadata for malware/infrastructure enrichment.
+- `URLhaus` active malware URL/hostname metadata for fresh infrastructure matching.
+- `ransomware.live` as victim/group/infostealer seed data that should lead to direct verification,
+  not public-row resale.
+- Certificate Transparency search for brand/domain drift and lookalike infrastructure.
+
+Activation rule: treat these as source-atlas candidates first. Each candidate needs terms review,
+commercial-use review where applicable, parser certification, canary output, dedupe proof, freshness
+score, and customer-watchlist value before moving into active collection.
+
+Buyer value rule: the paid product is not access to these public sources. The paid product is a fast,
+filtered alert and actor/company overview that joins watchlists, direct actor-page verification,
+freshness, source confidence, and safe metadata review.
+
 ## Rejection Reasons
 - Private/auth/CAPTCHA access required.
 - Raw credential or leaked payload retrieval.
