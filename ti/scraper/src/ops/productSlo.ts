@@ -16,7 +16,7 @@ export function buildLiveProductSloDashboard(input: BuildLiveProductSloDashboard
   const useful = value(input.actorRun?.usefulRowCount) ?? sum(input.queryMeasurements?.map((item) => item.usefulRowCount));
   const fresh = value(input.actorRun?.freshRowCount) ?? sum(input.queryMeasurements?.map((item) => item.freshRowCount));
   const sellable = value(input.actorRun?.sellableRowCount) ?? Math.min(useful ?? 0, rows ?? 0);
-  const target = value(input.actorRun?.targetSellableRows) ?? 100;
+  const target = value(input.actorRun?.targetSellableRows) ?? 5000;
   const usefulRate = rate(useful, rows);
   const freshRate = rate(fresh, rows);
   const marketplace = marketplaceTelemetry(input.marketplace);
@@ -54,7 +54,7 @@ function economics(input: any = {}, usefulRows: number | null) { const gross = v
 function pricingProof(cost: any = {}, marketplace: any = {}) { return { resultPriceUsdPerThousand: value(cost.resultPriceUsdPerThousand) ?? 3, actorStartPriceUsd: value(cost.actorStartPriceUsd) ?? 0.00005, pricingEffectiveAt: marketplace.pricingEffectiveAt ?? null, noLeakRequired: true }; }
 function nextAction(sellable: number, target: number, payoutReady: boolean): string { if (sellable < target) return "add_sellable_rows"; if (!payoutReady) return "payout_setup"; return "paid_traffic"; }
 function unknownMarketplaceFields(m: any): string[] { return Object.entries(m).filter(([, v]) => v === null).map(([k]) => k); }
-function scaleGates(sellable: number, usefulRate: number | null, freshRate: number | null) { return [100, 1000, 4000, 10000, 20000, 60000].map((target) => ({ targetSellableRows: target, currentSellableRows: sellable, ready: sellable >= target && (usefulRate ?? 0) >= 0.25 && (freshRate ?? 0) >= 0.4 })); }
+function scaleGates(sellable: number, usefulRate: number | null, freshRate: number | null) { return [100, 1000, 4000, 5000, 10000, 20000, 60000].map((target) => ({ targetSellableRows: target, currentSellableRows: sellable, ready: sellable >= target && (usefulRate ?? 0) >= 0.25 && (freshRate ?? 0) >= 0.4 })); }
 function slos(state: LiveProductSloState, sellable: number, target: number, usefulRate: number | null, freshRate: number | null) { return [{ id: "sellable_rows", state: sellable >= target ? "pass" : state, value: sellable, target }, { id: "useful_row_rate", state: (usefulRate ?? 0) >= 0.25 ? "pass" : "warn", value: usefulRate, target: 0.25 }, { id: "fresh_row_rate", state: (freshRate ?? 0) >= 0.4 ? "pass" : "warn", value: freshRate, target: 0.4 }]; }
 function blockers(sellable: number, target: number, payoutReady: boolean) { return [{ blocker: "sellable_row_floor", active: sellable < target, nextAction: "collect fresh useful rows" }, { blocker: "payout_setup", active: !payoutReady, nextAction: "verify Apify payout settings" }]; }
 function buyerSamples() { return ["APT29", "LockBit", "Akira"].map((actor) => ({ actor, rowClass: "sample", buyerVisibleFields: { actorSummary: `${actor} monitoring row`, freshness: "current", confidence: 0.7, provenanceHash: stableId("sample", actor), noLeakProof: "metadata_only" } })); }
