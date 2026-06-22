@@ -10,6 +10,7 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
     const activeQueryRef = useRef(initialResult?.query.trim().toLowerCase() ?? '')
+    const requestSeqRef = useRef(0)
     const inputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
@@ -34,24 +35,26 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
         event.preventDefault()
         const form = new FormData(event.currentTarget)
         const clean = String(form.get('query') ?? inputRef.current?.value ?? query).trim()
-        if (!clean || busy) return
+        if (!clean) return
 
+        const requestSeq = requestSeqRef.current + 1
+        requestSeqRef.current = requestSeq
         setBusy(true)
         setError('')
         setQuery(clean)
-        activeQueryRef.current = clean.toLowerCase()
+        const cleanKey = clean.toLowerCase()
+        activeQueryRef.current = cleanKey
         setResult(searchingResult(clean))
         try {
             const next = await searchThreatIntel(clean)
+            if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
             if (!next) {
                 setError('The TI service did not return results.')
                 return
             }
-            if (activeQueryRef.current === clean.toLowerCase()) {
-                setResult(next)
-            }
+            setResult(next)
         } finally {
-            setBusy(false)
+            if (requestSeqRef.current === requestSeq) setBusy(false)
         }
     }
 
@@ -74,7 +77,7 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
                     </label>
                     <button
                         type='submit'
-                        disabled={busy}
+                        aria-busy={busy}
                         className='inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#98a2b3]'
                     >
                         <Search className='h-4 w-4' />
