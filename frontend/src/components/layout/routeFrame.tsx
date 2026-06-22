@@ -30,6 +30,10 @@ export default function RouteFrame({ children, serverPath }: { children: ReactNo
         || pathname === '/reserved-usernames'
         || pathname === '/g'
         || pathname.startsWith('/g/')
+        || pathname === '/ai'
+        || pathname.startsWith('/ai/')
+        || pathname === '/s'
+        || pathname.startsWith('/s/')
         || pathname === '/eirik'
         || pathname.startsWith('/eirik/')
 
