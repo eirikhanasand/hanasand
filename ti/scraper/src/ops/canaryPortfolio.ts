@@ -6,6 +6,7 @@ import { IDENTITY_CANARY_FEEDS } from "./canaryPortfolioIdentityFeeds.ts";
 import { INCIDENT_CANARY_FEEDS } from "./canaryPortfolioIncidentFeeds.ts";
 import { JOURNALISM_CANARY_FEEDS } from "./canaryPortfolioJournalismFeeds.ts";
 import { MOBILE_FRAUD_CANARY_FEEDS } from "./canaryPortfolioMobileFraudFeeds.ts";
+import { RANSOMWARE_CANARY_FEEDS } from "./canaryPortfolioRansomwareFeeds.ts";
 import { REVENUE_CANARY_FEEDS } from "./canaryPortfolioRevenueFeeds.ts";
 export const canaryQueries = ["APT29", "APT42", "Turla", "Volt Typhoon", "Scattered Spider", "Akira", "CVE"];
 export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
@@ -52,9 +53,7 @@ export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   src("src_canary_intezer", "Intezer Blog", "rss", "https://intezer.com/blog/feed/", ["malware", "ransomware", "cloud"], "vendor"),
   ...REVENUE_CANARY_FEEDS,
   ...ADVISORY_CANARY_FEEDS, ...INCIDENT_CANARY_FEEDS, ...EXPLOIT_CANARY_FEEDS,
-  ...JOURNALISM_CANARY_FEEDS, ...IDENTITY_CANARY_FEEDS, ...MOBILE_FRAUD_CANARY_FEEDS, ...CLOUD_CANARY_FEEDS
+  ...JOURNALISM_CANARY_FEEDS, ...RANSOMWARE_CANARY_FEEDS, ...IDENTITY_CANARY_FEEDS,
+  ...MOBILE_FRAUD_CANARY_FEEDS, ...CLOUD_CANARY_FEEDS
 ];
-
-function src(id: string, name: string, type: string, url: string, q: string[], family: string) {
-  return { id, name, type, url, accessMethod: "public_http", status: "paused", risk: "low", trustScore: 0.85, language: "en", crawlFrequencySeconds: 3600, legalNotes: "Public source", metadata: { canaryPortfolio: true, sourceFamily: family, actorQueries: q } };
-}
+function src(id: string, name: string, type: string, url: string, q: string[], family: string) { return { id, name, type, url, accessMethod: "public_http", status: "paused", risk: "low", trustScore: 0.85, language: "en", crawlFrequencySeconds: 3600, legalNotes: "Public source", metadata: { canaryPortfolio: true, sourceFamily: family, actorQueries: q } }; }

@@ -5,6 +5,7 @@ export function rowFromCapture(capture: any, source?: any) {
   const summary = cleanSummary(capture.body ?? capture.rawText ?? capture.metadata?.safeExcerpt ?? "");
   const title = cleanTitle(capture.title, summary, source?.name);
   const url = safePublicUrl(capture.url, capture.metadata);
+  const claim = victimClaim(title);
   return {
     id: capture.id,
     sourceId: capture.sourceId,
@@ -17,9 +18,16 @@ export function rowFromCapture(capture: any, source?: any) {
     url,
     urlHash: hashContent(String(capture.url ?? capture.id)).slice(0, 16),
     tags: tagsFor(`${title} ${summary}`),
+    ...claim,
     provenanceHash: hashContent(capture.id),
     metadataOnly: isMetadataOnly(capture)
   };
+}
+
+function victimClaim(title: string) {
+  const match = title.match(/(?:🏴‍☠️\s*)?(.+?)\s+has just published a new victim\s*:\s*(.+)$/i);
+  if (!match) return {};
+  return { actor: match[1].trim(), victimName: match[2].trim(), claimType: "ransomware_victim_publication" };
 }
 
 function cleanTitle(title: unknown, summary: string, sourceName?: string) {
