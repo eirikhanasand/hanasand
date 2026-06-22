@@ -3,13 +3,12 @@ import { processCollectedItem } from "../pipeline/pipeline.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts";
 import { canaryQueries, PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
-import { detachedState, externalize, fetchItems, health, taskFor } from "./canaryHelpers.ts";
+import { detachedState, externalize, fetchItems, health, maxItemsFor, taskFor } from "./canaryHelpers.ts";
 import { isSellableIntelText, sellableReason } from "../value/sellableIntel.ts";
 export { activatePublicCanarySources, pausePublicCanarySources } from "./canaryActivation.ts"; export { PUBLIC_CANARY_SOURCE_PORTFOLIO } from "./canaryPortfolio.ts";
 export { buildCanaryOperatorConsoleHtml, buildCanaryOperatorSummary, buildCanaryReadinessPacket, buildCanarySoakReport } from "./canaryReports.ts";
 export type * from "./canaryCollectionTypes.ts";
 import type { CanaryCollectionCycleResult, CanaryCollectionLoopHandle, CanaryCollectionOptions } from "./canaryCollectionTypes.ts";
-
 export async function runCanaryCollectionCycle(options: CanaryCollectionOptions): Promise<CanaryCollectionCycleResult> {
   if (options.store.batch && !options.batched) return options.store.batch(() => runCanaryCollectionCycle({ ...options, batched: true }));
   const generatedAt = options.now?.() ?? nowIso(), fetcher = options.fetch ?? fetch, mode = options.fetch ? "injected_proof_fetch" : "native_live_http";
@@ -27,7 +26,6 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: counters.failedTaskCount ? "failed" : "completed", createdAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, error: errors[0]?.message });
   return { generatedAt, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, activeSourceCount: due.length, queuedTaskCount: tasks.length, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
-
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined;
   const cycle = async () => { if (!state.enabled || state.running) return; state.running = true; state.lastCycleAt = nowIso(); try { const result = await runCanaryCollectionCycle(options); state.latestResult = result; state.successCount++; state.lastSuccessAt = result.generatedAt; options.onCycle?.(result); } catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); } finally { state.running = false; state.cycleCount++; state.nextCycleAt = new Date(Date.now() + intervalMs).toISOString(); } };
@@ -35,14 +33,13 @@ export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { e
   if (state.enabled) timer = setInterval(cycle, intervalMs);
   return { stop: () => { if (timer) clearInterval(timer); state.enabled = false; }, getState: () => ({ ...state }) };
 }
-
 async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[]) {
   const leased = options.frontier.next(new Date(generatedAt), (task: any) => task.runId === runId); if (!leased) return;
   const task = leased.task, source = options.store.getSource?.(task.sourceId); counters.leasedTaskCount++;
   try {
     if (!source) throw new Error("source missing");
     const collectedItems = await fetchItems(source, task, fetcher, mode, generatedAt, maxBytes, options.timeoutMs ?? 12_000);
-    for (const collected of collectedItems.slice(0, options.maxItemsPerTask ?? 40)) {
+    for (const collected of collectedItems.slice(0, itemLimit(source, options))) {
       if (!isSellableIntelText({ text: collected.rawText, title: collected.title, sourceId: collected.sourceId, publishedAt: collected.publishedAt, collectedAt: collected.collectedAt, now: generatedAt })) { counters.skippedLowValueCount++; continue; } collected.metadata = { ...collected.metadata, sellableCandidate: true, sellableReason: sellableReason(collected.rawText) };
       let pipeline = processCollectedItem(collected);
       if (pipeline.capture.body && options.objectStore) pipeline = { ...pipeline, capture: externalize(pipeline.capture, options.objectStore) };
@@ -58,3 +55,4 @@ async function runLeasedTask(options: any, runId: string, generatedAt: string, f
     const ack = options.frontier.fail(task, new Date(generatedAt), message); if (ack?.status === "retry_scheduled") counters.retryScheduledCount++; if (ack?.status === "retry_exhausted") counters.retryExhaustedCount++;
   }
 }
+function itemLimit(source: any, options: any) { return maxItemsFor(source) ?? options.maxItemsPerTask ?? 40; }

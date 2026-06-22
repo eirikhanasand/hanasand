@@ -11,7 +11,7 @@ export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, m
   const started = Date.now(), res = await fetcher(task.targetUrl, { headers: { "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" }, signal: AbortSignal.timeout(timeoutMs) });
   const fetched = (await res.text()).slice(0, maxBytes);
   const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(res.url || task.targetUrl), responseBytes: fetched.length, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v1", requestedUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(res.url || task.targetUrl), httpStatus: res.status, ok: res.ok, contentType: res.headers.get("content-type") ?? undefined, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: fetched.length, maxBytes, truncated: fetched.length >= maxBytes, bounded: true, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
-  return feedItems(source, task, fetched, at, metadata);
+  return feedItems(source, task, fetched, at, metadata, maxItemsFor(source));
 }
 
 export const fetchItem = async (...args: any[]) => (await fetchItems(...args))[0];
@@ -40,3 +40,5 @@ export function storageStats(captures: any[]) {
   const nativeLiveHttpCaptureCount = captures.filter((c) => c.metadata?.fetchMode === "native_live_http").length, injectedProofFetchCaptureCount = captures.filter((c) => c.metadata?.fetchMode === "injected_proof_fetch").length, externalObjectCaptureCount = captures.filter((c) => c.storageKind === "external_object" || c.storageKind === "object_ref").length;
   return { metadataStore: "file_backed_or_repository", productionEvidenceMode: nativeLiveHttpCaptureCount && !injectedProofFetchCaptureCount ? "native_live_http" : injectedProofFetchCaptureCount && !nativeLiveHttpCaptureCount ? "injected_proof_only" : nativeLiveHttpCaptureCount ? "mixed" : "none", externalObjectCaptureCount, inlineCaptureCount: captures.length - externalObjectCaptureCount, missingObjectReferenceCount: captures.filter((c) => ["external_object", "object_ref"].includes(c.storageKind) && !c.objectRef).length, nativeLiveHttpCaptureCount, injectedProofFetchCaptureCount, unknownFetchModeCaptureCount: captures.filter((c) => !c.metadata?.fetchMode).length };
 }
+
+export function maxItemsFor(source: any) { return source.id === "src_canary_ransomwarelive" ? 120 : source.metadata?.maxItemsPerFetch; }
