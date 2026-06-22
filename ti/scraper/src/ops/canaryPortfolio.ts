@@ -2,6 +2,7 @@
 import { ADVISORY_CANARY_FEEDS } from "./canaryPortfolioAdvisoryFeeds.ts";
 import { CLOUD_CANARY_FEEDS } from "./canaryPortfolioCloudFeeds.ts";
 import { EXPLOIT_CANARY_FEEDS } from "./canaryPortfolioExploitFeeds.ts";
+import { IDENTITY_CANARY_FEEDS } from "./canaryPortfolioIdentityFeeds.ts";
 import { INCIDENT_CANARY_FEEDS } from "./canaryPortfolioIncidentFeeds.ts";
 import { JOURNALISM_CANARY_FEEDS } from "./canaryPortfolioJournalismFeeds.ts";
 import { REVENUE_CANARY_FEEDS } from "./canaryPortfolioRevenueFeeds.ts";
@@ -51,7 +52,7 @@ export const PUBLIC_CANARY_SOURCE_PORTFOLIO = [
   src("src_canary_intezer", "Intezer Blog", "rss", "https://intezer.com/blog/feed/", ["malware", "ransomware", "cloud"], "vendor"),
   ...REVENUE_CANARY_FEEDS,
   ...ADVISORY_CANARY_FEEDS, ...INCIDENT_CANARY_FEEDS, ...EXPLOIT_CANARY_FEEDS,
-  ...JOURNALISM_CANARY_FEEDS, ...CLOUD_CANARY_FEEDS
+  ...JOURNALISM_CANARY_FEEDS, ...IDENTITY_CANARY_FEEDS, ...CLOUD_CANARY_FEEDS
 ];
 
 function src(id: string, name: string, type: string, url: string, q: string[], family: string) {

@@ -1,6 +1,7 @@
 const MATCHERS = [
   [/\b(npm|pypi|package|dependency|dependencies|sbom|slsa|open source|trojanized|plugin|registry)\b/i, "supply-chain"],
   [/\b(infrastructure|domain|dns|c2|command and control|bulletproof|hosting|ip address)\b/i, "infrastructure c2"],
+  [/\b(info.?stealer|stealer|stolen session|session cookie|working login|credential log)\b/i, "infostealer credential identity"],
   [/\bzero.day|0.day|actively exploited|exploited in the wild\b/i, "zero-day"]
 ] as const;
 

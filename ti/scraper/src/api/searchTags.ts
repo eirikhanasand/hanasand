@@ -3,7 +3,7 @@ import { termRegex } from "./searchTerm.ts";
 const TAGS = [
   "ransomware", "breach", "malware", "phishing", "exploit", "cve", "apt", "leak",
   "victim", "botnet", "ddos", "supply-chain", "zero-day", "infrastructure", "c2",
-  "credential", "intrusion", "extortion", "loader", "mobile", "identity", "detection",
+  "credential", "infostealer", "intrusion", "extortion", "loader", "mobile", "identity", "detection",
   "advisory", "exposed", "webshell"
 ];
 
@@ -13,6 +13,7 @@ const PHRASES: Array<[RegExp, string]> = [
   [/\bcommand and control\b/i, "c2"],
   [/\bremote access trojan\b/i, "malware"],
   [/\b[A-Z0-9._-]*RAT\b/i, "malware"],
+  [/\b(info.?stealer|stealer|stolen session|session cookie|working login|credential log)\b/i, "infostealer"],
   [/\bactive(?:ly)? exploit/i, "exploit"],
   [/\bcredential(?:s)?\b/i, "credential"],
   [/\bexpos(?:ed|ure|ing)\b/i, "exposed"],
