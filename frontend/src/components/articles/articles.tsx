@@ -42,15 +42,17 @@ export default async function Articles({
     const hasAnyArticles = articles.length > 0 || displayed.length > 0
 
     return (
-        <section className='grid gap-6 px-4 py-8 md:px-12 lg:px-16'>
+        <section className='mx-auto grid w-full max-w-7xl gap-8 bg-[#f7f8fb] px-4 py-12 text-[#171a21] md:px-8 md:py-16'>
             {message && <ArticleNotification message={message} />}
-            <div className='grid gap-2'>
-                <div className='flex items-center gap-3 text-bright'>
-                    <BookOpen className='h-5 w-5 text-[#f0a17a]' />
-                    <h1 className='text-2xl font-semibold tracking-[-0.02em] text-bright'>Articles</h1>
+            <div className='grid gap-3'>
+                <div className='flex items-center gap-3'>
+                    <span className='grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] bg-white text-[#3056d3] shadow-sm'>
+                        <BookOpen className='h-5 w-5' />
+                    </span>
+                    <h1 className='text-3xl font-semibold tracking-normal text-[#171a21] md:text-4xl'>Articles</h1>
                 </div>
-                <p className='max-w-2xl text-sm leading-6 text-bright/50'>
-                    Notes, project writeups, and longer-form context from Hanasand.
+                <p className='max-w-2xl text-base leading-7 text-[#596170]'>
+                    Project notes, product context, and preserved writing from the personal Hanasand archive.
                 </p>
             </div>
             <Recent recent={articles} max={max} includeTitle={includeRecentTitle} emptyMessage={hasAnyArticles ? 'No recent articles right now.' : 'No articles are published here yet.'} />
@@ -64,7 +66,7 @@ function Recent({ recent, max, includeTitle = true, emptyMessage = 'No articles 
 
     return (
         <div className='grid gap-3'>
-            {includeTitle && <h2 className='text-sm font-semibold uppercase tracking-[0.16em] text-bright/38'>Recently published</h2>}
+            {includeTitle && <h2 className='text-xs font-semibold uppercase text-[#667085]'>Recently published</h2>}
             {displayed.length === 0 ? <EmptyArticles message={emptyMessage} /> : null}
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 {displayed.map((article) => <Article
@@ -81,7 +83,7 @@ function All({ recent, max, includeTitle = true }: RecentProps) {
 
     return (
         <div className='grid gap-3'>
-            {includeTitle && <h2 className='text-sm font-semibold uppercase tracking-[0.16em] text-bright/38'>All articles</h2>}
+            {includeTitle && <h2 className='text-xs font-semibold uppercase text-[#667085]'>All articles</h2>}
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 {displayed.map((article) => <Article
                     key={article.title}
@@ -97,23 +99,23 @@ function Article({ article }: ArticleProps) {
 
     return (
         <Link
-            className='group h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#f0a17a]/55'
+            className='group h-full rounded-lg outline-none focus-visible:ring-4 focus-visible:ring-[#dce6ff]'
             href={`/articles/${id}`}
         >
-            <article className='grid h-full overflow-hidden rounded-xl border border-white/10 bg-white/[0.035] transition hover:border-white/16 hover:bg-white/[0.055]'>
+            <article className='grid h-full overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm transition hover:border-[#bdc7d5] hover:shadow-[0_18px_48px_rgba(26,35,55,0.10)]'>
                 {metadata.image ? (
-                    <div className='aspect-[16/9] overflow-hidden bg-black/20'>
-                        <Image className='h-full w-full object-cover opacity-88 transition duration-300 group-hover:scale-[1.02] group-hover:opacity-100' src={metadata.image} alt={title} width={800} height={450} />
+                    <div className='aspect-[16/9] overflow-hidden bg-[#eef1f5]'>
+                        <Image className='h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]' src={metadata.image} alt={title} width={800} height={450} />
                     </div>
                 ) : null}
-                <div className='grid content-start gap-3 p-4 text-foreground'>
+                <div className='grid content-start gap-3 p-5'>
                     <div className='grid gap-2'>
-                        <p className='text-xs text-bright/36'>Published {prettyDate(new Date(created).toISOString())}</p>
-                        <h3 className='text-base font-semibold leading-6 text-bright/88'>{title}</h3>
+                        <p className='text-xs font-medium text-[#667085]'>Published {prettyDate(new Date(created).toISOString())}</p>
+                        <h3 className='text-base font-semibold leading-6 text-[#171a21]'>{title}</h3>
                     </div>
-                    <p className='line-clamp-3 text-sm leading-6 text-bright/50'>{metadata.description}</p>
-                    <p className='mt-auto text-sm font-medium text-bright/72'>
-                        {metadata.wordCount > 100 ? 'Read article →' : 'Brief note'}
+                    <p className='line-clamp-3 text-sm leading-6 text-[#596170]'>{metadata.description}</p>
+                    <p className='mt-auto text-sm font-semibold text-[#3056d3]'>
+                        {metadata.wordCount > 100 ? 'Read article' : 'Brief note'}
                     </p>
                 </div>
             </article>
@@ -154,12 +156,12 @@ function normalizeArticles(value: unknown): Article[] {
 
 function EmptyArticles({ message }: { message: string }) {
     return (
-        <div className='grid min-h-48 place-items-center rounded-xl border border-dashed border-white/10 bg-white/[0.025] p-6 text-center'>
+        <div className='grid min-h-48 place-items-center rounded-lg border border-dashed border-[#d8dee9] bg-white p-6 text-center'>
             <div className='grid gap-3'>
-                <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/4'>
-                    <FileText className='h-5 w-5 text-[#f0a17a]' />
+                <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-[#dfe5ee] bg-[#f8fafc]'>
+                    <FileText className='h-5 w-5 text-[#3056d3]' />
                 </div>
-                <p className='text-sm text-bright/50'>{message}</p>
+                <p className='text-sm text-[#596170]'>{message}</p>
             </div>
         </div>
     )
