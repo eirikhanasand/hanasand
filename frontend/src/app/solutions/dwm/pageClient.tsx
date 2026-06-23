@@ -24,7 +24,7 @@ const workflow = [
     },
     {
         title: 'Detect fresh actor mentions',
-        detail: 'Use public trackers as seeds and owned collection for monitored actor pages where approved.',
+        detail: 'Use public trackers as seeds and owned collection for monitored actor-page metadata.',
         icon: Radar,
     },
     {
@@ -48,15 +48,27 @@ export default function DarkWebMonitoringPage() {
     const [subscriptionId, setSubscriptionId] = useState('')
     const payload = useMemo(() => samplePayload(watchlist), [watchlist])
 
+    function updateEndpoint(value: string) {
+        setEndpoint(value)
+        setSubscriptionId('')
+    }
+
+    function updateWatchlist(value: string) {
+        setWatchlist(value)
+        setSubscriptionId('')
+    }
+
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const trimmedEndpoint = endpoint.trim()
         const terms = watchlist.split(',').map(item => item.trim()).filter(Boolean)
         if (!/^https:\/\//i.test(trimmedEndpoint)) {
+            setSubscriptionId('')
             setStatus('Use an HTTPS webhook endpoint.')
             return
         }
         if (!terms.length) {
+            setSubscriptionId('')
             setStatus('Add at least one company, domain, or vendor name.')
             return
         }
@@ -165,13 +177,13 @@ export default function DarkWebMonitoringPage() {
                             </div>
                             <Webhook className='h-5 w-5 text-[#3056d3]' />
                         </div>
-                        <label className='grid gap-2'>
+                        <label htmlFor='dwm-webhook-endpoint' className='grid gap-2'>
                             <span className='text-sm font-semibold text-[#344054]'>Webhook endpoint</span>
-                            <input value={endpoint} onChange={event => setEndpoint(event.target.value)} className={inputClass} placeholder='https://hooks.company.com/hanasand' />
+                            <input id='dwm-webhook-endpoint' value={endpoint} onChange={event => updateEndpoint(event.target.value)} className={inputClass} placeholder='https://hooks.company.com/hanasand' />
                         </label>
-                        <label className='grid gap-2'>
+                        <label htmlFor='dwm-watched-terms' className='grid gap-2'>
                             <span className='text-sm font-semibold text-[#344054]'>Watched terms</span>
-                            <textarea value={watchlist} onChange={event => setWatchlist(event.target.value)} className={`${inputClass} min-h-28 resize-y`} placeholder='Company, domain, supplier, brand...' />
+                            <textarea id='dwm-watched-terms' value={watchlist} onChange={event => updateWatchlist(event.target.value)} className={`${inputClass} min-h-28 resize-y`} placeholder='Company, domain, supplier, brand...' />
                         </label>
                         <div className='grid gap-3 md:grid-cols-[auto_auto_1fr] md:items-center'>
                             <button type='submit' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
@@ -237,7 +249,7 @@ function samplePayload(watchlist: string) {
         claimSummary: 'Actor page lists a new victim claim and mentions financial records, contracts, and employee data.',
         claimedAt: '2026-06-23T07:58:00.000Z',
         sourceName: 'monitored actor page',
-        sourceUrl: 'https://hanasand.com/ti/darkweb/index?record=redacted',
+        sourceUrl: 'https://hanasand.com/ti?query=Acme%20Payments',
         confidence: 0.84,
         recommendedAction: 'Confirm the company match, notify vendor-risk or incident response, and watch for claim updates.',
         pivots: ['Akira', 'Acme Payments', matchedTerm, 'financial records'],

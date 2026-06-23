@@ -43,36 +43,36 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
         <>
             <div
                 onClick={handleClick}
-                className={`group cursor-pointer rounded-lg border border-white/8 bg-white/[0.025] p-3 transition ${keys['shift']
-                    ? 'select-none hover:border-red-400/30 hover:bg-red-500/10'
-                    : 'hover:border-white/14 hover:bg-white/[0.045]'
+                className={`group cursor-pointer rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 transition ${keys['shift']
+                    ? 'select-none hover:border-red-200 hover:bg-red-50'
+                    : 'hover:border-[#cfd7e3] hover:bg-white'
                 }`}
             >
                 <div className='grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
                     <div className='min-w-0'>
                         <div className='flex min-w-0 flex-wrap items-center gap-2'>
-                            <h3 className='truncate text-sm font-medium text-bright/88'>{name}</h3>
-                            <span className='rounded-md border border-white/8 bg-white/5 px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-[0.08em] text-bright/48'>Virtual machine</span>
+                            <h3 className='truncate text-sm font-semibold text-[#171a21]'>{name}</h3>
+                            <span className='rounded-md border border-[#d8dee9] bg-white px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-[#687386]'>Virtual machine</span>
                             <span className={`rounded-md px-2 py-0.5 text-[0.68rem] font-medium uppercase tracking-[0.08em] ${status === 'Running'
-                                ? 'border border-green-300/20 bg-green-400/10 text-green-200/82'
+                                ? 'border border-green-200 bg-green-50 text-green-700'
                                 : status === 'Stopped'
-                                    ? 'border border-red-300/18 bg-red-400/10 text-red-200/78'
-                                    : 'border border-yellow-300/18 bg-yellow-400/10 text-yellow-100/76'
+                                    ? 'border border-red-200 bg-red-50 text-red-700'
+                                    : 'border border-yellow-200 bg-yellow-50 text-yellow-700'
                             }`}>{status}</span>
                         </div>
-                        <p className='mt-1 truncate text-xs text-bright/42'>
+                        <p className='mt-1 truncate text-xs text-[#687386]'>
                             {ip} · Owner {vm.owner || vm.created_by || 'Unknown'} · Last used {lastUsed} · {editors} editor{editors === 1 ? '' : 's'}
                         </p>
-                        <div className='mt-3 flex min-w-0 flex-wrap gap-2 text-[0.72rem] text-bright/48'>
-                            <span className='inline-flex items-center gap-1 rounded-md bg-white/[0.035] px-2 py-1'>
+                        <div className='mt-3 flex min-w-0 flex-wrap gap-2 text-[0.72rem] text-[#596170]'>
+                            <span className='inline-flex items-center gap-1 rounded-md border border-[#e0e5ed] bg-white px-2 py-1'>
                                 <HardDrive className='h-3 w-3' />
                                 <span className='truncate'>{image}</span>
                             </span>
-                            <span className='inline-flex items-center gap-1 rounded-md bg-white/[0.035] px-2 py-1'>
+                            <span className='inline-flex items-center gap-1 rounded-md border border-[#e0e5ed] bg-white px-2 py-1'>
                                 <Cpu className='h-3 w-3' />
                                 <span>{vm.limits_cpu ? `${vm.limits_cpu} CPU` : 'CPU pending'}</span>
                             </span>
-                            <span className='inline-flex items-center gap-1 rounded-md bg-white/[0.035] px-2 py-1'>
+                            <span className='inline-flex items-center gap-1 rounded-md border border-[#e0e5ed] bg-white px-2 py-1'>
                                 <Network className='h-3 w-3' />
                                 <span>{vm.limits_memory || 'Memory pending'}</span>
                             </span>
@@ -80,14 +80,14 @@ export default function VMRow({ vm, update }: { vm: VM, update: () => void }) {
                     </div>
                     {!keys['shift'] && <div className='min-w-0 justify-self-start sm:justify-self-end'><RestartButtons vm={vm} /></div>}
                     {keys['shift'] && (
-                        <div className='hidden rounded-md px-3 py-2 group-hover:grid hover:bg-bright/3 sm:place-items-center'>
+                        <div className='hidden rounded-md px-3 py-2 group-hover:grid hover:bg-red-100 sm:place-items-center'>
                             <Trash2 className='h-5 w-5 stroke-red-500' />
                         </div>
                     )}
                 </div>
             </div>
             <div className='absolute top-2 right-2 z-1200'>
-                <Notify className='px-4' background='bg-dark' message={message} />
+                <Notify className='px-4' background='bg-white' message={message} />
             </div>
         </>
     )

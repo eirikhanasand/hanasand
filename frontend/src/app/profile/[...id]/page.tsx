@@ -33,26 +33,26 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         const displayName = isInactive ? profileId : publicUser?.name || profileId
 
         return (
-            <div className='flex h-full w-full items-center justify-center px-4 pb-8 pt-4'>
-                <section className='glass-card w-full max-w-xl rounded-lg p-6 text-bright shadow-2xl'>
-                    <p className='text-xs font-medium uppercase tracking-[0.2em] text-bright/35'>Public profile</p>
+            <div className='flex min-h-full w-full items-center justify-center bg-[#f7f8fb] px-4 py-10'>
+                <section className='w-full max-w-xl rounded-lg border border-[#dde3ec] bg-white p-6 shadow-sm'>
+                    <p className='text-xs font-semibold uppercase tracking-[0.14em] text-[#687386]'>Public profile</p>
                     <div className='mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
                         <div className='min-w-0'>
-                            <h1 className='wrap-break-word text-3xl font-semibold text-bright'>{displayName}</h1>
-                            <p className='mt-1 text-sm text-bright/45'>@{profileId}</p>
+                            <h1 className='wrap-break-word text-3xl font-semibold text-[#171a21]'>{displayName}</h1>
+                            <p className='mt-1 text-sm text-[#687386]'>@{profileId}</p>
                         </div>
-                        <span className={`w-fit rounded-lg border px-3 py-1.5 text-xs font-medium ${isInactive ? 'border-orange-300/20 text-orange-200/70' : 'border-emerald-300/20 text-emerald-200/70'}`}>
+                        <span className={`w-fit rounded-lg border px-3 py-1.5 text-xs font-semibold ${isInactive ? 'border-orange-200 bg-orange-50 text-orange-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                             {isInactive ? 'Reserved' : 'Active'}
                         </span>
                     </div>
-                    <p className='mt-5 text-sm leading-6 text-bright/52'>
+                    <p className='mt-5 text-sm leading-6 text-[#596170]'>
                         Public account page for Hanasand. Sign in to manage account access, sessions, certificates, and workspace resources.
                     </p>
                     <div className='mt-6 flex flex-wrap gap-2'>
-                        <Link href={`/login?path=/profile/${profileId}`} className='rounded-lg border border-bright/12 bg-bright/10 px-4 py-2 text-sm font-medium text-bright transition-colors hover:bg-bright/14'>
+                        <Link href={`/login?path=/profile/${profileId}`} className='rounded-lg bg-[#171a21] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2b303b]'>
                             Log in
                         </Link>
-                        <Link href='/' className='rounded-lg border border-bright/10 px-4 py-2 text-sm font-medium text-bright/62 transition-colors hover:bg-bright/8 hover:text-bright'>
+                        <Link href='/' className='rounded-lg border border-[#d8dee9] px-4 py-2 text-sm font-semibold text-[#364152] transition-colors hover:bg-[#f2f5f9]'>
                             Home
                         </Link>
                     </div>

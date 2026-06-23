@@ -71,10 +71,10 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
         <DashboardPanel className='p-4'>
             <div className='flex items-center justify-between gap-3'>
                 <div>
-                    <h2 className='text-base font-semibold text-bright'>Devices</h2>
-                    <p className='mt-1 text-sm text-bright/40'>{sessions.length || (loading ? 'Loading' : 'No')} active session{sessions.length === 1 ? '' : 's'}</p>
+                    <h2 className='text-base font-semibold text-[#171a21]'>Devices</h2>
+                    <p className='mt-1 text-sm text-[#596170]'>{sessions.length || (loading ? 'Loading' : 'No')} active session{sessions.length === 1 ? '' : 's'}</p>
                 </div>
-                <button onClick={revokeOthers} className='h-9 cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 text-sm font-semibold text-bright/70 hover:bg-white/10'>
+                <button onClick={revokeOthers} className='h-9 cursor-pointer rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#364152] hover:bg-[#f2f5f9]'>
                     Log out others
                 </button>
             </div>
@@ -85,20 +85,20 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
                     const label = deviceLabel(session.user_agent)
                     const Icon = deviceIcon(session.user_agent)
                     return (
-                        <div key={session.token_id} className='grid gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center'>
-                            <Icon className='h-4 w-4 text-bright/38' />
+                        <div key={session.token_id} className='grid gap-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center'>
+                            <Icon className='h-4 w-4 text-[#687386]' />
                             <div className='min-w-0'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <h3 className='text-sm font-semibold text-bright/88'>{label}</h3>
-                                    <span className={`rounded-md px-1.5 py-0.5 text-[11px] ${isRevoked ? 'bg-red-500/10 text-red-200/80' : 'bg-emerald-500/10 text-emerald-200/80'}`}>
+                                    <h3 className='text-sm font-semibold text-[#171a21]'>{label}</h3>
+                                    <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${isRevoked ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
                                         {isRevoked ? 'Revoked' : 'Active'}
                                     </span>
                                 </div>
-                                <p className='mt-1 truncate text-xs text-bright/32'>{session.user_agent || 'Unknown client'}</p>
-                                <p className='mt-1 text-xs text-bright/32'>IP {session.ip} · {formatDate(session.last_seen_at)}</p>
+                                <p className='mt-1 truncate text-xs text-[#687386]'>{session.user_agent || 'Unknown client'}</p>
+                                <p className='mt-1 text-xs text-[#687386]'>IP {session.ip} · {formatDate(session.last_seen_at)}</p>
                             </div>
                             {!isRevoked && (
-                                <button onClick={() => revoke(session.token_id)} className='h-8 cursor-pointer rounded-lg bg-red-500/10 px-3 text-xs font-semibold text-red-100/80 hover:bg-red-500/18'>
+                                <button onClick={() => revoke(session.token_id)} className='h-8 cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 hover:bg-red-100'>
                                     <LogOut className='mr-2 inline h-4 w-4' />
                                     Revoke
                                 </button>
@@ -106,7 +106,7 @@ export default function SessionsPanel({ isSelf }: { isSelf: boolean }) {
                         </div>
                     )
                 })}
-                {!sessions.length && <div className='rounded-lg border border-dashed border-white/10 p-4 text-sm text-bright/40'>
+                {!sessions.length && <div className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#596170]'>
                     {loading ? 'Loading sessions...' : 'No active sessions found.'}
                 </div>}
             </div>
