@@ -6,6 +6,14 @@ backend default {
 }
 
 sub vcl_recv {
+    if (req.method != "GET" && req.method != "HEAD") {
+        return (pass);
+    }
+
+    if (req.url ~ "^/api(?:[/?#]|$)") {
+        return (pass);
+    }
+
     if (req.url ~ "^/s(?:[/?#]|$)") {
         return (pass);
     }
