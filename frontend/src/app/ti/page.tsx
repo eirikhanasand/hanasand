@@ -89,23 +89,29 @@ function sanitizeTiResultForPublicPage(result: TiSearchResponse | null): TiSearc
             victimNotificationPacket: result.analystLoop.victimNotificationPacket
         } : undefined,
         collectionStrategy: result.collectionStrategy ? {
-            thesis: result.collectionStrategy.thesis,
-            productFocus: result.collectionStrategy.productFocus.map(item => item.replace(/\bprovenance\b/gi, 'source context')),
+            thesis: publicTiText(result.collectionStrategy.thesis),
+            productFocus: result.collectionStrategy.productFocus.map(publicTiText),
             sourcePosture: result.collectionStrategy.sourcePosture
                 .filter(source => source.role !== 'rejected_paid_rows')
                 .map(source => ({
                     source: source.source,
                     role: source.role,
-                    summary: source.summary,
-                    buyerValue: source.buyerValue
+                    summary: publicTiText(source.summary),
+                    buyerValue: publicTiText(source.buyerValue)
                 })),
             ownedCollection: {
                 priority: result.collectionStrategy.ownedCollection.priority,
-                summary: result.collectionStrategy.ownedCollection.summary.replace(/\bprovenance\b/gi, 'source context'),
-                requirements: result.collectionStrategy.ownedCollection.requirements.map(item => item.replace(/\bprovenance\b/gi, 'source context')),
+                summary: publicTiText(result.collectionStrategy.ownedCollection.summary),
+                requirements: result.collectionStrategy.ownedCollection.requirements.map(publicTiText),
                 prohibited: []
             },
             distribution: result.collectionStrategy.distribution
         } : undefined
     }
+}
+
+function publicTiText(value: string) {
+    return value
+        .replace(/\bprovenance\b/gi, 'source context')
+        .replace(/\bmetadata capture\b/gi, 'watched source monitoring')
 }
