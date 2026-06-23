@@ -50,9 +50,9 @@ const solutions = [
         href: '/pwned',
     },
     {
-        title: 'Share Workspaces',
-        detail: 'Secure handoffs, previews, and controlled collaboration links for customer-facing work.',
-        href: '/s',
+        title: 'Customer Handoffs',
+        detail: 'Package exposure findings into customer-ready review links and follow-up workflows.',
+        href: '/contact?intent=handoffs',
     },
 ]
 

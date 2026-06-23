@@ -195,6 +195,16 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
         }
     }
 
+    if (normalizedIntent === 'handoffs') {
+        return {
+            subject: 'Customer handoff workflow',
+            message: 'I want to package monitoring results into customer-ready review links or follow-up workflows.\n\nWhat needs to be shared:\nWho reviews it:\nDelivery preference:',
+            eyebrow: 'Customer handoffs',
+            heading: 'Turn exposure findings into a clean customer handoff.',
+            detail: 'Send the kind of monitoring result you want to share and who needs to review it. The reply can map webhook alerts, review links, and follow-up workflow into one buyer-safe handoff.',
+        }
+    }
+
     if (normalizedPlan === 'pilot') {
         return {
             subject: 'Start Pilot threat monitoring',
