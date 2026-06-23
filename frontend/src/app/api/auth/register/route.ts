@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import { setAuthCookies } from '../_authCookies'
-
-const authApiUrl = process.env.NEXT_PUBLIC_API || 'https://api.hanasand.com/api'
+import { authApiUrl } from '../_authApiUrl'
 
 export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null) as { name?: string, id?: string, password?: string } | null
@@ -17,7 +16,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'This username is reserved.' }, { status: 400 })
     }
 
-    const upstream = await fetch(`${authApiUrl}/user`, {
+    const upstream = await fetch(`${authApiUrl()}/user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, id, password }),

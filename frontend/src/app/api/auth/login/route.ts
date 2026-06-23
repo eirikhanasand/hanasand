@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setAuthCookies } from '../_authCookies'
-
-const authApiUrl = process.env.NEXT_PUBLIC_API || 'https://api.hanasand.com/api'
+import { authApiUrl } from '../_authApiUrl'
 
 export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null) as { id?: string, password?: string } | null
@@ -12,7 +11,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Username and password are required.' }, { status: 400 })
     }
 
-    const upstream = await fetch(`${authApiUrl}/auth/login/${encodeURIComponent(id)}`, {
+    const upstream = await fetch(`${authApiUrl()}/auth/login/${encodeURIComponent(id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
