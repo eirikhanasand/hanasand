@@ -3,6 +3,7 @@
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { Activity, BellRing, Building2, Database, ExternalLink, Globe2, Radar, Search, ShieldCheck, Target, Waypoints } from 'lucide-react'
 import { FormEvent, useEffect, useRef, useState } from 'react'
+import { humanizeSlug } from '../seo'
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
     const [query, setQuery] = useState(initialResult?.query ?? initialQuery)
@@ -24,7 +25,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
             return
         }
 
-        const label = toTitleLabel(titleQuery)
+        const label = humanizeSlug(titleQuery)
         document.title = `${label} Threat Intelligence | Hanasand`
         updateMetaDescription(`Search Hanasand monitoring context for ${label}: actor names, company mentions, domains, and recent claims.`)
         updateCanonical(`/ti/${encodeURIComponent(titleQuery)}`)
@@ -151,7 +152,7 @@ function Results({ result }: { result: TiSearchResponse }) {
             <section className='grid gap-4 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm lg:grid-cols-[1.25fr_0.75fr]'>
                 <div className='grid gap-3'>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <h1 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>{result.query}</h1>
+                        <h1 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>{humanizeSlug(result.query)}</h1>
                         {result.status ? (
                             <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-medium uppercase text-[#3056d3]'>
                                 {humanResultStatus(result.status)}
@@ -477,20 +478,6 @@ function sourceStatusLabel(value: string) {
     if (/available|ready|active/i.test(value)) return 'Active'
     if (/context/i.test(value)) return 'Context'
     return 'Included'
-}
-
-function toTitleLabel(value: string) {
-    return value
-        .replace(/[-_]+/g, ' ')
-        .split(/\s+/)
-        .filter(Boolean)
-        .map(part => {
-            if (/^(apt|cve|mitre|nvd|api|url|ip|dns|soc)\d*$/i.test(part)) return part.toUpperCase()
-            const lower = part.toLowerCase()
-            if (/^\d+$/.test(lower)) return lower
-            return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`
-        })
-        .join(' ')
 }
 
 function updateMetaDescription(content: string) {

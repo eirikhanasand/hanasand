@@ -57,5 +57,15 @@ export function humanizeSlug(slug: string) {
         .replace(/[-_]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-        .replace(/\b\w/g, (char) => char.toUpperCase())
+        .split(' ')
+        .filter(Boolean)
+        .map(humanizeToken)
+        .join(' ')
+}
+
+function humanizeToken(token: string) {
+    if (/^(apt|cve|mitre|nvd|api|url|ip|dns|soc)\d*$/i.test(token)) return token.toUpperCase()
+    const lower = token.toLowerCase()
+    if (/^\d+$/.test(lower)) return lower
+    return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`
 }
