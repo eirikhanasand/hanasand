@@ -19,18 +19,19 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
         expires,
         secure: shouldUseSecureCookies(req),
     }
+    const sharedDomain = sharedCookieDomain(req)
 
     if (data.name) {
-        response.cookies.set('name', data.name, cookieOptions)
+        setAuthCookie(response, 'name', data.name, cookieOptions, sharedDomain)
     }
     if (data.id) {
-        response.cookies.set('id', data.id, cookieOptions)
+        setAuthCookie(response, 'id', data.id, cookieOptions, sharedDomain)
     }
-    response.cookies.set('avatar', data.avatar ?? '', cookieOptions)
+    setAuthCookie(response, 'avatar', data.avatar ?? '', cookieOptions, sharedDomain)
     if (data.token) {
-        response.cookies.set('access_token', data.token, cookieOptions)
+        setAuthCookie(response, 'access_token', data.token, cookieOptions, sharedDomain)
     }
-    response.cookies.set('roles', JSON.stringify(data.roles ?? []), cookieOptions)
+    setAuthCookie(response, 'roles', JSON.stringify(data.roles ?? []), cookieOptions, sharedDomain)
 }
 
 export function clearAuthCookies(req: NextRequest, response: NextResponse) {
@@ -42,6 +43,31 @@ export function clearAuthCookies(req: NextRequest, response: NextResponse) {
 
 function shouldUseSecureCookies(req: NextRequest) {
     return req.nextUrl.protocol === 'https:' || requestHostname(req).endsWith('hanasand.com')
+}
+
+function sharedCookieDomain(req: NextRequest) {
+    return requestHostname(req).endsWith('hanasand.com') ? '.hanasand.com' : null
+}
+
+function setAuthCookie(
+    response: NextResponse,
+    name: string,
+    value: string,
+    options: {
+        sameSite: 'lax'
+        path: string
+        expires: Date | undefined
+        secure: boolean
+    },
+    sharedDomain: string | null,
+) {
+    response.cookies.set(name, value, options)
+    if (sharedDomain) {
+        response.cookies.set(name, value, {
+            ...options,
+            domain: sharedDomain,
+        })
+    }
 }
 
 function expireSharedDomainAuthCookies(req: NextRequest, response: NextResponse) {

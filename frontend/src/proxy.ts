@@ -125,21 +125,44 @@ function applyRefreshedAuthCookies(
     }
 
     const cookieOptions = {
-        ...options,
+        sameSite: options.sameSite,
+        path: options.path,
+        secure: options.secure,
         expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
     }
 
     if (auth.token) {
-        response.cookies.set('access_token', auth.token, cookieOptions)
+        setAuthCookie(response, 'access_token', auth.token, cookieOptions, options.sharedDomain)
     }
     if (auth.roles) {
-        response.cookies.set('roles', JSON.stringify(auth.roles), cookieOptions)
+        setAuthCookie(response, 'roles', JSON.stringify(auth.roles), cookieOptions, options.sharedDomain)
     }
     if (auth.name) {
-        response.cookies.set('name', auth.name, cookieOptions)
+        setAuthCookie(response, 'name', auth.name, cookieOptions, options.sharedDomain)
     }
     if (auth.avatar !== undefined) {
-        response.cookies.set('avatar', auth.avatar, cookieOptions)
+        setAuthCookie(response, 'avatar', auth.avatar, cookieOptions, options.sharedDomain)
+    }
+}
+
+function setAuthCookie(
+    response: NextResponse,
+    name: string,
+    value: string,
+    options: {
+        sameSite: 'lax'
+        path: string
+        secure: boolean
+        expires: Date | undefined
+    },
+    sharedDomain: string | null,
+) {
+    response.cookies.set(name, value, options)
+    if (sharedDomain) {
+        response.cookies.set(name, value, {
+            ...options,
+            domain: sharedDomain,
+        })
     }
 }
 
@@ -181,6 +204,7 @@ function authCookieOptions(req: NextRequest) {
         sameSite: 'lax' as const,
         path: '/',
         secure: req.nextUrl.protocol === 'https:' || requestHostname(req).endsWith('hanasand.com'),
+        sharedDomain: requestHostname(req).endsWith('hanasand.com') ? '.hanasand.com' : null,
     }
 }
 
