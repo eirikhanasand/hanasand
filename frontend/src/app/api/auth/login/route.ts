@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setAuthCookies } from '../_authCookies'
-import { authApiUrl } from '../_authApiUrl'
+import { authApiUrl } from '@/utils/auth/authApiUrl'
 
 export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null) as { id?: string, password?: string } | null

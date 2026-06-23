@@ -1,5 +1,5 @@
-import config from '@/config'
 import fetchWithRetry from '@/utils/fetchWithRetry'
+import { authApiUrl } from '@/utils/auth/authApiUrl'
 
 export type TokenValidationResult = {
     valid: boolean
@@ -12,9 +12,9 @@ export type TokenValidationResult = {
 
 export default async function tokenIsValid(token: string, id: string): Promise<TokenValidationResult> {
     try {
-        const response = await fetchWithRetry(`${config.url.auth}/auth/token/${id}`, {
+        const response = await fetchWithRetry(`${authApiUrl()}/auth/token/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
-            timeoutMs: Math.max(config.abortTimeout, 10000),
+            timeoutMs: 10000,
             retries: 2,
         })
 
