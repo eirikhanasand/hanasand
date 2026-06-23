@@ -152,7 +152,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
     }, [activeRepo?.id, activeRepo?.stackType])
 
     return (
-        <aside className='flex h-full min-h-0 flex-col gap-3 rounded-2xl bg-dark/30 p-3 outline outline-dark'>
+        <aside className='flex h-full min-h-0 flex-col gap-3 rounded-2xl bg-[#f8fafc] p-3 outline outline-[#dfe5ee]'>
             <Panel
                 icon={<TerminalSquare className='h-4 w-4' />}
                 title='Workspace'
@@ -197,7 +197,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     {ownershipSummary.boundaryWarnings.length ? (
                         <div className='space-y-1'>
                             {ownershipSummary.boundaryWarnings.map((warning) => (
-                                <div key={warning} className='rounded-xl bg-amber-500/8 px-3 py-2 text-xs text-amber-100/78 outline outline-amber-200/10'>
+                                <div key={warning} className='rounded-xl bg-amber-500/8 px-3 py-2 text-xs text-amber-800 outline outline-amber-200/40'>
                                     {warning}
                                 </div>
                             ))}
@@ -206,12 +206,12 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     {ownershipSummary.recentUsage.length ? (
                         <div className='space-y-1'>
                             {ownershipSummary.recentUsage.slice(0, 4).map((event) => (
-                                <div key={`${event.kind}-${event.createdAt}-${event.actorId || 'system'}`} className='rounded-xl bg-dark/28 px-3 py-2 text-xs text-bright/60 outline outline-dark'>
+                                <div key={`${event.kind}-${event.createdAt}-${event.actorId || 'system'}`} className='rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
                                     <div className='flex items-center justify-between gap-3'>
-                                        <span className='truncate font-medium text-bright/78'>{formatUsageKind(event.kind)}</span>
-                                        <span className='shrink-0 text-[10px] uppercase tracking-[0.14em] text-bright/36'>{formatActivityTime(event.createdAt)}</span>
+                                        <span className='truncate font-medium text-[#344054]'>{formatUsageKind(event.kind)}</span>
+                                        <span className='shrink-0 text-[10px] uppercase tracking-[0.14em] text-[#8c95a5]'>{formatActivityTime(event.createdAt)}</span>
                                     </div>
-                                    <div className='mt-1 truncate text-[11px] text-bright/48'>
+                                    <div className='mt-1 truncate text-[11px] text-[#667085]'>
                                         {event.actorName || event.actorId || 'System'} {'->'} {event.ownerName || event.ownerId}
                                     </div>
                                 </div>
@@ -230,15 +230,15 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <Stat label='Collaborators' value={`${activeConversation?.collaboration?.collaborators?.length || 0} invited`} />
                 <Stat label='Seats' value={`${activeConversation?.collaboration?.seatCount || 0}/${activeConversation?.collaboration?.seatLimit || 0} used`} />
                 {activeConversation?.id ? (
-                    <Link href={`/ai/${activeConversation.id}`} className='text-xs text-bright/58 underline-offset-4 hover:text-bright/84 hover:underline'>
+                    <Link href={`/ai/${activeConversation.id}`} className='text-xs text-[#596170] underline-offset-4 hover:text-[#171a21] hover:underline'>
                         Shared session link: /ai/{activeConversation.id}
                     </Link>
                 ) : null}
                 {activeConversation?.collaboration?.canInvite ? (
                     <>
                         <div className='grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2'>
-                            <input value={collaboratorUserId} onChange={(event) => setCollaboratorUserId(event.target.value)} placeholder='user id' className='min-w-0 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
-                            <select value={collaboratorRole} onChange={(event) => setCollaboratorRole(event.target.value === 'reviewer' ? 'reviewer' : 'editor')} className='rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark'>
+                            <input value={collaboratorUserId} onChange={(event) => setCollaboratorUserId(event.target.value)} placeholder='user id' className='min-w-0 rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
+                            <select value={collaboratorRole} onChange={(event) => setCollaboratorRole(event.target.value === 'reviewer' ? 'reviewer' : 'editor')} className='rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee]'>
                                 <option value='editor'>Editor</option>
                                 <option value='reviewer'>Reviewer</option>
                             </select>
@@ -247,11 +247,11 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                             type='button'
                             onClick={() => void onInviteCollaborator({ userId: collaboratorUserId, role: collaboratorRole })}
                             disabled={collaboratorPending || (activeConversation.collaboration.remainingSeats <= 0 && !activeConversation.collaboration.collaborators.some((collaborator) => collaborator.userId === collaboratorUserId.trim()))}
-                            className='rounded-xl bg-dark/35 px-3 py-2 text-sm font-semibold text-bright/82 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-60'
+                            className='rounded-xl bg-white px-3 py-2 text-sm font-semibold text-[#344054] outline outline-[#dfe5ee] transition-colors hover:text-[#3056d3] disabled:opacity-60'
                         >
                             {collaboratorPending ? 'Inviting...' : 'Invite collaborator'}
                         </button>
-                        <div className='text-xs text-bright/42'>
+                        <div className='text-xs text-[#667085]'>
                             Collaborator seats remaining: {activeConversation.collaboration.remainingSeats} of {activeConversation.collaboration.seatLimit}.
                         </div>
                     </>
@@ -259,19 +259,19 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 {activeConversation?.collaboration?.collaborators?.length ? (
                     <div className='space-y-1'>
                         {activeConversation.collaboration.collaborators.slice(0, 6).map((collaborator) => (
-                            <div key={collaborator.userId} className='flex items-center justify-between gap-3 rounded-xl bg-dark/30 px-3 py-2 text-xs text-bright/62 outline outline-dark'>
+                            <div key={collaborator.userId} className='flex items-center justify-between gap-3 rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
                                 <div className='min-w-0'>
                                     <div className='truncate'>{collaborator.name || collaborator.userId}</div>
-                                    <div className='truncate text-[10px] text-bright/38'>{collaborator.userId}</div>
+                                    <div className='truncate text-[10px] text-[#8c95a5]'>{collaborator.userId}</div>
                                 </div>
                                 <div className='flex items-center gap-2'>
-                                    <span className='shrink-0 rounded-full bg-bright/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em]'>{collaborator.role}</span>
+                                    <span className='shrink-0 rounded-full bg-[#eef3ff] px-2 py-0.5 text-[10px] uppercase tracking-[0.16em]'>{collaborator.role}</span>
                                     {activeConversation.collaboration.canInvite || collaborator.userId === currentUserId ? (
                                         <button
                                             type='button'
                                             onClick={() => void onRemoveCollaborator(collaborator.userId)}
                                             disabled={collaboratorPending}
-                                            className='rounded-lg bg-dark/35 px-2 py-1 text-[10px] text-bright/62 outline outline-dark transition-colors hover:text-red-300 disabled:opacity-60'
+                                            className='rounded-lg bg-white px-2 py-1 text-[10px] text-[#596170] outline outline-[#dfe5ee] transition-colors hover:text-red-300 disabled:opacity-60'
                                         >
                                             {collaborator.userId === currentUserId ? 'Leave' : 'Remove'}
                                         </button>
@@ -282,7 +282,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     </div>
                 ) : null}
                 {activeConversation?.collaboration?.role !== 'owner' ? (
-                    <div className='text-xs text-bright/42'>
+                    <div className='text-xs text-[#667085]'>
                         Your current access lets you inspect this AI session and continue from the same conversation route.
                     </div>
                 ) : null}
@@ -291,7 +291,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
 
             <Panel
                 icon={<Share2 className='h-4 w-4' />}
-                title='Ownership metadata'
+                title='Access summary'
                 subtitle='Actor and exposure details.'
             >
                 <Stat label='Tenant owner' value={activeConversation?.ownerId || 'Unknown'} />
@@ -300,10 +300,10 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <Stat label='Release actors' value={releaseActors.length ? String(releaseActors.length) : 'None yet'} />
                 <Stat label='Repo boundary' value={ownershipSummary ? `${ownershipSummary.externalRepositoryCount} external` : 'Unknown'} />
                 <Stat label='Runtime boundary' value={ownershipSummary ? `${ownershipSummary.externalVmCount} external` : 'Unknown'} />
-                <div className='rounded-xl bg-dark/30 px-3 py-2 text-xs text-bright/55 outline outline-dark'>
+                <div className='rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
                     Latest preview: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No release metadata yet'}
                 </div>
-                <div className='text-xs text-bright/42'>
+                <div className='text-xs text-[#667085]'>
                     Repository, runtime, deploy, and release ownership are checked against the active AI owner.
                 </div>
             </Panel>
@@ -315,7 +315,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 {trustRelease && trust ? (
                     <>
-                        <div className='rounded-xl bg-emerald-500/8 px-3 py-2 text-xs text-emerald-100/78 outline outline-emerald-200/10'>
+                        <div className='rounded-xl bg-emerald-500/8 px-3 py-2 text-xs text-emerald-800 outline outline-emerald-200/40'>
                             {trust.noLockIn.headline}
                         </div>
                         <TrustItem icon={<History className='h-3.5 w-3.5' />} label='Version history' value={trust.versionHistory.summary} />
@@ -328,7 +328,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                 href={supportBundleHref(trustRelease)}
                                 target='_blank'
                                 rel='noopener noreferrer'
-                                className='inline-flex items-center gap-2 rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33]'
+                                className='inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs text-[#344054] outline outline-[#dfe5ee] transition-colors hover:text-[#3056d3]'
                             >
                                 <LifeBuoy className='h-3.5 w-3.5' />
                                 Support bundle
@@ -338,7 +338,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                     type='button'
                                     onClick={() => void onRollbackRelease(trustRelease.id)}
                                     disabled={rollbackPendingId === trustRelease.id}
-                                    className='inline-flex items-center gap-2 rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-60'
+                                    className='inline-flex items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-xs text-[#344054] outline outline-[#dfe5ee] transition-colors hover:text-[#3056d3] disabled:opacity-60'
                                 >
                                     <RefreshCcw className='h-3.5 w-3.5' />
                                     {rollbackPendingId === trustRelease.id ? 'Preparing...' : 'Rollback'}
@@ -347,8 +347,8 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         </div>
                         <div className='space-y-1'>
                             {trust.sla.slice(0, 4).map((item) => (
-                                <div key={item.tier} className='rounded-xl bg-dark/30 px-3 py-2 text-xs text-bright/58 outline outline-dark'>
-                                    <span className='font-semibold text-bright/78'>{item.tier}:</span> {item.promise}
+                                <div key={item.tier} className='rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
+                                    <span className='font-semibold text-[#344054]'>{item.tier}:</span> {item.promise}
                                 </div>
                             ))}
                         </div>
@@ -366,28 +366,28 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 {releases.length ? (
                     <div className='max-h-52 space-y-2 overflow-y-auto pr-1'>
                         {releases.slice(0, 6).map((release) => (
-                            <div key={release.id} className='rounded-xl bg-dark/30 px-3 py-3 outline outline-dark'>
+                            <div key={release.id} className='rounded-xl bg-[#f8fafc] px-3 py-3 outline outline-[#dfe5ee]'>
                                 <div className='flex items-start justify-between gap-3'>
                                     <div className='min-w-0'>
-                                        <div className='truncate text-sm font-medium text-bright/86'>{release.vmName}</div>
-                                        <div className='mt-1 text-xs text-bright/38'>
+                                        <div className='truncate text-sm font-medium text-[#171a21]'>{release.vmName}</div>
+                                        <div className='mt-1 text-xs text-[#8c95a5]'>
                                             {release.stackType.replaceAll('_', ' ')} · {release.accessPolicy.replaceAll('_', ' ')}
                                         </div>
                                         <PreviewLink href={release.previewUrl} emptyText='No preview URL recorded' />
                                     </div>
                                     <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${
                                         release.status === 'current'
-                                            ? 'bg-emerald-500/12 text-emerald-300'
+                                            ? 'bg-emerald-500/12 text-emerald-700'
                                             : release.status === 'rollback_target'
-                                                ? 'bg-amber-500/12 text-amber-200'
-                                                : 'bg-dark/45 text-bright/60'
+                                                ? 'bg-amber-500/12 text-amber-700'
+                                                : 'bg-[#eef2f7] text-[#596170]'
                                     }`}>
                                         {release.status.replaceAll('_', ' ')}
                                     </span>
                                 </div>
-                                {release.notes ? <div className='mt-2 text-xs text-bright/58'>{release.notes}</div> : null}
+                                {release.notes ? <div className='mt-2 text-xs text-[#596170]'>{release.notes}</div> : null}
                                 {release.trust ? (
-                                    <div className='mt-2 grid gap-1 text-[11px] text-bright/44'>
+                                    <div className='mt-2 grid gap-1 text-[11px] text-[#667085]'>
                                         <span>{release.trust.noLockIn.headline}</span>
                                         <span>Support bundle: {release.trust.supportBundle.includes.join(', ')}</span>
                                     </div>
@@ -397,7 +397,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                         type='button'
                                         onClick={() => void onRollbackRelease(release.id)}
                                         disabled={rollbackPendingId === release.id}
-                                        className='mt-3 rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/78 outline outline-dark transition-colors hover:text-[#f07d33] disabled:opacity-60'
+                                        className='mt-3 rounded-lg bg-white px-2.5 py-1.5 text-xs text-[#344054] outline outline-[#dfe5ee] transition-colors hover:text-[#3056d3] disabled:opacity-60'
                                     >
                                         {rollbackPendingId === release.id ? 'Preparing...' : 'Rollback to this release'}
                                     </button>
@@ -414,8 +414,8 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 subtitle='Import a public or private repository.'
             >
                 <div className='flex gap-2'>
-                    <input value={importInput} onChange={(event) => onImportInputChange(event.target.value)} placeholder='owner/repo, URL, or repo#branch:path' className='min-w-0 flex-1 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
-                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity disabled:opacity-60'>
+                    <input value={importInput} onChange={(event) => onImportInputChange(event.target.value)} placeholder='owner/repo, URL, or repo#branch:path' className='min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
+                    <button type='button' onClick={() => void onImportRepo()} disabled={importPending} className='rounded-xl bg-[#3056d3] px-3 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60'>
                         {importPending ? 'Importing' : 'Import'}
                     </button>
                 </div>
@@ -426,9 +426,9 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     type='password'
                     autoComplete='off'
                     spellCheck={false}
-                    className='rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24'
+                    className='rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]'
                 />
-                <div className='text-xs text-bright/40'>
+                <div className='text-xs text-[#667085]'>
                     Tokens are only sent with the current import or refresh request and are cleared again after successful use.
                 </div>
                 {importError ? <ErrorNotice compact message={importError} /> : null}
@@ -439,8 +439,8 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 title='Starter'
                 subtitle='Create a Docker-ready Next.js workspace.'
             >
-                <input value={starterName} onChange={(event) => setStarterName(event.target.value)} placeholder='Project name' className='rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
-                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90'>
+                <input value={starterName} onChange={(event) => setStarterName(event.target.value)} placeholder='Project name' className='rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
+                <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-xl bg-[#3056d3] px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90'>
                     Create Next.js + Docker workspace
                 </button>
             </Panel>
@@ -456,15 +456,15 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                             key={environment}
                             type='button'
                             onClick={() => setDeployEnvironment(environment)}
-                            className={`rounded-xl px-3 py-2 text-sm font-semibold outline transition-colors ${deployEnvironment === environment ? 'bg-[#f07d33]/12 text-[#f07d33] outline-[#f07d33]/20' : 'bg-dark/30 text-bright/62 outline-dark hover:text-bright/86'}`}
+                            className={`rounded-xl px-3 py-2 text-sm font-semibold outline transition-colors ${deployEnvironment === environment ? 'bg-[#3056d3]/12 text-[#3056d3] outline-[#3056d3]/20' : 'bg-[#f8fafc] text-[#596170] outline-[#dfe5ee] hover:text-[#171a21]'}`}
                         >
                             {environment === 'production' ? 'Production' : 'Staging'}
                         </button>
                     ))}
                 </div>
-                <div className='rounded-xl bg-dark/30 px-3 py-3 text-xs text-bright/58 outline outline-dark'>
-                    <div className='flex items-center gap-2 text-bright/82'>
-                        <ShieldCheck className='h-3.5 w-3.5 text-[#f07d33]' />
+                <div className='rounded-xl bg-[#f8fafc] px-3 py-3 text-xs text-[#596170] outline outline-[#dfe5ee]'>
+                    <div className='flex items-center gap-2 text-[#344054]'>
+                        <ShieldCheck className='h-3.5 w-3.5 text-[#3056d3]' />
                         <span className='font-semibold'>{deployProfile.title}</span>
                     </div>
                     <div className='mt-2 grid gap-1'>
@@ -481,7 +481,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                 key={target.id}
                                 type='button'
                                 onClick={() => setDeployVmName(target.name)}
-                                className={`rounded-full px-2.5 py-1 text-[11px] outline ${deployVmName === target.name ? 'bg-[#f07d33]/12 text-[#f07d33] outline-[#f07d33]/18' : 'bg-dark/28 text-bright/55 outline-dark hover:text-bright/80'}`}
+                                className={`rounded-full px-2.5 py-1 text-[11px] outline ${deployVmName === target.name ? 'bg-[#3056d3]/12 text-[#3056d3] outline-[#3056d3]/18' : 'bg-[#f8fafc] text-[#596170] outline-[#dfe5ee] hover:text-[#344054]'}`}
                             >
                                 {target.name}
                             </button>
@@ -489,45 +489,45 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     </div>
                 ) : null}
                 <div className='grid grid-cols-[minmax(0,1fr)_5rem] gap-2'>
-                    <input value={deployVmName} onChange={(event) => setDeployVmName(event.target.value)} placeholder='Deploy target' className='min-w-0 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
-                    <input value={deployPort} onChange={(event) => setDeployPort(event.target.value)} placeholder='3000' inputMode='numeric' className='min-w-0 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
+                    <input value={deployVmName} onChange={(event) => setDeployVmName(event.target.value)} placeholder='Deploy target' className='min-w-0 rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
+                    <input value={deployPort} onChange={(event) => setDeployPort(event.target.value)} placeholder='3000' inputMode='numeric' className='min-w-0 rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
                 </div>
-                <input value={deployHealthPath} onChange={(event) => setDeployHealthPath(event.target.value)} placeholder='/health or /' className='rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
-                <div className='rounded-xl bg-dark/30 px-3 py-3 outline outline-dark'>
-                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-bright/30'>Deploy checklist</div>
+                <input value={deployHealthPath} onChange={(event) => setDeployHealthPath(event.target.value)} placeholder='/health or /' className='rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
+                <div className='rounded-xl bg-[#f8fafc] px-3 py-3 outline outline-[#dfe5ee]'>
+                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-[#667085]'>Deploy checklist</div>
                     <div className='grid gap-1.5'>
                         {deployProfile.checklist.map((item) => (
                             <ChecklistItem key={item.label} label={item.label} state={item.state} />
                         ))}
                     </div>
                 </div>
-                <div className='rounded-xl bg-dark/30 px-3 py-3 outline outline-dark'>
-                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-bright/30'>Env placeholders</div>
+                <div className='rounded-xl bg-[#f8fafc] px-3 py-3 outline outline-[#dfe5ee]'>
+                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-[#667085]'>Env placeholders</div>
                     {envPlaceholders.length ? (
                         <div className='flex flex-wrap gap-1.5'>
                             {envPlaceholders.slice(0, 10).map((name) => (
-                                <span key={name} className='rounded-full bg-bright/8 px-2 py-1 text-[10px] text-bright/62 outline outline-bright/5'>
+                                <span key={name} className='rounded-full bg-[#eef3ff] px-2 py-1 text-[10px] text-[#596170] outline outline-[#dce6ff]'>
                                     {name}=required
                                 </span>
                             ))}
-                            {envPlaceholders.length > 10 ? <span className='text-[10px] text-bright/38'>+{envPlaceholders.length - 10} more</span> : null}
+                            {envPlaceholders.length > 10 ? <span className='text-[10px] text-[#8c95a5]'>+{envPlaceholders.length - 10} more</span> : null}
                         </div>
                     ) : (
-                        <div className='text-xs text-bright/42'>No required env vars detected from imported files. Secrets are never echoed here.</div>
+                        <div className='text-xs text-[#667085]'>No required env vars detected from imported files. Secrets are never echoed here.</div>
                     )}
                 </div>
                 {activeRepo ? (
-                    <div className='text-xs text-bright/42'>
+                    <div className='text-xs text-[#667085]'>
                         Suggested for {activeRepo.stackType.replaceAll('_', ' ')}: {activeRepo.stackType === 'nextjs_docker' ? '3000 and /' : '3001 and /ready'}.
                     </div>
                 ) : null}
-                <select value={deployAccessPolicy} onChange={(event) => setDeployAccessPolicy(event.target.value as AIDeploymentAccessPolicy)} className='rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark'>
+                <select value={deployAccessPolicy} onChange={(event) => setDeployAccessPolicy(event.target.value as AIDeploymentAccessPolicy)} className='rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee]'>
                     <option value='owner_only'>Owner only preview</option>
                     <option value='collaborators'>Collaborators</option>
                     <option value='public_preview'>Public preview</option>
                 </select>
                 {deployQuota ? (
-                    <div className='rounded-xl bg-dark/30 px-3 py-2 text-xs text-bright/55 outline outline-dark'>
+                    <div className='rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
                         <div>
                             Deploys: {deployQuota.used}/{deployQuota.limit} in {deployQuota.windowMinutes} min. {deployQuota.remaining} left.
                         </div>
@@ -541,34 +541,34 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     type='button'
                     onClick={() => void onStartDeployment({ vmName: deployVmName, port: deployPort, healthPath: deployHealthPath, accessPolicy: deployAccessPolicy, environment: deployEnvironment })}
                     disabled={deployPending}
-                    className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60'
+                    className='rounded-xl bg-[#3056d3] px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
                     {deployPending ? 'Checking deploy target...' : 'Start deploy check'}
                 </button>
                 {deployments.length ? (
                     <div className='max-h-48 space-y-2 overflow-y-auto pr-1'>
                         {deployments.slice(0, 5).map((deployment) => (
-                            <div key={deployment.id} className='rounded-xl bg-dark/30 px-3 py-3 outline outline-dark'>
+                            <div key={deployment.id} className='rounded-xl bg-[#f8fafc] px-3 py-3 outline outline-[#dfe5ee]'>
                                 <div className='flex items-start justify-between gap-3'>
                                     <div className='min-w-0'>
-                                        <div className='truncate text-sm font-medium text-bright/86'>{deployment.vmName}</div>
+                                        <div className='truncate text-sm font-medium text-[#171a21]'>{deployment.vmName}</div>
                                         <PreviewLink href={deployment.previewUrl || deployment.healthcheckUrl} emptyText='No preview URL yet' />
-                                        <div className='mt-1 text-[11px] text-bright/32'>
+                                        <div className='mt-1 text-[11px] text-[#8c95a5]'>
                                             {deployment.accessPolicy.replaceAll('_', ' ')} · {deployment.stackType.replaceAll('_', ' ')}
                                         </div>
                                     </div>
-                                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${deployment.status === 'running' ? 'bg-emerald-500/12 text-emerald-300' : 'bg-amber-500/12 text-amber-200'}`}>
+                                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${deployment.status === 'running' ? 'bg-emerald-500/12 text-emerald-700' : 'bg-amber-500/12 text-amber-700'}`}>
                                         {deployment.status}
                                     </span>
                                 </div>
                                 {deployment.failureReason ? (
-                                    <div className='mt-2 rounded-lg bg-amber-500/8 px-2.5 py-2 text-xs text-amber-100/78 outline outline-amber-200/10'>
+                                    <div className='mt-2 rounded-lg bg-amber-500/8 px-2.5 py-2 text-xs text-amber-800 outline outline-amber-200/40'>
                                         {deployment.failureReason}
                                     </div>
                                 ) : null}
                                 <div className='mt-2 space-y-1'>
                                     {deployment.events.slice(-3).map((event) => (
-                                        <div key={`${deployment.id}-${event.stage}-${event.timestamp}`} className='text-[11px] text-bright/42'>
+                                        <div key={`${deployment.id}-${event.stage}-${event.timestamp}`} className='text-[11px] text-[#667085]'>
                                             {event.stage.replaceAll('_', ' ')} · {event.message}
                                         </div>
                                     ))}
@@ -586,37 +586,37 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 grow
             >
                 {importedRepos.length ? importedRepos.map((repo) => (
-                    <div key={repo.id} className={`rounded-xl px-3 py-3 outline ${repo.id === activeRepoId ? 'bg-[#f07d33]/10 outline-[#f07d33]/18' : 'bg-dark/22 outline-dark'}`}>
+                    <div key={repo.id} className={`rounded-xl px-3 py-3 outline ${repo.id === activeRepoId ? 'bg-[#3056d3]/10 outline-[#3056d3]/18' : 'bg-white outline-[#dfe5ee]'}`}>
                         <div className='flex items-start justify-between gap-3'>
                             <div className='min-w-0'>
-                                <div className='truncate text-sm font-medium text-bright/88'>{repo.fullName}</div>
-                                <div className='mt-1 text-xs text-bright/35'>
+                                <div className='truncate text-sm font-medium text-[#171a21]'>{repo.fullName}</div>
+                                <div className='mt-1 text-xs text-[#8c95a5]'>
                                     {repo.branch} · {repo.syncStatus === 'ready' ? 'Ready' : repo.syncStatus === 'syncing' ? 'Syncing…' : repo.lastSyncError || 'Sync failed'}
                                 </div>
-                                <div className='mt-1 text-[11px] text-bright/38'>
+                                <div className='mt-1 text-[11px] text-[#8c95a5]'>
                                     {repo.accessScope === 'owned' ? `Owned by ${repo.ownerId}` : `Shared from ${repo.ownerId}`}
                                 </div>
-                                <div className='mt-1 text-[11px] text-bright/32'>
+                                <div className='mt-1 text-[11px] text-[#8c95a5]'>
                                     {repo.stackType === 'unknown' ? (repo.stackReason || 'Unsupported stack') : repo.stackType.replaceAll('_', ' ')}
                                 </div>
                                 {repo.credential?.hasCredential ? (
-                                    <div className='mt-1 text-[11px] text-emerald-200/80'>
+                                    <div className='mt-1 text-[11px] text-emerald-700'>
                                         Saved GitHub token {repo.credential.tokenHint || ''}{repo.credential.lastUsedAt ? ` · used ${formatActivityTime(repo.credential.lastUsedAt)}` : ''}
                                     </div>
                                 ) : repo.authHint ? (
-                                    <div className='mt-1 text-[11px] text-amber-200/80'>{repo.authHint}</div>
+                                    <div className='mt-1 text-[11px] text-amber-700'>{repo.authHint}</div>
                                 ) : null}
                             </div>
                             <div className='flex items-center gap-2'>
-                                <button type='button' onClick={() => void onAttachRepo(repo.id)} className='rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/80 outline outline-dark hover:text-[#f07d33]'>
+                                <button type='button' onClick={() => void onAttachRepo(repo.id)} className='rounded-lg bg-white px-2.5 py-1.5 text-xs text-[#344054] outline outline-[#dfe5ee] hover:text-[#3056d3]'>
                                     Attach
                                 </button>
                                 {repo.credential?.hasCredential ? (
-                                    <button type='button' onClick={() => void onRevokeRepoCredential(repo.id)} className='rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/70 outline outline-dark hover:text-red-300'>
+                                    <button type='button' onClick={() => void onRevokeRepoCredential(repo.id)} className='rounded-lg bg-white px-2.5 py-1.5 text-xs text-[#596170] outline outline-[#dfe5ee] hover:text-red-300'>
                                         Revoke
                                     </button>
                                 ) : null}
-                                <button type='button' onClick={() => void onRefreshRepo(repo.id)} className='grid h-8 w-8 place-items-center rounded-lg bg-dark/35 text-bright/70 outline outline-dark hover:text-[#f07d33]'>
+                                <button type='button' onClick={() => void onRefreshRepo(repo.id)} className='grid h-8 w-8 place-items-center rounded-lg bg-white text-[#596170] outline outline-[#dfe5ee] hover:text-[#3056d3]'>
                                     <RefreshCcw className={`h-3.5 w-3.5 ${syncingRepoId === repo.id ? 'animate-spin' : ''}`} />
                                 </button>
                             </div>
@@ -624,7 +624,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         {repo.id === activeRepoId && repo.files.length ? (
                             <div className='mt-3 max-h-36 space-y-1 overflow-y-auto pr-1'>
                                 {repo.files.slice(0, 80).map((file) => (
-                                    <button key={file.path} type='button' onClick={() => void onSelectRepoFile(file.path)} className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedRepoFilePath === file.path ? 'bg-[#f07d33]/12 text-bright/90 outline-[#f07d33]/18' : 'bg-dark/30 text-bright/65 outline-transparent hover:outline-dark'}`}>
+                                    <button key={file.path} type='button' onClick={() => void onSelectRepoFile(file.path)} className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedRepoFilePath === file.path ? 'bg-[#3056d3]/12 text-[#171a21] outline-[#3056d3]/18' : 'bg-[#f8fafc] text-[#596170] outline-transparent hover:outline-[#dfe5ee]'}`}>
                                         <div className='flex items-center justify-between gap-3'>
                                             <span className='truncate'>{file.path}</span>
                                             <PathBadge path={file.path} selected={selectedRepoFilePath === file.path} recentPaths={recentPaths} lastChangedPath={lastChangedPath} />
@@ -644,13 +644,13 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 <div className='max-h-40 space-y-2 overflow-y-auto pr-1'>
                     {initialShares.length ? initialShares.slice(0, 40).map((share) => (
-                        <div key={share.id} className={`rounded-xl px-3 py-3 outline ${share.id === activeConversation?.workspaceId ? 'bg-[#f07d33]/10 outline-[#f07d33]/18' : 'bg-dark/22 outline-dark'}`}>
+                        <div key={share.id} className={`rounded-xl px-3 py-3 outline ${share.id === activeConversation?.workspaceId ? 'bg-[#3056d3]/10 outline-[#3056d3]/18' : 'bg-white outline-[#dfe5ee]'}`}>
                             <div className='flex items-start justify-between gap-3'>
                                 <div className='min-w-0'>
-                                    <div className='truncate text-sm text-bright/85'>{share.alias || share.id}</div>
-                                    <div className='mt-1 truncate text-xs text-bright/35'>{share.path || share.id}</div>
+                                    <div className='truncate text-sm text-[#171a21]'>{share.alias || share.id}</div>
+                                    <div className='mt-1 truncate text-xs text-[#8c95a5]'>{share.path || share.id}</div>
                                 </div>
-                                <button type='button' onClick={() => void onAttachShare(share.id)} className='rounded-lg bg-dark/35 px-2.5 py-1.5 text-xs text-bright/80 outline outline-dark hover:text-[#f07d33]'>
+                                <button type='button' onClick={() => void onAttachShare(share.id)} className='rounded-lg bg-white px-2.5 py-1.5 text-xs text-[#344054] outline outline-[#dfe5ee] hover:text-[#3056d3]'>
                                     Attach
                                 </button>
                             </div>
@@ -671,7 +671,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                                 key={path}
                                 type='button'
                                 onClick={() => void onSelectShareFile(path)}
-                                className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedPath === path ? 'bg-[#f07d33]/12 text-bright/90 outline-[#f07d33]/18' : 'bg-dark/30 text-bright/65 outline-transparent hover:outline-dark'}`}
+                                className={`block w-full rounded-lg px-2 py-1.5 text-left text-xs outline ${selectedPath === path ? 'bg-[#3056d3]/12 text-[#171a21] outline-[#3056d3]/18' : 'bg-[#f8fafc] text-[#596170] outline-transparent hover:outline-[#dfe5ee]'}`}
                             >
                                 <div className='flex items-center justify-between gap-3'>
                                     <span className='truncate'>{path}</span>
@@ -690,7 +690,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     subtitle={selectedPath || 'Selected content'}
                     grow
                 >
-                    <pre className='max-h-72 overflow-auto rounded-xl bg-black/20 p-3 text-xs leading-5 text-bright/80'>{selectedContent.slice(0, 12000)}</pre>
+                    <pre className='max-h-72 overflow-auto rounded-xl bg-[#f4f6fa] p-3 text-xs leading-5 text-[#344054]'>{selectedContent.slice(0, 12000)}</pre>
                 </Panel>
             ) : null}
         </aside>
@@ -711,14 +711,14 @@ function Panel({
     grow?: boolean
 }) {
     return (
-        <section className={`rounded-2xl bg-dark/22 p-3 outline outline-dark ${grow ? 'min-h-0 flex-1' : ''}`}>
+        <section className={`rounded-2xl bg-white p-3 outline outline-[#dfe5ee] ${grow ? 'min-h-0 flex-1' : ''}`}>
             <div className='flex items-start gap-3'>
-                <div className='mt-0.5 rounded-xl bg-[#f07d33]/12 p-2 text-[#f07d33] outline outline-[#f07d33]/18'>
+                <div className='mt-0.5 rounded-xl bg-[#3056d3]/12 p-2 text-[#3056d3] outline outline-[#3056d3]/18'>
                     {icon}
                 </div>
                 <div className='min-w-0'>
-                    <div className='text-[11px] uppercase tracking-[0.18em] text-bright/30'>{title}</div>
-                    <div className='mt-1 text-sm text-bright/82'>{subtitle}</div>
+                    <div className='text-[11px] uppercase tracking-[0.18em] text-[#667085]'>{title}</div>
+                    <div className='mt-1 text-sm text-[#344054]'>{subtitle}</div>
                 </div>
             </div>
             <div className={`mt-3 grid gap-2 ${grow ? 'min-h-0' : ''}`}>{children}</div>
@@ -728,19 +728,19 @@ function Panel({
 
 function Stat({ label, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-xl bg-dark/30 px-3 py-2 outline outline-dark'>
-            <div className='text-[10px] uppercase tracking-[0.18em] text-bright/30'>{label}</div>
-            <div className='mt-1 text-sm text-bright/82'>{value}</div>
+        <div className='rounded-xl bg-[#f8fafc] px-3 py-2 outline outline-[#dfe5ee]'>
+            <div className='text-[10px] uppercase tracking-[0.18em] text-[#667085]'>{label}</div>
+            <div className='mt-1 text-sm text-[#344054]'>{value}</div>
         </div>
     )
 }
 
 function TrustItem({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
     return (
-        <div className='grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-xl bg-dark/30 px-3 py-2 text-xs text-bright/58 outline outline-dark'>
-            <span className='mt-0.5 text-[#f07d33]'>{icon}</span>
+        <div className='grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
+            <span className='mt-0.5 text-[#3056d3]'>{icon}</span>
             <div className='min-w-0'>
-                <div className='text-[10px] uppercase tracking-[0.18em] text-bright/30'>{label}</div>
+                <div className='text-[10px] uppercase tracking-[0.18em] text-[#667085]'>{label}</div>
                 <div className='mt-1 leading-5'>{value}</div>
             </div>
         </div>
@@ -749,7 +749,7 @@ function TrustItem({ icon, label, value }: { icon: React.ReactNode, label: strin
 
 function Empty({ text }: { text: string }) {
     return (
-        <div className='rounded-xl bg-dark/30 px-3 py-4 text-sm text-bright/40 outline outline-dark'>
+        <div className='rounded-xl bg-[#f8fafc] px-3 py-4 text-sm text-[#667085] outline outline-[#dfe5ee]'>
             {text}
         </div>
     )
@@ -811,7 +811,7 @@ function buildFallbackTrust(release: AIRelease | null): AIReleaseTrust | null {
 
 function PreviewLink({ href, emptyText }: { href: string | null | undefined, emptyText: string }) {
     if (!href) {
-        return <div className='mt-1 text-[11px] text-bright/35'>{emptyText}</div>
+        return <div className='mt-1 text-[11px] text-[#8c95a5]'>{emptyText}</div>
     }
 
     return (
@@ -819,7 +819,7 @@ function PreviewLink({ href, emptyText }: { href: string | null | undefined, emp
             href={href}
             target='_blank'
             rel='noopener noreferrer'
-            className='mt-1 inline-flex max-w-full items-center gap-1 text-[11px] text-[#f07d33]/85 underline decoration-[#f07d33]/25 underline-offset-4 transition-colors hover:text-[#ffb27d]'
+            className='mt-1 inline-flex max-w-full items-center gap-1 text-[11px] text-[#3056d3]/85 underline decoration-[#3056d3]/25 underline-offset-4 transition-colors hover:text-[#2546a8]'
             title={href}
         >
             <span className='truncate'>{href}</span>
@@ -832,9 +832,9 @@ function ChecklistItem({ label, state }: { label: string, state: 'ready' | 'need
     const ready = state === 'ready' || state === 'automatic'
 
     return (
-        <div className='flex items-center justify-between gap-3 rounded-lg bg-dark/26 px-2.5 py-2 text-xs text-bright/58 outline outline-dark'>
+        <div className='flex items-center justify-between gap-3 rounded-lg bg-[#f8fafc] px-2.5 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
             <span className='min-w-0 truncate'>{label}</span>
-            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${ready ? 'bg-emerald-500/12 text-emerald-300' : 'bg-amber-500/12 text-amber-200'}`}>
+            <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${ready ? 'bg-emerald-500/12 text-emerald-700' : 'bg-amber-500/12 text-amber-700'}`}>
                 {ready ? <CheckCircle2 className='h-3 w-3' /> : <AlertTriangle className='h-3 w-3' />}
                 {state === 'automatic' ? 'auto' : state === 'ready' ? 'ready' : 'needed'}
             </span>
@@ -933,15 +933,15 @@ function PathBadge({
     lastChangedPath: string | null
 }) {
     if (selected) {
-        return <span className='shrink-0 rounded-full bg-[#f07d33]/14 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-[#f07d33]'>Open</span>
+        return <span className='shrink-0 rounded-full bg-[#3056d3]/14 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-[#3056d3]'>Open</span>
     }
 
     if (lastChangedPath === path) {
-        return <span className='shrink-0 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-300'>Changed</span>
+        return <span className='shrink-0 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700'>Changed</span>
     }
 
     if (recentPaths.includes(path)) {
-        return <span className='shrink-0 rounded-full bg-bright/8 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-bright/48'>Recent</span>
+        return <span className='shrink-0 rounded-full bg-[#eef3ff] px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-[#667085]'>Recent</span>
     }
 
     return null
