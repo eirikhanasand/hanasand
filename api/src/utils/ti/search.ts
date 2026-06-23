@@ -830,7 +830,7 @@ function sourceActivationActions(reasons: string[], runId: string | undefined, n
 
 function analystHeadline(state: TiResultState, meaningfulWorkCount: number, reviewTasks: number) {
     if (state === 'metadata_review') return `${reviewTasks || meaningfulWorkCount || 1} metadata review item${(reviewTasks || meaningfulWorkCount || 1) === 1 ? '' : 's'} need analyst action.`
-    if (state === 'blocked_unsafe_target') return 'Unsafe raw target blocked; safe metadata remains the only permitted path.'
+    if (state === 'blocked_unsafe_target') return 'Blocked target kept out of customer output; metadata review remains the permitted path.'
     if (state === 'needs_source_activation') return 'Operator or legal approval is needed before metadata-only collection can continue.'
     if (state === 'queued') return 'Approved safe collection is queued and waiting for worker progress.'
     if (state === 'ready') return 'Reviewed evidence is ready for the public answer.'
