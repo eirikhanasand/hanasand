@@ -451,7 +451,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 title='Launch check'
                 subtitle='One-click preview path with recorded release details.'
             >
-                <div className='grid grid-cols-2 gap-2'>
+                <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
                     {(['staging', 'production'] as AIDeploymentEnvironment[]).map((environment) => (
                         <button
                             key={environment}

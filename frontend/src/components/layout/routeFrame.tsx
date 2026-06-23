@@ -12,6 +12,7 @@ export default function RouteFrame({ children, serverPath }: { children: ReactNo
     const isShare = isSharePath(pathname)
     const isDashboard = pathname.startsWith('/dashboard')
     const isProfile = pathname.startsWith('/profile')
+    const isAiWorkbench = pathname.startsWith('/ai') && pathname !== '/ai/window'
     const isPublicProduct = isPublicProductPath(pathname)
     const isAppSurface = !isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile)
 
@@ -27,7 +28,7 @@ export default function RouteFrame({ children, serverPath }: { children: ReactNo
             <main className={`w-full ${isAppSurface ? 'h-full' : isPublicProduct ? 'min-h-full' : 'min-h-[90.5vh] pt-3 md:pt-0'}`}>
                 {children}
             </main>
-            {isAppSurface ? null : <Footer />}
+            {isAppSurface && !isAiWorkbench ? null : <Footer />}
         </div>
     )
 }

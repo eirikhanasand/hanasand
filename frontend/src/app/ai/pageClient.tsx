@@ -90,7 +90,7 @@ export default function AIPageClient({
                     </div>
                 ) : null}
 
-                <div className={`grid min-h-0 flex-1 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[17rem_minmax(0,1fr)_24rem]' : 'xl:grid-cols-[17rem_minmax(0,1fr)]'}`}>
+                <div className={`grid min-h-0 flex-1 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[16rem_minmax(0,1fr)_22rem]' : 'xl:grid-cols-[16rem_minmax(0,1fr)]'}`}>
                     <ChatSidebar
                         activeConversationId={ai.activeConversationId}
                         archivedConversations={ai.archivedConversations}
@@ -120,7 +120,7 @@ export default function AIPageClient({
                     />
 
                     {showWorkspaceRail && detailsOpen ? (
-                        <div className='min-h-0'>
+                        <div className='min-h-0 xl:col-span-2 2xl:col-span-1'>
                             <WorkspacePane
                                 activeConversation={ai.activeConversation}
                                 importedRepos={ai.importedRepos}
