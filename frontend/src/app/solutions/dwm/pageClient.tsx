@@ -179,7 +179,7 @@ export default function DarkWebMonitoringPage() {
                         <div className='flex items-start justify-between gap-4'>
                             <div>
                                 <h2 className='text-xl font-semibold'>Subscribe a webhook</h2>
-                                <p className='mt-1 text-sm text-[#667085]'>Add an HTTPS endpoint, choose the names to watch, then create the alert schedule in the console.</p>
+                                <p className='mt-1 text-sm text-[#667085]'>Add an HTTPS endpoint, choose the names to watch, then create the alert in the console.</p>
                             </div>
                             <Webhook className='h-5 w-5 text-[#3056d3]' />
                         </div>

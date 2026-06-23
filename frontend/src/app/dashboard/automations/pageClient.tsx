@@ -376,7 +376,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                             : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-[#3d4656]'>{run.result || 'Running...'}</p>}
                                     </div>
                                 ))}
-                                {!runs.length && <p className='text-sm leading-6 text-[#596170]'>No delivery history yet. Run the alert once or wait for the next scheduled check.</p>}
+                                {!runs.length && <p className='text-sm leading-6 text-[#596170]'>No delivery history yet. Run the alert once or wait for the next check.</p>}
                             </div>
                         </div>
                     )}
