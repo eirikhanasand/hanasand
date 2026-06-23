@@ -53,7 +53,6 @@ export async function proxy(req: NextRequest) {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
-                expireSharedDomainCookie(response, 'access_token')
             }
 
             if (auth.roles) {
@@ -62,7 +61,6 @@ export async function proxy(req: NextRequest) {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
-                expireSharedDomainCookie(response, 'roles')
             }
 
             if (auth.name) {
@@ -70,7 +68,6 @@ export async function proxy(req: NextRequest) {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
-                expireSharedDomainCookie(response, 'name')
             }
 
             if (auth.avatar !== undefined) {
@@ -78,7 +75,6 @@ export async function proxy(req: NextRequest) {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
-                expireSharedDomainCookie(response, 'avatar')
             }
         }
 
@@ -143,10 +139,6 @@ function authCookieOptions(req: NextRequest) {
     }
 }
 
-function expireSharedDomainCookie(response: NextResponse, name: string) {
-    response.headers.append('Set-Cookie', `${name}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`)
-}
-
 function requestHostname(req: NextRequest) {
     const forwardedHost = req.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
     const host = forwardedHost || req.headers.get('host') || req.nextUrl.hostname
@@ -173,8 +165,9 @@ function loginRedirect(
         for (const cookie of authCookies) {
             response.cookies.delete(cookie)
         }
+        const secure = req.nextUrl.protocol === 'https:' || requestHostname(req).endsWith('hanasand.com') ? '; Secure' : ''
         for (const cookie of authCookies) {
-            response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`)
+            response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secure}`)
         }
     }
 

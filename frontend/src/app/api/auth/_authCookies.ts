@@ -31,23 +31,23 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
         response.cookies.set('access_token', data.token, cookieOptions)
     }
     response.cookies.set('roles', JSON.stringify(data.roles ?? []), cookieOptions)
-    expireSharedDomainAuthCookies(response)
 }
 
 export function clearAuthCookies(req: NextRequest, response: NextResponse) {
     for (const cookie of authCookieNames) {
         response.cookies.delete(cookie)
     }
-    expireSharedDomainAuthCookies(response)
+    expireSharedDomainAuthCookies(req, response)
 }
 
 function shouldUseSecureCookies(req: NextRequest) {
     return req.nextUrl.protocol === 'https:' || requestHostname(req).endsWith('hanasand.com')
 }
 
-function expireSharedDomainAuthCookies(response: NextResponse) {
+function expireSharedDomainAuthCookies(req: NextRequest, response: NextResponse) {
+    const secure = shouldUseSecureCookies(req) ? '; Secure' : ''
     for (const cookie of authCookieNames) {
-        response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`)
+        response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secure}`)
     }
 }
 

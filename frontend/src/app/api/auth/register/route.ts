@@ -31,18 +31,23 @@ export async function POST(req: NextRequest) {
     if (!upstream.ok) {
         return NextResponse.json(data || { error: responseText || 'Unable to create account.' }, { status: upstream.status })
     }
-    if (!data?.token || !data?.id || !data?.name) {
+    if (!data?.id || !data?.name) {
+        return NextResponse.json({ error: 'Account created, but the session could not be created.' }, { status: 502 })
+    }
+
+    const loginData = await createLoginSession(data.id, password)
+    if (!loginData?.token || !loginData?.id || !loginData?.name) {
         return NextResponse.json({ error: 'Account created, but the session could not be created.' }, { status: 502 })
     }
 
     const response = NextResponse.json({
-        name: data.name,
-        id: data.id,
-        avatar: data.avatar ?? null,
-        expires_at: data.expires_at ?? null,
-        roles: data.roles ?? [],
+        name: loginData.name,
+        id: loginData.id,
+        avatar: loginData.avatar ?? null,
+        expires_at: loginData.expires_at ?? null,
+        roles: loginData.roles ?? [],
     })
-    setAuthCookies(req, response, data)
+    setAuthCookies(req, response, loginData)
     return response
 }
 
@@ -52,4 +57,19 @@ function parseJson(text: string) {
     } catch {
         return null
     }
+}
+
+async function createLoginSession(id: string, password: string) {
+    const upstream = await fetch(`${authApiUrl()}/auth/login/${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+        cache: 'no-store',
+    }).catch(() => null)
+
+    if (!upstream?.ok) {
+        return null
+    }
+
+    return parseJson(await upstream.text())
 }
