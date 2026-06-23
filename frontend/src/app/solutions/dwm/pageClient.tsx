@@ -106,8 +106,11 @@ export default function DarkWebMonitoringPage() {
                         </div>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
-                                Talk through coverage
+                                Start monitoring
                                 <ArrowRight className='h-4 w-4' />
+                            </Link>
+                            <Link href='/pricing' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                                View pricing
                             </Link>
                             <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
                                 Open search
@@ -190,7 +193,7 @@ export default function DarkWebMonitoringPage() {
                         </label>
                         <div className='grid gap-3 md:grid-cols-[auto_auto_auto_1fr] md:items-center'>
                             <button type='button' onClick={prepareWebhookAlert} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
-                                Prepare webhook alert
+                                Subscribe webhook
                                 <ArrowRight className='h-4 w-4' />
                             </button>
                             <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
