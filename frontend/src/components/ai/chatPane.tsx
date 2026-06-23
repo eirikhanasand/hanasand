@@ -85,8 +85,8 @@ export default function ChatPane({
 
     return (
         <Fragment>
-            <section className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-                <div className='relative z-10 border-b border-[#e0e5ed] bg-white px-4 py-4 sm:px-7 sm:py-5'>
+            <section className='relative flex min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-hidden'>
+                <div className='relative z-10 w-full max-w-full border-b border-[#e0e5ed] bg-white px-4 py-4 sm:px-7 sm:py-5'>
                     <div className='flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4'>
                         <div className='min-w-0'>
                             <h1 className='truncate text-base font-semibold tracking-normal text-[#171a21]'>{conversationTitle(activeConversation?.title)}</h1>
@@ -148,8 +148,8 @@ export default function ChatPane({
                     </div>
                 </div>
 
-                <div className={`grid min-h-0 flex-1 ${showArtifacts ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem]' : 'grid-cols-1'}`}>
-                    <div ref={scrollRef} className='min-h-0 space-y-5 overflow-y-auto px-5 py-8 md:px-12 xl:px-24'>
+                <div className={`grid min-h-0 w-full max-w-full flex-1 ${showArtifacts ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem]' : 'grid-cols-1'}`}>
+                    <div ref={scrollRef} className='min-h-0 w-full max-w-full space-y-5 overflow-y-auto px-5 py-8 md:px-12 xl:px-24'>
                         {!activeConversation?.messages.length ? (
                             <EmptyComposerState tooltip={emptyTooltip} hasReadyModel={hasReadyModel} isAuthenticated={isAuthenticated} />
                         ) : activeConversation.messages.map((message) => (
