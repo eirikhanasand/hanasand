@@ -50,6 +50,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const specialCharacterColor = password.length > 0 ? passwordCounts.symbols >= 2 ? 'text-green-500' : 'text-red-500' : ''
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
+    const redirectPath = safeRedirectPath(path)
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
@@ -123,18 +124,18 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     }
 
     function completeAuth() {
-        window.setTimeout(() => window.location.assign(path || '/dashboard'), 0)
+        window.setTimeout(() => window.location.assign(redirectPath), 0)
     }
 
     useEffect(() => {
         const token = getCookie('access_token')
         const id = getCookie('id')
-        if (token && id && !serverInternal && !path) {
-            router.push('/dashboard')
+        if (token && id && !serverInternal) {
+            router.push(redirectPath)
         }
 
         setHydrated(true)
-    }, [path, router, serverInternal])
+    }, [redirectPath, router, serverInternal])
 
     return (
         <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-[#f7f8fb] px-4 py-10 text-[#171a21] md:px-10'>
@@ -212,7 +213,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                             </button>
                             <Link
-                                href='/login'
+                                href={path ? `/login?path=${encodeURIComponent(redirectPath)}` : '/login'}
                                 role='button'
                                 className={authGhostButtonClass}
                             >
@@ -253,4 +254,12 @@ function parseSignupResponse(responseText: string): SignupResponse {
     } catch {
         return { error: responseText || 'Unable to create account.' }
     }
+}
+
+function safeRedirectPath(path: string | null) {
+    if (!path || !path.startsWith('/') || path.startsWith('//')) {
+        return '/dashboard'
+    }
+
+    return path
 }

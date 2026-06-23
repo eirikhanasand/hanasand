@@ -194,9 +194,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
+    const redirectPath = safeRedirectPath(path)
 
     function completeAuth() {
-        window.setTimeout(() => window.location.assign(path || '/dashboard'), 0)
+        window.setTimeout(() => window.location.assign(redirectPath), 0)
     }
 
     function changeMode(nextMode: typeof mode) {
@@ -211,10 +212,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         const token = getCookie('access_token')
         const id = getCookie('id')
         if (token && id && !serverInternal && !serverExpired) {
-            router.push('/dashboard')
+            router.push(redirectPath)
         }
         setHydrated(true)
-    }, [router, serverExpired, serverInternal])
+    }, [redirectPath, router, serverExpired, serverInternal])
 
     return (
         <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-[#f7f8fb] px-4 py-10 text-[#171a21] md:px-10'>
@@ -517,6 +518,14 @@ function countPassword(password: string) {
     }
 
     return { numbers, symbols, lowercase, uppercase }
+}
+
+function safeRedirectPath(path: string | null) {
+    if (!path || !path.startsWith('/') || path.startsWith('//')) {
+        return '/dashboard'
+    }
+
+    return path
 }
 
 function parseSignupResponse(responseText: string) {
