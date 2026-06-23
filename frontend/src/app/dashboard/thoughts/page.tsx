@@ -1,4 +1,5 @@
 import DashboardThought from '@/components/thoughts/dashboardThought'
+import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import fetchThoughts from '@/utils/thoughts/fetchThoughts'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
@@ -16,22 +17,23 @@ export default async function Page() {
     const displayedThoughts = thoughts.length ? thoughts : fallbackThoughts
 
     return (
-        <div className='grid gap-5 py-4'>
-            <div className='flex flex-wrap items-start justify-between gap-4'>
-                <div>
-                    <p className='text-xs uppercase tracking-[0.35em] text-orange-200/70'>Notebook</p>
-                    <h1 className='mt-2 text-3xl font-semibold tracking-[-0.04em] text-bright'>Thoughts</h1>
-                </div>
-                <Link href='/dashboard/thoughts/create' className='flex gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-bright/78 hover:border-green-500/35 hover:bg-green-500/15'>
-                    <Plus />
-                    <span>Create</span>
-                </Link>
-            </div>
-            <section className='glass-card rounded-[1.4rem] p-5'>
+        <DashboardPage>
+            <DashboardHeader
+                eyebrow='Notebook'
+                title='Thoughts'
+                description='Short personal notes and working observations, kept inside the same console structure as the rest of the product.'
+                actions={
+                    <Link href='/dashboard/thoughts/create' className='flex h-9 items-center gap-2 rounded-lg bg-[#22252d] px-3.5 text-sm font-medium text-white transition hover:bg-[#111318]'>
+                        <Plus className='h-4 w-4' />
+                        <span>Create</span>
+                    </Link>
+                }
+            />
+            <DashboardPanel className='p-4'>
                 <div className='grid gap-2'>
                     {displayedThoughts.map((thought) => <DashboardThought key={thought.id} thought={thought} />)}
                 </div>
-            </section>
-        </div>
+            </DashboardPanel>
+        </DashboardPage>
     )
 }

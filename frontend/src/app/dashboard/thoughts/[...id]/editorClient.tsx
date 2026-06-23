@@ -27,16 +27,16 @@ export default function EditorClient({ thought }: { thought: Thought }) {
         <div className={`relative grid gap-4 ${editing ? '' : 'px-4 md:px-[18vw]'}`}>
             <div className='flex items-center justify-between gap-3'>
                 <div className='min-w-0'>
-                    <div className='flex items-center gap-2 text-orange-200/78'>
+                    <div className='flex items-center gap-2 text-[#3056d3]'>
                         <BrainCircuit className='h-4 w-4 shrink-0' />
-                        <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/38'>Thought editor</p>
+                        <p className='text-xs font-semibold uppercase text-[#3056d3]'>Thought editor</p>
                     </div>
-                    <h1 className='mt-2 truncate text-xl font-medium text-bright/92'>{text}</h1>
+                    <h1 className='mt-2 truncate text-xl font-medium text-[#171a21]'>{text}</h1>
                 </div>
                 <button
                     type='button'
                     onClick={handleDelete}
-                    className='inline-flex h-9 items-center gap-2 rounded-lg border border-red-300/15 bg-red-400/[0.07] px-3.5 text-sm font-medium text-red-100/82 transition hover:border-red-300/25 hover:bg-red-400/12 hover:text-red-100'
+                    className='inline-flex h-9 items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3.5 text-sm font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100'
                 >
                     <Trash className='h-4 w-4' />
                     Delete
@@ -46,7 +46,7 @@ export default function EditorClient({ thought }: { thought: Thought }) {
             <Editor
                 editing={editing}
                 setEditing={setEditing}
-                className='rounded-lg border border-white/10 bg-white/[0.035] p-2'
+                className='rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm'
                 id={thought.id}
                 content={thought.title.split('\n')}
             />

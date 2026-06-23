@@ -34,13 +34,13 @@ export default function DashboardArticle({ article }: { article: Article }) {
             <button
                 type='button'
                 onClick={handleClick}
-                className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-lg p-2 text-left transition ${keys['shift'] ? 'border border-red-300/12 bg-red-300/6 text-red-100/78 hover:bg-red-300/10' : 'text-bright/72 hover:bg-white/[0.045]'}`}
+                className={`flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-lg p-2 text-left transition ${keys['shift'] ? 'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100' : 'text-[#394150] hover:bg-[#f4f7fb]'}`}
             >
                 <span className='flex min-w-0 items-center gap-2'>
-                    <FileText className='h-4 w-4 shrink-0 text-bright/38' />
+                    <FileText className='h-4 w-4 shrink-0 text-[#798498]' />
                     <span className='min-w-0 truncate text-sm'>{article.title || article.id}</span>
                 </span>
-                {keys['shift'] && <Trash2 className='h-4 w-4 shrink-0 text-red-200/80' />}
+                {keys['shift'] && <Trash2 className='h-4 w-4 shrink-0 text-red-600' />}
             </button>
             <ErrorNotice compact variant='success' message={deleted ? `Deleted article ${article.id}.` : null} />
             <ErrorNotice compact message={error as string | null} />

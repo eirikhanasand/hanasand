@@ -50,16 +50,16 @@ export default function CreateClient() {
         <div className={`relative grid gap-4 ${editing ? '' : 'px-4 md:px-[18vw]'}`}>
             <div className='flex items-center justify-between gap-3'>
                 <div>
-                    <div className='flex items-center gap-2 text-orange-200/78'>
+                    <div className='flex items-center gap-2 text-[#3056d3]'>
                         <BrainCircuit className='h-4 w-4' />
-                        <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/38'>Thought editor</p>
+                        <p className='text-xs font-semibold uppercase text-[#3056d3]'>Thought editor</p>
                     </div>
-                    <h1 className='mt-2 text-xl font-medium text-bright/92'>{text}</h1>
+                    <h1 className='mt-2 text-xl font-medium text-[#171a21]'>{text}</h1>
                 </div>
                 <button
                     type='button'
                     onClick={handleCreate}
-                    className='inline-flex h-9 items-center gap-2 rounded-lg bg-bright/88 px-3.5 text-sm font-medium text-background/90 transition hover:bg-bright'
+                    className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#22252d] px-3.5 text-sm font-medium text-white transition hover:bg-[#111318]'
                 >
                     <Plus className='h-4 w-4' />
                     Create
@@ -72,7 +72,7 @@ export default function CreateClient() {
                     setEditing={setEditing}
                     customSaveLogic={true}
                     hideSaveButton
-                    className='rounded-lg border border-white/10 bg-white/[0.035] p-2'
+                    className='rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm'
                     id={title || ''}
                     content={title.split('\n')}
                     onChange={setTitle}
