@@ -23,9 +23,9 @@ type ChatPaneProps = {
 }
 
 const EMPTY_CHAT_TOOLTIPS = [
-    'Describe the change you want, attach the relevant workspace, and I will keep the work tied to files.',
+    'Describe the change you want, attach the relevant handoff, and I will keep the review tied to files.',
     'Ask for a plan, a code edit, a review pass, or browser verification before release.',
-    'Start from a bug, a repo, a screenshot, or a blank workspace and keep the handoff visible.',
+    'Start from a bug, a repo, a screenshot, or a customer handoff and keep the context visible.',
 ]
 
 export default function ChatPane({
@@ -81,7 +81,7 @@ export default function ChatPane({
         const selectedName = activeConversation?.preferredModel || activeConversation?.activeModel
         return clients.find((client) => client.name === selectedName) || clients[0] || null
     }, [activeConversation?.activeModel, activeConversation?.preferredModel, clients])
-    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Workspace review unavailable'
+    const selectedModelLabel = selectedClient ? 'Review ready' : 'Workspace review unavailable'
 
     return (
         <Fragment>
@@ -214,7 +214,7 @@ export default function ChatPane({
                                     onSend()
                                 }
                             }}
-                            placeholder='Ask Hanasand to inspect a workspace, draft a change, review files, or prepare a handoff...'
+                            placeholder='Ask Hanasand to inspect a handoff, draft a change, review files, or prepare customer notes...'
                             readOnly={readOnly}
                             rows={1}
                             className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-[#171a21] outline-none placeholder:text-[#8c95a5]'
@@ -251,17 +251,17 @@ function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { toolt
                     <Bot className='h-6 w-6' />
                 </div>
                 <h2 className='mt-7 text-2xl font-semibold tracking-normal text-[#171a21]'>
-                    Review a workspace, then ship with context.
+                    Review a handoff, then ship with context.
                 </h2>
                 <p className='mt-3 text-sm leading-6 text-[#596170]'>
                     {hasReadyModel
                         ? tooltip
-                        : 'Attach a workspace or open the workspace. Handoffs, files, deploy state, and review context stay visible while the agent is paused.'}
+                        : 'Attach a handoff or open shared context. Files, launch state, and review notes stay visible while review is paused.'}
                 </p>
                 {!hasReadyModel ? (
                     <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-[#596170]'>
                         <Link href='/s' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
-                            Open workspace
+                            Open handoffs
                         </Link>
                         {!isAuthenticated ? (
                             <Link href='/login' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>

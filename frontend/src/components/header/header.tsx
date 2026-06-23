@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, LockKeyhole, Radar, Search, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, LockKeyhole, Radar, Search, ShieldCheck, Waypoints } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -23,7 +23,6 @@ const solutionItems = [
     { title: 'All Solutions', detail: 'Monitoring, API delivery, and private exposure checking.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'High-speed exposure notifications for watched companies.', href: '/solutions/dwm', icon: BellRing },
     { title: 'Bloom Filter', detail: 'Private breach and password exposure checks.', href: '/pwned', icon: LockKeyhole },
-    { title: 'Workspace Review', detail: 'Review project handoffs and shared workspaces when a customer needs implementation help.', href: '/ai', icon: Sparkles },
 ]
 
 const resourceItems = [
@@ -138,9 +137,6 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     {isShare ? <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' /> : null}
                     <Link href='/status' aria-label='Status' title='Status' className={`${baseStyles} hidden sm:grid`}>
                         <ActivityIcon className={`h-4.5 w-4.5 ${isStatus ? 'text-[#087b34]' : ''}`} />
-                    </Link>
-                    <Link href='/ai' aria-label='Workspace Review' title='Workspace Review' className={`${baseStyles} hidden sm:grid`}>
-                        <Sparkles className={`h-4.5 w-4.5 ${isAI ? 'text-[#c05621]' : ''}`} />
                     </Link>
                     <ThemeSwitch />
                     <Dashboard href='/dashboard' serverToken={token} />

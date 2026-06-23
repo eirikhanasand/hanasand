@@ -83,7 +83,7 @@ export default function AIPageClient({
                                 <PanelRight className='h-4 w-4' />
                             </button>
                             <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[#596170] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
-                                Workspace
+                                Handoff
                                 <SquareArrowOutUpRight className='h-4 w-4' />
                             </Link>
                         </div>

@@ -363,7 +363,7 @@ export default function useAiWorkbench({
                 if (!shouldReconnectRef.current) {
                     return
                 }
-                setStatusNotice('Connection lost. Reconnecting to the model pool...')
+                setStatusNotice('Connection lost. Reconnecting to workspace review...')
                 reconnectTimerRef.current = setTimeout(connect, 2000)
             }
             ws.onerror = () => setIsConnected(false)

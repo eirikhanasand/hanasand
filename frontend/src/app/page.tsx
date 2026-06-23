@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, Building2, ChevronRight, ExternalLink, MessageCircle, Search, ShieldCheck, Waypoints } from 'lucide-react'
+import { ArrowRight, Building2, ChevronRight, ExternalLink, Search, ShieldCheck, Waypoints } from 'lucide-react'
 import LogoutClient from '@/components/logout/logoutClient'
 import { buildRouteMetadata } from './seo'
 
@@ -48,11 +48,6 @@ const solutions = [
         title: 'Bloom Filter',
         detail: 'Private breach and password-exposure checks without turning sensitive material into a dashboard.',
         href: '/pwned',
-    },
-    {
-        title: 'Workspace Review',
-        detail: 'Project handoffs and implementation review for customers who want help wiring alerts into their stack.',
-        href: '/ai',
     },
     {
         title: 'Share Workspaces',
@@ -219,10 +214,6 @@ export default async function Page({
                     </div>
                 </div>
             </section>
-
-            <Link href='/ai' aria-label='Open workspace review' className='fixed bottom-6 right-6 z-50 grid h-14 w-14 place-items-center rounded-full bg-[#0877ff] text-white shadow-[0_16px_40px_rgba(8,119,255,0.35)] transition hover:bg-[#0067df]'>
-                <MessageCircle className='h-6 w-6' />
-            </Link>
         </main>
     )
 }
