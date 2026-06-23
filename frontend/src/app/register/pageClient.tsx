@@ -2,7 +2,6 @@
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
-import postAuthJson from '@/utils/auth/postAuthJson'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -13,16 +12,6 @@ import ErrorNotice from '@/components/error/errorNotice'
 type RegisterPageProps = {
     path: string | null
     serverInternal: boolean
-}
-
-type SignupResponse = {
-    error?: string
-    name?: string
-    id?: string
-    avatar?: string | null
-    token?: string
-    expires_at?: string | null
-    roles?: unknown[]
 }
 
 const authInputClass = 'h-10 rounded-lg border border-[#d8dee9] bg-white px-3.5 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
@@ -52,10 +41,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const redirectPath = safeRedirectPath(path)
 
-    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
+    function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         const formData = new FormData(e.currentTarget)
-        const name = String(formData.get('name') || '').trim()
         const id = String(formData.get('username') || '').trim()
         const password = String(formData.get('password') || '')
         const submittedPasswordCounts = countPassword(password)
@@ -75,48 +62,6 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         }
 
         setBusy(true)
-        try {
-            const response = await postAuthJson('/api/auth/register', { name, id, password })
-            const responseText = response.text
-            const data = parseSignupResponse(responseText)
-
-            if (!response.ok || data.error) {
-                return setError(data.error || 'Unable to create account.')
-            }
-
-            if (data.name && data.id) {
-                completeAuth()
-                return
-            }
-
-            setError(data.error || 'Account created, but login could not be completed.')
-        } catch (error) {
-            if ('message' in (error as { message: string })) {
-                try {
-                    const message = (error as { message: string }).message
-                    const msg = JSON.parse(message)
-                    return setError(msg?.error)
-                } catch (error) {
-                    setError(error instanceof Error
-                        ? error.message.toLowerCase().includes('unauthorized')
-                            ? 'Unauthorized.'
-                            : error.message
-                        : 'Unknown error! Please contact @eirikhanasand.')
-                }
-            }
-
-            setError(error instanceof Error
-                ? error.message.toLowerCase().includes('unauthorized')
-                    ? 'Unauthorized.'
-                    : error.message
-                : 'Unknown error! Please contact @eirikhanasand.')
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    function completeAuth() {
-        window.location.assign(redirectPath)
     }
 
     useEffect(() => {
@@ -143,9 +88,11 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                     <Notify message={error} />
                     <form
                         className='flex w-full flex-col gap-2 self-center'
+                        action='/api/auth/register'
                         onSubmit={handleSubmit}
                         method='post'
                     >
+                        <input type='hidden' name='redirectPath' value={redirectPath} />
                         <label className='grid gap-1.5'>
                             <span className='text-xs font-semibold text-[#596170]'>Username</span>
                             <input
@@ -238,14 +185,6 @@ function countPassword(value: string) {
     }
 
     return { numbers, symbols, lowercase, uppercase }
-}
-
-function parseSignupResponse(responseText: string): SignupResponse {
-    try {
-        return JSON.parse(responseText) as SignupResponse
-    } catch {
-        return { error: responseText || 'Unable to create account.' }
-    }
 }
 
 function safeRedirectPath(path: string | null) {

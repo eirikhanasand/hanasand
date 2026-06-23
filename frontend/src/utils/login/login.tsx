@@ -1,5 +1,3 @@
-import postAuthJson from '@/utils/auth/postAuthJson'
-
 export class PendingDeletionError extends Error {
     id: string
     deletionScheduledAt: string
@@ -15,9 +13,16 @@ export class PendingDeletionError extends Error {
 }
 
 export default async function login(id: string, password: string) {
-    const response = await postAuthJson('/api/auth/login', { id, password })
+    const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id, password }),
+    })
 
-    const responseText = response.text
+    const responseText = await response.text()
     const data = parseResponse(responseText)
 
     if (response.status === 423 && data?.pending_deletion) {

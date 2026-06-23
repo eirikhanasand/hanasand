@@ -2,14 +2,12 @@
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
-import login, { PendingDeletionError } from '@/utils/login/login'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import config from '@/config'
 import { ArrowRight } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import ErrorNotice from '@/components/error/errorNotice'
-import postAuthJson from '@/utils/auth/postAuthJson'
 
 type LoginPageProps = {
     path: string | null
@@ -41,89 +39,22 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const reservedUsername = reservedUsernames.includes(signupUsername.trim().toLowerCase())
     const canCreateAccount = signupName.trim() && signupUsername.trim() && signupPasswordIsValid && !reservedUsername
 
-    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-        const formData = new FormData(e.currentTarget)
-        const id = formData.get('username') as string
-        const password = formData.get('password') as string
-
+    function handleSubmit() {
         setBusy(true)
-        try {
-            const data = await login(id, password)
-            if (data) {
-                completeAuth()
-                return
-            }
-
-            if (!data) {
-                setError('Please try again later.')
-            }
-        } catch (error) {
-            if (error instanceof PendingDeletionError) {
-                const params = new URLSearchParams({
-                    id: error.id,
-                    restoreToken: error.restoreToken,
-                    deletionScheduledAt: error.deletionScheduledAt,
-                })
-                router.push(`/account-pending-deletion?${params.toString()}`)
-                return
-            }
-            if ('message' in (error as { message: string })) {
-                const message = (error as { message: string }).message
-                try {
-                    const msg = JSON.parse(message)
-                    return setError(msg?.error || message)
-                } catch {
-                    setError(message
-                        ? message.toLowerCase().includes('unauthorized')
-                            ? 'Unauthorized.'
-                            : message
-                        : 'Unknown error! Please contact @eirikhanasand.')
-                }
-            }
-
-            setError(error instanceof Error
-                ? error.message.toLowerCase().includes('unauthorized')
-                    ? 'Unauthorized.'
-                    : error.message
-                : 'Unknown error! Please contact @eirikhanasand.')
-        } finally {
-            setBusy(false)
-        }
     }
 
-    async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
+    function handleSignup(e: React.FormEvent<HTMLFormElement>) {
         setError(null)
         if (!signupPasswordIsValid) {
+            e.preventDefault()
             return setError('Choose a stronger password.')
         }
         if (reservedUsername) {
+            e.preventDefault()
             return setError('This username is reserved.')
         }
 
-        const formData = new FormData(e.currentTarget)
-        const name = String(formData.get('name') || '').trim()
-        const id = String(formData.get('username') || '').trim()
-        const password = String(formData.get('password') || '')
         setBusy(true)
-        try {
-            const response = await postAuthJson('/api/auth/register', { name, id, password })
-            const responseText = response.text
-            const data = parseSignupResponse(responseText)
-            if (!response.ok || data.error) {
-                return setError(data.error || 'Unable to create account.')
-            }
-            if (!data.id || !data.name) {
-                return setError('Account created, but login could not be completed.')
-            }
-
-            completeAuth()
-        } catch (error) {
-            setError(error instanceof Error ? error.message : 'Unable to create account.')
-        } finally {
-            setBusy(false)
-        }
     }
 
     async function handleResetRequest(e: React.FormEvent<HTMLFormElement>) {
@@ -190,10 +121,6 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
     const redirectPath = safeRedirectPath(path)
 
-    function completeAuth() {
-        window.location.assign(redirectPath)
-    }
-
     function changeMode(nextMode: typeof mode) {
         setError(null)
         if (nextMode !== 'verify-reset') {
@@ -228,9 +155,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                         <div className='grid gap-3'>
                             <form
                                 className='flex w-full flex-col gap-2 self-center'
+                                action='/api/auth/login'
                                 onSubmit={handleSubmit}
                                 method='post'
                             >
+                                <input type='hidden' name='redirectPath' value={redirectPath} />
                                 <label className='grid gap-1.5'>
                                     <span className='text-xs font-semibold text-[#596170]'>Username</span>
                                     <input
@@ -286,9 +215,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     {mode === 'signup' && (
                         <form
                             className='flex w-full flex-col gap-2 self-center'
+                            action='/api/auth/register'
                             onSubmit={handleSignup}
                             method='post'
                         >
+                            <input type='hidden' name='redirectPath' value={redirectPath} />
                             <label className='grid gap-1.5'>
                                 <span className='text-xs font-semibold text-[#596170]'>Username</span>
                                 <input
@@ -520,12 +451,4 @@ function safeRedirectPath(path: string | null) {
     }
 
     return path
-}
-
-function parseSignupResponse(responseText: string) {
-    try {
-        return JSON.parse(responseText)
-    } catch {
-        return { error: responseText || 'Unable to create account.' }
-    }
 }
