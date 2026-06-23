@@ -78,7 +78,7 @@ export default function Page() {
                 <div className='mb-6 grid gap-2'>
                     <p className='text-sm font-semibold uppercase text-[#3056d3]'>Personal archive</p>
                     <h1 className='text-3xl font-semibold tracking-normal md:text-4xl'>Upload media</h1>
-                    <p className='max-w-2xl text-sm leading-6 text-[#596170]'>A small media utility kept from the earlier Hanasand workspace, aligned with the current product surface.</p>
+                    <p className='max-w-2xl text-sm leading-6 text-[#596170]'>A small media utility for quick screenshots, previews, and shareable assets.</p>
                 </div>
                 <Upload
                     url={url}

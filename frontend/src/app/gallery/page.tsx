@@ -74,7 +74,7 @@ export default function Page() {
                             <ImageIcon className='h-5 w-5 text-[#3056d3]' />
                             <h1 className='text-3xl font-semibold'>Gallery</h1>
                         </div>
-                        <p className='text-sm text-[#596170]'>Recent uploads and media utilities kept as part of the older Hanasand workspace.</p>
+                        <p className='text-sm text-[#596170]'>Recent uploads and media utilities from the personal Hanasand lab.</p>
                     </div>
                     <Link href='/upload' className='flex items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-sm font-semibold text-[#344054] hover:border-[#bdc7d5]'>
                         <Upload className='h-4 w-4' />

@@ -18,7 +18,7 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Eirik Hanasand',
-    description: 'Personal notebook, articles, apps, experiments, and older Hanasand projects by Eirik Hanasand.',
+    description: 'Personal notebook, articles, apps, experiments, and Hanasand project notes by Eirik Hanasand.',
     path: '/eirik',
     keywords: ['eirik hanasand', 'personal notebook', 'articles', 'event app', 'password check', 'upload media'],
 })
@@ -26,7 +26,7 @@ export const metadata: Metadata = buildRouteMetadata({
 const personalProjects = [
     {
         title: 'Password exposure check',
-        description: 'Exact-match password exposure checks from the original personal-tool era of Hanasand.',
+        description: 'Exact-match password exposure checks from the personal Hanasand utility set.',
         href: '/pwned',
         icon: ShieldCheck,
         tag: 'security',
@@ -54,7 +54,7 @@ const personalProjects = [
     },
     {
         title: 'Motivation wall',
-        description: 'The restored old quote wall: a slow, black-background stream of motivational quotes.',
+        description: 'A restored quote wall: a slow stream of motivational notes with its own mood.',
         href: '/eirik/motivation',
         icon: BookOpen,
         tag: 'notes',
@@ -78,7 +78,7 @@ const archiveProjects = [
     },
     {
         title: 'Pecubit and app design experiments',
-        description: 'Visual product experiments, phone mockups, and earlier app interface work kept with the older project notes.',
+        description: 'Visual product experiments, phone mockups, and app interface work from the design archive.',
         image: '/images/assets/pecubit.png',
         href: '/articles',
         label: 'interface design',
@@ -104,8 +104,8 @@ export default async function EirikPage() {
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Personal notebook</p>
                         <h1 className='mt-4 max-w-3xl text-4xl font-semibold tracking-normal text-[#171a21] md:text-6xl'>Eirik Hanasand</h1>
                         <p className='mt-5 max-w-2xl text-base leading-7 text-[#596170] md:text-lg md:leading-8'>
-                            This is the preserved personal side of Hanasand: older tools, article projects, app experiments,
-                            and the little practical utilities that existed before the site became a product workspace.
+                            This is the personal side of Hanasand: article projects, app experiments,
+                            and practical utilities that sit beside the product work.
                         </p>
                         <div className='mt-7 flex flex-wrap gap-3'>
                             <Link href='/articles' className='inline-flex items-center gap-2 rounded-lg bg-[#171a21] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
@@ -133,8 +133,8 @@ export default async function EirikPage() {
                         <div className='grid gap-2 text-sm leading-6 text-[#596170]'>
                             <p className='font-semibold text-[#171a21]'>README</p>
                             <p>
-                                Product Hanasand can move forward without erasing the earlier personal work. This route keeps
-                                the old project context visible without turning the main homepage back into a portfolio.
+                                Product Hanasand can move forward without erasing the personal work. This route keeps
+                                the project context visible without turning the main homepage back into a portfolio.
                             </p>
                         </div>
                     </div>
@@ -164,7 +164,7 @@ export default async function EirikPage() {
                     <div className='rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm'>
                         <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
                             <Code2 className='h-4 w-4 text-[#3056d3]' />
-                            Older project notes
+                            Project notes
                         </div>
                         <ul className='mt-5 grid gap-3 text-sm leading-6 text-[#596170]'>
                             {olderWork.map((item) => (
