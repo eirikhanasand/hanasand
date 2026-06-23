@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { Activity, BellRing, Radar, Search, ShieldAlert, Webhook } from 'lucide-react'
+import { Activity, BellRing, Braces, Building2, Radar, Search, ShieldAlert, Webhook } from 'lucide-react'
 import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
@@ -30,32 +30,34 @@ export default async function Page() {
         <DashboardPage>
             <DashboardHeader
                 title='Monitoring overview'
-                description='A customer-facing starting point for search, alert delivery, and service health.'
+                description='Search threats, prepare webhook alerts, and move from a company name to a usable monitoring flow quickly.'
                 eyebrow='Console'
             />
 
             <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-                <OverviewCard title='Requests Today' value={String(overview.requestsToday)} icon={<Activity className='h-4 w-4' />} />
-                <OverviewCard title='Active Domains' value={String(overview.activeDomains)} icon={<Radar className='h-4 w-4' />} />
-                <OverviewCard title='Critical Vulnerabilities' value={String(overview.criticalVulnerabilities)} icon={<ShieldAlert className='h-4 w-4' />} />
-                <OverviewCard title='Scanned Images' value={String(overview.imagesScanned)} icon={<Search className='h-4 w-4' />} />
+                <OverviewCard title='Signals inspected' value={formatNumber(overview.requestsToday)} detail='Recent API and monitoring activity' icon={<Activity className='h-4 w-4' />} />
+                <OverviewCard title='Watched domains' value={formatNumber(overview.activeDomains)} detail='Customer assets available for checks' icon={<Radar className='h-4 w-4' />} />
+                <OverviewCard title='Critical CVEs' value={formatNumber(overview.criticalVulnerabilities)} detail='High-severity exposure context' icon={<ShieldAlert className='h-4 w-4' />} />
+                <OverviewCard title='Source groups' value={formatNumber(overview.imagesScanned)} detail='Indexed feeds and enrichment sets' icon={<Search className='h-4 w-4' />} />
             </div>
 
             <div className='grid gap-4 xl:grid-cols-[1.3fr_0.9fr]'>
                 <DashboardPanel className='p-5'>
                     <div className='flex items-center justify-between'>
                         <h2 className='text-lg font-semibold text-[#171a21]'>Current focus</h2>
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.scanRunning ? 'bg-amber-50 text-amber-800' : 'bg-[#e9f8ef] text-[#147a3b]'}`}>
-                            {overview.scanRunning ? 'Scanning' : 'Idle'}
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.scanRunning ? 'bg-[#eef3ff] text-[#3056d3]' : 'bg-[#e9f8ef] text-[#147a3b]'}`}>
+                            {overview.scanRunning ? 'Monitoring active' : 'Ready'}
                         </span>
                     </div>
                     <div className='mt-4 grid gap-3 md:grid-cols-3'>
                         <ActionLink href='/ti' title='Threat search' body='Search companies, actors, vendors, domains, and claims.' icon={<Search className='h-4 w-4' />} />
                         <ActionLink href='/solutions/dwm#webhooks' title='Webhook alerts' body='Preview the alert payload and delivery format.' icon={<Webhook className='h-4 w-4' />} />
-                        <ActionLink href='/dashboard/automations' title='Scheduled checks' body='Configure recurring monitoring checks and review delivery history.' icon={<BellRing className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/automations' title='Alert delivery' body='Prepare recurring checks and keep the handoff history in one place.' icon={<BellRing className='h-4 w-4' />} />
+                        <ActionLink href='/solutions/dwm' title='Dark web monitoring' body='See what the product tracks and how a buyer uses the API.' icon={<Building2 className='h-4 w-4' />} />
+                        <ActionLink href='/developers' title='API access' body='Connect monitoring data to a workflow, SIEM, CRM, or ticket queue.' icon={<Braces className='h-4 w-4' />} />
                         {canManageSystem && <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />}
                         {canManageSystem && <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />}
-                        <ActionLink href='/status' title='Status' body='Synthetic checks, latency, uptime, and current service state.' />
+                        <ActionLink href='/status' title='Platform status' body='Service checks, latency, uptime, and current API state.' />
                         {canManageSystem && <ActionLink href='/dashboard/backup' title='Backup' body='Critical state locations, restore order, and resilience notes.' />}
                     </div>
                 </DashboardPanel>
@@ -84,7 +86,7 @@ export default async function Page() {
     )
 }
 
-function OverviewCard({ title, value, icon }: { title: string, value: string, icon: React.ReactNode }) {
+function OverviewCard({ title, value, detail, icon }: { title: string, value: string, detail: string, icon: React.ReactNode }) {
     return (
         <DashboardPanel className='p-5'>
             <div className='flex items-center justify-between text-[#596170]'>
@@ -92,8 +94,13 @@ function OverviewCard({ title, value, icon }: { title: string, value: string, ic
                 <span>{icon}</span>
             </div>
             <div className='mt-3 text-3xl font-semibold text-[#171a21]'>{value}</div>
+            <p className='mt-2 text-sm leading-6 text-[#667085]'>{detail}</p>
         </DashboardPanel>
     )
+}
+
+function formatNumber(value: number) {
+    return new Intl.NumberFormat('en-US').format(value)
 }
 
 function ActionLink({ href, title, body, icon }: { href: string, title: string, body: string, icon?: React.ReactNode }) {

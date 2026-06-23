@@ -53,8 +53,8 @@ export default function DashboardSidebar({
     ]
 
     const workspaceItems: Item[] = [
-        { href: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className='h-4 w-4' /> },
-        { href: '/dashboard/shares', label: 'Shares', icon: <Share2 className='h-4 w-4' /> },
+        { href: '/dashboard/projects', label: 'Workspaces', icon: <FolderKanban className='h-4 w-4' /> },
+        { href: '/dashboard/shares', label: 'Handoffs', icon: <Share2 className='h-4 w-4' /> },
         { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
@@ -96,7 +96,7 @@ export default function DashboardSidebar({
     const compact = mode === 'compact'
     const sections: Section[] = [
         { title: 'Monitoring', items: productItems },
-        { title: 'Workspace', items: workspaceItems },
+        { title: 'Review', items: workspaceItems },
         { title: 'Content', items: contentItems },
         { title: 'System', items: systemItems },
         { title: 'Admin', items: adminItems },
