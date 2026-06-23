@@ -1,4 +1,13 @@
 import PwnedPageClient from './pageClient'
+import type { Metadata } from 'next'
+import { buildRouteMetadata } from '../seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Password Exposure Check',
+    description: 'Check password exposure with a private bloom-filter style Hanasand utility.',
+    path: '/pwned',
+    keywords: ['password exposure', 'bloom filter', 'breach check'],
+})
 
 export default async function Page() {
     return (

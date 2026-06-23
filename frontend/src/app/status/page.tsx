@@ -1,12 +1,21 @@
 import StatusDashboard from './pageClient'
+import type { Metadata } from 'next'
 import getDomains from '@/utils/traffic/getDomains'
 import getMetrics from '@/utils/traffic/getMetrics'
 import getStatus from '@/utils/status/getStatus'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { getTrafficMetrics } from '@/utils/monitoring/data'
 import { normalizeDomainName } from '@/utils/monitoring/domain'
+import { buildRouteMetadata } from '../seo'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'System Status',
+    description: 'Live Hanasand service status, uptime, API health, and platform checks.',
+    path: '/status',
+    keywords: ['hanasand status', 'api status', 'platform status'],
+})
 
 export default async function page() {
     const [

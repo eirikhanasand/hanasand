@@ -68,24 +68,24 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
 
     if (created) {
         return (
-            <button type='button' onClick={() => copy({ text: fullUrl, setDidCopy })} className='flex max-w-full cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.045] px-3 py-2 text-left transition hover:bg-white/[0.07]'>
-                <Copy height={15} width={15} className={`shrink-0 ${didCopy === true ? 'stroke-green-600' : didCopy === false ? 'stroke-gray-200' : 'stroke-red-500'}`} />
-                <span className='min-w-0 break-all text-sm text-bright/78'>{fullUrl}</span>
+            <button type='button' onClick={() => copy({ text: fullUrl, setDidCopy })} className='flex max-w-full cursor-pointer items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-left transition hover:border-[#bdc7d5]'>
+                <Copy height={15} width={15} className={`shrink-0 ${didCopy === true ? 'stroke-[#147a3b]' : didCopy === false ? 'stroke-[#667085]' : 'stroke-[#b42318]'}`} />
+                <span className='min-w-0 break-all text-sm text-[#344054]'>{fullUrl}</span>
             </button>
         )
     }
 
     return (
         <div className='grid h-full w-full min-w-0 grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)] items-stretch gap-3 lg:grid-cols-[minmax(20rem,0.78fr)_minmax(18rem,0.74fr)_minmax(20rem,0.9fr)] lg:grid-rows-1 xl:grid-cols-[minmax(22rem,0.72fr)_minmax(22rem,0.82fr)_minmax(24rem,0.94fr)]'>
-            <section className='grid min-h-0 min-w-0 content-center gap-4 rounded-lg border border-white/10 bg-white/[0.035] p-4 sm:p-5'>
+            <section className='grid min-h-0 min-w-0 content-center gap-4 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm sm:p-5'>
                 <div>
-                    <h2 className='text-lg font-semibold text-bright/92'>Service check launcher</h2>
-                    <p className='mt-1.5 max-w-2xl text-sm leading-6 text-bright/52'>Start a permitted endpoint check, share the result link, then revisit the report when it finishes.</p>
+                    <h2 className='text-lg font-semibold text-[#171a21]'>Service check launcher</h2>
+                    <p className='mt-1.5 max-w-2xl text-sm leading-6 text-[#596170]'>Start a permitted endpoint check, share the result link, then revisit the report when it finishes.</p>
                 </div>
                 <form onSubmit={handleSubmit} className='grid gap-4'>
                     <ErrorNotice compact message={error as string | null} />
                     <input
-                        className='z-10 h-11 w-full rounded-lg border border-white/10 bg-white/[0.045] px-3 text-sm font-normal text-bright outline-none transition placeholder:text-bright/30 focus:border-[#f07d33]/55 focus:bg-white/[0.065]'
+                        className='z-10 h-11 w-full rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                         placeholder='https://example.com'
                         onChange={(e) => setPath(e.target.value)}
                         value={path}
@@ -95,7 +95,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                         <button
                             type='submit'
                             disabled={!isValidLink}
-                            className='h-10 rounded-lg bg-bright/88 px-3.5 text-sm font-medium text-background/90 transition hover:bg-bright disabled:cursor-not-allowed disabled:bg-white/[0.055] disabled:text-bright/34'
+                            className='h-10 rounded-lg bg-[#171a21] px-3.5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
                         >
                             Start check
                         </button>

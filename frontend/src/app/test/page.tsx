@@ -2,6 +2,15 @@ import ErrorNotice from '@/components/error/errorNotice'
 import { ArrowLeft, ChartColumn, Flame } from 'lucide-react'
 import LinkPageClient from './pageClient'
 import Link from 'next/link'
+import type { Metadata } from 'next'
+import { buildRouteMetadata } from '../seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Service Check',
+    description: 'Create a permitted endpoint check and share a Hanasand result link.',
+    path: '/test',
+    keywords: ['service check', 'endpoint test', 'hanasand'],
+})
 
 export default async function Page({
     searchParams,

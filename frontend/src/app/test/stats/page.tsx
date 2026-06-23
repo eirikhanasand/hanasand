@@ -1,4 +1,13 @@
 import TestStatsPageClient from './pageClient'
+import type { Metadata } from 'next'
+import { buildRouteMetadata } from '../../seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Service Check Results',
+    description: 'Review service-check results and recent endpoint checks on Hanasand.',
+    path: '/test/stats',
+    keywords: ['service checks', 'endpoint checks', 'hanasand'],
+})
 
 export default function Page() {
     return (

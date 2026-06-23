@@ -1,5 +1,14 @@
 import TiPageClient from './pageClient'
 import { redirect } from 'next/navigation'
+import type { Metadata } from 'next'
+import { buildRouteMetadata } from '../seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Threat Intelligence Search',
+    description: 'Search companies, actors, domains, and recent dark web monitoring signals in Hanasand.',
+    path: '/ti',
+    keywords: ['threat intelligence search', 'dark web monitoring', 'ransomware claims'],
+})
 
 interface TiPageProps {
     searchParams?: Promise<Record<string, string | string[] | undefined>>

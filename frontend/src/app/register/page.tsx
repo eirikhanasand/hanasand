@@ -1,4 +1,13 @@
 import RegisterPage from './pageClient'
+import type { Metadata } from 'next'
+import { buildRouteMetadata } from '../seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Create Account',
+    description: 'Create a Hanasand account for monitoring alerts, webhooks, and API access.',
+    path: '/register',
+    keywords: ['hanasand account', 'dark web monitoring account'],
+})
 
 export default async function Page({
     searchParams,

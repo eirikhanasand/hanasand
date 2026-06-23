@@ -1,4 +1,13 @@
 import LoginPage from './pageClient'
+import type { Metadata } from 'next'
+import { buildRouteMetadata } from '../seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Login',
+    description: 'Sign in to Hanasand monitoring, webhooks, alerts, and API access.',
+    path: '/login',
+    keywords: ['hanasand login', 'monitoring console'],
+})
 
 export default async function Page({
     searchParams,
