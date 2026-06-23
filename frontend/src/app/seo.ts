@@ -53,7 +53,10 @@ export function buildRouteMetadata({
 }
 
 export function humanizeSlug(slug: string) {
-    return slug
+    const clean = slug.trim()
+    if (/^cve-\d{4}-\d{4,}$/i.test(clean)) return clean.toUpperCase()
+
+    return clean
         .replace(/[-_]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
