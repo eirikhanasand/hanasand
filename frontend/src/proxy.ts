@@ -31,6 +31,7 @@ export async function proxy(req: NextRequest) {
         },
     })
     const refreshedCookieOptions = authCookieOptions(req)
+    let refreshedAuth: TokenRefreshCookies | null = null
 
     if (requiresAuth) {
         if (!tokenCookie || !idCookie) {
@@ -49,33 +50,39 @@ export async function proxy(req: NextRequest) {
             }
 
             if (auth.token) {
-                response.cookies.set('access_token', auth.token, {
-                    ...refreshedCookieOptions,
-                    expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
-                })
+                refreshedAuth = {
+                    ...(refreshedAuth ?? {}),
+                    token: auth.token,
+                    expires_at: auth.expires_at,
+                }
             }
 
             if (auth.roles) {
                 roles = normalizeRoles(auth.roles)
-                response.cookies.set('roles', JSON.stringify(roles), {
-                    ...refreshedCookieOptions,
-                    expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
-                })
+                refreshedAuth = {
+                    ...(refreshedAuth ?? {}),
+                    roles,
+                    expires_at: auth.expires_at,
+                }
             }
 
             if (auth.name) {
-                response.cookies.set('name', auth.name, {
-                    ...refreshedCookieOptions,
-                    expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
-                })
+                refreshedAuth = {
+                    ...(refreshedAuth ?? {}),
+                    name: auth.name,
+                    expires_at: auth.expires_at,
+                }
             }
 
             if (auth.avatar !== undefined) {
-                response.cookies.set('avatar', auth.avatar, {
-                    ...refreshedCookieOptions,
-                    expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
-                })
+                refreshedAuth = {
+                    ...(refreshedAuth ?? {}),
+                    avatar: auth.avatar,
+                    expires_at: auth.expires_at,
+                }
             }
+
+            applyRefreshedAuthCookies(response, refreshedCookieOptions, refreshedAuth)
         }
 
         const strictPath = pathToRoleArray.find((item) => path.startsWith(item.path))
@@ -88,7 +95,9 @@ export async function proxy(req: NextRequest) {
             if (!roles.some((role) => roleMatchesStrictPath(role, strictPath.role))) {
                 const url = new URL('/dashboard', req.url)
                 url.searchParams.set('notAllowed', 'true')
-                return NextResponse.redirect(url)
+                const redirectResponse = NextResponse.redirect(url)
+                applyRefreshedAuthCookies(redirectResponse, refreshedCookieOptions, refreshedAuth)
+                return redirectResponse
             }
         }
     }
@@ -96,6 +105,42 @@ export async function proxy(req: NextRequest) {
     response.headers.set('x-theme', theme)
     response.headers.set('x-current-path', path)
     return response
+}
+
+type TokenRefreshCookies = {
+    token?: string
+    roles?: Array<Role & { role_id?: string }>
+    name?: string
+    avatar?: string
+    expires_at?: string
+}
+
+function applyRefreshedAuthCookies(
+    response: NextResponse,
+    options: ReturnType<typeof authCookieOptions>,
+    auth: TokenRefreshCookies | null,
+) {
+    if (!auth) {
+        return
+    }
+
+    const cookieOptions = {
+        ...options,
+        expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
+    }
+
+    if (auth.token) {
+        response.cookies.set('access_token', auth.token, cookieOptions)
+    }
+    if (auth.roles) {
+        response.cookies.set('roles', JSON.stringify(auth.roles), cookieOptions)
+    }
+    if (auth.name) {
+        response.cookies.set('name', auth.name, cookieOptions)
+    }
+    if (auth.avatar !== undefined) {
+        response.cookies.set('avatar', auth.avatar, cookieOptions)
+    }
 }
 
 function normalizeRoles(value: unknown): Array<Role & { role_id?: string }> {
