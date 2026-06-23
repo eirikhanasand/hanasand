@@ -30,6 +30,7 @@ export async function proxy(req: NextRequest) {
             headers: requestHeaders,
         },
     })
+    const refreshedCookieOptions = authCookieOptions(req)
 
     if (requiresAuth) {
         if (!tokenCookie || !idCookie) {
@@ -49,8 +50,7 @@ export async function proxy(req: NextRequest) {
 
             if (auth.token) {
                 response.cookies.set('access_token', auth.token, {
-                    sameSite: 'lax',
-                    path: '/',
+                    ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
             }
@@ -58,24 +58,21 @@ export async function proxy(req: NextRequest) {
             if (auth.roles) {
                 roles = normalizeRoles(auth.roles)
                 response.cookies.set('roles', JSON.stringify(roles), {
-                    sameSite: 'lax',
-                    path: '/',
+                    ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
             }
 
             if (auth.name) {
                 response.cookies.set('name', auth.name, {
-                    sameSite: 'lax',
-                    path: '/',
+                    ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
             }
 
             if (auth.avatar !== undefined) {
                 response.cookies.set('avatar', auth.avatar, {
-                    sameSite: 'lax',
-                    path: '/',
+                    ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
             }
@@ -128,6 +125,20 @@ function normalizeRoles(value: unknown): Array<Role & { role_id?: string }> {
 
 function roleMatchesStrictPath(role: Role & { role_id?: string }, requiredRole: string) {
     return role.id === requiredRole || role.role_id === requiredRole
+}
+
+function authCookieOptions(req: NextRequest) {
+    const hostname = req.nextUrl.hostname
+    const domain = hostname === 'hanasand.com' || hostname.endsWith('.hanasand.com')
+        ? '.hanasand.com'
+        : undefined
+
+    return {
+        sameSite: 'lax' as const,
+        path: '/',
+        secure: req.nextUrl.protocol === 'https:' || Boolean(domain),
+        domain,
+    }
 }
 
 function loginRedirect(
