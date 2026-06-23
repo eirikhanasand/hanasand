@@ -70,7 +70,7 @@ export default function AIPageClient({
                     <div className='flex h-14 items-center justify-between border-b border-[#e0e5ed] bg-white px-5'>
                         <div className='min-w-0'>
                             <p className='truncate text-sm font-semibold text-[#171a21]'>
-                                {ai.activeConversation?.title || 'Workspace'}
+                                {conversationTitle(ai.activeConversation?.title)}
                             </p>
                         </div>
                         <div className='flex items-center gap-2'>
@@ -207,6 +207,11 @@ export default function AIPageClient({
             </div>
         </div>
     )
+}
+
+function conversationTitle(title?: string | null) {
+    const normalized = title?.trim()
+    return !normalized || normalized === 'New chat' ? 'New workspace review' : normalized
 }
 
 function runtimeStateSummary(runtimeState: AIRuntimeState) {

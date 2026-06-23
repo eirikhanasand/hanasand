@@ -47,7 +47,7 @@ export default function Menu() {
                     <div className={baseStyles}>
                         <Sparkles className={`group-hover:stroke-orange-300 ${isAI && 'stroke-orange-300'}`} />
                     </div>
-                    <h1 className='self-center font-semibold'>AI assistant</h1>
+                    <h1 className='self-center font-semibold'>Workspace assistant</h1>
                 </Link>
                 <Link href='/status' onClick={toggleOpen} className='flex rounded-xl pl-2 pr-5 transition-colors hover:bg-bright/8'>
                     <div className={baseStyles}>

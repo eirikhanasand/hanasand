@@ -488,7 +488,7 @@ export default function ShareChat({
             setMessages((current) => [...current, {
                 id: randomId(),
                 role: 'tool',
-                content: 'Hanasand AI is reconnecting. Try the same message again in a moment.',
+                content: 'The workspace assistant is reconnecting. Try the same message again in a moment.',
                 createdAt: new Date().toISOString(),
             }])
             setLastRun({
@@ -686,7 +686,7 @@ export default function ShareChat({
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2 text-sm font-semibold text-bright/88'>
                         <Sparkles className='h-4 w-4 text-[#f07d33]' />
-                        AI assistant
+                        Workspace assistant
                     </div>
                     <p className='truncate text-xs text-bright/45'>
                         {showBuilderWorkflow ? 'Build reviewable changes with visible checks.' : 'Ask mode will not change files.'}
@@ -713,7 +713,7 @@ export default function ShareChat({
                 <div className='flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-bright/52'>
                     <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>You approve changes</span>
                     <span className='rounded-full border border-bright/8 bg-bright/[0.035] px-2 py-0.5 font-medium text-bright/66'>Current file context</span>
-                    <span className='min-w-0 truncate text-bright/38'>{share?.path || share?.alias || 'Workspace root'}</span>
+                    <span className='min-w-0 truncate text-bright/38'>{share?.path || share?.alias || 'Workspace home'}</span>
                 </div>
             </div>
             {showBuilderWorkflow ? (
@@ -956,7 +956,7 @@ export default function ShareChat({
                                 </span>
                             </div>
                             <p className='mt-1 text-xs leading-5 text-bright/48'>
-                                Resolve the pending change before starting another AI run.
+                                Resolve the pending change before starting another assistant run.
                             </p>
                         </div>
                         <div className='flex shrink-0 items-center gap-1.5'>
@@ -1313,7 +1313,7 @@ function friendlyChatError(status: number) {
     if (status === 401 || status === 403) {
         return 'The chat session is reconnecting. Try again in a moment.'
     }
-    return 'Hanasand AI is reconnecting. Try again in a moment.'
+    return 'The workspace assistant is reconnecting. Try again in a moment.'
 }
 
 function wait(ms: number) {
@@ -1353,8 +1353,8 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
     ].filter(Boolean)
     if (workflow === 'ask') {
         return [
-            'You are Hanasand AI in Ask mode for the active /s share.',
-            'Ask mode is for normal developers and curious users who do not want AI edits.',
+            'You are the Hanasand workspace assistant in Ask mode for the active /s share.',
+            'Ask mode is for normal developers and curious users who do not want assistant edits.',
             'Answer the user clearly and concisely. Do not emit Hanasand tool tags. Do not create, update, or delete files.',
             'If the user asks you to change, build, publish, deploy, or rewrite the project, explain that they should switch to Build mode for reviewable changes.',
             'Use beginner language for deploy, environment, domain, and build failures. Keep advanced terminology secondary and explain it briefly if needed.',
@@ -1365,7 +1365,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
         ].filter(Boolean).join('\n\n')
     }
     return [
-        'You are Hanasand AI in a browser chat panel for the active /s share.',
+        'You are the Hanasand workspace assistant in a browser chat panel for the active /s share.',
         'Help like a coding agent. Be concise. For pure conversation, answer normally.',
         'The visible UI is for non-developers. Do not paste raw code, terminal-style logs, or framework jargon in normal prose; the UI will summarize file changes separately.',
         'Use beginner language for deploy, environment, domain, and build failures. Give one obvious next action.',
@@ -2330,7 +2330,7 @@ function stripToolTags(content: string) {
 
 function buildVisibleBuildReply(rawContent: string, pendingChanges: PendingShareChange[], browserProofs: number, responseOk: boolean) {
     if (!responseOk) {
-        return stripToolTags(rawContent).trim() || 'Hanasand AI is reconnecting. Try again in a moment.'
+        return stripToolTags(rawContent).trim() || 'The workspace assistant is reconnecting. Try again in a moment.'
     }
 
     const plainReply = hideCodeFromBuildReply(stripToolTags(rawContent)).trim()
@@ -2338,7 +2338,7 @@ function buildVisibleBuildReply(rawContent: string, pendingChanges: PendingShare
         ? `Prepared ${pendingChanges.length} reviewable change${pendingChanges.length === 1 ? '' : 's'}.`
         : 'I checked the request and did not prepare file changes.'
     const proofNote = browserProofs
-        ? 'Production check is running, so you can review the summary while Hanasand verifies the visible result.'
+        ? 'Production check is running, so you can review the summary while Hanasand checks the visible result.'
         : ''
     const reviewNote = pendingChanges.length
         ? 'Open What changed for the summary. Advanced diffs stay collapsed for developers.'

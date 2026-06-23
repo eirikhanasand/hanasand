@@ -51,8 +51,8 @@ export default function ChatPane({
     const awaitingResponse = Boolean(activeConversation?.messages.at(-1)?.pending)
     const hasReadyModel = isConnected && clients.length > 0
     const unavailableModelReason = isAuthenticated
-        ? 'Model unavailable. You can still open the editor or attach context while capacity is unavailable.'
-        : 'Model unavailable. You can still open the editor, attach context, or sign in to continue when capacity is available.'
+        ? 'Assistant unavailable. You can still open the editor or attach context while capacity is unavailable.'
+        : 'Assistant unavailable. You can still open the editor, attach context, or sign in to continue when capacity is available.'
     const composerBlockedReason = readOnly
         ? 'Reviewer mode: you can inspect this workspace but cannot send prompts.'
         : awaitingResponse
@@ -81,7 +81,7 @@ export default function ChatPane({
         const selectedName = activeConversation?.preferredModel || activeConversation?.activeModel
         return clients.find((client) => client.name === selectedName) || clients[0] || null
     }, [activeConversation?.activeModel, activeConversation?.preferredModel, clients])
-    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Model unavailable'
+    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Assistant unavailable'
 
     return (
         <Fragment>
@@ -89,7 +89,7 @@ export default function ChatPane({
                 <div className='relative z-10 border-b border-[#e0e5ed] bg-white px-7 py-5'>
                     <div className='flex items-center justify-between gap-4'>
                         <div className='min-w-0'>
-                            <h1 className='truncate text-base font-semibold tracking-normal text-[#171a21]'>{activeConversation?.title || 'New chat'}</h1>
+                            <h1 className='truncate text-base font-semibold tracking-normal text-[#171a21]'>{conversationTitle(activeConversation?.title)}</h1>
                             <div className='relative mt-1 inline-block'>
                                 <button
                                     type='button'
@@ -98,7 +98,7 @@ export default function ChatPane({
                                     className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-semibold text-[#3056d3] transition-colors hover:text-[#2546a8] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
                                     title={selectedModelLabel}
                                 >
-                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Model unavailable'}</span>
+                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Assistant unavailable'}</span>
                                     {clients.length ? <ChevronDown className='h-3.5 w-3.5 shrink-0' /> : null}
                                 </button>
                                 {modelMenuOpen && clients.length ? (
@@ -135,7 +135,7 @@ export default function ChatPane({
                             </Link>
                             <StatusChip
                                 icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />}
-                                label={isThinking ? 'Thinking...' : hasReadyModel ? 'Ready' : 'Offline'}
+                                label={isThinking ? 'Working...' : hasReadyModel ? 'Ready' : 'Offline'}
                                 accent={isThinking}
                             />
                             {latestArtifacts.length ? (
@@ -214,7 +214,7 @@ export default function ChatPane({
                                     onSend()
                                 }
                             }}
-                            placeholder='Ask Hanasand to build, inspect, debug, scaffold, or ship something...'
+                            placeholder='Ask Hanasand to inspect a workspace, draft a change, review files, or prepare a handoff...'
                             readOnly={readOnly}
                             rows={1}
                             className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-[#171a21] outline-none placeholder:text-[#8c95a5]'
@@ -244,7 +244,7 @@ export default function ChatPane({
 }
 
 function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { tooltip: string, hasReadyModel: boolean, isAuthenticated: boolean }) {
-    const greeting = 'What can I help you with?'
+    const greeting = 'What should we work on?'
 
     return (
         <div className='flex h-full min-h-[28rem] items-center justify-center'>
@@ -308,6 +308,11 @@ function modelLabel(client: GPT_Client) {
     return client.displayName || client.modelId || client.profile || client.name
 }
 
+function conversationTitle(title?: string | null) {
+    const normalized = title?.trim()
+    return !normalized || normalized === 'New chat' ? 'New workspace review' : normalized
+}
+
 function MarkdownBlock({ content }: { content: string }) {
     return (
         <div className='prose prose-invert max-w-none wrap-break-word text-sm leading-6 prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-xl prose-pre:bg-[#202020] prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-[#d3d3ce]'>
@@ -332,7 +337,7 @@ function ToolMessage({
         <div className='space-y-2'>
             <div className='inline-flex items-center gap-2 rounded-full bg-[#242424] px-3 py-1 text-xs text-[#b7b7b2]'>
                 {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-[#eeeeea]' /> : <Sparkles className='h-3.5 w-3.5 text-[#d3d3ce]' />}
-                {state === 'running' ? 'Thinking...' : state === 'error' ? 'Tool error' : 'Tool complete'}
+                {state === 'running' ? 'Working...' : state === 'error' ? 'Tool error' : 'Tool complete'}
             </div>
             {browserSummary ? <BrowserVerificationCard summary={browserSummary} /> : null}
             <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6 text-[#d3d3ce]'>{message.content}</div>

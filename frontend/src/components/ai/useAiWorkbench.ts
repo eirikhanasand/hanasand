@@ -140,7 +140,7 @@ export default function useAiWorkbench({
         }
 
         const resumedConversation = conversationsRef.current.find((conversation) => conversation.id === nextConversationId) || null
-        const source = savedConversationId === nextConversationId ? 'your last AI workspace selection' : 'the most recent runtime activity'
+        const source = savedConversationId === nextConversationId ? 'your last build workspace selection' : 'the most recent runtime activity'
         const detail = initialRuntimeState?.lastFailure?.message || initialRuntimeState?.lastToolRun?.detail || null
 
         setResumeNotice({

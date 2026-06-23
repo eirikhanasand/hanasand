@@ -16,9 +16,9 @@ export default function GPT_Header({
                             <Bot className='h-5 w-5' />
                         </div>
                         <div>
-                            <h1 className='font-semibold text-lg text-bright/90'>Hanasand AI</h1>
+                            <h1 className='font-semibold text-lg text-bright/90'>Workspace assistant</h1>
                             <p className='max-w-2xl text-sm text-bright/50'>
-                                Live metrics from connected inference clients.
+                                Live workspace activity and connected runtime status.
                             </p>
                         </div>
                     </div>

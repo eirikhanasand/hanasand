@@ -83,7 +83,7 @@ export default function ClientPage({
     }), [editingContent, share, workspaceTree])
     const activePath = useMemo(() => findPath(workspaceTree, share?.id || id), [id, share?.id, workspaceTree])
     const activeIsRoot = isWorkspaceRootItem(workspaceTree, share, share?.id || id)
-    const activeLabel = activeIsRoot ? 'Workspace root' : activePath || share?.alias || 'Loading file'
+    const activeLabel = activeIsRoot ? 'Workspace home' : activePath || share?.alias || 'Loading file'
     const previewEvidenceUrl = share?.alias && runtimeCapability.canPreview ? `https://${share.alias}.hanasand.com/` : null
     const otherUsers = presenceUsers.filter(user => user.clientId !== selfClientId)
     const remoteEditors = otherUsers.filter(user => user.editing)
@@ -200,7 +200,7 @@ export default function ClientPage({
                         {chatOpen ? (
                             <div className='flex min-w-0 items-center gap-2 px-2 text-sm font-semibold text-bright/82'>
                                 <MessageSquare className='h-4 w-4 shrink-0 text-[#f07d33]' />
-                                <span className='truncate'>Chat workspace</span>
+                                <span className='truncate'>Workspace assistant</span>
                             </div>
                         ) : openFiles.length ? (
                             <OpenFiles openFiles={openFiles} setOpenFiles={setOpenFiles} />
@@ -215,7 +215,7 @@ export default function ClientPage({
                         <div className='hidden shrink-0 items-center gap-1.5 lg:flex'>
                             <StatusPill
                                 icon={isConnected ? <Radio className='h-3.5 w-3.5' /> : <CloudOff className='h-3.5 w-3.5' />}
-                                label={isConnected ? `${participants} live` : workspaceCreated ? 'Reconnecting' : 'Preparing'}
+                                label={isConnected ? `${participants} live` : workspaceCreated ? 'Reconnecting' : 'Setting up'}
                                 tone={isConnected ? 'good' : 'warn'}
                             />
                             <StatusPill
@@ -232,13 +232,13 @@ export default function ClientPage({
                     )}
                     <button
                         type='button'
-                        aria-label={hydrated ? chatOpen ? 'Back to code editor' : 'Open workspace chat' : 'Preparing workspace chat'}
+                        aria-label={hydrated ? chatOpen ? 'Back to workspace editor' : 'Open workspace assistant' : 'Setting up workspace assistant'}
                         disabled={!hydrated}
                         onClick={() => setChatOpen(prev => !prev)}
                         className='inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-bright/10 bg-bright/[0.045] px-3 text-xs font-semibold text-bright/72 transition hover:border-[#f07d33]/35 hover:bg-[#f07d33]/12 hover:text-bright disabled:cursor-not-allowed disabled:opacity-45'
                     >
                         {chatOpen ? <Code2 className='h-4 w-4' /> : <MessageSquare className='h-4 w-4' />}
-                        {chatOpen ? 'Back to code' : 'Build'}
+                        {chatOpen ? 'Back to editor' : 'Assistant'}
                     </button>
                 </div>
                 {!chatOpen && (

@@ -229,8 +229,8 @@ function EmptyEditorState({
             <div className='pointer-events-auto w-full max-w-2xl rounded-xl border border-bright/10 bg-background/72 p-3 shadow-2xl shadow-black/20 backdrop-blur-md'>
                 <div className='flex items-start justify-between gap-3'>
                     <div className='min-w-0'>
-                        <h2 className='text-sm font-medium text-bright/82'>Start a reviewable change</h2>
-                        <p className='mt-1 text-xs leading-5 text-bright/42'>Create a file, keep the change small, then use Build or AI to verify before release.</p>
+                        <h2 className='text-sm font-medium text-bright/82'>Start a workspace note</h2>
+                        <p className='mt-1 text-xs leading-5 text-bright/42'>Create a file, keep the change small, then run checks before release.</p>
                     </div>
                     <FileCode2 className='h-4 w-4 shrink-0 text-[#f07d33]' />
                 </div>
@@ -269,7 +269,7 @@ function EmptyEditorState({
 
 const firstRunSteps = [
     'Draft one file',
-    'Run Build',
+    'Run checks',
     'Capture handoff notes',
 ]
 
@@ -330,7 +330,7 @@ Ship one small, reviewable change.
 ## Verify
 
 - Build:
-- Browser check:
+- Browser review:
 - Rollback note:
 `,
     },

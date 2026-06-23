@@ -37,10 +37,10 @@ export default function ChatSidebar(props: ChatSidebarProps) {
             <div className='flex items-center justify-between gap-2 pb-4'>
                 <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#2b2f39]'>
                     <MessageSquarePlus className='h-4 w-4' />
-                    New
+                    New review
                 </button>
                 <div className='flex items-center gap-1'>
-                    <IconButton label='Search chats' icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
+                    <IconButton label='Search reviews' icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
                     <Link href='/s' aria-label='Open editor' className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                         <SquareArrowOutUpRight className='h-4 w-4' />
                     </Link>
@@ -53,14 +53,14 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                     <input
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
-                        placeholder='Search chats'
+                        placeholder='Search reviews'
                         className='w-full rounded-lg border border-[#d8dee9] bg-white py-2.5 pl-10 pr-3 text-sm text-[#171a21] outline-none placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                     />
                 </label>
             ) : null}
 
             <div className='mb-3 flex items-center justify-between px-1 text-[11px] font-semibold uppercase text-[#667085]'>
-                <span>Chat</span>
+                <span>Reviews</span>
                 <span>{conversations.length}</span>
             </div>
 
@@ -116,7 +116,7 @@ function ConversationList({
     if (!conversations.length) {
         return (
             <div className='px-1 py-3 text-sm text-[#667085]'>
-                No {archived ? 'archived' : 'active'} chats yet.
+                No {archived ? 'archived' : 'active'} reviews yet.
             </div>
         )
     }
@@ -138,21 +138,21 @@ function ConversationList({
                     className={`group flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${conversation.id === activeConversationId ? 'bg-[#eef3ff] text-[#2546a8]' : 'text-[#344054] hover:bg-[#f8fafc]'}`}
                 >
                     <div className='min-w-0 flex-1 overflow-hidden'>
-                        <div className='truncate text-sm'>{conversation.title}</div>
+                        <div className='truncate text-sm'>{conversationTitle(conversation.title)}</div>
                     </div>
                     <div className='flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100'>
-                        <MiniButton label={`Rename ${conversation.title}`} icon={<Pencil className='h-3.5 w-3.5' />} onClick={(event) => {
+                        <MiniButton label={`Rename ${conversationTitle(conversation.title)}`} icon={<Pencil className='h-3.5 w-3.5' />} onClick={(event) => {
                             event.stopPropagation()
-                            const nextTitle = window.prompt('Rename chat', conversation.title)?.trim()
+                            const nextTitle = window.prompt('Rename review', conversationTitle(conversation.title))?.trim()
                             if (nextTitle) {
                                 void onRenameConversation(conversation.id, nextTitle)
                             }
                         }} />
-                        <MiniButton label={archived ? `Restore ${conversation.title}` : `Archive ${conversation.title}`} icon={archived ? <ArchiveRestore className='h-3.5 w-3.5' /> : <Archive className='h-3.5 w-3.5' />} onClick={(event) => {
+                        <MiniButton label={archived ? `Restore ${conversationTitle(conversation.title)}` : `Archive ${conversationTitle(conversation.title)}`} icon={archived ? <ArchiveRestore className='h-3.5 w-3.5' /> : <Archive className='h-3.5 w-3.5' />} onClick={(event) => {
                             event.stopPropagation()
                             void onArchiveConversation(conversation.id, !archived)
                         }} />
-                        <MiniButton label={`Delete ${conversation.title}`} danger icon={<Trash2 className='h-3.5 w-3.5' />} onClick={(event) => {
+                        <MiniButton label={`Delete ${conversationTitle(conversation.title)}`} danger icon={<Trash2 className='h-3.5 w-3.5' />} onClick={(event) => {
                             event.stopPropagation()
                             void onDeleteConversation(conversation.id)
                         }} />
@@ -161,6 +161,11 @@ function ConversationList({
             ))}
         </div>
     )
+}
+
+function conversationTitle(title?: string | null) {
+    const normalized = title?.trim()
+    return !normalized || normalized === 'New chat' ? 'New workspace review' : normalized
 }
 
 function IconButton({ label, icon, active = false, onClick }: { label: string, icon: React.ReactNode, active?: boolean, onClick: () => void }) {

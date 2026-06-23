@@ -101,7 +101,7 @@ export function createConversation(clientName: string | null = null): AIConversa
     return {
         id: crypto.randomUUID(),
         ownerId: getCookie('id') || '',
-        title: 'New chat',
+        title: 'New workspace review',
         preferredModel: clientName,
         activeModel: clientName,
         modelStrategy: 'auto',
@@ -259,7 +259,7 @@ export function buildSystemPrompt({
     workspaceContext: string | null
 }) {
     return [
-        'You are Hanasand AI, an app-style coding assistant inside Hanasand.',
+        'You are the Hanasand workspace assistant, an app-style build and review assistant inside Hanasand.',
         'Behave like Codex inside Hanasand: be direct, calm, concise, practical, and action-oriented.',
         'Prefer concrete next steps, patch-ready code, and careful reasoning over marketing language.',
         'Optimize for fast product progress: make a reasonable assumption for ambiguous build requests, create or attach a workspace early, edit the smallest useful surface, run the relevant check, and report the result.',
