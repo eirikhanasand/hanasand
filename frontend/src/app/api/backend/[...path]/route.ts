@@ -22,8 +22,8 @@ const hopByHopHeaders = new Set([
 
 async function handler(req: NextRequest, context: Context) {
     const cookieStore = await cookies()
-    const token = bearerToken(req.headers.get('authorization')) || cookieStore.get('access_token')?.value || ''
-    const id = req.headers.get('id') || cookieStore.get('id')?.value || ''
+    const token = cookieStore.get('access_token')?.value || bearerToken(req.headers.get('authorization')) || ''
+    const id = cookieStore.get('id')?.value || req.headers.get('id') || ''
     if (!token || !id) {
         return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
     }
