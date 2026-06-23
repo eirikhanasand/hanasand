@@ -49,36 +49,36 @@ export async function proxy(req: NextRequest) {
             }
 
             if (auth.token) {
-                expireHostOnlyCookie(response, 'access_token')
                 response.cookies.set('access_token', auth.token, {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
+                expireHostOnlyCookie(response, 'access_token')
             }
 
             if (auth.roles) {
                 roles = normalizeRoles(auth.roles)
-                expireHostOnlyCookie(response, 'roles')
                 response.cookies.set('roles', JSON.stringify(roles), {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
+                expireHostOnlyCookie(response, 'roles')
             }
 
             if (auth.name) {
-                expireHostOnlyCookie(response, 'name')
                 response.cookies.set('name', auth.name, {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
+                expireHostOnlyCookie(response, 'name')
             }
 
             if (auth.avatar !== undefined) {
-                expireHostOnlyCookie(response, 'avatar')
                 response.cookies.set('avatar', auth.avatar, {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
+                expireHostOnlyCookie(response, 'avatar')
             }
         }
 

@@ -21,7 +21,6 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
         domain: sharedCookieDomain(req),
     }
 
-    expireHostOnlyAuthCookies(response)
     if (data.name) {
         response.cookies.set('name', data.name, cookieOptions)
     }
@@ -33,6 +32,7 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
         response.cookies.set('access_token', data.token, cookieOptions)
     }
     response.cookies.set('roles', JSON.stringify(data.roles ?? []), cookieOptions)
+    expireHostOnlyAuthCookies(response)
 }
 
 export function clearAuthCookies(req: NextRequest, response: NextResponse) {
