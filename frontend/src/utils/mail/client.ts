@@ -46,12 +46,12 @@ export async function fetchMailOverview(params: { mailboxUser?: string, mailboxI
         headers,
         cache: 'no-store',
     })
+    const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
-        throw new Error((await response.json()).error || 'Unable to load mail.')
+        throw new Error((payload as { error?: string }).error || 'Mail is unavailable right now. The rest of the console is still ready.')
     }
 
-    const payload = await response.json()
-    return normalizeMailOverview(payload)
+    return normalizeMailOverview(payload as Partial<MailOverview>)
 }
 
 export async function sendMail(body: {
@@ -96,7 +96,8 @@ export async function deleteFilter(id: number, mailboxUser?: string) {
     const search = mailboxUser ? `?mailboxUser=${encodeURIComponent(mailboxUser)}` : ''
     const response = await fetch(`/api/backend/mail/filters/${id}${search}`, { method: 'DELETE', headers })
     if (!response.ok) {
-        throw new Error((await response.json()).error || 'Unable to delete filter.')
+        const payload = await response.json().catch(() => ({}))
+        throw new Error((payload as { error?: string }).error || 'Unable to delete filter.')
     }
 }
 
@@ -126,11 +127,12 @@ async function postJson(path: string, body: Record<string, unknown>) {
         cache: 'no-store',
     })
 
+    const payload = await response.json().catch(() => null)
     if (!response.ok) {
-        throw new Error((await response.json()).error || 'Request failed.')
+        throw new Error((payload as { error?: string } | null)?.error || 'Request failed.')
     }
 
-    return response.json().catch(() => null)
+    return payload
 }
 
 function normalizeMailOverview(payload: Partial<MailOverview>): MailOverview {

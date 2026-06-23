@@ -31,12 +31,12 @@ export async function fetchSessions(): Promise<AuthSession[]> {
         return []
     }
 
-    const response = await fetch(`${config.url.api}/auth/sessions`, { headers })
-    if (!response.ok) {
+    const response = await fetch(`${config.url.api}/auth/sessions`, { headers }).catch(() => null)
+    if (!response?.ok) {
         return []
     }
 
-    const body = await response.json()
+    const body = await response.json().catch(() => ({}))
     return Array.isArray(body.sessions) ? body.sessions : []
 }
 
@@ -49,8 +49,8 @@ export async function revokeSession(tokenId: number) {
     const response = await fetch(`${config.url.api}/auth/sessions/${tokenId}`, {
         method: 'DELETE',
         headers,
-    })
-    return response.ok
+    }).catch(() => null)
+    return Boolean(response?.ok)
 }
 
 export async function revokeOtherSessions() {
@@ -63,6 +63,6 @@ export async function revokeOtherSessions() {
         method: 'POST',
         headers,
         body: JSON.stringify({ keep_current: true }),
-    })
-    return response.ok
+    }).catch(() => null)
+    return Boolean(response?.ok)
 }

@@ -46,7 +46,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                         </span>
                     </div>
                     <p className='mt-5 text-sm leading-6 text-[#596170]'>
-                        Public account page for Hanasand. Sign in to manage account access, sessions, certificates, and workspace resources.
+                        Public account page for Hanasand. Sign in to manage account access, active sessions, API certificates, and product workspace details.
                     </p>
                     <div className='mt-6 flex flex-wrap gap-2'>
                         <Link href={`/login?path=/profile/${profileId}`} className='rounded-lg bg-[#171a21] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2b303b]'>
@@ -62,7 +62,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     }
 
     const certificates = await getCertificates(userId, token, userId)
-    const vms = await getVMs(userId, token, userId)
+    const vms = canManageSystem ? await getVMs(userId, token, userId) : []
 
     return (
         <div className='h-full px-2 pb-2'>
@@ -78,11 +78,11 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                         <DashboardHeader
                             eyebrow='Profile'
                             title={`@${name}`}
-                            description='Account, access, and workspace resources.'
+                            description='Account access, API credentials, and product workspace details.'
                         />
                         <div className='grid gap-3 xl:grid-cols-2'>
                             <SessionsPanel isSelf={isSelf} />
-                            <VMs vms={vms} />
+                            {canManageSystem && <VMs vms={vms} />}
                             <Certificates certificates={certificates} />
                             <AccountActions isSelf={isSelf} />
                         </div>

@@ -4,7 +4,12 @@ import { redirect } from 'next/navigation'
 import { Activity, ArrowRight, BellRing, Code2, Radar, Search, ShieldCheck, Webhook } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 
-export default async function Page() {
+export default async function Page({
+    searchParams,
+}: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+    const params = await searchParams
     const Cookies = await cookies()
     const Headers = await headers()
     const name = Cookies.get('name')?.value
@@ -23,6 +28,11 @@ export default async function Page() {
 
     return (
         <DashboardPage>
+            {params?.notAllowed && (
+                <div className='rounded-lg border border-[#fedf89] bg-[#fffaeb] px-4 py-3 text-sm font-medium text-[#93370d] shadow-sm'>
+                    That area is reserved for system operators. Your monitoring console is still ready here.
+                </div>
+            )}
             <DashboardHeader
                 eyebrow='Monitoring console'
                 title={`Welcome, ${firstName}. Your threat monitoring workspace is ready.`}

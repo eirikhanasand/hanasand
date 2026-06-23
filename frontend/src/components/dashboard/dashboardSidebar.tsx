@@ -53,10 +53,8 @@ export default function DashboardSidebar({
     ]
 
     const workspaceItems: Item[] = [
-        { href: '/dashboard/vms', label: 'VMs', icon: <Server className='h-4 w-4' /> },
         { href: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className='h-4 w-4' /> },
         { href: '/dashboard/shares', label: 'Shares', icon: <Share2 className='h-4 w-4' /> },
-        { href: '/dashboard/mail', label: 'Mail', icon: <Inbox className='h-4 w-4' /> },
         { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
@@ -67,6 +65,7 @@ export default function DashboardSidebar({
 
     if (canManageSystem) {
         systemItems.push(
+            { href: '/dashboard/vms', label: 'VMs', icon: <Server className='h-4 w-4' /> },
             { href: '/dashboard/traffic', label: 'Traffic', icon: <Network className='h-4 w-4' /> },
             { href: '/dashboard/system', label: 'System', icon: <Settings2 className='h-4 w-4' /> },
             { href: '/dashboard/system/ai', label: 'AI Metrics', icon: <Sparkles className='h-4 w-4' /> },
@@ -84,6 +83,7 @@ export default function DashboardSidebar({
     if (isAdmin) {
         adminItems.push(
             { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> },
+            { href: '/dashboard/mail', label: 'Mail', icon: <Inbox className='h-4 w-4' /> },
             { href: '/dashboard/db', label: 'Database', icon: <Database className='h-4 w-4' /> },
             { href: '/dashboard/db/backups', label: 'Backup', icon: <DatabaseBackup className='h-4 w-4' /> },
             { href: '/dashboard/system/rate-limits', label: 'Rate Limits', icon: <Gauge className='h-4 w-4' /> },
