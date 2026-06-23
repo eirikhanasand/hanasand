@@ -31,7 +31,7 @@ export default config
 
 function resolveApiUrl() {
     if (typeof window === 'undefined') {
-        return internalApiUrl
+        return resolveServerApiUrl(internalApiUrl)
     }
 
     if (process.env.NEXT_PUBLIC_API) {
@@ -44,6 +44,12 @@ function resolveApiUrl() {
     }
 
     return publicApiUrl
+}
+
+function resolveServerApiUrl(url: string) {
+    return process.env.NODE_ENV === 'production' && isLocalUrl(url)
+        ? publicApiUrl
+        : url
 }
 
 function resolveCdnUrl() {
