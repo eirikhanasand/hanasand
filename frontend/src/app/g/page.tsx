@@ -35,10 +35,10 @@ export default async function Page({
                             />
                         )}
                         <div className='grid gap-1'>
-                            <div className='flex items-center gap-2 text-lg font-semibold text-[#171a21]'>
+                            <h1 className='flex items-center gap-2 text-lg font-semibold text-[#171a21]'>
                                 <LinkIcon className='h-5 w-5 text-[#3056d3]' />
                                 {created ? 'Created shortcut' : 'Create shortcut'}
-                            </div>
+                            </h1>
                             <p className='text-sm leading-6 text-[#596170]'>
                                 {created ? 'Copy the shortcut and share it anywhere.' : 'Make a short Hanasand link for a URL you use often.'}
                             </p>

@@ -24,7 +24,7 @@ export default function MotivationPage() {
             <div className='absolute left-4 top-4 z-20 flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2 rounded-lg border border-[#dfe5ee] bg-white/90 px-3 py-2 text-xs text-[#667085] shadow-sm backdrop-blur-md md:left-8 md:top-8'>
                 <Link href='/eirik' className='font-semibold text-[#3056d3] transition hover:text-[#1f3ea8]'>Eirik</Link>
                 <span className='text-[#b4bdca]'>/</span>
-                <span>motivation wall</span>
+                <h1 className='text-xs font-medium text-[#667085]'>motivation wall</h1>
                 <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-0.5 text-[#667085]'>{uniqueQuotes.length} quotes</span>
             </div>
 
