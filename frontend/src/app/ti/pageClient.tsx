@@ -2,10 +2,12 @@
 
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { Activity, BellRing, Building2, Database, ExternalLink, Globe2, Radar, Search, ShieldCheck, Target, Waypoints } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
+    const router = useRouter()
     const [query, setQuery] = useState(initialResult?.query ?? initialQuery)
     const [result, setResult] = useState<TiSearchResponse | null>(initialResult)
     const [busy, setBusy] = useState(false)
@@ -79,7 +81,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         setQuery(clean)
         const cleanKey = clean.toLowerCase()
         activeQueryRef.current = cleanKey
-        window.history.pushState(null, '', `/ti/${encodeURIComponent(clean)}`)
+        router.push(`/ti/${encodeURIComponent(clean)}`)
         setResult(searchingResult(clean))
         try {
             const next = await searchThreatIntel(clean)
