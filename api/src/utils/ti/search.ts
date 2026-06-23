@@ -555,7 +555,7 @@ export function collectionStrategy(): TiCollectionStrategy {
         ],
         ownedCollection: {
             priority: 'primary',
-            summary: 'The long-term system should run isolated collectors and parsers that verify claims directly, store safe metadata, and feed the threat actor graph and notification pipeline.',
+            summary: 'The long-term system should run isolated collectors and parsers that verify claims directly, store event metadata, and feed the threat actor graph and notification pipeline.',
             requirements: [
                 'isolated disposable collectors',
                 'metadata-only storage by default',
