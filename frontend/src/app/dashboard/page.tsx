@@ -30,7 +30,7 @@ export default async function Page({
         <DashboardPage>
             {params?.notAllowed && (
                 <div className='rounded-lg border border-[#fedf89] bg-[#fffaeb] px-4 py-3 text-sm font-medium text-[#93370d] shadow-sm'>
-                    That area is reserved for system operators. Your monitoring console is still ready here.
+                    That console area is not included in this account. Your monitoring workspace is ready here.
                 </div>
             )}
             <DashboardHeader

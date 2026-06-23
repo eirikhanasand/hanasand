@@ -128,6 +128,10 @@ function normalizeRoles(value: unknown): Array<Role & { role_id?: string }> {
 }
 
 function roleMatchesStrictPath(role: Role & { role_id?: string }, requiredRole: string) {
+    if (role.id === 'admin' || role.id === 'administrator' || role.role_id === 'admin' || role.role_id === 'administrator') {
+        return true
+    }
+
     return role.id === requiredRole || role.role_id === requiredRole
 }
 
