@@ -1,7 +1,7 @@
 import DomainSelector from '@/components/monitoring/traffic/domainSelector'
 import TrafficMap from '@/components/monitoring/traffic/trafficMap'
 import TrafficDashboard from '@/components/monitoring/traffic/traffic'
-import LegacyTrafficDashboard from './pageClient'
+import RequestOperationsDashboard from './pageClient'
 import { getTrafficDomains, getTrafficMetrics, getTrafficRecords } from '@/utils/monitoring/data'
 import getBlocklist from '@/utils/traffic/getBlocklist'
 import getDomains from '@/utils/traffic/getDomains'
@@ -41,8 +41,9 @@ export default async function Page({
     return (
         <DashboardPage>
             <DashboardHeader
-                title='Traffic'
-                description='Live ingress, geographic flow, and recent request activity.'
+                eyebrow='Operations'
+                title='Traffic monitoring'
+                description='Live ingress, geographic flow, and recent request activity for the public and console surfaces.'
             />
             <div className='grid gap-4'>
                 <DashboardPanel className='p-4'>
@@ -59,12 +60,12 @@ export default async function Page({
                 />
                 <DashboardPanel className='p-4'>
                     <div className='mb-4'>
-                        <h2 className='text-lg font-semibold text-bright'>Traffic Operations</h2>
-                        <p className='mt-1 text-sm text-bright/45'>
-                            Legacy top endpoints, user agents, IP activity, and blocklist controls migrated from Queenbee.
+                        <h2 className='text-lg font-semibold text-[#171a21]'>Request operations</h2>
+                        <p className='mt-1 text-sm text-[#596170]'>
+                            Route demand, user agents, IP activity, and access controls for production operations.
                         </p>
                     </div>
-                    <LegacyTrafficDashboard
+                    <RequestOperationsDashboard
                         metrics={legacyMetrics}
                         blocklist={legacyBlocklist}
                         logs={legacyLogs}

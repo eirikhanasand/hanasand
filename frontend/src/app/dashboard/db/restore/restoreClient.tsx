@@ -68,7 +68,7 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                         updateParam('service', value)
                     }}
                     placeholder='Filter by service'
-                    className='min-w-60 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none'
+                    className='min-w-60 rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 text-sm text-[#171a21] outline-none focus:border-[#3056d3]'
                 />
                 <input
                     type='date'
@@ -78,9 +78,9 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                         setDateFilter(value)
                         updateParam('date', value)
                     }}
-                    className='rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-bright outline-none'
+                    className='rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 text-sm text-[#171a21] outline-none focus:border-[#3056d3]'
                 />
-                {message && <p className='text-sm text-bright/62'>{message}</p>}
+                {message && <p className='text-sm text-[#596170]'>{message}</p>}
             </div>
 
             <div className='grid gap-4'>
@@ -90,44 +90,38 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                         <article key={key} className={`${dashboardPanelClass} p-5`}>
                             <div className='flex flex-wrap items-start justify-between gap-3'>
                                 <div>
-                                    <h2 className='text-lg font-semibold text-bright'>{backup.service}</h2>
-                                    <p className='mt-1 text-sm text-bright/45'>{backup.file}</p>
+                                    <h2 className='text-lg font-semibold text-[#171a21]'>{backup.service}</h2>
+                                    <p className='mt-1 text-sm text-[#596170]'>{backup.file}</p>
                                 </div>
                                 <button
                                     type='button'
                                     onClick={() => handleRestore(backup)}
                                     disabled={isPending}
-                                    className={`
-                                        inline-flex items-center gap-2 rounded-lg
-                                        border border-white/10 bg-black/18
-                                        px-3 py-2 text-sm text-bright/75
-                                        transition hover:border-orange-300/35
-                                        hover:bg-orange-300/8 disabled:opacity-60
-                                    `}
+                                    className='inline-flex items-center gap-2 rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-3 py-2 text-sm font-semibold text-[#3056d3] transition hover:bg-[#e4ebff] disabled:opacity-60'
                                 >
                                     <RotateCcw className='h-4 w-4' />
                                     {restoring === key ? 'Restoring…' : 'Restore'}
                                 </button>
                             </div>
-                            <div className='mt-4 grid gap-3 md:grid-cols-3 text-sm text-bright/65'>
-                                <div className='rounded-xl bg-black/18 p-4'>
-                                    <p className='text-xs uppercase tracking-[0.18em] text-bright/35'>Locations</p>
-                                    <p className='mt-2'>{backup.locations.join(', ') || 'Unknown'}</p>
+                            <div className='mt-4 grid gap-3 text-sm text-[#596170] md:grid-cols-3'>
+                                <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4'>
+                                    <p className='text-xs font-semibold uppercase text-[#667085]'>Locations</p>
+                                    <p className='mt-2 font-medium text-[#171a21]'>{backup.locations.join(', ') || 'Unknown'}</p>
                                 </div>
-                                <div className='rounded-xl bg-black/18 p-4'>
-                                    <p className='text-xs uppercase tracking-[0.18em] text-bright/35'>Modified</p>
-                                    <p className='mt-2'>{formatDate(backup.mtime)}</p>
+                                <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4'>
+                                    <p className='text-xs font-semibold uppercase text-[#667085]'>Modified</p>
+                                    <p className='mt-2 font-medium text-[#171a21]'>{formatDate(backup.mtime)}</p>
                                 </div>
-                                <div className='rounded-xl bg-black/18 p-4'>
-                                    <p className='text-xs uppercase tracking-[0.18em] text-bright/35'>Size</p>
-                                    <p className='mt-2'>{backup.size || 'Unknown'}</p>
+                                <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4'>
+                                    <p className='text-xs font-semibold uppercase text-[#667085]'>Size</p>
+                                    <p className='mt-2 font-medium text-[#171a21]'>{backup.size || 'Unknown'}</p>
                                 </div>
                             </div>
                         </article>
                     )
                 })}
                 {!groupedBackups.length && (
-                    <article className={`${dashboardPanelClass} p-5 text-sm text-bright/55`}>
+                    <article className={`${dashboardPanelClass} p-5 text-sm text-[#596170]`}>
                         No backup files matched the current filters.
                     </article>
                 )}
