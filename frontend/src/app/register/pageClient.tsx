@@ -2,7 +2,6 @@
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
-import fetchWithRetry from '@/utils/fetchWithRetry'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -76,14 +75,13 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
 
         setBusy(true)
         try {
-            const response = await fetchWithRetry('/api/auth/register', {
+            const response = await fetch('/api/auth/register', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ name, id, password }),
-                timeoutMs: 10000,
-                retries: 2,
             })
             const responseText = await response.text()
             const data = parseSignupResponse(responseText)

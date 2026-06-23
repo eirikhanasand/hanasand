@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import config from '@/config'
 import { ArrowRight } from 'lucide-react'
-import fetchWithRetry from '@/utils/fetchWithRetry'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import ErrorNotice from '@/components/error/errorNotice'
 
@@ -108,12 +107,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         const password = String(formData.get('password') || '')
         setBusy(true)
         try {
-            const response = await fetchWithRetry('/api/auth/register', {
+            const response = await fetch('/api/auth/register', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, id, password }),
-                timeoutMs: 10000,
-                retries: 2,
             })
             const responseText = await response.text()
             const data = parseSignupResponse(responseText)
