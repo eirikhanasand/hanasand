@@ -21,7 +21,7 @@ export default function VMs({ vms: serverVMs }: { vms: VM[] }) {
             const updatedVMs = await getVMs(impersonatingId || id, undefined, id)
             setVms(updatedVMs)
         } else {
-            return router.push('/login?internal=true&path=/profile')
+            return router.push('/login?path=/profile')
         }
     }
 

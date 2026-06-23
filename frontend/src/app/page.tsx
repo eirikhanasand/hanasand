@@ -50,8 +50,8 @@ const solutions = [
         href: '/pwned',
     },
     {
-        title: 'AI Workspace',
-        detail: 'The existing Hanasand workspace for building, reviewing, and deploying small software projects.',
+        title: 'Build Workspace',
+        detail: 'The existing Hanasand workspace for building, reviewing, and deploying small software tools.',
         href: '/ai',
     },
     {

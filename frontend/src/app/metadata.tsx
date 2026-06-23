@@ -1,12 +1,12 @@
 import type { Viewport, Metadata } from 'next'
 
 const title = 'Hanasand'
-const description = 'A self-hosted AI workspace for building, reviewing, verifying, and deploying small software projects.'
+const description = 'Dark web monitoring, company exposure alerts, and threat intelligence workflows from Hanasand.'
 const image = 'https://hanasand.com/favicon.ico'
 
 const metadata: Metadata = {
     title,
-    keywords: ['hanasand', 'ai workspace', 'self-hosted app builder', 'code review', 'deployment evidence', 'projects'],
+    keywords: ['hanasand', 'dark web monitoring', 'threat intelligence', 'company exposure alerts', 'ransomware monitoring', 'webhook alerts'],
     authors: [{ name: 'Eirik Hanasand', url: 'https://hanasand.com' }],
     description,
     creator: 'Eirik Hanasand',
@@ -57,6 +57,6 @@ const metadata: Metadata = {
 export default metadata
 
 export const viewport: Viewport = {
-    colorScheme: 'dark',
-    themeColor: '#f07d33',
+    colorScheme: 'light',
+    themeColor: '#ffffff',
 }

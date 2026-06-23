@@ -23,7 +23,7 @@ const solutionItems = [
     { title: 'All Solutions', detail: 'Monitoring, API delivery, and private exposure checking.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'High-speed exposure notifications for watched companies.', href: '/solutions/dwm', icon: BellRing },
     { title: 'Bloom Filter', detail: 'Private breach and password exposure checks.', href: '/pwned', icon: LockKeyhole },
-    { title: 'AI Workspace', detail: 'Build, review, and ship small software projects.', href: '/ai', icon: Sparkles },
+    { title: 'Build Workspace', detail: 'Existing project workspace for building and reviewing small software tools.', href: '/ai', icon: Sparkles },
 ]
 
 const resourceItems = [
@@ -137,7 +137,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     <Link href='/status' aria-label='Status' title='Status' className={`${baseStyles} hidden sm:grid`}>
                         <ActivityIcon className={`h-4.5 w-4.5 ${isStatus ? 'text-[#087b34]' : ''}`} />
                     </Link>
-                    <Link href='/ai' aria-label='AI Workspace' title='AI Workspace' className={`${baseStyles} hidden sm:grid`}>
+                    <Link href='/ai' aria-label='Build Workspace' title='Build Workspace' className={`${baseStyles} hidden sm:grid`}>
                         <Sparkles className={`h-4.5 w-4.5 ${isAI ? 'text-[#c05621]' : ''}`} />
                     </Link>
                     <ThemeSwitch />
