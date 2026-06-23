@@ -48,7 +48,7 @@ export function clearAuthCookies(req: NextRequest, response: NextResponse) {
 }
 
 function sharedCookieDomain(req: NextRequest) {
-    const hostname = req.nextUrl.hostname
+    const hostname = requestHostname(req)
     return hostname === 'hanasand.com' || hostname.endsWith('.hanasand.com')
         ? '.hanasand.com'
         : undefined
@@ -56,6 +56,12 @@ function sharedCookieDomain(req: NextRequest) {
 
 function shouldUseSecureCookies(req: NextRequest) {
     return req.nextUrl.protocol === 'https:' || Boolean(sharedCookieDomain(req))
+}
+
+function requestHostname(req: NextRequest) {
+    const forwardedHost = req.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    const host = forwardedHost || req.headers.get('host') || req.nextUrl.hostname
+    return host.split(':')[0]
 }
 
 function expireHostOnlyAuthCookies(response: NextResponse) {

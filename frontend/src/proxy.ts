@@ -132,7 +132,7 @@ function roleMatchesStrictPath(role: Role & { role_id?: string }, requiredRole: 
 }
 
 function authCookieOptions(req: NextRequest) {
-    const hostname = req.nextUrl.hostname
+    const hostname = requestHostname(req)
     const domain = hostname === 'hanasand.com' || hostname.endsWith('.hanasand.com')
         ? '.hanasand.com'
         : undefined
@@ -147,6 +147,12 @@ function authCookieOptions(req: NextRequest) {
 
 function expireHostOnlyCookie(response: NextResponse, name: string) {
     response.headers.append('Set-Cookie', `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`)
+}
+
+function requestHostname(req: NextRequest) {
+    const forwardedHost = req.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    const host = forwardedHost || req.headers.get('host') || req.nextUrl.hostname
+    return host.split(':')[0]
 }
 
 function loginRedirect(
