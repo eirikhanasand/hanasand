@@ -1,5 +1,14 @@
 import Link from 'next/link'
 import { ArrowRight, Radar, Search, ShieldCheck } from 'lucide-react'
+import type { Metadata } from 'next'
+import { buildRouteMetadata } from './seo'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Page Not Found',
+    description: 'Find the right Hanasand monitoring, threat intelligence, pricing, or contact page.',
+    path: '/',
+    keywords: ['hanasand', 'threat intelligence', 'dark web monitoring'],
+})
 
 const recoveryLinks = [
     {
