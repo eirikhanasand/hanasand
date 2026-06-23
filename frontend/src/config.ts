@@ -2,7 +2,10 @@ import packagejson from '../package.json'
 
 const defaultPublicApiUrl = 'https://api.hanasand.com/api'
 const defaultPublicCdnUrl = 'https://cdn.hanasand.com/api'
-const publicApiUrl = process.env.NEXT_PUBLIC_API || defaultPublicApiUrl
+const configuredPublicApiUrl = process.env.NEXT_PUBLIC_API || defaultPublicApiUrl
+const publicApiUrl = process.env.NODE_ENV === 'production' && isLocalUrl(configuredPublicApiUrl)
+    ? defaultPublicApiUrl
+    : configuredPublicApiUrl
 const internalApiUrl =
     process.env.FRONTEND_INTERNAL_API ||
     process.env.INTERNAL_API ||
