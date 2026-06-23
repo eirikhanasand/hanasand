@@ -78,6 +78,7 @@ export default function useAiWorkbench({
     const [isConnected, setIsConnected] = useState(Boolean(initialRuntimeState?.connectedClientCount))
     const [statusNotice, setStatusNotice] = useState<string | null>(initialRuntimeState?.lastFailure?.message || null)
     const [runtimeSnapshot, setRuntimeSnapshot] = useState<AIRuntimeState | null>(initialRuntimeState)
+    const [aiApiAvailable, setAiApiAvailable] = useState(isAuthenticated)
     const [conversations, setConversations] = useState<AIConversation[]>(initialConversations)
     const [activeConversationId, setActiveConversationId] = useState<string | null>(initialConversationId || initialConversations[0]?.id || null)
     const [composer, setComposer] = useState('')
@@ -121,6 +122,19 @@ export default function useAiWorkbench({
     }, [conversations])
 
     useEffect(() => {
+        setAiApiAvailable(isAuthenticated)
+    }, [isAuthenticated])
+
+    const markUnauthorized = useCallback((response: Response) => {
+        if (response.status === 401 || response.status === 403) {
+            setAiApiAvailable(false)
+            return true
+        }
+
+        return false
+    }, [])
+
+    useEffect(() => {
         if (typeof window === 'undefined') {
             return
         }
@@ -160,13 +174,13 @@ export default function useAiWorkbench({
 
     useEffect(() => {
         refreshRuntimeRef.current = async () => {
-            if (!isAuthenticated) {
+            if (!isAuthenticated || !aiApiAvailable) {
                 return
             }
 
             try {
                 const response = await aiClientRequest('/ai/runtime')
-                if (!response.ok) {
+                if (markUnauthorized(response) || !response.ok) {
                     return
                 }
 
@@ -178,10 +192,10 @@ export default function useAiWorkbench({
                 // Best-effort runtime refresh should not interrupt the current session.
             }
         }
-    }, [isAuthenticated])
+    }, [aiApiAvailable, isAuthenticated, markUnauthorized])
 
     useEffect(() => {
-        if (!isAuthenticated) {
+        if (!isAuthenticated || !aiApiAvailable) {
             return
         }
 
@@ -193,10 +207,10 @@ export default function useAiWorkbench({
         return () => {
             window.clearInterval(interval)
         }
-    }, [isAuthenticated])
+    }, [aiApiAvailable, isAuthenticated])
 
     useEffect(() => {
-        if (!isAuthenticated) {
+        if (!isAuthenticated || !aiApiAvailable) {
             return
         }
 
@@ -204,7 +218,7 @@ export default function useAiWorkbench({
         const loadTargets = async () => {
             try {
                 const response = await aiClientRequest('/vms/agent/targets')
-                if (!response.ok) {
+                if (markUnauthorized(response) || !response.ok) {
                     return
                 }
 
@@ -224,10 +238,10 @@ export default function useAiWorkbench({
         return () => {
             cancelled = true
         }
-    }, [isAuthenticated])
+    }, [aiApiAvailable, isAuthenticated, markUnauthorized])
 
     useEffect(() => {
-        if (!isAuthenticated || !activeConversationId) {
+        if (!isAuthenticated || !aiApiAvailable || !activeConversationId) {
             return
         }
 
@@ -235,6 +249,9 @@ export default function useAiWorkbench({
         const refreshDeployments = async () => {
             try {
                 const response = await aiClientRequest(`/ai/deployments?conversationId=${encodeURIComponent(activeConversationId)}`)
+                if (markUnauthorized(response) || !response.ok) {
+                    return
+                }
                 const payload = await response.json().catch(() => null) as { deployments?: AIDeployment[], quota?: AIDeployQuota } | null
                 if (!cancelled && Array.isArray(payload?.deployments)) {
                     setDeployments((prev) => [
@@ -256,10 +273,10 @@ export default function useAiWorkbench({
             cancelled = true
             window.clearInterval(interval)
         }
-    }, [activeConversationId, isAuthenticated])
+    }, [activeConversationId, aiApiAvailable, isAuthenticated, markUnauthorized])
 
     useEffect(() => {
-        if (!isAuthenticated || !activeConversationId) {
+        if (!isAuthenticated || !aiApiAvailable || !activeConversationId) {
             return
         }
 
@@ -267,6 +284,9 @@ export default function useAiWorkbench({
         const refreshReleases = async () => {
             try {
                 const response = await aiClientRequest(`/ai/releases?conversationId=${encodeURIComponent(activeConversationId)}`)
+                if (markUnauthorized(response) || !response.ok) {
+                    return
+                }
                 const payload = await response.json().catch(() => null) as { releases?: AIRelease[] } | null
                 if (!cancelled && Array.isArray(payload?.releases)) {
                     setReleases(payload.releases)
@@ -282,7 +302,7 @@ export default function useAiWorkbench({
             cancelled = true
             window.clearInterval(interval)
         }
-    }, [activeConversationId, isAuthenticated])
+    }, [activeConversationId, aiApiAvailable, isAuthenticated, markUnauthorized])
 
     function createNewConversation() {
         return createNewConversationRef.current()
