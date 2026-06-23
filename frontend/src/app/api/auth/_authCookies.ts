@@ -21,6 +21,7 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
         domain: sharedCookieDomain(req),
     }
 
+    expireHostOnlyAuthCookies(response)
     if (data.name) {
         response.cookies.set('name', data.name, cookieOptions)
     }
@@ -55,4 +56,10 @@ function sharedCookieDomain(req: NextRequest) {
 
 function shouldUseSecureCookies(req: NextRequest) {
     return req.nextUrl.protocol === 'https:' || Boolean(sharedCookieDomain(req))
+}
+
+function expireHostOnlyAuthCookies(response: NextResponse) {
+    for (const cookie of authCookieNames) {
+        response.headers.append('Set-Cookie', `${cookie}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`)
+    }
 }
