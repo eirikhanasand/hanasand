@@ -158,7 +158,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                 </div>
 
                 <div className='grid w-full gap-3 rounded-lg border border-[#e4e7ec] bg-white p-4 shadow-[0_18px_55px_rgba(16,24,40,0.08)] md:p-5'>
-                    {(internal && path) && <ErrorNotice message={`${path} is internal. Please log in.`} />}
+                    {(internal && path) && <ErrorNotice variant='info' message={`Create an account to continue to ${path}.`} />}
 
                     <Notify message={error} />
                     <form

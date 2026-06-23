@@ -198,7 +198,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
         setCookieWithExpiresAt('access_token', data.token, data.expires_at)
         setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
-        window.location.assign(path || '/dashboard')
+        window.setTimeout(() => window.location.assign(path || '/dashboard'), 0)
     }
 
     function changeMode(nextMode: typeof mode) {
@@ -228,7 +228,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
 
                 <div className='grid w-full gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
                     {(expired && path) && <ErrorNotice variant='info' message={`Token expired. You will be redirected back to ${path} after reauthenticating.`} />}
-                    {(internal && path) && <ErrorNotice message={`${path} is internal. Please log in.`} />}
+                    {(internal && path) && <ErrorNotice variant='info' message={`Please log in to continue to ${path}.`} />}
 
                     <Notify message={error as string | null} />
                     {mode === 'login' && (

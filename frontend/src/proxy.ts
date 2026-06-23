@@ -33,7 +33,7 @@ export async function proxy(req: NextRequest) {
 
     if (requiresAuth) {
         if (!tokenCookie || !idCookie) {
-            return NextResponse.redirect(new URL(`/login?internal=true&path=${path}`, req.url))
+            return loginRedirect(req, path)
         }
 
         const token = tokenCookie.value
@@ -44,7 +44,7 @@ export async function proxy(req: NextRequest) {
             validToken = auth.valid
 
             if (!validToken) {
-                return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&expired=true'}`, req.url))
+                return loginRedirect(req, path, { expired: Boolean(token), clearAuth: true })
             }
 
             if (auth.token) {
@@ -89,7 +89,7 @@ export async function proxy(req: NextRequest) {
             }
 
             if (!roles.some((role) => roleMatchesStrictPath(role, strictPath.role))) {
-                return NextResponse.redirect(new URL(`/logout?internal=true&path=${path}${token.length && '&notAllowed=true'}`, req.url))
+                return loginRedirect(req, path, { notAllowed: true, clearAuth: true })
             }
         }
     }
@@ -126,4 +126,35 @@ function normalizeRoles(value: unknown): Array<Role & { role_id?: string }> {
 
 function roleMatchesStrictPath(role: Role & { role_id?: string }, requiredRole: string) {
     return role.id === requiredRole || role.role_id === requiredRole
+}
+
+function loginRedirect(
+    req: NextRequest,
+    path: string,
+    options: { expired?: boolean, notAllowed?: boolean, clearAuth?: boolean } = {},
+) {
+    const url = new URL('/login', req.url)
+    url.searchParams.set('path', path)
+    if (options.expired) {
+        url.searchParams.set('expired', 'true')
+    }
+    if (options.notAllowed) {
+        url.searchParams.set('notAllowed', 'true')
+    }
+
+    const response = NextResponse.redirect(url)
+    if (options.clearAuth) {
+        for (const cookie of ['name', 'access_token', 'id', 'avatar', 'roles']) {
+            response.cookies.delete(cookie)
+            if (isHanasandHost(req.nextUrl.hostname)) {
+                response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`)
+            }
+        }
+    }
+
+    return response
+}
+
+function isHanasandHost(hostname: string) {
+    return hostname === 'hanasand.com' || hostname.endsWith('.hanasand.com')
 }
