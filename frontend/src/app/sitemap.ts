@@ -12,19 +12,14 @@ const publicRoutes = [
     '/developers',
     '/eirik',
     '/eirik/motivation',
-    '/gallery',
-    '/g',
-    '/g/stats',
     '/pwned',
     '/pricing',
     '/privacy',
-    '/reserved-usernames',
     '/solutions',
     '/solutions/dwm',
     '/status',
     '/terms',
     '/ti',
-    '/upload',
 ]
 
 const articleRoutes = [

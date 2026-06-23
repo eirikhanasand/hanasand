@@ -8,5 +8,11 @@ Disallow: /reset-password
 Disallow: /notes
 Disallow: /thought
 Disallow: /thoughts
+Disallow: /dev/
+Disallow: /test
+Disallow: /upload
+Disallow: /gallery
+Disallow: /g
+Disallow: /reserved-usernames
 
 Sitemap: https://hanasand.com/sitemap.xml
