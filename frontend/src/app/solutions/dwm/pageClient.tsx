@@ -84,6 +84,7 @@ export default function DarkWebMonitoringPage() {
         writeWebhookDraft(draft)
         setSubscriptionId(nextSubscriptionId)
         setStatus(`Webhook setup saved for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. Create the alert in the console to start monitoring.`)
+        window.location.assign('/dashboard/automations?setup=dwm')
     }
 
     async function copyPayload() {
