@@ -12,17 +12,15 @@ const dockerfile = await read('Dockerfile')
 const apiTraffic = await readFromRepo('api/src/handlers/traffic/legacy.ts')
 const apiSchema = await readFromRepo('api/src/utils/db/ensureSchema.ts')
 
-for (const heading of ['Live traffic', 'Most visited subdomains', 'Top endpoints']) {
+for (const heading of ['Public routes monitored', 'Alert flow observed', 'No active spikes']) {
     assert.match(statusClient, new RegExp(escapeRegExp(heading)), `/status should render "${heading}"`)
 }
 
-for (const emptyState of [
-    'Waiting for the first live traffic reading.',
-    'Subdomain rankings will appear after traffic is recorded.',
-    'Endpoint rankings will appear after traffic is recorded.',
-]) {
-    assert.match(statusClient, new RegExp(escapeRegExp(emptyState)), `/status should not look missing when ${emptyState}`)
+for (const rawTrafficHeading of ['Most visited subdomains', 'Top endpoints']) {
+    assert.doesNotMatch(statusClient, new RegExp(escapeRegExp(rawTrafficHeading)), `/status should not expose raw traffic heading "${rawTrafficHeading}"`)
 }
+
+assert.match(statusClient, /without exposing raw traffic paths/, '/status should explain that raw traffic paths are not exposed publicly')
 
 assert.match(statusPage, /monitoringPayload\?\.top_paths/, '/status should fall back to monitoring top_paths when legacy endpoint data is empty')
 assert.match(statusPage, /monitoringPayload\?\.top_domains/, '/status should fall back to monitoring top_domains when legacy endpoint data is empty')
