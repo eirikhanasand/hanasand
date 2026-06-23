@@ -496,7 +496,8 @@ function sourceDisplayText(source: TiSearchResponse['sources'][number]) {
     return readableSourceText(source.provenance)
 }
 
-function linkFromText(value: string) {
+function linkFromText(value?: string) {
+    if (!value) return undefined
     const match = value.match(/\bhttps?:\/\/[^\s<>"']+/i)
     if (!match) return undefined
     try {
@@ -508,7 +509,8 @@ function linkFromText(value: string) {
     return undefined
 }
 
-function readableSourceText(value: string) {
+function readableSourceText(value?: string) {
+    if (!value) return 'Source details available in the console'
     if (/^https?:\/\//i.test(value)) {
         try {
             return new URL(value).hostname.replace(/^www\./, '')

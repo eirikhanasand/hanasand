@@ -95,9 +95,10 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                         method='post'
                     >
                         <input type='hidden' name='redirectPath' value={redirectPath} />
-                        <label className='grid gap-1.5'>
+                        <label className='grid gap-1.5' htmlFor='register-username'>
                             <span className='text-xs font-semibold text-[#596170]'>Username</span>
                             <input
+                                id='register-username'
                                 type='text'
                                 name='username'
                                 onChange={(e) => setUsername(e.target.value)}
@@ -111,9 +112,10 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             This username is reserved.
                             <Link href='/reserved-usernames' className='ml-1 font-semibold underline underline-offset-4'>View reserved names.</Link>
                         </div>}
-                        <label className='grid gap-1.5'>
+                        <label className='grid gap-1.5' htmlFor='register-name'>
                             <span className='text-xs font-semibold text-[#596170]'>Name</span>
                             <input
+                                id='register-name'
                                 type='text'
                                 name='name'
                                 placeholder='Dave'
@@ -122,9 +124,10 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 required
                             />
                         </label>
-                        <label className='grid gap-1.5'>
+                        <label className='grid gap-1.5' htmlFor='register-password'>
                             <span className='text-xs font-semibold text-[#596170]'>Password</span>
                             <input
+                                id='register-password'
                                 type='password'
                                 name='password'
                                 onChange={(e) => setPassword(e.target.value)}

@@ -160,9 +160,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 method='post'
                             >
                                 <input type='hidden' name='redirectPath' value={redirectPath} />
-                                <label className='grid gap-1.5'>
+                                <label className='grid gap-1.5' htmlFor='login-username'>
                                     <span className='text-xs font-semibold text-[#596170]'>Username</span>
                                     <input
+                                        id='login-username'
                                         type='text'
                                         name='username'
                                         placeholder='dave'
@@ -171,9 +172,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                         required
                                     />
                                 </label>
-                                <label className='grid gap-1.5'>
+                                <label className='grid gap-1.5' htmlFor='login-password'>
                                     <span className='text-xs font-semibold text-[#596170]'>Password</span>
                                     <input
+                                        id='login-password'
                                         type='password'
                                         name='password'
                                         placeholder='Enter your password'
@@ -220,9 +222,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                             method='post'
                         >
                             <input type='hidden' name='redirectPath' value={redirectPath} />
-                            <label className='grid gap-1.5'>
+                            <label className='grid gap-1.5' htmlFor='login-signup-username'>
                                 <span className='text-xs font-semibold text-[#596170]'>Username</span>
                                 <input
+                                    id='login-signup-username'
                                     type='text'
                                     name='username'
                                     value={signupUsername}
@@ -234,9 +237,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 />
                             </label>
                             {reservedUsername && <p className='px-1 text-xs font-semibold text-[#8a5a00]'>Reserved username.</p>}
-                            <label className='grid gap-1.5'>
+                            <label className='grid gap-1.5' htmlFor='login-signup-name'>
                                 <span className='text-xs font-semibold text-[#596170]'>Name</span>
                                 <input
+                                    id='login-signup-name'
                                     type='text'
                                     name='name'
                                     value={signupName}
@@ -247,9 +251,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     required
                                 />
                             </label>
-                            <label className='grid gap-1.5'>
+                            <label className='grid gap-1.5' htmlFor='login-signup-password'>
                                 <span className='text-xs font-semibold text-[#596170]'>Password</span>
                                 <input
+                                    id='login-signup-password'
                                     type='password'
                                     name='password'
                                     value={signupPassword}
@@ -287,9 +292,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
 
                     {mode === 'request-reset' && (
                         <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetRequest} method='post'>
-                            <label className='grid gap-1.5'>
+                            <label className='grid gap-1.5' htmlFor='login-reset-username'>
                                 <span className='text-xs font-semibold text-[#596170]'>Username</span>
                                 <input
+                                    id='login-reset-username'
                                     type='text'
                                     name='resetUserId'
                                     placeholder='dave'

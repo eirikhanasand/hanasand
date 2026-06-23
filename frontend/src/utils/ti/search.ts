@@ -57,7 +57,7 @@ export interface TiSearchResponse {
         id: string
         name: string
         type: string
-        provenance: string
+        provenance?: string
         url?: string
     }>
     notes: string[]
@@ -185,7 +185,7 @@ export interface TiMetadataReviewItem {
     actorStatement?: string
     claimedDate?: string
     sourceHash?: string
-    provenance: string
+    provenance?: string
     confidence: number
     status: 'needs_review' | 'queued_metadata_only' | 'duplicate' | 'escalated'
     allowedActions: Array<'notify_company' | 'mark_duplicate' | 'request_approval' | 'escalate'>
