@@ -10,33 +10,24 @@ export default function LogoutPageClient({ path }: { path?: string }) {
 
     useEffect(() => {
         (async () => {
-            try {
-                const id = getCookie('id')
-                removeCookies('name', 'access_token', 'id', 'avatar', 'roles')
-                const searchParams = new URLSearchParams(window.location.search)
-                const queryString = searchParams.toString()
+            const id = getCookie('id')
+            removeCookies('name', 'access_token', 'id', 'avatar', 'roles')
+            const searchParams = new URLSearchParams(window.location.search)
+            const queryString = searchParams.toString()
+
+            if (id) {
                 const controller = new AbortController()
                 const timeout = setTimeout(() => controller.abort(), config.abortTimeout)
+                fetch(`${config.url.api}/auth/logout/${id}`, {
+                    signal: controller.signal
+                }).catch(() => null).finally(() => clearTimeout(timeout))
+            }
 
-                if (id) {
-                    const response = await fetch(`${config.url.api}/auth/logout/${id}`, {
-                        signal: controller.signal
-                    })
-                    clearTimeout(timeout)
-                    if (!response.ok) {
-                        throw new Error(await response.text())
-                    }
-                }
-
-                const safePath = getSafeLocalPath(path)
-                if (safePath) {
-                    router.push(safePath)
-                } else {
-                    router.push(`/?${queryString}&logout=true`)
-                }
-            } catch (error) {
-                console.log(error)
-                router.push('/?logout=true&error=true')
+            const safePath = getSafeLocalPath(path)
+            if (safePath) {
+                router.push(safePath)
+            } else {
+                router.push(`/?${queryString}&logout=true`)
             }
         })()
     })

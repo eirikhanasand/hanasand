@@ -23,7 +23,7 @@ const examples = [
     {
         title: 'Ransomware actor overview',
         slug: 'hanasand/actor-overview',
-        detail: 'Map actors to victims, claimed data, infrastructure changes, source history, sectors, and review state.',
+        detail: 'Map actors to victims, claimed data, infrastructure changes, sectors, timelines, and review state.',
         badge: 'Graph ready',
         signal: 'Actor and victim pivots',
         icon: Waypoints,

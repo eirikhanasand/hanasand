@@ -1,7 +1,14 @@
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
 import AutomationsClient from './pageClient'
 
-export default function Page() {
+export default async function Page({
+    searchParams,
+}: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+    const params = await searchParams
+    const setup = Array.isArray(params?.setup) ? params?.setup[0] : params?.setup
+
     return (
         <DashboardPage>
             <DashboardHeader
@@ -9,7 +16,7 @@ export default function Page() {
                 title='Monitoring alerts'
                 description='Create scheduled checks, test delivery, and review recent alert runs from the customer console.'
             />
-            <AutomationsClient />
+            <AutomationsClient setup={setup === 'dwm' ? 'dwm' : undefined} />
         </DashboardPage>
     )
 }

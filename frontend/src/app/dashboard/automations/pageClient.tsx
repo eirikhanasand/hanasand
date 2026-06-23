@@ -42,29 +42,38 @@ type DwmWebhookDraft = {
     payload?: unknown
 }
 
-export default function AutomationsClient() {
+export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
+    const initialSetup = setup === 'dwm' || readSetupIntent() === 'dwm'
     const [automations, setAutomations] = useState<AgentAutomation[]>([])
     const [runs, setRuns] = useState<AgentAutomationRun[]>([])
     const [selectedId, setSelectedId] = useState('')
     const [busy, setBusy] = useState('')
     const [status, setStatus] = useState('')
     const [webhookDraft, setWebhookDraft] = useState<DwmWebhookDraft | null>(null)
-    const [draft, setDraft] = useState<AutomationPayload>(newAutomationDraft('Check the watchlist for new company, domain, vendor, or actor mentions and summarize any alert-worthy matches.'))
+    const [draft, setDraft] = useState<AutomationPayload>(() => initialSetup
+        ? dwmFallbackDraft()
+        : newAutomationDraft('Check the watchlist for new company, domain, vendor, or actor mentions and summarize any alert-worthy matches.'))
 
     const selected = useMemo(() => automations.find(item => item.id === selectedId) || null, [automations, selectedId])
     const activeAutomationCount = useMemo(() => automations.filter(item => item.status === 'active').length, [automations])
 
     useEffect(() => {
         const nextWebhookDraft = readWebhookDraft()
+        const setupIntent = setup || readSetupIntent()
         if (nextWebhookDraft) {
             setWebhookDraft(nextWebhookDraft)
             setDraft(draftFromWebhook(nextWebhookDraft))
             setSelectedId('')
             setRuns([])
             setStatus('Webhook alert is ready. Review the schedule and create it to start monitoring.')
+        } else if (setupIntent === 'dwm') {
+            setDraft(dwmFallbackDraft())
+            setSelectedId('')
+            setRuns([])
+            setStatus('Dark web monitoring alert draft is ready. Add the final delivery endpoint before creating it.')
         }
         void load(nextWebhookDraft ? draftSelectionId : undefined)
-    }, [])
+    }, [setup])
 
     async function load(selectId: string | undefined = selectedId) {
         setBusy('load')
@@ -109,7 +118,7 @@ export default function AutomationsClient() {
                 ? await updateAutomation(selected.id, draft)
                 : await createAutomation(draft)
             if (!selected && webhookDraft) {
-                if (typeof window !== 'undefined') window.localStorage.removeItem(dwmWebhookDraftKey)
+                clearStoredWebhookDraft()
                 setWebhookDraft(null)
             }
             setSelectedId(payload.automation.id)
@@ -169,7 +178,7 @@ export default function AutomationsClient() {
     }
 
     function clearWebhookDraft() {
-        if (typeof window !== 'undefined') window.localStorage.removeItem(dwmWebhookDraftKey)
+        clearStoredWebhookDraft()
         setWebhookDraft(null)
         setStatus('Saved webhook setup cleared.')
     }
@@ -397,7 +406,7 @@ function toDraft(automation: AgentAutomation): AutomationPayload {
 function readWebhookDraft(): DwmWebhookDraft | null {
     if (typeof window === 'undefined') return null
     try {
-        const raw = window.localStorage.getItem(dwmWebhookDraftKey)
+        const raw = window.localStorage.getItem(dwmWebhookDraftKey) || window.sessionStorage.getItem(dwmWebhookDraftKey)
         if (!raw) return null
         const parsed = JSON.parse(raw) as Partial<DwmWebhookDraft>
         if (!parsed.id || !parsed.endpoint || !Array.isArray(parsed.terms) || !parsed.terms.length) return null
@@ -413,12 +422,51 @@ function readWebhookDraft(): DwmWebhookDraft | null {
     }
 }
 
+function clearStoredWebhookDraft() {
+    if (typeof window === 'undefined') return
+    try {
+        window.localStorage.removeItem(dwmWebhookDraftKey)
+    } catch {
+        // Storage may be disabled; nothing else to clear.
+    }
+    try {
+        window.sessionStorage.removeItem(dwmWebhookDraftKey)
+    } catch {
+        // Storage may be disabled; nothing else to clear.
+    }
+}
+
+function readSetupIntent() {
+    if (typeof window === 'undefined') return ''
+    try {
+        return new URLSearchParams(window.location.search).get('setup') || ''
+    } catch {
+        return ''
+    }
+}
+
 function draftFromWebhook(subscription: DwmWebhookDraft): AutomationPayload {
     const terms = subscription.terms.map(term => term.trim()).filter(Boolean)
+    const deliveryTarget = redactWebhookEndpoint(subscription.endpoint)
     return {
         ...newAutomationDraft([
             `Watch these companies, domains, vendors, and products for new ransomware or extortion mentions: ${terms.join(', ')}.`,
-            `Send matching alerts to this HTTPS webhook endpoint: ${subscription.endpoint}.`,
+            `Send matching alerts to the configured HTTPS webhook endpoint: ${deliveryTarget}.`,
+            'Include actor, company, matchedTerm, claimSummary, claimedAt, sourceName, sourceUrl, confidence, recommendedAction, and pivots.',
+            'Only send new or materially updated matches that need review.',
+        ].join('\n')),
+        name: 'Dark web monitoring webhook',
+        intervalMinutes: 15,
+        modelName: 'webhook',
+        notifyOn: 'always',
+    }
+}
+
+function dwmFallbackDraft(): AutomationPayload {
+    return {
+        ...newAutomationDraft([
+            'Watch these companies, domains, vendors, and products for new ransomware or extortion mentions.',
+            'Send matching alerts to the configured HTTPS webhook endpoint.',
             'Include actor, company, matchedTerm, claimSummary, claimedAt, sourceName, sourceUrl, confidence, recommendedAction, and pivots.',
             'Only send new or materially updated matches that need review.',
         ].join('\n')),

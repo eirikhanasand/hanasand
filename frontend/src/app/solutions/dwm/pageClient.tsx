@@ -41,6 +41,8 @@ const apiUseCases = [
     'Route high-confidence company matches to Slack, Jira, SOAR, or a customer portal.',
 ]
 
+const dwmWebhookDraftKey = 'hanasand:dwm-webhook-subscription'
+
 export default function DarkWebMonitoringPage() {
     const [endpoint, setEndpoint] = useState('https://hooks.example.com/hanasand/dwm')
     const [watchlist, setWatchlist] = useState('acme.com, Acme Payments, Northwind supplier')
@@ -72,13 +74,14 @@ export default function DarkWebMonitoringPage() {
             return
         }
         const nextSubscriptionId = `dwm_${Date.now().toString(36)}`
-        window.localStorage.setItem('hanasand:dwm-webhook-subscription', JSON.stringify({
+        const draft = JSON.stringify({
             id: nextSubscriptionId,
             endpoint: trimmedEndpoint,
             terms,
             payload,
             createdAt: new Date().toISOString(),
-        }))
+        })
+        writeWebhookDraft(draft)
         setSubscriptionId(nextSubscriptionId)
         setStatus(`Webhook setup saved for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. Create the alert in the console to start monitoring.`)
     }
@@ -178,7 +181,7 @@ export default function DarkWebMonitoringPage() {
                         </div>
                         <label htmlFor='dwm-webhook-endpoint' className='grid gap-2'>
                             <span className='text-sm font-semibold text-[#344054]'>Webhook endpoint</span>
-                            <input id='dwm-webhook-endpoint' value={endpoint} onChange={event => updateEndpoint(event.target.value)} className={inputClass} placeholder='https://hooks.company.com/hanasand' />
+                            <input id='dwm-webhook-endpoint' aria-label='Webhook endpoint' value={endpoint} onChange={event => updateEndpoint(event.target.value)} className={inputClass} placeholder='https://hooks.company.com/hanasand' />
                         </label>
                         <label htmlFor='dwm-watched-terms' className='grid gap-2'>
                             <span className='text-sm font-semibold text-[#344054]'>Watched terms</span>
@@ -189,7 +192,7 @@ export default function DarkWebMonitoringPage() {
                                 Prepare webhook alert
                                 <ArrowRight className='h-4 w-4' />
                             </button>
-                            <Link href='/dashboard/automations' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                            <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
                                 Create alert in console
                             </Link>
                             <button type='button' onClick={copyPayload} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
@@ -229,6 +232,19 @@ export default function DarkWebMonitoringPage() {
 }
 
 const inputClass = 'rounded-lg border border-[#d8dee9] bg-white px-3 py-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+
+function writeWebhookDraft(draft: string) {
+    try {
+        window.localStorage.setItem(dwmWebhookDraftKey, draft)
+    } catch {
+        // Best effort: sessionStorage still supports the immediate handoff.
+    }
+    try {
+        window.sessionStorage.setItem(dwmWebhookDraftKey, draft)
+    } catch {
+        // The visible confirmation remains useful even if browser storage is disabled.
+    }
+}
 
 function Stat({ label, value }: { label: string; value: string }) {
     return (

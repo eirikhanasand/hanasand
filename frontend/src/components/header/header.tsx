@@ -14,9 +14,9 @@ import isSharePath from '@/utils/routes/isSharePath'
 import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 
 const productItems = [
-    { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, and monitored metadata.', href: '/ti', icon: Radar },
-    { title: 'Dark Web Monitoring', detail: 'Webhook-ready company and vendor alerts from actor-page metadata.', href: '/solutions/dwm', icon: BellRing },
-    { title: 'Actor Overview', detail: 'Actor profiles, victim pivots, and source history for review workflows.', href: '/ti', icon: Waypoints },
+    { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, and alert context.', href: '/ti', icon: Radar },
+    { title: 'Dark Web Monitoring', detail: 'Webhook-ready company and vendor alerts from monitored actor pages.', href: '/solutions/dwm', icon: BellRing },
+    { title: 'Actor Overview', detail: 'Actor profiles, victim pivots, and review-ready timelines.', href: '/ti', icon: Waypoints },
 ]
 
 const solutionItems = [
