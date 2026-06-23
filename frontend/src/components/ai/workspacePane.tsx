@@ -833,8 +833,8 @@ function ChecklistItem({ label, state }: { label: string, state: 'ready' | 'need
     const ready = state === 'ready' || state === 'automatic'
 
     return (
-        <div className='flex items-center justify-between gap-3 rounded-lg bg-[#f8fafc] px-2.5 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
-            <span className='min-w-0 truncate'>{label}</span>
+        <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg bg-[#f8fafc] px-2.5 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
+            <span className='min-w-0 flex-1 basis-48 wrap-break-word'>{label}</span>
             <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${ready ? 'bg-emerald-500/12 text-emerald-700' : 'bg-amber-500/12 text-amber-700'}`}>
                 {ready ? <CheckCircle2 className='h-3 w-3' /> : <AlertTriangle className='h-3 w-3' />}
                 {state === 'automatic' ? 'auto' : state === 'ready' ? 'ready' : 'needed'}
