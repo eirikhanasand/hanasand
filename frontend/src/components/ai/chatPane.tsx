@@ -12,6 +12,7 @@ type ChatPaneProps = {
     clients: GPT_Client[]
     composer: string
     isConnected: boolean
+    isAuthenticated: boolean
     participants: number
     landing?: boolean
     readOnly?: boolean
@@ -32,6 +33,7 @@ export default function ChatPane({
     clients,
     composer,
     isConnected,
+    isAuthenticated,
     readOnly = false,
     onModelStrategyChange,
     onPreferredModelChange,
@@ -48,12 +50,15 @@ export default function ChatPane({
         || activeConversation?.metrics?.status === 'generating'
     const awaitingResponse = Boolean(activeConversation?.messages.at(-1)?.pending)
     const hasReadyModel = isConnected && clients.length > 0
+    const unavailableModelReason = isAuthenticated
+        ? 'Model unavailable. You can still open the editor or attach context while capacity is unavailable.'
+        : 'Model unavailable. You can still open the editor, attach context, or sign in to continue when capacity is available.'
     const composerBlockedReason = readOnly
         ? 'Reviewer mode: you can inspect this workspace but cannot send prompts.'
         : awaitingResponse
             ? 'Waiting for the current agent turn to finish.'
             : !hasReadyModel
-                ? 'Model unavailable. You can still open the editor, attach context, or sign in to continue when capacity is available.'
+                ? unavailableModelReason
                 : null
     const lastMessageKey = useMemo(() => {
         const lastMessage = activeConversation?.messages.at(-1)
@@ -146,7 +151,7 @@ export default function ChatPane({
                 <div className={`grid min-h-0 flex-1 ${showArtifacts ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem]' : 'grid-cols-1'}`}>
                     <div ref={scrollRef} className='min-h-0 space-y-5 overflow-y-auto px-5 py-8 md:px-12 xl:px-24'>
                         {!activeConversation?.messages.length ? (
-                            <EmptyComposerState tooltip={emptyTooltip} hasReadyModel={hasReadyModel} />
+                            <EmptyComposerState tooltip={emptyTooltip} hasReadyModel={hasReadyModel} isAuthenticated={isAuthenticated} />
                         ) : activeConversation.messages.map((message) => (
                             <article key={message.id} className={`max-w-3xl rounded-lg border px-4 py-3 ${message.role === 'user' ? 'ml-auto border-[#dfe5ee] bg-white text-[#171a21] shadow-sm' : message.error ? 'border-[#fecdca] bg-[#fff1f0] text-[#912018]' : message.role === 'tool' ? 'border-[#dfe5ee] bg-[#f8fafc] text-[#344054]' : 'border-transparent bg-transparent text-[#171a21]'}`}>
                                 {message.role === 'tool' || message.role === 'assistant' ? (
@@ -238,7 +243,7 @@ export default function ChatPane({
     )
 }
 
-function EmptyComposerState({ tooltip, hasReadyModel }: { tooltip: string, hasReadyModel: boolean }) {
+function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { tooltip: string, hasReadyModel: boolean, isAuthenticated: boolean }) {
     const greeting = 'What can I help you with?'
 
     return (
@@ -260,9 +265,11 @@ function EmptyComposerState({ tooltip, hasReadyModel }: { tooltip: string, hasRe
                         <Link href='/s' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                             Open editor
                         </Link>
-                        <Link href='/login' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
-                            Sign in
-                        </Link>
+                        {!isAuthenticated ? (
+                            <Link href='/login' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                                Sign in
+                            </Link>
+                        ) : null}
                     </div>
                 ) : null}
             </div>

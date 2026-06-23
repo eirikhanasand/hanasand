@@ -129,7 +129,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
 function Results({ result }: { result: TiSearchResponse }) {
     const sourceUrlById = new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)]))
     const collectionSources = result.collectionStrategy?.sourcePosture ?? defaultCollectionSources()
-    const datasets = result.datasets.length ? result.datasets : defaultDatasets()
+    const datasets = (result.datasets.length ? result.datasets : defaultDatasets()).filter(item => !/planned|rejected|blocked/i.test(item.status))
     const sources = result.sources.length ? result.sources : defaultSourceLinks()
     const alertItems = alertItemsFor(result)
     return (
@@ -140,7 +140,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         <h1 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>{result.query}</h1>
                         {result.status ? (
                             <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-medium uppercase text-[#3056d3]'>
-                                {result.status}
+                                {humanResultStatus(result.status)}
                             </span>
                         ) : null}
                     </div>
@@ -170,7 +170,10 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <span className='text-xs text-[#667085]'>{item.date}</span>
                                 </div>
                                 <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
-                                <p className='inline-flex items-center gap-1 text-xs text-[#667085]'>Confidence {Math.round(item.confidence * 100)}% · {item.sourceIds.join(', ')}{href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}</p>
+                                <p className='inline-flex items-center gap-1 text-xs text-[#667085]'>
+                                    Confidence {Math.round(item.confidence * 100)}% · {item.sourceIds.length > 1 ? `${item.sourceIds.length} sources` : '1 source'}
+                                    {href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}
+                                </p>
                             </EvidenceBox>
                         )}) : <EmptyLine text={result.status === 'searching' ? 'Searching' : 'No activity returned yet.'} />}
                 </Panel>
@@ -219,7 +222,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
                             <div className='flex items-center justify-between gap-3'>
                                 <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
-                                <span className='text-xs text-[#667085]'>{formatLabel(item.status)}</span>
+                                <span className='text-xs text-[#667085]'>{sourceStatusLabel(item.status)}</span>
                             </div>
                             <p className='text-sm leading-6 text-[#596170]'>{item.coverage}</p>
                         </EvidenceBox>
@@ -391,7 +394,7 @@ function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchRespo
                     <div key={`${source.source}-${source.role}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
                         <div className='flex flex-wrap items-center justify-between gap-2'>
                             <h3 className='text-sm font-semibold text-[#171a21]'>{source.source}</h3>
-                            <span className='rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{formatLabel(source.role)}</span>
+                            <span className='rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{sourceRoleLabel(source.role)}</span>
                         </div>
                         <p className='mt-2 text-sm leading-6 text-[#596170]'>{source.summary}</p>
                         <p className='mt-2 text-xs leading-5 text-[#667085]'>{source.buyerValue}</p>
@@ -411,8 +414,8 @@ function SourceLinksPanel({ sources }: { sources: TiSearchResponse['sources'] })
                     return (
                         <EvidenceBox key={source.id} href={href}>
                             <h2 className='inline-flex items-center gap-1 text-sm font-semibold text-[#171a21]'>{source.name}{href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}</h2>
-                            <p className='text-xs text-[#667085]'>{formatLabel(source.type)}</p>
-                            <p className='text-sm leading-6 text-[#596170]'>{source.url ? source.url : readableSourceText(source.provenance)}</p>
+                            <p className='text-xs text-[#667085]'>{sourceTypeLabel(source.type)}</p>
+                            <p className='text-sm leading-6 text-[#596170]'>{sourceDisplayText(source)}</p>
                         </EvidenceBox>
                     )
                 })}
@@ -444,6 +447,54 @@ function formatLabel(value: string) {
     return value.replaceAll('_', ' ')
 }
 
+function humanResultStatus(value?: string) {
+    if (!value) return 'Monitoring'
+    if (value === 'metadata_review') return 'Review queue'
+    if (value === 'needs_source_activation') return 'Connecting sources'
+    if (value === 'blocked_unsafe_target') return 'Review required'
+    if (value === 'ready') return 'Ready'
+    if (value === 'partial') return 'Updating'
+    if (value === 'searching' || value === 'queued') return 'Searching'
+    return formatLabel(value)
+}
+
+function sourceStatusLabel(value: string) {
+    if (/metadata/i.test(value)) return 'Monitoring metadata'
+    if (/available|ready|active/i.test(value)) return 'Active'
+    if (/context/i.test(value)) return 'Context'
+    return 'Included'
+}
+
+function sourceRoleLabel(value: string) {
+    if (value === 'primary_seed') return 'Seed coverage'
+    if (value === 'owned_collection_target') return 'Owned monitoring'
+    if (value === 'corroboration') return 'Corroboration'
+    if (value === 'context_only') return 'Context'
+    return formatLabel(value)
+}
+
+function sourceTypeLabel(value: string) {
+    if (/news/i.test(value)) return 'Recent reporting'
+    if (/victim|claim|ransom/i.test(value)) return 'Victim claims'
+    if (/vulnerab|cve|kev/i.test(value)) return 'Vulnerability context'
+    if (/darknet|darkweb|actor/i.test(value)) return 'Actor-page metadata'
+    return 'Source'
+}
+
+function sourceDisplayText(source: TiSearchResponse['sources'][number]) {
+    const href = source.url || linkFromText(source.provenance)
+    if (href) {
+        try {
+            const url = new URL(href)
+            if (/news\.google\.com$/i.test(url.hostname)) return 'Linked report via Google News'
+            return url.hostname.replace(/^www\./, '')
+        } catch {
+            return 'Open source'
+        }
+    }
+    return readableSourceText(source.provenance)
+}
+
 function linkFromText(value: string) {
     const match = value.match(/\bhttps?:\/\/[^\s<>"']+/i)
     if (!match) return undefined
@@ -457,7 +508,13 @@ function linkFromText(value: string) {
 }
 
 function readableSourceText(value: string) {
-    if (/^https?:\/\//i.test(value)) return value
+    if (/^https?:\/\//i.test(value)) {
+        try {
+            return new URL(value).hostname.replace(/^www\./, '')
+        } catch {
+            return 'Open source'
+        }
+    }
     return value.replace(/^Scraper run [^;]+;\s*/i, '').replace(/^Live query text;\s*/i, '')
 }
 

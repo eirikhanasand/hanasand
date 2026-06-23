@@ -7,9 +7,9 @@ export default function Page() {
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Shares'
+                eyebrow='Monitoring workspace'
                 title='Shares'
-                description='Review shared spaces and create a new workspace.'
+                description='Review shared workspaces, customer handoffs, and delivery links.'
             />
             <div className='max-w-3xl'>
                 <Shares />

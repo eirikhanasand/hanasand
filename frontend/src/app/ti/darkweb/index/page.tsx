@@ -105,10 +105,10 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                         </p>
                     </div>
                     <div className='grid gap-2 text-sm'>
-                        <Metric icon={<Database className='h-4 w-4' />} label='Watch targets' value={formatNumber(statusIndex?.targetRecordCount)} />
-                        <Metric icon={<Search className='h-4 w-4' />} label='Indexed pages' value={formatNumber(statusIndex?.indexedRecordEstimate)} />
-                        <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Matches' value={formatNumber(searchIndex?.totalMatches)} />
-                        <Metric icon={<BellRing className='h-4 w-4' />} label='Updated' value={formatDate(searchIndex?.generatedAt ?? statusIndex?.generatedAt)} />
+                        <Metric icon={<Database className='h-4 w-4' />} label='Watch targets' value={formatNumber(statusIndex?.targetRecordCount, 'Ready')} />
+                        <Metric icon={<Search className='h-4 w-4' />} label='Indexed pages' value={formatNumber(statusIndex?.indexedRecordEstimate, 'Active')} />
+                        <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Matches' value={formatNumber(searchIndex?.totalMatches, records.length ? 'Matched' : 'No current match')} />
+                        <Metric icon={<BellRing className='h-4 w-4' />} label='Updated' value={formatDate(searchIndex?.generatedAt ?? statusIndex?.generatedAt, 'Live checks')} />
                     </div>
                 </section>
 
@@ -165,8 +165,12 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                         <div className='grid min-h-[28vh] place-items-center rounded-lg border border-[#dfe5ee] bg-white px-5 py-10 text-center shadow-sm'>
                             <div className='grid max-w-xl gap-3'>
                                 <Search className='mx-auto h-7 w-7 text-[#3056d3]' />
-                                <h2 className='text-xl font-semibold text-[#171a21]'>No signals returned</h2>
-                                <p className='text-sm leading-6 text-[#667085]'>Try a broader company, actor, sector, or domain search.</p>
+                                <h2 className='text-xl font-semibold text-[#171a21]'>{query ? 'No matching signals in the current index' : 'Search company and actor signals'}</h2>
+                                <p className='text-sm leading-6 text-[#667085]'>
+                                    {query
+                                        ? 'Try a broader company, actor, sector, or domain. Alerts are useful when a watched term appears; empty searches stay quiet.'
+                                        : 'Enter a company, actor, domain, supplier, or sector to review monitored exposure metadata.'}
+                                </p>
                             </div>
                         </div>
                     )}
@@ -259,7 +263,7 @@ function Breakdown({ title, values }: { title: string; values?: Record<string, n
                     <span className='text-[#596170]'>{formatLabel(key)}</span>
                     <span className='font-semibold text-[#171a21]'>{formatNumber(count)}</span>
                 </div>
-            )) : <p className='text-sm text-[#667085]'>No data</p>}
+            )) : <p className='text-sm text-[#667085]'>Available after matching records are returned.</p>}
         </section>
     )
 }
@@ -297,12 +301,12 @@ function paramValue(value: string | string[] | undefined) {
     return Array.isArray(value) ? value[0] ?? '' : value ?? ''
 }
 
-function formatNumber(value: number | undefined) {
-    return typeof value === 'number' ? new Intl.NumberFormat('en-US').format(value) : 'unknown'
+function formatNumber(value: number | undefined, fallback = 'Checking') {
+    return typeof value === 'number' ? new Intl.NumberFormat('en-US').format(value) : fallback
 }
 
-function formatDate(value: string | undefined) {
-    if (!value) return 'unknown'
+function formatDate(value: string | undefined, fallback = 'Checking') {
+    if (!value) return fallback
     const time = Date.parse(value)
     if (Number.isNaN(time)) return value
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(new Date(time))

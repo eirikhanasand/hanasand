@@ -16,9 +16,9 @@ export default async function Page() {
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Private workspace'
+                eyebrow='Monitoring workspace'
                 title='Notes'
-                description='Private notes for your dashboard, coding workspace, and mobile capture flow. Only your signed-in account can load or edit them.'
+                description='Private notes for watchlists, customer follow-up, actor review, and alert triage. Only your signed-in account can load or edit them.'
             />
             <NotesClient />
         </DashboardPage>

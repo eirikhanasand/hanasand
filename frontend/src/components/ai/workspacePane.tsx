@@ -957,7 +957,7 @@ function formatActivityTime(value: string | null) {
         return value
     }
 
-    return parsed.toLocaleString()
+    return `${parsed.toISOString().slice(0, 10)} ${parsed.toISOString().slice(11, 16)} UTC`
 }
 
 function formatUsageKind(kind: AIUsageEventKind) {

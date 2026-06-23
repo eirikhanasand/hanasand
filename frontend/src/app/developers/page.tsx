@@ -5,9 +5,9 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Developers',
-    description: 'Developer integration notes for Hanasand threat monitoring metadata and company exposure alerts.',
+    description: 'Developer integration notes for Hanasand company exposure alerts and webhook delivery.',
     path: '/developers',
-    keywords: ['hanasand developers', 'threat intelligence api', 'exposure alert metadata'],
+    keywords: ['hanasand developers', 'threat intelligence api', 'dark web monitoring webhooks'],
 })
 
 const fields = [
@@ -24,7 +24,7 @@ const fields = [
 const delivery = [
     { title: 'Search and console', detail: 'Use the TI surface for manual lookup, actor pivots, and company review.', icon: Code2 },
     { title: 'Structured exports', detail: 'Shape alert rows for review queues, spreadsheets, CRM notes, or security workflows.', icon: Database },
-    { title: 'Webhook-ready packets', detail: 'Keep payloads small: watched entity, actor, claim metadata, source, timestamps, and review status.', icon: Webhook },
+    { title: 'Webhook alerts', detail: 'Send watched entity, actor, claim, source, timestamps, and review status to the tools your team already uses.', icon: Webhook },
 ]
 
 const alertExample = [
@@ -46,9 +46,9 @@ export default function DevelopersPage() {
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[0.85fr_1.15fr] lg:items-center'>
                     <div className='grid gap-5'>
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Developers</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Integrate compact exposure metadata.</h1>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Integrate company exposure alerts.</h1>
                         <p className='max-w-2xl text-lg leading-8 text-[#596170]'>
-                            Hanasand is being shaped around compact, reviewable alert records for company monitoring: actor, victim, claim, source, timing, and watchlist context.
+                            Hanasand sends reviewable alert records for company monitoring: actor, victim, claim, source, timing, and watchlist context.
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/ti' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
@@ -67,7 +67,7 @@ export default function DevelopersPage() {
                                 <Braces className='h-4 w-4 text-[#7ca4ff]' />
                                 alert.json
                             </div>
-                            <span className='rounded-full bg-white/10 px-2 py-1 text-xs font-medium text-white/70'>metadata</span>
+                            <span className='rounded-full bg-white/10 px-2 py-1 text-xs font-medium text-white/70'>webhook alert</span>
                         </div>
                         <pre className='overflow-x-auto p-5 text-sm leading-7 text-[#d8e2f2]'>
                             {alertExample}
@@ -116,7 +116,7 @@ export default function DevelopersPage() {
                     <div className='flex flex-col gap-3 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between'>
                         <div className='grid gap-1'>
                             <h2 className='text-lg font-semibold'>Need a specific delivery format?</h2>
-                            <p className='text-sm text-[#596170]'>Send the queue, alerting system, or dashboard shape you want the metadata to fit.</p>
+                            <p className='text-sm text-[#596170]'>Send the queue, alerting system, or dashboard shape you want the alerts to fit.</p>
                         </div>
                         <Link href='/contact' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
                             <Mail className='h-4 w-4' />

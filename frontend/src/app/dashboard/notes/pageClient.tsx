@@ -90,7 +90,7 @@ export default function NotesClient() {
                         <LockKeyhole className='h-3.5 w-3.5' />
                         Private to you
                     </div>
-                    Notes sync across dashboard, editor, and mobile surfaces. Quotes live separately on the motivation wall.
+                    Notes stay with this monitoring workspace for watchlist decisions, customer context, and follow-up tasks.
                 </div>
                 <button
                     onClick={() => {
@@ -132,11 +132,11 @@ export default function NotesClient() {
                     <textarea
                         value={draft.content}
                         onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
-                        placeholder='Write a private note...'
+                        placeholder='Write a watchlist, actor review, or customer follow-up note...'
                         className='min-h-96 resize-none rounded-lg border border-[#d8dee9] bg-white px-4 py-3 text-sm leading-6 text-[#171a21] outline-none transition placeholder:text-[#98a2b3] focus:border-[#3056d3] focus:ring-3 focus:ring-[#3056d3]/10'
                     />
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <p className='text-sm text-[#687386]'>{message || (busy ? 'Working...' : selected ? `Last edited from ${formatSource(selected.source)}.` : 'Private notes are editable here and available to the authenticated app surfaces.')}</p>
+                        <p className='text-sm text-[#687386]'>{message || (busy ? 'Working...' : selected ? `Last edited from ${formatSource(selected.source)}.` : 'Private notes are available in your signed-in monitoring workspace.')}</p>
                         <div className='flex gap-2'>
                             {selected && (
                                 <button onClick={() => void remove()} className='flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100'>
