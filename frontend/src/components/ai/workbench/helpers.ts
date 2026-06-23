@@ -101,7 +101,7 @@ export function createConversation(clientName: string | null = null): AIConversa
     return {
         id: crypto.randomUUID(),
         ownerId: getCookie('id') || '',
-        title: 'New workspace review',
+        title: 'Workspace review',
         preferredModel: clientName,
         activeModel: clientName,
         modelStrategy: 'auto',

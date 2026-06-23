@@ -37,11 +37,11 @@ export default function ChatSidebar(props: ChatSidebarProps) {
             <div className='flex items-center justify-between gap-2 pb-4'>
                 <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#2b2f39]'>
                     <MessageSquarePlus className='h-4 w-4' />
-                    New review
+                    New workspace
                 </button>
                 <div className='flex items-center gap-1'>
                     <IconButton label='Search reviews' icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
-                    <Link href='/s' aria-label='Open editor' className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                    <Link href='/s' aria-label='Open workspace' className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                         <SquareArrowOutUpRight className='h-4 w-4' />
                     </Link>
                 </div>
@@ -165,7 +165,7 @@ function ConversationList({
 
 function conversationTitle(title?: string | null) {
     const normalized = title?.trim()
-    return !normalized || normalized === 'New chat' ? 'New workspace review' : normalized
+    return !normalized || normalized === 'New chat' || normalized === 'New workspace review' ? 'Workspace review' : normalized
 }
 
 function IconButton({ label, icon, active = false, onClick }: { label: string, icon: React.ReactNode, active?: boolean, onClick: () => void }) {

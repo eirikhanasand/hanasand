@@ -76,7 +76,7 @@ export function useConversationActions({
     }, [isAuthenticated, setStatusNotice, updateLocalConversation])
 
     const renameConversation = useCallback(async (id: string, title: string) => {
-        const nextTitle = title.trim() || 'New workspace review'
+        const nextTitle = title.trim() || 'Workspace review'
         await patchConversation(id, { title: nextTitle })
     }, [patchConversation])
 

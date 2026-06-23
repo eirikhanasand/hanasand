@@ -51,8 +51,8 @@ export default function ChatPane({
     const awaitingResponse = Boolean(activeConversation?.messages.at(-1)?.pending)
     const hasReadyModel = isConnected && clients.length > 0
     const unavailableModelReason = isAuthenticated
-        ? 'Assistant unavailable. You can still open the editor or attach context while capacity is unavailable.'
-        : 'Assistant unavailable. You can still open the editor, attach context, or sign in to continue when capacity is available.'
+        ? 'Workspace agent is temporarily unavailable. You can still open the workspace or attach context.'
+        : 'Workspace agent is temporarily unavailable. You can still open the workspace, attach context, or sign in.'
     const composerBlockedReason = readOnly
         ? 'Reviewer mode: you can inspect this workspace but cannot send prompts.'
         : awaitingResponse
@@ -81,7 +81,7 @@ export default function ChatPane({
         const selectedName = activeConversation?.preferredModel || activeConversation?.activeModel
         return clients.find((client) => client.name === selectedName) || clients[0] || null
     }, [activeConversation?.activeModel, activeConversation?.preferredModel, clients])
-    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Assistant unavailable'
+    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Workspace agent unavailable'
 
     return (
         <Fragment>
@@ -98,7 +98,7 @@ export default function ChatPane({
                                     className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-semibold text-[#3056d3] transition-colors hover:text-[#2546a8] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
                                     title={selectedModelLabel}
                                 >
-                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Assistant unavailable'}</span>
+                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Workspace agent unavailable'}</span>
                                     {clients.length ? <ChevronDown className='h-3.5 w-3.5 shrink-0' /> : null}
                                 </button>
                                 {modelMenuOpen && clients.length ? (
@@ -135,7 +135,7 @@ export default function ChatPane({
                             </Link>
                             <StatusChip
                                 icon={isThinking ? <LoaderCircle className='h-3.5 w-3.5 animate-spin' /> : <Sparkles className='h-3.5 w-3.5' />}
-                                label={isThinking ? 'Working...' : hasReadyModel ? 'Ready' : 'Offline'}
+                                label={isThinking ? 'Working...' : hasReadyModel ? 'Ready' : 'Paused'}
                                 accent={isThinking}
                             />
                             {latestArtifacts.length ? (
@@ -244,8 +244,6 @@ export default function ChatPane({
 }
 
 function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { tooltip: string, hasReadyModel: boolean, isAuthenticated: boolean }) {
-    const greeting = 'What should we work on?'
-
     return (
         <div className='flex h-full min-h-[28rem] items-center justify-center'>
             <div className='max-w-xl text-center'>
@@ -253,17 +251,17 @@ function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { toolt
                     <Bot className='h-6 w-6' />
                 </div>
                 <h2 className='mt-7 text-2xl font-semibold tracking-normal text-[#171a21]'>
-                    {greeting}
+                    Review a workspace, then ship with context.
                 </h2>
                 <p className='mt-3 text-sm leading-6 text-[#596170]'>
                     {hasReadyModel
                         ? tooltip
-                        : 'Attach a workspace or open the editor while the model is unavailable. The handoff, files, deploy state, and review context stay visible either way.'}
+                        : 'Attach a workspace or open the workspace. Handoffs, files, deploy state, and review context stay visible while the agent is paused.'}
                 </p>
                 {!hasReadyModel ? (
                     <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-[#596170]'>
                         <Link href='/s' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
-                            Open editor
+                            Open workspace
                         </Link>
                         {!isAuthenticated ? (
                             <Link href='/login' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
@@ -310,12 +308,12 @@ function modelLabel(client: GPT_Client) {
 
 function conversationTitle(title?: string | null) {
     const normalized = title?.trim()
-    return !normalized || normalized === 'New chat' ? 'New workspace review' : normalized
+    return !normalized || normalized === 'New chat' || normalized === 'New workspace review' ? 'Workspace review' : normalized
 }
 
 function MarkdownBlock({ content }: { content: string }) {
     return (
-        <div className='prose prose-invert max-w-none wrap-break-word text-sm leading-6 prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-xl prose-pre:bg-[#202020] prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-[#d3d3ce]'>
+        <div className='prose max-w-none wrap-break-word text-sm leading-6 text-[#344054] prose-p:my-3 prose-pre:overflow-auto prose-pre:rounded-lg prose-pre:bg-[#f4f6fa] prose-pre:p-3 prose-code:text-[0.9em] prose-a:text-[#3056d3]'>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
             </ReactMarkdown>
@@ -335,12 +333,12 @@ function ToolMessage({
 
     return (
         <div className='space-y-2'>
-            <div className='inline-flex items-center gap-2 rounded-full bg-[#242424] px-3 py-1 text-xs text-[#b7b7b2]'>
-                {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-[#eeeeea]' /> : <Sparkles className='h-3.5 w-3.5 text-[#d3d3ce]' />}
+            <div className='inline-flex items-center gap-2 rounded-full bg-[#eef3ff] px-3 py-1 text-xs font-medium text-[#3056d3]'>
+                {state === 'running' ? <LoaderCircle className='h-3.5 w-3.5 animate-spin text-[#3056d3]' /> : <Sparkles className='h-3.5 w-3.5 text-[#3056d3]' />}
                 {state === 'running' ? 'Working...' : state === 'error' ? 'Tool error' : 'Tool complete'}
             </div>
             {browserSummary ? <BrowserVerificationCard summary={browserSummary} /> : null}
-            <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6 text-[#d3d3ce]'>{message.content}</div>
+            <div className='whitespace-pre-wrap wrap-break-word text-sm leading-6 text-[#344054]'>{message.content}</div>
         </div>
     )
 }
@@ -355,7 +353,7 @@ function StatusChip({
     accent?: boolean
 }) {
     return (
-        <div className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs ${accent ? 'bg-bright/10 text-[#eeeeea]' : 'text-[#9a9a95]'}`}>
+        <div className={`inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs ${accent ? 'bg-[#eef3ff] text-[#3056d3]' : 'text-[#667085]'}`}>
             {icon}
             {label}
         </div>
