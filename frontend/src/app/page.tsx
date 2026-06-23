@@ -51,14 +51,14 @@ const solutions = [
     },
     {
         title: 'Share Workspaces',
-        detail: 'Public project handoffs, previews, and controlled collaboration links.',
+        detail: 'Secure handoffs, previews, and controlled collaboration links for customer-facing work.',
         href: '/s',
     },
 ]
 
 const stats = [
     ['Current focus', 'Company exposure alerts'],
-    ['Collection model', 'Owned metadata capture'],
+    ['Collection model', 'Owned monitoring'],
     ['Public indexes', 'Seed and corroboration'],
     ['Product surface', 'hanasand.com'],
 ]
@@ -67,7 +67,7 @@ const feedRows = [
     ['Akira', 'Ntd Apparel', '62 GB claimed', 'current'],
     ['Aurora', 'Aerospace & Advanced Composites GmbH', '123 GB claimed', 'current'],
     ['RansomHouse', 'Irec Sas', 'new victim claim', 'recent'],
-    ['Qilin', 'Supplier watchlist match', 'metadata review', 'review'],
+    ['Qilin', 'Supplier watchlist match', 'under review', 'review'],
 ]
 
 export default async function Page({
@@ -152,7 +152,7 @@ export default async function Page({
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Monitoring workflow</p>
                         <h2 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>Find the company mention before it becomes a forwarded screenshot.</h2>
                         <p className='text-base leading-7 text-[#596170]'>
-                            Public ransomware indexes are useful starting points. Hanasand is being shaped around direct metadata collection, freshness checks, actor-page changes, and clean notification packets for real buyer workflows.
+                            Public ransomware indexes are useful starting points. Hanasand adds direct monitoring, freshness checks, actor-page changes, and clean notification packets for buyer workflows.
                         </p>
                         <div className='grid gap-3'>
                             {stats.map(([label, value]) => (
@@ -193,7 +193,7 @@ export default async function Page({
                     <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
                         <div className='grid gap-2'>
                             <p className='text-sm font-semibold uppercase text-[#3056d3]'>Solutions</p>
-                            <h2 className='text-3xl font-semibold text-[#171a21]'>The existing Hanasand products, repositioned.</h2>
+                            <h2 className='text-3xl font-semibold text-[#171a21]'>Monitoring and secure workflow tools in one place.</h2>
                         </div>
                         <Link href='/dashboard/overview' className='inline-flex w-fit items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 py-2.5 text-sm font-semibold text-[#171a21] shadow-sm transition hover:border-[#bdc7d5]'>
                             Go to Console

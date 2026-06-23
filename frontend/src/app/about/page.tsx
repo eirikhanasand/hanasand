@@ -17,8 +17,8 @@ const principles = [
         icon: Radar,
     },
     {
-        title: 'Metadata is the product surface',
-        detail: 'The useful buyer fields are actor, company, claim, timing, source, sector, country, review state, and delivery history.',
+        title: 'Clean fields make alerts usable',
+        detail: 'Every alert should tell the buyer the actor, company, claim, timing, source, sector, country, review state, and delivery history.',
         icon: Waypoints,
     },
     {
@@ -42,7 +42,7 @@ export default function AboutPage() {
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-14 md:px-8 md:py-20 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                     <div className='grid gap-5'>
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Company</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Hanasand is building the operating surface for company exposure monitoring.</h1>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Hanasand monitors company exposure across actor pages and recent claims.</h1>
                         <p className='max-w-2xl text-lg leading-8 text-[#596170]'>
                             The product centers on high-speed, reviewable threat intelligence: recent mentions, actor context, company matching, and clean delivery.
                         </p>

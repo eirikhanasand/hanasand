@@ -53,7 +53,7 @@ export default function SolutionsPage() {
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Solutions</p>
                         <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Fast company exposure monitoring, packaged for teams that need answers now.</h1>
                         <p className='max-w-3xl text-lg leading-8 text-[#596170]'>
-                            Hanasand turns actor pages, public indexes, and metadata capture into alerts and API records that tell a buyer who was mentioned, what was claimed, when it changed, and what to review next.
+                            Hanasand turns actor pages, public indexes, and watched sources into alerts and API records that tell a buyer who was mentioned, what was claimed, when it changed, and what to review next.
                         </p>
                         <div className='flex flex-wrap gap-3'>
                             <Link href='/solutions/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
