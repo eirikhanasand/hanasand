@@ -153,33 +153,45 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                         onSubmit={handleSubmit}
                         method='post'
                     >
-                        <input
-                            type='text'
-                            name='username'
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder='Username'
-                            className={authInputClass}
-                            required
-                        />
+                        <label className='grid gap-1.5'>
+                            <span className='text-xs font-semibold text-[#596170]'>Username</span>
+                            <input
+                                type='text'
+                                name='username'
+                                onChange={(e) => setUsername(e.target.value)}
+                                placeholder='buyer-team'
+                                className={authInputClass}
+                                autoComplete='username'
+                                required
+                            />
+                        </label>
                         {reservedUsername && <div className='rounded-lg border border-[#ffd27a] bg-[#fff8e6] p-3 text-sm leading-6 text-[#8a5a00]'>
                             This username is reserved.
                             <Link href='/reserved-usernames' className='ml-1 font-semibold underline underline-offset-4'>View reserved names.</Link>
                         </div>}
-                        <input
-                            type='text'
-                            name='name'
-                            placeholder='Name'
-                            className={authInputClass}
-                            required
-                        />
-                        <input
-                            type='password'
-                            name='password'
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder='Password'
-                            className={authInputClass}
-                            required
-                        />
+                        <label className='grid gap-1.5'>
+                            <span className='text-xs font-semibold text-[#596170]'>Name</span>
+                            <input
+                                type='text'
+                                name='name'
+                                placeholder='QA Buyer'
+                                className={authInputClass}
+                                autoComplete='name'
+                                required
+                            />
+                        </label>
+                        <label className='grid gap-1.5'>
+                            <span className='text-xs font-semibold text-[#596170]'>Password</span>
+                            <input
+                                type='password'
+                                name='password'
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder='Create a strong password'
+                                className={authInputClass}
+                                autoComplete='new-password'
+                                required
+                            />
+                        </label>
                         {!passwordIsValid && <div className='rounded-lg border border-[#e4e7ec] bg-[#f8fafc] p-3 text-xs leading-5 text-[#667085]'>
                             <p>
                                 Password:

@@ -23,7 +23,7 @@ const fields = [
 
 const delivery = [
     { title: 'Search and console', detail: 'Use the TI surface for manual lookup, actor pivots, and company review.', icon: Code2 },
-    { title: 'Structured exports', detail: 'Shape alert rows for internal queues, spreadsheets, CRM notes, or security workflows.', icon: Database },
+    { title: 'Structured exports', detail: 'Shape alert rows for review queues, spreadsheets, CRM notes, or security workflows.', icon: Database },
     { title: 'Webhook-ready packets', detail: 'Keep payloads small: watched entity, actor, claim metadata, source, timestamps, and review status.', icon: Webhook },
 ]
 

@@ -81,7 +81,7 @@ export default function DarkWebMonitoringPage() {
             createdAt: new Date().toISOString(),
         }))
         setSubscriptionId(nextSubscriptionId)
-        setStatus(`Webhook subscription ready for ${terms.length} watched term${terms.length === 1 ? '' : 's'}.`)
+        setStatus(`Webhook draft saved for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. Activate alert delivery from the console.`)
     }
 
     async function copyPayload() {
@@ -169,11 +169,11 @@ export default function DarkWebMonitoringPage() {
                         </div>
                     </div>
 
-                    <form onSubmit={submit} className='grid gap-5 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 shadow-sm md:p-5'>
+                    <form id='webhooks' onSubmit={submit} className='scroll-mt-24 grid gap-5 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 shadow-sm md:p-5'>
                         <div className='flex items-start justify-between gap-4'>
                             <div>
                                 <h2 className='text-xl font-semibold'>Subscribe a webhook</h2>
-                                <p className='mt-1 text-sm text-[#667085]'>Add an HTTPS endpoint, choose the names to watch, and copy the payload shape for your intake system.</p>
+                                <p className='mt-1 text-sm text-[#667085]'>Add an HTTPS endpoint, choose the names to watch, and save the draft before activating delivery from the console.</p>
                             </div>
                             <Webhook className='h-5 w-5 text-[#3056d3]' />
                         </div>
@@ -185,11 +185,14 @@ export default function DarkWebMonitoringPage() {
                             <span className='text-sm font-semibold text-[#344054]'>Watched terms</span>
                             <textarea id='dwm-watched-terms' value={watchlist} onChange={event => updateWatchlist(event.target.value)} className={`${inputClass} min-h-28 resize-y`} placeholder='Company, domain, supplier, brand...' />
                         </label>
-                        <div className='grid gap-3 md:grid-cols-[auto_auto_1fr] md:items-center'>
+                        <div className='grid gap-3 md:grid-cols-[auto_auto_auto_1fr] md:items-center'>
                             <button type='submit' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
-                                Create subscription
+                                Save webhook draft
                                 <ArrowRight className='h-4 w-4' />
                             </button>
+                            <Link href='/dashboard/automations' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                                Activate alerts
+                            </Link>
                             <button type='button' onClick={copyPayload} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
                                 <Copy className='h-4 w-4' />
                                 Copy payload
@@ -198,7 +201,7 @@ export default function DarkWebMonitoringPage() {
                         </div>
                         {subscriptionId ? (
                             <div className='rounded-lg border border-[#cfe8d8] bg-[#f3fbf6] px-3 py-2 text-sm text-[#146c36]'>
-                                Subscription ID: <span className='font-mono font-semibold'>{subscriptionId}</span>
+                                Draft ID: <span className='font-mono font-semibold'>{subscriptionId}</span>
                             </div>
                         ) : null}
                     </form>

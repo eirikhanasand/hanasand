@@ -236,20 +236,28 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 onSubmit={handleSubmit}
                                 method='post'
                             >
-                                <input
-                                    type='text'
-                                    name='username'
-                                    placeholder='Username'
-                                    className={authInputClass}
-                                    required
-                                />
-                                <input
-                                    type='password'
-                                    name='password'
-                                    placeholder='Password'
-                                    className={authInputClass}
-                                    required
-                                />
+                                <label className='grid gap-1.5'>
+                                    <span className='text-xs font-semibold text-[#596170]'>Username</span>
+                                    <input
+                                        type='text'
+                                        name='username'
+                                        placeholder='buyer-team'
+                                        className={authInputClass}
+                                        autoComplete='username'
+                                        required
+                                    />
+                                </label>
+                                <label className='grid gap-1.5'>
+                                    <span className='text-xs font-semibold text-[#596170]'>Password</span>
+                                    <input
+                                        type='password'
+                                        name='password'
+                                        placeholder='Enter your password'
+                                        className={authInputClass}
+                                        autoComplete='current-password'
+                                        required
+                                    />
+                                </label>
                                 <div className='mt-1 flex items-center gap-3'>
                                     <button
                                         type='submit'
@@ -286,34 +294,46 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                             onSubmit={handleSignup}
                             method='post'
                         >
-                            <input
-                                type='text'
-                                name='username'
-                                value={signupUsername}
-                                onChange={(e) => setSignupUsername(e.target.value)}
-                                placeholder='Username'
-                                className={authInputClass}
-                                required
-                            />
+                            <label className='grid gap-1.5'>
+                                <span className='text-xs font-semibold text-[#596170]'>Username</span>
+                                <input
+                                    type='text'
+                                    name='username'
+                                    value={signupUsername}
+                                    onChange={(e) => setSignupUsername(e.target.value)}
+                                    placeholder='buyer-team'
+                                    className={authInputClass}
+                                    autoComplete='username'
+                                    required
+                                />
+                            </label>
                             {reservedUsername && <p className='px-1 text-xs font-semibold text-[#8a5a00]'>Reserved username.</p>}
-                            <input
-                                type='text'
-                                name='name'
-                                value={signupName}
-                                onChange={(e) => setSignupName(e.target.value)}
-                                placeholder='Name'
-                                className={authInputClass}
-                                required
-                            />
-                            <input
-                                type='password'
-                                name='password'
-                                value={signupPassword}
-                                onChange={(e) => setSignupPassword(e.target.value)}
-                                placeholder='Password'
-                                className={authInputClass}
-                                required
-                            />
+                            <label className='grid gap-1.5'>
+                                <span className='text-xs font-semibold text-[#596170]'>Name</span>
+                                <input
+                                    type='text'
+                                    name='name'
+                                    value={signupName}
+                                    onChange={(e) => setSignupName(e.target.value)}
+                                    placeholder='QA Buyer'
+                                    className={authInputClass}
+                                    autoComplete='name'
+                                    required
+                                />
+                            </label>
+                            <label className='grid gap-1.5'>
+                                <span className='text-xs font-semibold text-[#596170]'>Password</span>
+                                <input
+                                    type='password'
+                                    name='password'
+                                    value={signupPassword}
+                                    onChange={(e) => setSignupPassword(e.target.value)}
+                                    placeholder='Create a strong password'
+                                    className={authInputClass}
+                                    autoComplete='new-password'
+                                    required
+                                />
+                            </label>
                             {signupPassword && !signupPasswordIsValid && (
                                 <p className='px-1 text-xs leading-5 text-[#667085]'>
                                     16 chars, 2 lowercase, 2 uppercase, 2 numbers, 2 symbols.
@@ -341,13 +361,17 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
 
                     {mode === 'request-reset' && (
                         <form className='flex w-full flex-col gap-2 self-center' onSubmit={handleResetRequest} method='post'>
-                            <input
-                                type='text'
-                                name='resetUserId'
-                                placeholder='Username'
-                                className={authInputClass}
-                                required
-                            />
+                            <label className='grid gap-1.5'>
+                                <span className='text-xs font-semibold text-[#596170]'>Username</span>
+                                <input
+                                    type='text'
+                                    name='resetUserId'
+                                    placeholder='buyer-team'
+                                    className={authInputClass}
+                                    autoComplete='username'
+                                    required
+                                />
+                            </label>
                             <div className='mt-1 flex items-center gap-3'>
                                 <button
                                     type='submit'

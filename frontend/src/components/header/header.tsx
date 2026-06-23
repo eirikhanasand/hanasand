@@ -34,11 +34,11 @@ const resourceItems = [
 function PublicDropdown({ label, items }: { label: string, items: Array<{ title: string, detail: string, href: string, icon: typeof Radar }> }) {
     return (
         <div className='group relative'>
-            <button className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>
+            <button className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] group-hover:bg-[#f1f4f8]' aria-haspopup='true'>
                 {label}
                 <ChevronDown className='h-4 w-4 text-[#7a8493]' />
             </button>
-            <div className='pointer-events-none absolute left-0 top-11 z-20 w-[23rem] translate-y-1 rounded-lg border border-[#e0e5ed] bg-white p-2 opacity-0 shadow-[0_22px_70px_rgba(25,34,52,0.15)] transition group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'>
+            <div className='invisible pointer-events-none absolute left-0 top-11 z-20 w-[23rem] translate-y-1 rounded-lg border border-[#e0e5ed] bg-white p-2 opacity-0 shadow-[0_22px_70px_rgba(25,34,52,0.15)] transition group-hover:visible group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100'>
                 {items.map((item) => {
                     const Icon = item.icon
                     return (
