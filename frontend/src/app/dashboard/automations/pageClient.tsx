@@ -61,7 +61,7 @@ export default function AutomationsClient() {
             setDraft(draftFromWebhook(nextWebhookDraft))
             setSelectedId('')
             setRuns([])
-            setStatus('Webhook setup loaded from the dark web monitoring page. Review it and create the alert.')
+            setStatus('Webhook alert is ready. Review the schedule and create it to start monitoring.')
         }
         void load(nextWebhookDraft ? draftSelectionId : undefined)
     }, [])
@@ -165,7 +165,7 @@ export default function AutomationsClient() {
         setSelectedId('')
         setRuns([])
         setDraft(draftFromWebhook(webhookDraft))
-        setStatus('Webhook setup loaded. Review it and create the alert.')
+        setStatus('Webhook alert is ready. Review the schedule and create it to start monitoring.')
     }
 
     function clearWebhookDraft() {
@@ -235,14 +235,14 @@ export default function AutomationsClient() {
                             <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
                                 <div className='min-w-0'>
                                     <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Dark web monitoring</p>
-                                    <h3 className='mt-1 text-sm font-semibold text-[#171a21]'>Webhook setup ready</h3>
+                                    <h3 className='mt-1 text-sm font-semibold text-[#171a21]'>Webhook alert ready to create</h3>
                                     <p className='mt-1 text-sm leading-6 text-[#3d4656]'>
                                         Watch {formatTerms(webhookDraft.terms)} and send matching company exposure alerts to {redactWebhookEndpoint(webhookDraft.endpoint)}.
                                     </p>
                                 </div>
                                 <div className='flex shrink-0 flex-wrap gap-2'>
                                     <button type='button' onClick={useWebhookDraft} className='rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
-                                        Use setup
+                                        Apply setup
                                     </button>
                                     <button type='button' onClick={clearWebhookDraft} className='rounded-lg border border-[#ccd6ea] bg-white px-3 py-2 text-sm font-semibold text-[#596170] hover:border-[#aebbd1] hover:text-[#171a21]'>
                                         Clear

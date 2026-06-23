@@ -81,7 +81,7 @@ export default function DarkWebMonitoringPage() {
             createdAt: new Date().toISOString(),
         }))
         setSubscriptionId(nextSubscriptionId)
-        setStatus(`Webhook setup saved for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. Open the console to create the alert schedule.`)
+        setStatus(`Webhook setup saved for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. Create the alert in the console to start monitoring.`)
     }
 
     async function copyPayload() {
@@ -173,7 +173,7 @@ export default function DarkWebMonitoringPage() {
                         <div className='flex items-start justify-between gap-4'>
                             <div>
                                 <h2 className='text-xl font-semibold'>Subscribe a webhook</h2>
-                                <p className='mt-1 text-sm text-[#667085]'>Add an HTTPS endpoint, choose the names to watch, and open the console with the alert setup ready.</p>
+                                <p className='mt-1 text-sm text-[#667085]'>Add an HTTPS endpoint, choose the names to watch, then create the alert schedule in the console.</p>
                             </div>
                             <Webhook className='h-5 w-5 text-[#3056d3]' />
                         </div>
@@ -187,11 +187,11 @@ export default function DarkWebMonitoringPage() {
                         </label>
                         <div className='grid gap-3 md:grid-cols-[auto_auto_auto_1fr] md:items-center'>
                             <button type='submit' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
-                                Save webhook setup
+                                Prepare webhook alert
                                 <ArrowRight className='h-4 w-4' />
                             </button>
                             <Link href='/dashboard/automations' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
-                                Open alert console
+                                Create alert in console
                             </Link>
                             <button type='button' onClick={copyPayload} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
                                 <Copy className='h-4 w-4' />
