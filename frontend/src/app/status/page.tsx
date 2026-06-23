@@ -1,9 +1,6 @@
 import StatusDashboard from './pageClient'
 import getDomains from '@/utils/traffic/getDomains'
 import getMetrics from '@/utils/traffic/getMetrics'
-import getBlocklist from '@/utils/traffic/getBlocklist'
-import getLogs from '@/utils/traffic/getLogs'
-import getUAs from '@/utils/traffic/getUAs'
 import getStatus from '@/utils/status/getStatus'
 import { getTrafficMetrics } from '@/utils/monitoring/data'
 import { normalizeDomainName } from '@/utils/monitoring/domain'
@@ -14,20 +11,14 @@ export default async function page() {
     const [
         metrics,
         domainMetrics,
-        blocklist,
-        logs,
         cdnDomains,
         monitoringTraffic,
-        topUAsUnparsed,
         serviceStatus,
     ] = await Promise.all([
         withFallback(getMetrics(), []),
         withFallback(getMetrics('domain'), []),
-        withFallback(getBlocklist(), []),
-        withFallback(getLogs(), []),
         withFallback(getDomains(), []),
         withFallback(getTrafficMetrics(), 'unavailable'),
-        withFallback(getUAs(), []),
         withFallback(getStatus(), getFallbackServiceStatus()),
     ])
     const monitoringPayload = typeof monitoringTraffic === 'string' ? null : monitoringTraffic
@@ -40,7 +31,6 @@ export default async function page() {
             })
             .filter((domain): domain is { name: string, tps: number } => Boolean(domain))
     const topDomains = Array.isArray(cdnDomains) && cdnDomains.length > 0 ? cdnDomains : fallbackDomains
-    const topUAs = Array.isArray(topUAsUnparsed) ? topUAsUnparsed : []
     const endpointMetrics = metrics.length > 0
         ? metrics
         : (monitoringPayload?.top_paths || []).map((item) => ({
@@ -58,16 +48,16 @@ export default async function page() {
             hits_last_week: item.count,
             hits_total: item.count,
         }))
+    const liveSurfaceCount = topDomains.filter((domain) => domain.tps > 0).length
 
     return (
         <div className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
             <StatusDashboard
-                metrics={endpointMetrics}
-                domainMetrics={subdomainMetrics}
-                blocklist={blocklist}
-                logs={logs}
-                topDomains={topDomains}
-                topUAs={topUAs}
+                trafficSummary={{
+                    endpointCount: endpointMetrics.length,
+                    domainCount: subdomainMetrics.length,
+                    liveSurfaceCount,
+                }}
                 serviceStatus={serviceStatus}
             />
         </div>

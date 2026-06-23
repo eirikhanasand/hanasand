@@ -1,25 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { type TrafficSummaryMetric } from '@/utils/traffic/getMetrics'
 import { ServiceStatus } from '@/utils/status/getStatus'
 import { Activity, AlertCircle, BadgeCheck, BellRing, Binoculars, CheckCircle, Code2, HeartPulse, Search, ShieldAlert, Timer, Webhook, XCircle } from 'lucide-react'
 import ErrorNotice from '@/components/error/errorNotice'
 
-type MetricSummary = {
-    value: string
-    hits_today: number
-    hits_last_week: number
-    hits_total: number
-}
-
 type DashboardProps = {
-    metrics: MetricSummary[]
-    domainMetrics: TrafficSummaryMetric[]
-    blocklist: BlocklistEntry[]
-    logs: RequestLog[]
-    topDomains: DomainTPS[]
-    topUAs: UAMetrics[]
+    trafficSummary: {
+        endpointCount: number
+        domainCount: number
+        liveSurfaceCount: number
+    }
     serviceStatus: ServiceStatus
 }
 
@@ -46,7 +37,7 @@ function relativeTime(value: string, now: number | null) {
     return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
-export default function StatusDashboard({ metrics: serverMetrics, domainMetrics: serverDomainMetrics, topDomains, serviceStatus }: DashboardProps) {
+export default function StatusDashboard({ trafficSummary, serviceStatus }: DashboardProps) {
     const [now, setNow] = useState<number | null>(null)
 
     useEffect(() => {
@@ -55,9 +46,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
 
     const nowMs = now ?? Date.now()
     const visibleChecks = serviceStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs))
-    const endpointCount = serverMetrics.length
-    const domainCount = serverDomainMetrics.length
-    const liveDomainCount = topDomains.filter((domain) => domain.tps > 0).length
+    const { endpointCount, domainCount, liveSurfaceCount } = trafficSummary
     const statusTone = {
         up: 'border-[#bde8ca] bg-[#e9f8ef] text-[#11612f]',
         degraded: 'border-[#f8df9b] bg-[#fff8e1] text-[#8a5a00]',
@@ -145,9 +134,9 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                 <SummaryCard
                     icon={<BellRing className='h-4 w-4' />}
                     label='Live activity'
-                    title={liveDomainCount > 0 ? 'Traffic is flowing' : 'No active spikes'}
-                    body={liveDomainCount > 0
-                        ? `${liveDomainCount} monitored surface${liveDomainCount === 1 ? '' : 's'} reported live activity in the last window.`
+                    title={liveSurfaceCount > 0 ? 'Traffic is flowing' : 'No active spikes'}
+                    body={liveSurfaceCount > 0
+                        ? `${liveSurfaceCount} monitored surface${liveSurfaceCount === 1 ? '' : 's'} reported live activity in the last window.`
                         : 'No unusual public traffic spike is visible in the current status window.'}
                 />
                 <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm md:col-span-3'>
