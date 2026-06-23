@@ -261,6 +261,23 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         </div>
                     )}
 
+                    {!webhookDraft && initialSetup && (
+                        <div className='rounded-lg border border-[#b8c5ff] bg-[#f4f7ff] p-4'>
+                            <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
+                                <div className='min-w-0'>
+                                    <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Dark web monitoring</p>
+                                    <h3 className='mt-1 text-sm font-semibold text-[#171a21]'>Webhook alert ready to create</h3>
+                                    <p className='mt-1 text-sm leading-6 text-[#3d4656]'>
+                                        The schedule is prefilled for company, domain, vendor, and product monitoring. Add the delivery endpoint in the instructions, then create the alert.
+                                    </p>
+                                </div>
+                                <button type='button' onClick={() => setStatus('Review the prefilled schedule and create it to start monitoring.')} className='shrink-0 rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
+                                    Apply setup
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className='grid gap-3 md:grid-cols-2'>
                         <label className='grid gap-1.5'>
                             <span className='text-xs font-medium text-[#596170]'>Name</span>
