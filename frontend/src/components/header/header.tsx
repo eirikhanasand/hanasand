@@ -59,7 +59,7 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
 }
 
 export default function Header({ token, path: serverPath }: { token: boolean, path: string }) {
-    const baseStyles = 'group rounded-lg h-11 w-11 md:h-12 md:w-12 grid place-items-center cursor-pointer transition-colors hover:bg-bright/8'
+    const baseStyles = 'group grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827]'
     const pathname = usePathname() || serverPath
     const isStatus = pathname.includes('/status')
     const isShare = isSharePath(pathname)
@@ -109,29 +109,37 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
     }
 
     return (
-        <header className={`fixed top-0 left-0 z-1000 w-full ${isAppSurface ? 'p-2' : 'px-3 pt-3 sm:px-5 md:px-16 md:pt-4 lg:px-32'}`}>
-            <div className='w-full text-foreground flex min-h-13 md:grid md:grid-cols-3 px-2.5 sm:px-4 select-none outline outline-dark rounded-xl py-1 bg-background'>
-                <div className='grid md:hidden place-items-center w-full flex-1'>
-                    <Link href='/' className='w-full flex px-2.5 items-center h-11 hover:bg-bright/8 rounded-lg cursor-pointer transition-colors'>
-                        <h1 className='font-semibold text-bright text-glow'>hanasand</h1>
+        <header className='fixed left-0 top-0 z-1000 w-full border-b border-[#e1e5ec] bg-white/95 px-3 shadow-[0_1px_0_rgba(17,24,39,0.03)] backdrop-blur sm:px-5 md:px-8'>
+            <div className='mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4'>
+                <div className='flex min-w-0 items-center gap-4'>
+                    <Link href='/' className='flex min-w-0 items-center gap-3'>
+                        <span className='grid h-9 w-9 shrink-0 grid-cols-2 grid-rows-2 gap-0.5 overflow-hidden rounded-[7px] bg-white p-1 shadow-[inset_0_0_0_1px_#d9e0ea]'>
+                            <span className='rounded-xs bg-[#16a34a]' />
+                            <span className='rounded-xs bg-[#2563eb]' />
+                            <span className='rounded-xs bg-[#f97316]' />
+                            <span className='rounded-xs bg-[#111827]' />
+                        </span>
+                        <span className='truncate text-lg font-semibold tracking-normal text-[#20242c]'>hanasand</span>
                     </Link>
+                    <nav className='hidden items-center gap-1 lg:flex'>
+                        {token ? (
+                            <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Console</Link>
+                        ) : null}
+                        <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Threat Search</Link>
+                        <Link href='/solutions/dwm' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>DWM</Link>
+                        <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>API Docs</Link>
+                        <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Pricing</Link>
+                    </nav>
                 </div>
-                <div className='hidden md:flex items-center'>
-                    <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' />
-                    <Link href='/status' className={baseStyles}>
-                        <ActivityIcon className={`group-hover:stroke-[#41b819] ${isStatus && 'stroke-[#41b819]'}`} />
-                    </Link>
-                    <Link href='/ai' className={baseStyles}>
-                        <Sparkles className={`group-hover:stroke-orange-300 ${isAI && 'stroke-orange-300'}`} />
-                    </Link>
-                </div>
-                <div className='hidden md:grid place-items-center w-full'>
-                    <Link href='/' className='group w-fit grid place-items-center h-12 hover:bg-bright/8 md:px-10 rounded-lg cursor-pointer transition-colors'>
-                        <h1 className='font-semibold text-bright text-glow'>hanasand</h1>
-                    </Link>
-                </div>
-                <div className='flex justify-end items-center'>
+                <div className='flex items-center justify-end gap-2'>
                     {token && isDashboard && <ViewModeToggle />}
+                    {isShare ? <ShareIcon baseStyles={baseStyles} isShare={isShare} href='/s' /> : null}
+                    <Link href='/status' aria-label='Status' title='Status' className={`${baseStyles} hidden sm:grid`}>
+                        <ActivityIcon className={`h-4.5 w-4.5 ${isStatus ? 'text-[#087b34]' : ''}`} />
+                    </Link>
+                    <Link href='/ai' aria-label='AI Workspace' title='AI Workspace' className={`${baseStyles} hidden sm:grid`}>
+                        <Sparkles className={`h-4.5 w-4.5 ${isAI ? 'text-[#c05621]' : ''}`} />
+                    </Link>
                     <ThemeSwitch />
                     <Dashboard href='/dashboard' serverToken={token} />
                     <Logout baseStyles={baseStyles} serverToken={token} />

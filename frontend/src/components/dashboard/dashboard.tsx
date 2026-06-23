@@ -20,8 +20,8 @@ export default function Dashboard({ href, serverToken }: { href?: string, server
     }
 
     return (
-        <LinkorDiv href={href} className='group rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center'>
-            <LayoutDashboard className='stroke-current group-hover:stroke-[#374c66]' />
+        <LinkorDiv href={href} className='group grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827]'>
+            <LayoutDashboard className='h-4.5 w-4.5 stroke-current' />
         </LinkorDiv>
     )
 }

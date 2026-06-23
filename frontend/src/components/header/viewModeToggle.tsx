@@ -23,7 +23,7 @@ export default function ViewModeToggle() {
         setDashboardViewMode(nextMode)
     }
 
-    const label = mode === 'normal' ? 'Use compact dashboard navigation' : 'Use normal dashboard navigation'
+    const label = mode === 'normal' ? 'Collapse sidebar' : 'Expand sidebar'
 
     return (
         <button
@@ -31,11 +31,11 @@ export default function ViewModeToggle() {
             onClick={toggleMode}
             aria-label={label}
             title={label}
-            className='group grid h-12 w-12 place-items-center rounded-lg hover:bg-[#6464641a]'
+            className='group grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827]'
         >
             {mode === 'normal'
-                ? <PanelLeftClose className='h-5 w-5 text-bright/75 group-hover:text-orange-300' />
-                : <PanelLeftOpen className='h-5 w-5 text-bright/75 group-hover:text-orange-300' />}
+                ? <PanelLeftClose className='h-4.5 w-4.5' />
+                : <PanelLeftOpen className='h-4.5 w-4.5' />}
         </button>
     )
 }

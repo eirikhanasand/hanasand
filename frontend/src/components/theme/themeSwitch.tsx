@@ -24,7 +24,7 @@ export default function ThemeSwitch() {
     }
 
     return (
-        <div className='group rounded-lg hover:bg-[#6464641a] h-12 w-12 grid place-items-center cursor-pointer'>
+        <div className='group grid h-10 w-10 cursor-pointer place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827]'>
             <div className='grid place-items-center justify-end cursor-pointer'>
                 <label>
                     <input
