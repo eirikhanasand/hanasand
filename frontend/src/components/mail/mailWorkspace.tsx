@@ -111,7 +111,10 @@ export default function MailWorkspace({ mailboxUser }: Props) {
             setBackgroundIssue('')
             setLastSuccessAt(Date.now())
         } catch (cause) {
-            const message = cause instanceof Error ? cause.message : 'Unable to load the mailbox.'
+            const rawMessage = cause instanceof Error ? cause.message : ''
+            const message = /failed to fetch|networkerror|load failed/i.test(rawMessage)
+                ? 'Mail is unavailable right now. The rest of the console is still ready.'
+                : rawMessage || 'Unable to load the mailbox.'
             if (silent) {
                 setBackgroundIssue(message)
             } else {

@@ -7,13 +7,13 @@ interface TiPageProps {
 
 export default async function Page({ searchParams }: TiPageProps) {
     const params = await searchParams
-    const rawQuery = params?.q
+    const rawQuery = params?.q ?? params?.query
     const query = (Array.isArray(rawQuery) ? rawQuery[0] : rawQuery)?.trim()
     const initialResult = query ? await searchThreatIntel(query) : null
 
     return (
         <main className='min-h-[calc(100vh-4.5rem)] w-full bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
-            <TiPageClient initialResult={initialResult} />
+            <TiPageClient initialQuery={query || ''} initialResult={initialResult} />
         </main>
     )
 }

@@ -5,9 +5,9 @@ export default function Page() {
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Agents'
-                title='Automations'
-                description='Create recurring agent work, test it immediately, and inspect results after the run has happened on the server.'
+                eyebrow='Alert delivery'
+                title='Monitoring alerts'
+                description='Create scheduled checks, test delivery, and review recent alert runs from the customer console.'
             />
             <AutomationsClient />
         </DashboardPage>

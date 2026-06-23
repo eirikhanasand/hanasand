@@ -43,7 +43,7 @@ export default function DashboardSidebar({
         { href: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className='h-4 w-4' /> },
         { href: '/dashboard/shares', label: 'Shares', icon: <Share2 className='h-4 w-4' /> },
         { href: '/dashboard/mail', label: 'Mail', icon: <Inbox className='h-4 w-4' /> },
-        { href: '/dashboard/automations', label: 'Automations', icon: <AlarmClockCheck className='h-4 w-4' /> },
+        { href: '/dashboard/automations', label: 'Alerts', icon: <AlarmClockCheck className='h-4 w-4' /> },
         { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
@@ -83,8 +83,8 @@ export default function DashboardSidebar({
                 ) : (
                     <>
                         <div>
-                            <p className='text-[0.62rem] font-semibold uppercase text-[#3056d3]'>Workspace</p>
-                            <h2 className='mt-1 text-sm font-semibold text-[#171a21]'>Dashboard</h2>
+                            <p className='text-[0.62rem] font-semibold uppercase text-[#3056d3]'>Console</p>
+                            <h2 className='mt-1 text-sm font-semibold text-[#171a21]'>Hanasand</h2>
                         </div>
                         <LayoutDashboard className='h-4 w-4 text-[#667085]' />
                     </>

@@ -4,18 +4,39 @@ import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { Activity, BellRing, Building2, Database, ExternalLink, Globe2, Radar, Search, ShieldCheck, Target, Waypoints } from 'lucide-react'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 
-export default function TiPageClient({ initialResult }: { initialResult: TiSearchResponse | null }) {
-    const [query, setQuery] = useState(initialResult?.query ?? '')
+export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
+    const [query, setQuery] = useState(initialResult?.query ?? initialQuery)
     const [result, setResult] = useState<TiSearchResponse | null>(initialResult)
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
-    const activeQueryRef = useRef(initialResult?.query.trim().toLowerCase() ?? '')
+    const activeQueryRef = useRef((initialResult?.query ?? initialQuery).trim().toLowerCase())
     const requestSeqRef = useRef(0)
     const inputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         activeQueryRef.current = query.trim().toLowerCase()
     }, [query])
+
+    useEffect(() => {
+        const clean = initialQuery.trim()
+        if (!clean || initialResult) return
+
+        const cleanKey = clean.toLowerCase()
+        const requestSeq = requestSeqRef.current + 1
+        requestSeqRef.current = requestSeq
+        activeQueryRef.current = cleanKey
+        setBusy(true)
+        setQuery(clean)
+        setResult(searchingResult(clean))
+        searchThreatIntel(clean)
+            .then((next) => {
+                if (requestSeqRef.current !== requestSeq || activeQueryRef.current !== cleanKey) return
+                if (next) setResult(next)
+            })
+            .finally(() => {
+                if (requestSeqRef.current === requestSeq) setBusy(false)
+            })
+    }, [initialQuery, initialResult])
 
     useEffect(() => {
         if (!result?.refreshAfterSeconds || result.status === 'ready') return
@@ -58,6 +79,19 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
         }
     }
 
+    function handleQueryChange(value: string) {
+        setQuery(value)
+        const cleanKey = value.trim().toLowerCase()
+        activeQueryRef.current = cleanKey
+        if (!cleanKey) {
+            setResult(null)
+            return
+        }
+        if (result && result.query.trim().toLowerCase() !== cleanKey) {
+            setResult(null)
+        }
+    }
+
     const visible = result
 
     return (
@@ -70,7 +104,7 @@ export default function TiPageClient({ initialResult }: { initialResult: TiSearc
                             ref={inputRef}
                             name='query'
                             value={query}
-                            onChange={(event) => setQuery(event.target.value)}
+                            onChange={(event) => handleQueryChange(event.target.value)}
                             placeholder='Company, actor, domain, CVE, supplier...'
                             className='h-12 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                         />

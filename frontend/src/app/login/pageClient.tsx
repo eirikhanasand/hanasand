@@ -212,11 +212,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     useEffect(() => {
         const token = getCookie('access_token')
         const id = getCookie('id')
-        if (token && id) {
+        if (token && id && !serverInternal && !serverExpired) {
             router.push('/dashboard')
         }
         setHydrated(true)
-    }, [router])
+    }, [router, serverExpired, serverInternal])
 
     return (
         <section className='grid min-h-[calc(100vh-4.5rem)] w-full place-items-center bg-[#f7f8fb] px-4 py-10 text-[#171a21] md:px-10'>

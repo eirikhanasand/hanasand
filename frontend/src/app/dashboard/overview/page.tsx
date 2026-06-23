@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { Activity, Radar, ShieldAlert, Sparkles } from 'lucide-react'
+import { Activity, BellRing, Radar, Search, ShieldAlert, Webhook } from 'lucide-react'
 import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
@@ -29,27 +29,30 @@ export default async function Page() {
     return (
         <DashboardPage>
             <DashboardHeader
-                title='Operations Overview'
-                description='Traffic, vulnerability load, and service health in one place.'
-                eyebrow='Overview'
+                title='Monitoring overview'
+                description='A customer-facing starting point for search, alert delivery, and service health.'
+                eyebrow='Console'
             />
 
             <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
                 <OverviewCard title='Requests Today' value={String(overview.requestsToday)} icon={<Activity className='h-4 w-4' />} />
                 <OverviewCard title='Active Domains' value={String(overview.activeDomains)} icon={<Radar className='h-4 w-4' />} />
                 <OverviewCard title='Critical Vulnerabilities' value={String(overview.criticalVulnerabilities)} icon={<ShieldAlert className='h-4 w-4' />} />
-                <OverviewCard title='Scanned Images' value={String(overview.imagesScanned)} icon={<Sparkles className='h-4 w-4' />} />
+                <OverviewCard title='Scanned Images' value={String(overview.imagesScanned)} icon={<Search className='h-4 w-4' />} />
             </div>
 
             <div className='grid gap-4 xl:grid-cols-[1.3fr_0.9fr]'>
                 <DashboardPanel className='p-5'>
                     <div className='flex items-center justify-between'>
-                        <h2 className='text-lg font-semibold text-bright'>Current Focus</h2>
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.scanRunning ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-200'}`}>
+                        <h2 className='text-lg font-semibold text-[#171a21]'>Current focus</h2>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.scanRunning ? 'bg-amber-50 text-amber-800' : 'bg-[#e9f8ef] text-[#147a3b]'}`}>
                             {overview.scanRunning ? 'Scanning' : 'Idle'}
                         </span>
                     </div>
                     <div className='mt-4 grid gap-3 md:grid-cols-3'>
+                        <ActionLink href='/ti' title='Threat search' body='Search companies, actors, vendors, domains, and claims.' icon={<Search className='h-4 w-4' />} />
+                        <ActionLink href='/solutions/dwm#webhooks' title='Webhook alerts' body='Preview the alert payload and delivery format.' icon={<Webhook className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/automations' title='Scheduled checks' body='Configure recurring monitoring checks and review delivery history.' icon={<BellRing className='h-4 w-4' />} />
                         {canManageSystem && <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />}
                         {canManageSystem && <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />}
                         <ActionLink href='/status' title='Status' body='Synthetic checks, latency, uptime, and current service state.' />
@@ -58,17 +61,17 @@ export default async function Page() {
                 </DashboardPanel>
 
                 <DashboardPanel className='p-5'>
-                    <h2 className='text-lg font-semibold text-bright'>Service Health</h2>
+                    <h2 className='text-lg font-semibold text-[#171a21]'>Service health</h2>
                     <div className='mt-4 space-y-3'>
                         {status.checks.slice(0, 6).map((check) => (
-                            <div key={`${check.service}-${check.check_name}`} className='flex items-center justify-between rounded-lg border border-white/8 bg-white/3 px-3 py-2 text-sm'>
+                            <div key={`${check.service}-${check.check_name}`} className='flex items-center justify-between rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 text-sm'>
                                 <div>
-                                    <div className='font-medium text-bright'>{check.check_name}</div>
-                                    <div className='text-bright/45'>{check.service}</div>
+                                    <div className='font-medium text-[#171a21]'>{check.check_name}</div>
+                                    <div className='text-[#667085]'>{check.service}</div>
                                 </div>
                                 <div className='text-right'>
-                                    <div className='font-semibold text-bright'>{check.latency_ms}ms</div>
-                                    <div className={`text-xs ${check.status === 'up' ? 'text-emerald-300' : check.status === 'degraded' ? 'text-amber-300' : 'text-red-300'}`}>
+                                    <div className='font-semibold text-[#171a21]'>{check.latency_ms}ms</div>
+                                    <div className={`text-xs ${check.status === 'up' ? 'text-[#147a3b]' : check.status === 'degraded' ? 'text-amber-700' : 'text-red-700'}`}>
                                         {check.status}
                                     </div>
                                 </div>
@@ -84,20 +87,21 @@ export default async function Page() {
 function OverviewCard({ title, value, icon }: { title: string, value: string, icon: React.ReactNode }) {
     return (
         <DashboardPanel className='p-5'>
-            <div className='flex items-center justify-between text-bright/60'>
+            <div className='flex items-center justify-between text-[#596170]'>
                 <span className='text-sm'>{title}</span>
                 <span>{icon}</span>
             </div>
-            <div className='mt-3 text-3xl font-semibold text-bright'>{value}</div>
+            <div className='mt-3 text-3xl font-semibold text-[#171a21]'>{value}</div>
         </DashboardPanel>
     )
 }
 
-function ActionLink({ href, title, body }: { href: string, title: string, body: string }) {
+function ActionLink({ href, title, body, icon }: { href: string, title: string, body: string, icon?: React.ReactNode }) {
     return (
-        <Link href={href} className='rounded-lg border border-white/8 bg-white/3 p-4 transition hover:border-[#f07d33]/40 hover:bg-[#f07d33]/8'>
-            <div className='font-semibold text-bright'>{title}</div>
-            <div className='mt-2 text-sm text-bright/55'>{body}</div>
+        <Link href={href} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 transition hover:border-[#b8c5ff] hover:bg-[#f4f7ff]'>
+            {icon ? <div className='mb-3 text-[#3056d3]'>{icon}</div> : null}
+            <div className='font-semibold text-[#171a21]'>{title}</div>
+            <div className='mt-2 text-sm leading-6 text-[#596170]'>{body}</div>
         </Link>
     )
 }

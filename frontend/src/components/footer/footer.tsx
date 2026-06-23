@@ -10,10 +10,10 @@ const footerGroups = [
     {
         title: 'Product',
         links: [
-            { label: 'Workspace', href: '/s' },
-            { label: 'AI assistant', href: '/ai' },
+            { label: 'Solutions', href: '/solutions' },
+            { label: 'Dark web monitoring', href: '/solutions/dwm' },
+            { label: 'Threat search', href: '/ti' },
             { label: 'Status', href: '/status', status: true },
-            { label: 'Dashboard', href: '/dashboard/overview' },
         ],
     },
     {
@@ -26,12 +26,12 @@ const footerGroups = [
         ],
     },
     {
-        title: 'Other tools',
+        title: 'Utilities',
         links: [
-            { label: 'Password check', href: '/pwned' },
+            { label: 'Bloom filter checks', href: '/pwned' },
             { label: 'Upload media', href: '/upload' },
             { label: 'Short links', href: '/g' },
-            { label: 'Load tests', href: '/test' },
+            { label: 'Service checks', href: '/test' },
         ],
     },
 ]
@@ -49,20 +49,20 @@ export default function Footer() {
                         <span className='grid h-8 w-8 place-items-center rounded-lg border border-bright/10 bg-bright/8 font-serif text-base text-bright shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'>H</span>
                         <span className='grid gap-0.5'>
                             <span>hanasand</span>
-                            <span className='text-[11px] font-normal text-bright/34'>operations workspace</span>
+                            <span className='text-[11px] font-normal text-bright/34'>threat intelligence</span>
                         </span>
                     </Link>
                     <p className='mt-4 max-w-md text-sm leading-6 text-bright/42'>
-                        A focused surface for projects.
+                        Company exposure monitoring, actor context, and private utility surfaces under one product shell.
                     </p>
                     <div className='mt-4 flex flex-wrap gap-2'>
                         <span className='inline-flex items-center gap-1.5 rounded-full border border-bright/8 px-2.5 py-1 text-[11px] text-bright/44'>
                             <Sparkles className='h-3.5 w-3.5 text-orange-200/60' />
-                            product workspace
+                            monitoring API
                         </span>
                         <span className='inline-flex items-center gap-1.5 rounded-full border border-bright/8 px-2.5 py-1 text-[11px] text-bright/44'>
                             <Globe className='h-3.5 w-3.5 text-bright/42' />
-                            history
+                            customer alerts
                         </span>
                     </div>
                 </div>

@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Database, LockKeyhole, Radar, Search, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, LockKeyhole, Radar, Search, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -15,15 +15,15 @@ import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 
 const productItems = [
     { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, and monitored metadata.', href: '/ti', icon: Radar },
-    { title: 'Exposure Alerts', detail: 'Company and supplier mentions from recent actor activity.', href: '/ti', icon: BellRing },
+    { title: 'Dark Web Monitoring', detail: 'Webhook-ready company and vendor alerts from actor-page metadata.', href: '/solutions/dwm', icon: BellRing },
     { title: 'Actor Overview', detail: 'Actor profiles, victim pivots, and source history for review workflows.', href: '/ti', icon: Waypoints },
 ]
 
 const solutionItems = [
-    { title: 'Threat Monitoring', detail: 'High-speed exposure notifications for watched companies.', href: '/ti', icon: ShieldCheck },
+    { title: 'All Solutions', detail: 'Monitoring, API delivery, and private exposure checking.', href: '/solutions', icon: ShieldCheck },
+    { title: 'Dark Web Monitoring', detail: 'High-speed exposure notifications for watched companies.', href: '/solutions/dwm', icon: BellRing },
     { title: 'Bloom Filter', detail: 'Private breach and password exposure checks.', href: '/pwned', icon: LockKeyhole },
     { title: 'AI Workspace', detail: 'Build, review, and ship small software projects.', href: '/ai', icon: Sparkles },
-    { title: 'Share Workspaces', detail: 'Public project handoffs and controlled collaboration links.', href: '/s', icon: Database },
 ]
 
 const resourceItems = [
