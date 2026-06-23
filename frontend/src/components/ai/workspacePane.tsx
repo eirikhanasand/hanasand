@@ -185,13 +185,13 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 >
                     <Stat label='Owners' value={ownershipSummary.ownerIds.join(', ') || 'Unknown'} />
                     <Stat label='Repo owners' value={ownershipSummary.repositoryOwnerIds.join(', ') || 'None'} />
-                    <Stat label='VM owners' value={ownershipSummary.vmOwnerIds.join(', ') || 'None'} />
+                    <Stat label='Runtime owners' value={ownershipSummary.vmOwnerIds.join(', ') || 'None'} />
                     <Stat label='Owned chats' value={String(ownershipSummary.ownedConversationCount)} />
                     <Stat label='Shared chats' value={String(ownershipSummary.sharedConversationCount)} />
                     <Stat label='Seats' value={`${ownershipSummary.collaboratorSeatCount} invited`} />
                     <Stat label='Repos / deploys' value={`${ownershipSummary.repositoryCount} repos · ${ownershipSummary.deploymentCount} deploys`} />
                     <Stat label='External repos' value={String(ownershipSummary.externalRepositoryCount)} />
-                    <Stat label='External VMs' value={String(ownershipSummary.externalVmCount)} />
+                    <Stat label='External runtimes' value={String(ownershipSummary.externalVmCount)} />
                     <Stat label='24h usage' value={`${ownershipSummary.usageEventCount24h} events · ${ownershipSummary.usageUnitCount24h} units`} />
                     <Stat label='Active actors' value={`${ownershipSummary.activeActorCount24h} seen in the last day`} />
                     {ownershipSummary.boundaryWarnings.length ? (
@@ -299,12 +299,12 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <Stat label='Deploy actors' value={deployActors.length ? String(deployActors.length) : 'None yet'} />
                 <Stat label='Release actors' value={releaseActors.length ? String(releaseActors.length) : 'None yet'} />
                 <Stat label='Repo boundary' value={ownershipSummary ? `${ownershipSummary.externalRepositoryCount} external` : 'Unknown'} />
-                <Stat label='VM boundary' value={ownershipSummary ? `${ownershipSummary.externalVmCount} external` : 'Unknown'} />
+                <Stat label='Runtime boundary' value={ownershipSummary ? `${ownershipSummary.externalVmCount} external` : 'Unknown'} />
                 <div className='rounded-xl bg-dark/30 px-3 py-2 text-xs text-bright/55 outline outline-dark'>
-                    Latest exposure: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No release metadata yet'}
+                    Latest preview: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No release metadata yet'}
                 </div>
                 <div className='text-xs text-bright/42'>
-                    Repo, VM, deploy, and release ownership are checked against the active AI owner.
+                    Repository, runtime, deploy, and release ownership are checked against the active AI owner.
                 </div>
             </Panel>
 
@@ -489,7 +489,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     </div>
                 ) : null}
                 <div className='grid grid-cols-[minmax(0,1fr)_5rem] gap-2'>
-                    <input value={deployVmName} onChange={(event) => setDeployVmName(event.target.value)} placeholder='VM name' className='min-w-0 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
+                    <input value={deployVmName} onChange={(event) => setDeployVmName(event.target.value)} placeholder='Deploy target' className='min-w-0 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
                     <input value={deployPort} onChange={(event) => setDeployPort(event.target.value)} placeholder='3000' inputMode='numeric' className='min-w-0 rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
                 </div>
                 <input value={deployHealthPath} onChange={(event) => setDeployHealthPath(event.target.value)} placeholder='/health or /' className='rounded-xl bg-dark/35 px-3 py-2 text-sm text-bright/88 outline outline-dark placeholder:text-bright/24' />
@@ -543,7 +543,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     disabled={deployPending}
                     className='rounded-xl bg-[#f07d33] px-3 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
-                    {deployPending ? 'Checking VM deploy...' : 'Start VM deploy check'}
+                    {deployPending ? 'Checking deploy target...' : 'Start deploy check'}
                 </button>
                 {deployments.length ? (
                     <div className='max-h-48 space-y-2 overflow-y-auto pr-1'>
@@ -792,7 +792,7 @@ function buildFallbackTrust(release: AIRelease | null): AIReleaseTrust | null {
         ],
         noLockIn: {
             headline: 'Your code, your domain, your infrastructure.',
-            bullets: ['Source stays exportable.', 'Deployments are recorded against your VM/domain choices.', 'Rollback evidence stays attached to release history.'],
+            bullets: ['Source stays exportable.', 'Deployments are recorded against your target and domain choices.', 'Rollback evidence stays attached to release history.'],
         },
         supportBundle: {
             available: true,
@@ -894,7 +894,7 @@ function buildDeployProfile({
         ? `${service}.hanasand.com`
         : `${service}.staging.hanasand.com`
     const checklist: Array<{ label: string, state: 'ready' | 'needs_input' | 'automatic' }> = [
-        { label: `Target VM: ${vmName || 'choose a VM'}`, state: vmName ? 'ready' : 'needs_input' },
+        { label: `Deploy target: ${vmName || 'choose a target'}`, state: vmName ? 'ready' : 'needs_input' },
         { label: `Domain profile: ${domain}`, state: 'automatic' },
         { label: 'SSL certificate after route is live', state: 'automatic' },
         { label: `Health check: ${port || 'port'}${healthPath || '/'}`, state: port && healthPath ? 'ready' : 'needs_input' },
@@ -907,7 +907,7 @@ function buildDeployProfile({
         title: `${environment === 'production' ? 'Production' : 'Staging'} infrastructure profile`,
         domain,
         ssl: 'Automatic after domain route responds',
-        logs: 'Build, healthcheck, VM bridge, and release events',
+        logs: 'Build, healthcheck, runtime bridge, and release events',
         rollback: 'Previous release is selectable from release history',
         checklist,
     }

@@ -1188,7 +1188,7 @@ export default function useAiWorkbench({
                 }
                 return release
             }))
-            setStatusNotice('Marked a previous release as the rollback target. Final restore is still a manual VM step.')
+            setStatusNotice('Marked a previous release as the rollback target. Final restore still needs a manual runtime step.')
         } catch (error) {
             setStatusNotice(error instanceof Error ? error.message : 'Unable to mark rollback target.')
         } finally {
@@ -1747,7 +1747,7 @@ export default function useAiWorkbench({
                 await scaffoldStarter('nextjs_docker', projectName, toolCall.shareId || conversation.workspaceId || null)
                 return {
                     ok: true,
-                    message: `Created project workspace for ${projectName} and prepared VM ${vmName}. ${result.message}`,
+                    message: `Created project workspace for ${projectName} and prepared deploy target ${vmName}. ${result.message}`,
                 }
             }
 

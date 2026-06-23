@@ -6,9 +6,9 @@ export default async function Page() {
             <div className='grid w-full max-w-5xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center'>
                 <div className='grid gap-4'>
                     <p className='text-sm font-semibold uppercase text-[#3056d3]'>Bloom Filter</p>
-                    <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Password exposure check for the personal archive.</h1>
+                    <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Private password exposure checks for teams.</h1>
                     <p className='max-w-xl text-base leading-7 text-[#596170]'>
-                        This older Hanasand tool remains available as a focused utility: check an exact password against indexed breach data without turning the main product into a generic security toolbox.
+                        A focused Hanasand utility for checking exact passwords against indexed breach data without turning dark web monitoring into a generic security toolbox.
                     </p>
                 </div>
                 <PwnedPageClient />
