@@ -4,8 +4,9 @@ import { redirect } from 'next/navigation'
 export default async function Page() {
     const Cookies = await cookies()
     const id = Cookies.get('id')?.value
+    const token = Cookies.get('access_token')?.value
 
-    if (!id) {
+    if (!id || !token) {
         redirect('/logout?path=/login%3Fpath%3D/profile%26expired=true')
     }
 

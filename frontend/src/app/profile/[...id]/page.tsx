@@ -27,7 +27,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
     const canManageContent = isAdmin || hasRole('content_admin')
     const isSelf = profileId === userId
 
-    if (!name || !userId || !token) {
+    if (!userId || !token) {
         const publicUser = await fetchUser(profileId)
         const isInactive = publicUser?.active === false
         const displayName = isInactive ? profileId : publicUser?.name || profileId
@@ -63,6 +63,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
 
     const certificates = await getCertificates(userId, token, userId)
     const vms = canManageSystem ? await getVMs(userId, token, userId) : []
+    const displayName = name || profileId
 
     return (
         <div className='h-full px-2 pb-2'>
@@ -77,7 +78,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
                     <DashboardPage>
                         <DashboardHeader
                             eyebrow='Profile'
-                            title={`@${name}`}
+                            title={`@${displayName}`}
                             description='Account access, API credentials, and product workspace details.'
                         />
                         <div className='grid gap-3 xl:grid-cols-2'>
