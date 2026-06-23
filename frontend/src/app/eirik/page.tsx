@@ -18,9 +18,9 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Eirik Hanasand',
-    description: 'Personal archive, articles, apps, experiments, and older Hanasand projects by Eirik Hanasand.',
+    description: 'Personal notebook, articles, apps, experiments, and older Hanasand projects by Eirik Hanasand.',
     path: '/eirik',
-    keywords: ['eirik hanasand', 'personal archive', 'articles', 'event app', 'password check', 'upload media'],
+    keywords: ['eirik hanasand', 'personal notebook', 'articles', 'event app', 'password check', 'upload media'],
 })
 
 const personalProjects = [
@@ -57,7 +57,7 @@ const personalProjects = [
         description: 'The restored old quote wall: a slow, black-background stream of motivational quotes.',
         href: '/eirik/motivation',
         icon: BookOpen,
-        tag: 'archive',
+        tag: 'notes',
     },
     {
         title: 'Articles',
@@ -78,7 +78,7 @@ const archiveProjects = [
     },
     {
         title: 'Pecubit and app design experiments',
-        description: 'Visual product experiments, phone mockups, and earlier app interface work kept as part of the personal archive.',
+        description: 'Visual product experiments, phone mockups, and earlier app interface work kept with the older project notes.',
         image: '/images/assets/pecubit.png',
         href: '/articles',
         label: 'interface design',
@@ -101,7 +101,7 @@ export default async function EirikPage() {
             <div className='mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 py-12 md:px-8 md:py-16'>
                 <section className='grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center'>
                     <div>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Personal archive</p>
+                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Personal notebook</p>
                         <h1 className='mt-4 max-w-3xl text-4xl font-semibold tracking-normal text-[#171a21] md:text-6xl'>Eirik Hanasand</h1>
                         <p className='mt-5 max-w-2xl text-base leading-7 text-[#596170] md:text-lg md:leading-8'>
                             This is the preserved personal side of Hanasand: older tools, article projects, app experiments,
@@ -213,13 +213,13 @@ export default async function EirikPage() {
                                     <GalleryHorizontal className='mt-0.5 h-4 w-4 shrink-0 text-[#667085]' />
                                 </div>
                                 <p className='mt-2 line-clamp-3 text-sm leading-6 text-[#596170]'>
-                                    {article.metadata.description || 'Project note from the personal Hanasand archive.'}
+                                    {article.metadata.description || 'Project note from the personal Hanasand notebook.'}
                                 </p>
                                 <p className='mt-4 text-xs text-[#667085]'>{article.metadata.estimatedMinutes || 1} min read</p>
                             </Link>
                         )) : (
                             <div className='rounded-lg border border-[#e0e5ed] bg-[#f8fafc] p-4 text-sm leading-6 text-[#596170] md:col-span-2'>
-                                Articles are unavailable right now, but this archive keeps the article project surface ready for production.
+                                Articles are unavailable right now, but this notebook keeps the article project surface ready for production.
                             </div>
                         )}
                     </div>

@@ -69,7 +69,7 @@ export default function Page() {
             <div className='mx-auto grid w-full max-w-7xl gap-6'>
                 <div className='flex items-center justify-between gap-4'>
                     <div className='grid gap-2'>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Personal archive</p>
+                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Personal notebook</p>
                         <div className='flex items-center gap-3 text-[#171a21]'>
                             <ImageIcon className='h-5 w-5 text-[#3056d3]' />
                             <h1 className='text-3xl font-semibold'>Gallery</h1>

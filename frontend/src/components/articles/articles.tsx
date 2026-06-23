@@ -52,7 +52,7 @@ export default async function Articles({
                     <h1 className='text-3xl font-semibold tracking-normal text-[#171a21] md:text-4xl'>Articles</h1>
                 </div>
                 <p className='max-w-2xl text-base leading-7 text-[#596170]'>
-                    Project notes, product context, and preserved writing from the personal Hanasand archive.
+                    Project notes, product context, and preserved writing from the personal Hanasand notebook.
                 </p>
             </div>
             <Recent recent={articles} max={max} includeTitle={includeRecentTitle} emptyMessage={hasAnyArticles ? 'No recent articles right now.' : 'No articles are published here yet.'} />

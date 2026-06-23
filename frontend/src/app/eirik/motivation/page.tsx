@@ -6,9 +6,9 @@ import './page.css'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Motivation',
-    description: 'The restored Hanasand motivation wall: a slow-scrolling archive of motivational quotes.',
+    description: 'The restored Hanasand motivation wall: a slow-scrolling personal quote wall.',
     path: '/eirik/motivation',
-    keywords: ['motivation quotes', 'eirik hanasand', 'personal archive', 'quote wall'],
+    keywords: ['motivation quotes', 'eirik hanasand', 'personal notebook', 'quote wall'],
 })
 
 export default function MotivationPage() {
