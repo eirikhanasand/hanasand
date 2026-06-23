@@ -18,6 +18,19 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     }, [query])
 
     useEffect(() => {
+        const titleQuery = (result?.query || query).trim()
+        if (!titleQuery) {
+            document.title = 'Threat Intelligence Search | Hanasand'
+            return
+        }
+
+        const label = toTitleLabel(titleQuery)
+        document.title = `${label} Threat Intelligence | Hanasand`
+        updateMetaDescription(`Search Hanasand monitoring context for ${label}: actor names, company mentions, domains, and recent claims.`)
+        updateCanonical(`/ti/${encodeURIComponent(titleQuery)}`)
+    }, [query, result?.query])
+
+    useEffect(() => {
         const clean = initialQuery.trim()
         if (!clean || initialResult) return
 
@@ -464,6 +477,41 @@ function sourceStatusLabel(value: string) {
     if (/available|ready|active/i.test(value)) return 'Active'
     if (/context/i.test(value)) return 'Context'
     return 'Included'
+}
+
+function toTitleLabel(value: string) {
+    return value
+        .replace(/[-_]+/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(part => {
+            if (/^(apt|cve|mitre|nvd|api|url|ip|dns|soc)\d*$/i.test(part)) return part.toUpperCase()
+            const lower = part.toLowerCase()
+            if (/^\d+$/.test(lower)) return lower
+            return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`
+        })
+        .join(' ')
+}
+
+function updateMetaDescription(content: string) {
+    let meta = document.head.querySelector<HTMLMetaElement>('meta[name="description"]')
+    if (!meta) {
+        meta = document.createElement('meta')
+        meta.name = 'description'
+        document.head.appendChild(meta)
+    }
+    meta.content = content
+}
+
+function updateCanonical(path: string) {
+    const href = `${window.location.origin}${path}`
+    let canonical = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')
+    if (!canonical) {
+        canonical = document.createElement('link')
+        canonical.rel = 'canonical'
+        document.head.appendChild(canonical)
+    }
+    canonical.href = href
 }
 
 function sourceRoleLabel(value: string) {
