@@ -30,18 +30,18 @@ export default function DashboardShare({ share }: { share: Share }) {
 
     return (
         <div className='group'>
-            <div className='flex items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-white/8 hover:bg-white/4'>
+            <div className='flex items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-[#e0e5ed] hover:bg-[#fbfcfe]'>
                 <div className='min-w-0'>
-                    <h3 key={share.id} className='truncate text-sm font-medium text-bright/84'>{share.alias || share.path || share.id}</h3>
-                    <p className='mt-0.5 truncate text-xs text-bright/36'>
+                    <h3 key={share.id} className='truncate text-sm font-semibold text-[#171a21]'>{share.alias || share.path || share.id}</h3>
+                    <p className='mt-0.5 truncate text-xs text-[#687386]'>
                         {share.locked ? 'Locked' : 'Open'} · {share.wordCount || 0} words · {share.path || share.id}
                     </p>
                 </div>
                 <div className='flex shrink-0 items-center gap-1.5'>
-                    <Link href={`/s/${share.id}`} className='rounded-lg border border-white/10 px-2.5 py-1.5 text-xs font-semibold text-bright/58 hover:bg-white/6 hover:text-bright/82'>
+                    <Link href={`/s/${share.id}`} className='rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#364152] hover:bg-[#f2f5f9]'>
                         Open
                     </Link>
-                    <button type='button' onClick={() => void handleDelete()} aria-label={`Delete share ${share.alias || share.path || share.id}`} className='inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-300/18 bg-red-400/8 text-red-100/72 hover:bg-red-400/14 hover:text-red-100'>
+                    <button type='button' onClick={() => void handleDelete()} aria-label={`Delete share ${share.alias || share.path || share.id}`} className='inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100'>
                         <Trash2 className='h-4 w-4' />
                     </button>
                 </div>

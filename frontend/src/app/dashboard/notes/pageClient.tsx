@@ -85,8 +85,8 @@ export default function NotesClient() {
     return (
         <div className='grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]'>
             <DashboardPanel className='min-h-80 p-3'>
-                <div className='mb-3 rounded-lg border border-white/8 bg-white/[0.035] p-3 text-xs leading-5 text-bright/48'>
-                    <div className='mb-1 flex items-center gap-2 font-semibold text-bright/70'>
+                <div className='mb-3 rounded-lg border border-[#dfe5ee] bg-[#f7f9fc] p-3 text-xs leading-5 text-[#596170]'>
+                    <div className='mb-1 flex items-center gap-2 font-semibold text-[#171a21]'>
                         <LockKeyhole className='h-3.5 w-3.5' />
                         Private to you
                     </div>
@@ -97,7 +97,7 @@ export default function NotesClient() {
                         setSelectedId('')
                         setDraft(emptyDraft)
                     }}
-                    className='mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/7 px-3 py-2 text-sm font-semibold text-bright transition hover:bg-white/10'
+                    className='mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-sm font-semibold text-[#364152] transition hover:bg-[#f2f5f9]'
                 >
                     <Plus className='h-4 w-4' />
                     New note
@@ -107,17 +107,17 @@ export default function NotesClient() {
                         <button
                             key={note.id}
                             onClick={() => setSelectedId(note.id)}
-                            className={`rounded-xl border px-3 py-3 text-left transition ${
+                            className={`rounded-lg border px-3 py-3 text-left transition ${
                                 note.id === selectedId
-                                    ? 'border-white/14 bg-white/12 text-bright'
-                                    : 'border-white/7 bg-white/[0.035] text-bright/70 hover:bg-white/7'
+                                    ? 'border-[#3056d3] bg-[#eef3ff] text-[#171a21]'
+                                    : 'border-[#dfe5ee] bg-white text-[#364152] hover:bg-[#f7f9fc]'
                             }`}
                         >
                             <div className='truncate text-sm font-semibold'>{note.title || 'Untitled'}</div>
-                            <div className='mt-1 truncate text-xs text-bright/42'>{formatNoteDate(note.updated_at)}</div>
+                            <div className='mt-1 truncate text-xs text-[#687386]'>{formatNoteDate(note.updated_at)}</div>
                         </button>
                     ))}
-                    {!notes.length && <div className='rounded-lg border border-dashed border-white/10 p-5 text-center text-sm text-bright/40'>No private notes yet.</div>}
+                    {!notes.length && <div className='rounded-lg border border-dashed border-[#d8dee9] p-5 text-center text-sm text-[#596170]'>No private notes yet.</div>}
                 </div>
             </DashboardPanel>
 
@@ -127,24 +127,24 @@ export default function NotesClient() {
                         value={draft.title}
                         onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
                         placeholder='Title'
-                        className='rounded-xl border border-white/10 bg-black/18 px-4 py-3 text-lg font-semibold text-bright outline-none transition placeholder:text-bright/30 focus:border-white/18'
+                        className='rounded-lg border border-[#d8dee9] bg-white px-4 py-3 text-lg font-semibold text-[#171a21] outline-none transition placeholder:text-[#98a2b3] focus:border-[#3056d3] focus:ring-3 focus:ring-[#3056d3]/10'
                     />
                     <textarea
                         value={draft.content}
                         onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))}
                         placeholder='Write a private note...'
-                        className='min-h-96 resize-none rounded-xl border border-white/10 bg-black/18 px-4 py-3 text-sm leading-6 text-bright outline-none transition placeholder:text-bright/30 focus:border-white/18'
+                        className='min-h-96 resize-none rounded-lg border border-[#d8dee9] bg-white px-4 py-3 text-sm leading-6 text-[#171a21] outline-none transition placeholder:text-[#98a2b3] focus:border-[#3056d3] focus:ring-3 focus:ring-[#3056d3]/10'
                     />
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <p className='text-sm text-bright/45'>{message || (busy ? 'Working...' : selected ? `Last edited from ${formatSource(selected.source)}.` : 'Private notes are editable here and available to the authenticated app surfaces.')}</p>
+                        <p className='text-sm text-[#687386]'>{message || (busy ? 'Working...' : selected ? `Last edited from ${formatSource(selected.source)}.` : 'Private notes are editable here and available to the authenticated app surfaces.')}</p>
                         <div className='flex gap-2'>
                             {selected && (
-                                <button onClick={() => void remove()} className='flex items-center gap-2 rounded-xl border border-red-300/16 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/16'>
+                                <button onClick={() => void remove()} className='flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100'>
                                     <Trash2 className='h-4 w-4' />
                                     Delete
                                 </button>
                             )}
-                            <button onClick={() => void save()} className='flex items-center gap-2 rounded-xl border border-white/12 bg-white/88 px-4 py-2 text-sm font-semibold text-black transition hover:bg-white'>
+                            <button onClick={() => void save()} className='flex items-center gap-2 rounded-lg bg-[#22252d] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#111318]'>
                                 <Check className='h-4 w-4' />
                                 Save
                             </button>

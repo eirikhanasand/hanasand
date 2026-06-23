@@ -21,10 +21,10 @@ export default async function Projects() {
         <DashboardPanel className='grid min-h-42 content-start gap-3 p-4'>
             <div className='flex items-center justify-between gap-3'>
                 <div>
-                    <h2 className='text-base font-medium text-bright/90'>Projects</h2>
-                    <p className='mt-1 text-xs text-bright/38'>{(projects as Project[]).length} workspaces</p>
+                    <h2 className='text-base font-semibold text-[#171a21]'>Projects</h2>
+                    <p className='mt-1 text-sm text-[#596170]'>{(projects as Project[]).length} workspace{(projects as Project[]).length === 1 ? '' : 's'}</p>
                 </div>
-                <Link href='/s' className='inline-flex h-8 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-medium text-bright/70 transition hover:bg-white/9 hover:text-bright'>
+                <Link href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#364152] transition hover:bg-[#f2f5f9]'>
                     <Plus className='h-4 w-4' />
                     <span>Create</span>
                 </Link>
@@ -32,7 +32,7 @@ export default async function Projects() {
             <div className='grid gap-1'>
                 {(projects as Project[]).length
                     ? (projects as Project[]).map((project) => <DashboardProject key={project.alias} project={project} />)
-                    : <p className='text-sm text-bright/42'>No projects yet.</p>}
+                    : <p className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#596170]'>No projects yet.</p>}
             </div>
         </DashboardPanel>
     )
