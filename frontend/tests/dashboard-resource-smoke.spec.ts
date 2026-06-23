@@ -114,8 +114,9 @@ test.describe('dashboard resource routes', () => {
 
             for (const route of privilegedDashboardRoutes) {
                 await page.goto(route.path, { waitUntil: 'domcontentloaded' })
-                await expect(page).toHaveURL(/\/login\?/)
-                expect(new URL(page.url()).searchParams.get('path')).toBe(route.path)
+                await expect(page).toHaveURL(/\/dashboard\?notAllowed=true/)
+                await expect(page.getByText('That console area is not included in this account.')).toBeVisible()
+                await expect(page.getByText(/Sign in to continue|Token expired/i)).toHaveCount(0)
             }
         } finally {
             await context.close()

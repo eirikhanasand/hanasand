@@ -197,7 +197,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const redirectPath = safeRedirectPath(path)
 
     function completeAuth() {
-        void waitForAuthCookies().finally(() => window.location.assign(redirectPath))
+        window.location.assign(redirectPath)
     }
 
     function changeMode(nextMode: typeof mode) {
@@ -526,15 +526,6 @@ function safeRedirectPath(path: string | null) {
     }
 
     return path
-}
-
-async function waitForAuthCookies() {
-    for (let attempt = 0; attempt < 20; attempt++) {
-        if (getCookie('access_token') && getCookie('id')) {
-            return
-        }
-        await new Promise(resolve => window.setTimeout(resolve, 50))
-    }
 }
 
 function parseSignupResponse(responseText: string) {
