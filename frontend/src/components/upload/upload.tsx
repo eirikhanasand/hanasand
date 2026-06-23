@@ -115,7 +115,7 @@ export default function Upload({ url, setUrl, setFile, preview, setPreview }: Up
             </div>
             <div className='grid gap-5 p-4 sm:p-6'>
                 <div className='grid gap-1'>
-                    <h1 className='text-lg font-semibold text-[#171a21]'>Upload media</h1>
+                    <h2 className='text-lg font-semibold text-[#171a21]'>Upload media</h2>
                     <p className='text-sm leading-6 text-[#596170]'>Choose a file or paste a fetchable media URL.</p>
                 </div>
 
