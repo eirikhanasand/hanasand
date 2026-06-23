@@ -20,7 +20,7 @@ export default async function Page({
             <DashboardHeader
                 eyebrow='Alert delivery'
                 title='Monitoring alerts'
-                description='Create scheduled checks, test delivery, and review recent alert runs from the customer console.'
+                description='Create monitoring checks, test delivery, and review recent alert activity from the customer console.'
             />
             <AutomationsClient setup={setup === 'dwm' ? 'dwm' : undefined} />
         </DashboardPage>

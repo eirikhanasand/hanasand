@@ -46,7 +46,7 @@ export default async function Page() {
                 <OverviewCard title='Signals inspected' value={formatNumber(overview.requestsToday)} detail='Recent API and monitoring activity' icon={<Activity className='h-4 w-4' />} />
                 <OverviewCard title='Watched domains' value={formatNumber(overview.activeDomains)} detail='Customer assets available for checks' icon={<Radar className='h-4 w-4' />} />
                 <OverviewCard title='Critical CVEs' value={formatNumber(overview.criticalVulnerabilities)} detail='High-severity exposure context' icon={<ShieldAlert className='h-4 w-4' />} />
-                <OverviewCard title='Source groups' value={formatNumber(overview.imagesScanned)} detail='Indexed feeds and enrichment sets' icon={<Search className='h-4 w-4' />} />
+                <OverviewCard title='Indexed sources' value={formatNumber(overview.imagesScanned)} detail='Feeds and enrichment sets available for monitoring' icon={<Search className='h-4 w-4' />} />
             </div>
 
             <div className='grid gap-4 xl:grid-cols-[1.3fr_0.9fr]'>
@@ -60,7 +60,7 @@ export default async function Page() {
                     <div className='mt-4 grid gap-3 md:grid-cols-3'>
                         <ActionLink href='/ti' title='Threat search' body='Search companies, actors, vendors, domains, and claims.' icon={<Search className='h-4 w-4' />} />
                         <ActionLink href='/solutions/dwm#webhooks' title='Webhook alerts' body='Preview the alert payload and delivery format.' icon={<Webhook className='h-4 w-4' />} />
-                        <ActionLink href='/dashboard/automations' title='Alert delivery' body='Prepare recurring checks and keep the handoff history in one place.' icon={<BellRing className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/automations' title='Alert delivery' body='Prepare recurring checks and review delivery history in one place.' icon={<BellRing className='h-4 w-4' />} />
                         <ActionLink href='/solutions/dwm' title='Dark web monitoring' body='See what the product tracks and how a buyer uses the API.' icon={<Building2 className='h-4 w-4' />} />
                         <ActionLink href='/developers' title='API access' body='Connect monitoring data to a workflow, SIEM, CRM, or ticket queue.' icon={<Braces className='h-4 w-4' />} />
                         {canManageSystem && <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />}

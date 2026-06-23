@@ -65,12 +65,12 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             setDraft(draftFromWebhook(nextWebhookDraft))
             setSelectedId('')
             setRuns([])
-            setStatus('Webhook alert is ready. Review the schedule and create it to start monitoring.')
+            setStatus('Webhook alert is ready. Review the cadence and create it to start monitoring.')
         } else if (setupIntent === 'dwm') {
             setDraft(dwmFallbackDraft())
             setSelectedId('')
             setRuns([])
-            setStatus('Dark web monitoring alert draft is ready. Add the final delivery endpoint before creating it.')
+            setStatus('Dark web monitoring alert is ready. Add the delivery endpoint in the instructions, then create it.')
         }
         void load(nextWebhookDraft ? draftSelectionId : undefined)
     }, [setup])
@@ -89,9 +89,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             } else {
                 setRuns([])
             }
-            setStatus('Loaded alert schedules.')
+            setStatus('Loaded alert settings.')
         } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'Unable to load alert schedules.')
+            setStatus(error instanceof Error ? error.message : 'Unable to load alert settings.')
         } finally {
             setBusy('')
         }
@@ -124,9 +124,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             setSelectedId(payload.automation.id)
             setDraft(toDraft(payload.automation))
             await load(payload.automation.id)
-            setStatus(selected ? 'Alert schedule updated.' : 'Alert schedule created.')
+            setStatus(selected ? 'Alert updated.' : 'Alert created.')
         } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'Unable to save alert schedule.')
+            setStatus(error instanceof Error ? error.message : 'Unable to save alert settings.')
         } finally {
             setBusy('')
         }
@@ -141,9 +141,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             setRuns([])
             setDraft(newAutomationDraft())
             await load('')
-            setStatus('Alert schedule removed.')
+            setStatus('Alert removed.')
         } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'Unable to remove alert schedule.')
+            setStatus(error instanceof Error ? error.message : 'Unable to remove alert.')
         } finally {
             setBusy('')
         }
@@ -154,7 +154,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
         try {
             await runAutomationNow(id)
             await load(id)
-            setStatus('Run queued. Refresh in a moment to see the result.')
+            setStatus('Delivery check queued. Refresh in a moment to see the result.')
         } catch (error) {
             setStatus(error instanceof Error ? error.message : 'Unable to queue run.')
         } finally {
@@ -174,7 +174,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
         setSelectedId('')
         setRuns([])
         setDraft(draftFromWebhook(webhookDraft))
-        setStatus('Webhook alert is ready. Review the schedule and create it to start monitoring.')
+        setStatus('Webhook alert is ready. Review the cadence and create it to start monitoring.')
     }
 
     function clearWebhookDraft() {
@@ -199,7 +199,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             <section className='rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm'>
                 <div className='mb-2 flex items-center justify-between gap-2 px-2 py-1'>
                     <div>
-                        <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Scheduled</p>
+                        <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Monitoring</p>
                         <h2 className='text-sm font-semibold text-[#171a21]'>{activeAutomationCount}/{maxActiveAutomations} active alerts</h2>
                     </div>
                     <button type='button' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d8dee9] bg-[#f8fafc] text-[#3056d3] hover:bg-[#eef3ff]' onClick={newAutomation} title='New alert' aria-label='New alert'>
@@ -221,7 +221,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             <p className='mt-2 text-[11px] text-[#8c95a5]'>{formatSchedule(automation)}</p>
                         </button>
                     ))}
-                    {!automations.length && <p className='p-3 text-sm text-[#596170]'>No alert schedules yet.</p>}
+                    {!automations.length && <p className='p-3 text-sm leading-6 text-[#596170]'>No alerts yet. Create one to watch company, vendor, domain, and product mentions.</p>}
                 </div>
             </section>
 
@@ -230,11 +230,11 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <div className='flex flex-wrap items-center justify-between gap-2'>
                         <div>
                             <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Editor</p>
-                            <h2 className='text-lg font-semibold text-[#171a21]'>{selected ? selected.name : 'New alert schedule'}</h2>
+                            <h2 className='text-lg font-semibold text-[#171a21]'>{selected ? selected.name : 'New monitoring alert'}</h2>
                         </div>
                         <div className='flex flex-wrap gap-2'>
                             <IconButton label='Refresh' icon={<RefreshCw className='h-4 w-4' />} onClick={() => void load()} />
-                            {selected && <IconButton label='Run now' icon={<Play className='h-4 w-4' />} onClick={() => void runNow(selected.id)} disabled={busy.startsWith('run-')} />}
+                            {selected && <IconButton label='Check now' icon={<Play className='h-4 w-4' />} onClick={() => void runNow(selected.id)} disabled={busy.startsWith('run-')} />}
                             {selected && <IconButton label='Delete' icon={<Trash2 className='h-4 w-4' />} tone='danger' onClick={() => void removeAutomation(selected.id)} disabled={busy.startsWith('delete-')} />}
                         </div>
                     </div>
@@ -251,7 +251,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                 </div>
                                 <div className='flex shrink-0 flex-wrap gap-2'>
                                     <button type='button' onClick={useWebhookDraft} className='rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
-                                        Apply setup
+                                        Use this setup
                                     </button>
                                     <button type='button' onClick={clearWebhookDraft} className='rounded-lg border border-[#ccd6ea] bg-white px-3 py-2 text-sm font-semibold text-[#596170] hover:border-[#aebbd1] hover:text-[#171a21]'>
                                         Clear
@@ -268,11 +268,11 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                     <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Dark web monitoring</p>
                                     <h3 className='mt-1 text-sm font-semibold text-[#171a21]'>Webhook alert ready to create</h3>
                                     <p className='mt-1 text-sm leading-6 text-[#3d4656]'>
-                                        The schedule is prefilled for company, domain, vendor, and product monitoring. Add the delivery endpoint in the instructions, then create the alert.
+                                        The alert is prefilled for company, domain, vendor, and product monitoring. Add the delivery endpoint in the instructions, then create the alert.
                                     </p>
                                 </div>
-                                <button type='button' onClick={() => setStatus('Review the prefilled schedule and create it to start monitoring.')} className='shrink-0 rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
-                                    Apply setup
+                                <button type='button' onClick={() => setStatus('Review the prefilled alert and create it to start monitoring.')} className='shrink-0 rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
+                                    Use this setup
                                 </button>
                             </div>
                         </div>
@@ -284,15 +284,15 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             <input className={inputClass} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} />
                         </label>
                         <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Check type</span>
+                            <span className='text-xs font-medium text-[#596170]'>Delivery type</span>
                             <select className={inputClass} value={draft.actionType} onChange={event => setDraft({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}>
                                 <option value='agent_prompt'>Monitoring check</option>
                                 <option value='echo'>Delivery test</option>
                             </select>
                         </label>
                         <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Routing preference</span>
-                            <input className={inputClass} value={draft.modelName || ''} placeholder='Auto' onChange={event => setDraft({ ...draft, modelName: event.target.value.trim() || null })} />
+                            <span className='text-xs font-medium text-[#596170]'>Delivery channel</span>
+                            <input className={inputClass} value={draft.modelName || ''} placeholder='Webhook, email, or auto' onChange={event => setDraft({ ...draft, modelName: event.target.value.trim() || null })} />
                         </label>
                     </div>
 
@@ -303,18 +303,18 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
                     <div className='grid gap-3 md:grid-cols-5'>
                         <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Schedule</span>
+                            <span className='text-xs font-medium text-[#596170]'>Cadence</span>
                             <select className={inputClass} value={draft.scheduleKind} onChange={event => setDraft({ ...draft, scheduleKind: event.target.value as AutomationPayload['scheduleKind'] })}>
                                 <option value='interval'>Recurring</option>
                                 <option value='once'>Once</option>
                             </select>
                         </label>
                         <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Every minutes</span>
+                            <span className='text-xs font-medium text-[#596170]'>Check every</span>
                             <input className={`${inputClass} disabled:opacity-45`} type='number' min={1} disabled={draft.scheduleKind !== 'interval'} value={draft.intervalMinutes || 30} onChange={event => setDraft({ ...draft, intervalMinutes: Number(event.target.value) })} />
                         </label>
                         <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Run at</span>
+                            <span className='text-xs font-medium text-[#596170]'>First check</span>
                             <input className={`${inputClass} disabled:opacity-45`} type='datetime-local' disabled={draft.scheduleKind !== 'once'} value={draft.runAt || defaultRunAt()} onChange={event => setDraft({ ...draft, runAt: event.target.value })} />
                         </label>
                         <label className='grid gap-1.5'>
@@ -334,8 +334,8 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         <label className='grid gap-1.5'>
                             <span className='text-xs font-medium text-[#596170]'>Notify</span>
                             <select className={inputClass} value={draft.notifyOn || 'failure'} onChange={event => setDraft({ ...draft, notifyOn: event.target.value as AutomationPayload['notifyOn'] })}>
-                                <option value='failure'>Failures</option>
-                                <option value='always'>Every run</option>
+                                <option value='failure'>Delivery issues</option>
+                                <option value='always'>Every check</option>
                                 <option value='never'>Never</option>
                             </select>
                         </label>
@@ -349,7 +349,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <div className='flex flex-wrap items-center gap-2'>
                         <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39] disabled:opacity-50' onClick={() => void saveAutomation()} disabled={busy === 'save'}>
                             <WandSparkles className='h-4 w-4' />
-                            {selected ? 'Save changes' : 'Create alert'}
+                            {selected ? 'Save alert' : 'Create alert'}
                         </button>
                         <button type='button' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-sm font-semibold text-[#596170] hover:border-[#bdc7d5] hover:text-[#171a21]' onClick={cancelDraft} disabled={busy === 'save'}>
                             Cancel
@@ -360,9 +360,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     {selected && (
                         <div className='grid gap-3 border-t border-[#eef1f5] pt-4'>
                             <div className='grid gap-2 sm:grid-cols-3'>
-                                <InfoCard icon={<CalendarClock className='h-4 w-4' />} label='Next run' value={formatDate(selected.nextRunAt)} />
-                                <InfoCard icon={<Pause className='h-4 w-4' />} label='Last status' value={`${selected.lastStatus || 'No runs'}${selected.consecutiveFailures ? ` · ${selected.consecutiveFailures} failures` : ''}`} />
-                                <InfoCard icon={<Play className='h-4 w-4' />} label='Runs' value={`${selected.runCount}`} />
+                                <InfoCard icon={<CalendarClock className='h-4 w-4' />} label='Next check' value={formatDate(selected.nextRunAt)} />
+                                <InfoCard icon={<Pause className='h-4 w-4' />} label='Latest delivery' value={`${selected.lastStatus || 'No checks'}${selected.consecutiveFailures ? ` · ${selected.consecutiveFailures} issues` : ''}`} />
+                                <InfoCard icon={<Play className='h-4 w-4' />} label='Checks' value={`${selected.runCount}`} />
                             </div>
                             <div className='grid gap-2'>
                                 {runs.map(run => (
@@ -376,7 +376,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                             : <p className='mt-2 whitespace-pre-wrap text-sm leading-6 text-[#3d4656]'>{run.result || 'Running...'}</p>}
                                     </div>
                                 ))}
-                                {!runs.length && <p className='text-sm text-[#596170]'>No delivery history yet.</p>}
+                                {!runs.length && <p className='text-sm leading-6 text-[#596170]'>No delivery history yet. Run the alert once or wait for the next scheduled check.</p>}
                             </div>
                         </div>
                     )}
@@ -516,5 +516,5 @@ function formatDate(value?: string | null) {
 
 function formatSchedule(automation: AgentAutomation) {
     if (automation.scheduleKind === 'once') return `Once · ${formatDate(automation.runAt)}`
-    return `Every ${automation.intervalMinutes || 0} min · next ${formatDate(automation.nextRunAt)} · ${automation.timezone || 'UTC'}`
+    return `Every ${automation.intervalMinutes || 0} minutes · next ${formatDate(automation.nextRunAt)} · ${automation.timezone || 'UTC'}`
 }
