@@ -270,7 +270,7 @@ function EmptyEditorState({
 const firstRunSteps = [
     'Draft one file',
     'Run checks',
-    'Capture handoff notes',
+    'Capture release notes',
 ]
 
 const starterTemplates = [

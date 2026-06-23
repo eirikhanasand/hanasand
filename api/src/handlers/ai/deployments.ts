@@ -624,7 +624,7 @@ function buildOwnedDeploymentProfile({
             envPlaceholders.length
                 ? `Deploy checklist: ${envPlaceholders.length} environment placeholder${envPlaceholders.length === 1 ? '' : 's'} detected (${envPlaceholders.join(', ')}); values are never echoed.`
                 : 'Deploy checklist: no required environment placeholders were detected from imported files.',
-            'Deploy checklist: build logs, VM bridge events, health result, and release record are persisted for refresh and handoff.',
+            'Deploy checklist: build logs, VM bridge events, health result, and release record are persisted for refresh and reporting.',
             'Deploy checklist: previous releases remain selectable as rollback targets before production cutover.',
         ],
     }

@@ -2247,7 +2247,7 @@ function plainImpactForPath(path: string) {
     if (/docker|compose|env/i.test(path)) return 'Publishing'
     if (/page|layout|component|src\/app/i.test(path)) return 'Visitor view'
     if (/test|spec|e2e|smoke/i.test(path)) return 'Verification'
-    if (/readme|docs?\//i.test(path)) return 'Handoff'
+    if (/readme|docs?\//i.test(path)) return 'Docs'
     if (/package\.json|tsconfig|next\.config/i.test(path)) return 'App setup'
     return 'Project'
 }
@@ -2446,7 +2446,7 @@ function inferDesignBrief(prompt: string, treePaths: string[]): DesignBrief | nu
             tokenPlan: ['clinical neutral base', 'calm blue/green accent', 'large readable type', 'high contrast states'],
         },
         agency: {
-            layoutMoves: ['evidence-led hero', 'case-study strips', 'process and handoff sections'],
+            layoutMoves: ['evidence-led hero', 'case-study strips', 'process and delivery sections'],
             assetPipeline: ['project thumbnail slots', 'client-logo placeholders marked as pending', 'icons for strategy/design/build'],
             tokenPlan: ['editorial type scale', 'restrained accent', 'portfolio spacing rhythm', 'case-study cards with varied composition'],
         },
@@ -2498,7 +2498,7 @@ function isCostControlPrompt(prompt: string) {
 }
 
 function isMaintainabilityPrompt(prompt: string) {
-    return /\b(maintain|maintainable|maintainability|maintenance|messy|mess|refactor|technical debt|debt|slow|slower|performance|perf|crawl|bloated|bloat|redundant|css|asset|assets|cms|content management|content sections?|ownership|owned|own the code|export|editable|edit later|can edit|supportable|dependency|dependencies|lock-in|locked in|platform|vendor|portable|handoff|developer later|client side|client-side|hard coded|custom flow|edge case|browser|browser bugs?|device|mobile safari|checkout|integration|weird bug|opaque|widget|widgets|scalability|scale|scales|scaling|landing page|compliance|semantic|accessible|accessibility|a11y|markup)\b/i.test(prompt)
+    return /\b(maintain|maintainable|maintainability|maintenance|messy|mess|refactor|technical debt|debt|slow|slower|performance|perf|crawl|bloated|bloat|redundant|css|asset|assets|cms|content management|content sections?|ownership|owned|own the code|export|editable|edit later|can edit|supportable|dependency|dependencies|lock-in|locked in|platform|vendor|portable|delivery|developer later|client side|client-side|hard coded|custom flow|edge case|browser|browser bugs?|device|mobile safari|checkout|integration|weird bug|opaque|widget|widgets|scalability|scale|scales|scaling|landing page|compliance|semantic|accessible|accessibility|a11y|markup)\b/i.test(prompt)
 }
 
 function isProgressGovernancePrompt(prompt: string) {

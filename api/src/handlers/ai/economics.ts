@@ -694,7 +694,7 @@ function subscriptionTiers() {
             queuePriority: 'priority',
             concurrency: 6,
             fit: 'Multiple client workspaces',
-            features: ['handoff reports', 'white-label deploy', 'client workspace separation'],
+            features: ['client reports', 'white-label deploy', 'client workspace separation'],
         },
         {
             id: 'business',

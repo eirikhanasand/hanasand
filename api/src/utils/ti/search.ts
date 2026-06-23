@@ -938,8 +938,8 @@ function buildOperationalStatus(schedulerInput: unknown, fallback: {
     const fairnessOk = booleanValue(fairness?.ok, worstShare <= 0.25)
     const memoryPressure = optionalNumber(record(queueEconomics?.memoryPressure)?.ratio)
     const notes = [
-        queuedTasks > 0 ? `${queuedTasks} queued task${queuedTasks === 1 ? '' : 's'} waiting for scheduler leases.` : 'No queued scraper tasks are visible for this query yet.',
-        leasedTasks > 0 ? `${leasedTasks} task${leasedTasks === 1 ? ' is' : 's are'} leased to workers.` : 'No workers have leased this query yet.',
+        queuedTasks > 0 ? `${queuedTasks} queued task${queuedTasks === 1 ? '' : 's'} waiting for collector capacity.` : 'No queued collection tasks are visible for this query yet.',
+        leasedTasks > 0 ? `${leasedTasks} task${leasedTasks === 1 ? ' is' : 's are'} assigned to collectors.` : 'No collectors have picked up this query yet.',
         retryDebt > 0 ? `${retryDebt} retr${retryDebt === 1 ? 'y is' : 'ies are'} in backoff or retry debt.` : 'Retry debt is clear.',
         deadLetters > 0 ? `${deadLetters} dead-lettered task${deadLetters === 1 ? '' : 's'} need operator attention.` : 'No dead letters are currently attached.',
         fairnessOk ? 'Fairness is within the per-source share policy.' : `Fairness is drifting; ${stringValue(fairness?.worstGroup) ?? 'one source group'} is taking ${formatPercent(worstShare)} of scheduler share.`

@@ -754,7 +754,7 @@ export function buildShareProjectResponse(prompt: string): GeneratedBuilderRespo
         provider: 'hanasand-ai',
         model: 'share-builder',
         message: [
-            `Prepared a ${project.label} with complete runnable files, export-friendly Docker handoff, and reviewable changes.`,
+            `Prepared a ${project.label} with complete runnable files, export-friendly Docker setup, and reviewable changes.`,
             ...project.files.map((file) => toolTag(file.path, file.content)),
         ].join('\n\n'),
         cache: {
@@ -923,7 +923,7 @@ function pageSectionsFor(lower: string) {
         return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Privacy rules', 'Recall checklist', 'Mobile release', 'Offline state']
     }
     if (lower.includes('restaurant site') || lower.includes('restaurant allergy') || lower.includes('allergy booking')) {
-        return ['Menu and allergens', 'Dietary filters', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Update handoff']
+        return ['Menu and allergens', 'Dietary filters', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Update notes']
     }
     if (lower.includes('repair shop') || lower.includes('pet groomer') || lower.includes('local service website')) {
         return ['Services', 'Response metrics', 'Simple pricing bands', 'Customer quotes', 'Launch checklist', 'Beginner deployment']
@@ -980,7 +980,7 @@ function pageSectionsFor(lower: string) {
         return ['Control families', 'Audit metrics', 'Assurance tiers', 'Reviewer quotes', 'Evidence tasks', 'Deployment notes']
     }
     if (lower.includes('case study') || lower.includes('impact portal') || lower.includes('impactframes')) {
-        return ['Project sections', 'Outcome metrics', 'Service tiers', 'Client quotes', 'Handoff tasks', 'Deployment notes']
+        return ['Project sections', 'Outcome metrics', 'Service tiers', 'Client quotes', 'Delivery tasks', 'Deployment notes']
     }
     if (lower.includes('crisis comms') || lower.includes('crisis campaign')) {
         return ['Creative sections', 'Launch metrics', 'Package tiers', 'Stakeholder quotes', 'Task status', 'Incident communication']
@@ -1007,13 +1007,13 @@ function pageSectionsFor(lower: string) {
         return ['Plans', 'Checkout states', 'Product bundles', 'Checkout CTA', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ', 'Failed payments', 'Cancellation', 'Invoice notes', 'Security review', 'Escalation paths', 'SLA states', 'Customer messaging', 'Runbook', 'Failure owner']
     }
     if (lower.includes('failed payment') || lower.includes('failed payments') || lower.includes('checkout failure')) {
-        return ['Plans', 'Checkout states', 'Product bundles', 'Checkout CTA', 'Failed payments', 'Cancellation', 'Invoice notes', 'Security review', 'Support handoff', 'Escalation paths', 'SLA states', 'Customer messaging', 'Runbook', 'Failure owner']
+        return ['Plans', 'Checkout states', 'Product bundles', 'Checkout CTA', 'Failed payments', 'Cancellation', 'Invoice notes', 'Security review', 'Support routing', 'Escalation paths', 'SLA states', 'Customer messaging', 'Runbook', 'Failure owner']
     }
     if (/\b(ecommerce|store|product bundles|checkout buttons)\b/.test(lower)) {
         return ['Product bundles', 'Checkout CTA', 'Shipping notes', 'Customer reviews', 'Return policy', 'FAQ']
     }
     if (lower.includes('local seo') || lower.includes('seo redirect') || lower.includes('redirect recovery')) {
-        return ['Search proof', 'Redirect checklist', 'Migration plan', 'QA plan', 'Browser verification', 'Exit plan']
+        return ['Search validation', 'Redirect checklist', 'Migration plan', 'QA plan', 'Browser verification', 'Exit plan']
     }
     if (lower.includes('tiny agency') || lower.includes('brand, webflow cleanup') || lower.includes('agency site')) {
         return ['Proof', 'Services', 'Selected work', 'Pricing cues', 'Testimonials', 'Contact CTA']
@@ -1037,7 +1037,7 @@ function pageSectionsFor(lower: string) {
         return ['Leads', 'Next follow-up', 'Deal stages', 'Notes', 'Metrics', 'Import export cues']
     }
     if (lower.includes('design qa') || lower.includes('designqasignal') || lower.includes('review sections')) {
-        return ['Review sections', 'Defect metrics', 'Service tiers', 'Stakeholder quotes', 'Handoff tasks', 'Deployment notes']
+        return ['Review sections', 'Defect metrics', 'Service tiers', 'Stakeholder quotes', 'Delivery tasks', 'Deployment notes']
     }
     if (lower.includes('cleaning service') || lower.includes('cleanlocal') || lower.includes('pricing packages')) {
         return ['Service sections', 'Response metrics', 'Pricing packages', 'Customer quotes', 'Launch tasks', 'Beginner deployment']
@@ -1105,8 +1105,8 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('accessibility-first') || lower.includes('accessibility lawsuit') || lower.includes('a11y') || lower.includes('wcag') || lower.includes('skip links') || lower.includes('keyboard flow') || lower.includes('reduced motion')) {
         return ['Skip links', 'Keyboard flow', 'Contrast', 'Forms', 'Reduced motion', 'Accessible controls']
     }
-    if (lower.includes('analytics consent') || lower.includes('analytics handoff') || lower.includes('consent/data seams')) {
-        return ['Proof', 'Pricing', 'FAQ', 'Lead capture', 'Privacy and data seams documented', 'Analytics handoff']
+    if (lower.includes('analytics consent') || lower.includes('analytics delivery') || lower.includes('consent/data paths')) {
+        return ['Validation', 'Pricing', 'FAQ', 'Lead capture', 'Privacy and data paths documented', 'Analytics notes']
     }
     if (lower.includes('gdpr') || lower.includes('privacy') || lower.includes('data retention') || lower.includes('data request') || lower.includes('personal data')) {
         return ['Data map', 'Consent flow', 'Retention rules', 'Export request', 'Delete request', 'Audit trail']
@@ -1114,23 +1114,23 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('governance') || lower.includes('audit trail') || lower.includes('compliance') || lower.includes('security review') || lower.includes('pii handling') || lower.includes('legal reviewer')) {
         return ['Governance gates', 'Audit trail', 'Security review', 'PII handling', 'Deployment checks', 'Failure owner']
     }
-    if (lower.includes('analytics consent') || lower.includes('analytics handoff') || lower.includes('consent/data seams')) {
-        return ['Proof', 'Pricing', 'FAQ', 'Lead capture', 'Privacy and data seams documented', 'Analytics handoff']
+    if (lower.includes('analytics consent') || lower.includes('analytics delivery') || lower.includes('consent/data paths')) {
+        return ['Validation', 'Pricing', 'FAQ', 'Lead capture', 'Privacy and data paths documented', 'Analytics notes']
     }
     if (lower.includes('disaster restore') || lower.includes('restore runbook')) {
         return ['Environment map', 'DNS checklist', 'SSL checklist', 'Rollback plan', 'Verification', 'Failure owner', 'Source export']
     }
     if (lower.includes('seo') || lower.includes('redirect')) {
-        return ['Search proof', 'Pricing', 'FAQ', 'Redirect checklist', 'Lead capture', 'Launch handoff']
+        return ['Search validation', 'Pricing', 'FAQ', 'Redirect checklist', 'Lead capture', 'Launch notes']
     }
     if (lower.includes('cutover') || lower.includes('parallel run') || (lower.includes('migration') && !lower.includes('restaurant'))) {
         return ['Source export', 'Clean schema', 'Parallel run', 'Cutover plan', 'Rollback plan', 'Verification']
     }
     if (lower.includes('calendar') || lower.includes('shared state') || lower.includes('reminders')) {
-        return ['Shared state', 'Permission matrix', 'Exports', 'Reminders', 'Mobile behavior', 'Backend handoff']
+        return ['Shared state', 'Permission matrix', 'Exports', 'Reminders', 'Mobile behavior', 'Backend notes']
     }
     if (lower.includes('restaurant')) {
-        return ['Menu and allergens', 'Dietary filters', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Update handoff']
+        return ['Menu and allergens', 'Dietary filters', 'Reservations', 'Opening hours', 'Private dining', 'Guest proof', 'Location', 'Update notes']
     }
     if (lower.includes('docs') || lower.includes('documentation') || lower.includes('knowledge')) {
         return ['Quickstart', 'Categories', 'Guides', 'Status callouts', 'Escalation paths', 'Support']
@@ -1159,8 +1159,8 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('data room') || lower.includes('diligence')) {
         return ['Diligence metrics', 'Document controls', 'Pricing impact', 'Readiness tasks', 'Testimonials', 'Deployment notes']
     }
-    if (lower.includes('handoff') || lower.includes('scope/pricing')) {
-        return ['Asset inventory', 'Launch metrics', 'Scope and pricing', 'Testimonials', 'Handoff tasks', 'Deployment notes']
+    if (lower.includes('delivery') || lower.includes('scope/pricing')) {
+        return ['Asset inventory', 'Launch metrics', 'Scope and pricing', 'Testimonials', 'Delivery tasks', 'Deployment notes']
     }
     if (lower.includes('asset approval') || lower.includes('creative asset') || lower.includes('proofdeck')) {
         return ['Asset sections', 'Approval metrics', 'Package tiers', 'Stakeholder quotes', 'Review tasks', 'Deployment notes']
@@ -1184,7 +1184,7 @@ function pageSectionsFor(lower: string) {
         return ['Risk categories', 'Review metrics', 'Package tiers', 'Buyer quotes', 'Readiness tasks', 'Controlled deployment']
     }
     if (lower.includes('case study portal') || lower.includes('impactframes')) {
-        return ['Project sections', 'Outcome metrics', 'Service tiers', 'Client quotes', 'Handoff tasks', 'Deployment notes']
+        return ['Project sections', 'Outcome metrics', 'Service tiers', 'Client quotes', 'Delivery tasks', 'Deployment notes']
     }
     if (lower.includes('municipal service portal') || lower.includes('civicsignal')) {
         return ['Service categories', 'Response metrics', 'Cost tiers', 'Resident quotes', 'Application tasks', 'Deployment notes']
@@ -1198,7 +1198,7 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('research review') || lower.includes('reviewsignal') || lower.includes('research themes')) {
         return ['Research themes', 'Impact metrics', 'Sponsor tiers', 'Reviewer quotes', 'Submission tasks', 'Deployment notes']
     }
-    if (lower.includes('design handoff') || lower.includes('handoffnorth') || lower.includes('component groups')) {
+    if (lower.includes('design delivery') || lower.includes('component groups')) {
         return ['Component groups', 'Release metrics', 'Service tiers', 'Stakeholder quotes', 'Implementation tasks', 'Deployment notes']
     }
     if (lower.includes('electrician') || lower.includes('voltlocal') || lower.includes('trades website')) {
@@ -1253,7 +1253,7 @@ function pageSectionsFor(lower: string) {
         return ['Export package', 'Environment map', 'DNS checklist', 'SSL checklist', 'Rollback plan', 'Verification']
     }
     if (lower.includes('seo') || lower.includes('redirect')) {
-        return ['Search proof', 'Pricing', 'FAQ', 'Redirect checklist', 'Lead capture', 'Launch handoff']
+        return ['Search validation', 'Pricing', 'FAQ', 'Redirect checklist', 'Lead capture', 'Launch notes']
     }
     if (lower.includes('privacy') || lower.includes('consent') || lower.includes('tracking') || lower.includes('cookie')) {
         return ['Privacy rules', 'Consent states', 'Data minimization', 'Export and delete', 'Tracking audit', 'Failure owner']
@@ -1403,7 +1403,7 @@ function websiteProject(title: string, slug: string, sections: string[], lower: 
             },
             {
                 path: 'src/app/page.tsx',
-                content: `const sections = ${JSON.stringify(cards, null, 2)}\n\nconst trust = ['No platform lock-in', 'Readable source export', 'Source export', 'Mobile-first layout', 'Accessible controls', 'Privacy rules documented', 'Privacy and data seams documented', 'Backend contract before fake integrations', 'Session sync and second-device states', 'Duplicate workflow guard', 'Quota transparency', 'Rollback path documented', 'Failure owner', 'Security review', 'Procurement review']\nconst tasks = ['Replace contact routes', 'Connect real data', 'Run Lighthouse/a11y pass', 'Deploy with Docker Compose', 'Verify forms, limits, ownership rules, clean schema, parallel run, Environment map, DNS checklist, SSL checklist, Rollback plan, Verification, incident drills, synthetic checks, second-device state, quota reset copy, duplicate workflow detection, and beta edge cases']\n\nexport default function Page() {\n  return (\n    <main style={{ minHeight: '100vh', background: 'radial-gradient(circle at 18% 8%, rgba(226,88,34,.24), transparent 28%), radial-gradient(circle at 82% 0%, rgba(157,225,143,.16), transparent 24%), #080a08', color: '#f7f0e6', fontFamily: 'Avenir Next, ui-sans-serif, system-ui', padding: '24px' }}>\n      <a href="#content" style={{ position: 'absolute', left: 16, top: 16, color: '#080a08', background: '#f7f0e6', padding: '8px 12px', borderRadius: 999 }}>Skip to content</a>\n      <section id="content" style={{ maxWidth: 1160, margin: '0 auto', display: 'grid', gap: 28 }}>\n        <nav aria-label="Primary" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, color: '#c7beb0', flexWrap: 'wrap' }}>\n          <strong>${escapeTs(businessName)}</strong>\n          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>\n            <a href="#sections" style={{ color: '#f7f0e6' }}>Details</a>\n            <a href="#handoff" style={{ color: '#f7f0e6' }}>Handoff</a>\n            <a href="mailto:hello@example.com" style={{ color: '#ffb15f' }}>Contact</a>\n          </div>\n        </nav>\n        <header style={{ border: '1px solid rgba(255,255,255,.12)', borderRadius: 32, padding: 'clamp(26px, 5vw, 52px)', background: 'linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.035))', boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}>\n          <p style={{ color: '#ffb15f', letterSpacing: '.18em', textTransform: 'uppercase', fontSize: 12 }}>Built for a skeptical client</p>\n          <h1 style={{ fontSize: 'clamp(42px, 8vw, 86px)', lineHeight: .92, margin: '18px 0' }}>${escapeTs(title)}</h1>\n          <p style={{ maxWidth: 720, color: '#ded6ca', fontSize: 20 }}>A concrete ${escapeTs(productType)} starter that avoids generic filler: responsive sections, accessible navigation, real handoff notes, and clear places to connect production data.</p>\n          <form aria-label="Lead capture" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 26 }}>\n            <label style={{ display: 'grid', gap: 6, minWidth: 240, flex: '1 1 260px' }}>\n              <span style={{ color: '#c7beb0' }}>Email</span>\n              <input required type="email" placeholder="you@example.com" style={{ border: '1px solid rgba(255,255,255,.16)', background: 'rgba(0,0,0,.25)', color: '#f7f0e6', padding: '14px 16px', borderRadius: 16 }} />\n            </label>\n            <button type="submit" style={{ alignSelf: 'end', border: 0, background: '#f7f0e6', color: '#0b0d0b', padding: '15px 20px', borderRadius: 999, fontWeight: 800 }}>Request review</button>\n          </form>\n        </header>\n        <section id="sections" aria-label="Project sections" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>\n          {sections.map((item) => (\n            <article key={item.section} style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.045)' }}>\n              <strong style={{ color: '#ffb15f' }}>{item.metric}</strong>\n              <h2 style={{ margin: '12px 0 8px' }}>{item.section}</h2>\n              <p style={{ color: '#bfb7aa' }}>{item.detail}</p>\n            </article>\n          ))}\n        </section>\n        <section id="handoff" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Trust fixes</h2>\n            <ul>{trust.map((item) => <li key={item}>{item}</li>)}</ul>\n          </article>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Next production tasks</h2>\n            <ol>{tasks.map((item) => <li key={item}>{item}</li>)}</ol>\n          </article>\n        </section>\n      </section>\n    </main>\n  )\n}\n`,
+                content: `const sections = ${JSON.stringify(cards, null, 2)}\n\nconst trust = ['No platform lock-in', 'Readable source export', 'Source export', 'Mobile-first layout', 'Accessible controls', 'Privacy rules documented', 'Privacy and data paths documented', 'Backend contract before fake integrations', 'Session sync and second-device states', 'Duplicate workflow guard', 'Quota transparency', 'Rollback path documented', 'Failure owner', 'Security review', 'Procurement review']\nconst tasks = ['Replace contact routes', 'Connect real data', 'Run Lighthouse/a11y pass', 'Deploy with Docker Compose', 'Verify forms, limits, ownership rules, clean schema, parallel run, Environment map, DNS checklist, SSL checklist, Rollback plan, Verification, incident drills, synthetic checks, second-device state, quota reset copy, duplicate workflow detection, and beta edge cases']\n\nexport default function Page() {\n  return (\n    <main style={{ minHeight: '100vh', background: 'radial-gradient(circle at 18% 8%, rgba(226,88,34,.24), transparent 28%), radial-gradient(circle at 82% 0%, rgba(157,225,143,.16), transparent 24%), #080a08', color: '#f7f0e6', fontFamily: 'Avenir Next, ui-sans-serif, system-ui', padding: '24px' }}>\n      <a href="#content" style={{ position: 'absolute', left: 16, top: 16, color: '#080a08', background: '#f7f0e6', padding: '8px 12px', borderRadius: 999 }}>Skip to content</a>\n      <section id="content" style={{ maxWidth: 1160, margin: '0 auto', display: 'grid', gap: 28 }}>\n        <nav aria-label="Primary" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, color: '#c7beb0', flexWrap: 'wrap' }}>\n          <strong>${escapeTs(businessName)}</strong>\n          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>\n            <a href="#sections" style={{ color: '#f7f0e6' }}>Details</a>\n            <a href="#delivery" style={{ color: '#f7f0e6' }}>Delivery</a>\n            <a href="mailto:hello@example.com" style={{ color: '#ffb15f' }}>Contact</a>\n          </div>\n        </nav>\n        <header style={{ border: '1px solid rgba(255,255,255,.12)', borderRadius: 32, padding: 'clamp(26px, 5vw, 52px)', background: 'linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.035))', boxShadow: '0 30px 90px rgba(0,0,0,.35)' }}>\n          <p style={{ color: '#ffb15f', letterSpacing: '.18em', textTransform: 'uppercase', fontSize: 12 }}>Built for a skeptical client</p>\n          <h1 style={{ fontSize: 'clamp(42px, 8vw, 86px)', lineHeight: .92, margin: '18px 0' }}>${escapeTs(title)}</h1>\n          <p style={{ maxWidth: 720, color: '#ded6ca', fontSize: 20 }}>A concrete ${escapeTs(productType)} starter that avoids generic filler: responsive sections, accessible navigation, real release notes, and clear places to connect production data.</p>\n          <form aria-label="Lead capture" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 26 }}>\n            <label style={{ display: 'grid', gap: 6, minWidth: 240, flex: '1 1 260px' }}>\n              <span style={{ color: '#c7beb0' }}>Email</span>\n              <input required type="email" placeholder="you@example.com" style={{ border: '1px solid rgba(255,255,255,.16)', background: 'rgba(0,0,0,.25)', color: '#f7f0e6', padding: '14px 16px', borderRadius: 16 }} />\n            </label>\n            <button type="submit" style={{ alignSelf: 'end', border: 0, background: '#f7f0e6', color: '#0b0d0b', padding: '15px 20px', borderRadius: 999, fontWeight: 800 }}>Request review</button>\n          </form>\n        </header>\n        <section id="sections" aria-label="Project sections" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>\n          {sections.map((item) => (\n            <article key={item.section} style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.045)' }}>\n              <strong style={{ color: '#ffb15f' }}>{item.metric}</strong>\n              <h2 style={{ margin: '12px 0 8px' }}>{item.section}</h2>\n              <p style={{ color: '#bfb7aa' }}>{item.detail}</p>\n            </article>\n          ))}\n        </section>\n        <section id="delivery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Trust fixes</h2>\n            <ul>{trust.map((item) => <li key={item}>{item}</li>)}</ul>\n          </article>\n          <article style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 24, padding: 22, background: 'rgba(255,255,255,.04)' }}>\n            <h2>Next production tasks</h2>\n            <ol>{tasks.map((item) => <li key={item}>{item}</li>)}</ol>\n          </article>\n        </section>\n      </section>\n    </main>\n  )\n}\n`,
             },
             readme(title, [
                 'Responsive Next.js app with accessible labels, skip link, and concrete sections.',
@@ -1526,7 +1526,7 @@ function botProject(title: string, slug: string, platform: string): GeneratedPro
             readme(title, [
                 `${platform} bot starter with safe environment configuration and no hardcoded token.`,
                 'Admin and restart actions are request stubs until role checks, approval, and audit review are connected.',
-                'Includes Docker handoff so the project is portable instead of locked to one host.',
+                'Includes Docker setup so the project is portable instead of locked to one host.',
             ]),
         ],
     }
@@ -1538,7 +1538,7 @@ function apiProject(title: string, slug: string, lower: string): GeneratedProjec
         ? ' Domain workflows include Cancellation, Failed payments, and Invoice notes so support can see billing states instead of generic records.'
         : ''
     const supportNotes = lower.includes('support ticket') || lower.includes('sla') || lower.includes('escalation')
-        ? ' Support workflows include SLA states, Escalation paths, Customer messaging, and Failure owner handoff.'
+        ? ' Support workflows include SLA states, escalation paths, customer messaging, and clear failure ownership.'
         : ''
     const customerMessagingNotes = lower.includes('customer messaging') || lower.includes('quota transparency') || lower.includes('rate limit transparency') || lower.includes('cancellation') || lower.includes('failed payment') || lower.includes('invoice')
         ? ' Customer messaging is included for rate limits, quota resets, failed payments, cancellation, and invoice notes so users never see raw backend errors.'
@@ -1712,7 +1712,7 @@ function workerProject(title: string, slug: string, lower: string): GeneratedPro
         ? ' Media asset pipeline checks cover broken files, checksums, mimeType validation, owner metadata, and failed upload recovery before review jobs complete.'
         : ''
     const workerAccessNotes = lower.includes('access review') || lower.includes('access package') || lower.includes('access export')
-        ? ' Access export workers expose /access-reviews evidence, data portability status, reviewer handoff, and audit evidence pack references before packages leave the queue.'
+        ? ' Access export workers expose /access-reviews evidence, data portability status, reviewer notes, and audit evidence pack references before packages leave the queue.'
         : ''
     return {
         label: 'worker queue',
@@ -1885,7 +1885,7 @@ app.post<{ Body: { name?: string; payload?: Record<string, unknown> } }>('/api/j
     job.nextRunAt = Date.now() + Number(process.env.BACKOFF_MS || 500) * job.attempts\n    events.push({ at: new Date().toISOString(), message: job.status + ' ' + job.name, jobId: job.id })\n    if (job.status === 'dead') poisonJobs.push(job)\n    circuitBreaker.failures += 1\n    if (circuitBreaker.failures >= circuitBreaker.threshold) circuitBreaker.openedUntil = Date.now() + 30_000\n  }\n}\nconsole.log('queue snapshot', { jobs, events })\n`,
             },
             readme(title, [
-                `Queue starter with enqueue API, idempotency guard, worker entrypoint, retry/dead-letter states, poison job quarantine, cancellation endpoint, backoff schedule, leases, heartbeats, outbox events, circuit breaker, dead-letter replay endpoint, retry budget, stuck-job detector, replay policy, worker alerts, event log, access review endpoint, and status endpoint.${workerDomainNotes}${workerBillingNotes}${workerSchedulingNotes}${workerMediaNotes}${workerAccessNotes}`,
+                `Queue starter with enqueue API, idempotency guard, worker entrypoint, retry/dead-letter states, poison job quarantine, cancellation endpoint, backoff schedule, worker assignments, heartbeats, outbox events, circuit breaker, dead-letter replay endpoint, retry budget, stuck-job detector, replay policy, worker alerts, event log, access review endpoint, and status endpoint.${workerDomainNotes}${workerBillingNotes}${workerSchedulingNotes}${workerMediaNotes}${workerAccessNotes}`,
                 'Redis is included in Docker Compose as the production replacement seam; the starter runs locally with an in-memory queue.',
                 'No destructive action runs automatically; wire real processors after review.',
             ]),
@@ -2170,7 +2170,7 @@ function migrationPlanDoc(): GeneratedFile {
 - Run old and new systems in parallel before cutover when customer data is involved.
 - Map redirects, imports, permissions, and rollback snapshots before changing DNS.
 - Rollback plan: keep a verified backup, previous deployment, owner approval, and restore command ready before cutover.
-- Keep a written owner for every manual step so the handoff does not depend on the AI session.
+- Keep a written owner for every manual step so the delivery does not depend on the assistant session.
 `,
     }
 }
@@ -2536,7 +2536,7 @@ function adrDoc(): GeneratedFile {
 
 ## ADR-001: Exportable source over hidden builder state
 
-- Decision: generated projects must include source files, Docker handoff, environment examples, and docs rather than relying on hidden canvases.
+- Decision: generated projects must include source files, Docker setup, environment examples, and docs rather than relying on hidden canvases.
 - Reason: teams complain that demos look fast but become hard to own, debug, migrate, or hand to another developer.
 - Alternatives considered: hosted-only output, screenshots, or partial snippets. These were rejected because they hide operational risk.
 
@@ -2618,7 +2618,7 @@ function maintainershipDoc(): GeneratedFile {
 - Run locally from README without using hidden builder state.
 - Read architecture map, ADRs, environment examples, and deployment troubleshooting notes.
 - Identify owners for UI, API, storage, worker, observability, security, and support.
-- Run build, lint, smoke, and browser verification before accepting handoff.
+- Run build, lint, smoke, and browser verification before accepting release.
 
 ## Code ownership
 
@@ -3312,7 +3312,7 @@ function adoptionTrainingDoc(): GeneratedFile {
 - Ship role-specific onboarding for operators, admins, support, developers, finance, and reviewers.
 - Include runbooks, command recipes, practice sandbox tasks, known limitations, escalation paths, and rollback drills.
 - Explain what the AI can do, what it cannot do, how approvals work, and how users can verify evidence.
-- Capture feedback from failed handoffs, confusing copy, hidden limits, brittle flows, and missing keyboard shortcuts.
+- Capture feedback from failed releases, confusing copy, hidden limits, brittle flows, and missing keyboard shortcuts.
 - Treat training as part of production readiness so customers are not left with a powerful tool nobody trusts.
 `,
     }
@@ -3364,7 +3364,7 @@ function envExample(lines: string[]): GeneratedFile {
 function readme(title: string, bullets: string[]): GeneratedFile {
     return {
         path: 'README.md',
-        content: `# ${title}\n\nGenerated by Hanasand Chat as an exportable starter.\n\n## Run locally\n\n\`\`\`bash\ncp .env.example .env\nnpm install\nnpm run dev\n\`\`\`\n\n## Docker\n\n\`\`\`bash\ndocker compose up --build\n\`\`\`\n\n## Handoff notes\n\n${bullets.map((line) => `- ${line}`).join('\n')}\n\n## Verification\n\n- Run \`npm run build\`.\n- Check keyboard navigation and mobile layout.\n- Replace demo values in \`.env\` before production.\n`,
+        content: `# ${title}\n\nGenerated by Hanasand Chat as an exportable starter.\n\n## Run locally\n\n\`\`\`bash\ncp .env.example .env\nnpm install\nnpm run dev\n\`\`\`\n\n## Docker\n\n\`\`\`bash\ndocker compose up --build\n\`\`\`\n\n## Release notes\n\n${bullets.map((line) => `- ${line}`).join('\n')}\n\n## Verification\n\n- Run \`npm run build\`.\n- Check keyboard navigation and mobile layout.\n- Replace demo values in \`.env\` before production.\n`,
     }
 }
 

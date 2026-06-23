@@ -241,7 +241,7 @@ function writeWebhookDraft(draft: string) {
     try {
         window.localStorage.setItem(dwmWebhookDraftKey, draft)
     } catch {
-        // Best effort: sessionStorage still supports the immediate handoff.
+        // Best effort: sessionStorage still supports the immediate setup flow.
     }
     try {
         window.sessionStorage.setItem(dwmWebhookDraftKey, draft)

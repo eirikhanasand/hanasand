@@ -704,7 +704,7 @@ type AIReleaseTrust = {
         zipLabel: string
         githubLabel: string
     }
-    handoffReport: string[]
+    launchReport: string[]
     noLockIn: {
         headline: string
         bullets: string[]

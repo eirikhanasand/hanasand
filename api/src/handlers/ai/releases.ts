@@ -109,7 +109,7 @@ export async function getAiReleaseSupportBundle(req: FastifyRequest, res: Fastif
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
             },
-            handoffReport: trust.handoffReport,
+            launchReport: trust.launchReport,
             recovery: trust.recovery,
             exports: trust.exports,
             noLockIn: trust.noLockIn,
@@ -228,7 +228,7 @@ function releaseTrust(row: Pick<ReleaseRow, 'id' | 'conversation_id' | 'deployme
             zipLabel: 'Export project as zip from the workspace files.',
             githubLabel: 'Push or mirror the project to GitHub from the repository workspace.',
         },
-        handoffReport: [
+        launchReport: [
             `Release ${row.id} on ${row.vm_name}.`,
             `Stack: ${row.stack_type.replaceAll('_', ' ')}.`,
             `Access: ${row.access_policy.replaceAll('_', ' ')}.`,
@@ -246,13 +246,13 @@ function releaseTrust(row: Pick<ReleaseRow, 'id' | 'conversation_id' | 'deployme
         supportBundle: {
             available: true,
             url: bundleUrl,
-            includes: ['release metadata', 'deployment events', 'failure reason', 'request IDs', 'handoff report', 'rollback status'],
+            includes: ['release metadata', 'deployment events', 'failure reason', 'request IDs', 'launch report', 'rollback status'],
             requestIds,
         },
         sla: [
             { tier: 'Starter', promise: 'Async queue, basic deploy history, and recoverable release records.' },
             { tier: 'Pro', promise: 'Priority verification, rollback target selection, custom domain readiness, and support bundles.' },
-            { tier: 'Agency', promise: 'Client handoff reports, white-label deploy evidence, and multi-workspace history.' },
+            { tier: 'Agency', promise: 'Client reports, white-label deploy evidence, and multi-workspace history.' },
             { tier: 'Business', promise: 'Audit logs, approvals, scoped secrets, release evidence, and SSO later.' },
         ],
     }

@@ -120,10 +120,11 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
         : null
     const selectedContent = selectedShareFileContent || selectedShareContent
     const launchOwners = Array.from(new Set(deployments.map((deployment) => deployment.startedBy || deployment.ownerId).filter(Boolean)))
-    const handoffOwners = Array.from(new Set(releases.map((release) => release.createdBy || release.ownerId).filter(Boolean)))
+    const reportOwners = Array.from(new Set(releases.map((release) => release.createdBy || release.ownerId).filter(Boolean)))
     const latestRelease = releases[0] || null
     const trustRelease = releases.find((release) => release.status === 'current') || latestRelease
     const trust = trustRelease?.trust || buildFallbackTrust(trustRelease)
+    const launchReport = trust?.launchReport || []
     const envPlaceholders = detectEnvPlaceholders(activeRepo)
     const deployProfile = buildDeployProfile({
         environment: deployEnvironment,
@@ -297,21 +298,21 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <Stat label='Tenant owner' value={activeConversation?.ownerId || 'Unknown'} />
                 <Stat label='Your role' value={activeConversation?.collaboration?.role || 'owner'} />
                 <Stat label='Launch owners' value={launchOwners.length ? String(launchOwners.length) : 'None yet'} />
-                <Stat label='Handoff owners' value={handoffOwners.length ? String(handoffOwners.length) : 'None yet'} />
+                <Stat label='Report owners' value={reportOwners.length ? String(reportOwners.length) : 'None yet'} />
                 <Stat label='Repo boundary' value={ownershipSummary ? `${ownershipSummary.externalRepositoryCount} external` : 'Unknown'} />
                 <Stat label='Preview boundary' value={ownershipSummary ? `${ownershipSummary.externalVmCount} external` : 'Unknown'} />
                 <div className='rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
-                    Latest preview: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No handoff details yet'}
+                    Latest preview: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No report details yet'}
                 </div>
                 <div className='text-xs text-[#667085]'>
-                    Repository, preview, launch, and handoff ownership are checked against the active workspace owner.
+                    Repository, preview, launch, and report ownership are checked against the active workspace owner.
                 </div>
             </Panel>
 
             <Panel
                 icon={<ShieldCheck className='h-4 w-4' />}
-                title='Handoff record'
-                subtitle={trustRelease ? 'Recovery, export, and handoff details for this project.' : 'Handoff details appear after the first recorded launch.'}
+                title='Launch report'
+                subtitle={trustRelease ? 'Recovery, export, and release details for this project.' : 'Report details appear after the first recorded launch.'}
             >
                 {trustRelease && trust ? (
                     <>
@@ -322,7 +323,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         <TrustItem icon={<RefreshCcw className='h-3.5 w-3.5' />} label='Rollback' value={trust.recovery.rollbackLabel} />
                         <TrustItem icon={<Archive className='h-3.5 w-3.5' />} label='Backup before risk' value={trust.recovery.backupBeforeRiskyChanges ? trust.recovery.backupPolicy : 'No backup policy recorded.'} />
                         <TrustItem icon={<Download className='h-3.5 w-3.5' />} label='Export' value={`${trust.exports.zipLabel} ${trust.exports.githubLabel}`} />
-                        <TrustItem icon={<FileText className='h-3.5 w-3.5' />} label='Handoff report' value={trust.handoffReport.join(' ')} />
+                        <TrustItem icon={<FileText className='h-3.5 w-3.5' />} label='Launch report' value={launchReport.join(' ')} />
                         <div className='flex flex-wrap gap-2'>
                             <a
                                 href={supportBundleHref(trustRelease)}
@@ -354,7 +355,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         </div>
                     </>
                 ) : (
-                    <Empty text='No handoff record yet. Record a launch to create rollback, export, and support details.' />
+                    <Empty text='No launch report yet. Record a launch to create rollback, export, and support details.' />
                 )}
             </Panel>
 
@@ -448,7 +449,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             <Panel
                 icon={<ServerCog className='h-4 w-4' />}
                 title='Launch check'
-                subtitle='One-click preview path with recorded handoff details.'
+                subtitle='One-click preview path with recorded release details.'
             >
                 <div className='grid grid-cols-2 gap-2'>
                     {(['staging', 'production'] as AIDeploymentEnvironment[]).map((environment) => (
@@ -784,7 +785,7 @@ function buildFallbackTrust(release: AIRelease | null): AIReleaseTrust | null {
             zipLabel: 'Export project as zip from workspace files.',
             githubLabel: 'Push or mirror the project to GitHub.',
         },
-        handoffReport: [
+        launchReport: [
             `Release ${release.id} on ${release.vmName}.`,
             `Stack: ${release.stackType.replaceAll('_', ' ')}.`,
             `Access: ${release.accessPolicy.replaceAll('_', ' ')}.`,
@@ -797,14 +798,14 @@ function buildFallbackTrust(release: AIRelease | null): AIReleaseTrust | null {
         supportBundle: {
             available: true,
             url: `/api/ai/releases/${release.id}/support-bundle`,
-            includes: ['handoff details', 'launch events', 'failure reason', 'request IDs', 'handoff report', 'rollback status'],
+            includes: ['release details', 'launch events', 'failure reason', 'request IDs', 'launch report', 'rollback status'],
             requestIds: [],
         },
         sla: [
-            { tier: 'Starter', promise: 'Background review, basic launch history, and recoverable handoff records.' },
+            { tier: 'Starter', promise: 'Background review, basic launch history, and recoverable report records.' },
             { tier: 'Pro', promise: 'Priority verification, rollback target selection, and support bundles.' },
-            { tier: 'Agency', promise: 'Client handoff reports and multi-workspace history.' },
-            { tier: 'Business', promise: 'Audit logs, approvals, scoped secrets, handoff details, and SSO later.' },
+            { tier: 'Agency', promise: 'Client reports and multi-workspace history.' },
+            { tier: 'Business', promise: 'Audit logs, approvals, scoped secrets, release details, and SSO later.' },
         ],
     }
 }
@@ -969,7 +970,7 @@ function formatUsageKind(kind: AIUsageEventKind) {
         case 'deployment_started':
             return 'Launch started'
         case 'release_recorded':
-            return 'Handoff recorded'
+            return 'Launch report recorded'
         case 'rollback_marked':
             return 'Rollback marked'
         case 'collaborator_invited':

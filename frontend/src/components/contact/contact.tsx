@@ -195,7 +195,7 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
         }
     }
 
-    if (normalizedIntent === 'reports' || normalizedIntent === 'handoffs') {
+    if (normalizedIntent === 'reports') {
         return {
             subject: 'Shared monitoring reports',
             message: 'I want to package monitoring results into customer-ready review links or follow-up workflows.\n\nWhat needs to be shared:\nWho reviews it:\nDelivery preference:',

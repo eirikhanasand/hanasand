@@ -292,7 +292,7 @@ export default function useAiWorkbench({
                     setReleases(payload.releases)
                 }
             } catch {
-                // Handoff history is informative; failed polling should not interrupt the workspace.
+                // Release history is informative; failed polling should not interrupt the workspace.
             }
         }
 
