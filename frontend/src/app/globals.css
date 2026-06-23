@@ -198,9 +198,11 @@ body {
 .dark .enterprise-theme [class*="text-[#171a21]"],
 .dark .enterprise-theme [class*="text-[#20242c]"],
 .dark .enterprise-theme [class*="text-[#111827]"],
+.dark .enterprise-theme [class*="text-[#111318]"],
 .dark .enterprise-theme [class*="text-[#16181d]"],
 .dark .enterprise-theme [class*="text-[#2f3540]"],
 .dark .enterprise-theme [class*="text-[#3a404b]"],
+.dark .enterprise-theme [class*="text-[#2b3340]"],
 .dark .enterprise-theme [class*="text-[#3d4656]"] {
   color: #f5f7fb !important;
 }
@@ -227,6 +229,24 @@ body {
 
 .dark .enterprise-theme [class*="shadow-"] {
   box-shadow: 0 20px 70px rgba(0, 0, 0, 0.34) !important;
+}
+
+.dark header [class*="text-[#3a404b]"],
+.dark header [class*="text-[#2f3540]"],
+.dark header [class*="text-[#4b5565]"],
+.dark header [class*="text-[#111827]"],
+.dark header [class*="text-[#16181d]"] {
+  color: #d9e2f2 !important;
+}
+
+.dark header [class*="text-[#7a8493]"] {
+  color: #8d9bb2 !important;
+}
+
+.dark header [class*="hover:bg-[#f1f4f8]"]:hover,
+.dark header [class*="hover:bg-[#f6f8fb]"]:hover,
+.dark header [class*="group-hover:bg-[#f1f4f8]"] {
+  background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 button:not(:disabled),
