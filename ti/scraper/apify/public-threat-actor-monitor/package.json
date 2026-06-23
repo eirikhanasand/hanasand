@@ -1,12 +1,13 @@
 {
   "name": "public-threat-actor-monitor",
-  "version": "0.6.7",
+  "version": "0.6.40",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "bun run src/main.ts",
     "check": "bunx tsc --noEmit",
     "smoke": "bun run scripts/smoke.ts",
+    "audit:strict-sellable": "bun run scripts/audit-strict-sellable.ts",
     "check:publication": "bun run scripts/check-publication.ts"
   },
   "devDependencies": {

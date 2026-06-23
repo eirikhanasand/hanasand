@@ -1,5 +1,6 @@
 import type { MarketplaceRow, MonetizationSummary } from "./types.ts";
 import { dailyCollectionRunForRows, monetizationReadinessForRows, paidRowQualitySummary, revenueConversionChecklistForRows, buyerVisibleOutputQualityForRows } from "./outputQuality.ts";
+import { strictSellableAuditForRows } from "./strictSellableAudit.ts";
 
 export function outputRecord(rows: MarketplaceRow[], monetizationSummary: MonetizationSummary) {
   const paidRowQuality = paidRowQualitySummary(rows);
@@ -11,6 +12,7 @@ export function outputRecord(rows: MarketplaceRow[], monetizationSummary: Moneti
     paidRowQuality,
     monetizationReadiness: monetizationReadinessForRows(rows, paidRowQuality),
     revenueConversionChecklist,
+    strictSellableAudit: strictSellableAuditForRows(rows),
     buyerVisibleOutputQuality,
     generatedAt: new Date().toISOString(),
     monetization: monetizationSummary,
@@ -18,5 +20,4 @@ export function outputRecord(rows: MarketplaceRow[], monetizationSummary: Moneti
     rows
   };
 }
-
 

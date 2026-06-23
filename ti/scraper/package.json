@@ -34,6 +34,7 @@
     "check:apify-threat-actor-monitor": "cd apify/public-threat-actor-monitor && bun run check",
     "check:apify-publication": "cd apify/public-threat-actor-monitor && bun run check:publication",
     "smoke:apify-threat-actor-monitor": "cd apify/public-threat-actor-monitor && bun run smoke",
+    "audit:apify-strict-sellable": "bun run apify/public-threat-actor-monitor/scripts/audit-strict-sellable.ts",
     "measure:search-product": "bun run scripts/measure-search-product.ts",
     "snapshot:product-slo": "bun run scripts/collect-product-slo-snapshot.ts",
     "plan:cutover": "bun run scripts/run-cutover-apply-plan.ts",

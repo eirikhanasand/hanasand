@@ -38,6 +38,7 @@ assertPaidQuality(outputRecord.paidRowQuality);
 assertBuyerQuality(outputRecord.buyerVisibleOutputQuality, rows.length);
 assertDailyCollection(outputRecord.dailyCollectionRun);
 assertReadiness(outputRecord.monetizationReadiness);
+assertStrictSellableAudit(outputRecord.strictSellableAudit, rows.length);
 assertRevenueChecklist(outputRecord.revenueConversionChecklist);
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -118,6 +119,21 @@ function assertReadiness(readiness: Record<string, any>) {
   assert(typeof readiness.recentPayworthyLiveRows === "number", "recent payworthy readiness rows");
   assert(typeof readiness.distinctRecentPayworthyHostedSourceFindings === "number", "recent payworthy readiness findings");
   assert(readiness.status === (readiness.recentPayworthyLiveRows >= readiness.minimumProductionSellableRows ? "ready_for_paid_traffic" : "blocked_for_paid_traffic"), "readiness matches strict recent live floor");
+}
+
+function assertStrictSellableAudit(audit: Record<string, any>, rowCount: number) {
+  assert(audit?.schemaVersion === "ti.strict_sellable_audit.v1", "strict sellable audit schema");
+  assert(audit.rowCount === rowCount, "strict sellable audit row count");
+  assert(audit.firstMilestoneRows === 100_000, "strict audit first milestone");
+  assert(audit.productionMilestoneRows === 200_000, "strict audit production milestone");
+  assert(typeof audit.strictSellableRows === "number", "strict sellable row count");
+  assert(audit.firstMilestoneReached === (audit.strictSellableRows >= audit.firstMilestoneRows), "strict first milestone state");
+  assert(audit.productionMilestoneReached === (audit.strictSellableRows >= audit.productionMilestoneRows), "strict production milestone state");
+  assert(typeof audit.duplicateStrictKeys === "number", "strict duplicate count");
+  assert(typeof audit.testRows === "number", "strict test count");
+  assert(Array.isArray(audit.sourceBreakdown), "strict source breakdown");
+  assert(Array.isArray(audit.claimTypeBreakdown), "strict claim type breakdown");
+  assert(Array.isArray(audit.rejectionBreakdown), "strict rejection breakdown");
 }
 
 function assertRevenueChecklist(checklist: Record<string, any>) {
