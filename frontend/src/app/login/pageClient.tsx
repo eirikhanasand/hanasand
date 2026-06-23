@@ -1,7 +1,7 @@
 'use client'
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import login, { PendingDeletionError } from '@/utils/login/login'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -47,10 +47,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         const id = formData.get('username') as string
         const password = formData.get('password') as string
 
+        setBusy(true)
         try {
             const data = await login(id, password)
             if (data) {
-                completeAuth(data)
+                completeAuth()
                 return
             }
 
@@ -86,6 +87,8 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                     ? 'Unauthorized.'
                     : error.message
                 : 'Unknown error! Please contact @eirikhanasand.')
+        } finally {
+            setBusy(false)
         }
     }
 
@@ -105,11 +108,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         const password = String(formData.get('password') || '')
         setBusy(true)
         try {
-            const response = await fetchWithRetry(`${config.url.api}/user`, {
+            const response = await fetchWithRetry('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, id, password }),
-                timeoutMs: config.abortTimeout,
+                timeoutMs: 10000,
                 retries: 2,
             })
             const responseText = await response.text()
@@ -117,11 +120,11 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
             if (!response.ok || data.error) {
                 return setError(data.error || 'Unable to create account.')
             }
-            if (!data.token) {
+            if (!data.id || !data.name) {
                 return setError('Account created, but login could not be completed.')
             }
 
-            completeAuth(data)
+            completeAuth()
         } catch (error) {
             setError(error instanceof Error ? error.message : 'Unable to create account.')
         } finally {
@@ -192,12 +195,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
 
-    function completeAuth(data: { name: string, id: string, avatar?: string | null, token: string, expires_at?: string | null, roles?: unknown[] }) {
-        setCookieWithExpiresAt('name', data.name, data.expires_at)
-        setCookieWithExpiresAt('id', data.id, data.expires_at)
-        setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
-        setCookieWithExpiresAt('access_token', data.token, data.expires_at)
-        setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
+    function completeAuth() {
         window.setTimeout(() => window.location.assign(path || '/dashboard'), 0)
     }
 
@@ -255,10 +253,10 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 <div className='mt-1 flex items-center gap-3'>
                                     <button
                                         type='submit'
-                                        disabled={!hydrated}
+                                        disabled={!hydrated || busy}
                                         className={`${authPrimaryButtonClass} min-w-24`}
                                     >
-                                        Log in
+                                        {busy ? 'Logging in' : 'Log in'}
                                         <ArrowRight className='h-4 w-4 transition group-hover:translate-x-0.5' />
                                     </button>
                                     <button

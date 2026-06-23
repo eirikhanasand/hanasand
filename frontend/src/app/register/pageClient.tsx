@@ -1,8 +1,7 @@
 'use client'
 import Notify from '@/components/notify/notify'
-import config from '@/config'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
-import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 import fetchWithRetry from '@/utils/fetchWithRetry'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -76,13 +75,13 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
 
         setBusy(true)
         try {
-            const response = await fetchWithRetry(`${config.url.api}/user`, {
+            const response = await fetchWithRetry('/api/auth/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ name, id, password }),
-                timeoutMs: config.abortTimeout,
+                timeoutMs: 10000,
                 retries: 2,
             })
             const responseText = await response.text()
@@ -92,15 +91,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                 return setError(data.error || 'Unable to create account.')
             }
 
-            if (data.token && data.name && data.id) {
-                completeAuth({
-                    name: data.name,
-                    id: data.id,
-                    avatar: data.avatar,
-                    token: data.token,
-                    expires_at: data.expires_at,
-                    roles: data.roles,
-                })
+            if (data.name && data.id) {
+                completeAuth()
                 return
             }
 
@@ -130,13 +122,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         }
     }
 
-    function completeAuth(data: { name: string, id: string, avatar?: string | null, token: string, expires_at?: string | null, roles?: unknown[] }) {
-        setCookieWithExpiresAt('name', data.name, data.expires_at)
-        setCookieWithExpiresAt('id', data.id, data.expires_at)
-        setCookieWithExpiresAt('avatar', data.avatar ?? '', data.expires_at)
-        setCookieWithExpiresAt('access_token', data.token, data.expires_at)
-        setCookieWithExpiresAt('roles', JSON.stringify(data.roles ?? []), data.expires_at)
-        window.location.assign(path || '/dashboard')
+    function completeAuth() {
+        window.setTimeout(() => window.location.assign(path || '/dashboard'), 0)
     }
 
     useEffect(() => {

@@ -1,4 +1,3 @@
-import config from '@/config'
 import fetchWithRetry from '@/utils/fetchWithRetry'
 
 export class PendingDeletionError extends Error {
@@ -16,13 +15,13 @@ export class PendingDeletionError extends Error {
 }
 
 export default async function login(id: string, password: string) {
-    const response = await fetchWithRetry(`${config.url.api}/auth/login/${id}`, {
+    const response = await fetchWithRetry('/api/auth/login', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ password }),
-        timeoutMs: config.abortTimeout,
+        body: JSON.stringify({ id, password }),
+        timeoutMs: 10000,
         retries: 2,
     })
 
