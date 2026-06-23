@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 
 const SITE_NAME = 'Hanasand'
 const SITE_URL = 'https://hanasand.com'
-const DEFAULT_IMAGE = `${SITE_URL}/favicon.ico`
+const DEFAULT_IMAGE = `${SITE_URL}/icon-512.png`
 
 type RouteMetadataArgs = {
     title: string

@@ -205,6 +205,16 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
         }
     }
 
+    if (normalizedIntent === 'api') {
+        return {
+            subject: 'Monitoring API access',
+            message: 'I want API or webhook access for company exposure alerts.\n\nSystem to connect:\nFields needed:\nExpected watchlist size:\nDelivery timeline:',
+            eyebrow: 'API access',
+            heading: 'Connect Hanasand alerts to your workflow.',
+            detail: 'Send the system you want to connect, the fields you need, and how the alerts should be delivered. The reply can cover webhook setup, payload shape, and pricing.',
+        }
+    }
+
     if (normalizedPlan === 'pilot') {
         return {
             subject: 'Start Pilot threat monitoring',

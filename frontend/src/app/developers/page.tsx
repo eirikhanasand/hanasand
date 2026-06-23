@@ -34,7 +34,7 @@ const alertExample = [
     '  "victimName": "Acme Manufacturing",',
     '  "claimDate": "2026-06-22",',
     '  "claimedDataDescription": "finance and HR documents",',
-    '  "sourceUrl": "https://...",',
+    '  "sourceUrl": "https://hanasand.com/ti/acme-manufacturing",',
     '  "reviewState": "needs_review"',
     '}',
 ].join('\n')
@@ -55,7 +55,7 @@ export default function DevelopersPage() {
                                 Try search
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
-                            <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                            <Link href='/contact?intent=api' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
                                 Request access
                             </Link>
                         </div>
@@ -69,7 +69,7 @@ export default function DevelopersPage() {
                             </div>
                             <span className='rounded-full bg-white/10 px-2 py-1 text-xs font-medium text-white/70'>webhook alert</span>
                         </div>
-                        <pre className='overflow-x-auto p-5 text-sm leading-7 text-[#d8e2f2]'>
+                        <pre className='overflow-x-auto whitespace-pre-wrap wrap-break-word p-5 text-sm leading-7 text-[#d8e2f2]'>
                             {alertExample}
                         </pre>
                     </div>
@@ -118,7 +118,7 @@ export default function DevelopersPage() {
                             <h2 className='text-lg font-semibold'>Need a specific delivery format?</h2>
                             <p className='text-sm text-[#596170]'>Send the queue, alerting system, or dashboard shape you want the alerts to fit.</p>
                         </div>
-                        <Link href='/contact' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                        <Link href='/contact?intent=api' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
                             <Mail className='h-4 w-4' />
                             Contact sales
                         </Link>
