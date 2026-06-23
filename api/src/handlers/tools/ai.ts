@@ -974,7 +974,7 @@ function pageSectionsFor(lower: string) {
         return ['Impact metrics', 'Sponsor tiers', 'Collaborator quotes', 'Submission tasks', 'Data lineage', 'Privacy rules']
     }
     if (lower.includes('artist shop') || lower.includes('artist drop') || lower.includes('releasing prints')) {
-        return ['Edition details', 'Launch timeline', 'Shipping notes', 'Proof', 'FAQ', 'Purchase CTA', 'Product bundles']
+        return ['Edition details', 'Launch timeline', 'Shipping notes', 'Validation', 'FAQ', 'Purchase CTA', 'Product bundles']
     }
     if (lower.includes('evidence room') || lower.includes('evidenceroom')) {
         return ['Control families', 'Audit metrics', 'Assurance tiers', 'Reviewer quotes', 'Evidence tasks', 'Deployment notes']
@@ -1016,13 +1016,13 @@ function pageSectionsFor(lower: string) {
         return ['Search validation', 'Redirect checklist', 'Migration plan', 'QA plan', 'Browser verification', 'Exit plan']
     }
     if (lower.includes('tiny agency') || lower.includes('brand, webflow cleanup') || lower.includes('agency site')) {
-        return ['Proof', 'Services', 'Selected work', 'Pricing cues', 'Testimonials', 'Contact CTA']
+        return ['Validation', 'Services', 'Selected work', 'Pricing cues', 'Testimonials', 'Contact CTA']
     }
     if (lower.includes('board-ready') || lower.includes('initiatives, blockers') || lower.includes('ceo wants a board')) {
         return ['Initiatives', 'Blockers', 'Decisions', 'Owner asks', 'Timeline', 'Status metrics']
     }
     if (lower.includes('artist drop') || lower.includes('releasing prints') || lower.includes('editions, dates')) {
-        return ['Edition details', 'Launch timeline', 'Shipping notes', 'Proof', 'FAQ', 'Purchase CTA']
+        return ['Edition details', 'Launch timeline', 'Shipping notes', 'Validation', 'FAQ', 'Purchase CTA']
     }
     if (lower.includes('permit page') || lower.includes('residents keep calling')) {
         return ['Permit types', 'Timeline', 'Fee checklist', 'Documents', 'Office hours', 'Plain FAQ']
@@ -1232,7 +1232,7 @@ function pageSectionsFor(lower: string) {
         return ['Skip links', 'Keyboard flow', 'Contrast', 'Forms', 'Reduced motion']
     }
     if (lower.includes('marketing') || lower.includes('landing')) {
-        return ['Proof', 'Features', 'Pricing', 'Testimonials', 'FAQ', 'Launch CTA']
+        return ['Validation', 'Features', 'Pricing', 'Testimonials', 'FAQ', 'Launch CTA']
     }
     if (lower.includes('gdpr') || lower.includes('privacy') || lower.includes('data retention') || lower.includes('data request') || lower.includes('personal data')) {
         return ['Data map', 'Consent flow', 'Retention rules', 'Export request', 'Delete request', 'Audit trail']
@@ -1282,7 +1282,7 @@ function pageSectionsFor(lower: string) {
     if (lower.includes('gallery') || lower.includes('image')) {
         return ['Review queue', 'Keep', 'Reject later', 'Collections', 'Export summary', 'Deferred deletion confirmation']
     }
-    return ['Overview', 'Highlights', 'Workflow', 'Proof', 'Next step']
+    return ['Overview', 'Highlights', 'Workflow', 'Validation', 'Next step']
 }
 
 function websiteProject(title: string, slug: string, sections: string[], lower: string): GeneratedProject {
@@ -3167,7 +3167,7 @@ function modelProviderFallbackDoc(): GeneratedFile {
 function tenantIsolationProofDoc(): GeneratedFile {
     return {
         path: 'docs/tenant-isolation-proof.md',
-        content: `# Tenant Isolation Proof
+        content: `# Tenant Isolation Evidence
 
 - Prove tenant scoping at API, database, queue, export, audit, support, and admin layers.
 - Test cross-tenant reads, writes, exports, restore, replay, webhooks, and search.

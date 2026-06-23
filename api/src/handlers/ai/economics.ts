@@ -624,7 +624,7 @@ function incidentFrom({ gpuLaneCount, totalQueued, totalAvailableSessions, lowes
         return { state: 'busy', label: 'Queue pressure', message: 'More work is queued than currently available lane capacity can absorb quickly.' }
     }
     if (failedProofCount > 0) {
-        return { state: 'watching', label: 'Proof failures present', message: 'Some checks failed in this window; users can still work while the system tracks the categories.' }
+        return { state: 'watching', label: 'Validation failures present', message: 'Some checks failed in this window; users can still work while the system tracks the categories.' }
     }
     return { state: 'operational', label: 'Users can get work done', message: 'Model lanes, verification, and deploy checks are reporting normal capacity.' }
 }

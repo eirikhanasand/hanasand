@@ -19,7 +19,7 @@ const outRoot = path.join(repoRoot, 'sandbox', 'share-chat-critical-stories')
 
 const stories: Story[] = [
     { id: 201, title: 'Angry Founder Landing Page', kind: 'website', prompt: 'Build an angry founder landing page for ProofForge. The user is criticizing generic AI slop and demands pricing, proof, objections, FAQ, exportable source, accessibility, and Docker.', mustMention: [/pricing/i, /proof/i, /faq/i, /docker/i] },
-    { id: 202, title: 'Local Restaurant Reservation Site', kind: 'website', prompt: 'Create a local restaurant reservation site for Fjord Table with menu allergens reservations hours private dining location guest proof and mobile-first accessibility.', mustMention: [/allergen/i, /reservation/i, /location/i, /docker/i] },
+    { id: 202, title: 'Local Restaurant Reservation Site', kind: 'website', prompt: 'Create a local restaurant reservation site for Fjord Table with menu allergens reservations hours private dining location guest validation and mobile-first accessibility.', mustMention: [/allergen/i, /reservation/i, /location/i, /docker/i] },
     { id: 203, title: 'Discord Moderation Bot', kind: 'bot', prompt: 'Build a Discord moderation bot for Nordic Mods with safe token env handling role command stubs status and audit history. The user is worried about leaked tokens and destructive deletes.', mustMention: [/DISCORD_TOKEN/, /audit/i, /stub/i, /docker/i] },
     { id: 204, title: 'Healthcare Intake API', kind: 'api', prompt: 'Create a healthcare intake API for Care Intake with validation health readiness token handling shaped errors and a persistence seam.', mustMention: [/health/i, /ready/i, /title_required|validation/i, /API_TOKEN/] },
     { id: 205, title: 'Ecommerce Product Page Rebuild', kind: 'website', prompt: 'Rebuild an ecommerce product page for North Bag Co because the previous AI builder had awful product formatting. Include bundles shipping notes reviews FAQ return policy and SEO metadata.', mustMention: [/shipping/i, /faq/i, /metadata/i, /docker/i] },
@@ -36,7 +36,7 @@ const stories: Story[] = [
     { id: 216, title: 'CSV Import Worker', kind: 'worker', prompt: 'Build a CSV import worker queue with enqueue route worker entrypoint retry dead-letter state status endpoint Redis compose seam and verification notes.', mustMention: [/dead/i, /retry/i, /worker-status/i, /redis/i] },
     { id: 217, title: 'Conference Site With Schedule Pressure', kind: 'website', prompt: 'Create a conference site for NorthCode Summit with schedule speakers tracks sponsors tickets venue mobile CTAs and accessibility.', mustMention: [/Schedule|Speakers|Tickets/i, /aria-label/i, /Docker/i, /mobile/i] },
     { id: 218, title: 'Auth Repair Starter', kind: 'api', prompt: 'Build an auth repair API starter that does not fake auth but gates writes behind API_TOKEN and documents where real auth belongs with health readiness.', mustMention: [/API_TOKEN/, /Forbidden/i, /health/i, /ready/i] },
-    { id: 219, title: 'Observability Status Page', kind: 'website', prompt: 'Create an observability status page with uptime proof incident timeline service cards customer messaging operational handoff notes and Docker export.', mustMention: [/Proof|status|incident/i, /handoff/i, /Docker/i, /responsive/i] },
+    { id: 219, title: 'Observability Status Page', kind: 'website', prompt: 'Create an observability status page with uptime validation incident timeline service cards customer messaging operational release notes and Docker export.', mustMention: [/validation|status|incident/i, /release notes|delivery/i, /Docker/i, /responsive/i] },
     { id: 220, title: 'Game Server Control Bot', kind: 'bot', prompt: 'Build a Discord game server control bot with status commands maintenance notices audit trail and restart request stubs that never execute destructively by default.', mustMention: [/status/i, /audit/i, /stub/i, /DISCORD_TOKEN/] },
 ]
 
@@ -79,7 +79,7 @@ async function verify(story: Story, target: string, files: ToolFile[]) {
         compose: await exists(path.join(target, 'docker-compose.yml')),
         noHardcodedSecrets: !/(sk-[a-z0-9]|xox[baprs]-|DISCORD_TOKEN\s*=\s*[^\n]*[A-Za-z0-9]{20,})/i.test(allContent),
         noLorem: !/lorem ipsum|placeholder text|todo: write copy/i.test(allContent),
-        handoff: /handoff|verification|docker compose/i.test(await read(path.join(target, 'README.md'))),
+        releaseNotes: /release notes|verification|docker compose/i.test(await read(path.join(target, 'README.md'))),
         mentions: story.mustMention.every((pattern) => pattern.test(allContent)),
     }
     if (story.kind === 'website') {

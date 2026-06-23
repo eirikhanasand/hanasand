@@ -16,7 +16,7 @@ const stories: Story[] = [
     { id: 242, title: 'Paginated Customer Records API', kind: 'api', prompt: 'Create a paginated customer records API with owner scoping pagination schema version failure owner rate limiting token gate health readiness shaped errors Docker.', mustMention: [/ownerId/i, /nextCursor/i, /schemaVersion/i, /failureOwner/i, /rateLimit/i] },
     { id: 243, title: 'Duplicate Workflow Guard Worker', kind: 'worker', prompt: 'Create a duplicate workflow guard worker queue with idempotency guard event log retry dead-letter visible worker status Redis Docker.', mustMention: [/idempotency/i, /events/i, /dead/i, /retrying/i, /worker-status/i] },
     { id: 244, title: 'Restart Request Discord Bot', kind: 'bot', prompt: 'Build a Discord restart request bot that converts restart commands into audited requests maintenance notices and never restarts automatically.', mustMention: [/restartRequests/i, /Restart request logged/i, /maintenance/i, /auditLog/i] },
-    { id: 245, title: 'DNS SSL Rollback Handoff Site', kind: 'website', prompt: 'Build a DNS SSL rollback deployment handoff site with environment map DNS checklist SSL checklist rollback plan verification Docker Compose.', mustMention: [/Environment map/i, /DNS checklist/i, /SSL checklist/i, /Rollback plan/i, /Verification/i] },
+    { id: 245, title: 'DNS SSL Rollback Delivery Site', kind: 'website', prompt: 'Build a DNS SSL rollback deployment delivery site with environment map DNS checklist SSL checklist rollback plan verification Docker Compose.', mustMention: [/Environment map/i, /DNS checklist/i, /SSL checklist/i, /Rollback plan/i, /Verification/i] },
     { id: 246, title: 'Payment Failure Recovery Page', kind: 'website', prompt: 'Build a payment subscription checkout recovery page with plans checkout states failed payments cancellation invoice notes security review backend contract.', mustMention: [/Plans/i, /Checkout states/i, /Failed payments/i, /Cancellation/i, /Security review/i] },
     { id: 247, title: 'Account-Scoped Refund API', kind: 'api', prompt: 'Create an account scoped refund API with idempotency pagination schemaVersion failureOwner token gate rateLimit health ready shaped errors.', mustMention: [/ownerId/i, /idempotency/i, /nextCursor/i, /schemaVersion/i, /failureOwner/i] },
     { id: 248, title: 'Workflow Side-Effects Review Site', kind: 'website', prompt: 'Create a workflow side effects review site with trigger inventory duplicate guard state transitions side effects failure owner rollback path.', mustMention: [/Trigger inventory/i, /Duplicate guard/i, /State transitions/i, /Side effects/i, /Rollback path/i] },
@@ -64,7 +64,7 @@ async function verify(story: Story, target: string, files: ToolFile[]) {
         compose: await exists(path.join(target, 'docker-compose.yml')),
         noHardcodedSecrets: !/(sk-[a-z0-9]|xox[baprs]-|DISCORD_TOKEN\s*=\s*[^\n]*[A-Za-z0-9]{20,})/i.test(allContent),
         noLorem: !/lorem ipsum|placeholder text|todo: write copy/i.test(allContent),
-        handoff: /handoff|verification|docker compose|failure owner|rollback/i.test(await read(path.join(target, 'README.md'))),
+        delivery: /delivery|release notes|verification|docker compose|failure owner|rollback/i.test(await read(path.join(target, 'README.md'))),
         mentions: story.mustMention.every((pattern) => pattern.test(allContent)),
     }
     if (story.kind === 'website') {

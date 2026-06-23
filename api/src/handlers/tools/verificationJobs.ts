@@ -718,7 +718,7 @@ function nonDestructiveJourneyScript() {
                 }
             } else {
                 const type = control instanceof HTMLInputElement ? (control.type || '').toLowerCase() : 'text'
-                control.value = type === 'email' ? 'proof@example.com' : type === 'tel' ? '+4700000000' : type === 'number' ? '1' : 'Proof input'
+                control.value = type === 'email' ? 'proof@example.com' : type === 'tel' ? '+4700000000' : type === 'number' ? '1' : 'Validation input'
                 control.dispatchEvent(new Event('input', { bubbles: true }))
                 control.dispatchEvent(new Event('change', { bubbles: true }))
                 filled += 1
