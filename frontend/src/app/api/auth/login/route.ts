@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (wantsRedirect) {
-        const response = NextResponse.redirect(new URL(safeRedirectPath(redirectPath), req.url), { status: 303 })
+        const response = redirectTo(safeRedirectPath(redirectPath))
         setAuthCookies(req, response, data)
         return response
     }
@@ -88,11 +88,19 @@ function parseJson(text: string) {
     }
 }
 
-function authRedirect(req: NextRequest, redirectPath: string, error: string) {
-    const url = new URL('/login', req.url)
-    url.searchParams.set('path', safeRedirectPath(redirectPath))
-    url.searchParams.set('error', error)
-    return NextResponse.redirect(url, { status: 303 })
+function authRedirect(_req: NextRequest, redirectPath: string, error: string) {
+    const search = new URLSearchParams({
+        path: safeRedirectPath(redirectPath),
+        error,
+    })
+    return redirectTo(`/login?${search.toString()}`)
+}
+
+function redirectTo(path: string) {
+    return new NextResponse(null, {
+        status: 303,
+        headers: { Location: path },
+    })
 }
 
 function safeRedirectPath(path: string | null) {

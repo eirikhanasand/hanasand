@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (wantsRedirect) {
-        const response = NextResponse.redirect(new URL(safeRedirectPath(redirectPath), req.url), { status: 303 })
+        const response = redirectTo(safeRedirectPath(redirectPath))
         setAuthCookies(req, response, loginData)
         return response
     }
@@ -120,10 +120,16 @@ async function createLoginSession(id: string, password: string) {
     return parseJson(await upstream.text())
 }
 
-function authRedirect(req: NextRequest, path: string, error: string) {
-    const url = new URL(path, req.url)
-    url.searchParams.set('error', error)
-    return NextResponse.redirect(url, { status: 303 })
+function authRedirect(_req: NextRequest, path: string, error: string) {
+    const search = new URLSearchParams({ error })
+    return redirectTo(`${path}?${search.toString()}`)
+}
+
+function redirectTo(path: string) {
+    return new NextResponse(null, {
+        status: 303,
+        headers: { Location: path },
+    })
 }
 
 function safeRedirectPath(path: string | null) {
