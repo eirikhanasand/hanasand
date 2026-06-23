@@ -89,7 +89,9 @@ export async function proxy(req: NextRequest) {
             }
 
             if (!roles.some((role) => roleMatchesStrictPath(role, strictPath.role))) {
-                return loginRedirect(req, path, { notAllowed: true, clearAuth: true })
+                const url = new URL('/dashboard', req.url)
+                url.searchParams.set('notAllowed', 'true')
+                return NextResponse.redirect(url)
             }
         }
     }
