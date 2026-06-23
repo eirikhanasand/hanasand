@@ -6,7 +6,7 @@ import { buildRouteMetadata } from './seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand Threat Intelligence',
-    description: 'Monitor ransomware victim claims, actor infrastructure, and company exposure with high-speed metadata-first threat intelligence.',
+    description: 'Monitor ransomware victim claims, actor infrastructure, and company exposure with high-speed threat intelligence.',
     path: '/',
     keywords: ['hanasand', 'threat intelligence', 'ransomware monitoring', 'dark web monitoring', 'company exposure alerts'],
 })
@@ -87,7 +87,7 @@ export default async function Page({
                     <div className='mx-auto grid max-w-5xl justify-items-center gap-6 text-center'>
                         <Link href='/ti' className='inline-flex items-center gap-2 rounded-full border border-[#b8c5ff] bg-white px-3 py-1.5 text-sm font-medium text-[#2442a8] shadow-sm'>
                             <span className='rounded-full bg-[#e7edff] px-2 py-0.5 text-xs'>New</span>
-                            Direct actor-infrastructure monitoring is moving to hanasand.com
+                            Direct actor-page monitoring for company exposure
                             <ArrowRight className='h-4 w-4' />
                         </Link>
 
@@ -96,7 +96,7 @@ export default async function Page({
                                 Hanasand Threat Intelligence
                             </h1>
                             <p className='mx-auto max-w-3xl text-lg leading-8 text-[#596170] md:text-xl'>
-                                High-speed company exposure alerts and actor overviews built from metadata-first collection, source corroboration, and reviewable evidence.
+                                High-speed company exposure alerts and actor overviews built from watched sources, fresh claim changes, and review-ready context.
                             </p>
                         </div>
 

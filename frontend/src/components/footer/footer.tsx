@@ -62,7 +62,7 @@ export default function Footer() {
                 <div className='min-w-0'>
                     <BrandLogo />
                     <p className='mt-4 max-w-md text-sm leading-6 text-[#596170] dark:text-[#a8b3c5]'>
-                        Company exposure monitoring, actor context, webhooks, and private utility surfaces under one product shell.
+                        Company exposure monitoring, actor context, webhook alerts, and developer-ready threat intelligence under one product shell.
                     </p>
                     <div className='mt-4 flex flex-wrap gap-2'>
                         <span className='inline-flex items-center gap-1.5 rounded-full border border-[#dfe5ee] bg-white px-2.5 py-1 text-[11px] text-[#3d4656] dark:border-[#26344a] dark:bg-[#111927] dark:text-[#d9e2f2]'>

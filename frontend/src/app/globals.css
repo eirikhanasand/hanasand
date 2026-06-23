@@ -215,6 +215,11 @@ body {
   color: #a8b3c5 !important;
 }
 
+.dark .enterprise-theme [class*="text-[#2442a8]"],
+.dark .enterprise-theme [class*="text-[#3056d3]"] {
+  color: #9db4ff !important;
+}
+
 .dark .enterprise-theme [class*="placeholder:text-[#8c95a5]"]::placeholder {
   color: #728099 !important;
 }
