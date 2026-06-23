@@ -8,7 +8,16 @@ import ErrorNotice from '@/components/error/errorNotice'
 
 const fieldClassName = 'w-full rounded-lg border border-[#d8dee9] bg-white px-3 py-3 text-sm text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
 
-export default function Contact() {
+type ContactIntent = {
+    subject: string
+    message: string
+    eyebrow: string
+    heading: string
+    detail: string
+}
+
+export default function Contact({ plan = '', intent = '' }: { plan?: string; intent?: string }) {
+    const contactIntent = getContactIntent(plan, intent)
     const validationSchema = Yup.object().shape({
         name: Yup.string().required('Name is required'),
         email: Yup.string().email('Invalid email').required('Email is required'),
@@ -20,9 +29,10 @@ export default function Contact() {
         initialValues: {
             name: '',
             email: '',
-            type: '',
-            message: '',
+            type: contactIntent.subject,
+            message: contactIntent.message,
         },
+        enableReinitialize: true,
         validationSchema,
         onSubmit: (values) => {
             const subject = values.type
@@ -39,10 +49,10 @@ export default function Contact() {
             <div className='mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start'>
                 <div className='grid gap-6'>
                     <div className='grid gap-4'>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Contact sales</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>Talk through monitoring for your company, customers, or portfolio.</h1>
+                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>{contactIntent.eyebrow}</p>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-5xl'>{contactIntent.heading}</h1>
                         <p className='max-w-xl text-base leading-7 text-[#596170]'>
-                            Send the company names, domains, actor concerns, or supplier watchlist you care about. The reply can cover coverage, pricing, and how the metadata would be delivered.
+                            {contactIntent.detail}
                         </p>
                     </div>
 
@@ -159,4 +169,67 @@ function Field({
             {error && <ErrorNotice compact message={error} />}
         </label>
     )
+}
+
+function getContactIntent(plan: string, intent: string): ContactIntent {
+    const normalizedPlan = plan.trim().toLowerCase()
+    const normalizedIntent = intent.trim().toLowerCase()
+
+    if (normalizedIntent === 'dwm') {
+        return {
+            subject: 'Start dark web monitoring',
+            message: 'I want to monitor company, vendor, and domain mentions across recent ransomware and extortion activity.\n\nWatchlist size:\nDelivery preference: webhook / email / API\nTeam or company context:',
+            eyebrow: 'Dark web monitoring',
+            heading: 'Start monitoring the names that matter.',
+            detail: 'Send the companies, domains, suppliers, product names, or executive names you want watched. The reply can cover coverage, alert delivery, and the fastest path to a pilot.',
+        }
+    }
+
+    if (normalizedIntent === 'sales') {
+        return {
+            subject: 'Threat monitoring sales request',
+            message: 'I want to discuss Hanasand monitoring for company, vendor, domain, or portfolio exposure.\n\nWhat I want watched:\nDelivery preference:\nTimeline:',
+            eyebrow: 'Contact sales',
+            heading: 'Talk through monitoring for your company, customers, or portfolio.',
+            detail: 'Send the company names, domains, actor concerns, or supplier watchlist you care about. The reply can cover coverage, pricing, and how the alert data would be delivered.',
+        }
+    }
+
+    if (normalizedPlan === 'pilot') {
+        return {
+            subject: 'Start Pilot threat monitoring',
+            message: 'I want to start the Pilot plan for up to 25 watched names or domains.\n\nNames/domains to monitor:\nDelivery preference:\nTiming:',
+            eyebrow: 'Pilot plan',
+            heading: 'Start a focused monitoring pilot.',
+            detail: 'Send the first names or domains you want monitored. The reply can confirm coverage, delivery format, and what the first alerts will look like.',
+        }
+    }
+
+    if (normalizedPlan === 'company-monitor') {
+        return {
+            subject: 'Company Monitor sales request',
+            message: 'I want to discuss Company Monitor for brand, subsidiary, vendor, or executive-name monitoring.\n\nApproximate watchlist size:\nDelivery preference:\nMain risk concerns:',
+            eyebrow: 'Company Monitor',
+            heading: 'Talk through monitoring for your company and vendors.',
+            detail: 'Send the watchlist shape, delivery preference, and the kinds of exposure you care about. The reply can cover pricing, webhook setup, and review workflow.',
+        }
+    }
+
+    if (normalizedPlan === 'portfolio') {
+        return {
+            subject: 'Portfolio monitoring coverage',
+            message: 'I want to discuss portfolio or supplier-network monitoring.\n\nApproximate number of companies/domains:\nDelivery preference:\nCoverage needs:',
+            eyebrow: 'Portfolio monitoring',
+            heading: 'Monitor customers, suppliers, or portfolio companies.',
+            detail: 'Send the portfolio size, supplier list shape, or customer monitoring workflow you want covered. The reply can map the right plan and data delivery format.',
+        }
+    }
+
+    return {
+        subject: '',
+        message: '',
+        eyebrow: 'Contact sales',
+        heading: 'Talk through monitoring for your company, customers, or portfolio.',
+        detail: 'Send the company names, domains, actor concerns, or supplier watchlist you care about. The reply can cover coverage, pricing, and how the alert data would be delivered.',
+    }
 }

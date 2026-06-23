@@ -15,7 +15,7 @@ const examples = [
     {
         title: 'Company exposure monitor',
         slug: 'hanasand/company-exposure-monitor',
-        detail: 'Watch company names, domains, suppliers, brands, and portfolio companies across recent victim-claim metadata.',
+        detail: 'Watch company names, domains, suppliers, brands, and portfolio companies across recent victim-claim activity.',
         badge: 'Live alerts',
         signal: '12 min median refresh',
         icon: Building2,
@@ -29,8 +29,8 @@ const examples = [
         icon: Waypoints,
     },
     {
-        title: 'Dark web metadata index',
-        slug: 'hanasand/darkweb-metadata-index',
+        title: 'Dark web exposure index',
+        slug: 'hanasand/darkweb-exposure-index',
         detail: 'Normalized actor, company, URL, note, claim, and timing fields from leak and extortion infrastructure.',
         badge: 'Indexed feeds',
         signal: 'Company and actor pivots',

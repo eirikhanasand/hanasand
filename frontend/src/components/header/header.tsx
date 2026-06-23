@@ -34,7 +34,7 @@ const resourceItems = [
 function PublicDropdown({ label, items }: { label: string, items: Array<{ title: string, detail: string, href: string, icon: typeof Radar }> }) {
     return (
         <div className='group relative'>
-            <button className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] group-hover:bg-[#f1f4f8]' aria-haspopup='true'>
+            <button className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] group-hover:bg-[#f1f4f8] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white dark:group-hover:bg-white/8' aria-haspopup='true'>
                 {label}
                 <ChevronDown className='h-4 w-4 text-[#7a8493]' />
             </button>
@@ -79,17 +79,17 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     <nav className='hidden items-center gap-5 lg:flex'>
                         <PublicDropdown label='Product' items={productItems} />
                         <PublicDropdown label='Solutions' items={solutionItems} />
-                        <Link href='/developers' className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>
+                        <Link href='/developers' className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>
                             Developers
                             <Code2 className='h-4 w-4 text-[#7a8493]' />
                         </Link>
                         <PublicDropdown label='Resources' items={resourceItems} />
-                        <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Pricing</Link>
+                        <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>
                     </nav>
 
                     <div className='flex items-center justify-end gap-2'>
                         <ThemeSwitch />
-                        <Link href='/contact' className='hidden h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#2f3540] transition hover:bg-[#f1f4f8] md:inline-flex dark:text-[#d9e2f2] dark:hover:bg-white/8'>Contact sales</Link>
+                        <Link href='/contact?intent=sales' className='hidden h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#2f3540] transition hover:bg-[#f1f4f8] md:inline-flex dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Contact sales</Link>
                         <Link href={token ? '/dashboard/overview' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#22252d] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#111318]'>
                             Go to Console
                         </Link>
@@ -110,12 +110,12 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                     {!isDashboard && !isProfile && (
                         <nav className='hidden items-center gap-1 lg:flex'>
                             {token ? (
-                                <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Console</Link>
+                                <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Console</Link>
                             ) : null}
-                            <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Threat search</Link>
-                            <Link href='/solutions/dwm' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Dark web</Link>
-                            <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>API docs</Link>
-                            <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Pricing</Link>
+                            <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Threat search</Link>
+                            <Link href='/solutions/dwm' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Dark web</Link>
+                            <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>API docs</Link>
+                            <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>
                         </nav>
                     )}
                 </div>

@@ -126,7 +126,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                     <ProductTile
                         icon={<Globe2 className='h-4 w-4' />}
                         title='Monitoring mix'
-                        detail='Use public indexes as seed coverage, then track monitored actor infrastructure and exposure metadata in one customer-ready map.'
+                        detail='Use public indexes as seed coverage, then track monitored actor infrastructure and exposure records in one customer-ready map.'
                     />
                 </section>
 
@@ -169,7 +169,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                                 <p className='text-sm leading-6 text-[#667085]'>
                                     {query
                                         ? 'Try a broader company, actor, sector, or domain. Alerts are useful when a watched term appears; empty searches stay quiet.'
-                                        : 'Enter a company, actor, domain, supplier, or sector to review monitored exposure metadata.'}
+                                        : 'Enter a company, actor, domain, supplier, or sector to review monitored exposure records.'}
                                 </p>
                             </div>
                         </div>

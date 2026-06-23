@@ -41,7 +41,7 @@ const platformItems = [
     { title: 'API delivery', detail: 'Structured fields for actor, company, source, date, claim summary, and recommended action.', icon: Code2 },
     { title: 'Graph pivots', detail: 'Actor, victim, sector, country, source, and CVE pivots that fit analyst workflows.', icon: Waypoints },
     { title: 'Notification pipeline', detail: 'Webhook-shaped packets designed for Slack, incident queues, and vendor-risk workflows.', icon: BellRing },
-    { title: 'Metadata index', detail: 'Searchable company and actor records without exposing raw leaked material.', icon: Database },
+    { title: 'Exposure index', detail: 'Searchable company and actor records without exposing raw leaked material.', icon: Database },
 ]
 
 export default function SolutionsPage() {

@@ -65,7 +65,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         setQuery(clean)
         const cleanKey = clean.toLowerCase()
         activeQueryRef.current = cleanKey
-        window.history.pushState(null, '', `/ti?q=${encodeURIComponent(clean)}`)
+        window.history.pushState(null, '', `/ti/${encodeURIComponent(clean)}`)
         setResult(searchingResult(clean))
         try {
             const next = await searchThreatIntel(clean)
@@ -294,7 +294,7 @@ function defaultDatasets(): TiSearchResponse['datasets'] {
         {
             name: 'Actor infrastructure monitoring',
             type: 'darknet_metadata',
-            coverage: 'Metadata-first checks against actor-controlled public leak infrastructure so watched companies can be alerted when a new mention appears.',
+            coverage: 'Company-first checks against actor-controlled public leak infrastructure so watched companies can be alerted when a new mention appears.',
             status: 'metadata_only'
         },
         {
@@ -307,7 +307,7 @@ function defaultDatasets(): TiSearchResponse['datasets'] {
         {
             name: 'Company and supplier watchlists',
             type: 'vendor_report',
-            coverage: 'Customer-specific names, domains, brands, subsidiaries, and vendors matched against new actor claims and captured metadata.',
+            coverage: 'Customer-specific names, domains, brands, subsidiaries, and vendors matched against new actor claims and captured page text.',
             status: 'planned'
         }
     ]
@@ -324,14 +324,14 @@ function defaultCollectionSources(): NonNullable<TiSearchResponse['collectionStr
         {
             source: 'Direct actor infrastructure collection',
             role: 'owned_collection_target',
-            summary: 'Metadata-first collection from actor-controlled public leak/extortion infrastructure where policy allows.',
+            summary: 'Company-first collection from actor-controlled public leak/extortion infrastructure where policy allows.',
             buyerValue: 'This is the valuable part: faster discovery, verified claim changes, freshness deltas, and watchlist alerts that are not just copied from another public index.'
         },
         {
-            source: 'Infostealer and credential-exposure metadata',
+            source: 'Infostealer and credential-exposure records',
             role: 'owned_collection_target',
-            summary: 'Company/domain exposure metadata routed through review without credential values, raw dumps, or unsafe redistribution.',
-            buyerValue: 'Buyers care when their domain, vendor, executive, or portfolio company appears in fresh exposure metadata; the value is the alert and triage context, not dump access.'
+            summary: 'Company/domain exposure records routed through review without credential values, raw dumps, or unsafe redistribution.',
+            buyerValue: 'Buyers care when their domain, vendor, executive, or portfolio company appears in fresh exposure records; the value is the alert and triage context, not dump access.'
         },
         {
             source: 'NVD, CISA KEV, and public advisories',
@@ -460,7 +460,7 @@ function humanResultStatus(value?: string) {
 }
 
 function sourceStatusLabel(value: string) {
-    if (/metadata/i.test(value)) return 'Monitoring metadata'
+    if (/metadata/i.test(value)) return 'Monitoring data'
     if (/available|ready|active/i.test(value)) return 'Active'
     if (/context/i.test(value)) return 'Context'
     return 'Included'
@@ -478,7 +478,7 @@ function sourceTypeLabel(value: string) {
     if (/news/i.test(value)) return 'Recent reporting'
     if (/victim|claim|ransom/i.test(value)) return 'Victim claims'
     if (/vulnerab|cve|kev/i.test(value)) return 'Vulnerability context'
-    if (/darknet|darkweb|actor/i.test(value)) return 'Actor-page metadata'
+    if (/darknet|darkweb|actor/i.test(value)) return 'Actor-page records'
     return 'Source'
 }
 
@@ -540,7 +540,7 @@ function alertItemsFor(result: TiSearchResponse) {
     if (result.status === 'searching' || result.status === 'queued') {
         return [{
             title: 'Watching for company matches',
-            detail: 'The search is checking actor claims, public indexes, and captured metadata for company, vendor, domain, and brand mentions.',
+            detail: 'The search is checking actor claims, public indexes, and captured page text for company, vendor, domain, and brand mentions.',
             state: 'watching',
             tone: 'watch' as const
         }]

@@ -24,7 +24,7 @@ const workflow = [
     },
     {
         title: 'Detect fresh actor mentions',
-        detail: 'Use public indexes as seeds and owned collection for monitored actor-page metadata.',
+        detail: 'Use public indexes as seeds and owned collection for monitored actor-page changes.',
         icon: Radar,
     },
     {
@@ -101,11 +101,11 @@ export default function DarkWebMonitoringPage() {
                             <p className='text-sm font-semibold uppercase text-[#3056d3]'>Dark web monitoring</p>
                             <h1 className='max-w-xl text-4xl font-semibold leading-tight tracking-normal md:text-5xl'>Know when an actor page mentions your company, vendor, or domain.</h1>
                             <p className='max-w-2xl text-lg leading-8 text-[#596170]'>
-                                Hanasand monitors ransomware and extortion metadata, matches it to watchlists, and sends notification packets for security, vendor-risk, and executive-response teams.
+                                Hanasand monitors ransomware and extortion activity, matches it to watchlists, and sends notification packets for security, vendor-risk, and executive-response teams.
                             </p>
                         </div>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                            <Link href='/contact?intent=dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
                                 Start monitoring
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
@@ -271,7 +271,7 @@ function samplePayload(watchlist: string) {
         claimSummary: 'Actor page lists a new victim claim and mentions financial records, contracts, and employee data.',
         claimedAt: '2026-06-23T07:58:00.000Z',
         sourceName: 'monitored actor page',
-        sourceUrl: 'https://hanasand.com/ti?query=Acme%20Payments',
+        sourceUrl: 'https://hanasand.com/ti/Acme%20Payments',
         confidence: 0.84,
         recommendedAction: 'Confirm the company match, notify vendor-risk or incident response, and watch for claim updates.',
         pivots: ['Akira', 'Acme Payments', matchedTerm, 'financial records'],

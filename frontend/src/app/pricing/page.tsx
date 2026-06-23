@@ -17,6 +17,7 @@ const plans = [
         cadence: '/ month',
         detail: 'Start monitoring a focused set of companies and domains.',
         cta: 'Start pilot',
+        href: '/contact?plan=pilot',
         icon: BellRing,
         features: ['25 watched names or domains', 'Recent actor-claim matches', 'Email notification packets', 'Company and actor pivots'],
     },
@@ -26,9 +27,10 @@ const plans = [
         cadence: '/ month',
         detail: 'For security teams watching their own brand, subsidiaries, vendors, and executive names.',
         cta: 'Contact sales',
+        href: '/contact?plan=company-monitor',
         icon: ShieldCheck,
         featured: true,
-        features: ['250 watched names or domains', 'Faster refresh cadence', 'Structured metadata export', 'Weekly coverage review'],
+        features: ['250 watched names or domains', 'Faster refresh cadence', 'Structured alert export', 'Weekly coverage review'],
     },
     {
         name: 'Portfolio',
@@ -36,6 +38,7 @@ const plans = [
         cadence: '/ month',
         detail: 'For firms monitoring customers, portfolio companies, acquisition targets, or supplier networks.',
         cta: 'Talk through coverage',
+        href: '/contact?plan=portfolio',
         icon: Building2,
         features: ['1,500 watched names or domains', 'Priority source expansion', 'Custom delivery format', 'Shared review workspace'],
     },
@@ -68,7 +71,7 @@ export default function PricingPage() {
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Pricing</p>
                         <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Threat monitoring priced for useful signals, not scraped volume.</h1>
                         <p className='text-lg leading-8 text-[#596170]'>
-                            Pick the watchlist size that matches the buyer workflow. Every tier is built around recent company exposure alerts and reviewable metadata.
+                            Pick the watchlist size that matches the buyer workflow. Every tier is built around recent company exposure alerts and review-ready alert data.
                         </p>
                     </div>
 
@@ -91,7 +94,7 @@ export default function PricingPage() {
                                         <span className='text-4xl font-semibold'>{plan.price}</span>
                                         <span className='pb-1 text-sm font-medium text-[#667085]'>{plan.cadence}</span>
                                     </div>
-                                    <Link href='/contact' className={`inline-flex h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition ${plan.featured ? 'bg-[#171a21] text-white hover:bg-[#2b2f39]' : 'border border-[#d8dee9] bg-white text-[#171a21] hover:border-[#bdc7d5]'}`}>
+                                    <Link href={plan.href} className={`inline-flex h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition ${plan.featured ? 'bg-[#171a21] text-white hover:bg-[#2b2f39]' : 'border border-[#d8dee9] bg-white text-[#171a21] hover:border-[#bdc7d5]'}`}>
                                         {plan.cta}
                                         <ArrowRight className='h-4 w-4' />
                                     </Link>

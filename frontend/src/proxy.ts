@@ -7,6 +7,7 @@ export async function proxy(req: NextRequest) {
     const tokenCookie = req.cookies.get('access_token')
     const idCookie = req.cookies.get('id')
     const path = req.nextUrl.pathname
+    const pathWithSearch = `${path}${req.nextUrl.search}`
     let validToken = false
     const requestHeaders = new Headers(req.headers)
     const theme = req.cookies.get('theme')?.value || 'dark'
@@ -35,7 +36,7 @@ export async function proxy(req: NextRequest) {
 
     if (requiresAuth) {
         if (!tokenCookie || !idCookie) {
-            return loginRedirect(req, path)
+            return loginRedirect(req, pathWithSearch)
         }
 
         const token = tokenCookie.value
@@ -46,7 +47,7 @@ export async function proxy(req: NextRequest) {
             validToken = auth.valid
 
             if (!validToken) {
-                return loginRedirect(req, path, { expired: Boolean(token), clearAuth: true })
+                return loginRedirect(req, pathWithSearch, { expired: Boolean(token), clearAuth: true })
             }
 
             if (auth.token) {
