@@ -1,12 +1,11 @@
 'use client'
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import './toggle.css'
 
 export default function ThemeSwitch() {
     const [theme, setTheme] = useState<'dark' | 'light'>('light')
-    const inputId = useId()
 
     useEffect(() => {
         const savedTheme = getCookie('theme') as 'dark' | 'light'
@@ -30,23 +29,18 @@ export default function ThemeSwitch() {
     const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
 
     return (
-        <label
-            htmlFor={inputId}
-            className='group grid h-10 w-10 cursor-pointer place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827] dark:border-[#2b3647] dark:text-[#d9e2f2] dark:hover:bg-white/8'
+        <button
+            type='button'
+            className='group grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2 dark:border-[#2b3647] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:focus-visible:ring-offset-[#050914]'
             aria-label={label}
+            aria-pressed={theme === 'dark'}
             title={label}
             data-testid='theme-switch'
+            onClick={toggleTheme}
         >
-            <input
-                id={inputId}
-                type='checkbox'
-                checked={theme === 'dark'}
-                onChange={toggleTheme}
-                className='sr-only'
-                aria-label={label}
-            />
+            <span className='sr-only'>{label}</span>
             <ThemeIcon />
-        </label>
+        </button>
     )
 }
 
