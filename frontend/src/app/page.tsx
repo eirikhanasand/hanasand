@@ -50,9 +50,9 @@ const solutions = [
         href: '/pwned',
     },
     {
-        title: 'Customer Handoffs',
+        title: 'Shared Reports',
         detail: 'Package exposure findings into customer-ready review links and follow-up workflows.',
-        href: '/contact?intent=handoffs',
+        href: '/contact?intent=reports',
     },
 ]
 

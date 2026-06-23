@@ -17,7 +17,7 @@ export default function CookiesPage() {
             sections={[
                 { title: 'Required cookies', body: 'Authentication cookies keep users signed in and route protected console pages correctly. These are required for logged-in product use.' },
                 { title: 'Preference cookies', body: 'The theme cookie remembers light or dark mode so pages load with the selected appearance.' },
-                { title: 'Local browser storage', body: 'Some setup flows can use local browser storage for drafts, such as a webhook configuration handoff before an alert is created.' },
+                { title: 'Local browser storage', body: 'Some setup flows can use local browser storage for drafts, such as a webhook configuration before an alert is created.' },
             ]}
         />
     )

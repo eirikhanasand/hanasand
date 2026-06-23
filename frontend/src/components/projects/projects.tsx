@@ -32,7 +32,7 @@ export default async function Projects() {
             <div className='grid gap-1'>
                 {(projects as Project[]).length
                     ? (projects as Project[]).map((project) => <DashboardProject key={project.alias} project={project} />)
-                    : <p className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#596170]'>No monitoring workspaces yet. Create one when you need a saved customer view, watchlist review, or delivery handoff.</p>}
+                    : <p className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#596170]'>No monitoring workspaces yet. Create one when you need a saved customer view, watchlist review, or delivery report.</p>}
             </div>
         </DashboardPanel>
     )
