@@ -1,6 +1,15 @@
 import { BellRing, Building2, Database, Filter, Globe2, Radar, Search, ShieldCheck } from 'lucide-react'
+import type { Metadata } from 'next'
+import { buildRouteMetadata } from '../../../seo'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = buildRouteMetadata({
+    title: 'Threat Actor Source Map',
+    description: 'Search monitored actor pages, company mentions, review states, and alert-ready dark web monitoring metadata.',
+    path: '/ti/darkweb/index',
+    keywords: ['threat actor source map', 'dark web index', 'company exposure monitoring'],
+})
 
 interface DarkwebIndexPageProps {
     searchParams?: Promise<Record<string, string | string[] | undefined>>
