@@ -292,7 +292,7 @@ export default function useAiWorkbench({
                     setReleases(payload.releases)
                 }
             } catch {
-                // Release history is informative; failed polling should not interrupt the workspace.
+                // Handoff history is informative; failed polling should not interrupt the workspace.
             }
         }
 
@@ -1004,23 +1004,23 @@ export default function useAiWorkbench({
         environment: AIDeploymentEnvironment
     }) => {
         if (!activeConversation) {
-            setStatusNotice('Open a conversation before starting a deploy.')
+            setStatusNotice('Open a conversation before starting a launch check.')
             return
         }
 
         if (!isAuthenticated) {
-            setStatusNotice('Sign in to deploy a workspace.')
+            setStatusNotice('Sign in to run a launch check.')
             return
         }
 
         const targetVmName = vmName.trim()
         if (!targetVmName) {
-            setStatusNotice('Choose a VM target before starting a deploy.')
+            setStatusNotice('Choose a launch target before starting a check.')
             return
         }
 
         setDeployPending(true)
-        setStatusNotice('Starting remote deploy orchestration...')
+        setStatusNotice('Starting remote launch check...')
         try {
             const response = await aiClientRequest('/ai/deployments', {
                 method: 'POST',
@@ -1035,7 +1035,7 @@ export default function useAiWorkbench({
             })
             const payload = await response.json().catch(() => null) as { deployment?: AIDeployment, quota?: AIDeployQuota, error?: string } | null
             if (!response.ok && !payload?.deployment) {
-                throw new Error(payload?.error || 'Unable to start deploy orchestration.')
+                throw new Error(payload?.error || 'Unable to start launch check.')
             }
 
             if (payload?.deployment) {
@@ -1044,11 +1044,11 @@ export default function useAiWorkbench({
                     setDeployQuota(payload.quota)
                 }
                 setStatusNotice(payload.deployment.status === 'running'
-                    ? 'Deploy healthcheck passed. Preview is reachable from the VM target.'
-                    : payload.deployment.failureReason || 'Deploy requires a manual follow-up step.')
+                    ? 'Launch healthcheck passed. Preview is reachable from the target.'
+                    : payload.deployment.failureReason || 'Launch check requires a manual follow-up step.')
             }
         } catch (error) {
-            setStatusNotice(error instanceof Error ? error.message : 'Unable to start deploy orchestration.')
+            setStatusNotice(error instanceof Error ? error.message : 'Unable to start launch check.')
         } finally {
             setDeployPending(false)
         }
@@ -1105,7 +1105,7 @@ export default function useAiWorkbench({
             }
 
             replaceConversation(payload.conversation)
-            setStatusNotice(`Shared this AI session with ${trimmedUserId} as ${role}.`)
+            setStatusNotice(`Shared this workspace review with ${trimmedUserId} as ${role}.`)
         } catch (error) {
             setCollaborationError(error instanceof Error ? error.message : 'Unable to invite collaborator.')
         } finally {
@@ -1167,8 +1167,8 @@ export default function useAiWorkbench({
             }
 
             setStatusNotice(trimmedUserId === currentUserId && activeConversation.collaboration.role !== 'owner'
-                ? 'You left the shared AI session.'
-                : `Removed ${trimmedUserId} from this AI session.`)
+                ? 'You left the shared workspace review.'
+                : `Removed ${trimmedUserId} from this workspace review.`)
         } catch (error) {
             setCollaborationError(error instanceof Error ? error.message : 'Unable to remove collaborator.')
         } finally {
@@ -1767,7 +1767,7 @@ export default function useAiWorkbench({
                 await scaffoldStarter('nextjs_docker', projectName, toolCall.shareId || conversation.workspaceId || null)
                 return {
                     ok: true,
-                    message: `Created project workspace for ${projectName} and prepared deploy target ${vmName}. ${result.message}`,
+                    message: `Created project workspace for ${projectName} and prepared launch target ${vmName}. ${result.message}`,
                 }
             }
 

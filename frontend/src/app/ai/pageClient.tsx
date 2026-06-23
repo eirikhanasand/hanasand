@@ -216,8 +216,8 @@ function conversationTitle(title?: string | null) {
 
 function runtimeStateSummary(runtimeState: AIRuntimeState) {
     if (runtimeState.connectedClientCount > 0) {
-        return `${runtimeState.connectedClientCount} model${runtimeState.connectedClientCount === 1 ? '' : 's'} available`
+        return `${runtimeState.connectedClientCount} review connection${runtimeState.connectedClientCount === 1 ? '' : 's'} available`
     }
 
-    return 'Workspace agent paused'
+    return 'Workspace review paused'
 }

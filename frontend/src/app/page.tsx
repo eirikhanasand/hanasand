@@ -50,8 +50,8 @@ const solutions = [
         href: '/pwned',
     },
     {
-        title: 'Build Workspace',
-        detail: 'The existing Hanasand workspace for building, reviewing, and deploying small software tools.',
+        title: 'Workspace Review',
+        detail: 'Project handoffs and implementation review for customers who want help wiring alerts into their stack.',
         href: '/ai',
     },
     {
@@ -220,7 +220,7 @@ export default async function Page({
                 </div>
             </section>
 
-            <Link href='/ai' aria-label='Open AI agent' className='fixed bottom-6 right-6 z-50 grid h-14 w-14 place-items-center rounded-full bg-[#0877ff] text-white shadow-[0_16px_40px_rgba(8,119,255,0.35)] transition hover:bg-[#0067df]'>
+            <Link href='/ai' aria-label='Open workspace review' className='fixed bottom-6 right-6 z-50 grid h-14 w-14 place-items-center rounded-full bg-[#0877ff] text-white shadow-[0_16px_40px_rgba(8,119,255,0.35)] transition hover:bg-[#0067df]'>
                 <MessageCircle className='h-6 w-6' />
             </Link>
         </main>

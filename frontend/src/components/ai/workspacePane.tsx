@@ -189,7 +189,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     <Stat label='Owned chats' value={String(ownershipSummary.ownedConversationCount)} />
                     <Stat label='Shared chats' value={String(ownershipSummary.sharedConversationCount)} />
                     <Stat label='Seats' value={`${ownershipSummary.collaboratorSeatCount} invited`} />
-                    <Stat label='Repos / deploys' value={`${ownershipSummary.repositoryCount} repos · ${ownershipSummary.deploymentCount} deploys`} />
+                    <Stat label='Repos / launches' value={`${ownershipSummary.repositoryCount} repos · ${ownershipSummary.deploymentCount} launches`} />
                     <Stat label='External repos' value={String(ownershipSummary.externalRepositoryCount)} />
                     <Stat label='External runtimes' value={String(ownershipSummary.externalVmCount)} />
                     <Stat label='24h usage' value={`${ownershipSummary.usageEventCount24h} events · ${ownershipSummary.usageUnitCount24h} units`} />
@@ -283,7 +283,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 ) : null}
                 {activeConversation?.collaboration?.role !== 'owner' ? (
                     <div className='text-xs text-[#667085]'>
-                        Your current access lets you inspect this AI session and continue from the same conversation route.
+                        Your current access lets you inspect this shared review and continue from the same conversation route.
                     </div>
                 ) : null}
                 {collaborationError ? <ErrorNotice compact message={collaborationError} /> : null}
@@ -296,22 +296,22 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 <Stat label='Tenant owner' value={activeConversation?.ownerId || 'Unknown'} />
                 <Stat label='Your role' value={activeConversation?.collaboration?.role || 'owner'} />
-                <Stat label='Deploy actors' value={deployActors.length ? String(deployActors.length) : 'None yet'} />
-                <Stat label='Release actors' value={releaseActors.length ? String(releaseActors.length) : 'None yet'} />
+                <Stat label='Launch owners' value={deployActors.length ? String(deployActors.length) : 'None yet'} />
+                <Stat label='Handoff owners' value={releaseActors.length ? String(releaseActors.length) : 'None yet'} />
                 <Stat label='Repo boundary' value={ownershipSummary ? `${ownershipSummary.externalRepositoryCount} external` : 'Unknown'} />
                 <Stat label='Runtime boundary' value={ownershipSummary ? `${ownershipSummary.externalVmCount} external` : 'Unknown'} />
                 <div className='rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
-                    Latest preview: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No release metadata yet'}
+                    Latest preview: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No handoff details yet'}
                 </div>
                 <div className='text-xs text-[#667085]'>
-                    Repository, runtime, deploy, and release ownership are checked against the active AI owner.
+                    Repository, runtime, launch, and handoff ownership are checked against the active workspace owner.
                 </div>
             </Panel>
 
             <Panel
                 icon={<ShieldCheck className='h-4 w-4' />}
-                title='Commercial trust'
-                subtitle={trustRelease ? 'Recovery, export, and handoff evidence for this project.' : 'Recovery evidence appears after the first release.'}
+                title='Handoff record'
+                subtitle={trustRelease ? 'Recovery, export, and handoff details for this project.' : 'Handoff details appear after the first recorded launch.'}
             >
                 {trustRelease && trust ? (
                     <>
@@ -354,14 +354,14 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         </div>
                     </>
                 ) : (
-                    <Empty text='No release record yet. Deploy or record a release to create rollback, export, handoff, and support evidence.' />
+                    <Empty text='No handoff record yet. Record a launch to create rollback, export, and support details.' />
                 )}
             </Panel>
 
             <Panel
                 icon={<RefreshCcw className='h-4 w-4' />}
-                title='Release history'
-                subtitle='Rollback targets and launch evidence per release.'
+                title='Launch history'
+                subtitle='Rollback targets and launch details.'
             >
                 {releases.length ? (
                     <div className='max-h-52 space-y-2 overflow-y-auto pr-1'>
@@ -405,12 +405,12 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                             </div>
                         ))}
                     </div>
-                ) : <Empty text='No release records yet. Deploy history will appear here after the first attempt.' />}
+                ) : <Empty text='No launch history yet. Attempts will appear here after the first check.' />}
             </Panel>
 
             <Panel
                 icon={<FolderGit2 className='h-4 w-4' />}
-                title='Import from GitHub'
+                title='Attach repository'
                 subtitle='Import a public or private repository.'
             >
                 <div className='flex gap-2'>
@@ -441,14 +441,14 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             >
                 <input value={starterName} onChange={(event) => setStarterName(event.target.value)} placeholder='Project name' className='rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
                 <button type='button' onClick={() => void onScaffoldStarter('nextjs_docker', starterName)} className='rounded-xl bg-[#3056d3] px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90'>
-                    Create Next.js + Docker workspace
+                    Create workspace
                 </button>
             </Panel>
 
             <Panel
                 icon={<ServerCog className='h-4 w-4' />}
-                title='Deploy'
-                subtitle='One-click launch path with owned infrastructure evidence.'
+                title='Launch check'
+                subtitle='One-click preview path with recorded handoff details.'
             >
                 <div className='grid grid-cols-2 gap-2'>
                     {(['staging', 'production'] as AIDeploymentEnvironment[]).map((environment) => (
@@ -489,12 +489,12 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     </div>
                 ) : null}
                 <div className='grid grid-cols-[minmax(0,1fr)_5rem] gap-2'>
-                    <input value={deployVmName} onChange={(event) => setDeployVmName(event.target.value)} placeholder='Deploy target' className='min-w-0 rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
+                    <input value={deployVmName} onChange={(event) => setDeployVmName(event.target.value)} placeholder='Launch target' className='min-w-0 rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
                     <input value={deployPort} onChange={(event) => setDeployPort(event.target.value)} placeholder='3000' inputMode='numeric' className='min-w-0 rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
                 </div>
                 <input value={deployHealthPath} onChange={(event) => setDeployHealthPath(event.target.value)} placeholder='/health or /' className='rounded-xl bg-white px-3 py-2 text-sm text-[#171a21] outline outline-[#dfe5ee] placeholder:text-[#98a2b3]' />
                 <div className='rounded-xl bg-[#f8fafc] px-3 py-3 outline outline-[#dfe5ee]'>
-                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-[#667085]'>Deploy checklist</div>
+                    <div className='mb-2 text-[10px] uppercase tracking-[0.18em] text-[#667085]'>Launch checklist</div>
                     <div className='grid gap-1.5'>
                         {deployProfile.checklist.map((item) => (
                             <ChecklistItem key={item.label} label={item.label} state={item.state} />
@@ -529,10 +529,10 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 {deployQuota ? (
                     <div className='rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
                         <div>
-                            Deploys: {deployQuota.used}/{deployQuota.limit} in {deployQuota.windowMinutes} min. {deployQuota.remaining} left.
+                            Checks: {deployQuota.used}/{deployQuota.limit} in {deployQuota.windowMinutes} min. {deployQuota.remaining} left.
                         </div>
                         <div className='mt-1'>
-                            Live: {deployQuota.activeRunning}/{deployQuota.maxRunning}. {deployQuota.runningRemaining} slots left.
+                            Running previews: {deployQuota.activeRunning}/{deployQuota.maxRunning}. {deployQuota.runningRemaining} slots left.
                             {deployQuota.sharedAcrossCollaborators ? ' Shared quota.' : ''}
                         </div>
                     </div>
@@ -543,7 +543,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                     disabled={deployPending}
                     className='rounded-xl bg-[#3056d3] px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60'
                 >
-                    {deployPending ? 'Checking deploy target...' : 'Start deploy check'}
+                    {deployPending ? 'Checking launch target...' : 'Run launch check'}
                 </button>
                 {deployments.length ? (
                     <div className='max-h-48 space-y-2 overflow-y-auto pr-1'>
@@ -576,7 +576,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                             </div>
                         ))}
                     </div>
-                ) : <Empty text='No deploy attempts recorded for this conversation yet.' />}
+                ) : <Empty text='No launch attempts recorded for this conversation yet.' />}
             </Panel>
 
             <Panel
@@ -792,19 +792,19 @@ function buildFallbackTrust(release: AIRelease | null): AIReleaseTrust | null {
         ],
         noLockIn: {
             headline: 'Your code, your domain, your infrastructure.',
-            bullets: ['Source stays exportable.', 'Deployments are recorded against your target and domain choices.', 'Rollback evidence stays attached to release history.'],
+            bullets: ['Source stays exportable.', 'Launches are recorded against your target and domain choices.', 'Rollback details stay attached to launch history.'],
         },
         supportBundle: {
             available: true,
             url: `/api/ai/releases/${release.id}/support-bundle`,
-            includes: ['release metadata', 'deployment events', 'failure reason', 'request IDs', 'handoff report', 'rollback status'],
+            includes: ['handoff details', 'launch events', 'failure reason', 'request IDs', 'handoff report', 'rollback status'],
             requestIds: [],
         },
         sla: [
-            { tier: 'Starter', promise: 'Async queue, basic deploy history, and recoverable release records.' },
+            { tier: 'Starter', promise: 'Async queue, basic launch history, and recoverable handoff records.' },
             { tier: 'Pro', promise: 'Priority verification, rollback target selection, and support bundles.' },
             { tier: 'Agency', promise: 'Client handoff reports and multi-workspace history.' },
-            { tier: 'Business', promise: 'Audit logs, approvals, scoped secrets, release evidence, and SSO later.' },
+            { tier: 'Business', promise: 'Audit logs, approvals, scoped secrets, handoff details, and SSO later.' },
         ],
     }
 }
@@ -894,21 +894,21 @@ function buildDeployProfile({
         ? `${service}.hanasand.com`
         : `${service}.staging.hanasand.com`
     const checklist: Array<{ label: string, state: 'ready' | 'needs_input' | 'automatic' }> = [
-        { label: `Deploy target: ${vmName || 'choose a target'}`, state: vmName ? 'ready' : 'needs_input' },
+        { label: `Launch target: ${vmName || 'choose a target'}`, state: vmName ? 'ready' : 'needs_input' },
         { label: `Domain profile: ${domain}`, state: 'automatic' },
         { label: 'SSL certificate after route is live', state: 'automatic' },
         { label: `Health check: ${port || 'port'}${healthPath || '/'}`, state: port && healthPath ? 'ready' : 'needs_input' },
         { label: envPlaceholders.length ? `${envPlaceholders.length} env placeholder${envPlaceholders.length === 1 ? '' : 's'} detected` : 'No env placeholders detected', state: 'automatic' },
         { label: `Access policy: ${accessPolicy.replaceAll('_', ' ')}`, state: 'ready' },
-        { label: 'Build logs, deploy events, and rollback target recorded', state: 'automatic' },
+        { label: 'Build logs, launch events, and rollback target recorded', state: 'automatic' },
     ]
 
     return {
         title: `${environment === 'production' ? 'Production' : 'Staging'} infrastructure profile`,
         domain,
         ssl: 'Automatic after domain route responds',
-        logs: 'Build, healthcheck, runtime bridge, and release events',
-        rollback: 'Previous release is selectable from release history',
+        logs: 'Build, healthcheck, runtime bridge, and launch events',
+        rollback: 'Previous launch is selectable from launch history',
         checklist,
     }
 }
@@ -967,9 +967,9 @@ function formatUsageKind(kind: AIUsageEventKind) {
         case 'message_written':
             return 'Message written'
         case 'deployment_started':
-            return 'Deployment started'
+            return 'Launch started'
         case 'release_recorded':
-            return 'Release recorded'
+            return 'Handoff recorded'
         case 'rollback_marked':
             return 'Rollback marked'
         case 'collaborator_invited':

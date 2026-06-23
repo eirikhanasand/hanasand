@@ -51,8 +51,8 @@ export default function ChatPane({
     const awaitingResponse = Boolean(activeConversation?.messages.at(-1)?.pending)
     const hasReadyModel = isConnected && clients.length > 0
     const unavailableModelReason = isAuthenticated
-        ? 'Workspace agent is temporarily unavailable. You can still open the workspace or attach context.'
-        : 'Workspace agent is temporarily unavailable. You can still open the workspace, attach context, or sign in.'
+        ? 'Workspace review is temporarily unavailable. You can still open the workspace or attach context.'
+        : 'Workspace review is temporarily unavailable. You can still open the workspace, attach context, or sign in.'
     const composerBlockedReason = readOnly
         ? 'Reviewer mode: you can inspect this workspace but cannot send prompts.'
         : awaitingResponse
@@ -81,7 +81,7 @@ export default function ChatPane({
         const selectedName = activeConversation?.preferredModel || activeConversation?.activeModel
         return clients.find((client) => client.name === selectedName) || clients[0] || null
     }, [activeConversation?.activeModel, activeConversation?.preferredModel, clients])
-    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Workspace agent unavailable'
+    const selectedModelLabel = selectedClient ? modelLabel(selectedClient) : 'Workspace review unavailable'
 
     return (
         <Fragment>
@@ -98,7 +98,7 @@ export default function ChatPane({
                                     className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-semibold text-[#3056d3] transition-colors hover:text-[#2546a8] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
                                     title={selectedModelLabel}
                                 >
-                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Workspace agent unavailable'}</span>
+                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Workspace review unavailable'}</span>
                                     {clients.length ? <ChevronDown className='h-3.5 w-3.5 shrink-0' /> : null}
                                 </button>
                                 {modelMenuOpen && clients.length ? (
