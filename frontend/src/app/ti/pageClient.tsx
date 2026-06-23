@@ -55,7 +55,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const form = new FormData(event.currentTarget)
-        const clean = String(form.get('query') ?? inputRef.current?.value ?? query).trim()
+        const clean = String(form.get('q') ?? inputRef.current?.value ?? query).trim()
         if (!clean) return
 
         const requestSeq = requestSeqRef.current + 1
@@ -102,7 +102,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
                         <span className='text-xs font-semibold uppercase text-[#3056d3]'>Threat intelligence search</span>
                         <input
                             ref={inputRef}
-                            name='query'
+                            name='q'
                             value={query}
                             onChange={(event) => handleQueryChange(event.target.value)}
                             placeholder='Company, actor, domain, CVE, supplier...'
@@ -154,13 +154,13 @@ function Results({ result }: { result: TiSearchResponse }) {
                 <div className='grid gap-2 text-sm'>
                     <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Confidence' value={`${Math.round(result.confidence * 100)}%`} />
                     <Metric icon={<Activity className='h-4 w-4' />} label='Updated' value={formatDate(result.generatedAt || result.lastSeen)} />
-                    <Metric icon={<Database className='h-4 w-4' />} label='Sources' value={`${result.sources.length}`} />
+                    <Metric icon={<Database className='h-4 w-4' />} label='Feeds' value={`${result.sources.length}`} />
                     <Metric icon={<BellRing className='h-4 w-4' />} label='Alerting' value={result.status === 'ready' || result.status === 'partial' ? 'Active' : 'Watching'} />
                 </div>
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Recent Activity' icon={<Radar className='h-4 w-4' />}>
+                <Panel title='Recent Signals' icon={<Radar className='h-4 w-4' />}>
                     {result.recentActivity.length ? result.recentActivity.map(item => {
                         const href = item.url || item.sourceIds.map(id => sourceUrlById.get(id)).find(Boolean)
                         return (
@@ -217,7 +217,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                     ))}
                 </Panel>
 
-                <Panel title='Source Coverage' icon={<Globe2 className='h-4 w-4' />}>
+                <Panel title='Monitoring Coverage' icon={<Globe2 className='h-4 w-4' />}>
                     {datasets.map(item => (
                         <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
                             <div className='flex items-center justify-between gap-3'>
@@ -253,8 +253,8 @@ function EmptyState() {
         <section className='grid min-h-[48vh] place-items-center border border-[#dfe5ee] bg-white px-5 py-10 text-center'>
             <div className='grid max-w-xl gap-3'>
                 <Radar className='mx-auto h-8 w-8 text-[#3056d3]' />
-                <h1 className='text-2xl font-semibold text-[#171a21]'>Search threat intelligence</h1>
-                <p className='text-sm leading-6 text-[#667085]'>Enter an actor, ransomware group, CVE, malware family, sector, or victim name.</p>
+                <h1 className='text-2xl font-semibold text-[#171a21]'>Search company exposure and actor context</h1>
+                <p className='text-sm leading-6 text-[#667085]'>Enter a company, vendor, domain, ransomware group, CVE, or actor name.</p>
             </div>
         </section>
     )
@@ -388,7 +388,7 @@ function Panel({ title, icon, children }: { title: string; icon: React.ReactNode
 
 function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture'] }) {
     return (
-        <Panel title='Collection Mix' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Monitoring Mix' icon={<Database className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 {sources.filter(source => source.role !== 'rejected_paid_rows').slice(0, 4).map(source => (
                     <div key={`${source.source}-${source.role}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
@@ -407,7 +407,7 @@ function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchRespo
 
 function SourceLinksPanel({ sources }: { sources: TiSearchResponse['sources'] }) {
     return (
-        <Panel title='Evidence Links' icon={<ExternalLink className='h-4 w-4' />}>
+        <Panel title='Reference Links' icon={<ExternalLink className='h-4 w-4' />}>
             <div className='grid gap-1'>
                 {sources.slice(0, 8).map(source => {
                     const href = source.url || linkFromText(source.provenance)

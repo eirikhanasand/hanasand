@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowRight, BellRing, Building2, CheckCircle2, Code2, Copy, Radar, Webhook } from 'lucide-react'
-import { FormEvent, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 const fields = [
     'actor',
@@ -24,7 +24,7 @@ const workflow = [
     },
     {
         title: 'Detect fresh actor mentions',
-        detail: 'Use public trackers as seeds and owned collection for monitored actor-page metadata.',
+        detail: 'Use public indexes as seeds and owned collection for monitored actor-page metadata.',
         icon: Radar,
     },
     {
@@ -37,7 +37,7 @@ const workflow = [
 const apiUseCases = [
     'Create tickets when a watched supplier appears in a new victim claim.',
     'Attach actor, company, claimed-data text, date, and source link to vendor-risk workflows.',
-    'Keep an internal actor overview current without manually copying from public trackers.',
+    'Keep the actor overview current without manually copying from public indexes.',
     'Route high-confidence company matches to Slack, Jira, SOAR, or a customer portal.',
 ]
 
@@ -58,8 +58,7 @@ export default function DarkWebMonitoringPage() {
         setSubscriptionId('')
     }
 
-    function submit(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault()
+    function prepareWebhookAlert() {
         const trimmedEndpoint = endpoint.trim()
         const terms = watchlist.split(',').map(item => item.trim()).filter(Boolean)
         if (!/^https:\/\//i.test(trimmedEndpoint)) {
@@ -169,7 +168,7 @@ export default function DarkWebMonitoringPage() {
                         </div>
                     </div>
 
-                    <form id='webhooks' onSubmit={submit} className='scroll-mt-24 grid gap-5 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 shadow-sm md:p-5'>
+                    <section id='webhooks' className='scroll-mt-24 grid gap-5 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 shadow-sm md:p-5'>
                         <div className='flex items-start justify-between gap-4'>
                             <div>
                                 <h2 className='text-xl font-semibold'>Subscribe a webhook</h2>
@@ -186,7 +185,7 @@ export default function DarkWebMonitoringPage() {
                             <textarea id='dwm-watched-terms' aria-label='Watched terms' value={watchlist} onChange={event => updateWatchlist(event.target.value)} className={`${inputClass} min-h-28 resize-y`} placeholder='Company, domain, supplier, brand...' />
                         </label>
                         <div className='grid gap-3 md:grid-cols-[auto_auto_auto_1fr] md:items-center'>
-                            <button type='submit' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                            <button type='button' onClick={prepareWebhookAlert} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
                                 Prepare webhook alert
                                 <ArrowRight className='h-4 w-4' />
                             </button>
@@ -204,7 +203,7 @@ export default function DarkWebMonitoringPage() {
                                 Draft ID: <span className='font-mono font-semibold'>{subscriptionId}</span>
                             </div>
                         ) : null}
-                    </form>
+                    </section>
                 </div>
             </section>
 

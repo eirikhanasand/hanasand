@@ -432,8 +432,7 @@ function draftFromWebhook(subscription: DwmWebhookDraft): AutomationPayload {
 function redactWebhookEndpoint(endpoint: string) {
     try {
         const url = new URL(endpoint)
-        const path = url.pathname.length > 28 ? `${url.pathname.slice(0, 24)}...` : url.pathname
-        return `${url.origin}${path}`
+        return `${url.origin}/...`
     } catch {
         return 'saved HTTPS endpoint'
     }

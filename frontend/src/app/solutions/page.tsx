@@ -22,10 +22,10 @@ const primarySolutions = [
     {
         title: 'Threat Intelligence Search',
         eyebrow: 'Console',
-        detail: 'Search actors, companies, CVEs, and source-backed claims from one clean UI while preserving review state and source pivots.',
+        detail: 'Search actors, companies, CVEs, and monitored claims from one clean UI while preserving review state and alert context.',
         href: '/ti',
         icon: Radar,
-        points: ['Actor overviews', 'Company exposure search', 'Source history'],
+        points: ['Actor overviews', 'Company exposure search', 'Alert context'],
     },
     {
         title: 'Bloom Filter Exposure Checks',

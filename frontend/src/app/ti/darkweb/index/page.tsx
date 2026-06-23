@@ -125,8 +125,8 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                     />
                     <ProductTile
                         icon={<Globe2 className='h-4 w-4' />}
-                        title='Source mix'
-                        detail='Combine ransomware.live, RansomLook, monitored actor infrastructure, and exposure metadata into one reviewable map.'
+                        title='Monitoring mix'
+                        detail='Use public indexes as seed coverage, then track monitored actor infrastructure and exposure metadata in one customer-ready map.'
                     />
                 </section>
 
