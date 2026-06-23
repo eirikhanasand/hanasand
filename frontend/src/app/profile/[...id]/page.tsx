@@ -61,7 +61,7 @@ export default async function Page(props: { params: Promise<{ id: string[] }> })
         )
     }
 
-    const certificates = await getCertificates(userId)
+    const certificates = await getCertificates(userId, token, userId)
     const vms = await getVMs(userId, token, userId)
 
     return (

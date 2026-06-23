@@ -43,8 +43,9 @@ export default function Certificates({ certificates: serverCertificates }: { cer
 
     async function update() {
         const id = getCookie('id')
+        const token = getCookie('access_token')
         if (id) {
-            const updatedCertificates = await getCertificates(id)
+            const updatedCertificates = await getCertificates(id, token, id)
             setCertificates(updatedCertificates)
         }
     }
