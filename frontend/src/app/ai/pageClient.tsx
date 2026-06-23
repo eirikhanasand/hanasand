@@ -91,18 +91,20 @@ export default function AIPageClient({
                 ) : null}
 
                 <div className={`grid min-h-0 flex-1 ${showWorkspaceRail && detailsOpen ? 'xl:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[16rem_minmax(0,1fr)_22rem]' : 'xl:grid-cols-[16rem_minmax(0,1fr)]'}`}>
-                    <ChatSidebar
-                        activeConversationId={ai.activeConversationId}
-                        archivedConversations={ai.archivedConversations}
-                        conversations={ai.filteredConversations}
-                        search={ai.search}
-                        setSearch={ai.setSearch}
-                        onArchiveConversation={ai.archiveConversation}
-                        onDeleteConversation={ai.deleteConversation}
-                        onNewConversation={ai.createNewConversation}
-                        onRenameConversation={ai.renameConversation}
-                        onSelectConversation={selectConversation}
-                    />
+                    <div className='hidden min-h-0 md:block'>
+                        <ChatSidebar
+                            activeConversationId={ai.activeConversationId}
+                            archivedConversations={ai.archivedConversations}
+                            conversations={ai.filteredConversations}
+                            search={ai.search}
+                            setSearch={ai.setSearch}
+                            onArchiveConversation={ai.archiveConversation}
+                            onDeleteConversation={ai.deleteConversation}
+                            onNewConversation={ai.createNewConversation}
+                            onRenameConversation={ai.renameConversation}
+                            onSelectConversation={selectConversation}
+                        />
+                    </div>
 
                     <ChatPane
                         activeConversation={ai.activeConversation}
