@@ -121,15 +121,17 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         </span>
                         <span className='truncate text-lg font-semibold tracking-normal text-[#20242c]'>hanasand</span>
                     </Link>
-                    <nav className='hidden items-center gap-1 lg:flex'>
-                        {token ? (
-                            <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Console</Link>
-                        ) : null}
-                        <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Threat Search</Link>
-                        <Link href='/solutions/dwm' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>DWM</Link>
-                        <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>API Docs</Link>
-                        <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Pricing</Link>
-                    </nav>
+                    {!isDashboard && !isProfile && (
+                        <nav className='hidden items-center gap-1 lg:flex'>
+                            {token ? (
+                                <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Console</Link>
+                            ) : null}
+                            <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Threat search</Link>
+                            <Link href='/solutions/dwm' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Dark web</Link>
+                            <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>API docs</Link>
+                            <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d]'>Pricing</Link>
+                        </nav>
+                    )}
                 </div>
                 <div className='flex items-center justify-end gap-2'>
                     {token && isDashboard && <ViewModeToggle />}

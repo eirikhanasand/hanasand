@@ -44,11 +44,11 @@ export default function DashboardSidebar({
 
     const productItems: Item[] = [
         { href: '/dashboard', label: 'Console', icon: <LayoutDashboard className='h-4 w-4' /> },
-        { href: '/ti', label: 'Threat Search', icon: <Radar className='h-4 w-4' /> },
-        { href: '/solutions/dwm', label: 'DWM', icon: <ShieldCheck className='h-4 w-4' /> },
+        { href: '/ti', label: 'Threat search', icon: <Radar className='h-4 w-4' /> },
+        { href: '/solutions/dwm', label: 'Dark web', icon: <ShieldCheck className='h-4 w-4' /> },
         { href: '/solutions/dwm#webhooks', label: 'Webhooks', icon: <Webhook className='h-4 w-4' /> },
         { href: '/dashboard/automations', label: 'Alerts', icon: <AlarmClockCheck className='h-4 w-4' /> },
-        { href: '/developers', label: 'API Docs', icon: <Code2 className='h-4 w-4' /> },
+        { href: '/developers', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
         { href: '/pricing', label: 'Pricing', icon: <DollarSign className='h-4 w-4' /> },
     ]
 
