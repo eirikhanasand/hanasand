@@ -124,7 +124,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
     }
 
     function completeAuth() {
-        window.setTimeout(() => window.location.assign(redirectPath), 0)
+        void waitForAuthCookies().finally(() => window.location.assign(redirectPath))
     }
 
     useEffect(() => {
@@ -253,6 +253,15 @@ function parseSignupResponse(responseText: string): SignupResponse {
         return JSON.parse(responseText) as SignupResponse
     } catch {
         return { error: responseText || 'Unable to create account.' }
+    }
+}
+
+async function waitForAuthCookies() {
+    for (let attempt = 0; attempt < 20; attempt++) {
+        if (getCookie('access_token') && getCookie('id')) {
+            return
+        }
+        await new Promise(resolve => window.setTimeout(resolve, 50))
     }
 }
 
