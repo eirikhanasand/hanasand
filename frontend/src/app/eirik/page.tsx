@@ -46,8 +46,8 @@ const personalProjects = [
         tag: 'utility',
     },
     {
-        title: 'Load and route tests',
-        description: 'Public test surfaces used while hardening uptime, routing, and service checks.',
+        title: 'Service check',
+        description: 'A small utility for checking availability, routing, and page response behavior.',
         href: '/test',
         icon: Sparkles,
         tag: 'operations',
