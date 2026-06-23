@@ -18,7 +18,6 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
         path: '/',
         expires,
         secure: shouldUseSecureCookies(req),
-        domain: sharedCookieDomain(req),
     }
 
     if (data.name) {
@@ -32,40 +31,28 @@ export function setAuthCookies(req: NextRequest, response: NextResponse, data: A
         response.cookies.set('access_token', data.token, cookieOptions)
     }
     response.cookies.set('roles', JSON.stringify(data.roles ?? []), cookieOptions)
-    expireHostOnlyAuthCookies(response)
+    expireSharedDomainAuthCookies(response)
 }
 
 export function clearAuthCookies(req: NextRequest, response: NextResponse) {
-    const domain = sharedCookieDomain(req)
     for (const cookie of authCookieNames) {
         response.cookies.delete(cookie)
     }
-    if (domain) {
-        for (const cookie of authCookieNames) {
-            response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=${domain}; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`)
-        }
-    }
-}
-
-function sharedCookieDomain(req: NextRequest) {
-    const hostname = requestHostname(req)
-    return hostname === 'hanasand.com' || hostname.endsWith('.hanasand.com')
-        ? '.hanasand.com'
-        : undefined
+    expireSharedDomainAuthCookies(response)
 }
 
 function shouldUseSecureCookies(req: NextRequest) {
-    return req.nextUrl.protocol === 'https:' || Boolean(sharedCookieDomain(req))
+    return req.nextUrl.protocol === 'https:' || requestHostname(req).endsWith('hanasand.com')
+}
+
+function expireSharedDomainAuthCookies(response: NextResponse) {
+    for (const cookie of authCookieNames) {
+        response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`)
+    }
 }
 
 function requestHostname(req: NextRequest) {
     const forwardedHost = req.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
     const host = forwardedHost || req.headers.get('host') || req.nextUrl.hostname
     return host.split(':')[0]
-}
-
-function expireHostOnlyAuthCookies(response: NextResponse) {
-    for (const cookie of authCookieNames) {
-        response.headers.append('Set-Cookie', `${cookie}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`)
-    }
 }

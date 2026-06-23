@@ -53,7 +53,7 @@ export async function proxy(req: NextRequest) {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
-                expireHostOnlyCookie(response, 'access_token')
+                expireSharedDomainCookie(response, 'access_token')
             }
 
             if (auth.roles) {
@@ -62,7 +62,7 @@ export async function proxy(req: NextRequest) {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
-                expireHostOnlyCookie(response, 'roles')
+                expireSharedDomainCookie(response, 'roles')
             }
 
             if (auth.name) {
@@ -70,7 +70,7 @@ export async function proxy(req: NextRequest) {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
-                expireHostOnlyCookie(response, 'name')
+                expireSharedDomainCookie(response, 'name')
             }
 
             if (auth.avatar !== undefined) {
@@ -78,7 +78,7 @@ export async function proxy(req: NextRequest) {
                     ...refreshedCookieOptions,
                     expires: auth.expires_at ? new Date(auth.expires_at) : undefined,
                 })
-                expireHostOnlyCookie(response, 'avatar')
+                expireSharedDomainCookie(response, 'avatar')
             }
         }
 
@@ -132,21 +132,15 @@ function roleMatchesStrictPath(role: Role & { role_id?: string }, requiredRole: 
 }
 
 function authCookieOptions(req: NextRequest) {
-    const hostname = requestHostname(req)
-    const domain = hostname === 'hanasand.com' || hostname.endsWith('.hanasand.com')
-        ? '.hanasand.com'
-        : undefined
-
     return {
         sameSite: 'lax' as const,
         path: '/',
-        secure: req.nextUrl.protocol === 'https:' || Boolean(domain),
-        domain,
+        secure: req.nextUrl.protocol === 'https:' || requestHostname(req).endsWith('hanasand.com'),
     }
 }
 
-function expireHostOnlyCookie(response: NextResponse, name: string) {
-    response.headers.append('Set-Cookie', `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`)
+function expireSharedDomainCookie(response: NextResponse, name: string) {
+    response.headers.append('Set-Cookie', `${name}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure`)
 }
 
 function requestHostname(req: NextRequest) {
