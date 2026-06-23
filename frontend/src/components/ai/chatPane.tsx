@@ -23,9 +23,9 @@ type ChatPaneProps = {
 }
 
 const EMPTY_CHAT_TOOLTIPS = [
-    'Describe the change you want, attach the relevant handoff, and I will keep the review tied to files.',
-    'Ask for a plan, a code edit, a review pass, or browser verification before release.',
-    'Start from a bug, a repo, a screenshot, or a customer handoff and keep the context visible.',
+    'Attach the relevant context, then ask for a focused review, code change, or release check.',
+    'Start from a bug, repo, screenshot, or customer note and keep the important context visible.',
+    'Ask for a plan, implementation pass, browser check, or customer-ready summary.',
 ]
 
 export default function ChatPane({
@@ -51,8 +51,8 @@ export default function ChatPane({
     const awaitingResponse = Boolean(activeConversation?.messages.at(-1)?.pending)
     const hasReadyModel = isConnected && clients.length > 0
     const unavailableModelReason = isAuthenticated
-        ? 'Workspace review is temporarily unavailable. You can still open the workspace or attach context.'
-        : 'Workspace review is temporarily unavailable. You can still open the workspace, attach context, or sign in.'
+        ? 'Review is paused. You can still open context, attach files, and continue from this page.'
+        : 'Review is paused. Sign in to continue, or open shared context first.'
     const composerBlockedReason = readOnly
         ? 'Reviewer mode: you can inspect this workspace but cannot send prompts.'
         : awaitingResponse
@@ -81,7 +81,7 @@ export default function ChatPane({
         const selectedName = activeConversation?.preferredModel || activeConversation?.activeModel
         return clients.find((client) => client.name === selectedName) || clients[0] || null
     }, [activeConversation?.activeModel, activeConversation?.preferredModel, clients])
-    const selectedModelLabel = selectedClient ? 'Review ready' : 'Workspace review unavailable'
+    const selectedModelLabel = selectedClient ? 'Review ready' : 'Review paused'
 
     return (
         <Fragment>
@@ -98,7 +98,7 @@ export default function ChatPane({
                                     className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-semibold text-[#3056d3] transition-colors hover:text-[#2546a8] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
                                     title={selectedModelLabel}
                                 >
-                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Workspace review unavailable'}</span>
+                                    <span className='truncate'>{isConnected ? selectedModelLabel : 'Review paused'}</span>
                                     {clients.length ? <ChevronDown className='h-3.5 w-3.5 shrink-0' /> : null}
                                 </button>
                                 {modelMenuOpen && clients.length ? (
@@ -214,7 +214,7 @@ export default function ChatPane({
                                     onSend()
                                 }
                             }}
-                            placeholder='Ask Hanasand to inspect a handoff, draft a change, review files, or prepare customer notes...'
+                            placeholder='Ask Hanasand to inspect context, draft a change, review files, or prepare customer notes...'
                             readOnly={readOnly}
                             rows={1}
                             className='h-10 min-h-0 flex-1 resize-none overflow-hidden bg-transparent py-2 text-sm leading-6 text-[#171a21] outline-none placeholder:text-[#8c95a5]'
@@ -251,17 +251,17 @@ function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { toolt
                     <Bot className='h-6 w-6' />
                 </div>
                 <h2 className='mt-7 text-2xl font-semibold tracking-normal text-[#171a21]'>
-                    Review a handoff, then ship with context.
+                    Review context, then ship with confidence.
                 </h2>
                 <p className='mt-3 text-sm leading-6 text-[#596170]'>
                     {hasReadyModel
                         ? tooltip
-                        : 'Attach a handoff or open shared context. Files, launch state, and review notes stay visible while review is paused.'}
+                        : 'Attach context or open a shared workspace. Files, launch state, and notes stay visible while review is paused.'}
                 </p>
                 {!hasReadyModel ? (
                     <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-[#596170]'>
                         <Link href='/s' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
-                            Open handoffs
+                            Open context
                         </Link>
                         {!isAuthenticated ? (
                             <Link href='/login' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
@@ -308,7 +308,7 @@ function modelLabel(client: GPT_Client) {
 
 function conversationTitle(title?: string | null) {
     const normalized = title?.trim()
-    return !normalized || normalized === 'New chat' || normalized === 'New workspace review' ? 'Workspace review' : normalized
+    return !normalized || normalized === 'New chat' || normalized === 'New workspace review' || normalized === 'Workspace review' ? 'Review assistant' : normalized
 }
 
 function MarkdownBlock({ content }: { content: string }) {

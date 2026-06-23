@@ -83,7 +83,7 @@ export default function AIPageClient({
                                 <PanelRight className='h-4 w-4' />
                             </button>
                             <Link href={ai.activeConversation?.workspaceId ? `/s/${ai.activeConversation.workspaceId}` : '/s'} className='inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[#596170] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
-                                Handoff
+                                Context
                                 <SquareArrowOutUpRight className='h-4 w-4' />
                             </Link>
                         </div>
@@ -211,13 +211,13 @@ export default function AIPageClient({
 
 function conversationTitle(title?: string | null) {
     const normalized = title?.trim()
-    return !normalized || normalized === 'New chat' || normalized === 'New workspace review' ? 'Workspace review' : normalized
+    return !normalized || normalized === 'New chat' || normalized === 'New workspace review' || normalized === 'Workspace review' ? 'Review assistant' : normalized
 }
 
 function runtimeStateSummary(runtimeState: AIRuntimeState) {
     if (runtimeState.connectedClientCount > 0) {
-        return `${runtimeState.connectedClientCount} review connection${runtimeState.connectedClientCount === 1 ? '' : 's'} available`
+        return `${runtimeState.connectedClientCount} review connection${runtimeState.connectedClientCount === 1 ? '' : 's'} ready`
     }
 
-    return 'Workspace review paused'
+    return 'Review assistant paused'
 }

@@ -37,11 +37,11 @@ export default function ChatSidebar(props: ChatSidebarProps) {
             <div className='flex items-center justify-between gap-2 pb-4'>
                 <button type='button' onClick={onNewConversation} className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#2b2f39]'>
                     <MessageSquarePlus className='h-4 w-4' />
-                    New review
+                    New session
                 </button>
                 <div className='flex items-center gap-1'>
-                    <IconButton label='Search reviews' icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
-                    <Link href='/s' aria-label='Open handoffs' className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                    <IconButton label='Search sessions' icon={<Search className='h-4 w-4' />} active={searchOpen} onClick={() => setSearchOpen((prev) => !prev)} />
+                    <Link href='/s' aria-label='Open context' className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                         <SquareArrowOutUpRight className='h-4 w-4' />
                     </Link>
                 </div>
@@ -53,14 +53,14 @@ export default function ChatSidebar(props: ChatSidebarProps) {
                     <input
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
-                        placeholder='Search reviews'
+                        placeholder='Search sessions'
                         className='w-full rounded-lg border border-[#d8dee9] bg-white py-2.5 pl-10 pr-3 text-sm text-[#171a21] outline-none placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                     />
                 </label>
             ) : null}
 
             <div className='mb-3 flex items-center justify-between px-1 text-[11px] font-semibold uppercase text-[#667085]'>
-                <span>Reviews</span>
+                <span>Sessions</span>
                 <span>{conversations.length}</span>
             </div>
 
@@ -116,7 +116,7 @@ function ConversationList({
     if (!conversations.length) {
         return (
             <div className='px-1 py-3 text-sm text-[#667085]'>
-                No {archived ? 'archived' : 'active'} reviews yet.
+                No {archived ? 'archived' : 'active'} sessions yet.
             </div>
         )
     }
@@ -165,7 +165,7 @@ function ConversationList({
 
 function conversationTitle(title?: string | null) {
     const normalized = title?.trim()
-    return !normalized || normalized === 'New chat' || normalized === 'New workspace review' ? 'Workspace review' : normalized
+    return !normalized || normalized === 'New chat' || normalized === 'New workspace review' || normalized === 'Workspace review' ? 'Review assistant' : normalized
 }
 
 function IconButton({ label, icon, active = false, onClick }: { label: string, icon: React.ReactNode, active?: boolean, onClick: () => void }) {

@@ -119,8 +119,8 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
         ? activeConversation.workspaceMeta.workspaceSource
         : null
     const selectedContent = selectedShareFileContent || selectedShareContent
-    const deployActors = Array.from(new Set(deployments.map((deployment) => deployment.startedBy || deployment.ownerId).filter(Boolean)))
-    const releaseActors = Array.from(new Set(releases.map((release) => release.createdBy || release.ownerId).filter(Boolean)))
+    const launchOwners = Array.from(new Set(deployments.map((deployment) => deployment.startedBy || deployment.ownerId).filter(Boolean)))
+    const handoffOwners = Array.from(new Set(releases.map((release) => release.createdBy || release.ownerId).filter(Boolean)))
     const latestRelease = releases[0] || null
     const trustRelease = releases.find((release) => release.status === 'current') || latestRelease
     const trust = trustRelease?.trust || buildFallbackTrust(trustRelease)
@@ -185,15 +185,15 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 >
                     <Stat label='Owners' value={ownershipSummary.ownerIds.join(', ') || 'Unknown'} />
                     <Stat label='Repo owners' value={ownershipSummary.repositoryOwnerIds.join(', ') || 'None'} />
-                    <Stat label='Runtime owners' value={ownershipSummary.vmOwnerIds.join(', ') || 'None'} />
-                    <Stat label='Owned chats' value={String(ownershipSummary.ownedConversationCount)} />
-                    <Stat label='Shared chats' value={String(ownershipSummary.sharedConversationCount)} />
+                    <Stat label='Preview owners' value={ownershipSummary.vmOwnerIds.join(', ') || 'None'} />
+                    <Stat label='Owned sessions' value={String(ownershipSummary.ownedConversationCount)} />
+                    <Stat label='Shared sessions' value={String(ownershipSummary.sharedConversationCount)} />
                     <Stat label='Seats' value={`${ownershipSummary.collaboratorSeatCount} invited`} />
                     <Stat label='Repos / launches' value={`${ownershipSummary.repositoryCount} repos · ${ownershipSummary.deploymentCount} launches`} />
                     <Stat label='External repos' value={String(ownershipSummary.externalRepositoryCount)} />
-                    <Stat label='External runtimes' value={String(ownershipSummary.externalVmCount)} />
+                    <Stat label='External previews' value={String(ownershipSummary.externalVmCount)} />
                     <Stat label='24h usage' value={`${ownershipSummary.usageEventCount24h} events · ${ownershipSummary.usageUnitCount24h} units`} />
-                    <Stat label='Active actors' value={`${ownershipSummary.activeActorCount24h} seen in the last day`} />
+                    <Stat label='Active users' value={`${ownershipSummary.activeActorCount24h} seen in the last day`} />
                     {ownershipSummary.boundaryWarnings.length ? (
                         <div className='space-y-1'>
                             {ownershipSummary.boundaryWarnings.map((warning) => (
@@ -223,7 +223,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
 
             <Panel
                 icon={<UsersRound className='h-4 w-4' />}
-                title='Review handoff'
+                title='Review access'
                 subtitle={activeConversation?.collaboration?.role === 'owner' ? 'Invite an editor or reviewer.' : `Shared with you as ${activeConversation?.collaboration?.role || 'viewer'}.`}
             >
                 <Stat label='Owner' value={activeConversation?.ownerId || 'Unknown'} />
@@ -231,7 +231,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                 <Stat label='Seats' value={`${activeConversation?.collaboration?.seatCount || 0}/${activeConversation?.collaboration?.seatLimit || 0} used`} />
                 {activeConversation?.id ? (
                     <Link href={`/ai/${activeConversation.id}`} className='text-xs text-[#596170] underline-offset-4 hover:text-[#171a21] hover:underline'>
-                        Shared session link: /ai/{activeConversation.id}
+                        Session link: /ai/{activeConversation.id}
                     </Link>
                 ) : null}
                 {activeConversation?.collaboration?.canInvite ? (
@@ -292,19 +292,19 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
             <Panel
                 icon={<Share2 className='h-4 w-4' />}
                 title='Access summary'
-                subtitle='Actor and exposure details.'
+                subtitle='Session and preview details.'
             >
                 <Stat label='Tenant owner' value={activeConversation?.ownerId || 'Unknown'} />
                 <Stat label='Your role' value={activeConversation?.collaboration?.role || 'owner'} />
-                <Stat label='Launch owners' value={deployActors.length ? String(deployActors.length) : 'None yet'} />
-                <Stat label='Handoff owners' value={releaseActors.length ? String(releaseActors.length) : 'None yet'} />
+                <Stat label='Launch owners' value={launchOwners.length ? String(launchOwners.length) : 'None yet'} />
+                <Stat label='Handoff owners' value={handoffOwners.length ? String(handoffOwners.length) : 'None yet'} />
                 <Stat label='Repo boundary' value={ownershipSummary ? `${ownershipSummary.externalRepositoryCount} external` : 'Unknown'} />
-                <Stat label='Runtime boundary' value={ownershipSummary ? `${ownershipSummary.externalVmCount} external` : 'Unknown'} />
+                <Stat label='Preview boundary' value={ownershipSummary ? `${ownershipSummary.externalVmCount} external` : 'Unknown'} />
                 <div className='rounded-xl bg-[#f8fafc] px-3 py-2 text-xs text-[#596170] outline outline-[#dfe5ee]'>
                     Latest preview: {latestRelease ? `${latestRelease.accessPolicy.replaceAll('_', ' ')} via ${latestRelease.vmName}` : 'No handoff details yet'}
                 </div>
                 <div className='text-xs text-[#667085]'>
-                    Repository, runtime, launch, and handoff ownership are checked against the active workspace owner.
+                    Repository, preview, launch, and handoff ownership are checked against the active workspace owner.
                 </div>
             </Panel>
 
@@ -532,7 +532,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                             Checks: {deployQuota.used}/{deployQuota.limit} in {deployQuota.windowMinutes} min. {deployQuota.remaining} left.
                         </div>
                         <div className='mt-1'>
-                            Running previews: {deployQuota.activeRunning}/{deployQuota.maxRunning}. {deployQuota.runningRemaining} slots left.
+                            Active previews: {deployQuota.activeRunning}/{deployQuota.maxRunning}. {deployQuota.runningRemaining} slots left.
                             {deployQuota.sharedAcrossCollaborators ? ' Shared quota.' : ''}
                         </div>
                     </div>
@@ -801,7 +801,7 @@ function buildFallbackTrust(release: AIRelease | null): AIReleaseTrust | null {
             requestIds: [],
         },
         sla: [
-            { tier: 'Starter', promise: 'Async queue, basic launch history, and recoverable handoff records.' },
+            { tier: 'Starter', promise: 'Background review, basic launch history, and recoverable handoff records.' },
             { tier: 'Pro', promise: 'Priority verification, rollback target selection, and support bundles.' },
             { tier: 'Agency', promise: 'Client handoff reports and multi-workspace history.' },
             { tier: 'Business', promise: 'Audit logs, approvals, scoped secrets, handoff details, and SSO later.' },
@@ -907,7 +907,7 @@ function buildDeployProfile({
         title: `${environment === 'production' ? 'Production' : 'Staging'} infrastructure profile`,
         domain,
         ssl: 'Automatic after domain route responds',
-        logs: 'Build, healthcheck, runtime bridge, and launch events',
+        logs: 'Build, health check, preview, and launch events',
         rollback: 'Previous launch is selectable from launch history',
         checklist,
     }

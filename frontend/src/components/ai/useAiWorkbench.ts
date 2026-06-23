@@ -363,7 +363,7 @@ export default function useAiWorkbench({
                 if (!shouldReconnectRef.current) {
                     return
                 }
-                setStatusNotice('Connection lost. Reconnecting to workspace review...')
+                setStatusNotice('Connection lost. Reconnecting review assistant...')
                 reconnectTimerRef.current = setTimeout(connect, 2000)
             }
             ws.onerror = () => setIsConnected(false)
@@ -1105,7 +1105,7 @@ export default function useAiWorkbench({
             }
 
             replaceConversation(payload.conversation)
-            setStatusNotice(`Shared this workspace review with ${trimmedUserId} as ${role}.`)
+            setStatusNotice(`Shared this review session with ${trimmedUserId} as ${role}.`)
         } catch (error) {
             setCollaborationError(error instanceof Error ? error.message : 'Unable to invite collaborator.')
         } finally {
@@ -1167,8 +1167,8 @@ export default function useAiWorkbench({
             }
 
             setStatusNotice(trimmedUserId === currentUserId && activeConversation.collaboration.role !== 'owner'
-                ? 'You left the shared workspace review.'
-                : `Removed ${trimmedUserId} from this workspace review.`)
+                ? 'You left the shared review session.'
+                : `Removed ${trimmedUserId} from this review session.`)
         } catch (error) {
             setCollaborationError(error instanceof Error ? error.message : 'Unable to remove collaborator.')
         } finally {
