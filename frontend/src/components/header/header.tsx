@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, LockKeyhole, Radar, Search, ShieldCheck, Waypoints } from 'lucide-react'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, LockKeyhole, MenuIcon, Radar, Search, ShieldCheck, Waypoints, X } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -13,6 +13,7 @@ import ViewModeToggle from './viewModeToggle'
 import isSharePath from '@/utils/routes/isSharePath'
 import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 import BrandLogo from '@/components/brand/brandLogo'
+import { useState } from 'react'
 
 const productItems = [
     { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, and alert context.', href: '/ti', icon: Radar },
@@ -59,6 +60,49 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
     )
 }
 
+const mobilePublicLinks = [
+    { label: 'Threat search', href: '/ti' },
+    { label: 'Dark web monitoring', href: '/solutions/dwm' },
+    { label: 'Solutions', href: '/solutions' },
+    { label: 'Developers', href: '/developers' },
+    { label: 'Pricing', href: '/pricing' },
+    { label: 'Status', href: '/status' },
+    { label: 'Contact sales', href: '/contact?intent=sales' },
+]
+
+function PublicMobileMenu() {
+    const [open, setOpen] = useState(false)
+
+    return (
+        <div className='relative lg:hidden'>
+            <button
+                type='button'
+                onClick={() => setOpen((next) => !next)}
+                className='grid h-11 w-11 place-items-center rounded-lg border border-[#dfe5ee] text-[#3a404b] transition hover:bg-[#f6f8fb] dark:border-[#2b3a52] dark:text-[#d9e2f2] dark:hover:bg-white/8'
+                aria-label={open ? 'Close navigation' : 'Open navigation'}
+                aria-expanded={open}
+            >
+                {open ? <X className='h-5 w-5' /> : <MenuIcon className='h-5 w-5' />}
+            </button>
+            {open && (
+                <div className='absolute right-0 top-13 z-30 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-[#e0e5ed] bg-white p-2 shadow-[0_22px_70px_rgba(25,34,52,0.16)] dark:border-[#273345] dark:bg-[#111927] dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
+                    {mobilePublicLinks.map((item) => (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setOpen(false)}
+                            className='flex h-11 items-center justify-between rounded-lg px-3 text-sm font-semibold text-[#222733] transition hover:bg-[#f6f8fb] dark:text-[#eef3fb] dark:hover:bg-white/6'
+                        >
+                            {item.label}
+                            <ChevronDown className='h-4 w-4 -rotate-90 text-[#98a2b3]' />
+                        </Link>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
 export default function Header({ token, path: serverPath }: { token: boolean, path: string }) {
     const baseStyles = 'group grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827]'
     const pathname = usePathname() || serverPath
@@ -93,9 +137,10 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         <Link href={token ? '/dashboard/overview' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#22252d] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#111318]'>
                             Go to Console
                         </Link>
-                        <Link href='/ti' aria-label='Search intelligence' className='grid h-11 w-11 place-items-center rounded-lg border border-[#dfe5ee] text-[#3a404b] transition hover:bg-[#f6f8fb] lg:hidden'>
+                        <Link href='/ti' aria-label='Search intelligence' className='hidden h-11 w-11 place-items-center rounded-lg border border-[#dfe5ee] text-[#3a404b] transition hover:bg-[#f6f8fb] sm:grid lg:hidden dark:border-[#2b3a52] dark:text-[#d9e2f2] dark:hover:bg-white/8'>
                             <Search className='h-5 w-5' />
                         </Link>
+                        <PublicMobileMenu />
                     </div>
                 </div>
             </header>
