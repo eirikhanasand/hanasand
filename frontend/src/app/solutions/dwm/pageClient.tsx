@@ -132,7 +132,7 @@ export default function DarkWebMonitoringPage() {
                                 </div>
                                 <span className='rounded-full bg-[#e9f8ef] px-2.5 py-1 text-xs font-semibold text-[#147a3b]'>Matched</span>
                             </div>
-                            <pre className='max-h-[34rem] max-w-full overflow-auto p-4 text-xs leading-5 text-[#2b3340]'><code>{JSON.stringify(payload, null, 2)}</code></pre>
+                            <pre className='max-h-[34rem] max-w-full overflow-auto whitespace-pre-wrap wrap-break-word p-4 text-xs leading-5 text-[#2b3340]'><code>{JSON.stringify(payload, null, 2)}</code></pre>
                         </div>
                     </div>
                 </div>
