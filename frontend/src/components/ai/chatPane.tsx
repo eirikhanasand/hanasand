@@ -86,8 +86,8 @@ export default function ChatPane({
     return (
         <Fragment>
             <section className='relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
-                <div className='relative z-10 border-b border-[#e0e5ed] bg-white px-7 py-5'>
-                    <div className='flex items-center justify-between gap-4'>
+                <div className='relative z-10 border-b border-[#e0e5ed] bg-white px-4 py-4 sm:px-7 sm:py-5'>
+                    <div className='flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4'>
                         <div className='min-w-0'>
                             <h1 className='truncate text-base font-semibold tracking-normal text-[#171a21]'>{conversationTitle(activeConversation?.title)}</h1>
                             <div className='relative mt-1 inline-block'>
@@ -95,7 +95,7 @@ export default function ChatPane({
                                     type='button'
                                     onClick={() => setModelMenuOpen((prev) => !prev)}
                                     disabled={!clients.length}
-                                    className='inline-flex max-w-full items-center gap-1.5 text-left text-sm font-semibold text-[#3056d3] transition-colors hover:text-[#2546a8] disabled:cursor-not-allowed disabled:text-[#98a2b3]'
+                                    className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md text-left text-sm font-semibold text-[#3056d3] transition-colors hover:text-[#2546a8] disabled:cursor-not-allowed disabled:text-[#98a2b3] sm:px-1'
                                     title={selectedModelLabel}
                                 >
                                     <span className='truncate'>{isConnected ? selectedModelLabel : 'Review paused'}</span>
@@ -125,7 +125,7 @@ export default function ChatPane({
                                 ) : null}
                             </div>
                         </div>
-                        <div className='flex items-center gap-2'>
+                        <div className='flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end'>
                             <Link
                                 href='/s'
                                 className='grid h-9 w-9 place-items-center rounded-lg text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'
@@ -260,11 +260,11 @@ function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { toolt
                 </p>
                 {!hasReadyModel ? (
                     <div className='mt-5 flex flex-wrap justify-center gap-2 text-xs text-[#596170]'>
-                        <Link href='/s' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                        <Link href='/s' className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                             Open context
                         </Link>
                         {!isAuthenticated ? (
-                            <Link href='/login' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
+                            <Link href='/login' className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-3 py-1.5 font-semibold transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                                 Sign in
                             </Link>
                         ) : null}

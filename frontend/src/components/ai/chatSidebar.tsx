@@ -74,7 +74,7 @@ export default function ChatSidebar(props: ChatSidebarProps) {
             />
 
             <div className='mt-5 border-t border-[#e0e5ed] pt-4'>
-                <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex w-full items-center justify-between px-1 text-[11px] font-semibold uppercase text-[#667085]'>
+                <button type='button' onClick={() => setShowArchived((prev) => !prev)} className='flex min-h-8 w-full items-center justify-between rounded-lg px-1 text-[11px] font-semibold uppercase text-[#667085] transition-colors hover:bg-[#f8fafc] hover:text-[#171a21]'>
                     <span>Archived</span>
                     <span>{archivedConversations.length}</span>
                 </button>
