@@ -60,6 +60,8 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
         setNow(Date.now())
     }, [])
 
+    const nowMs = now ?? Date.now()
+    const visibleChecks = serviceStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs))
     const domainsSortedByTps = toDomainTPS([], topDomains, 5)
     const liveDomains = domainsSortedByTps.filter(domain => domain.tps > 0)
     const livePeakTps = liveDomains.reduce((highest, domain) => Math.max(highest, domain.tps), 0)
@@ -86,8 +88,10 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                 </div>
 
                 <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                    {serviceStatus.checks.map(check => {
+                    {visibleChecks.map(check => {
                         const Icon = check.status === 'up' ? BadgeCheck : check.status === 'degraded' ? ShieldAlert : Activity
+                        const serviceLabel = publicStatusLabel(check.service)
+                        const checkLabel = publicStatusLabel(check.check_name)
                         return (
                             <div key={`${check.service}-${check.check_name}`} className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
                                 <div className='flex items-start justify-between gap-4'>
@@ -103,8 +107,8 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                                         }
                                     </span>
                                 </div>
-                                <p className='mt-5 text-xs font-semibold uppercase text-[#667085]'>{check.service}</p>
-                                <h3 className='mt-2 text-lg font-semibold text-[#171a21]'>{check.check_name}</h3>
+                                <p className='mt-5 text-xs font-semibold uppercase text-[#667085]'>{serviceLabel}</p>
+                                <h3 className='mt-2 text-lg font-semibold text-[#171a21]'>{checkLabel}</h3>
                                 <div className='mt-4 grid gap-2 text-sm text-[#596170]'>
                                     <div className='flex items-center gap-2 rounded-lg border border-[#e0e5ed] bg-[#f8fafc] px-3 py-2'>
                                         <HeartPulse className='h-4 w-4 shrink-0 text-[#147a3b]' />
@@ -126,7 +130,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                             </div>
                         )
                     })}
-                    {!serviceStatus.checks.length && <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm text-[#596170] shadow-sm'>
+                    {!visibleChecks.length && <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm text-[#596170] shadow-sm'>
                         No public monitor checks are available yet.
                     </div>}
                 </div>
@@ -188,7 +192,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                 {serverDomainMetrics.map((d, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm shadow-sm'>
                         <Marquee
-                            text={clampMetricLabel(d.value)}
+                            text={clampMetricLabel(publicMetricLabel(d.value))}
                             className='w-full'
                             innerClassName='font-semibold text-[#171a21]'
                         />
@@ -207,7 +211,7 @@ export default function StatusDashboard({ metrics: serverMetrics, domainMetrics:
                 {serverMetrics.map((m, i) => (
                     <div key={i} className='flex flex-col gap-1 rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm shadow-sm'>
                         <Marquee
-                            text={clampMetricLabel(m.value)}
+                            text={clampMetricLabel(publicMetricLabel(m.value))}
                             className='w-full'
                             innerClassName='font-semibold text-[#171a21]'
                         />
@@ -228,4 +232,37 @@ function EmptyTrafficCard({ text }: { text: string }) {
             {text}
         </div>
     )
+}
+
+function isCurrentPublicCheck(check: ServiceStatus['checks'][number], nowMs: number) {
+    const checkedAt = new Date(check.checked_at).getTime()
+    if (!Number.isFinite(checkedAt)) {
+        return false
+    }
+
+    const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000
+    return nowMs - checkedAt <= fourteenDaysMs
+}
+
+function publicStatusLabel(value: string) {
+    const normalized = value
+        .replace(/agent3/gi, 'automation')
+        .replace(/prod[-_\s]*rate[-_\s]*limit/gi, 'rate limits')
+        .replace(/internal/gi, 'service')
+        .replace(/api[-_\s]*index/gi, 'API')
+        .replace(/share[-_\s]*page/gi, 'workspace links')
+        .replace(/delete[-_\s]*account/gi, 'account deletion')
+        .replace(/user[-_\s]*creation/gi, 'account creation')
+        .replace(/[-_]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    return normalized.replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+function publicMetricLabel(value: string) {
+    return String(value || '')
+        .replace(/internal/gi, 'service')
+        .replace(/agent3/gi, 'automation')
+        .replace(/localhost/gi, 'local service')
 }
