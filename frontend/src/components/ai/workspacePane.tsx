@@ -153,7 +153,7 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
     }, [activeRepo?.id, activeRepo?.stackType])
 
     return (
-        <aside className='flex h-full min-h-0 flex-col gap-3 rounded-2xl bg-[#f8fafc] p-3 outline outline-[#dfe5ee]'>
+        <aside className='flex h-full min-h-0 w-full max-w-full min-w-0 flex-col gap-3 overflow-hidden rounded-2xl bg-[#f8fafc] p-3 outline outline-[#dfe5ee]'>
             <Panel
                 icon={<TerminalSquare className='h-4 w-4' />}
                 title='Workspace'
@@ -463,12 +463,12 @@ export default function WorkspacePane(props: WorkspacePaneProps) {
                         </button>
                     ))}
                 </div>
-                <div className='rounded-xl bg-[#f8fafc] px-3 py-3 text-xs text-[#596170] outline outline-[#dfe5ee]'>
-                    <div className='flex items-center gap-2 text-[#344054]'>
+                <div className='min-w-0 overflow-hidden rounded-xl bg-[#f8fafc] px-3 py-3 text-xs text-[#596170] outline outline-[#dfe5ee]'>
+                    <div className='flex min-w-0 items-center gap-2 text-[#344054]'>
                         <ShieldCheck className='h-3.5 w-3.5 text-[#3056d3]' />
-                        <span className='font-semibold'>{deployProfile.title}</span>
+                        <span className='min-w-0 wrap-break-word font-semibold'>{deployProfile.title}</span>
                     </div>
-                    <div className='mt-2 grid gap-1'>
+                    <div className='mt-2 grid min-w-0 gap-1 wrap-break-word'>
                         <div>Domain: {deployProfile.domain}</div>
                         <div>SSL: {deployProfile.ssl}</div>
                         <div>Logs: {deployProfile.logs}</div>
@@ -712,7 +712,7 @@ function Panel({
     grow?: boolean
 }) {
     return (
-        <section className={`rounded-2xl bg-white p-3 outline outline-[#dfe5ee] ${grow ? 'min-h-0 flex-1' : ''}`}>
+        <section className={`min-w-0 max-w-full rounded-2xl bg-white p-3 outline outline-[#dfe5ee] ${grow ? 'min-h-0 flex-1' : ''}`}>
             <div className='flex items-start gap-3'>
                 <div className='mt-0.5 rounded-xl bg-[#3056d3]/12 p-2 text-[#3056d3] outline outline-[#3056d3]/18'>
                     {icon}
@@ -722,7 +722,7 @@ function Panel({
                     <div className='mt-1 text-sm text-[#344054]'>{subtitle}</div>
                 </div>
             </div>
-            <div className={`mt-3 grid gap-2 ${grow ? 'min-h-0' : ''}`}>{children}</div>
+            <div className={`mt-3 grid min-w-0 max-w-full gap-2 ${grow ? 'min-h-0' : ''}`}>{children}</div>
         </section>
     )
 }
