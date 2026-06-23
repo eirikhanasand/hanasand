@@ -1,9 +1,18 @@
 import { ReactNode } from 'react'
+import type { Metadata } from 'next'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import parseCookie from '@/utils/cookies/parseCookie'
 import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
 import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
+
+export const metadata: Metadata = {
+    title: {
+        default: 'Monitoring Console | Hanasand',
+        template: '%s | Hanasand',
+    },
+    description: 'Customer console for company exposure monitoring, threat search, webhook alerts, and API access.',
+}
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
     const cookieStore = await cookies()

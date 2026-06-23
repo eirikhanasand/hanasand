@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import type { Metadata } from 'next'
 import { Activity, BellRing, Braces, Building2, Radar, Search, ShieldAlert, Webhook } from 'lucide-react'
 import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
@@ -9,6 +10,11 @@ import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/das
 import parseCookie from '@/utils/cookies/parseCookie'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+    title: 'Monitoring Overview',
+    description: 'Overview of monitoring activity, threat search shortcuts, webhook alert setup, API access, and platform status.',
+}
 
 export default async function Page() {
     const cookieStore = await cookies()

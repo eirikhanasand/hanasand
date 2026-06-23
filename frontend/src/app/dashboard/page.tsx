@@ -1,8 +1,14 @@
 import Link from 'next/link'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import type { Metadata } from 'next'
 import { Activity, ArrowRight, BellRing, Code2, Radar, Search, ShieldCheck, Webhook } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+
+export const metadata: Metadata = {
+    title: 'Monitoring Workspace',
+    description: 'Start threat searches, prepare webhook alerts, review pricing, and connect monitoring data from the customer workspace.',
+}
 
 export default async function Page({
     searchParams,
