@@ -144,17 +144,14 @@ function loginRedirect(
 
     const response = NextResponse.redirect(url)
     if (options.clearAuth) {
-        for (const cookie of ['name', 'access_token', 'id', 'avatar', 'roles']) {
+        const authCookies = ['name', 'access_token', 'id', 'avatar', 'roles']
+        for (const cookie of authCookies) {
             response.cookies.delete(cookie)
-            if (isHanasandHost(req.nextUrl.hostname)) {
-                response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`)
-            }
+        }
+        for (const cookie of authCookies) {
+            response.headers.append('Set-Cookie', `${cookie}=; Path=/; Domain=.hanasand.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`)
         }
     }
 
     return response
-}
-
-function isHanasandHost(hostname: string) {
-    return hostname === 'hanasand.com' || hostname.endsWith('.hanasand.com')
 }
