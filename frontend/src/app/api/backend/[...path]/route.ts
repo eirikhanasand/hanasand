@@ -22,8 +22,8 @@ const hopByHopHeaders = new Set([
 
 async function handler(req: NextRequest, context: Context) {
     const cookieStore = await cookies()
-    const token = cookieStore.get('access_token')?.value || ''
-    const id = cookieStore.get('id')?.value || ''
+    const token = bearerToken(req.headers.get('authorization')) || cookieStore.get('access_token')?.value || ''
+    const id = req.headers.get('id') || cookieStore.get('id')?.value || ''
     if (!token || !id) {
         return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
     }
@@ -71,7 +71,7 @@ async function handler(req: NextRequest, context: Context) {
 
     const refreshedToken = response.headers.get('x-access-token')
     if (refreshedToken) {
-        next.cookies.set('access_token', refreshedToken, {
+        setProxyAuthCookie(req, next, 'access_token', refreshedToken, {
             sameSite: 'lax',
             path: '/',
             expires: response.headers.get('x-access-token-expires-at')
@@ -81,6 +81,45 @@ async function handler(req: NextRequest, context: Context) {
     }
 
     return next
+}
+
+function bearerToken(value: string | null) {
+    if (!value?.startsWith('Bearer ')) {
+        return ''
+    }
+
+    return value.slice('Bearer '.length).trim()
+}
+
+function setProxyAuthCookie(
+    req: NextRequest,
+    response: NextResponse,
+    name: string,
+    value: string,
+    options: {
+        sameSite: 'lax'
+        path: string
+        expires: Date | undefined
+    },
+) {
+    const secure = req.nextUrl.protocol === 'https:' || requestHostname(req).endsWith('hanasand.com')
+    const cookieOptions = {
+        ...options,
+        secure,
+    }
+    response.cookies.set(name, value, cookieOptions)
+    if (requestHostname(req).endsWith('hanasand.com')) {
+        response.cookies.set(name, value, {
+            ...cookieOptions,
+            domain: '.hanasand.com',
+        })
+    }
+}
+
+function requestHostname(req: NextRequest) {
+    const forwardedHost = req.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    const host = forwardedHost || req.headers.get('host') || req.nextUrl.hostname
+    return host.split(':')[0]
 }
 
 export const GET = handler
