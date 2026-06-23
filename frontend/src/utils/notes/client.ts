@@ -1,6 +1,6 @@
 'use client'
 
-import { getCookie, setCookieWithExpiresAt } from '@/utils/cookies/cookies'
+import { getCookie } from '@/utils/cookies/cookies'
 
 function authHeaders() {
     const token = getCookie('access_token') || ''
@@ -21,12 +21,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
             ...(init?.headers || {}),
         },
     })
-    const refreshedToken = response.headers.get('x-access-token')
-    const refreshedExpiresAt = response.headers.get('x-access-token-expires-at')
-    if (refreshedToken) {
-        setCookieWithExpiresAt('access_token', refreshedToken, refreshedExpiresAt)
-    }
-
     const body = await response.json().catch(() => ({}))
     if (!response.ok) {
         throw new Error(String((body as { error?: string }).error || 'Notes request failed.'))
