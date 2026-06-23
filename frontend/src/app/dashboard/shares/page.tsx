@@ -8,8 +8,8 @@ export default function Page() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Delivery'
-                title='Customer handoffs'
-                description='Review shared monitoring workspaces, delivery links, and customer-facing evidence packages.'
+                title='Shared reports'
+                description='Review monitoring report links, customer delivery pages, and shared exposure review work.'
             />
             <div className='max-w-3xl'>
                 <Shares />

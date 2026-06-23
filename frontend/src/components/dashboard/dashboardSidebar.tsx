@@ -54,7 +54,7 @@ export default function DashboardSidebar({
 
     const workspaceItems: Item[] = [
         { href: '/dashboard/projects', label: 'Workspaces', icon: <FolderKanban className='h-4 w-4' /> },
-        { href: '/dashboard/shares', label: 'Handoffs', icon: <Share2 className='h-4 w-4' /> },
+        { href: '/dashboard/shares', label: 'Reports', icon: <Share2 className='h-4 w-4' /> },
         { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
