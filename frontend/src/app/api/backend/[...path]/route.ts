@@ -58,7 +58,8 @@ async function handler(req: NextRequest, context: Context) {
 
     const responseHeaders = new Headers()
     response.headers.forEach((value, key) => {
-        if (!hopByHopHeaders.has(key.toLowerCase()) && key.toLowerCase() !== 'set-cookie') {
+        const lower = key.toLowerCase()
+        if (!hopByHopHeaders.has(lower) && lower !== 'set-cookie' && lower !== 'x-access-token' && lower !== 'x-access-token-expires-at') {
             responseHeaders.set(key, value)
         }
     })
