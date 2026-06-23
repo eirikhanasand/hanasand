@@ -2,7 +2,7 @@ import type { Viewport, Metadata } from 'next'
 
 const title = 'Hanasand'
 const description = 'Dark web monitoring, company exposure alerts, and threat intelligence workflows from Hanasand.'
-const image = 'https://hanasand.com/favicon.ico'
+const image = 'https://hanasand.com/favicon.svg'
 
 const metadata: Metadata = {
     title,
@@ -49,7 +49,11 @@ const metadata: Metadata = {
         },
     },
     icons: {
-        icon: '/favicon.ico',
+        icon: [
+            { url: '/favicon-light.svg', media: '(prefers-color-scheme: light)', type: 'image/svg+xml' },
+            { url: '/favicon.svg', media: '(prefers-color-scheme: dark)', type: 'image/svg+xml' },
+            { url: '/favicon.ico' },
+        ],
         apple: '/apple-touch-icon.png',
     },
 }
@@ -57,6 +61,9 @@ const metadata: Metadata = {
 export default metadata
 
 export const viewport: Viewport = {
-    colorScheme: 'light',
-    themeColor: '#ffffff',
+    colorScheme: 'light dark',
+    themeColor: [
+        { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+        { media: '(prefers-color-scheme: dark)', color: '#0e1520' },
+    ],
 }

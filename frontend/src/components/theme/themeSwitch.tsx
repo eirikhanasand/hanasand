@@ -1,16 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { getCookie, setCookie } from '@/utils/cookies/cookies'
 import './toggle.css'
 
 export default function ThemeSwitch() {
-    const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+    const [theme, setTheme] = useState<'dark' | 'light'>('light')
+    const inputId = useId()
 
     useEffect(() => {
         const savedTheme = getCookie('theme') as 'dark' | 'light'
         if (savedTheme) {
             setTheme(savedTheme)
+            document.documentElement.classList.remove('dark', 'light')
+            document.documentElement.classList.add(savedTheme)
+            return
         }
 
         document.documentElement.classList.remove('dark', 'light')
@@ -24,19 +28,17 @@ export default function ThemeSwitch() {
     }
 
     return (
-        <div className='group grid h-10 w-10 cursor-pointer place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827]'>
-            <div className='grid place-items-center justify-end cursor-pointer'>
-                <label>
-                    <input
-                        type='checkbox'
-                        checked={theme === 'light'}
-                        onChange={toggleTheme}
-                        className='sr-only'
-                    />
-                    <ThemeIcon />
-                </label>
-            </div>
-        </div>
+        <label htmlFor={inputId} className='group grid h-10 w-10 cursor-pointer place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827] dark:border-[#2b3647] dark:text-[#d9e2f2] dark:hover:bg-white/8'>
+            <input
+                id={inputId}
+                type='checkbox'
+                checked={theme === 'dark'}
+                onChange={toggleTheme}
+                className='sr-only'
+                aria-label='Toggle dark mode'
+            />
+            <ThemeIcon />
+        </label>
     )
 }
 

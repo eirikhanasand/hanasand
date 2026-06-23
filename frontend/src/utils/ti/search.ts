@@ -1,5 +1,9 @@
 import config from '@/config'
 
+const cacheTtlMs = 60_000
+const memoryCache = new Map<string, { expiresAt: number; result: TiSearchResponse }>()
+const browserCachePrefix = 'hanasand:ti-search:'
+
 export interface TiSearchResponse {
     query: string
     generatedAt: string
@@ -200,12 +204,19 @@ export interface TiVictimNotificationPacket {
 }
 
 export default async function searchThreatIntel(query: string): Promise<TiSearchResponse | null> {
+    const clean = query.trim()
+    if (!clean) return null
+
+    const key = clean.toLowerCase()
+    const cached = readCachedResult(key)
+    if (cached) return cached
+
     let response: Response
     try {
         response = await fetch(`${config.url.api}/ti/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
+            body: JSON.stringify({ query: clean })
         })
     } catch {
         return null
@@ -216,8 +227,51 @@ export default async function searchThreatIntel(query: string): Promise<TiSearch
     }
 
     try {
-        return await response.json() as TiSearchResponse
+        const result = await response.json() as TiSearchResponse
+        writeCachedResult(key, result)
+        return result
     } catch {
         return null
+    }
+}
+
+function readCachedResult(key: string) {
+    const now = Date.now()
+    const memoryHit = memoryCache.get(key)
+    if (memoryHit && memoryHit.expiresAt > now) {
+        return memoryHit.result
+    }
+    if (memoryHit) memoryCache.delete(key)
+
+    if (typeof window === 'undefined') return null
+
+    try {
+        const raw = window.localStorage.getItem(`${browserCachePrefix}${key}`)
+        if (!raw) return null
+        const parsed = JSON.parse(raw) as { expiresAt?: number; result?: TiSearchResponse }
+        if (!parsed.expiresAt || parsed.expiresAt <= now || !parsed.result?.query) {
+            window.localStorage.removeItem(`${browserCachePrefix}${key}`)
+            return null
+        }
+        return parsed.result
+    } catch {
+        return null
+    }
+}
+
+function writeCachedResult(key: string, result: TiSearchResponse) {
+    if (result.status === 'queued' || result.status === 'searching') {
+        return
+    }
+
+    const record = { expiresAt: Date.now() + cacheTtlMs, result }
+    memoryCache.set(key, record)
+
+    if (typeof window === 'undefined') return
+
+    try {
+        window.localStorage.setItem(`${browserCachePrefix}${key}`, JSON.stringify(record))
+    } catch {
+        // Storage can be unavailable in private or locked-down browser contexts.
     }
 }

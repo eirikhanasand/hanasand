@@ -22,12 +22,12 @@ export default function RouteFrame({ children, serverPath }: { children: ReactNo
             : 'mt-[8.25vh] h-[91.75vh] md:mt-[9.5vh] md:h-[90.5vh]'
 
     return (
-        <div className={`relative z-10 ${frameSizing} w-full overflow-auto`}>
+        <div className={`enterprise-theme relative z-10 ${frameSizing} w-full overflow-auto`}>
             {isAppSurface || isPublicProduct ? null : <BackgroundSketches />}
             <main className={`w-full ${isAppSurface ? 'h-full' : isPublicProduct ? 'min-h-full' : 'min-h-[90.5vh] pt-3 md:pt-0'}`}>
                 {children}
             </main>
-            {isAppSurface || isPublicProduct ? null : <Footer />}
+            {isAppSurface ? null : <Footer />}
         </div>
     )
 }

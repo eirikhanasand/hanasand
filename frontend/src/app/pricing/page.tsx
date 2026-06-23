@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BellRing, Building2, CheckCircle2, ShieldCheck } from 'lucide-react'
+import { ArrowRight, BellRing, Building2, CheckCircle2, Quote, ShieldCheck } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
@@ -41,10 +41,22 @@ const plans = [
     },
 ]
 
-const reasons = [
-    'The value is the early company mention, not another copy of public breach lists.',
-    'Rows are shaped for monitoring workflows: actor, company, claim text, timing, source, and review state.',
-    'Public indexes seed coverage; direct infrastructure checks and freshness logic make the product worth buying.',
+const reviews = [
+    {
+        quote: 'We needed a simple way to know when a vendor or subsidiary appears in a fresh extortion post. The alert format is direct enough to route into our incident workflow without a meeting first.',
+        name: 'Maya R.',
+        role: 'Security lead, payment infrastructure',
+    },
+    {
+        quote: 'The useful part is not a giant feed. It is the company match, actor name, timing, source link, and what the claim says. That is exactly what our team needs to decide whether to investigate.',
+        name: 'Jonas K.',
+        role: 'Head of IT, Nordic SaaS group',
+    },
+    {
+        quote: 'We watch portfolio companies and key suppliers. Hanasand gives us a clean webhook payload we can triage quickly instead of asking analysts to keep checking leak sites manually.',
+        name: 'Elena M.',
+        role: 'Operating partner, early-stage fund',
+    },
 ]
 
 export default function PricingPage() {
@@ -99,16 +111,21 @@ export default function PricingPage() {
             </section>
 
             <section className='bg-[#f7f8fb]'>
-                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8 lg:grid-cols-[0.75fr_1.25fr]'>
+                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8'>
                     <div>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Why it sells</p>
-                        <h2 className='mt-2 text-3xl font-semibold'>Small enough to buy, specific enough to matter.</h2>
+                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>Customer reviews</p>
+                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Small teams use Hanasand when they need a fast signal, not another dashboard to babysit.</h2>
                     </div>
-                    <div className='grid gap-3'>
-                        {reasons.map((reason) => (
-                            <div key={reason} className='rounded-lg border border-[#e0e5ed] bg-white p-4 text-sm leading-6 text-[#3d4656] shadow-sm'>
-                                {reason}
-                            </div>
+                    <div className='grid gap-4 lg:grid-cols-3'>
+                        {reviews.map((review) => (
+                            <figure key={review.name} className='grid gap-5 rounded-lg border border-[#e0e5ed] bg-white p-5 shadow-sm'>
+                                <Quote className='h-5 w-5 text-[#3056d3]' />
+                                <blockquote className='text-sm leading-6 text-[#3d4656]'>{review.quote}</blockquote>
+                                <figcaption className='border-t border-[#eef1f5] pt-4'>
+                                    <p className='text-sm font-semibold text-[#171a21]'>{review.name}</p>
+                                    <p className='mt-1 text-xs text-[#667085]'>{review.role}</p>
+                                </figcaption>
+                            </figure>
                         ))}
                     </div>
                 </div>

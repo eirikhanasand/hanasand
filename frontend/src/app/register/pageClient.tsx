@@ -55,9 +55,11 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
         const submittedUsernameIsReserved = reservedUsernames.includes(id.toLowerCase())
 
         if (!submittedPasswordIsValid) {
+            e.preventDefault()
             return setError('Invalid password. Check the requirements.')
         }
         if (submittedUsernameIsReserved) {
+            e.preventDefault()
             return setError('This username is reserved. Choose another username.')
         }
 
@@ -99,7 +101,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                                 type='text'
                                 name='username'
                                 onChange={(e) => setUsername(e.target.value)}
-                                placeholder='buyer-team'
+                                placeholder='dave'
                                 className={authInputClass}
                                 autoComplete='username'
                                 required
@@ -114,7 +116,7 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
                             <input
                                 type='text'
                                 name='name'
-                                placeholder='QA Buyer'
+                                placeholder='Dave'
                                 className={authInputClass}
                                 autoComplete='name'
                                 required

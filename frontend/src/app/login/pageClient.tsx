@@ -165,7 +165,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     <input
                                         type='text'
                                         name='username'
-                                        placeholder='buyer-team'
+                                        placeholder='dave'
                                         className={authInputClass}
                                         autoComplete='username'
                                         required
@@ -227,7 +227,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     name='username'
                                     value={signupUsername}
                                     onChange={(e) => setSignupUsername(e.target.value)}
-                                    placeholder='buyer-team'
+                                    placeholder='dave'
                                     className={authInputClass}
                                     autoComplete='username'
                                     required
@@ -241,7 +241,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     name='name'
                                     value={signupName}
                                     onChange={(e) => setSignupName(e.target.value)}
-                                    placeholder='QA Buyer'
+                                    placeholder='Dave'
                                     className={authInputClass}
                                     autoComplete='name'
                                     required
@@ -292,7 +292,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                 <input
                                     type='text'
                                     name='resetUserId'
-                                    placeholder='buyer-team'
+                                    placeholder='dave'
                                     className={authInputClass}
                                     autoComplete='username'
                                     required

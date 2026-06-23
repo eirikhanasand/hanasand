@@ -65,6 +65,7 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
         setQuery(clean)
         const cleanKey = clean.toLowerCase()
         activeQueryRef.current = cleanKey
+        window.history.pushState(null, '', `/ti?q=${encodeURIComponent(clean)}`)
         setResult(searchingResult(clean))
         try {
             const next = await searchThreatIntel(clean)

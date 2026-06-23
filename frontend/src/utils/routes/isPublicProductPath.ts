@@ -29,6 +29,10 @@ export default function isPublicProductPath(path: string | null | undefined) {
         || pathname === '/reset-password'
         || pathname === '/account-pending-deletion'
         || pathname === '/reserved-usernames'
+        || pathname === '/terms'
+        || pathname === '/privacy'
+        || pathname === '/cookies'
+        || pathname === '/cookie-settings'
         || pathname === '/g'
         || pathname.startsWith('/g/')
         || pathname === '/article'
