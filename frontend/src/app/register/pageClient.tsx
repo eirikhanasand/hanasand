@@ -2,6 +2,7 @@
 import Notify from '@/components/notify/notify'
 import useClearStateAfter from '@/hooks/useClearStateAfter'
 import { getCookie } from '@/utils/cookies/cookies'
+import postAuthJson from '@/utils/auth/postAuthJson'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -75,15 +76,8 @@ export default function RegisterPageClient({ path, serverInternal }: RegisterPag
 
         setBusy(true)
         try {
-            const response = await fetch('/api/auth/register', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name, id, password }),
-            })
-            const responseText = await response.text()
+            const response = await postAuthJson('/api/auth/register', { name, id, password })
+            const responseText = response.text
             const data = parseSignupResponse(responseText)
 
             if (!response.ok || data.error) {

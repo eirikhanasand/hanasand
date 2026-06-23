@@ -9,6 +9,7 @@ import config from '@/config'
 import { ArrowRight } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import ErrorNotice from '@/components/error/errorNotice'
+import postAuthJson from '@/utils/auth/postAuthJson'
 
 type LoginPageProps = {
     path: string | null
@@ -107,13 +108,8 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
         const password = String(formData.get('password') || '')
         setBusy(true)
         try {
-            const response = await fetch('/api/auth/register', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, id, password }),
-            })
-            const responseText = await response.text()
+            const response = await postAuthJson('/api/auth/register', { name, id, password })
+            const responseText = response.text
             const data = parseSignupResponse(responseText)
             if (!response.ok || data.error) {
                 return setError(data.error || 'Unable to create account.')
