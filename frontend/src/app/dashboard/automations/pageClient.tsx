@@ -301,7 +301,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         <textarea className={`${inputClass} min-h-32 leading-6`} value={draft.prompt} onChange={event => setDraft({ ...draft, prompt: event.target.value })} />
                     </label>
 
-                    <div className='grid gap-3 md:grid-cols-5'>
+                    <div className='grid gap-3 md:grid-cols-2 2xl:grid-cols-5'>
                         <label className='grid gap-1.5'>
                             <span className='text-xs font-medium text-[#596170]'>Cadence</span>
                             <select className={inputClass} value={draft.scheduleKind} onChange={event => setDraft({ ...draft, scheduleKind: event.target.value as AutomationPayload['scheduleKind'] })}>
