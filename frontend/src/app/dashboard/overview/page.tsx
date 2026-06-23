@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { Activity, BellRing, Braces, Building2, Radar, Search, ShieldAlert, Webhook } from 'lucide-react'
 import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
+import { toPublicServiceStatus } from '@/utils/status/publicStatus'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import parseCookie from '@/utils/cookies/parseCookie'
 
@@ -25,6 +26,7 @@ export default async function Page() {
         getMonitoringOverview(),
         getStatus(),
     ])
+    const publicStatus = toPublicServiceStatus(status)
 
     return (
         <DashboardPage>
@@ -65,7 +67,7 @@ export default async function Page() {
                 <DashboardPanel className='p-5'>
                     <h2 className='text-lg font-semibold text-[#171a21]'>Service health</h2>
                     <div className='mt-4 space-y-3'>
-                        {status.checks.slice(0, 6).map((check) => (
+                        {publicStatus.checks.slice(0, 6).map((check) => (
                             <div key={`${check.service}-${check.check_name}`} className='flex items-center justify-between rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 text-sm'>
                                 <div>
                                     <div className='font-medium text-[#171a21]'>{check.check_name}</div>
@@ -79,6 +81,11 @@ export default async function Page() {
                                 </div>
                             </div>
                         ))}
+                        {!publicStatus.checks.length && (
+                            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-3 text-sm text-[#596170]'>
+                                Public monitor checks are preparing. The console remains available.
+                            </div>
+                        )}
                     </div>
                 </DashboardPanel>
             </div>
