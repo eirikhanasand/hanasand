@@ -8,6 +8,7 @@ type Context = {
 
 const hopByHopHeaders = new Set([
     'connection',
+    'content-encoding',
     'content-length',
     'host',
     'keep-alive',
