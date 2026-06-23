@@ -16,7 +16,7 @@ export async function proxy(req: NextRequest) {
     const impersonatingName = req.cookies.get('impersonating_name')?.value || ''
     const requiresAuth = !pathIsAllowedWhileUnauthorized(path)
 
-    if (path.startsWith('/dev') && requestHostname(req).endsWith('hanasand.com')) {
+    if ((path === '/dev' || path.startsWith('/dev/')) && requestHostname(req).endsWith('hanasand.com')) {
         return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
