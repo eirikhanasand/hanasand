@@ -54,7 +54,7 @@ export default function TrafficDashboard({
     const [form, setForm] = useState<Partial<BlocklistEntry>>({})
     const { condition: message, setCondition: setMessage } = useClearStateAfter()
     const { data: domains } = useWS<DomainTPS[]>({ initialState: Array.isArray(topDomains) ? topDomains : [], path: '/tps/:id', replace: true })
-    const commonListStyle = 'flex max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm backdrop-blur-md'
+    const commonListStyle = 'flex max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm shadow-sm'
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         // @ts-expect-error
@@ -117,7 +117,7 @@ export default function TrafficDashboard({
                 )}
             </div>
 
-            <SectionTitle title='Top endpoints' />
+            <SectionTitle title='Most requested routes' />
             <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
                 {metrics.map((m, i) => (
                     <MetricCard key={i} title={m.value} rows={[
@@ -132,16 +132,16 @@ export default function TrafficDashboard({
             <SectionTitle title='Top IPs' />
             <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
                 {IPs.map((ipMetric, i) => (
-                    <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm backdrop-blur-md'>
-                        <h2 className='break-all text-sm font-medium text-bright/82'>{ipMetric.ip}</h2>
-                        <span className='text-xs leading-5 text-bright/45'>Most common user agent: {ipMetric.most_common_user_agent ?? 'N/A'}</span>
+                    <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm shadow-sm'>
+                        <h2 className='break-all text-sm font-semibold text-[#171a21]'>{ipMetric.ip}</h2>
+                        <span className='text-xs leading-5 text-[#596170]'>Most common user agent: {ipMetric.most_common_user_agent ?? 'N/A'}</span>
                         <div className='mt-2'>
-                            <h3 className='text-xs font-medium text-bright/58'>Top paths</h3>
-                            <ul className='mt-1 grid gap-1 text-xs text-bright/48'>
+                            <h3 className='text-xs font-semibold text-[#667085]'>Requested paths</h3>
+                            <ul className='mt-1 grid gap-1 text-xs text-[#596170]'>
                                 {(Array.isArray(ipMetric.top_paths) ? ipMetric.top_paths : []).map((path, idx) => (
                                     <li key={idx} className='flex min-w-0 justify-between gap-2'>
                                         <span className='min-w-0 truncate'>{path.path}</span>
-                                        <span className='shrink-0 text-bright/36'>{path.hits}</span>
+                                        <span className='shrink-0 text-[#98a2b3]'>{path.hits}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -154,16 +154,16 @@ export default function TrafficDashboard({
             <SectionTitle title='Top user agents' />
             <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
                 {UAs.map((ua, i) => (
-                    <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm backdrop-blur-md'>
-                        <h2 className='break-all text-xs font-medium leading-5 text-bright/78'>{ua.user_agent}</h2>
-                        <span className='text-xs text-bright/45'>Most common IP: {ua.most_common_ip ?? 'N/A'}</span>
+                    <div key={i} className='flex max-h-[62vh] flex-col gap-2 overflow-y-auto rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm shadow-sm'>
+                        <h2 className='break-all text-xs font-semibold leading-5 text-[#171a21]'>{ua.user_agent}</h2>
+                        <span className='text-xs text-[#596170]'>Most common IP: {ua.most_common_ip ?? 'N/A'}</span>
                         <div className='mt-2'>
-                            <h3 className='text-xs font-medium text-bright/58'>Top paths</h3>
-                            <ul className='mt-1 grid gap-1 text-xs text-bright/48'>
+                            <h3 className='text-xs font-semibold text-[#667085]'>Requested paths</h3>
+                            <ul className='mt-1 grid gap-1 text-xs text-[#596170]'>
                                 {(Array.isArray(ua.top_paths) ? ua.top_paths : []).map((path, idx) => (
                                     <li key={idx} className='flex min-w-0 justify-between gap-2'>
                                         <span className='min-w-0 truncate'>{path.path}</span>
-                                        <span className='shrink-0 text-bright/36'>{path.hits}</span>
+                                        <span className='shrink-0 text-[#98a2b3]'>{path.hits}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -178,9 +178,9 @@ export default function TrafficDashboard({
                 {/* Blocklist */}
                 <div className={commonListStyle}>
                     <div className='flex items-center justify-between gap-3'>
-                        <h1 className='text-sm font-medium text-bright/88'>Blocklist</h1>
+                        <h1 className='text-sm font-semibold text-[#171a21]'>Access controls</h1>
                         <button
-                            className='flex h-8 cursor-pointer items-center gap-1 rounded-lg border border-emerald-300/15 bg-emerald-300/10 px-2.5 text-xs font-medium text-emerald-100/78 transition hover:bg-emerald-300/15'
+                            className='flex h-8 cursor-pointer items-center gap-1 rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2.5 text-xs font-semibold text-[#3056d3] transition hover:bg-[#e4ebff]'
                             onClick={() => setShowBlockModal(true)}
                         >
                             <Plus className='w-4 h-4' /> Add
@@ -189,7 +189,7 @@ export default function TrafficDashboard({
                     <div className='h-full overflow-x-auto'>
                         <table className='w-full min-w-[28rem] text-left text-sm'>
                             <thead>
-                                <tr className='border-b border-white/10 text-xs font-medium text-bright/42'>
+                                <tr className='border-b border-[#dfe5ee] text-xs font-semibold text-[#667085]'>
                                     <th>Metric</th>
                                     <th>Value</th>
                                     <th />
@@ -198,14 +198,14 @@ export default function TrafficDashboard({
                             </thead>
                             <tbody>
                                 {blocklist.map((entry, id) => (
-                                    <tr key={id} className='group border-b border-white/8 text-bright/64'>
+                                    <tr key={id} className='group border-b border-[#eef1f6] text-[#596170]'>
                                         <td className='py-2'>{entry.type}</td>
                                         <td className='break-all py-2'>{entry.value}</td>
                                         {<td className='flex gap-2 w-full justify-end'>
-                                            <button onClick={() => editBlock(entry)} className='hidden cursor-pointer text-bright/42 hover:text-yellow-300 group-hover:block'>
+                                            <button onClick={() => editBlock(entry)} className='hidden cursor-pointer text-[#667085] hover:text-[#3056d3] group-hover:block'>
                                                 <Pencil className='w-4 h-4' />
                                             </button>
-                                            <button onClick={() => handleDeleteBlock(entry.id)} className='hidden cursor-pointer text-bright/42 hover:text-red-300 group-hover:block'>
+                                            <button onClick={() => handleDeleteBlock(entry.id)} className='hidden cursor-pointer text-[#667085] hover:text-[#b42318] group-hover:block'>
                                                 <X className='w-5 h-5' />
                                             </button>
                                             <div className='block group-hover:hidden w-5' />
@@ -213,7 +213,7 @@ export default function TrafficDashboard({
                                         </td>}
                                     </tr>
                                 ))}
-                                {!blocklist.length && <tr><td colSpan={4} className='py-4 text-sm text-bright/42'>No blocklist entries yet.</td></tr>}
+                                {!blocklist.length && <tr><td colSpan={4} className='py-4 text-sm text-[#596170]'>No access controls yet.</td></tr>}
                             </tbody>
                         </table>
                     </div>
@@ -221,11 +221,11 @@ export default function TrafficDashboard({
 
                 {/* Recent Activity */}
                 <div className={commonListStyle}>
-                    <h1 className='text-sm font-medium text-bright/88'>Recent activity</h1>
+                    <h1 className='text-sm font-semibold text-[#171a21]'>Recent requests</h1>
                     <div className='overflow-x-auto'>
                         <table className='w-full min-w-[42rem] overflow-hidden text-left text-sm'>
                             <thead className='w-full'>
-                                <tr className='border-b border-white/10 text-xs font-medium text-bright/42'>
+                                <tr className='border-b border-[#dfe5ee] text-xs font-semibold text-[#667085]'>
                                     <th>Metric</th>
                                     <th>Value</th>
                                     <th>Path</th>
@@ -235,7 +235,7 @@ export default function TrafficDashboard({
                             </thead>
                             <tbody>
                                 {logs.map((log, i) => (
-                                    <tr key={i} className='border-b border-white/8 text-bright/62'>
+                                    <tr key={i} className='border-b border-[#eef1f6] text-[#596170]'>
                                         <td className='py-2'>{log.metric}</td>
                                         <td className='break-all py-2'>{log.value}</td>
                                         <td className='break-all py-2'>{log.path}</td>
@@ -243,7 +243,7 @@ export default function TrafficDashboard({
                                         <td className='min-w-fit py-2'>{prettyDate(log.last_seen)}</td>
                                     </tr>
                                 ))}
-                                {!logs.length && <tr><td colSpan={5} className='py-4 text-sm text-bright/42'>No recent activity yet.</td></tr>}
+                                {!logs.length && <tr><td colSpan={5} className='py-4 text-sm text-[#596170]'>No recent requests yet.</td></tr>}
                             </tbody>
                         </table>
                     </div>
@@ -254,42 +254,42 @@ export default function TrafficDashboard({
             {showBlockModal && (
                 <div
                     onClick={() => setShowBlockModal(false)}
-                    className='fixed inset-0 z-30 grid place-items-center bg-black/60 backdrop-blur-sm'
+                    className='fixed inset-0 z-30 grid place-items-center bg-[#171a21]/35 backdrop-blur-sm'
                 >
                     <div
                         onClick={e => e.stopPropagation()}
-                        className='w-96 rounded-lg border border-white/12 bg-[#111411] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.34)]'
+                        className='w-96 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-[0_24px_80px_rgba(26,35,55,0.18)]'
                     >
                         <div className='mb-4 flex items-center justify-between gap-3'>
-                            <h2 className='text-base font-medium text-bright/90'>{editingBlock ? 'Edit blocklist' : 'Add blocklist'}</h2>
-                            <button onClick={() => setShowBlockModal(false)} className='grid h-7 w-7 place-items-center rounded-lg text-bright/52 hover:bg-white/10'><X className='h-4 w-4' /></button>
+                            <h2 className='text-base font-semibold text-[#171a21]'>{editingBlock ? 'Edit access control' : 'Add access control'}</h2>
+                            <button onClick={() => setShowBlockModal(false)} className='grid h-7 w-7 place-items-center rounded-lg text-[#667085] hover:bg-[#f2f4f7]'><X className='h-4 w-4' /></button>
                         </div>
                         <form className='flex flex-col gap-3' onSubmit={handleBlockSubmit}>
-                            <label className='flex flex-col gap-1.5 text-sm text-bright/60'>
+                            <label className='flex flex-col gap-1.5 text-sm font-medium text-[#596170]'>
                                 Metric
-                                <select name='metric' value={form.type || ''} onChange={handleChange} required className='rounded-lg border border-white/10 bg-black/18 p-2 text-bright outline-none focus:border-[#f07d33]/55'>
+                                <select name='metric' value={form.type || ''} onChange={handleChange} required className='rounded-lg border border-[#dfe5ee] bg-white p-2 text-[#171a21] outline-none focus:border-[#3056d3]'>
                                     <option value=''>Select metric</option>
                                     <option value='ip'>IP</option>
                                     <option value='user_agent'>User Agent</option>
                                 </select>
                             </label>
 
-                            <label className='flex flex-col gap-1.5 text-sm text-bright/60'>
+                            <label className='flex flex-col gap-1.5 text-sm font-medium text-[#596170]'>
                                 Value
-                                <input name='value' value={form.value || ''} onChange={handleChange} required className='rounded-lg border border-white/10 bg-black/18 p-2 text-bright outline-none focus:border-[#f07d33]/55' />
+                                <input name='value' value={form.value || ''} onChange={handleChange} required className='rounded-lg border border-[#dfe5ee] bg-white p-2 text-[#171a21] outline-none focus:border-[#3056d3]' />
                             </label>
 
-                            <label className='flex items-center gap-2 text-sm text-bright/62'>
+                            <label className='flex items-center gap-2 text-sm text-[#596170]'>
                                 <input type='checkbox' name='is_vpn' checked={form.is_vpn || false} onChange={handleChange} /> VPN
                             </label>
-                            <label className='flex items-center gap-2 text-sm text-bright/62'>
+                            <label className='flex items-center gap-2 text-sm text-[#596170]'>
                                 <input type='checkbox' name='is_proxy' checked={form.is_proxy || false} onChange={handleChange} /> Proxy
                             </label>
-                            <label className='flex items-center gap-2 text-sm text-bright/62'>
+                            <label className='flex items-center gap-2 text-sm text-[#596170]'>
                                 <input type='checkbox' name='is_tor' checked={form.is_tor || false} onChange={handleChange} /> Tor
                             </label>
 
-                            <button type='submit' className='mt-1 h-9 rounded-lg bg-bright/88 px-4 text-sm font-medium text-background/90 transition hover:bg-bright'>
+                            <button type='submit' className='mt-1 h-9 rounded-lg bg-[#22252d] px-4 text-sm font-semibold text-white transition hover:bg-[#111318]'>
                                 {editingBlock ? 'Update' : 'Create'}
                             </button>
                         </form>
@@ -301,15 +301,15 @@ export default function TrafficDashboard({
 }
 
 function SectionTitle({ title }: { title: string }) {
-    return <h1 className='text-base font-medium text-bright/88'>{title}</h1>
+    return <h1 className='text-base font-semibold text-[#171a21]'>{title}</h1>
 }
 
 function MetricCard({ title, rows }: { title: string, rows: Array<[string, number]> }) {
     return (
-        <div className='flex max-h-[62vh] flex-col gap-1 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm backdrop-blur-md'>
-            <h2 className='break-all text-sm font-medium text-bright/82'>{title}</h2>
+        <div className='flex max-h-[62vh] flex-col gap-1 overflow-y-auto rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm shadow-sm'>
+            <h2 className='break-all text-sm font-semibold text-[#171a21]'>{title}</h2>
             {rows.map(([label, value]) => (
-                <span key={label} className='text-xs text-bright/45'>{label}: {value}</span>
+                <span key={label} className='text-xs text-[#596170]'>{label}: {value}</span>
             ))}
         </div>
     )
@@ -317,7 +317,7 @@ function MetricCard({ title, rows }: { title: string, rows: Array<[string, numbe
 
 function EmptyState({ text }: { text: string }) {
     return (
-        <div className='rounded-lg border border-dashed border-white/10 bg-white/[0.025] p-4 text-sm text-bright/42'>
+        <div className='rounded-lg border border-dashed border-[#d0d5dd] bg-white p-4 text-sm text-[#596170]'>
             {text}
         </div>
     )

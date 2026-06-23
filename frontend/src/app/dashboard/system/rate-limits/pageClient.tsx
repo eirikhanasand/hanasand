@@ -35,8 +35,8 @@ const fallbackTierPresets: ApiKeyTierDefinition[] = [
     },
     {
         id: 'internal',
-        label: 'Internal',
-        description: 'Trusted internal automations and operations.',
+        label: 'Operations',
+        description: 'Trusted service automations and operations.',
         defaultLimits: { perSecond: 60, perMinute: 3_000, perHour: 120_000, perDay: 1_000_000 },
     },
     {
