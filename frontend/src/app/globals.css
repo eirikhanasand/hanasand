@@ -51,28 +51,28 @@
 }
 
 .light {
-  --background: #e2dac9;
-  --foreground: #231d13;
-  --color-background: #e2dac9;
-  --color-dark: #b9aa8d;
-  --color-dark-reverse: #efe6d3;
-  --color-normal: #d7cbb4;
-  --color-light: #c7b895;
-  --color-extralight: #a49370;
-  --color-superlight: #74664c;
-  --color-almostbright: #514735;
-  --color-bright: #241e14;
-  --page-wash-top: #e9dfca;
-  --page-wash-bottom: #cfc3aa;
-  --grid-line: rgba(76, 64, 42, 0.060);
-  --ambient-primary: rgba(64, 105, 88, 0.070);
-  --ambient-secondary: rgba(164, 86, 39, 0.056);
-  --ambient-neutral: rgba(61, 78, 91, 0.034);
-  --panel-border: rgba(60, 50, 32, 0.18);
-  --panel-surface: rgba(224, 215, 195, 0.88);
-  --card-border: rgba(60, 50, 32, 0.14);
-  --card-surface: rgba(239, 230, 211, 0.58);
-  --soft-shadow: rgba(75, 58, 32, 0.18);
+  --background: #f7f8fb;
+  --foreground: #171a21;
+  --color-background: #f7f8fb;
+  --color-dark: #ffffff;
+  --color-dark-reverse: #eef2f7;
+  --color-normal: #f2f5f9;
+  --color-light: #e0e5ed;
+  --color-extralight: #c8d1df;
+  --color-superlight: #667085;
+  --color-almostbright: #344054;
+  --color-bright: #171a21;
+  --page-wash-top: #ffffff;
+  --page-wash-bottom: #eef2f7;
+  --grid-line: rgba(48, 86, 211, 0.040);
+  --ambient-primary: rgba(48, 86, 211, 0.044);
+  --ambient-secondary: rgba(20, 163, 90, 0.030);
+  --ambient-neutral: rgba(22, 26, 33, 0.026);
+  --panel-border: rgba(24, 36, 58, 0.12);
+  --panel-surface: rgba(255, 255, 255, 0.90);
+  --card-border: rgba(24, 36, 58, 0.10);
+  --card-surface: rgba(255, 255, 255, 0.72);
+  --soft-shadow: rgba(26, 35, 55, 0.12);
 }
 
 body {
@@ -87,43 +87,43 @@ body {
 
 .light body {
   background:
-    radial-gradient(ellipse 44rem 24rem at 80% -7%, rgba(93, 122, 118, 0.12) 0%, transparent 72%),
-    radial-gradient(ellipse 42rem 30rem at 8% 88%, rgba(151, 82, 38, 0.11) 0%, transparent 76%),
+    radial-gradient(ellipse 44rem 24rem at 80% -7%, rgba(48, 86, 211, 0.08) 0%, transparent 72%),
+    radial-gradient(ellipse 42rem 30rem at 8% 88%, rgba(20, 163, 90, 0.06) 0%, transparent 76%),
     linear-gradient(180deg, var(--page-wash-top), var(--background) 50%, var(--page-wash-bottom));
 }
 
 .light ::selection {
-  background: rgba(132, 85, 40, 0.28);
+  background: rgba(48, 86, 211, 0.18);
 }
 
 .light .text-glow {
-  text-shadow: 0 1px 0 rgba(255, 248, 230, 0.55), 0 12px 38px rgba(73, 54, 26, 0.12);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 38px rgba(26, 35, 55, 0.10);
 }
 
 .light [class*="border-white/"],
 .light [class*="border-bright/"] {
-  border-color: rgba(60, 50, 32, 0.16) !important;
+  border-color: rgba(24, 36, 58, 0.14) !important;
 }
 
 .light [class*="bg-white/"] {
-  background-color: rgba(111, 91, 55, 0.08) !important;
+  background-color: rgba(255, 255, 255, 0.72) !important;
 }
 
 .light [class*="bg-black/"] {
-  background-color: rgba(86, 68, 38, 0.10) !important;
+  background-color: rgba(24, 36, 58, 0.06) !important;
 }
 
 .light [class*="text-white/"] {
-  color: rgba(35, 29, 19, 0.74) !important;
+  color: rgba(23, 26, 33, 0.74) !important;
 }
 
 .light .glass-panel {
   background:
-    linear-gradient(180deg, rgba(239, 230, 211, 0.90), rgba(211, 199, 174, 0.82));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(247, 248, 251, 0.86));
 }
 
 .light .glass-card {
-  box-shadow: inset 0 1px 0 rgba(255, 248, 230, 0.52);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
 }
 
 .enterprise-console {
@@ -377,9 +377,9 @@ button:not(:disabled),
 
 .dashboard-sidebar-sticky {
   position: sticky;
-  top: 0.5rem;
+  top: 0;
   align-self: start;
-  max-height: calc(92.5vh - 1rem);
+  max-height: min(100%, calc(100dvh - 5rem));
   overscroll-behavior: contain;
 }
 

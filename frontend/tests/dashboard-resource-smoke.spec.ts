@@ -179,13 +179,20 @@ test.describe('dashboard resource routes', () => {
                 const before = await sidebarLayoutMetrics(page)
                 await page.mouse.wheel(0, 1200)
                 await page.waitForTimeout(100)
-                const after = await sidebarLayoutMetrics(page)
+                const afterWheel = await sidebarLayoutMetrics(page)
+                await scrollConsoleContentToBottom(page)
+                await page.waitForTimeout(100)
+                const afterBottom = await sidebarLayoutMetrics(page)
 
                 expect(before.asideBottom).toBeLessThanOrEqual(before.viewportHeight + 1)
-                expect(after.asideTop).toBeGreaterThanOrEqual(-1)
-                expect(after.asideBottom).toBeLessThanOrEqual(after.viewportHeight + 1)
-                expect(after.documentScrollHeight).toBeLessThanOrEqual(after.viewportHeight + 20)
-                expect(after.horizontalOverflow).toBeLessThanOrEqual(1)
+                expect(afterWheel.asideTop).toBeGreaterThanOrEqual(-1)
+                expect(afterWheel.asideBottom).toBeLessThanOrEqual(afterWheel.viewportHeight + 1)
+                expect(afterWheel.documentScrollHeight).toBeLessThanOrEqual(afterWheel.viewportHeight + 20)
+                expect(afterWheel.horizontalOverflow).toBeLessThanOrEqual(1)
+                expect(afterBottom.asideTop).toBeGreaterThanOrEqual(-1)
+                expect(afterBottom.asideBottom).toBeLessThanOrEqual(afterBottom.viewportHeight + 1)
+                expect(afterBottom.documentScrollHeight).toBeLessThanOrEqual(afterBottom.viewportHeight + 20)
+                expect(afterBottom.horizontalOverflow).toBeLessThanOrEqual(1)
             }
         } finally {
             await context.close()
@@ -523,6 +530,24 @@ async function sidebarLayoutMetrics(page: Page) {
             documentScrollHeight: document.documentElement.scrollHeight,
             viewportHeight: window.innerHeight,
             horizontalOverflow: document.documentElement.scrollWidth - window.innerWidth,
+        }
+    })
+}
+
+async function scrollConsoleContentToBottom(page: Page) {
+    await page.evaluate(() => {
+        const aside = document.querySelector('aside')
+        const candidates = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+            .filter((node) => node !== aside && !aside?.contains(node))
+            .filter((node) => {
+                const style = window.getComputedStyle(node)
+                return /(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 10
+            })
+            .sort((a, b) => b.clientHeight - a.clientHeight)
+
+        const scroller = candidates[0] || document.scrollingElement
+        if (scroller) {
+            scroller.scrollTop = scroller.scrollHeight
         }
     })
 }
