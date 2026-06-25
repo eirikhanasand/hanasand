@@ -2,6 +2,7 @@ import TiPageClient from './pageClient'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { buildRouteMetadata } from '../seo'
+import ConsoleRouteShell from '@/components/dashboard/consoleRouteShell'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Threat Intelligence Search',
@@ -23,8 +24,10 @@ export default async function Page({ searchParams }: TiPageProps) {
     }
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] w-full bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
-            <TiPageClient initialQuery='' initialResult={null} />
-        </main>
+        <ConsoleRouteShell>
+            <main className='min-h-full w-full bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
+                <TiPageClient initialQuery='' initialResult={null} />
+            </main>
+        </ConsoleRouteShell>
     )
 }

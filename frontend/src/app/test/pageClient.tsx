@@ -11,11 +11,15 @@ import { Copy } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
+const freeTryLimit = 5
+const freeTryStorageKey = 'hanasand:load-testing-free-tries'
+
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const router = useRouter()
     const [path, setPath] = useState('')
     const [recentScans, setRecentScans] = useState<Test[]>([])
     const [myScans, setMyScans] = useState<Test[]>([])
+    const [freeTriesUsed, setFreeTriesUsed] = useState(0)
     const isValidLink =
         (path.includes('http://') && path.includes('.') && path.length >= 10)
         || (path.includes('https://') && path.includes('.') && path.length >= 11)
@@ -50,10 +54,17 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         }
     }, [])
 
+    useEffect(() => {
+        setFreeTriesUsed(readFreeTriesUsed())
+    }, [])
+
     async function handleSubmit(e: FormEvent<HTMLElement>) {
         e.preventDefault()
         if (!isValidLink) {
             return
+        }
+        if (freeTriesUsed >= freeTryLimit) {
+            return setError('The free load-testing allowance has been used. Choose a plan to keep running checks.')
         }
 
         const result = await postTest({ url: path })
@@ -62,6 +73,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         }
 
         if (result.id) {
+            setFreeTriesUsed(incrementFreeTriesUsed())
             router.push(`/test/${result.id}`)
         }
     }
@@ -81,6 +93,9 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                 <div>
                     <h2 className='text-lg font-semibold text-[#171a21]'>Service check launcher</h2>
                     <p className='mt-1.5 max-w-2xl text-sm leading-6 text-[#596170]'>Start a permitted endpoint check, share the result link, then revisit the report when it finishes.</p>
+                    <p className='mt-2 inline-flex w-fit rounded-full bg-[#eef3ff] px-2.5 py-1 text-xs font-semibold text-[#3056d3]'>
+                        {Math.max(0, freeTryLimit - freeTriesUsed)} free check{Math.max(0, freeTryLimit - freeTriesUsed) === 1 ? '' : 's'} remaining
+                    </p>
                 </div>
                 <form onSubmit={handleSubmit} className='grid gap-4'>
                     <ErrorNotice compact message={error as string | null} />
@@ -94,11 +109,20 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                     <div className='flex flex-wrap gap-3'>
                         <button
                             type='submit'
-                            disabled={!isValidLink}
+                            disabled={!isValidLink || freeTriesUsed >= freeTryLimit}
                             className='h-10 rounded-lg bg-[#171a21] px-3.5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
                         >
                             Start check
                         </button>
+                        {freeTriesUsed >= freeTryLimit ? (
+                            <button
+                                type='button'
+                                onClick={() => router.push('/dashboard/subscription')}
+                                className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3.5 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'
+                            >
+                                Choose a plan
+                            </button>
+                        ) : null}
                     </div>
                 </form>
             </section>
@@ -106,4 +130,22 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
             <RecentScans title='Global Recent Scans' empty='No scans recorded yet.' scans={recentScans} className='h-full' />
         </div>
     )
+}
+
+function readFreeTriesUsed() {
+    try {
+        return Math.max(0, Math.min(freeTryLimit, Number(window.localStorage.getItem(freeTryStorageKey) || '0') || 0))
+    } catch {
+        return 0
+    }
+}
+
+function incrementFreeTriesUsed() {
+    const next = Math.min(freeTryLimit, readFreeTriesUsed() + 1)
+    try {
+        window.localStorage.setItem(freeTryStorageKey, String(next))
+    } catch {
+        // The server check still runs; storage only gates the browser trial experience.
+    }
+    return next
 }

@@ -1,26 +1,17 @@
 import { ReactNode } from 'react'
-import type { Metadata } from 'next'
-import { cookies, headers } from 'next/headers'
-import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import parseCookie from '@/utils/cookies/parseCookie'
-import DashboardSidebar from '@/components/dashboard/dashboardSidebar'
-import ImpersonationBanner from '@/components/impersonation/impersonationBanner'
+import DashboardSidebar from './dashboardSidebar'
 
-export const metadata: Metadata = {
-    title: {
-        default: 'Monitoring Console | Hanasand',
-        template: '%s | Hanasand',
-    },
-    description: 'Customer console for company exposure monitoring, threat search, webhook alerts, and API access.',
-}
-
-export default async function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function ConsoleRouteShell({ children }: { children: ReactNode }) {
     const cookieStore = await cookies()
-    const headerStore = await headers()
     const id = cookieStore.get('id')?.value
     const token = cookieStore.get('access_token')?.value
-    const impersonatingId = cookieStore.get('impersonating_id')?.value || headerStore.get('x-impersonating-id') || ''
-    const impersonatingName = cookieStore.get('impersonating_name')?.value || headerStore.get('x-impersonating-name') || ''
+
+    if (!id || !token) {
+        return children
+    }
+
     const rolesCookie = cookieStore.get('roles')?.value
     const roles = parseCookie<Array<Role | string>>(rolesCookie, [])
     const roleIds = roles.map((role) => typeof role === 'string' ? role : role.id || '')
@@ -28,10 +19,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     const isAdmin = hasRole('administrator') || hasRole('admin')
     const canManageSystem = isAdmin || hasRole('system_admin')
     const canManageContent = isAdmin || hasRole('content_admin')
-
-    if (!id || !token) {
-        return redirect('/logout?path=/login%3Fpath%3D/dashboard%26expired=true')
-    }
 
     return (
         <div className='h-full min-h-0 overflow-hidden bg-[#f7f8fb] px-2 pb-2 text-[#171a21]'>
@@ -43,7 +30,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                     canManageContent={canManageContent}
                 />
                 <div className='min-h-0 min-w-0 overflow-auto overscroll-contain'>
-                    {impersonatingId && <ImpersonationBanner id={impersonatingId} name={impersonatingName} />}
                     {children}
                 </div>
             </div>

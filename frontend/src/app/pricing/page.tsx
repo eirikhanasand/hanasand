@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BellRing, Building2, CheckCircle2, Quote, ShieldCheck } from 'lucide-react'
+import { ArrowRight, BellRing, Building2, CheckCircle2, Quote, ShieldCheck, Zap } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
@@ -62,6 +62,12 @@ const reviews = [
     },
 ]
 
+const loadTestingPlans = [
+    { name: 'Free checks', price: '$0', detail: '5 permitted endpoint checks for evaluation.', href: '/test' },
+    { name: 'Starter checks', price: '$19/mo', detail: '50 checks per month for small websites and APIs.', href: '/contact?plan=load-starter' },
+    { name: 'Team checks', price: '$79/mo', detail: '500 checks per month with result history and launch workflows.', href: '/contact?plan=load-team' },
+]
+
 export default function PricingPage() {
     return (
         <main className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] text-[#171a21]'>
@@ -109,6 +115,33 @@ export default function PricingPage() {
                                 </article>
                             )
                         })}
+                    </div>
+                </div>
+            </section>
+
+            <section className='border-b border-[#e3e7ee] bg-white'>
+                <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8'>
+                    <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
+                        <div>
+                            <p className='text-sm font-semibold uppercase text-[#3056d3]'>Load testing</p>
+                            <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Endpoint checks with five free tries before a plan is needed.</h2>
+                        </div>
+                        <Link href='/test' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
+                            Start free checks
+                            <Zap className='h-4 w-4 text-[#3056d3]' />
+                        </Link>
+                    </div>
+                    <div className='grid gap-4 md:grid-cols-3'>
+                        {loadTestingPlans.map((plan) => (
+                            <article key={plan.name} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-5 shadow-sm'>
+                                <h3 className='text-lg font-semibold text-[#171a21]'>{plan.name}</h3>
+                                <div className='mt-3 text-3xl font-semibold text-[#171a21]'>{plan.price}</div>
+                                <p className='mt-2 text-sm leading-6 text-[#596170]'>{plan.detail}</p>
+                                <Link href={plan.href} className='mt-5 inline-flex h-10 items-center rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                                    Select
+                                </Link>
+                            </article>
+                        ))}
                     </div>
                 </div>
             </section>

@@ -7,9 +7,9 @@ export default function Page() {
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Delivery'
-                title='Shared reports'
-                description='Review monitoring report links, customer delivery pages, and shared exposure review work.'
+                eyebrow='Code sharing'
+                title='Code shares and projects'
+                description='Manage paste-style code files, shared snippets, and full project workspaces.'
             />
             <div className='max-w-3xl'>
                 <Shares />

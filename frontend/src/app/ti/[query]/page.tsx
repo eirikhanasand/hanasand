@@ -3,6 +3,7 @@ import TiPageClient from '../pageClient'
 import { sanitizeTiResultForPublicPage } from '../publicResult'
 import type { Metadata } from 'next'
 import { buildRouteMetadata, humanizeSlug } from '../../seo'
+import ConsoleRouteShell from '@/components/dashboard/consoleRouteShell'
 
 type TiQueryPageProps = {
     params: Promise<{ query: string }>
@@ -27,8 +28,10 @@ export default async function TiQueryPage({ params }: TiQueryPageProps) {
     const initialResult = query ? sanitizeTiResultForPublicPage(await searchThreatIntel(query)) : null
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] w-full bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
-            <TiPageClient initialQuery={query} initialResult={initialResult} />
-        </main>
+        <ConsoleRouteShell>
+            <main className='min-h-full w-full bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
+                <TiPageClient initialQuery={query} initialResult={initialResult} />
+            </main>
+        </ConsoleRouteShell>
     )
 }

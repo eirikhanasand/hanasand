@@ -21,14 +21,14 @@ export default async function Shares() {
         <DashboardPanel className='grid min-h-42 content-start gap-3 p-4'>
             <div className='flex items-start justify-between gap-3'>
                 <div>
-                    <h2 className='text-base font-semibold text-[#171a21]'>Shared reports</h2>
+                    <h2 className='text-base font-semibold text-[#171a21]'>Code shares</h2>
                     <p className='mt-1 text-sm text-[#596170]'>
-                        {typeof shares === 'string' ? 'Unavailable' : `${shares.length} report link${shares.length === 1 ? '' : 's'}`}
+                        {typeof shares === 'string' ? 'Unavailable' : `${shares.length} code share${shares.length === 1 ? '' : 's'}`}
                     </p>
                 </div>
                 <Link prefetch={false} href='/s' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#364152] transition hover:bg-[#f2f5f9]'>
                     <Plus className='h-4 w-4' />
-                    <span>Create report</span>
+                    <span>Create share</span>
                 </Link>
             </div>
             <div className='grid gap-1'>
@@ -36,7 +36,7 @@ export default async function Shares() {
                     ? <ErrorNotice compact message={shares} />
                     : (shares as Share[]).length
                         ? (shares as Share[]).map((share) => <DashboardShare key={share.id} share={share} />)
-                        : <p className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#596170]'>No shared reports yet. Create one when a monitoring result needs to be reviewed outside the console.</p>}
+                        : <p className='rounded-lg border border-dashed border-[#d8dee9] p-4 text-sm text-[#596170]'>No code shares yet. Create a file, snippet, or project workspace when you need a shareable code surface.</p>}
             </div>
         </DashboardPanel>
     )

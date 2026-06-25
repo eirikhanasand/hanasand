@@ -7,14 +7,15 @@ import BackgroundSketches from '@/components/background/backgroundSketches'
 import isSharePath from '@/utils/routes/isSharePath'
 import isPublicProductPath from '@/utils/routes/isPublicProductPath'
 
-export default function RouteFrame({ children, serverPath }: { children: ReactNode, serverPath: string }) {
+export default function RouteFrame({ children, serverPath, token }: { children: ReactNode, serverPath: string, token: boolean }) {
     const pathname = usePathname() || serverPath
     const isShare = isSharePath(pathname)
     const isDashboard = pathname.startsWith('/dashboard')
     const isProfile = pathname.startsWith('/profile')
     const isAiWorkbench = pathname.startsWith('/ai') && pathname !== '/ai/window'
     const isPublicProduct = isPublicProductPath(pathname)
-    const isAppSurface = !isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile)
+    const isLoggedInTi = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
+    const isAppSurface = isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile))
 
     const frameSizing = isAppSurface
         ? 'mt-[7.5vh] h-[92.5vh]'

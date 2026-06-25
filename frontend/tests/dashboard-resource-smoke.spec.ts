@@ -12,20 +12,26 @@ const hasAdminLoginCredentials = Boolean(process.env.PLAYWRIGHT_ADMIN_ID && proc
 const dashboardRoutes = [
     { path: '/dashboard', heading: /Good|You're|It’s/ },
     { path: '/dashboard/overview', heading: 'Operations Overview', screenshot: 'dashboard-overview.png' },
+    { path: '/dashboard/dwm', heading: 'Company and vendor exposure alerts' },
+    { path: '/dashboard/load-testing', heading: 'Permitted endpoint checks and launch confidence' },
+    { path: '/dashboard/subscription', heading: 'Enable product access' },
     { path: '/dashboard/vms', heading: 'Virtual Machines', screenshot: 'dashboard-vms.png' },
     { path: '/dashboard/projects', heading: 'Projects', screenshot: 'dashboard-projects.png' },
-    { path: '/dashboard/shares', heading: 'Shares', screenshot: 'dashboard-shares.png' },
+    { path: '/dashboard/shares', heading: 'Code shares and projects', screenshot: 'dashboard-shares.png' },
     { path: '/dashboard/automations', heading: 'Automations' },
     { path: '/dashboard/notes', heading: 'Notes' },
 ]
 
 const normalSidebarLinks = [
-    { name: 'Overview', href: '/dashboard' },
-    { name: 'VMs', href: '/dashboard/vms' },
-    { name: 'Projects', href: '/dashboard/projects' },
-    { name: 'Shares', href: '/dashboard/shares' },
-    { name: 'Mail', href: '/dashboard/mail' },
-    { name: 'Automations', href: '/dashboard/automations' },
+    { name: 'Console', href: '/dashboard' },
+    { name: 'Threat search', href: '/ti' },
+    { name: 'Dark web', href: '/dashboard/dwm' },
+    { name: 'Alerts', href: '/dashboard/automations' },
+    { name: 'Load testing', href: '/dashboard/load-testing' },
+    { name: 'API docs', href: '/developers' },
+    { name: 'Subscription', href: '/dashboard/subscription' },
+    { name: 'Workspaces', href: '/dashboard/projects' },
+    { name: 'Code shares', href: '/dashboard/shares' },
     { name: 'Notes', href: '/dashboard/notes' },
 ]
 
@@ -136,11 +142,50 @@ test.describe('dashboard resource routes', () => {
             await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
             await expectNormalUserSidebar(page, userId)
 
-            for (const link of normalSidebarLinks) {
+            const consoleRoutes = normalSidebarLinks.filter(link => link.href.startsWith('/dashboard') || link.href.startsWith('/ti'))
+            for (const link of consoleRoutes) {
                 await page.locator('aside nav').getByRole('link', { name: link.name, exact: true }).click()
                 await expect(page).toHaveURL(new RegExp(`${link.href.replace(/\//g, '\\/')}$`))
                 await expectNormalUserSidebar(page, userId)
                 await expectNormalUserDestination(page, link.href)
+            }
+        } finally {
+            await context.close()
+            await deleteUser(request, userId, password)
+        }
+    })
+
+    test('console sidebar stays bounded after page scrolling', async ({ browser, request, baseURL }) => {
+        const userId = `pdrsb${uniqueSuffix()}`
+        const auth = await createUser(request, userId, 'Dashboard Sidebar')
+        const context = await browser.newContext({ baseURL, viewport: { width: 1280, height: 900 } })
+
+        try {
+            await authenticateContext(context, auth, baseURL || 'http://127.0.0.1:3000')
+            const page = await context.newPage()
+            const routes = ['/dashboard/overview', '/dashboard/dwm', '/dashboard/subscription', '/dashboard/load-testing', '/dashboard/shares', '/ti/apt42']
+
+            for (const route of routes) {
+                await page.goto(route, { waitUntil: 'domcontentloaded' })
+                await expect(page.locator('aside')).toBeVisible()
+                await expect(page.locator('aside').getByRole('button', { name: 'Collapse sidebar' })).toBeVisible()
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Dark web', exact: true })).toHaveAttribute('href', '/dashboard/dwm')
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Subscription', exact: true })).toHaveAttribute('href', '/dashboard/subscription')
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Code shares', exact: true })).toHaveAttribute('href', '/dashboard/shares')
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Webhooks', exact: true })).toHaveCount(0)
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Pricing', exact: true })).toHaveCount(0)
+                await expect(page.locator('aside nav').getByRole('link', { name: 'Articles', exact: true })).toHaveCount(0)
+
+                const before = await sidebarLayoutMetrics(page)
+                await page.mouse.wheel(0, 1200)
+                await page.waitForTimeout(100)
+                const after = await sidebarLayoutMetrics(page)
+
+                expect(before.asideBottom).toBeLessThanOrEqual(before.viewportHeight + 1)
+                expect(after.asideTop).toBeGreaterThanOrEqual(-1)
+                expect(after.asideBottom).toBeLessThanOrEqual(after.viewportHeight + 1)
+                expect(after.documentScrollHeight).toBeLessThanOrEqual(after.viewportHeight + 20)
+                expect(after.horizontalOverflow).toBeLessThanOrEqual(1)
             }
         } finally {
             await context.close()
@@ -450,8 +495,8 @@ async function expectNormalUserDestination(page: Page, href: string) {
         return
     }
 
-    if (href === '/dashboard/mail') {
-        await expect(page.getByTestId('mail-compose-button')).toBeVisible()
+    if (href === '/ti') {
+        await expect(page.locator('main').getByRole('heading', { name: 'Threat Intelligence Search' })).toBeVisible()
         return
     }
 
@@ -459,6 +504,27 @@ async function expectNormalUserDestination(page: Page, href: string) {
     if (route) {
         await expect(page.locator('main').getByRole('heading', { name: route.heading }).first()).toBeVisible()
     }
+}
+
+async function sidebarLayoutMetrics(page: Page) {
+    return page.evaluate(() => {
+        const aside = document.querySelector('aside')
+        if (!aside) {
+            throw new Error('Missing dashboard sidebar')
+        }
+
+        const rect = aside.getBoundingClientRect()
+        return {
+            asideTop: rect.top,
+            asideBottom: rect.bottom,
+            asideHeight: rect.height,
+            asideClientHeight: aside.clientHeight,
+            asideScrollHeight: aside.scrollHeight,
+            documentScrollHeight: document.documentElement.scrollHeight,
+            viewportHeight: window.innerHeight,
+            horizontalOverflow: document.documentElement.scrollWidth - window.innerWidth,
+        }
+    })
 }
 
 async function createUser(request: APIRequestContext, id: string, name: string) {

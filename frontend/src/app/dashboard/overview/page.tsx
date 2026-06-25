@@ -59,10 +59,11 @@ export default async function Page() {
                     </div>
                     <div className='mt-4 grid gap-3 md:grid-cols-3'>
                         <ActionLink href='/ti' title='Threat search' body='Search companies, actors, vendors, domains, and claims.' icon={<Search className='h-4 w-4' />} />
-                        <ActionLink href='/solutions/dwm#webhooks' title='Webhook alerts' body='Preview the alert payload and delivery format.' icon={<Webhook className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/dwm' title='Webhook alerts' body='Preview the alert payload and delivery format.' icon={<Webhook className='h-4 w-4' />} />
                         <ActionLink href='/dashboard/automations' title='Alert delivery' body='Prepare recurring checks and review delivery history in one place.' icon={<BellRing className='h-4 w-4' />} />
-                        <ActionLink href='/solutions/dwm' title='Dark web monitoring' body='See what the product tracks and how a buyer uses the API.' icon={<Building2 className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/dwm' title='Dark web monitoring' body='See what the product tracks and how a buyer uses the API.' icon={<Building2 className='h-4 w-4' />} />
                         <ActionLink href='/developers' title='API access' body='Connect monitoring data to a workflow, SIEM, CRM, or ticket queue.' icon={<Braces className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/load-testing' title='Load testing' body='Run permitted endpoint checks and review result links.' />
                         {canManageSystem && <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />}
                         {canManageSystem && <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />}
                         <ActionLink href='/status' title='Platform status' body='Service checks, latency, uptime, and current API state.' />

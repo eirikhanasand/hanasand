@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AlarmClockCheck, BookOpenText, BrainCircuit, CalendarClock, Code2, Database, DatabaseBackup, DollarSign, FileWarning, FolderKanban, Gauge, Inbox, LayoutDashboard, Network, NotebookText, Radar, ScanSearch, ScrollText, Server, Settings2, Share2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Webhook } from 'lucide-react'
+import { AlarmClockCheck, BrainCircuit, CalendarClock, Code2, Database, DatabaseBackup, FileCode2, FileWarning, FolderKanban, Gauge, Inbox, LayoutDashboard, Network, NotebookText, PanelLeftClose, PanelLeftOpen, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
-import { getDashboardViewMode } from '@/utils/layout/viewMode'
+import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
 type Item = {
     href: string
@@ -45,16 +45,16 @@ export default function DashboardSidebar({
     const productItems: Item[] = [
         { href: '/dashboard', label: 'Console', icon: <LayoutDashboard className='h-4 w-4' /> },
         { href: '/ti', label: 'Threat search', icon: <Radar className='h-4 w-4' /> },
-        { href: '/solutions/dwm', label: 'Dark web', icon: <ShieldCheck className='h-4 w-4' /> },
-        { href: '/solutions/dwm#webhooks', label: 'Webhooks', icon: <Webhook className='h-4 w-4' /> },
+        { href: '/dashboard/dwm', label: 'Dark web', icon: <ShieldCheck className='h-4 w-4' /> },
         { href: '/dashboard/automations', label: 'Alerts', icon: <AlarmClockCheck className='h-4 w-4' /> },
+        { href: '/dashboard/load-testing', label: 'Load testing', icon: <Zap className='h-4 w-4' /> },
         { href: '/developers', label: 'API docs', icon: <Code2 className='h-4 w-4' /> },
-        { href: '/pricing', label: 'Pricing', icon: <DollarSign className='h-4 w-4' /> },
+        { href: '/dashboard/subscription', label: 'Subscription', icon: <ScanSearch className='h-4 w-4' /> },
     ]
 
     const workspaceItems: Item[] = [
         { href: '/dashboard/projects', label: 'Workspaces', icon: <FolderKanban className='h-4 w-4' /> },
-        { href: '/dashboard/shares', label: 'Reports', icon: <Share2 className='h-4 w-4' /> },
+        { href: '/dashboard/shares', label: 'Code shares', icon: <FileCode2 className='h-4 w-4' /> },
         { href: '/dashboard/notes', label: 'Notes', icon: <NotebookText className='h-4 w-4' /> },
         { href: `/profile/${id}`, label: 'Profile', icon: <UserRound className='h-4 w-4' /> },
     ]
@@ -75,7 +75,6 @@ export default function DashboardSidebar({
 
     if (canManageContent) {
         contentItems.push(
-            { href: '/dashboard/articles', label: 'Articles', icon: <ScrollText className='h-4 w-4' /> },
             { href: '/dashboard/thoughts', label: 'Thoughts', icon: <BrainCircuit className='h-4 w-4' /> },
         )
     }
@@ -94,6 +93,7 @@ export default function DashboardSidebar({
     }
 
     const compact = mode === 'compact'
+    const toggleLabel = compact ? 'Expand sidebar' : 'Collapse sidebar'
     const sections: Section[] = [
         { title: 'Monitoring', items: productItems },
         { title: 'Review', items: workspaceItems },
@@ -109,17 +109,33 @@ export default function DashboardSidebar({
         .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
     return (
-        <aside className={`dashboard-sidebar-sticky h-fit max-h-full overflow-auto rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
+        <aside className={`dashboard-sidebar-sticky min-h-0 overflow-auto rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2 py-1'}`}>
                 {compact ? (
-                    <BookOpenText className='h-4 w-4 text-[#596170]' />
+                    <button
+                        type='button'
+                        onClick={() => setDashboardViewMode('normal')}
+                        className='grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#596170] transition hover:bg-[#f8fafc] hover:text-[#171a21]'
+                        aria-label='Expand sidebar'
+                        title='Expand sidebar'
+                    >
+                        <PanelLeftOpen className='h-4 w-4' />
+                    </button>
                 ) : (
                     <>
                         <div>
                             <p className='text-[0.62rem] font-semibold uppercase text-[#3056d3]'>Console</p>
                             <h2 className='mt-1 text-sm font-semibold text-[#171a21]'>Monitoring</h2>
                         </div>
-                        <BookOpenText className='h-4 w-4 text-[#667085]' />
+                        <button
+                            type='button'
+                            onClick={() => setDashboardViewMode('compact')}
+                            className='grid h-9 w-9 place-items-center rounded-lg border border-[#dfe5ee] text-[#667085] transition hover:bg-[#f8fafc] hover:text-[#171a21]'
+                            aria-label={toggleLabel}
+                            title={toggleLabel}
+                        >
+                            <PanelLeftClose className='h-4 w-4' />
+                        </button>
                     </>
                 )}
             </div>

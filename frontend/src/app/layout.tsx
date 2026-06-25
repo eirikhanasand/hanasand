@@ -20,7 +20,7 @@ export default async function layout({ children }: { children: ReactNode }) {
                 <div className='site-atmosphere' />
                 <Header token={token} path={path} />
                 <DetachedBoxHost />
-                <RouteFrame serverPath={path}>{children}</RouteFrame>
+                <RouteFrame serverPath={path} token={token}>{children}</RouteFrame>
             </body>
         </html>
     )

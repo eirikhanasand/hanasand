@@ -70,8 +70,15 @@ const mobilePublicLinks = [
     { label: 'Contact sales', href: '/contact?intent=sales' },
 ]
 
-function PublicMobileMenu() {
+function PublicMobileMenu({ token }: { token: boolean }) {
     const [open, setOpen] = useState(false)
+    const links = token
+        ? mobilePublicLinks.map(item => {
+            if (item.href === '/solutions/dwm') return { ...item, href: '/dashboard/dwm' }
+            if (item.href === '/pricing') return { ...item, href: '/dashboard/subscription' }
+            return item
+        })
+        : mobilePublicLinks
 
     return (
         <div className='relative lg:hidden'>
@@ -86,7 +93,7 @@ function PublicMobileMenu() {
             </button>
             {open && (
                 <div className='absolute right-0 top-13 z-30 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border border-[#e0e5ed] bg-white p-2 shadow-[0_22px_70px_rgba(25,34,52,0.16)] dark:border-[#273345] dark:bg-[#111927] dark:shadow-[0_22px_70px_rgba(0,0,0,0.42)]'>
-                    {mobilePublicLinks.map((item) => (
+                    {links.map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
@@ -112,7 +119,10 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
     const isDashboard = pathname.startsWith('/dashboard')
     const isProfile = pathname.startsWith('/profile')
     const isPublicProduct = isPublicProductPath(pathname)
-    const isAppSurface = !isPublicProduct && (isShare || isAI || isDashboard || isProfile)
+    const isLoggedInConsoleProduct = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
+    const isAppSurface = isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile))
+    const darkWebHref = token ? '/dashboard/dwm' : '/solutions/dwm'
+    const pricingHref = token ? '/dashboard/subscription' : '/pricing'
 
     if (!isAppSurface) {
         return (
@@ -122,13 +132,13 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
 
                     <nav className='hidden items-center gap-5 lg:flex'>
                         <PublicDropdown label='Product' items={productItems} />
-                        <PublicDropdown label='Solutions' items={solutionItems} />
+                        <PublicDropdown label='Solutions' items={token ? solutionItems.map(item => item.href === '/solutions/dwm' ? { ...item, href: '/dashboard/dwm' } : item) : solutionItems} />
                         <Link href='/developers' className='inline-flex h-10 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>
                             Developers
                             <Code2 className='h-4 w-4 text-[#7a8493]' />
                         </Link>
                         <PublicDropdown label='Resources' items={resourceItems} />
-                        <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>
+                        <Link href={pricingHref} className='inline-flex h-10 items-center rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>
                     </nav>
 
                     <div className='flex items-center justify-end gap-2'>
@@ -140,7 +150,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                         <Link href='/ti' aria-label='Search intelligence' className='hidden h-11 w-11 place-items-center rounded-lg border border-[#dfe5ee] text-[#3a404b] transition hover:bg-[#f6f8fb] sm:grid lg:hidden dark:border-[#2b3a52] dark:text-[#d9e2f2] dark:hover:bg-white/8'>
                             <Search className='h-5 w-5' />
                         </Link>
-                        <PublicMobileMenu />
+                        <PublicMobileMenu token={token} />
                     </div>
                 </div>
             </header>
@@ -158,9 +168,9 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                                 <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Console</Link>
                             ) : null}
                             <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Threat search</Link>
-                            <Link href='/solutions/dwm' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Dark web</Link>
+                            <Link href={darkWebHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Dark web</Link>
                             <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>API docs</Link>
-                            <Link href='/pricing' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>
+                            <Link href={pricingHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>
                         </nav>
                     )}
                 </div>

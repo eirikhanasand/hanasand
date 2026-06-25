@@ -175,6 +175,25 @@ body {
   color: #f5f7fb;
 }
 
+.light .enterprise-theme {
+  background: #f7f8fb;
+  color: #171a21;
+}
+
+.light .enterprise-theme header,
+.light header {
+  background-color: #ffffff !important;
+}
+
+.light header[class*="bg-white/"] {
+  background-color: #ffffff !important;
+}
+
+.light .enterprise-theme [class*="bg-(--panel-surface)"],
+.light .enterprise-theme [class*="bg-(--card-surface)"] {
+  background-color: #ffffff !important;
+}
+
 .dark .enterprise-theme [class*="bg-[#f7f8fb]"],
 .dark .enterprise-theme [class*="bg-[#f8fafc]"],
 .dark .enterprise-theme [class*="bg-[#fbfcfe]"] {
@@ -358,7 +377,10 @@ button:not(:disabled),
 
 .dashboard-sidebar-sticky {
   position: sticky;
-  top: 0;
+  top: 0.5rem;
+  align-self: start;
+  max-height: calc(92.5vh - 1rem);
+  overscroll-behavior: contain;
 }
 
 .icon-tile {
