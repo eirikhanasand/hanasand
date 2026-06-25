@@ -145,6 +145,8 @@ CREATE TABLE IF NOT EXISTS load_tests (
     id TEXT PRIMARY KEY DEFAULT substring(translate(encode(gen_random_bytes(4), 'base64'), '+/', 'AB') for 6),
     url TEXT NOT NULL,
     owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    quota_identity TEXT,
+    quota_plan TEXT NOT NULL DEFAULT 'free',
     timeout INTEGER DEFAULT 1,
     stages JSONB NOT NULL DEFAULT '{"default": true}',
     status TEXT DEFAULT 'pending',
@@ -160,6 +162,14 @@ CREATE TABLE IF NOT EXISTS load_tests (
 
 CREATE INDEX IF NOT EXISTS idx_load_tests_created_at ON load_tests(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_load_tests_owner_created_at ON load_tests(owner_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_load_tests_quota_identity_created_at ON load_tests(quota_identity, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS load_test_subscriptions (
+    owner_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'starter', 'team', 'volume')),
+    active BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS load_test_runs (
     id BIGSERIAL PRIMARY KEY,

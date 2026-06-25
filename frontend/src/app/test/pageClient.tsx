@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useState } from 'react'
 
 const freeTryLimit = 5
-const freeTryStorageKey = 'hanasand:load-testing-free-tries'
+const freeTryStorageKey = 'hanasand:load-testing-free-tries-v2'
 
 export default function TestPageClient({ serverId, created }: { serverId?: string, created?: string }) {
     const router = useRouter()
@@ -20,10 +20,15 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
     const [recentScans, setRecentScans] = useState<Test[]>([])
     const [myScans, setMyScans] = useState<Test[]>([])
     const [freeTriesUsed, setFreeTriesUsed] = useState(0)
+    const [loadTestQuota, setLoadTestQuota] = useState<LoadTestQuota | null>(null)
     const isValidLink =
         (path.includes('http://') && path.includes('.') && path.length >= 10)
         || (path.includes('https://') && path.includes('.') && path.length >= 11)
     const fullUrl = `${config.url.link}/${serverId}`
+    const remainingChecks = loadTestQuota?.remaining ?? Math.max(0, freeTryLimit - freeTriesUsed)
+    const quotaLabel = loadTestQuota && loadTestQuota.plan !== 'free'
+        ? `${remainingChecks} ${loadTestQuota.plan} check${remainingChecks === 1 ? '' : 's'} remaining this month`
+        : `${remainingChecks} free check${remainingChecks === 1 ? '' : 's'} remaining`
     const { condition: error, setCondition: setError } = useClearStateAfter()
     const { condition: didCopy, setCondition: setDidCopy } = useClearStateAfter({
         initialState: false,
@@ -63,18 +68,27 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
         if (!isValidLink) {
             return
         }
-        if (freeTriesUsed >= freeTryLimit) {
-            return setError('The free load-testing allowance has been used. Choose a plan to keep running checks.')
-        }
-
         const result = await postTest({ url: path })
-        if (!result) {
-            return setError('Please try again later.')
+        if (!result.ok) {
+            if (result.quota) {
+                setLoadTestQuota(result.quota)
+                if (result.quota.plan === 'free') {
+                    setFreeTriesUsed(Math.min(freeTryLimit, result.quota.used))
+                }
+            }
+            return setError(result.error)
         }
 
-        if (result.id) {
-            setFreeTriesUsed(incrementFreeTriesUsed())
-            router.push(`/test/${result.id}`)
+        if (result.test.id) {
+            if (result.test.quota) {
+                setLoadTestQuota(result.test.quota)
+                if (result.test.quota.plan === 'free') {
+                    setFreeTriesUsed(Math.min(freeTryLimit, result.test.quota.used))
+                }
+            } else {
+                setFreeTriesUsed(incrementFreeTriesUsed())
+            }
+            router.push(`/test/${result.test.id}`)
         }
     }
 
@@ -94,7 +108,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                     <h2 className='text-lg font-semibold text-[#171a21]'>Service check launcher</h2>
                     <p className='mt-1.5 max-w-2xl text-sm leading-6 text-[#596170]'>Start a permitted endpoint check, share the result link, then revisit the report when it finishes.</p>
                     <p className='mt-2 inline-flex w-fit rounded-full bg-[#eef3ff] px-2.5 py-1 text-xs font-semibold text-[#3056d3]'>
-                        {Math.max(0, freeTryLimit - freeTriesUsed)} free check{Math.max(0, freeTryLimit - freeTriesUsed) === 1 ? '' : 's'} remaining
+                        {quotaLabel}
                     </p>
                 </div>
                 <form onSubmit={handleSubmit} className='grid gap-4'>
@@ -109,7 +123,7 @@ export default function TestPageClient({ serverId, created }: { serverId?: strin
                     <div className='flex flex-wrap gap-3'>
                         <button
                             type='submit'
-                            disabled={!isValidLink || freeTriesUsed >= freeTryLimit}
+                            disabled={!isValidLink}
                             className='h-10 rounded-lg bg-[#171a21] px-3.5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8dee9] disabled:bg-[#f5f7fb] disabled:text-[#98a2b3]'
                         >
                             Start check

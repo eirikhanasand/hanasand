@@ -239,6 +239,14 @@ type LoadTestSummary = {
     errors?: LoadTestErrorPoint[]
 }
 
+type LoadTestQuota = {
+    plan: 'free' | 'starter' | 'team' | 'volume'
+    limit: number
+    used: number
+    remaining: number
+    resetsAt?: string | null
+}
+
 type Test = {
     id: string
     url: string
@@ -257,6 +265,7 @@ type Test = {
     previous_run_summary?: LoadTestSummary
     latest_run_number?: number
     p95_delta_ms?: number | null
+    quota?: LoadTestQuota
 }
 
 type FileItemBase = {
