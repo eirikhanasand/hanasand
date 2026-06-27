@@ -17,8 +17,8 @@ export default function Visits({ id, serverVisits }: { id: string | number, serv
     }, [id])
 
     return (
-        <div className='flex min-w-0 gap-2 rounded-lg p-2 text-sm text-bright/66 transition hover:bg-white/[0.045]'>
-            <Eye className='h-4 w-4 shrink-0 text-bright/42' />
+        <div className='flex min-w-0 gap-2 rounded-lg p-2 text-sm text-[#344054] transition hover:bg-[#f2f5f9] dark:text-[#d5dceb] dark:hover:bg-white/6'>
+            <Eye className='h-4 w-4 shrink-0 text-[#667085] dark:text-[#9aa8bf]' />
             <span className='min-w-0 wrap-break-word'>{visits}</span>
         </div>
     )

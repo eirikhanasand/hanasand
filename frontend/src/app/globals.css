@@ -300,6 +300,7 @@ html.dark:not(.light) header[class*="bg-white/"] {
 }
 
 html.dark:not(.light) header [class*="text-[#3a404b]"],
+html.dark:not(.light) header [class*="text-[#20242c]"],
 html.dark:not(.light) header [class*="text-[#2f3540]"],
 html.dark:not(.light) header [class*="text-[#4b5565]"],
 html.dark:not(.light) header [class*="text-[#111827]"],

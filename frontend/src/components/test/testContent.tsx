@@ -28,8 +28,8 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
 
             {/* Header / Overview */}
             <div className='flex flex-wrap justify-between items-center gap-3'>
-                <h1 className='text-lg font-semibold'>Test Results</h1>
-                <div className='text-sm text-gray-300'>
+                <h1 className='text-lg font-semibold text-[#171a21] dark:text-[#f5f7fb]'>Test Results</h1>
+                <div className='text-sm text-[#596170] dark:text-[#c7d0df]'>
                     {isDone
                         ? <CircleCheckBig className='stroke-green-500 w-5 h-5' />
                         : isPending
@@ -50,7 +50,7 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
                 )}
                 {metrics.rps && metrics.rps.length > 0 && (
                     <div className='min-w-0'>
-                        <h2 className='font-medium text-white mb-2'>Requests per Second</h2>
+                        <h2 className='mb-2 font-medium text-[#171a21] dark:text-[#f5f7fb]'>Requests per Second</h2>
                         <ResponsiveContainer width='100%' height={200}>
                             <LineChart data={metrics.rps}>
                                 <XAxis dataKey='time' stroke='#aaa' />
@@ -64,7 +64,7 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
 
                 {metrics.latency && metrics.latency.length > 0 && (
                     <div className='min-w-0'>
-                        <h2 className='font-medium text-white mb-2'>Latency (ms)</h2>
+                        <h2 className='mb-2 font-medium text-[#171a21] dark:text-[#f5f7fb]'>Latency (ms)</h2>
                         <ResponsiveContainer width='100%' height={200}>
                             <LineChart data={metrics.latency}>
                                 <XAxis dataKey='time' stroke='#aaa' />
@@ -79,7 +79,7 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
 
                 {metrics.errors && metrics.errors.length > 0 && (
                     <div className='min-w-0'>
-                        <h2 className='font-medium text-white mb-2'>Errors over time</h2>
+                        <h2 className='mb-2 font-medium text-[#171a21] dark:text-[#f5f7fb]'>Errors over time</h2>
                         <ResponsiveContainer width='100%' height={150}>
                             <BarChart data={metrics.errors}>
                                 <XAxis dataKey='time' stroke='#aaa' />
@@ -93,7 +93,7 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
             </div>
 
             {showLogs && <LogViewer isDone={isDone} text={test.logs || []} />}
-            {showErrors && <div className={`absolute bottom-0 left-0 ${isDone ? 'bg-red-500/40  backdrop-blur-md' : 'bg-red-500/20'} w-full rounded-lg max-h-[20rem] overflow-auto`}>
+            {showErrors && <div className={`absolute bottom-0 left-0 ${isDone ? 'bg-red-50/95 backdrop-blur-md dark:bg-red-950/80' : 'bg-red-50 dark:bg-red-950/60'} max-h-[20rem] w-full overflow-auto rounded-lg border border-red-200 dark:border-red-400/30`}>
                 <LogViewer text={test.errors || []} />
             </div>}
         </div>
@@ -102,9 +102,9 @@ export default function TestContent({ test, showLogs, showErrors }: TestContentP
 
 function MetricCard({ label, value }: { label: string, value: string | number }) {
     return (
-        <div className='rounded-lg border border-white/10 bg-white/4 px-3 py-2'>
-            <div className='text-[11px] uppercase text-bright/35'>{label}</div>
-            <div className='mt-1 text-sm font-semibold text-bright/90'>{value}</div>
+        <div className='rounded-lg border border-[#dfe5ee] bg-[#f7f8fb] px-3 py-2 dark:border-[#30415f] dark:bg-[#0b1220]'>
+            <div className='text-[11px] font-semibold uppercase text-[#596170] dark:text-[#9aa8bf]'>{label}</div>
+            <div className='mt-1 text-sm font-semibold text-[#171a21] dark:text-[#f5f7fb]'>{value}</div>
         </div>
     )
 }
