@@ -88,7 +88,7 @@ export default function Footer() {
                                         <Link
                                             key={`${group.title}-${link.label}-${link.href}`}
                                             href={link.href}
-                                            className='inline-flex w-fit items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-[#596170] transition-colors hover:bg-white hover:text-[#171a21] dark:text-[#a8b3c5] dark:hover:bg-white/7 dark:hover:text-white'
+                                            className='inline-flex w-fit items-center gap-1.5 py-1.5 text-sm font-medium text-[#596170] transition-colors hover:text-[#171a21] dark:text-[#a8b3c5] dark:hover:text-white'
                                         >
                                             {Icon ? <Icon className={`h-3.5 w-3.5 ${link.status ? 'text-[#10b35a]' : 'text-[#8c95a5]'}`} /> : null}
                                             {link.label}
