@@ -109,7 +109,7 @@ export default function DashboardSidebar({
         .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
     return (
-        <aside className={`dashboard-sidebar-sticky min-h-0 overflow-auto rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
+        <aside className={`dashboard-sidebar-sticky noscroll min-h-0 overflow-auto rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm ${compact ? 'lg:w-16' : 'lg:w-58'}`}>
             <div className={`mb-2 flex items-center ${compact ? 'justify-center' : 'justify-between gap-3 px-2 py-1'}`}>
                 {compact ? (
                     <button
