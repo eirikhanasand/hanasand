@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AlarmClockCheck, BrainCircuit, CalendarClock, Code2, Database, DatabaseBackup, FileCode2, FileWarning, FolderKanban, Gauge, Inbox, LayoutDashboard, Network, NotebookText, PanelLeftClose, PanelLeftOpen, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
+import { AlarmClockCheck, BrainCircuit, CalendarClock, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -62,6 +62,7 @@ export default function DashboardSidebar({
     const systemItems: Item[] = []
     const contentItems: Item[] = []
     const adminItems: Item[] = []
+    const tiAdminItems: Item[] = []
 
     if (canManageSystem) {
         systemItems.push(
@@ -80,6 +81,13 @@ export default function DashboardSidebar({
     }
 
     if (isAdmin) {
+        tiAdminItems.push(
+            { href: '/dashboard/ti', label: 'TI overview', icon: <Radar className='h-4 w-4' /> },
+            { href: '/dashboard/ti/sources', label: 'TI sources', icon: <DatabaseZap className='h-4 w-4' /> },
+            { href: '/dashboard/ti/domains', label: 'TI domains', icon: <Globe2 className='h-4 w-4' /> },
+            { href: '/dashboard/ti/runs', label: 'TI runs', icon: <PlayCircle className='h-4 w-4' /> },
+        )
+
         adminItems.push(
             { href: '/dashboard/logs', label: 'Logs', icon: <FileWarning className='h-4 w-4' /> },
             { href: '/dashboard/mail', label: 'Mail', icon: <Inbox className='h-4 w-4' /> },
@@ -96,6 +104,7 @@ export default function DashboardSidebar({
     const toggleLabel = compact ? 'Expand sidebar' : 'Collapse sidebar'
     const sections: Section[] = [
         { title: 'Monitoring', items: productItems },
+        { title: 'Threat Intel', items: tiAdminItems },
         { title: 'Review', items: workspaceItems },
         { title: 'Content', items: contentItems },
         { title: 'System', items: systemItems },
