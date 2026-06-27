@@ -217,7 +217,18 @@ export interface TiVictimNotificationPacket {
 
 interface KnownActorContext extends Pick<TiSearchResponse, 'aliases' | 'targets' | 'ttps'> {
     summary: string
+    confidence?: number
+    status?: TiResultState
+    lastSeen?: string
+    recentActivity?: TiActivity[]
+    datasets?: TiDataset[]
+    sources?: TiSource[]
+    notes?: string[]
 }
+
+const tiResponseCache = new Map<string, { expiresAt: number, result: TiSearchResponse }>()
+const curatedProfileCacheTtlMs = 60 * 60 * 1000
+const liveSearchCacheTtlMs = 60 * 1000
 
 export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearchResponse> {
     const query = input.query.trim()
@@ -225,15 +236,44 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
         throw new Error('query is required')
     }
 
+    const cacheKey = query.toLowerCase()
+    const cached = readTiResponseCache(cacheKey)
+    if (cached) return cached
+
     const scraperBase = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
     if (scraperBase) {
         const scraperResult = await tryScraperSearch(scraperBase, query)
         if (scraperResult) {
+            writeTiResponseCache(cacheKey, scraperResult)
             return scraperResult
         }
     }
 
-    return seededSearch(query)
+    const result = seededSearch(query)
+    writeTiResponseCache(cacheKey, result)
+    return result
+}
+
+function readTiResponseCache(key: string) {
+    const cached = tiResponseCache.get(key)
+    if (!cached) return null
+    if (cached.expiresAt <= Date.now()) {
+        tiResponseCache.delete(key)
+        return null
+    }
+    return {
+        ...cached.result,
+        generatedAt: new Date().toISOString(),
+    }
+}
+
+function writeTiResponseCache(key: string, result: TiSearchResponse) {
+    const ttl = result.status === 'ready' ? curatedProfileCacheTtlMs : liveSearchCacheTtlMs
+    tiResponseCache.set(key, { expiresAt: Date.now() + ttl, result })
+    if (tiResponseCache.size > 500) {
+        const oldestKey = tiResponseCache.keys().next().value
+        if (oldestKey) tiResponseCache.delete(oldestKey)
+    }
 }
 
 async function tryScraperSearch(scraperBase: string, query: string): Promise<TiSearchResponse | null> {
@@ -438,24 +478,25 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             query,
             generatedAt,
             mode: 'live_search',
-            status: 'partial',
+            status: known?.status ?? 'partial',
             refreshAfterSeconds: 3,
             summary: summarizeLiveResult(query, matches, known),
-            confidence: known ? 0.62 : 0.48,
-            lastSeen: activity[0]?.lastReportedAt ?? activityMatches[0]?.publishedAt ?? generatedAt,
+            confidence: known?.confidence ?? (known ? 0.62 : 0.48),
+            lastSeen: activity[0]?.lastReportedAt ?? activityMatches[0]?.publishedAt ?? known?.lastSeen ?? generatedAt,
             aliases: known?.aliases ?? [],
-            recentActivity: activity,
+            recentActivity: mergeActivity(activity, known?.recentActivity ?? []),
             targets: mergeTargets(inferLiveTargets(query, matches), known?.targets ?? []),
             ttps: mergeTtps(inferLiveTtps(matches), known?.ttps ?? []),
-            datasets: liveDatasets(),
-            sources: matches.slice(0, 8).map(match => ({
+            datasets: mergeDatasets(liveDatasets(), known?.datasets ?? []),
+            sources: mergeSources(matches.slice(0, 8).map(match => ({
                 id: match.id,
                 name: match.publisher ?? match.title,
                 type: match.kind === 'news' ? 'live_news' : match.kind === 'background' ? 'background_reference' : 'live_clear_web',
                 provenance: match.url,
                 url: safeTiLink(match.url)
-            })),
+            })), known?.sources ?? []),
             notes: [
+                ...(known?.notes ?? []),
                 'Live results are discovery evidence until capture and extraction finish.',
                 'Restricted sources remain metadata-only and policy-gated.'
             ],
@@ -470,18 +511,18 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
         query,
         generatedAt: new Date().toISOString(),
         mode: 'live_search',
-        status: buildAnalystLoop({ query, operationalStatus }).resultState,
+        status: known?.status ?? buildAnalystLoop({ query, operationalStatus }).resultState,
         refreshAfterSeconds: 3,
         summary: known?.summary ?? 'Searching',
-        confidence: known ? 0.46 : 0.2,
-        lastSeen: new Date().toISOString(),
+        confidence: known?.confidence ?? (known ? 0.46 : 0.2),
+        lastSeen: known?.lastSeen ?? new Date().toISOString(),
         aliases: known?.aliases ?? [],
-        recentActivity: [],
+        recentActivity: known?.recentActivity ?? [],
         targets: known?.targets ?? [],
         ttps: known?.ttps ?? [],
-        datasets: liveDatasets(),
-        sources: [{ id: 'live:search:pending', name: 'Searching', type: 'live_search', provenance: 'Live discovery is in progress' }],
-        notes: [],
+        datasets: mergeDatasets(liveDatasets(), known?.datasets ?? []),
+        sources: known?.sources?.length ? known.sources : [{ id: 'live:search:pending', name: 'Live discovery pending', type: 'live_search', provenance: 'Live discovery is in progress' }],
+        notes: known?.notes ?? [],
         operationalStatus,
         analystLoop: buildAnalystLoop({ query, operationalStatus }),
         collectionStrategy: collectionStrategy()
@@ -497,20 +538,20 @@ function seededSearch(query: string): TiSearchResponse {
         query,
         generatedAt: new Date().toISOString(),
         mode: 'live_search',
-        status: analystLoop.resultState === 'searching' && known ? 'partial' : analystLoop.resultState,
+        status: known?.status ?? (analystLoop.resultState === 'searching' && known ? 'partial' : analystLoop.resultState),
         refreshAfterSeconds: 3,
         summary: analystLoop.metadataReviewInbox[0]?.company
             ? metadataReviewSummary(analystLoop.metadataReviewInbox[0])
             : known?.summary ?? 'Searching',
-        confidence: known ? 0.46 : 0.2,
-        lastSeen: new Date().toISOString(),
+        confidence: known?.confidence ?? (known ? 0.46 : 0.2),
+        lastSeen: known?.lastSeen ?? new Date().toISOString(),
         aliases: known?.aliases ?? [],
-        recentActivity: [],
+        recentActivity: known?.recentActivity ?? [],
         targets: known?.targets ?? [],
         ttps: known?.ttps ?? [],
-        datasets: liveDatasets(),
-        sources: [{ id: 'live:search:unavailable', name: 'Searching', type: 'system', provenance: 'Live source discovery is not available from this API process' }],
-        notes: [],
+        datasets: mergeDatasets(liveDatasets(), known?.datasets ?? []),
+        sources: known?.sources?.length ? known.sources : [{ id: 'live:search:unavailable', name: 'Live discovery unavailable', type: 'system', provenance: 'Live source discovery is not available from this API process' }],
+        notes: known?.notes ?? [],
         operationalStatus,
         analystLoop,
         collectionStrategy: collectionStrategy()
@@ -1167,7 +1208,183 @@ function knownActorProfile(query: string): KnownActorContext | null {
             ]
         }
     }
+    if (
+        normalized === 'apt49'
+        || normalized.includes('tropic trooper')
+        || normalized.includes('bluehornet')
+        || normalized.includes('blue hornet')
+        || normalized.includes('againstthewest')
+        || normalized.includes('against the west')
+    ) {
+        return apt49ActorProfile()
+    }
     return baselineKnownActorProfile(normalized)
+}
+
+function apt49ActorProfile(): KnownActorContext {
+    return {
+        status: 'ready',
+        confidence: 0.82,
+        lastSeen: '2024-12-01T00:00:00.000Z',
+        summary: 'APT49 is an ambiguous label in open reporting. Hanasand resolves it as an alias-collision profile: one track maps APT49 to Tropic Trooper, a long-running Asia-Pacific espionage actor, while Malpedia and Cyberint map BlueHornet/AgainstTheWest/APT49 to a hacktivist and leak-focused persona. Treat the name as a disambiguation problem, then monitor both tracks for company exposure, infrastructure changes, and fresh reporting.',
+        aliases: [
+            'Tropic Trooper',
+            'KeyBoy',
+            'Pirate Panda',
+            'BlueHornet',
+            'AgainstTheWest',
+            'APT49 alias collision',
+        ],
+        recentActivity: [
+            {
+                date: '2024-12',
+                title: 'APT49 label collision requires analyst disambiguation',
+                detail: 'Open-source references disagree on whether APT49 should be treated as Tropic Trooper or BlueHornet/AgainstTheWest. The profile is therefore split into espionage-track and hacktivist/leak-track monitoring until a source-specific claim resolves the context.',
+                confidence: 0.9,
+                sourceIds: ['malpedia-bluehornet', 'cyberint-bluehornet', 'aardvark-apt49'],
+                claimType: 'general_activity',
+                affectedSectors: ['Threat actor tracking', 'Analyst workflow'],
+                countries: ['Global'],
+                impact: 'Prevents false attribution and keeps watchlist alerts tied to the correct source track.',
+                firstReportedAt: '2024-01-01T00:00:00.000Z',
+                lastReportedAt: '2024-12-01T00:00:00.000Z',
+                publisherCount: 3,
+                corroboratingSourceIds: ['malpedia-bluehornet', 'cyberint-bluehornet'],
+                contradictingSourceIds: ['aardvark-apt49'],
+            },
+            {
+                date: '2024',
+                title: 'BlueHornet / AgainstTheWest tracked as a leak and extortion-adjacent persona',
+                detail: 'Malpedia and Cyberint both associate BlueHornet with AgainstTheWest and APT49 naming. For product purposes this is monitored as a company-exposure and leak-claim source, not as a generic malware family feed.',
+                confidence: 0.84,
+                sourceIds: ['malpedia-bluehornet', 'cyberint-bluehornet'],
+                claimType: 'victim_claim',
+                affectedSectors: ['Public sector', 'Technology', 'Critical infrastructure', 'Enterprise services'],
+                countries: ['Global'],
+                impact: 'Useful for detecting whether a customer, vendor, domain, or portfolio company appears in actor statements or leak claims.',
+                lastReportedAt: '2024-12-01T00:00:00.000Z',
+                publisherCount: 2,
+            },
+            {
+                date: '2024',
+                title: 'Tropic Trooper track remains a separate espionage profile',
+                detail: 'The Tropic Trooper interpretation points to an espionage actor historically associated with targeting governments, military, transport, healthcare, and high-tech organizations, especially in Asia-Pacific contexts.',
+                confidence: 0.72,
+                sourceIds: ['aardvark-apt49'],
+                claimType: 'campaign',
+                affectedSectors: ['Government', 'Defense', 'Healthcare', 'Transportation', 'High technology'],
+                countries: ['Asia-Pacific'],
+                impact: 'Useful for actor overview, sector exposure, and TTP mapping, but should not be mixed with BlueHornet company-leak claims without source evidence.',
+                lastReportedAt: '2024-12-01T00:00:00.000Z',
+                publisherCount: 1,
+            },
+        ],
+        targets: [
+            {
+                sector: 'Government and public-sector organizations',
+                regions: ['Asia-Pacific', 'Global for BlueHornet leak claims'],
+                rationale: 'The Tropic Trooper track is associated with espionage collection, while the BlueHornet track is useful for public-sector leak and claim monitoring.',
+                confidence: 0.76,
+            },
+            {
+                sector: 'Defense, transportation, healthcare, and high technology',
+                regions: ['East Asia', 'Southeast Asia', 'Taiwan-facing reporting contexts'],
+                rationale: 'These sectors appear in open-source Tropic Trooper-style targeting summaries and are useful watchlist categories for enterprise monitoring.',
+                confidence: 0.7,
+            },
+            {
+                sector: 'Company and vendor exposure',
+                regions: ['Global'],
+                rationale: 'The BlueHornet/AgainstTheWest track is valuable when it names organizations, domains, claimed datasets, or leak narratives.',
+                confidence: 0.78,
+            },
+        ],
+        ttps: [
+            {
+                name: 'Spearphishing Attachment',
+                attackId: 'T1566.001',
+                tactic: 'Initial Access',
+                detail: 'Used as a plausible initial-access pattern for the espionage-track profile; source-specific campaigns should be checked before operationalizing indicators.',
+                confidence: 0.64,
+            },
+            {
+                name: 'Ingress Tool Transfer',
+                attackId: 'T1105',
+                tactic: 'Command and Control',
+                detail: 'Commonly relevant for actor profiles involving custom payload delivery and follow-on tooling.',
+                confidence: 0.58,
+            },
+            {
+                name: 'Data from Local System',
+                attackId: 'T1005',
+                tactic: 'Collection',
+                detail: 'Relevant to both tracks: espionage collection for Tropic Trooper-style activity and company-data claims for BlueHornet-style leak monitoring.',
+                confidence: 0.62,
+            },
+            {
+                name: 'Exfiltration Over Web Service',
+                attackId: 'T1567',
+                tactic: 'Exfiltration',
+                detail: 'Useful review hypothesis for leak-claim and extortion-adjacent reporting; do not infer a confirmed technique without campaign evidence.',
+                confidence: 0.52,
+            },
+        ],
+        datasets: [
+            {
+                name: 'Curated actor profile cache',
+                type: 'vendor_report',
+                coverage: 'Persistent APT49 alias-collision profile compiled from cited open-source references and served immediately without re-running live discovery.',
+                status: 'available',
+            },
+            {
+                name: 'BlueHornet / AgainstTheWest exposure monitoring',
+                type: 'darknet_metadata',
+                coverage: 'Company names, domains, claimed datasets, actor statements, and leak-claim metadata when this track surfaces in monitored sources.',
+                status: 'metadata_only',
+            },
+            {
+                name: 'Tropic Trooper campaign context',
+                type: 'clear_web',
+                coverage: 'Actor overview, aliases, sector targeting, and tradecraft context from public reporting.',
+                status: 'available',
+            },
+        ],
+        sources: [
+            {
+                id: 'aardvark-apt49',
+                name: 'Aardvark Infinity: Comprehensive Profile of APT49 / Tropic Trooper',
+                type: 'actor_profile',
+                provenance: 'https://medium.com/aardvark-infinity/comprehensive-profile-of-apt49-tropic-trooper-252ba921c46f',
+                url: 'https://medium.com/aardvark-infinity/comprehensive-profile-of-apt49-tropic-trooper-252ba921c46f',
+            },
+            {
+                id: 'malpedia-bluehornet',
+                name: 'Malpedia: BlueHornet',
+                type: 'actor_profile',
+                provenance: 'https://malpedia.caad.fkie.fraunhofer.de/actor/bluehornet',
+                url: 'https://malpedia.caad.fkie.fraunhofer.de/actor/bluehornet',
+            },
+            {
+                id: 'cyberint-bluehornet',
+                name: 'Cyberint: BlueHornet / AgainstTheWest',
+                type: 'actor_profile',
+                provenance: 'https://cyberint.com/blog/research/bluehornet-one-apt-to-terrorize-them-all/',
+                url: 'https://cyberint.com/blog/research/bluehornet-one-apt-to-terrorize-them-all/',
+            },
+            {
+                id: 'google-cloud-apt-groups',
+                name: 'Google Cloud Security: APT groups directory',
+                type: 'actor_directory',
+                provenance: 'https://cloud.google.com/security/resources/insights/apt-groups',
+                url: 'https://cloud.google.com/security/resources/insights/apt-groups',
+            },
+        ],
+        notes: [
+            'APT49 is treated as an alias collision, not a single-source certainty.',
+            'Recent attacks should update independently from this cached actor profile.',
+            'Leak-claim monitoring must stay metadata-only: company name, actor, date, claim text, claimed-data description, source reference, and review state.',
+        ],
+    }
 }
 
 interface BaselineActorProfile {
@@ -1301,6 +1518,38 @@ function mergeTtps(primary: TiTtp[], secondary: TiTtp[]) {
         }
     }
     return merged.slice(0, 6)
+}
+
+function mergeActivity(primary: TiActivity[], secondary: TiActivity[]) {
+    const merged = [...primary]
+    for (const item of secondary) {
+        if (!merged.some(existing => existing.title.toLowerCase() === item.title.toLowerCase())) {
+            merged.push(item)
+        }
+    }
+    return merged
+        .sort((a, b) => Date.parse(b.lastReportedAt ?? b.firstReportedAt ?? b.date) - Date.parse(a.lastReportedAt ?? a.firstReportedAt ?? a.date))
+        .slice(0, 8)
+}
+
+function mergeDatasets(primary: TiDataset[], secondary: TiDataset[]) {
+    const merged = [...secondary]
+    for (const item of primary) {
+        if (!merged.some(existing => existing.name.toLowerCase() === item.name.toLowerCase())) {
+            merged.push(item)
+        }
+    }
+    return merged.slice(0, 8)
+}
+
+function mergeSources(primary: TiSource[], secondary: TiSource[]) {
+    const merged = [...secondary]
+    for (const item of primary) {
+        if (!merged.some(existing => existing.id === item.id || existing.url === item.url)) {
+            merged.push(item)
+        }
+    }
+    return merged.slice(0, 10)
 }
 
 function truncateSentence(value: string, maxLength: number) {
