@@ -599,9 +599,9 @@ export function collectionStrategy(): TiCollectionStrategy {
         thesis: 'Use public indexes as seeds and corroboration, then create value through our own high-speed metadata capture, actor mapping, and company/vendor notifications.',
         productFocus: [
             'recent victim and company claims',
-            'actor, date, claimed-data, sector, country, and source metadata',
+            'actor, date, claimed-data, sector, country, and source records',
             'fast notifications when a watched company, vendor, domain, brand, or portfolio company appears',
-            'UI-friendly actor overviews with provenance, freshness, confidence, and safety boundaries'
+            'UI-friendly actor overviews with sources used, freshness, and review state'
         ],
         sourcePosture: [
             {
@@ -636,7 +636,7 @@ export function collectionStrategy(): TiCollectionStrategy {
             requirements: [
                 'isolated disposable collectors',
                 'metadata-only storage by default',
-                'source, freshness, hash, and provenance tracking',
+                'source, freshness, hash, and collection tracking',
                 'no raw leak downloads or credential values',
                 'review queues for sensitive or ambiguous captures',
                 'actor/victim/domain graph edges for the overview UI'
@@ -1261,14 +1261,14 @@ function withAutomaticProfileDefaults(profile: KnownActorContext, actorName: str
     const generatedAt = new Date().toISOString()
     const automaticActivity: TiActivity = {
         date: generatedAt.slice(0, 10),
-        title: `${actorName} profile refreshed by automatic enrichment`,
-        detail: `The enrichment worker refreshed ${actorName} from the curated actor context, shared source-pack references, live-reporting hooks, and monitoring datasets. Recent attack rows update separately when fresh source evidence appears.`,
+        title: `${actorName} actor profile updated`,
+        detail: `${actorName} was refreshed from actor directories, public reporting links, and monitored source records. Recent activity updates separately when new source evidence appears.`,
         confidence,
-        sourceIds: ['auto-enrichment-worker', 'google-cloud-apt-groups'],
+        sourceIds: ['google-cloud-apt-groups', 'mitre-attack-groups'],
         claimType: 'general_activity',
         affectedSectors: inferProfileSectors(profile.summary),
         countries: inferProfileRegions(profile.summary),
-        impact: 'Keeps the actor overview ready without waiting for a user-triggered search.',
+        impact: 'Keeps stable actor context available while recent activity is checked independently.',
         firstReportedAt: generatedAt,
         lastReportedAt: generatedAt,
         publisherCount: 2,
@@ -1284,7 +1284,7 @@ function withAutomaticProfileDefaults(profile: KnownActorContext, actorName: str
         sources: mergeSources(profile.sources ?? [], automaticActorSources(actorName)),
         notes: [
             ...(profile.notes ?? []),
-            'Stable actor fields are refreshed by the shared background enrichment sweep.',
+            'Stable actor fields are refreshed by the background actor refresh job.',
             'Recent attacks and monitored company mentions are refreshed separately from identity, alias, and TTP context.',
         ],
     }
@@ -1295,7 +1295,7 @@ function apt49ActorProfile(): KnownActorContext {
         status: 'ready',
         confidence: 0.82,
         lastSeen: '2024-12-01T00:00:00.000Z',
-        summary: 'APT49 is an ambiguous label in open reporting. Hanasand resolves it as an alias-collision profile: one track maps APT49 to Tropic Trooper, a long-running Asia-Pacific espionage actor, while Malpedia and Cyberint map BlueHornet/AgainstTheWest/APT49 to a hacktivist and leak-focused persona. Treat the name as a disambiguation problem, then monitor both tracks for company exposure, infrastructure changes, and fresh reporting.',
+        summary: 'APT49 is an ambiguous label in open reporting. Some sources map it to Tropic Trooper, a long-running Asia-Pacific espionage actor. Malpedia and Cyberint map BlueHornet/AgainstTheWest/APT49 to a hacktivist and leak-focused persona. The profile is split into both tracks until source-specific reporting makes the context clear.',
         aliases: [
             'Tropic Trooper',
             'KeyBoy',
@@ -1324,7 +1324,7 @@ function apt49ActorProfile(): KnownActorContext {
             {
                 date: '2024',
                 title: 'BlueHornet / AgainstTheWest tracked as a leak and extortion-adjacent persona',
-                detail: 'Malpedia and Cyberint both associate BlueHornet with AgainstTheWest and APT49 naming. For product purposes this is monitored as a company-exposure and leak-claim source, not as a generic malware family feed.',
+                detail: 'Malpedia and Cyberint both associate BlueHornet with AgainstTheWest and APT49 naming. Company names, domains, claimed datasets, and actor statements are tracked when this naming track appears in monitored sources.',
                 confidence: 0.84,
                 sourceIds: ['malpedia-bluehornet', 'cyberint-bluehornet'],
                 claimType: 'victim_claim',
@@ -1450,7 +1450,7 @@ function apt49ActorProfile(): KnownActorContext {
         ],
         notes: [
             'APT49 is treated as an alias collision, not a single-source certainty.',
-            'Recent attacks should update independently from this cached actor profile.',
+            'Recent activity updates independently from this cached actor profile.',
             'Leak-claim monitoring must stay metadata-only: company name, actor, date, claim text, claimed-data description, source reference, and review state.',
         ],
     }
@@ -1577,14 +1577,14 @@ function buildAutomaticBaselineProfile(profile: BaselineActorProfile): KnownActo
         recentActivity: [
             {
                 date: generatedAt.slice(0, 10),
-                title: `${primaryName} profile refreshed by automatic enrichment`,
-                detail: `The enrichment worker matched ${primaryName} aliases against the actor catalog, live clear-web discovery, source-pack references, and monitoring datasets. Recent attack rows update separately when fresh source evidence appears.`,
+                title: `${primaryName} actor profile updated`,
+                detail: `${primaryName} aliases were matched against actor directories, public reporting links, monitored source records, and the actor catalog. Recent activity updates separately when new source evidence appears.`,
                 confidence: 0.68,
-                sourceIds: ['auto-enrichment-worker', 'google-cloud-apt-groups'],
+                sourceIds: ['google-cloud-apt-groups', 'mitre-attack-groups', 'malpedia-actor-index'],
                 claimType: 'general_activity',
                 affectedSectors: inferProfileSectors(profile.summary),
                 countries: inferProfileRegions(profile.summary),
-                impact: 'Keeps the actor overview usable while live reporting and monitored source captures update independently.',
+                impact: 'Keeps stable actor context available while recent reporting and monitored source captures update independently.',
                 firstReportedAt: generatedAt,
                 lastReportedAt: generatedAt,
                 publisherCount: 2,
@@ -1595,9 +1595,9 @@ function buildAutomaticBaselineProfile(profile: BaselineActorProfile): KnownActo
         datasets: automaticActorDatasets(primaryName),
         sources: automaticActorSources(primaryName),
         notes: [
-            'Generated by the shared actor enrichment pipeline, not a one-off profile override.',
-            'Profile fields are cached and reused until source metadata or live activity changes.',
-            'Recent attacks are intentionally allowed to refresh more often than stable actor identity, aliases, and targeting context.',
+            'Shared actor refresh job; not a one-off profile override.',
+            'Profile fields are cached and reused until source records or recent activity changes.',
+            'Recent activity is allowed to refresh more often than stable actor identity, aliases, and targeting context.',
         ],
     }
 }
@@ -1665,9 +1665,9 @@ function mergeSources(primary: TiSource[], secondary: TiSource[]) {
 function automaticActorDatasets(actorName: string): TiDataset[] {
     return [
         {
-            name: `${actorName} actor profile cache`,
+            name: `${actorName} actor profile`,
             type: 'vendor_report',
-            coverage: 'Stable actor identity, aliases, targeting, tradecraft, source links, and analyst notes generated by the shared enrichment pipeline.',
+            coverage: 'Stable actor identity, aliases, targeting, tradecraft, source links, and analyst notes from the background actor refresh job.',
             status: 'available',
         },
         {
@@ -1689,17 +1689,32 @@ function automaticActorSources(actorName: string): TiSource[] {
     const query = encodeURIComponent(`${actorName} threat actor`)
     return [
         {
-            id: 'auto-enrichment-worker',
-            name: 'Hanasand actor enrichment worker',
-            type: 'enrichment_pipeline',
-            provenance: 'Alias/source-pack expansion, source freshness checks, profile cache, and recent-activity refresh.',
-        },
-        {
             id: 'google-cloud-apt-groups',
             name: 'Google Cloud Security: APT groups directory',
             type: 'actor_directory',
             provenance: 'https://cloud.google.com/security/resources/insights/apt-groups',
             url: 'https://cloud.google.com/security/resources/insights/apt-groups',
+        },
+        {
+            id: 'mitre-attack-groups',
+            name: 'MITRE ATT&CK Groups',
+            type: 'actor_directory',
+            provenance: 'https://attack.mitre.org/groups/',
+            url: 'https://attack.mitre.org/groups/',
+        },
+        {
+            id: 'malpedia-actor-index',
+            name: 'Malpedia actor index',
+            type: 'actor_directory',
+            provenance: 'https://malpedia.caad.fkie.fraunhofer.de/actors',
+            url: 'https://malpedia.caad.fkie.fraunhofer.de/actors',
+        },
+        {
+            id: 'cisa-advisories',
+            name: 'CISA cybersecurity advisories',
+            type: 'public_advisory',
+            provenance: 'https://www.cisa.gov/news-events/cybersecurity-advisories',
+            url: 'https://www.cisa.gov/news-events/cybersecurity-advisories',
         },
         {
             id: `live-news-${slugifyForId(actorName)}`,

@@ -16,7 +16,7 @@ export default async function Page() {
         <DashboardPage className='h-full'>
             <DashboardHeader
                 title='Cron jobs'
-                description='Managed host schedules, health signals, and failover maintenance jobs.'
+                description='Managed host schedules, health checks, and failover maintenance jobs.'
             />
             <CronJobsClient />
         </DashboardPage>

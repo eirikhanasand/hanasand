@@ -169,7 +169,7 @@ export default function TrafficMap({
                     <div>
                         <h1 className='text-xl font-semibold text-white'>Live Traffic Map</h1>
                         <p className='mt-1 text-sm text-white/80'>
-                            Zoomable global view of recent request hotspots, live ingress pulses, and top traffic signals.
+                            Zoomable global view of recent request hotspots, live ingress pulses, and top traffic patterns.
                         </p>
                     </div>
                     <div
@@ -462,7 +462,7 @@ export default function TrafficMap({
                     </div>
                 </InsightCard>
 
-                <InsightCard title='Traffic Signals' icon={<Activity className='h-4 w-4 stroke-orange-300' />}>
+                <InsightCard title='Traffic Activity' icon={<Activity className='h-4 w-4 stroke-orange-300' />}>
                     <SignalGroup title='Top Paths' entries={initialMetrics?.top_paths || []} valueLabel='requests' />
                     <SignalGroup title='Methods' entries={initialMetrics?.top_methods || []} valueLabel='requests' />
                     <SignalGroup title='Statuses' entries={initialMetrics?.top_status_codes || []} valueLabel='hits' />

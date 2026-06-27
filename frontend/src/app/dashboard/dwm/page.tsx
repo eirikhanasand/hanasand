@@ -13,7 +13,8 @@ const samplePayload = {
     matchedTerm: 'acme.com',
     claimSummary: 'Actor page lists a new victim claim and mentions financial records, contracts, and employee data.',
     claimedAt: '2026-06-23T07:58:00.000Z',
-    confidence: 0.84,
+    sourceCount: 3,
+    reviewState: 'needs_review',
     recommendedAction: 'Confirm the company match, notify vendor-risk or incident response, and watch for claim updates.',
 }
 

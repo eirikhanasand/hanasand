@@ -53,7 +53,7 @@ const updatedActors: TiEnrichedActor[] = [
         ],
         automationEvidence: [
             'Matched query apt49 to aliases Tropic Trooper, BlueHornet, AgainstTheWest, and KeyBoy.',
-            'Merged curated source-pack references with live reporting and scraper-backed activity rows.',
+            'Merged curated source links with live reporting and scraper-backed activity rows.',
             'Stored stable profile fields in the API response cache through the rotating background enrichment sweep; recent activity remains short-cache refreshed.',
         ],
         plannedWork: [
@@ -81,7 +81,7 @@ const updatedActors: TiEnrichedActor[] = [
         ],
         plannedWork: [
             'Refresh stable actor metadata through the always-on cache warmer.',
-            'Attach campaign-level technique evidence when reporting names tools, CVEs, or infrastructure.',
+            'Attach campaign-level technique sources when reporting names tools, CVEs, or infrastructure.',
         ],
     },
     {
@@ -177,8 +177,8 @@ const activity: TiActivityEvent[] = [
         actorId: 'apt49',
         actorName: 'APT49',
         happenedAt: '2026-06-27T17:55:00.000Z',
-        title: 'APT49 returned enriched profile plus live signals',
-        detail: 'Production API returned aliases, 8 recent signals, 3 targets, 4 TTPs, curated sources, and live reporting links.',
+        title: 'APT49 returned enriched profile plus recent activity',
+        detail: 'Production API returned aliases, recent activity, 3 targets, 4 TTPs, curated sources, and live reporting links.',
         source: 'api/ti/search automatic enrichment',
         tone: 'ok',
     },
@@ -218,11 +218,11 @@ const auditLog: TiManagementAuditEvent[] = [
     {
         id: 'audit-enrich-apt49',
         happenedAt: '2026-06-27T17:55:00.000Z',
-        actor: 'ti-enrichment-worker',
+        actor: 'ti-profile-refresh',
         action: 'profile.enrich',
         target: 'actor:apt49',
         result: 'updated',
-        detail: 'Merged source-pack links, alias collision notes, live reporting rows, inferred TTPs, datasets, and cache metadata.',
+        detail: 'Merged source links, alias collision notes, live reporting rows, inferred TTPs, datasets, and cache metadata.',
     },
     {
         id: 'audit-cache-apt49',
@@ -236,7 +236,7 @@ const auditLog: TiManagementAuditEvent[] = [
     {
         id: 'audit-enrich-apt28',
         happenedAt: '2026-06-27T17:53:00.000Z',
-        actor: 'ti-enrichment-worker',
+        actor: 'ti-profile-refresh',
         action: 'profile.enrich',
         target: 'actor:apt28',
         result: 'updated',

@@ -155,14 +155,14 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
 
                 <section className='grid gap-3'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <h2 className='text-lg font-semibold text-[#171a21]'>Actor and company signals</h2>
+                        <h2 className='text-lg font-semibold text-[#171a21]'>Actor and company activity</h2>
                         <p className='text-xs text-[#667085]'>{records.length} shown{searchIndex?.nextCursor ? ' · more available' : ''}</p>
                     </div>
                     {records.length ? (
                         <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
                             <div className='hidden grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.5fr_0.55fr] gap-3 border-b border-[#eef1f5] bg-[#f8fafc] px-3 py-2 text-xs font-semibold uppercase text-[#667085] lg:grid'>
                                 <span>Mention</span>
-                                <span>Signal type</span>
+                                <span>Activity type</span>
                                 <span>Review</span>
                                 <span>Freshness</span>
                                 <span>Language</span>
@@ -174,7 +174,7 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                         <div className='grid min-h-[28vh] place-items-center rounded-lg border border-[#dfe5ee] bg-white px-5 py-10 text-center shadow-sm'>
                             <div className='grid max-w-xl gap-3'>
                                 <Search className='mx-auto h-7 w-7 text-[#3056d3]' />
-                                <h2 className='text-xl font-semibold text-[#171a21]'>{query ? 'No matching signals in the current index' : 'Search company and actor signals'}</h2>
+                                <h2 className='text-xl font-semibold text-[#171a21]'>{query ? 'No matching activity in the current index' : 'Search company and actor activity'}</h2>
                                 <p className='text-sm leading-6 text-[#667085]'>
                                     {query
                                         ? 'Try a broader company, actor, sector, or domain. Alerts are useful when a watched term appears; empty searches stay quiet.'
@@ -208,7 +208,7 @@ function RecordRow({ record }: { record: DarkwebRecord }) {
                 <div className='flex flex-wrap gap-2 text-xs text-[#667085]'>
                     <span>{record.network}</span>
                     <span>{formatLabel(record.reviewState)}</span>
-                    <span>confidence {Math.round(record.confidence * 100)}%</span>
+                    <span>{sourceCountText(record)}</span>
                     {record.retentionClass ? <span>{record.retentionClass}</span> : null}
                 </div>
                 <Hints label='Actors' values={record.actorHints} />
@@ -217,7 +217,7 @@ function RecordRow({ record }: { record: DarkwebRecord }) {
                 {record.blockedReason ? <p className='text-xs text-[#8a5a00]'>Needs analyst review before customer alerting.</p> : null}
                 {record.classification?.reasons?.length ? <p className='text-xs leading-5 text-[#667085]'>{record.classification.reasons.join(' · ')}</p> : null}
             </div>
-            <Cell label='Signal type' value={formatLabel(record.category)} />
+            <Cell label='Activity type' value={formatLabel(record.category)} />
             <Cell label='Review' value={formatLabel(record.legalTriage)} />
             <Cell label='Freshness' value={formatLabel(record.liveness)} />
             <Cell label='Language' value={record.language} />
@@ -323,6 +323,16 @@ function formatDate(value: string | undefined, fallback = 'Checking') {
 
 function formatLabel(value: string) {
     return value.replaceAll('_', ' ')
+}
+
+function sourceCountText(record: DarkwebRecord) {
+    const count = [
+        record.provenance?.sourceHash,
+        record.provenance?.discoveryPathHash,
+        ...(record.classification?.reasons ?? []),
+    ].filter(Boolean).length
+    if (count <= 0) return 'source recorded'
+    return `${count} source detail${count === 1 ? '' : 's'}`
 }
 
 async function fetchDarkwebStatus(): Promise<DarkwebStatusResponse | null> {

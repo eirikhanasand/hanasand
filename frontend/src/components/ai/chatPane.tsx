@@ -251,7 +251,7 @@ function EmptyComposerState({ tooltip, hasReadyModel, isAuthenticated }: { toolt
                     <Bot className='h-6 w-6' />
                 </div>
                 <h2 className='mt-7 text-2xl font-semibold tracking-normal text-[#171a21]'>
-                    Review context, then ship with confidence.
+                    Review context, then ship when it is ready.
                 </h2>
                 <p className='mt-3 text-sm leading-6 text-[#596170]'>
                     {hasReadyModel

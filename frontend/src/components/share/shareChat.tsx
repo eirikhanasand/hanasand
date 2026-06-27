@@ -1441,7 +1441,7 @@ function buildPrompt(prompt: string, share: Share, editingContent: string, treeP
             'Regression accountability mode:',
             '- Users may be reacting to agents that edit before reading, miss repeated references, hallucinate test coverage, ignore failing tests, or call newly broken behavior an existing issue after context loss.',
             '- Before changing files, restate the exact regression or invariant to preserve, name the files/surfaces that must stay working, and prefer reading current content over guessing.',
-            '- Never mark tests as skipped, ignored, or out of scope to make a run pass unless the user explicitly asks. Treat failing tests and browser evidence as product signals, not obstacles.',
+            '- Never mark tests as skipped, ignored, or out of scope to make a run pass unless the user explicitly asks. Treat failing tests and browser evidence as product evidence, not obstacles.',
             '- If verification is incomplete, say what was not verified. Do not claim full success from generated checks alone; prefer real build output, real tests, real DOM selectors, and browser evidence.',
             '- When context may be stale or compacted, compare against the current file/tree and keep a small change ledger so regressions remain attributable.',
         ].join('\n') : null,
@@ -2093,14 +2093,14 @@ function reviewDesignDifferentiation(content: string, prompt: string, pendingCha
     const strengths = [
         /--[a-z0-9-]+|theme|tokens|brand|palette|typography|type scale/i.test(content) ? 'Uses brand or theme tokens.' : null,
         /<img|next\/image|background-image|\.svg|lucide-react|icon/i.test(content) ? 'Includes an asset or icon direction.' : null,
-        /\b(clamp|minmax|grid-template|container|@media|sm:|md:|lg:|max-width|min-width)\b/i.test(content) ? 'Includes responsive layout signals.' : null,
+        /\b(clamp|minmax|grid-template|container|@media|sm:|md:|lg:|max-width|min-width)\b/i.test(content) ? 'Includes responsive layout details.' : null,
         /\b(voice|tone|editorial|visual language|art direction|brand kit)\b/i.test(content) ? 'Names a specific design direction.' : null,
     ].filter(Boolean) as string[]
     const status: GateStatus = issues.length >= 2 ? 'failed' : issues.length ? 'not_verified' : 'passed'
     return {
         status,
         detail: status === 'passed'
-            ? 'Design has specific tokens, assets, hierarchy, and responsive signals.'
+            ? 'Design has specific tokens, assets, hierarchy, and responsive details.'
             : status === 'failed'
                 ? 'Design risks looking generic or AI-generated.'
                 : 'Some design checks are still missing.',

@@ -25,7 +25,7 @@ export default function TiActivityPage() {
                             <Link key={actor.id} href={`/ti/${encodeURIComponent(actor.id)}`} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 transition hover:border-[#b8c5ff] hover:bg-[#f4f7ff]'>
                                 <div className='flex flex-wrap items-center justify-between gap-3'>
                                     <h3 className='text-base font-semibold text-[#171a21]'>{actor.name}</h3>
-                                    <span className='rounded-full bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]'>{Math.round(actor.confidence * 100)}% confidence</span>
+                                    <span className='rounded-full bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]'>{actor.sourceLinks.length} sources</span>
                                 </div>
                                 <p className='mt-2 text-xs text-[#667085]'>Updated {formatTiDate(actor.lastUpdatedAt)} · next {formatTiDate(actor.nextRefreshAt)}</p>
                                 <p className='mt-2 text-sm leading-6 text-[#596170]'>{actor.changedFields.join(', ')}</p>

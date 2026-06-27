@@ -12,7 +12,8 @@ const fields = [
     'claimedAt',
     'sourceName',
     'sourceUrl',
-    'confidence',
+    'sourceCount',
+    'reviewState',
     'recommendedAction',
 ]
 
@@ -38,7 +39,7 @@ const apiUseCases = [
     'Create tickets when a watched supplier appears in a new victim claim.',
     'Attach actor, company, claimed-data text, date, and source link to vendor-risk workflows.',
     'Keep the actor overview current without manually copying from public indexes.',
-    'Route high-confidence company matches to Slack, Jira, SOAR, or a customer portal.',
+    'Route reviewed company matches to Slack, Jira, SOAR, or a customer portal.',
 ]
 
 const dwmWebhookDraftKey = 'hanasand:dwm-webhook-subscription'
@@ -163,7 +164,7 @@ export default function DarkWebMonitoringPage() {
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>API and webhook delivery</p>
                         <h2 className='text-3xl font-semibold md:text-4xl'>Attach monitoring to the system your team already uses.</h2>
                         <p className='text-base leading-7 text-[#596170]'>
-                            The API is useful because it turns scattered actor-page observations into stable fields: company, actor, matched term, claim text, source, timing, confidence, and recommended action.
+                            The API is useful because it turns scattered actor-page observations into stable fields: company, actor, matched term, claim text, source, timing, review state, and recommended action.
                         </p>
                         <div className='grid gap-3'>
                             {apiUseCases.map(useCase => (
@@ -272,7 +273,8 @@ function samplePayload(watchlist: string) {
         claimedAt: '2026-06-23T07:58:00.000Z',
         sourceName: 'monitored actor page',
         sourceUrl: 'https://hanasand.com/ti/Acme%20Payments',
-        confidence: 0.84,
+        sourceCount: 3,
+        reviewState: 'needs_review',
         recommendedAction: 'Confirm the company match, notify vendor-risk or incident response, and watch for claim updates.',
         pivots: ['Akira', 'Acme Payments', matchedTerm, 'financial records'],
     }

@@ -75,7 +75,7 @@ export default function PricingPage() {
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 md:py-20'>
                     <div className='mx-auto grid max-w-3xl justify-items-center gap-4 text-center'>
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Pricing</p>
-                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Threat monitoring priced for useful signals, not scraped volume.</h1>
+                        <h1 className='text-4xl font-semibold tracking-normal md:text-6xl'>Threat monitoring priced for useful alerts, not scraped volume.</h1>
                         <p className='text-lg leading-8 text-[#596170]'>
                             Pick the watchlist size that matches the buyer workflow. Every tier is built around recent company exposure alerts and review-ready alert data.
                         </p>

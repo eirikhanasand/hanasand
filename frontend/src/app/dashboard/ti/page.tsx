@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Camera, DatabaseZap, ExternalLink, Globe2, PlayCircle, Radar } from 'lucide-react'
+import { Camera, DatabaseZap, ExternalLink, Globe2, HelpCircle, PlayCircle, Radar } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import { getTiEnrichmentOverview } from '@/utils/tiAdmin/enrichment'
 import { formatTiDate, getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
@@ -36,7 +36,10 @@ export default function TiAdminPage() {
                 <DashboardPanel className='p-5'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-lg font-semibold text-[#171a21]'>Ingestion schedule</h2>
+                            <PanelHeading
+                                title='Ingestion schedule'
+                                description='Each row is a monitored source. Last run shows when it was checked; next run shows when the background collector will check it again.'
+                            />
                             <p className='mt-1 text-sm text-[#596170]'>Last and next source runs, sorted by the next scheduled check.</p>
                         </div>
                         <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#f2f5f9]'>
@@ -65,7 +68,10 @@ export default function TiAdminPage() {
                 </DashboardPanel>
 
                 <DashboardPanel className='p-5'>
-                    <h2 className='text-lg font-semibold text-[#171a21]'>Latest run</h2>
+                    <PanelHeading
+                        title='Latest run'
+                        description='The newest collection job result: which source ran, when it started, and how many rows, captures, and screenshots it produced.'
+                    />
                     <p className='mt-1 text-sm text-[#596170]'>{latestRun?.message || 'No run found.'}</p>
                     {latestRun ? (
                         <div className='mt-4 grid gap-3'>
@@ -83,7 +89,10 @@ export default function TiAdminPage() {
             <DashboardPanel className='p-5'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div>
-                        <h2 className='text-lg font-semibold text-[#171a21]'>Domain surfacing</h2>
+                        <PanelHeading
+                            title='Domain surfacing'
+                            description='Shows which watched company domains or names appeared in monitored results, and which sources produced those matches.'
+                        />
                         <p className='mt-1 text-sm text-[#596170]'>Which monitored domains are producing results, and which sources surfaced them.</p>
                     </div>
                     <Link href='/dashboard/ti/domains' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#f2f5f9]'>All domains</Link>
@@ -105,8 +114,11 @@ export default function TiAdminPage() {
             <DashboardPanel className='p-5'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div>
-                        <h2 className='text-lg font-semibold text-[#171a21]'>Automatic actor enrichment</h2>
-                        <p className='mt-1 text-sm text-[#596170]'>The background worker keeps stable actor profiles cached while recent activity refreshes separately.</p>
+                        <PanelHeading
+                            title='Automatic actor enrichment'
+                            description='The background job refreshes stable actor profiles, aliases, sources, targeting, and tradecraft so searches do not depend on one manual profile.'
+                        />
+                        <p className='mt-1 text-sm text-[#596170]'>The background refresh job keeps stable actor profiles cached while recent activity refreshes separately.</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         <Link href='/dashboard/ti/activity' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#f2f5f9]'>Activity</Link>
@@ -131,7 +143,10 @@ export default function TiAdminPage() {
             <DashboardPanel className='p-5'>
                 <div className='flex items-center gap-2'>
                     <Radar className='h-4 w-4 text-[#3056d3]' />
-                    <h2 className='text-lg font-semibold text-[#171a21]'>Screenshot captures</h2>
+                    <PanelHeading
+                        title='Screenshot captures'
+                        description='Visual records from monitored pages. Open a capture to see when it was published, when it was captured, ownership, page type, and metadata.'
+                    />
                 </div>
                 <div className='mt-4 grid gap-3 lg:grid-cols-3'>
                     {captures.map(capture => (
@@ -152,6 +167,26 @@ export default function TiAdminPage() {
                 </div>
             </DashboardPanel>
         </DashboardPage>
+    )
+}
+
+function PanelHeading({ title, description }: { title: string, description: string }) {
+    return (
+        <div className='flex items-center gap-2'>
+            <h2 className='text-lg font-semibold text-[#171a21]'>{title}</h2>
+            <span className='group relative inline-flex'>
+                <button
+                    type='button'
+                    aria-label={description}
+                    className='inline-flex h-6 w-6 items-center justify-center rounded-full text-[#667085] transition hover:bg-[#eef3ff] hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+                >
+                    <HelpCircle className='h-3.5 w-3.5' />
+                </button>
+                <span className='pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 rounded-lg border border-[#dfe5ee] bg-white p-3 text-left text-xs font-medium leading-5 text-[#404957] shadow-xl group-hover:block group-focus-within:block'>
+                    {description}
+                </span>
+            </span>
+        </div>
     )
 }
 

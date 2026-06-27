@@ -12,7 +12,7 @@ export const metadata: Metadata = buildRouteMetadata({
 
 const principles = [
     {
-        title: 'Direct monitoring finds the signal',
+        title: 'Direct monitoring finds the mention',
         detail: 'Public indexes help corroborate coverage while direct source checks, freshness logic, and company watchlists create the alert value.',
         icon: Radar,
     },
@@ -65,7 +65,7 @@ export default function AboutPage() {
                                 </span>
                                 <div>
                                     <h2 className='text-lg font-semibold'>Current product focus</h2>
-                                    <p className='text-sm text-[#667085]'>Monitoring workflows for buyers who need recent exposure signals.</p>
+                                    <p className='text-sm text-[#667085]'>Monitoring workflows for buyers who need recent exposure activity.</p>
                                 </div>
                             </div>
                             <div className='mt-5 grid gap-3'>

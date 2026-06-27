@@ -43,7 +43,7 @@ export default async function Page() {
             />
 
             <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-                <OverviewCard title='Signals inspected' value={formatNumber(overview.requestsToday)} detail='Recent API and monitoring activity' icon={<Activity className='h-4 w-4' />} />
+                <OverviewCard title='Activity inspected' value={formatNumber(overview.requestsToday)} detail='Recent API and monitoring activity' icon={<Activity className='h-4 w-4' />} />
                 <OverviewCard title='Watched domains' value={formatNumber(overview.activeDomains)} detail='Customer assets available for checks' icon={<Radar className='h-4 w-4' />} />
                 <OverviewCard title='Critical CVEs' value={formatNumber(overview.criticalVulnerabilities)} detail='High-severity exposure context' icon={<ShieldAlert className='h-4 w-4' />} />
                 <OverviewCard title='Indexed sources' value={formatNumber(overview.imagesScanned)} detail='Feeds and enrichment sets available for monitoring' icon={<Search className='h-4 w-4' />} />

@@ -1,7 +1,7 @@
 'use client'
 
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
-import { Activity, BellRing, Building2, Database, ExternalLink, Globe2, Radar, Search, ShieldCheck, Target, Waypoints } from 'lucide-react'
+import { Activity, BellRing, Building2, Database, ExternalLink, Globe2, HelpCircle, Radar, Search, ShieldCheck, Target, Waypoints } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
@@ -169,15 +169,15 @@ function Results({ result }: { result: TiSearchResponse }) {
                     </div>
                 </div>
                 <div className='grid gap-2 text-sm'>
-                    <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Confidence' value={`${Math.round(result.confidence * 100)}%`} />
+                    <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Sources' value={sourceCountLabel(result.sources.length)} />
                     <Metric icon={<Activity className='h-4 w-4' />} label='Updated' value={formatDate(result.generatedAt || result.lastSeen)} />
-                    <Metric icon={<Database className='h-4 w-4' />} label='Feeds' value={`${result.sources.length}`} />
-                    <Metric icon={<BellRing className='h-4 w-4' />} label='Alerting' value={result.status === 'ready' || result.status === 'partial' ? 'Active' : 'Watching'} />
+                    <Metric icon={<Database className='h-4 w-4' />} label='Activity' value={activityCountLabel(result.recentActivity.length)} />
+                    <Metric icon={<BellRing className='h-4 w-4' />} label='Monitoring' value={result.status === 'ready' || result.status === 'partial' ? 'Active' : 'Watching'} />
                 </div>
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Recent Signals' icon={<Radar className='h-4 w-4' />}>
+                <Panel title='Recent Activity' description='New or updated reporting connected to this actor, company, domain, CVE, or search term. Stable profile facts stay cached; this section is the part that changes most often.' icon={<Radar className='h-4 w-4' />}>
                     {result.recentActivity.length ? result.recentActivity.map(item => {
                         const href = item.url || item.sourceIds.map(id => sourceUrlById.get(id)).find(Boolean)
                         return (
@@ -188,14 +188,14 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 </div>
                                 <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
                                 <p className='inline-flex items-center gap-1 text-xs text-[#667085]'>
-                                    Confidence {Math.round(item.confidence * 100)}% · {item.sourceIds.length > 1 ? `${item.sourceIds.length} sources` : '1 source'}
+                                    {activitySourceLabel(item.sourceIds.length)}
                                     {href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}
                                 </p>
                             </EvidenceBox>
                         )}) : <EmptyLine text={result.status === 'searching' ? 'Searching' : 'No activity returned yet.'} />}
                 </Panel>
 
-                <Panel title='Company Exposure' icon={<Building2 className='h-4 w-4' />}>
+                <Panel title='Company Exposure' description='Company exposure means a company, domain, vendor, brand, product, or portfolio name appears in actor claims, leak posts, advisories, or monitored pages. This is the section buyers use to decide whether someone needs to review or respond.' icon={<Building2 className='h-4 w-4' />}>
                     {alertItems.length ? alertItems.map(item => (
                         <div key={item.title} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                             <div className='flex items-center justify-between gap-3'>
@@ -204,12 +204,12 @@ function Results({ result }: { result: TiSearchResponse }) {
                             </div>
                             <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
                         </div>
-                    )) : <EmptyLine text='No company exposure returned yet.' />}
+                    )) : <EmptyLine text='No company, domain, vendor, or product matches returned yet.' />}
                 </Panel>
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Targeting' icon={<Target className='h-4 w-4' />}>
+                <Panel title='Targeting' description='Industries and regions the actor is reported to target, plus why that mapping was included. Use this to judge whether the actor is relevant to your organization or customers.' icon={<Target className='h-4 w-4' />}>
                     {result.targets.length ? result.targets.map(item => (
                         <div key={item.sector} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                             <h2 className='text-sm font-semibold text-[#171a21]'>{item.sector}</h2>
@@ -221,7 +221,7 @@ function Results({ result }: { result: TiSearchResponse }) {
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Observed Tradecraft' icon={<Waypoints className='h-4 w-4' />}>
+                <Panel title='Observed Tradecraft' description='Reported tactics, techniques, and procedures, usually mapped to ATT&CK where available. This helps defenders understand how the actor tends to operate.' icon={<Waypoints className='h-4 w-4' />}>
                     {result.ttps.map(item => (
                         <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                             <div className='flex flex-wrap items-center gap-2'>
@@ -234,7 +234,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                     ))}
                 </Panel>
 
-                <Panel title='Monitoring Coverage' icon={<Globe2 className='h-4 w-4' />}>
+                <Panel title='Monitoring Coverage' description='The data families checked for this result, such as actor profiles, victim claims, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
                     {datasets.map(item => (
                         <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
                             <div className='flex items-center justify-between gap-3'>
@@ -391,12 +391,13 @@ function formatDate(value: string) {
     return parsed.toISOString().slice(0, 10)
 }
 
-function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+function Panel({ title, description, icon, children }: { title: string; description?: string; icon: React.ReactNode; children: React.ReactNode }) {
     return (
         <section className='border border-[#dfe5ee] bg-white p-4'>
             <div className='mb-2 flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
                 <span className='text-[#3056d3]'>{icon}</span>
-                {title}
+                <span>{title}</span>
+                {description ? <InfoTip label={description} /> : null}
             </div>
             {children}
         </section>
@@ -405,7 +406,7 @@ function Panel({ title, icon, children }: { title: string; icon: React.ReactNode
 
 function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture'] }) {
     return (
-        <Panel title='Monitoring Mix' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Monitoring Mix' description='How the result is assembled: public indexes can seed coverage, direct monitored pages provide freshness, and advisories add vulnerability context.' icon={<Database className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 {sources.filter(source => source.role !== 'rejected_paid_rows').slice(0, 4).map(source => (
                     <div key={`${source.source}-${source.role}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
@@ -423,10 +424,12 @@ function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchRespo
 }
 
 function SourceLinksPanel({ sources }: { sources: TiSearchResponse['sources'] }) {
+    const visibleSources = sources.slice(0, 5)
+    const hiddenCount = Math.max(0, sources.length - visibleSources.length)
     return (
-        <Panel title='Reference Links' icon={<ExternalLink className='h-4 w-4' />}>
+        <Panel title='Sources Used' description='Named sources used for this result. Public visitors see a limited set; customer console access can show additional source links and internal capture details.' icon={<ExternalLink className='h-4 w-4' />}>
             <div className='grid gap-1'>
-                {sources.slice(0, 8).map(source => {
+                {visibleSources.map(source => {
                     const href = source.url || linkFromText(source.provenance)
                     return (
                         <EvidenceBox key={source.id} href={href}>
@@ -436,8 +439,30 @@ function SourceLinksPanel({ sources }: { sources: TiSearchResponse['sources'] })
                         </EvidenceBox>
                     )
                 })}
+                {hiddenCount > 0 ? (
+                    <div className='mt-2 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 text-sm leading-6 text-[#596170]'>
+                        {hiddenCount} additional source{hiddenCount === 1 ? '' : 's'} available in the customer console.
+                    </div>
+                ) : null}
             </div>
         </Panel>
+    )
+}
+
+function InfoTip({ label }: { label: string }) {
+    return (
+        <span className='group relative inline-flex'>
+            <button
+                type='button'
+                aria-label={label}
+                className='inline-flex h-6 w-6 items-center justify-center rounded-full text-[#667085] transition hover:bg-[#eef3ff] hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+            >
+                <HelpCircle className='h-3.5 w-3.5' />
+            </button>
+            <span className='pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 rounded-lg border border-[#dfe5ee] bg-white p-3 text-left text-xs font-medium leading-5 text-[#404957] shadow-xl group-hover:block group-focus-within:block'>
+                {label}
+            </span>
+        </span>
     )
 }
 
@@ -480,6 +505,21 @@ function sourceStatusLabel(value: string) {
     if (/available|ready|active/i.test(value)) return 'Active'
     if (/context/i.test(value)) return 'Context'
     return 'Included'
+}
+
+function sourceCountLabel(count: number) {
+    if (count <= 0) return 'No sources'
+    return `${Math.min(count, 5)} shown${count > 5 ? ` of ${count}` : ''}`
+}
+
+function activityCountLabel(count: number) {
+    if (count <= 0) return 'None yet'
+    return `${count} item${count === 1 ? '' : 's'}`
+}
+
+function activitySourceLabel(count: number) {
+    if (count <= 0) return 'Source pending'
+    return count === 1 ? '1 source' : `${count} sources`
 }
 
 function updateMetaDescription(content: string) {

@@ -17,7 +17,7 @@ export default function LoadTestingPage() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Load testing'
-                title='Permitted endpoint checks and launch confidence'
+                title='Permitted endpoint checks and launch readiness'
                 description='Run lightweight checks against URLs you control, keep result links, and upgrade when the free five tries are not enough.'
                 actions={(
                     <Link href='/test' className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>

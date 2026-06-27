@@ -469,7 +469,7 @@ function draftFromWebhook(subscription: DwmWebhookDraft): AutomationPayload {
         ...newAutomationDraft([
             `Watch these companies, domains, vendors, and products for new ransomware or extortion mentions: ${terms.join(', ')}.`,
             `Send matching alerts to the configured HTTPS webhook endpoint: ${deliveryTarget}.`,
-            'Include actor, company, matchedTerm, claimSummary, claimedAt, sourceName, sourceUrl, confidence, recommendedAction, and pivots.',
+            'Include actor, company, matchedTerm, claimSummary, claimedAt, sourceName, sourceUrl, sourceCount, reviewState, recommendedAction, and pivots.',
             'Only send new or materially updated matches that need review.',
         ].join('\n')),
         name: 'Dark web monitoring webhook',
@@ -484,7 +484,7 @@ function dwmFallbackDraft(): AutomationPayload {
         ...newAutomationDraft([
             'Watch these companies, domains, vendors, and products for new ransomware or extortion mentions.',
             'Send matching alerts to the configured HTTPS webhook endpoint.',
-            'Include actor, company, matchedTerm, claimSummary, claimedAt, sourceName, sourceUrl, confidence, recommendedAction, and pivots.',
+            'Include actor, company, matchedTerm, claimSummary, claimedAt, sourceName, sourceUrl, sourceCount, reviewState, recommendedAction, and pivots.',
             'Only send new or materially updated matches that need review.',
         ].join('\n')),
         name: 'Dark web monitoring webhook',

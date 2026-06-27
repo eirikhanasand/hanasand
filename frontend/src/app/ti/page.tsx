@@ -6,7 +6,7 @@ import ConsoleRouteShell from '@/components/dashboard/consoleRouteShell'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Threat Intelligence Search',
-    description: 'Search companies, actors, domains, and recent dark web monitoring signals in Hanasand.',
+    description: 'Search companies, actors, domains, and recent dark web monitoring activity in Hanasand.',
     path: '/ti',
     keywords: ['threat intelligence search', 'dark web monitoring', 'ransomware claims'],
 })

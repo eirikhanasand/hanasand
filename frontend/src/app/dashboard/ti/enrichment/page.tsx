@@ -14,7 +14,7 @@ export default function TiEnrichmentPage() {
             <DashboardHeader
                 eyebrow='Threat intelligence'
                 title='Actor enrichment'
-                description='Automatic actor-profile enrichment queue, recent refreshes, source packs, and planned background work.'
+                description='Automatic actor-profile refresh queue, recent updates, source links, and planned background work.'
             />
 
             <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
@@ -60,7 +60,7 @@ function ActorCard({ actor, queued }: { actor: TiEnrichedActor, queued?: boolean
             <div className='mt-4 grid gap-2 sm:grid-cols-2'>
                 <Info label='Last updated' value={formatTiDate(actor.lastUpdatedAt)} />
                 <Info label='Next refresh' value={formatTiDate(actor.nextRefreshAt)} />
-                <Info label='Confidence' value={`${Math.round(actor.confidence * 100)}%`} />
+                <Info label='Sources' value={`${actor.sourceLinks.length} linked`} />
                 <Info label='Changed fields' value={actor.changedFields.length ? actor.changedFields.join(', ') : 'Queued'} />
             </div>
             <div className='mt-4'>
@@ -70,7 +70,7 @@ function ActorCard({ actor, queued }: { actor: TiEnrichedActor, queued?: boolean
                 </ul>
             </div>
             <div className='mt-4'>
-                <p className='text-xs font-semibold uppercase text-[#667085]'>Automation evidence</p>
+                <p className='text-xs font-semibold uppercase text-[#667085]'>Refresh details</p>
                 <ul className='mt-2 grid gap-2 text-sm leading-6 text-[#596170]'>
                     {actor.automationEvidence.map(item => <li key={item}>- {item}</li>)}
                 </ul>
