@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ServiceStatus } from '@/utils/status/getStatus'
 import { Activity, AlertCircle, BadgeCheck, BellRing, Binoculars, CheckCircle, Code2, HeartPulse, Search, ShieldAlert, Timer, Webhook, XCircle } from 'lucide-react'
 import ErrorNotice from '@/components/error/errorNotice'
+import { useRouter } from 'next/navigation'
 
 type DashboardProps = {
     trafficSummary: {
@@ -38,11 +39,19 @@ function relativeTime(value: string, now: number | null) {
 }
 
 export default function StatusDashboard({ trafficSummary, serviceStatus }: DashboardProps) {
+    const router = useRouter()
     const [now, setNow] = useState<number | null>(null)
 
     useEffect(() => {
         setNow(Date.now())
-    }, [])
+        const clock = window.setInterval(() => setNow(Date.now()), 1000)
+        const refresh = window.setInterval(() => router.refresh(), 60000)
+
+        return () => {
+            window.clearInterval(clock)
+            window.clearInterval(refresh)
+        }
+    }, [router])
 
     const nowMs = now ?? Date.now()
     const visibleChecks = serviceStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs))
