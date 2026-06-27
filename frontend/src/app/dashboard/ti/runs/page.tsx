@@ -7,7 +7,8 @@ import ManualRunButton from '../manualRunButton'
 export const dynamic = 'force-dynamic'
 
 export default function TiRunsPage() {
-    const { runs } = getTiAdminOverview()
+    const { runs, sources } = getTiAdminOverview()
+    const runQueries = [...new Set(sources.flatMap(source => source.domains).filter(domain => !domain.includes('only')))]
 
     return (
         <DashboardPage>
@@ -15,7 +16,7 @@ export default function TiRunsPage() {
                 eyebrow='Threat intelligence'
                 title='Runs'
                 description='Recent collection runs, row counts, screenshots, and next scheduled checks.'
-                actions={<ManualRunButton label='Start manual run' />}
+                actions={<ManualRunButton label='Start manual run' queries={runQueries} />}
             />
 
             <DashboardPanel className='overflow-x-auto'>

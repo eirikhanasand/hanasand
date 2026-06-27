@@ -34,7 +34,7 @@ export default function TiSourcesPage() {
                                     <p className='mt-2 max-w-4xl text-sm leading-6 text-[#596170]'>{source.buyerValue}</p>
                                 </div>
                                 <div className='flex flex-wrap gap-2'>
-                                    <ManualRunButton sourceId={source.id} label='Run now' />
+                                    <ManualRunButton sourceId={source.id} label='Run now' queries={source.domains.filter(domain => !domain.includes('only'))} />
                                     <Link href={`/dashboard/ti/sources/${source.id}`} className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
                                         Details
                                         <ExternalLink className='h-4 w-4' />

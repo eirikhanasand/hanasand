@@ -24,7 +24,7 @@ export default async function TiSourceDetailPage(props: { params: Promise<{ id: 
                 eyebrow='Threat intelligence source'
                 title={source.name}
                 description={source.buyerValue}
-                actions={<ManualRunButton sourceId={source.id} label='Run this source' />}
+                actions={<ManualRunButton sourceId={source.id} label='Run this source' queries={source.domains.filter(domain => !domain.includes('only'))} />}
             />
 
             <div className='flex'>

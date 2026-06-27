@@ -11,6 +11,7 @@ export default function TiAdminPage() {
     const activeSources = sources.filter(source => source.status === 'active').length
     const nextRun = [...sources].sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const latestRun = [...runs].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0]
+    const runQueries = [...new Set(sources.flatMap(source => source.domains).filter(domain => !domain.includes('only')))]
 
     return (
         <DashboardPage>
@@ -18,7 +19,7 @@ export default function TiAdminPage() {
                 eyebrow='Threat intelligence'
                 title='TI operations'
                 description='Admin view for source ingestion, run timing, domain-to-result surfacing, screenshot captures, and source metadata.'
-                actions={<ManualRunButton label='Start all-source run' />}
+                actions={<ManualRunButton label='Start all-source run' queries={runQueries} />}
             />
 
             <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
