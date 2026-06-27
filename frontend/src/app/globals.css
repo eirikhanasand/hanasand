@@ -314,6 +314,76 @@ html.dark:not(.light) header [class*="group-hover:bg-[#f1f4f8]"] {
   background-color: rgba(255, 255, 255, 0.08) !important;
 }
 
+.landing-primary-action {
+  border-color: #171a21 !important;
+  background-color: #171a21 !important;
+  color: #ffffff !important;
+}
+
+.landing-primary-action:hover {
+  background-color: #2b2f39 !important;
+}
+
+.landing-inner-pill {
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+}
+
+.landing-status-pill {
+  border-color: #cfd8e6 !important;
+  background-color: #ffffff !important;
+  color: #344054 !important;
+}
+
+.landing-live-pill {
+  border-color: #b9e8c9 !important;
+  background-color: #e9f8ef !important;
+  color: #147a3b !important;
+}
+
+.landing-text-action {
+  color: #171a21 !important;
+}
+
+.landing-action-icon {
+  color: #171a21 !important;
+}
+
+html.dark:not(.light) .landing-primary-action {
+  border-color: #334767 !important;
+  background-color: #172234 !important;
+  color: #f5f7fb !important;
+}
+
+html.dark:not(.light) .landing-primary-action:hover {
+  background-color: #1d2b42 !important;
+}
+
+html.dark:not(.light) .landing-inner-pill {
+  background-color: #243856 !important;
+  color: #c9d8ff !important;
+}
+
+html.dark:not(.light) .landing-status-pill {
+  border-color: #334767 !important;
+  background-color: #172234 !important;
+  color: #d9e2f2 !important;
+}
+
+html.dark:not(.light) .landing-live-pill {
+  border-color: #295f43 !important;
+  background-color: #123224 !important;
+  color: #7de0a2 !important;
+}
+
+html.dark:not(.light) .landing-text-action {
+  color: #d9e2f2 !important;
+}
+
+html.dark:not(.light) .landing-action-icon {
+  color: #9db4ff !important;
+}
+
 button:not(:disabled),
 [role="button"],
 [onclick] {
