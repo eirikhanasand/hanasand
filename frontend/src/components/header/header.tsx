@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, LockKeyhole, MenuIcon, Radar, Search, ShieldCheck, Waypoints, X } from 'lucide-react'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Radar, Search, ShieldCheck, Waypoints, X } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -18,12 +18,14 @@ import { useState } from 'react'
 const productItems = [
     { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, and alert context.', href: '/ti', icon: Radar },
     { title: 'Dark Web Monitoring', detail: 'Webhook-ready company and vendor alerts from monitored actor pages.', href: '/solutions/dwm', icon: BellRing },
+    { title: 'Load Testing', detail: 'Permitted endpoint checks with five free tries and paid monthly tiers.', href: '/test', icon: Gauge },
     { title: 'Actor Overview', detail: 'Actor profiles, victim pivots, and review-ready timelines.', href: '/ti', icon: Waypoints },
 ]
 
 const solutionItems = [
     { title: 'All Solutions', detail: 'Monitoring, API delivery, and private exposure checking.', href: '/solutions', icon: ShieldCheck },
     { title: 'Dark Web Monitoring', detail: 'High-speed exposure notifications for watched companies.', href: '/solutions/dwm', icon: BellRing },
+    { title: 'Load Testing', detail: 'Check URLs you control before launches and customer handoffs.', href: '/test', icon: Gauge },
     { title: 'Bloom Filter', detail: 'Private breach and password exposure checks.', href: '/pwned', icon: LockKeyhole },
 ]
 
@@ -63,6 +65,7 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
 const mobilePublicLinks = [
     { label: 'Threat search', href: '/ti' },
     { label: 'Dark web monitoring', href: '/solutions/dwm' },
+    { label: 'Load testing', href: '/test' },
     { label: 'Solutions', href: '/solutions' },
     { label: 'Developers', href: '/developers' },
     { label: 'Pricing', href: '/pricing' },

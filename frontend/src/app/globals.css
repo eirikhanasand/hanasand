@@ -189,12 +189,44 @@ body {
   background-color: #ffffff !important;
 }
 
-.dark header {
+.light header [class*="text-[#20242c]"],
+.light header [class*="text-[#3a404b]"],
+.light header [class*="text-[#2f3540]"],
+.light header [class*="text-[#4b5565]"],
+.light header [class*="text-[#111827]"],
+.light header [class*="text-[#16181d]"],
+.light header [class*="text-[#171a21]"] {
+  color: #171a21 !important;
+}
+
+.light header [class*="text-[#596170]"],
+.light header [class*="text-[#667085]"],
+.light header [class*="text-[#7a8493]"],
+.light header [class*="text-[#8c95a5]"] {
+  color: #4b5565 !important;
+}
+
+.light header [class*="text-[#3056d3]"] {
+  color: #3056d3 !important;
+}
+
+.light header [class*="bg-white"],
+.light header [class*="bg-[#f8fafc]"] {
+  background-color: #ffffff !important;
+}
+
+.light header [class*="border-[#e0e5ed]"],
+.light header [class*="border-[#e1e7f0]"],
+.light header [class*="border-[#dfe5ee]"] {
+  border-color: #d8dee9 !important;
+}
+
+html.dark:not(.light) header {
   background-color: #0e1520 !important;
 }
 
-.dark header[class*="bg-white"],
-.dark header[class*="bg-white/"] {
+html.dark:not(.light) header[class*="bg-white"],
+html.dark:not(.light) header[class*="bg-white/"] {
   background-color: #0e1520 !important;
 }
 
@@ -264,21 +296,21 @@ body {
   box-shadow: 0 20px 70px rgba(0, 0, 0, 0.34) !important;
 }
 
-.dark header [class*="text-[#3a404b]"],
-.dark header [class*="text-[#2f3540]"],
-.dark header [class*="text-[#4b5565]"],
-.dark header [class*="text-[#111827]"],
-.dark header [class*="text-[#16181d]"] {
+html.dark:not(.light) header [class*="text-[#3a404b]"],
+html.dark:not(.light) header [class*="text-[#2f3540]"],
+html.dark:not(.light) header [class*="text-[#4b5565]"],
+html.dark:not(.light) header [class*="text-[#111827]"],
+html.dark:not(.light) header [class*="text-[#16181d]"] {
   color: #d9e2f2 !important;
 }
 
-.dark header [class*="text-[#7a8493]"] {
+html.dark:not(.light) header [class*="text-[#7a8493]"] {
   color: #8d9bb2 !important;
 }
 
-.dark header [class*="hover:bg-[#f1f4f8]"]:hover,
-.dark header [class*="hover:bg-[#f6f8fb]"]:hover,
-.dark header [class*="group-hover:bg-[#f1f4f8]"] {
+html.dark:not(.light) header [class*="hover:bg-[#f1f4f8]"]:hover,
+html.dark:not(.light) header [class*="hover:bg-[#f6f8fb]"]:hover,
+html.dark:not(.light) header [class*="group-hover:bg-[#f1f4f8]"] {
   background-color: rgba(255, 255, 255, 0.08) !important;
 }
 

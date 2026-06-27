@@ -3,7 +3,7 @@
 import config from '@/config'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, Globe, LockKeyhole, Radar, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
+import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, Gauge, Globe, LockKeyhole, Radar, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
 import isSharePath from '@/utils/routes/isSharePath'
 import BrandLogo from '@/components/brand/brandLogo'
 
@@ -13,6 +13,7 @@ const footerGroups = [
         links: [
             { label: 'Threat Intelligence', href: '/ti', icon: Radar },
             { label: 'Dark Web Monitoring', href: '/solutions/dwm', icon: BellRing },
+            { label: 'Load Testing', href: '/test', icon: Gauge },
             { label: 'Actor Overview', href: '/ti', icon: Waypoints },
         ],
     },

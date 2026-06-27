@@ -8,7 +8,7 @@ export default function ThemeSwitch() {
     const [theme, setTheme] = useState<'dark' | 'light'>('light')
 
     useEffect(() => {
-        const savedTheme = getCookie('theme') as 'dark' | 'light'
+        const savedTheme = normalizeTheme(getCookie('theme'))
         if (savedTheme) {
             setTheme(savedTheme)
             document.documentElement.classList.remove('dark', 'light')
@@ -42,6 +42,14 @@ export default function ThemeSwitch() {
             <ThemeIcon />
         </button>
     )
+}
+
+function normalizeTheme(value: string | null | undefined): 'dark' | 'light' | null {
+    if (value === 'dark' || value === 'light') {
+        return value
+    }
+
+    return null
 }
 
 function ThemeIcon() {

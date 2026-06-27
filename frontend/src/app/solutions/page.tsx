@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BellRing, Code2, Database, LockKeyhole, Radar, ShieldCheck, Waypoints } from 'lucide-react'
+import { ArrowRight, BellRing, Code2, Database, Gauge, LockKeyhole, Radar, ShieldCheck, Waypoints } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
@@ -34,6 +34,14 @@ const primarySolutions = [
         href: '/pwned',
         icon: LockKeyhole,
         points: ['Private matching', 'Low-friction checks', 'Clean customer workflow'],
+    },
+    {
+        title: 'Load Testing',
+        eyebrow: '5 free tries',
+        detail: 'Run permitted endpoint checks against URLs you control, keep result links, and upgrade into monthly check tiers when launch work gets serious.',
+        href: '/test',
+        icon: Gauge,
+        points: ['5 checks before payment', 'Starter and team tiers', 'Shareable result links'],
     },
 ]
 
