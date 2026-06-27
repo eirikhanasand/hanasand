@@ -209,14 +209,14 @@ function Results({ result }: { result: TiSearchResponse }) {
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Targeting' description='Industries and regions the actor is reported to target, plus why that mapping was included. Use this to judge whether the actor is relevant to your organization or customers.' icon={<Target className='h-4 w-4' />}>
+                <Panel title='Typical Victims' description='Industries and regions the actor is reported to target, plus why that mapping was included. Use this to judge whether the actor is relevant to your organization or customers.' icon={<Target className='h-4 w-4' />}>
                     {result.targets.length ? result.targets.map(item => (
                         <div key={item.sector} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                             <h2 className='text-sm font-semibold text-[#171a21]'>{item.sector}</h2>
                             <p className='text-xs text-[#667085]'>{item.regions.join(', ')}</p>
                             <p className='text-sm leading-6 text-[#596170]'>{item.rationale}</p>
                         </div>
-                    )) : <EmptyLine text='No targeting returned yet.' />}
+                    )) : <EmptyLine text='No typical victim pattern returned yet.' />}
                 </Panel>
             </section>
 
@@ -226,7 +226,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                             <div className='flex flex-wrap items-center gap-2'>
                                 <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
-                                {item.attackId ? <span className='text-xs text-[#3056d3]'>{item.attackId}</span> : null}
+                                {item.attackId ? <TechniqueBadge attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} /> : null}
                             </div>
                             <p className='text-xs text-[#667085]'>{item.tactic}</p>
                             <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
@@ -464,6 +464,46 @@ function InfoTip({ label }: { label: string }) {
             </span>
         </span>
     )
+}
+
+function TechniqueBadge({ attackId, name, tactic, detail }: { attackId: string; name: string; tactic: string; detail: string }) {
+    const description = techniqueDescription(attackId, name, tactic, detail)
+    return (
+        <span className='group relative inline-flex'>
+            <a
+                href={`https://attack.mitre.org/techniques/${attackId.replace('.', '/')}/`}
+                target='_blank'
+                rel='noopener noreferrer'
+                aria-label={`${attackId}: ${description}`}
+                className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-1.5 py-0.5 text-xs font-semibold text-[#3056d3] transition hover:border-[#3056d3] hover:bg-[#e1e9ff] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+            >
+                {attackId}
+            </a>
+            <span className='pointer-events-none absolute left-1/2 top-7 z-20 hidden w-80 -translate-x-1/2 rounded-lg border border-[#dfe5ee] bg-white p-3 text-left text-xs font-medium leading-5 text-[#404957] shadow-xl group-hover:block group-focus-within:block'>
+                <span className='block font-semibold text-[#171a21]'>{attackId}: {name}</span>
+                <span className='mt-1 block text-[#667085]'>{tactic}</span>
+                <span className='mt-2 block'>{description}</span>
+            </span>
+        </span>
+    )
+}
+
+function techniqueDescription(attackId: string, name: string, tactic: string, detail: string) {
+    const descriptions: Record<string, string> = {
+        'T1005': 'Data from Local System: collecting files or data from a compromised computer before staging, exfiltration, or further use.',
+        'T1078': 'Valid Accounts: using legitimate user, service, or cloud accounts to access systems and avoid obvious intrusion paths.',
+        'T1078.004': 'Valid Accounts: Cloud Accounts: using legitimate cloud account credentials to access cloud-hosted services and resources.',
+        'T1102': 'Web Service: using an external web service as part of command-and-control or operational infrastructure.',
+        'T1105': 'Ingress Tool Transfer: moving tools, malware, scripts, or payloads into a compromised environment.',
+        'T1110': 'Brute Force: trying passwords, password hashes, or credential material to gain access to accounts.',
+        'T1110.003': 'Password Spraying: trying a small number of common passwords across many accounts to avoid lockouts.',
+        'T1114': 'Email Collection: collecting email messages or mail data from local systems, remote services, or cloud mailboxes.',
+        'T1486': 'Data Encrypted for Impact: encrypting data on target systems to disrupt operations or support extortion.',
+        'T1566': 'Phishing: sending deceptive messages to trick users into opening links, attachments, or giving up access.',
+        'T1566.001': 'Spearphishing Attachment: sending targeted emails with malicious attachments to gain execution or access.',
+        'T1567': 'Exfiltration Over Web Service: sending stolen data to a web service controlled by, or usable by, the actor.',
+    }
+    return descriptions[attackId] ?? `${name}: ${detail || `Reported under the ${tactic} tactic.`}`
 }
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
