@@ -1,0 +1,217 @@
+export type DwmSourceFamily = 'telegram_public' | 'darkweb_metadata' | 'actor_page' | 'public_advisory' | 'clear_web'
+export type DwmSeverity = 'critical' | 'high' | 'medium' | 'low'
+
+export type DwmWatchTerm = {
+    value: string
+    kind: 'company' | 'domain' | 'vendor' | 'brand' | 'vip' | 'product' | 'unknown'
+}
+
+export type DwmAlert = {
+    id: string
+    eventType: 'darkweb.monitoring.match'
+    severity: DwmSeverity
+    confidence: number
+    matchedTerm: DwmWatchTerm
+    company: string
+    actor?: string
+    artifactType: string
+    sourceFamily: DwmSourceFamily
+    sourceCount: number
+    firstSeenAt: string
+    claimSummary: string
+    reviewState: string
+    recommendedAction: string
+    evidence: Array<{
+        id: string
+        sourceName: string
+        sourceFamily: DwmSourceFamily
+        captureMode: 'public_message' | 'metadata_only' | 'public_report'
+        redactionState: 'redacted' | 'metadata_only' | 'public_safe'
+        contentHash: string
+        excerpt: string
+    }>
+    webhookDelivery: {
+        recommendedRoute: 'identity_response' | 'vendor_risk' | 'incident_response' | 'brand_protection' | 'analyst_review'
+        payloadHash: string
+        dedupeKey: string
+    }
+}
+
+export type DwmSourceCoverage = {
+    family: DwmSourceFamily
+    label: string
+    sourceCount: number
+    activeCount: number
+    approvalState: 'active' | 'canary' | 'approval_required' | 'missing'
+    health: 'healthy' | 'partial' | 'missing'
+    detail: string
+}
+
+export type DwmProductSnapshot = {
+    schemaVersion: 'dwm.product.v1'
+    generatedAt: string
+    tenantId: string
+    watchlist: DwmWatchTerm[]
+    alerts: DwmAlert[]
+    sourceCoverage: DwmSourceCoverage[]
+    onDemandQueue: Array<{
+        id: string
+        target: string
+        type: 'telegram_channel' | 'restricted_metadata' | 'actor_scope' | 'sector_scope' | 'language_scope'
+        priority: 'critical' | 'high' | 'medium'
+        scope: string
+        approvalState: 'draft' | 'queued' | 'approved_metadata_only' | 'blocked'
+        nextAction: string
+    }>
+    readiness: {
+        decision: 'production_ready_with_live_sources' | 'demo_ready_needs_live_sources' | 'blocked_missing_watchlist'
+        blockers: string[]
+        advantages: string[]
+        nextWorkItem: string
+    }
+}
+
+export function demoDwmProductSnapshot(generatedAt = '2026-06-27T21:20:00.000Z'): DwmProductSnapshot {
+    const watchlist: DwmWatchTerm[] = [
+        { value: 'acme.com', kind: 'domain' },
+        { value: 'Acme Payments', kind: 'company' },
+        { value: 'Northwind Supplier', kind: 'vendor' },
+        { value: 'fjordenergy.example', kind: 'domain' },
+    ]
+
+    return {
+        schemaVersion: 'dwm.product.v1',
+        generatedAt,
+        tenantId: 'tenant_demo',
+        watchlist,
+        alerts: [
+            {
+                id: 'dwm_alert_identity_acme_lumma',
+                eventType: 'darkweb.monitoring.match',
+                severity: 'critical',
+                confidence: 91,
+                matchedTerm: watchlist[0],
+                company: 'Acme Payments',
+                actor: 'Lumma C2',
+                artifactType: 'session_or_token_hint',
+                sourceFamily: 'telegram_public',
+                sourceCount: 5,
+                firstSeenAt: '2026-06-27T21:14:00.000Z',
+                claimSummary: 'Public Telegram broker-room metadata claims acme.com appears in a stealer-log bundle with Okta session cookies, OAuth tokens, and AWS IAM key hints.',
+                reviewState: 'validate_identity',
+                recommendedAction: 'Validate the identity match, revoke live sessions, rotate affected keys, and route to incident response without storing raw stolen material.',
+                evidence: [
+                    {
+                        id: 'ev_tel_acme_lumma',
+                        sourceName: 'Public Telegram broker-room coverage',
+                        sourceFamily: 'telegram_public',
+                        captureMode: 'public_message',
+                        redactionState: 'redacted',
+                        contentHash: 'f91d0c2a',
+                        excerpt: 'acme.com matched in a redacted public Telegram stealer-log listing.',
+                    },
+                    {
+                        id: 'ev_dark_acme_actor',
+                        sourceName: 'Actor-page metadata mirror',
+                        sourceFamily: 'darkweb_metadata',
+                        captureMode: 'metadata_only',
+                        redactionState: 'metadata_only',
+                        contentHash: 'a52c113e',
+                        excerpt: 'Metadata-only actor page includes Acme Payments as claimed victim with financial records category.',
+                    },
+                ],
+                webhookDelivery: {
+                    recommendedRoute: 'identity_response',
+                    payloadHash: '4c08a98d',
+                    dedupeKey: 'dwm_dedupe_acme_identity',
+                },
+            },
+            {
+                id: 'dwm_alert_vendor_northwind',
+                eventType: 'darkweb.monitoring.match',
+                severity: 'high',
+                confidence: 84,
+                matchedTerm: watchlist[2],
+                company: 'Northwind Supplier',
+                actor: 'RansomHouse',
+                artifactType: 'vendor_claim',
+                sourceFamily: 'darkweb_metadata',
+                sourceCount: 3,
+                firstSeenAt: '2026-06-27T20:51:00.000Z',
+                claimSummary: 'Restricted metadata sources claim a watched supplier appears in an actor-page update with procurement and customer-record categories.',
+                reviewState: 'needs_review',
+                recommendedAction: 'Route to vendor-risk workflow, ask the supplier owner for confirmation, and keep actor mirrors on 30-minute watch.',
+                evidence: [
+                    {
+                        id: 'ev_dark_northwind',
+                        sourceName: 'Restricted actor-page metadata',
+                        sourceFamily: 'darkweb_metadata',
+                        captureMode: 'metadata_only',
+                        redactionState: 'metadata_only',
+                        contentHash: 'c61be8a1',
+                        excerpt: 'Northwind Supplier appears in actor-page metadata with claimed procurement data.',
+                    },
+                ],
+                webhookDelivery: {
+                    recommendedRoute: 'vendor_risk',
+                    payloadHash: '8c10f2bd',
+                    dedupeKey: 'dwm_dedupe_northwind_vendor',
+                },
+            },
+        ],
+        sourceCoverage: [
+            { family: 'telegram_public', label: 'Public Telegram', sourceCount: 54, activeCount: 38, approvalState: 'active', health: 'partial', detail: 'Broker rooms, ransomware mirrors, combo-list drops, stealer-log shops, and phishing-kit seller channels.' },
+            { family: 'darkweb_metadata', label: 'Dark web metadata', sourceCount: 18, activeCount: 12, approvalState: 'active', health: 'partial', detail: 'Actor pages, leak-site mirrors, first-seen times, screenshots, hashes, and victim/data-type metadata.' },
+            { family: 'actor_page', label: 'Actor pages', sourceCount: 11, activeCount: 9, approvalState: 'active', health: 'partial', detail: 'Ransomware and extortion actor pages normalized into victim, sector, country, and mirror-state fields.' },
+            { family: 'public_advisory', label: 'Public advisories', sourceCount: 32, activeCount: 32, approvalState: 'active', health: 'healthy', detail: 'CERT, vendor reports, GitHub advisories, malware infrastructure feeds, and corroborating public reports.' },
+            { family: 'clear_web', label: 'Clear-web corroboration', sourceCount: 27, activeCount: 25, approvalState: 'active', health: 'partial', detail: 'Searchable public context used to reduce false positives before customer delivery.' },
+        ],
+        onDemandQueue: [
+            { id: 'req_session_replay_market', target: 't.me/session_replay_market', type: 'telegram_channel', priority: 'high', scope: 'acme.com plus subsidiaries', approvalState: 'queued', nextAction: 'Run public-channel compliance checks and promote approved messages to continuous polling.' },
+            { id: 'req_actor_mirror', target: 'new onion ransomware mirror', type: 'restricted_metadata', priority: 'high', scope: 'financial services vendors', approvalState: 'approved_metadata_only', nextAction: 'Block payload paths and capture actor, victim, first-seen, mirror, screenshot, and hash metadata only.' },
+            { id: 'req_lumma_cluster', target: 'Lumma broker alias cluster', type: 'actor_scope', priority: 'medium', scope: 'identity exposure', approvalState: 'queued', nextAction: 'Link aliases to Telegram and clear-web corroboration sources before customer alerting.' },
+        ],
+        readiness: {
+            decision: 'demo_ready_needs_live_sources',
+            blockers: [
+                'Persist tenant-specific DWM watchlists instead of using the preview snapshot.',
+                'Schedule live public Telegram polling and source health rollups for approved channels.',
+                'Persist webhook delivery attempts and replay state per alert dedupe key.',
+            ],
+            advantages: [
+                'Telegram is modeled as a first-class source family, not a keyword side feed.',
+                'Restricted dark web monitoring is metadata-only by default, avoiding bulk scraped-row bloat.',
+                'Every alert includes source evidence, confidence, review state, and a recommended customer workflow.',
+                'On-demand collection requests become approval packets before continuous monitoring.',
+            ],
+            nextWorkItem: 'Persist DWM watchlists and webhook subscriptions, then connect the TI /v1/dwm/product route to scheduled Telegram polling.',
+        },
+    }
+}
+
+export function dwmWebhookPayload(alert: DwmAlert) {
+    return {
+        eventType: alert.eventType,
+        alertId: alert.id,
+        severity: alert.severity,
+        confidence: alert.confidence,
+        company: alert.company,
+        matchedTerm: alert.matchedTerm.value,
+        actor: alert.actor,
+        artifactType: alert.artifactType,
+        sourceFamily: alert.sourceFamily,
+        sourceCount: alert.sourceCount,
+        firstSeenAt: alert.firstSeenAt,
+        claimSummary: alert.claimSummary,
+        reviewState: alert.reviewState,
+        recommendedAction: alert.recommendedAction,
+        evidence: alert.evidence.map(item => ({
+            id: item.id,
+            sourceName: item.sourceName,
+            captureMode: item.captureMode,
+            redactionState: item.redactionState,
+            contentHash: item.contentHash,
+        })),
+        delivery: alert.webhookDelivery,
+    }
+}

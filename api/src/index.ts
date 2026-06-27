@@ -12,7 +12,7 @@ import ensureSchema from '#utils/db/ensureSchema.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import recordTraffic from '#utils/traffic/recordTraffic.ts'
 import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
-import { warmThreatActorProfileCache } from '#utils/ti/search.ts'
+import { recordThreatActorProfileWarmFailure, warmThreatActorProfileCache } from '#utils/ti/search.ts'
 
 const fastify = Fastify({
     logger: true
@@ -121,6 +121,7 @@ async function start() {
         }
         await fastify.listen({ port, host: '0.0.0.0' })
         void warmThreatActorProfileCache(8).catch(error => {
+            recordThreatActorProfileWarmFailure(error)
             fastify.log.warn({ error }, 'Failed to warm threat actor profile cache')
         })
         if (process.env.SKIP_REPOSITORY_SYNC !== '1') {

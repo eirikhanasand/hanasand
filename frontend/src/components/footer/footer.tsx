@@ -3,7 +3,7 @@
 import config from '@/config'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, Gauge, Globe, LockKeyhole, Radar, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
+import { Activity, ArrowUpRight, BellRing, BookOpen, Code2, Gauge, Globe, LockKeyhole, Network, Radar, ShieldCheck, Sparkles, Waypoints } from 'lucide-react'
 import isSharePath from '@/utils/routes/isSharePath'
 import BrandLogo from '@/components/brand/brandLogo'
 
@@ -12,6 +12,7 @@ const footerGroups = [
         title: 'Product',
         links: [
             { label: 'Threat Intelligence', href: '/ti', icon: Radar },
+            { label: 'Onion Sessions', href: '/solutions/onion-session', icon: Network },
             { label: 'Dark Web Monitoring', href: '/solutions/dwm', icon: BellRing },
             { label: 'Load Testing', href: '/test', icon: Gauge },
             { label: 'Actor Overview', href: '/ti', icon: Waypoints },
@@ -63,7 +64,7 @@ export default function Footer() {
                 <div className='min-w-0'>
                     <BrandLogo />
                     <p className='mt-4 max-w-md text-sm leading-6 text-[#596170] dark:text-[#a8b3c5]'>
-                        Company exposure monitoring, actor context, webhook alerts, and developer-ready threat intelligence under one product shell.
+                        Telegram and dark web monitoring, actor context, identity exposure alerts, and developer-ready threat intelligence under one product shell.
                     </p>
                     <div className='mt-4 flex flex-wrap gap-2'>
                         <span className='inline-flex items-center gap-1.5 rounded-full border border-[#dfe5ee] bg-white px-2.5 py-1 text-[11px] text-[#3d4656] dark:border-[#26344a] dark:bg-[#111927] dark:text-[#d9e2f2]'>

@@ -8,9 +8,9 @@ export function taskFor(source: any, at: string, runId: string, maxBytes: number
 }
 
 export async function fetchItems(source: any, task: any, fetcher: CanaryFetch, mode: string, at: string, maxBytes: number, timeoutMs = 12_000) {
-  const started = Date.now(), res = await fetcher(task.targetUrl, { headers: { "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" }, signal: AbortSignal.timeout(timeoutMs) });
+  const started = Date.now(), requestedUrl = publicFetchUrl(source, task.targetUrl), res = await fetcher(requestedUrl, { headers: { "user-agent": "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" }, signal: AbortSignal.timeout(timeoutMs) });
   const fetched = (await res.text()).slice(0, maxBytes);
-  const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(res.url || task.targetUrl), responseBytes: fetched.length, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v1", requestedUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(res.url || task.targetUrl), httpStatus: res.status, ok: res.ok, contentType: res.headers.get("content-type") ?? undefined, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: fetched.length, maxBytes, truncated: fetched.length >= maxBytes, bounded: true, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
+  const metadata = { canaryPortfolio: true, fetchMode: mode, finalUrlHash: hashContent(res.url || requestedUrl), responseBytes: fetched.length, fetchProvenance: { mode, adapterVersion: "public_canary_fetcher:v1", requestedUrlHash: hashContent(requestedUrl), sourceUrlHash: hashContent(task.targetUrl), finalUrlHash: hashContent(res.url || requestedUrl), httpStatus: res.status, ok: res.ok, contentType: res.headers.get("content-type") ?? undefined, fetchedAt: at, durationMs: Date.now() - started, bytesReceived: fetched.length, maxBytes, truncated: fetched.length >= maxBytes, bounded: true, userAgent: "hanasand-ti-scraper-canary/0.1 (+safe-public-canary)" } };
   return feedItems(source, task, fetched, at, metadata, maxItemsFor(source));
 }
 
@@ -42,3 +42,9 @@ export function storageStats(captures: any[]) {
 }
 
 export function maxItemsFor(source: any) { return source.id === "src_canary_ransomwarelive" ? 120 : source.metadata?.maxItemsPerFetch; }
+
+function publicFetchUrl(source: any, targetUrl: string) {
+  if (source.type !== "telegram_public") return targetUrl;
+  const match = targetUrl.match(/(?:https?:\/\/)?t\.me\/(?:s\/)?([a-zA-Z0-9_]+)/);
+  return match ? `https://t.me/s/${match[1]}` : targetUrl;
+}

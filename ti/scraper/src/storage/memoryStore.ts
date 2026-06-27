@@ -12,6 +12,7 @@ const put = <T extends { id: string }>(map: Map<string, T>, item: T) => (map.set
 export class InMemoryScraperStore implements ScraperStore {
   private captures = new Map<string, RawCapture>(); private dedupe = new Map<string, string>(); private incidents = new Map<string, IncidentCandidate>(); private sources = new Map<string, SourceRecord>(); private plans = new Map<string, any>(); private runs = new Map<string, any>();
   private analystMetadataReviewTasks = new Map<string, any>(); private analystSourceActivationPackets = new Map<string, any>(); private analystVictimNotificationPackets = new Map<string, any>(); private analystClaimLedgerEntries = new Map<string, any>(); private analystLoopSnapshots = new Map<string, any>();
+  private dwmWatchlists = new Map<string, any>(); private dwmAlerts = new Map<string, any>(); private dwmWebhookDeliveries = new Map<string, any>();
   private replayJobs = new Map<string, CaptureReplayJob>(); private discoveryEvidence = new Map<string, DiscoveryEvidence>(); private liveSearchSnapshots = new Map<string, LiveSearchSnapshot>(); private evidenceDeltas = new Map<string, EvidenceDelta>(); private cursorOwners = new Map<string, string>(); private sequence = 0;
   private evidenceQueries = new InMemoryEvidenceQueries(() => ({ captures: this.listCaptures(), incidents: this.listIncidents(), replayJobs: this.listReplayJobs(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas() }));
   saveCapture(capture: RawCapture): RawCapture { return this.saveCaptureWithDedupe(capture).capture; }
@@ -55,6 +56,9 @@ export class InMemoryScraperStore implements ScraperStore {
   saveAnalystVictimNotificationPacket(packet: any) { return put(this.analystVictimNotificationPackets, packet); } listAnalystVictimNotificationPackets() { return mapValues(this.analystVictimNotificationPackets); }
   saveAnalystClaimLedgerEntry(entry: any) { return put(this.analystClaimLedgerEntries, entry); } listAnalystClaimLedgerEntries() { return mapValues(this.analystClaimLedgerEntries); }
   saveAnalystLoopSnapshot(snapshot: any) { return put(this.analystLoopSnapshots, snapshot); } listAnalystLoopSnapshots() { return mapValues(this.analystLoopSnapshots); }
+  saveDwmWatchlist(watchlist: any) { return put(this.dwmWatchlists, watchlist); } getDwmWatchlist(id: string) { return this.dwmWatchlists.get(id); } listDwmWatchlists() { return mapValues(this.dwmWatchlists); }
+  saveDwmAlert(alert: any) { return put(this.dwmAlerts, alert); } getDwmAlert(id: string) { return this.dwmAlerts.get(id); } listDwmAlerts() { return mapValues(this.dwmAlerts); }
+  saveDwmWebhookDelivery(delivery: any) { return put(this.dwmWebhookDeliveries, delivery); } getDwmWebhookDelivery(id: string) { return this.dwmWebhookDeliveries.get(id); } listDwmWebhookDeliveries() { return mapValues(this.dwmWebhookDeliveries); }
 }
 installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscoveryMethods(InMemoryScraperStore);
 export { canonicalizeUrl, captureDedupeKey, InMemoryObjectEvidenceStore };

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ServiceStatus } from '@/utils/status/getStatus'
-import { Activity, AlertCircle, BadgeCheck, BellRing, Binoculars, CheckCircle, Code2, HeartPulse, Search, ShieldAlert, Timer, Webhook, XCircle } from 'lucide-react'
+import { Activity, AlertCircle, BadgeCheck, BellRing, Binoculars, CheckCircle, Code2, HeartPulse, Inbox, Search, ShieldAlert, Timer, Webhook, XCircle } from 'lucide-react'
 import ErrorNotice from '@/components/error/errorNotice'
 import { useRouter } from 'next/navigation'
 
@@ -65,7 +65,7 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
     return (
         <div className='mx-auto grid min-h-full max-w-7xl gap-6 pb-6'>
             <section className='grid gap-4'>
-                <div className='flex flex-wrap items-start justify-between gap-4'>
+                <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.36fr)]'>
                     <div>
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Status</p>
                         <h1 className='mt-2 text-4xl font-semibold tracking-normal text-[#171a21]'>Service health</h1>
@@ -73,8 +73,15 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                             Public availability for the Hanasand web, monitoring, and notification surfaces.
                         </p>
                     </div>
-                    <div className={`rounded-lg border px-4 py-2 text-sm font-semibold ${statusTone[serviceStatus.overall]}`}>
-                        {serviceStatus.overall.toUpperCase()}
+                    <div className={`grid gap-3 rounded-lg border p-4 shadow-sm ${statusTone[serviceStatus.overall]}`}>
+                        <div className='flex items-center justify-between gap-3'>
+                            <span className='text-xs font-semibold uppercase'>Overall health</span>
+                            <span className='rounded-md bg-white/70 px-2 py-1 text-xs font-semibold'>{serviceStatus.overall.toUpperCase()}</span>
+                        </div>
+                        <div className='text-2xl font-semibold'>{visibleChecks.length} public check{visibleChecks.length === 1 ? '' : 's'}</div>
+                        <p className='text-sm leading-6'>
+                            Snapshot generated {relativeTime(serviceStatus.generated_at, now)}.
+                        </p>
                     </div>
                 </div>
 
@@ -84,7 +91,7 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                         const serviceLabel = publicStatusLabel(check.service)
                         const checkLabel = publicStatusLabel(check.check_name)
                         return (
-                            <div key={`${check.service}-${check.check_name}`} className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
+                            <div key={`${check.service}-${check.check_name}`} className='grid min-h-[22rem] rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
                                 <div className='flex items-start justify-between gap-4'>
                                     <div className={`grid h-10 w-10 place-items-center rounded-lg border ${check.status === 'up' ? 'border-[#bde8ca] bg-[#e9f8ef] text-[#147a3b]' : check.status === 'degraded' ? 'border-[#f8df9b] bg-[#fff8e1] text-[#8a5a00]' : 'border-[#fecdca] bg-[#fff1f0] text-[#b42318]'}`}>
                                         <Icon className='h-4 w-4' />
@@ -127,8 +134,14 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                             </div>
                         )
                     })}
-                    {!visibleChecks.length && <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 text-sm text-[#596170] shadow-sm'>
-                        No public monitor checks are available yet.
+                    {!visibleChecks.length && <div className='grid min-h-72 place-items-center rounded-lg border border-dashed border-[#cfd7e4] bg-white p-6 text-center text-sm text-[#596170] shadow-sm md:col-span-2 xl:col-span-4'>
+                        <div>
+                            <div className='mx-auto grid h-11 w-11 place-items-center rounded-lg border border-[#dfe5ee] bg-[#f8fafc] text-[#3056d3]'>
+                                <Inbox className='h-5 w-5' />
+                            </div>
+                            <h2 className='mt-3 text-base font-semibold text-[#171a21]'>No public monitor checks yet</h2>
+                            <p className='mt-1 max-w-md leading-6'>The status shell is healthy, but no current public checks are available in this snapshot.</p>
+                        </div>
                     </div>}
                 </div>
             </section>

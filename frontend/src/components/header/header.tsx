@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import ShareIcon from '@/components/menu/shareIcon'
 import ThemeSwitch from '@/components/theme/themeSwitch'
-import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Radar, Search, ShieldCheck, Waypoints, X } from 'lucide-react'
+import { ActivityIcon, BellRing, BookOpen, ChevronDown, Code2, Gauge, LockKeyhole, MenuIcon, Network, Radar, Search, ShieldCheck, Waypoints, X } from 'lucide-react'
 import Login from '@/components/login/login'
 import Logout from '@/components/logout/logout'
 import Dashboard from '@/components/dashboard/dashboard'
@@ -17,14 +17,16 @@ import { useState } from 'react'
 
 const productItems = [
     { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, and alert context.', href: '/ti', icon: Radar },
-    { title: 'Dark Web Monitoring', detail: 'Webhook-ready company and vendor alerts from monitored actor pages.', href: '/solutions/dwm', icon: BellRing },
+    { title: 'Onion Sessions', detail: 'Short-span isolated onion workspaces with remote-session controls.', href: '/solutions/onion-session', icon: Network },
+    { title: 'Dark Web Monitoring', detail: 'Telegram, dark web, actor-page, identity, and vendor exposure alerts.', href: '/solutions/dwm', icon: BellRing },
     { title: 'Load Testing', detail: 'Permitted endpoint checks with five free tries and paid monthly tiers.', href: '/test', icon: Gauge },
     { title: 'Actor Overview', detail: 'Actor profiles, victim pivots, and review-ready timelines.', href: '/ti', icon: Waypoints },
 ]
 
 const solutionItems = [
     { title: 'All Solutions', detail: 'Monitoring, API delivery, and private exposure checking.', href: '/solutions', icon: ShieldCheck },
-    { title: 'Dark Web Monitoring', detail: 'High-speed exposure notifications for watched companies.', href: '/solutions/dwm', icon: BellRing },
+    { title: 'Onion Sessions', detail: 'Fast short-lived workspaces for onion network review.', href: '/solutions/onion-session', icon: Network },
+    { title: 'Dark Web Monitoring', detail: 'High-speed Telegram and dark web monitoring for watched organizations.', href: '/solutions/dwm', icon: BellRing },
     { title: 'Load Testing', detail: 'Check URLs you control before launches and customer handoffs.', href: '/test', icon: Gauge },
     { title: 'Bloom Filter', detail: 'Private breach and password exposure checks.', href: '/pwned', icon: LockKeyhole },
 ]
@@ -64,6 +66,7 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
 
 const mobilePublicLinks = [
     { label: 'Threat search', href: '/ti' },
+    { label: 'Onion sessions', href: '/solutions/onion-session' },
     { label: 'Dark web monitoring', href: '/solutions/dwm' },
     { label: 'Load testing', href: '/test' },
     { label: 'Solutions', href: '/solutions' },
@@ -171,6 +174,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                                 <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Console</Link>
                             ) : null}
                             <Link href='/ti' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Threat search</Link>
+                            <Link href='/solutions/onion-session' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Onion sessions</Link>
                             <Link href={darkWebHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Dark web</Link>
                             <Link href='/developers' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>API docs</Link>
                             <Link href={pricingHref} className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>

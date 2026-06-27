@@ -126,15 +126,17 @@ function LeftSide({
                 <div className='mt-3 px-px'>
                     <ConnectionStatus isConnected={isConnected} />
                 </div>
-                <MetaRow icon={<Users />} value={participants} />
-                <MetaRow icon={<Fingerprint />} value={test.id} />
-                <MetaRow icon={<LinkIcon />} value={test.url} />
-                <MetaRow icon={<Hourglass />} value={`${test.timeout}s`} />
-                <MetaRow icon={<Timer />} value={`${ms ? `${ms}ms` : 'Pending'}`} />
-                <MetaRow icon={<Workflow />} value={test.stages.default ? 'Default' : JSON.stringify(test.stages)} />
-                <MetaRow icon={<ActivityIcon />} value={upperCaseFirstLetter(test.status)} />
+                <div className='mt-3 grid gap-1'>
+                    <MetaRow icon={<Users />} label='Viewers' value={participants} />
+                    <MetaRow icon={<Fingerprint />} label='Scan id' value={test.id} />
+                    <MetaRow icon={<LinkIcon />} label='Target' value={test.url} />
+                    <MetaRow icon={<Hourglass />} label='Timeout' value={`${test.timeout}s`} />
+                    <MetaRow icon={<Timer />} label='Duration' value={`${ms ? `${ms}ms` : 'Pending'}`} />
+                    <MetaRow icon={<Workflow />} label='Stages' value={test.stages.default ? 'Default' : JSON.stringify(test.stages)} />
+                    <MetaRow icon={<ActivityIcon />} label='Status' value={upperCaseFirstLetter(test.status)} />
+                </div>
                 <Visits id={test.id} serverVisits={test.visits} />
-                <MetaRow icon={<Watch />} value={prettyDate(test.created_at)} />
+                <MetaRow icon={<Watch />} label='Created' value={prettyDate(test.created_at)} />
                 {test.logs.length > 0 && <button
                     onClick={() => setShowLogs(prev => !prev)}
                     className='flex w-full min-w-0 items-center gap-2 rounded-lg p-2 text-left text-[#344054] transition hover:bg-[#f2f5f9] dark:text-[#d5dceb] dark:hover:bg-white/6'
@@ -166,10 +168,11 @@ function LeftSide({
     )
 }
 
-function MetaRow({ icon, value }: { icon: ReactNode, value: ReactNode }) {
+function MetaRow({ icon, label, value }: { icon: ReactNode, label: string, value: ReactNode }) {
     return (
-        <div className='flex min-w-0 gap-2 rounded-lg p-2 text-sm text-[#344054] transition hover:bg-[#f2f5f9] dark:text-[#d5dceb] dark:hover:bg-white/6'>
+        <div className='grid min-w-0 grid-cols-[1.25rem_minmax(4.75rem,0.35fr)_minmax(0,1fr)] items-start gap-2 rounded-lg p-2 text-sm text-[#344054] transition hover:bg-[#f2f5f9] dark:text-[#d5dceb] dark:hover:bg-white/6'>
             <span className='grid h-5 w-5 shrink-0 place-items-center text-[#667085] dark:text-[#9aa8bf] [&>svg]:h-4 [&>svg]:w-4'>{icon}</span>
+            <span className='text-xs font-semibold uppercase leading-5 text-[#667085] dark:text-[#9aa8bf]'>{label}</span>
             <span className='min-w-0 flex-1 wrap-break-word leading-5'>{value}</span>
         </div>
     )

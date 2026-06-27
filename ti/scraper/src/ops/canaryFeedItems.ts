@@ -5,10 +5,35 @@ const ITEM_RE = /<item\b[\s\S]*?<\/item>/gi;
 const ENTRY_RE = /<entry\b[\s\S]*?<\/entry>/gi;
 
 export function feedItems(source: any, task: any, fetched: string, at: string, metadata: any, maxItems = 40) {
+  if (source.type === "telegram_public") {
+    const telegram = telegramItems(source, task, fetched, at, metadata, maxItems);
+    if (telegram.length) return telegram;
+  }
   const blocks = [...fetched.matchAll(ITEM_RE)].map((m) => m[0]);
   if (!blocks.length) blocks.push(...[...fetched.matchAll(ENTRY_RE)].map((m) => m[0]));
   const items = blocks.slice(0, maxItems).map((block, index) => item(source, task, block, at, metadata, index)).filter((row) => row.rawText.length > 24);
   return items.length ? items : [fallback(source, task, fetched, at, metadata)];
+}
+
+function telegramItems(source: any, task: any, fetched: string, at: string, metadata: any, maxItems: number) {
+  const blocks = [...fetched.matchAll(/<div\b[^>]*class=["'][^"']*\btgme_widget_message\b[^"']*["'][^>]*>[\s\S]*?(?=<div\b[^>]*class=["'][^"']*\btgme_widget_message\b|<\/section>|<\/body>|$)/gi)].map((m) => m[0]);
+  return blocks.slice(0, maxItems).map((block, index) => telegramItem(source, task, block, at, metadata, index)).filter((item) => item.rawText.length > 10);
+}
+
+function telegramItem(source: any, task: any, block: string, at: string, metadata: any, index: number) {
+  const dataPost = attr(block, "div", "data-post");
+  const [channelFromPost, messageId] = dataPost.split("/");
+  const channel = channelFromPost || telegramChannel(source.url) || "unknown";
+  const messageText = text(classBlock(block, "tgme_widget_message_text"));
+  const author = text(classBlock(block, "tgme_widget_message_author"));
+  const title = [source.name, messageId ? `message ${messageId}` : ""].filter(Boolean).join(" ");
+  const publishedAt = attr(block, "time", "datetime") || undefined;
+  const messageUrl = dataPost ? `https://t.me/${dataPost}` : task.targetUrl;
+  const rawText = [source.name, author, messageText].filter(Boolean).join("\n").slice(0, 24_000);
+  return {
+    ...row(source, task, messageUrl, title, rawText, at, publishedAt, { ...metadata, adapter: "telegram_public", channel, messageId: messageId ? Number(messageId) : undefined, messageState: "available", mediaPolicy: "metadata_only_no_download" }, index, false),
+    links: [messageUrl, ...links(block)].slice(0, 12),
+  };
 }
 
 function item(source: any, task: any, block: string, at: string, metadata: any, index: number) {
@@ -43,6 +68,19 @@ function tag(block: string, name: string) {
 function attr(block: string, tagName: string, attrName: string) {
   const m = block.match(new RegExp(`<${tagName}\\b[^>]*\\s${attrName}=["']([^"']+)["'][^>]*>`, "i"));
   return m?.[1] ?? "";
+}
+
+function classBlock(block: string, className: string) {
+  const m = block.match(new RegExp(`<[^>]+class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`, "i"));
+  return m?.[1] ?? "";
+}
+
+function links(block: string) {
+  return [...block.matchAll(/\bhref=["']([^"']+)["']/gi)].map((match) => match[1]).filter((url) => /^https?:\/\//i.test(url));
+}
+
+function telegramChannel(url: string) {
+  return url.match(/(?:https?:\/\/)?t\.me\/(?:s\/)?([a-zA-Z0-9_]+)/)?.[1];
 }
 
 function text(value: string) {

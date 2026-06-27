@@ -6,8 +6,8 @@ import { formatTiDate } from '@/utils/tiAdmin/ops'
 
 export const dynamic = 'force-dynamic'
 
-export default function TiActivityPage() {
-    const { activity, updatedActors } = getTiEnrichmentOverview()
+export default async function TiActivityPage() {
+    const { activity, updatedActors, worker } = await getTiEnrichmentOverview()
 
     return (
         <DashboardPage>
@@ -16,12 +16,15 @@ export default function TiActivityPage() {
                 title='Recent actor activity'
                 description='Recently updated actors, enrichment events, and source-backed profile changes.'
             />
+            <DashboardPanel className='p-4 text-sm text-[#596170]'>
+                Worker state: <span className='font-semibold text-[#171a21]'>{worker.state}</span>. Last sweep: <span className='font-semibold text-[#171a21]'>{worker.lastSweepFinishedAt ? formatTiDate(worker.lastSweepFinishedAt) : 'No sweep recorded'}</span>.
+            </DashboardPanel>
 
             <div className='grid gap-4 lg:grid-cols-[0.95fr_1.05fr]'>
                 <DashboardPanel className='p-5'>
                     <h2 className='text-lg font-semibold text-[#171a21]'>Updated actors</h2>
                     <div className='mt-4 grid gap-3'>
-                        {updatedActors.map(actor => (
+                        {updatedActors.length ? updatedActors.map(actor => (
                             <Link key={actor.id} href={`/ti/${encodeURIComponent(actor.id)}`} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 transition hover:border-[#b8c5ff] hover:bg-[#f4f7ff]'>
                                 <div className='flex flex-wrap items-center justify-between gap-3'>
                                     <h3 className='text-base font-semibold text-[#171a21]'>{actor.name}</h3>
@@ -30,7 +33,7 @@ export default function TiActivityPage() {
                                 <p className='mt-2 text-xs text-[#667085]'>Updated {formatTiDate(actor.lastUpdatedAt)} · next {formatTiDate(actor.nextRefreshAt)}</p>
                                 <p className='mt-2 text-sm leading-6 text-[#596170]'>{actor.changedFields.join(', ')}</p>
                             </Link>
-                        ))}
+                        )) : <p className='text-sm text-[#596170]'>No live actor refreshes have been recorded by the API worker yet.</p>}
                     </div>
                 </DashboardPanel>
 
@@ -40,7 +43,7 @@ export default function TiActivityPage() {
                         <h2 className='text-lg font-semibold text-[#171a21]'>Activity stream</h2>
                     </div>
                     <div className='mt-4 grid gap-3'>
-                        {activity.map(event => (
+                        {activity.length ? activity.map(event => (
                             <article key={event.id} className='rounded-lg border border-[#e0e5ed] bg-white p-4'>
                                 <div className='flex flex-wrap items-start justify-between gap-3'>
                                     <div>
@@ -55,7 +58,7 @@ export default function TiActivityPage() {
                                     <ExternalLink className='h-3 w-3 text-[#3056d3]' />
                                 </p>
                             </article>
-                        ))}
+                        )) : <p className='text-sm text-[#596170]'>No activity events reported by the API worker yet.</p>}
                     </div>
                 </DashboardPanel>
             </div>

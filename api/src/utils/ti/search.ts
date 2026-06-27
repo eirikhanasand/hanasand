@@ -235,11 +235,89 @@ export type TiProfileWarmResult = {
     actor: string
     status: TiResultState | undefined
     confidence: number
+    aliases: string[]
+    changedFields: string[]
+    sourceLinks: Array<{ name: string, url: string }>
+    automationEvidence: string[]
+    plannedWork: string[]
     recentActivityCount: number
     targetCount: number
     ttpCount: number
     cachedUntil: string
+    refreshedAt: string
+    nextRefreshAt: string
 }
+
+export type TiActorRefreshState = TiProfileWarmResult & {
+    refreshCount: number
+}
+
+export type TiActorRefreshAuditEvent = {
+    id: string
+    happenedAt: string
+    actor: string
+    action: string
+    target: string
+    result: string
+    detail: string
+}
+
+export type TiActorRefreshActivityEvent = {
+    id: string
+    actorId: string
+    actorName: string
+    happenedAt: string
+    title: string
+    detail: string
+    source: string
+    tone: 'ok' | 'watch' | 'bad'
+}
+
+export type TiActorRefreshOverview = {
+    generatedAt: string
+    worker: {
+        state: 'warming' | 'running' | 'idle' | 'error'
+        mode: string
+        intervalSeconds: number
+        batchSize: number
+        lastSweepStartedAt: string | null
+        lastSweepFinishedAt: string | null
+        lastError: string | null
+        cursor: number
+    }
+    updatedActors: TiActorRefreshState[]
+    queuedActors: Array<{
+        id: string
+        name: string
+        aliases: string[]
+        status: 'queued'
+        confidence: number
+        lastUpdatedAt: string
+        nextRefreshAt: string
+        changedFields: string[]
+        sourceLinks: Array<{ name: string, url: string }>
+        automationEvidence: string[]
+        plannedWork: string[]
+    }>
+    activity: TiActorRefreshActivityEvent[]
+    auditLog: TiActorRefreshAuditEvent[]
+    stats: {
+        updatedLastHour: number
+        queued: number
+        auditedEvents: number
+        automaticCoverage: number
+        totalRefreshes: number
+    }
+}
+
+const profileWarmIntervalMs = 60 * 1000
+const profileWarmState = new Map<string, TiActorRefreshState>()
+const profileWarmAuditLog: TiActorRefreshAuditEvent[] = []
+const profileWarmActivity: TiActorRefreshActivityEvent[] = []
+let profileWarmStartedAt: string | null = null
+let profileWarmFinishedAt: string | null = null
+let profileWarmLastError: string | null = null
+let profileWarmStateName: TiActorRefreshOverview['worker']['state'] = 'idle'
 
 export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearchResponse> {
     const query = input.query.trim()
@@ -271,23 +349,212 @@ export async function warmThreatActorProfileCache(batchSize = 5): Promise<TiProf
 
     const warmed: TiProfileWarmResult[] = []
     const startedAt = profileWarmCursor
+    profileWarmStartedAt = new Date().toISOString()
+    profileWarmStateName = 'warming'
     for (let offset = 0; offset < Math.min(batchSize, actors.length); offset += 1) {
         const actor = actors[(startedAt + offset) % actors.length]!
         const result = seededSearch(actor)
         writeTiResponseCache(actor.toLowerCase(), result)
+        const refreshedAt = new Date().toISOString()
+        const cachedUntil = new Date(Date.now() + (result.status === 'ready' ? curatedProfileCacheTtlMs : liveSearchCacheTtlMs)).toISOString()
         warmed.push({
             actor,
             status: result.status,
             confidence: result.confidence,
+            aliases: result.aliases,
+            changedFields: changedFieldsForWarmResult(result),
+            sourceLinks: result.sources.map(source => ({
+                name: source.name,
+                url: source.url || source.provenance || '',
+            })).filter(source => source.url),
+            automationEvidence: automationEvidenceForWarmResult(actor, result),
+            plannedWork: plannedWorkForWarmResult(actor, result),
             recentActivityCount: result.recentActivity.length,
             targetCount: result.targets.length,
             ttpCount: result.ttps.length,
-            cachedUntil: new Date(Date.now() + (result.status === 'ready' ? curatedProfileCacheTtlMs : liveSearchCacheTtlMs)).toISOString(),
+            cachedUntil,
+            refreshedAt,
+            nextRefreshAt: new Date(Date.now() + refreshDelayForWarmIndex(offset, actors.length)).toISOString(),
         })
     }
 
     profileWarmCursor = (startedAt + warmed.length) % actors.length
+    recordWarmResults(warmed)
+    profileWarmFinishedAt = new Date().toISOString()
+    profileWarmStateName = 'running'
+    profileWarmLastError = null
     return warmed
+}
+
+export function recordThreatActorProfileWarmFailure(error: unknown) {
+    profileWarmLastError = error instanceof Error ? error.message : String(error)
+    profileWarmStateName = 'error'
+    const happenedAt = new Date().toISOString()
+    pushLimited(profileWarmAuditLog, {
+        id: `ti-warm-error-${Date.now()}`,
+        happenedAt,
+        actor: 'ti-profile-refresh',
+        action: 'profile.cache.warm',
+        target: 'actor-cache',
+        result: 'failed',
+        detail: profileWarmLastError,
+    })
+}
+
+export function getThreatActorEnrichmentOverview(): TiActorRefreshOverview {
+    const now = Date.now()
+    const updatedActors = [...profileWarmState.values()]
+        .sort((a, b) => new Date(b.refreshedAt).getTime() - new Date(a.refreshedAt).getTime())
+    const updatedLastHour = updatedActors.filter(actor => now - new Date(actor.refreshedAt).getTime() <= 60 * 60 * 1000).length
+    return {
+        generatedAt: new Date(now).toISOString(),
+        worker: {
+            state: profileWarmStateName,
+            mode: 'API cron actor-profile cache warmer',
+            intervalSeconds: profileWarmIntervalMs / 1000,
+            batchSize: 5,
+            lastSweepStartedAt: profileWarmStartedAt,
+            lastSweepFinishedAt: profileWarmFinishedAt,
+            lastError: profileWarmLastError,
+            cursor: profileWarmCursor,
+        },
+        updatedActors,
+        queuedActors: queuedWarmActors(updatedActors),
+        activity: [...profileWarmActivity],
+        auditLog: [...profileWarmAuditLog],
+        stats: {
+            updatedLastHour,
+            queued: queuedWarmActors(updatedActors).length,
+            auditedEvents: profileWarmAuditLog.length,
+            automaticCoverage: automaticThreatActorWarmList().length,
+            totalRefreshes: updatedActors.reduce((sum, actor) => sum + actor.refreshCount, 0),
+        },
+    }
+}
+
+function recordWarmResults(results: TiProfileWarmResult[]) {
+    for (const result of results) {
+        const existing = profileWarmState.get(result.actor.toLowerCase())
+        const refreshCount = (existing?.refreshCount ?? 0) + 1
+        profileWarmState.set(result.actor.toLowerCase(), {
+            ...result,
+            refreshCount,
+        })
+        pushLimited(profileWarmActivity, {
+            id: `ti-refresh-${result.actor.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
+            actorId: result.actor.toLowerCase().replace(/\s+/g, '-'),
+            actorName: titleCaseWords(result.actor),
+            happenedAt: result.refreshedAt,
+            title: `${titleCaseWords(result.actor)} profile refreshed`,
+            detail: `Refreshed aliases, sources, recent activity, targets, tradecraft, and dataset context from the shared actor enrichment builder. This actor has been refreshed ${refreshCount} time${refreshCount === 1 ? '' : 's'} since API startup.`,
+            source: 'api cron actor-profile cache warmer',
+            tone: 'ok',
+        })
+        pushLimited(profileWarmAuditLog, {
+            id: `ti-cache-write-${result.actor.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
+            happenedAt: result.refreshedAt,
+            actor: 'ti-profile-refresh',
+            action: 'profile.cache.write',
+            target: `actor:${result.actor.toLowerCase().replace(/\s+/g, '-')}`,
+            result: 'stored',
+            detail: `Cached ready profile until ${result.cachedUntil}; next rotating refresh is planned for ${result.nextRefreshAt}.`,
+        })
+    }
+}
+
+function queuedWarmActors(updatedActors: TiActorRefreshState[]) {
+    const updatedIds = new Set(updatedActors.map(actor => actor.actor.toLowerCase()))
+    return automaticThreatActorWarmList()
+        .filter(actor => !updatedIds.has(actor.toLowerCase()) || nextWarmActorNames(4).includes(actor))
+        .slice(0, 6)
+        .map((actor, index) => {
+            const existing = profileWarmState.get(actor.toLowerCase())
+            const result = existing || warmPreviewForActor(actor, index)
+            return {
+                id: actor.toLowerCase().replace(/\s+/g, '-'),
+                name: titleCaseWords(actor),
+                aliases: result.aliases,
+                status: 'queued' as const,
+                confidence: result.confidence,
+                lastUpdatedAt: result.refreshedAt,
+                nextRefreshAt: result.nextRefreshAt,
+                changedFields: [],
+                sourceLinks: result.sourceLinks,
+                automationEvidence: [`Queued by the rotating actor cache warmer. The worker advances every ${profileWarmIntervalMs / 1000} seconds and refreshes a batch of actor profiles each pass.`],
+                plannedWork: plannedWorkForActorName(actor),
+            }
+        })
+}
+
+function warmPreviewForActor(actor: string, index: number): TiProfileWarmResult {
+    const result = seededSearch(actor)
+    const now = Date.now()
+    return {
+        actor,
+        status: 'queued',
+        confidence: result.confidence,
+        aliases: result.aliases,
+        changedFields: [],
+        sourceLinks: result.sources.map(source => ({
+            name: source.name,
+            url: source.url || source.provenance || '',
+        })).filter(source => source.url),
+        automationEvidence: [],
+        plannedWork: plannedWorkForWarmResult(actor, result),
+        recentActivityCount: result.recentActivity.length,
+        targetCount: result.targets.length,
+        ttpCount: result.ttps.length,
+        cachedUntil: new Date(now + curatedProfileCacheTtlMs).toISOString(),
+        refreshedAt: new Date(now).toISOString(),
+        nextRefreshAt: new Date(now + refreshDelayForWarmIndex(index, automaticThreatActorWarmList().length)).toISOString(),
+    }
+}
+
+function nextWarmActorNames(count: number) {
+    const actors = automaticThreatActorWarmList()
+    return Array.from({ length: Math.min(count, actors.length) }, (_, offset) => actors[(profileWarmCursor + offset) % actors.length]!)
+}
+
+function refreshDelayForWarmIndex(offset: number, actorCount: number) {
+    return profileWarmIntervalMs * Math.max(1, Math.ceil((actorCount + offset) / 5))
+}
+
+function changedFieldsForWarmResult(result: TiSearchResponse) {
+    const fields = ['summary', 'aliases']
+    if (result.recentActivity.length) fields.push('recentActivity')
+    if (result.targets.length) fields.push('targets')
+    if (result.ttps.length) fields.push('ttps')
+    if (result.sources.length) fields.push('sources')
+    if (result.datasets.length) fields.push('datasets')
+    return fields
+}
+
+function automationEvidenceForWarmResult(actor: string, result: TiSearchResponse) {
+    return [
+        `Matched ${actor} against the automatic actor warm list and alias-aware profile builder.`,
+        `Cached ${result.aliases.length} aliases, ${result.sources.length} sources, ${result.recentActivity.length} activity rows, ${result.targets.length} target categories, and ${result.ttps.length} tradecraft entries.`,
+        'Recent activity can refresh separately from stable identity, source, and target metadata.',
+    ]
+}
+
+function plannedWorkForWarmResult(actor: string, result: TiSearchResponse) {
+    const sectors = result.targets.map(target => target.sector).slice(0, 2)
+    const techniques = result.ttps.map(ttp => ttp.attackId || ttp.name).slice(0, 2)
+    return [
+        sectors.length ? `Check fresh reporting for ${sectors.join(' and ')} exposure changes.` : `Check fresh reporting for ${actor} exposure changes.`,
+        techniques.length ? `Promote newly sourced tradecraft around ${techniques.join(' and ')} when reporting changes.` : 'Promote newly sourced tradecraft when reporting changes.',
+        'Compare monitored company, vendor, and domain names against new activity rows.',
+    ]
+}
+
+function plannedWorkForActorName(actor: string) {
+    const preview = warmPreviewForActor(actor, 0)
+    return preview.plannedWork
+}
+
+function pushLimited<T>(items: T[], item: T, limit = 120) {
+    items.unshift(item)
+    if (items.length > limit) items.length = limit
 }
 
 function readTiResponseCache(key: string) {

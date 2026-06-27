@@ -6,8 +6,8 @@ import { formatTiDate } from '@/utils/tiAdmin/ops'
 
 export const dynamic = 'force-dynamic'
 
-export default function TiEnrichmentPage() {
-    const { updatedActors, queuedActors, stats } = getTiEnrichmentOverview()
+export default async function TiEnrichmentPage() {
+    const { updatedActors, queuedActors, stats, worker } = await getTiEnrichmentOverview()
 
     return (
         <DashboardPage>
@@ -21,8 +21,18 @@ export default function TiEnrichmentPage() {
                 <Stat title='Updated last hour' value={`${stats.updatedLastHour}`} />
                 <Stat title='Queued next' value={`${stats.queued}`} />
                 <Stat title='Coverage' value={`${stats.automaticCoverage} actors`} />
-                <Stat title='Mode' value='24/7 sweep' />
+                <Stat title='Worker' value={worker.state === 'running' ? 'Running' : worker.state} />
             </div>
+
+            <DashboardPanel className='p-4'>
+                <div className='grid gap-3 text-sm text-[#596170] md:grid-cols-4'>
+                    <Info label='Last sweep' value={worker.lastSweepFinishedAt ? formatTiDate(worker.lastSweepFinishedAt) : 'No sweep recorded'} />
+                    <Info label='Refresh cadence' value={`${worker.intervalSeconds}s, ${worker.batchSize || 'no'} actors/pass`} />
+                    <Info label='Total refreshes' value={`${stats.totalRefreshes}`} />
+                    <Info label='Worker mode' value={worker.mode} />
+                </div>
+                {worker.lastError ? <p className='mt-3 rounded-lg border border-[#ffd5d0] bg-[#fff4f2] p-3 text-sm text-[#a33428]'>{worker.lastError}</p> : null}
+            </DashboardPanel>
 
             <DashboardPanel className='p-5'>
                 <div className='flex items-center gap-2'>
@@ -30,7 +40,9 @@ export default function TiEnrichmentPage() {
                     <h2 className='text-lg font-semibold text-[#171a21]'>Recently enriched</h2>
                 </div>
                 <div className='mt-4 grid gap-4 xl:grid-cols-2'>
-                    {updatedActors.map(actor => <ActorCard key={actor.id} actor={actor} />)}
+                    {updatedActors.length ? updatedActors.map(actor => <ActorCard key={actor.id} actor={actor} />) : (
+                        <p className='text-sm text-[#596170]'>No live actor refreshes have been recorded by the API worker yet.</p>
+                    )}
                 </div>
             </DashboardPanel>
 
@@ -40,7 +52,9 @@ export default function TiEnrichmentPage() {
                     <h2 className='text-lg font-semibold text-[#171a21]'>Next for enrichment</h2>
                 </div>
                 <div className='mt-4 grid gap-4 xl:grid-cols-2'>
-                    {queuedActors.map(actor => <ActorCard key={actor.id} actor={actor} queued />)}
+                    {queuedActors.length ? queuedActors.map(actor => <ActorCard key={actor.id} actor={actor} queued />) : (
+                        <p className='text-sm text-[#596170]'>No queued actors reported by the API worker.</p>
+                    )}
                 </div>
             </DashboardPanel>
         </DashboardPage>
@@ -62,6 +76,7 @@ function ActorCard({ actor, queued }: { actor: TiEnrichedActor, queued?: boolean
                 <Info label='Next refresh' value={formatTiDate(actor.nextRefreshAt)} />
                 <Info label='Sources' value={`${actor.sourceLinks.length} linked`} />
                 <Info label='Changed fields' value={actor.changedFields.length ? actor.changedFields.join(', ') : 'Queued'} />
+                <Info label='Refresh count' value={`${actor.refreshCount ?? 0}`} />
             </div>
             <div className='mt-4'>
                 <p className='text-xs font-semibold uppercase text-[#667085]'>Planned work</p>

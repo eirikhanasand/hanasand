@@ -5,8 +5,8 @@ import { formatTiDate } from '@/utils/tiAdmin/ops'
 
 export const dynamic = 'force-dynamic'
 
-export default function TiAuditPage() {
-    const { auditLog, stats } = getTiEnrichmentOverview()
+export default async function TiAuditPage() {
+    const { auditLog, stats, worker } = await getTiEnrichmentOverview()
 
     return (
         <DashboardPage>
@@ -18,8 +18,8 @@ export default function TiAuditPage() {
 
             <div className='grid gap-4 sm:grid-cols-3'>
                 <Stat title='Audit events' value={`${stats.auditedEvents}`} />
-                <Stat title='Retention' value='Full trail' />
-                <Stat title='Scope' value='Management' />
+                <Stat title='Refreshes' value={`${stats.totalRefreshes}`} />
+                <Stat title='Worker' value={worker.state} />
             </div>
 
             <DashboardPanel className='overflow-x-auto'>

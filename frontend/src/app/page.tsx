@@ -45,6 +45,11 @@ const solutions = [
         href: '/ti',
     },
     {
+        title: 'Onion Sessions',
+        detail: 'Short-lived isolated onion workspaces with remote controls, notes, and source tracking.',
+        href: '/solutions/onion-session',
+    },
+    {
         title: 'Bloom Filter',
         detail: 'Private breach and password-exposure checks without turning sensitive material into a dashboard.',
         href: '/pwned',

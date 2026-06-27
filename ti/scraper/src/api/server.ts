@@ -1,5 +1,9 @@
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
+import { createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
+import { createDwmWatchlist, deliverDwmWebhooks, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, storedWatchlistTerms } from "./dwmWorkflowRoutes.ts";
+import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
+import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
 import { contractIndex } from "./contractsRoute.ts";
@@ -34,6 +38,56 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname)) return runResults(options, url.pathname.split("/")[4]);
     if (url.pathname === "/v1/darkweb/status") return json({ status: buildDarkwebIndexStatus({ sources: options.store.listSources(), captures: options.store.listCaptures() } as any) });
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
+    if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "GET") {
+      const tenantId = url.searchParams.get("tenantId") ?? undefined;
+      const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
+      return json(buildDwmProductSnapshot({
+        tenantId,
+        watchlist: explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId),
+        sources: options.store.listSources(),
+        captures: options.store.listCaptures(),
+        includeDemoIfEmpty: url.searchParams.get("demo") !== "false"
+      }));
+    }
+    if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "POST") {
+      const body = await readJson(request);
+      return json(buildDwmProductSnapshot({
+        tenantId: body.tenantId,
+        watchlist: Array.isArray(body.watchlist) ? body.watchlist : parseWatchlistParam(String(body.watchlist ?? body.terms ?? "")),
+        sources: options.store.listSources(),
+        captures: options.store.listCaptures(),
+        includeDemoIfEmpty: body.includeDemoIfEmpty !== false
+      }));
+    }
+    if (url.pathname === "/v1/dwm/source-requests" && request.method === "POST") return createDwmSourceRequest(request, options);
+    if ((url.pathname === "/v1/dwm/source-inventory" || url.pathname === "/api/dwm/source-inventory") && request.method === "GET") return json(buildDwmSourceInventory({
+      tenantId: url.searchParams.get("tenantId") ?? undefined,
+      watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? ""),
+      sources: options.store.listSources(),
+      captures: options.store.listCaptures(),
+      includeCandidates: url.searchParams.get("full") === "true"
+    }));
+    if ((url.pathname === "/v1/dwm/source-packs" || url.pathname === "/api/dwm/source-packs") && request.method === "GET") {
+      const catalog = buildDwmSeedCatalog({ watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? "") });
+      return json({
+        schemaVersion: "dwm.source_packs.v1",
+        generatedAt: nowIso(),
+        packs: catalog.packs,
+        counts: {
+          packCount: catalog.packs.length,
+          candidateCount: catalog.candidates.length,
+          telegramPublic: catalog.candidates.filter((candidate) => candidate.family === "telegram_public").length,
+          darkwebMetadata: catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length
+        }
+      });
+    }
+    if (url.pathname === "/v1/dwm/watchlists" && request.method === "GET") return listDwmWatchlists(url, options);
+    if (url.pathname === "/v1/dwm/watchlists" && request.method === "POST") return createDwmWatchlist(request, options);
+    if (url.pathname === "/v1/dwm/alerts" && request.method === "GET") return listDwmAlerts(url, options);
+    if (url.pathname === "/v1/dwm/alerts/rebuild" && request.method === "POST") return rebuildDwmAlerts(request, options);
+    if (url.pathname === "/v1/dwm/webhooks/deliver" && request.method === "POST") return deliverDwmWebhooks(request, options);
+    if (url.pathname === "/v1/dwm/webhooks/deliveries" && request.method === "GET") return listDwmWebhookDeliveries(url, options);
+    if (url.pathname === "/v1/dwm/watchlist/normalize") return json({ watchlist: normalizeWatchlist(parseWatchlistParam(url.searchParams.get("terms") ?? "")) });
     if (url.pathname === "/v1/restricted-metadata/status") return json({ status: buildRestrictedMetadataOperationsStatus({ sources: options.store.listSources(), captures: options.store.listCaptures(), query: url.searchParams.get("q") ?? undefined }) });
     if (url.pathname === "/v1/restricted-metadata/apply-plan") return json({ endpoint: "/v1/restricted-metadata/apply-plan", metadataOnly: true, actions: [] });
     if (url.pathname === "/v1/public-channels/apply-plan") return publicChannelApplyPlan(request, options);
@@ -53,4 +107,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   } catch (caught) {
     return error("internal_error", caught instanceof Error ? caught.message : String(caught), 500);
   }
+}
+
+function parseWatchlistParam(value: string): string[] {
+  return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
 }

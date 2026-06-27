@@ -1,0 +1,72 @@
+import { describe, expect, test } from "bun:test";
+import { handleApiRequest } from "../api/server.ts";
+import { FocusedFrontier } from "../frontier/frontier.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import type { RawCapture, SourceRecord } from "../types.ts";
+
+const source: SourceRecord = {
+  id: "src_webhook_tg",
+  name: "Webhook Telegram",
+  type: "telegram_public",
+  url: "https://t.me/webhook_public",
+  accessMethod: "public_http",
+  status: "active",
+  trustScore: 0.8,
+  legalNotes: "Public preview only.",
+  createdAt: "2026-06-27T21:00:00.000Z",
+  updatedAt: "2026-06-27T21:00:00.000Z"
+} as SourceRecord;
+
+const capture: RawCapture = {
+  id: "cap_webhook_acme",
+  sourceId: source.id,
+  url: "https://t.me/webhook_public/44",
+  collectedAt: "2026-06-27T21:02:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-webhook-acme",
+  sensitive: false,
+  body: "acme.com appears in public Telegram chatter for Lumma C2 Okta session cookie exposure.",
+  metadata: { adapter: "telegram_public", channel: "webhook_public", messageId: 44 }
+} as RawCapture;
+
+describe("dwm webhook delivery", () => {
+  test("delivers saved alerts and records delivery attempts", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source);
+    store.saveCapture(capture);
+    const seen: Array<{ url: string; body: any; headers: Headers }> = [];
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      webhookFetch: async (url: string, init: RequestInit) => {
+        seen.push({ url, body: JSON.parse(String(init.body)), headers: new Headers(init.headers) });
+        return new Response("ok", { status: 202 });
+      }
+    };
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", terms: ["acme.com"], webhookUrl: "https://hooks.example.com/dwm" })
+    }), options);
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme" })
+    }), options);
+
+    const deliverResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme" })
+    }), options);
+    const delivered = await deliverResponse.json() as any;
+
+    expect(deliverResponse.status).toBe(200);
+    expect(delivered.attemptedCount).toBe(1);
+    expect(delivered.deliveries[0].status).toBe("delivered");
+    expect(seen[0].url).toBe("https://hooks.example.com/dwm");
+    expect(seen[0].body.eventType).toBe("darkweb.monitoring.match");
+    expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.match");
+    expect((store as any).listDwmAlerts()[0].deliveryState).toBe("delivered");
+    expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
+  });
+});

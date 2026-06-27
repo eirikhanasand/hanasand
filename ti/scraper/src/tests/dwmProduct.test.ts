@@ -1,0 +1,124 @@
+import { describe, expect, test } from "bun:test";
+import { handleApiRequest } from "../api/server.ts";
+import { FocusedFrontier } from "../frontier/frontier.ts";
+import { buildDwmProductSnapshot, classifySourceFamily, normalizeWatchlist } from "../product/dwmProduct.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import type { RawCapture, SourceRecord } from "../types.ts";
+
+const telegramSource: SourceRecord = {
+  id: "src_telegram_lumma",
+  name: "Lumma broker public channel",
+  type: "telegram_public",
+  url: "https://t.me/lumma_broker_room",
+  accessMethod: "official_api",
+  status: "active",
+  risk: "medium",
+  trustScore: 0.82,
+  legalNotes: "Public Telegram messages only.",
+  createdAt: "2026-06-27T00:00:00.000Z",
+  updatedAt: "2026-06-27T00:00:00.000Z"
+} as SourceRecord;
+
+const darkwebSource: SourceRecord = {
+  id: "src_akira_metadata",
+  name: "Akira metadata mirror",
+  type: "tor_metadata",
+  url: "http://akira-example.onion",
+  accessMethod: "approved_proxy",
+  status: "active",
+  risk: "high",
+  trustScore: 0.76,
+  legalNotes: "Metadata-only collection; payload paths blocked.",
+  createdAt: "2026-06-27T00:00:00.000Z",
+  updatedAt: "2026-06-27T00:00:00.000Z"
+} as SourceRecord;
+
+const telegramCapture: RawCapture = {
+  id: "cap_telegram_1",
+  sourceId: "src_telegram_lumma",
+  url: "https://t.me/lumma_broker_room/42",
+  collectedAt: "2026-06-27T08:10:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-telegram",
+  sensitive: false,
+  body: "Lumma C2 listing says acme.com has 38 saved logins, Okta live cookie, OAuth token, and AWS IAM admin key.",
+  metadata: { adapter: "telegram_public", channel: "lumma_broker_room" }
+} as RawCapture;
+
+const darkwebCapture: RawCapture = {
+  id: "cap_darkweb_1",
+  sourceId: "src_akira_metadata",
+  url: "http://akira-example.onion/acme",
+  collectedAt: "2026-06-27T08:18:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-darkweb",
+  sensitive: true,
+  metadata: {
+    leakSite: {
+      actorName: "Akira",
+      victimName: "acme.com",
+      description: "Actor-page metadata claims acme.com financial records and supplier contracts.",
+      captureMode: "metadata_only"
+    }
+  }
+} as RawCapture;
+
+describe("dwm product snapshot", () => {
+  test("normalizes watchlists and classifies source families", () => {
+    expect(normalizeWatchlist([" acme.com ", "acme.com", "Acme Payments"])).toEqual([
+      { value: "acme.com", kind: "domain" },
+      { value: "Acme Payments", kind: "company" }
+    ]);
+    expect(classifySourceFamily(telegramSource)).toBe("telegram_public");
+    expect(classifySourceFamily(darkwebSource)).toBe("darkweb_metadata");
+  });
+
+  test("builds workflow-ready alerts from Telegram and metadata-only darkweb captures", () => {
+    const snapshot = buildDwmProductSnapshot({
+      tenantId: "tenant_acme",
+      watchlist: ["acme.com"],
+      sources: [telegramSource, darkwebSource],
+      captures: [telegramCapture, darkwebCapture],
+      generatedAt: "2026-06-27T08:20:00.000Z",
+      includeDemoIfEmpty: false
+    });
+
+    expect(snapshot.readiness.decision).toBe("production_ready_with_live_sources");
+    expect(snapshot.alerts).toHaveLength(2);
+    expect(snapshot.alerts[0].severity).toBe("critical");
+    expect(snapshot.alerts[0].webhookDelivery.recommendedRoute).toBe("identity_response");
+    expect(snapshot.sourceInventory.counts.catalogTelegramPublic).toBeGreaterThanOrEqual(100);
+    expect(snapshot.sourceInventory.reportingHooks.sourceInventoryRoute).toBe("/v1/dwm/source-inventory");
+    expect(snapshot.alerts.some((alert) => alert.sourceFamily === "darkweb_metadata")).toBe(true);
+    expect(snapshot.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata")?.evidence[0].redactionState).toBe("metadata_only");
+  });
+
+  test("reports missing production blockers instead of hiding behind demo data", () => {
+    const snapshot = buildDwmProductSnapshot({ watchlist: ["acme.com"], sources: [], captures: [], generatedAt: "2026-06-27T08:20:00.000Z" });
+    expect(snapshot.readiness.decision).toBe("demo_ready_needs_live_sources");
+    expect(snapshot.alerts[0].id).toContain("dwm_alert_demo");
+    expect(snapshot.readiness.blockers).toContain("No live public Telegram source is registered for this tenant.");
+    expect(snapshot.readiness.blockers).toContain("No approved metadata-only dark web source is registered for this tenant.");
+  });
+
+  test("mounts the DWM product API route", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveSource(darkwebSource);
+    store.saveCapture(telegramCapture);
+    store.saveCapture(darkwebCapture);
+
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/product?watchlist=acme.com&demo=false"), {
+      store,
+      frontier: new FocusedFrontier()
+    });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(body.schemaVersion).toBe("dwm.product.v1");
+    expect(body.alerts).toHaveLength(2);
+    expect(body.sourceCoverage.find((row: any) => row.family === "telegram_public").activeCount).toBe(1);
+  });
+});

@@ -1,23 +1,33 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, BellRing, Code2, Database, Gauge, LockKeyhole, Radar, ShieldCheck, Waypoints } from 'lucide-react'
+import { ArrowRight, BellRing, Code2, Database, Gauge, LockKeyhole, Network, Radar, ShieldCheck, Waypoints } from 'lucide-react'
 import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Solutions',
-    description: 'Threat monitoring, dark web monitoring, and private exposure-checking solutions from Hanasand.',
+    description: 'Threat monitoring, onion session workspaces, dark web monitoring, and private exposure-checking solutions from Hanasand.',
     path: '/solutions',
-    keywords: ['dark web monitoring', 'ransomware monitoring', 'company exposure alerts', 'threat intelligence API'],
+    keywords: ['onion session workspace', 'dark web monitoring', 'ransomware monitoring', 'company exposure alerts', 'threat intelligence API'],
 })
 
 const primarySolutions = [
     {
         title: 'Dark Web Monitoring',
-        eyebrow: 'Buyer-ready',
-        detail: 'Monitor company, vendor, domain, and brand mentions across ransomware and extortion infrastructure with webhook-ready notification packets.',
+        eyebrow: 'Monitoring',
+        detail: 'Watch companies, domains, executives, brands, and vendors across Telegram, actor-page metadata, public advisories, and clear-web corroboration.',
         href: '/solutions/dwm',
         icon: ShieldCheck,
-        points: ['Company and vendor watchlists', 'Actor and claim context', 'Webhook delivery examples'],
+        points: ['147 mapped sources, 116 active in preview', 'Session, token, API-key, vendor, and actor claims', 'Webhook-ready alert packet with confidence and action'],
+        price: 'From $49/mo',
+    },
+    {
+        title: 'Onion Session Workspace',
+        eyebrow: 'Controlled review',
+        detail: 'Open short-lived remote onion sessions for source validation, metadata capture, analyst notes, and evidence-safe handoff.',
+        href: '/solutions/onion-session',
+        icon: Network,
+        points: ['10-60 minute isolated sessions', 'Read-only and fresh-circuit controls', 'Evidence packet instead of local raw-content handling'],
+        price: 'Bundled with monitoring',
     },
     {
         title: 'Threat Intelligence Search',
@@ -26,6 +36,7 @@ const primarySolutions = [
         href: '/ti',
         icon: Radar,
         points: ['Actor overviews', 'Company exposure search', 'Alert context'],
+        price: 'Console',
     },
     {
         title: 'Bloom Filter Exposure Checks',
@@ -34,6 +45,7 @@ const primarySolutions = [
         href: '/pwned',
         icon: LockKeyhole,
         points: ['Private matching', 'Low-friction checks', 'Clean customer workflow'],
+        price: 'Privacy-first',
     },
     {
         title: 'Load Testing',
@@ -42,10 +54,12 @@ const primarySolutions = [
         href: '/test',
         icon: Gauge,
         points: ['5 checks before payment', 'Starter and team tiers', 'Shareable result links'],
+        price: 'Free trial',
     },
 ]
 
 const platformItems = [
+    { title: 'Short-span access', detail: 'Session controls for short-lived onion review, with P2P network expansion designed into the workspace.', icon: Network },
     { title: 'API delivery', detail: 'Structured fields for actor, company, source, date, claim summary, and recommended action.', icon: Code2 },
     { title: 'Graph pivots', detail: 'Actor, victim, sector, country, source, and CVE pivots that fit analyst workflows.', icon: Waypoints },
     { title: 'Notification pipeline', detail: 'Webhook-shaped packets designed for Slack, incident queues, and vendor-risk workflows.', icon: BellRing },
@@ -64,8 +78,8 @@ export default function SolutionsPage() {
                             Hanasand turns actor pages, public indexes, and watched sources into alerts and API records that tell a buyer who was mentioned, what was claimed, when it changed, and what to review next.
                         </p>
                         <div className='flex flex-wrap gap-3'>
-                            <Link href='/solutions/dwm' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
-                                Explore dark web monitoring
+                            <Link href='/solutions/onion-session' className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                                Open onion sessions
                                 <ArrowRight className='h-4 w-4' />
                             </Link>
                             <Link href='/contact' className='inline-flex h-11 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#171a21] transition hover:border-[#bdc7d5]'>
@@ -89,8 +103,16 @@ export default function SolutionsPage() {
                                         <h2 className='text-xl font-semibold text-[#171a21]'>{solution.title}</h2>
                                         <p className='text-sm leading-6 text-[#596170]'>{solution.detail}</p>
                                     </div>
+                                    <div className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] px-3 py-2 text-sm font-semibold text-[#171a21]'>
+                                        {solution.price}
+                                    </div>
                                     <div className='grid gap-2 border-t border-[#eef1f5] pt-4'>
-                                        {solution.points.map(point => <span key={point} className='text-sm text-[#3d4656]'>{point}</span>)}
+                                        {solution.points.map(point => (
+                                            <span key={point} className='flex items-start gap-2 text-sm leading-6 text-[#3d4656]'>
+                                                <span className='mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#3056d3]' />
+                                                {point}
+                                            </span>
+                                        ))}
                                     </div>
                                     <span className='inline-flex items-center gap-2 text-sm font-semibold text-[#3056d3]'>
                                         Open solution
