@@ -108,7 +108,13 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                                         <span className='ml-auto text-right font-semibold text-[#171a21]'>{relativeTime(check.checked_at, now)}</span>
                                     </div>
                                 </div>
-                                {check.message && <ErrorNotice compact className='mt-3' message={check.message} />}
+                                {check.message && check.status !== 'up' ? (
+                                    <ErrorNotice compact className='mt-3' message={check.message} />
+                                ) : check.message ? (
+                                    <p className='mt-3 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-3 py-2 text-sm leading-6 text-[#596170]'>
+                                        {check.message}
+                                    </p>
+                                ) : null}
                             </div>
                         )
                     })}
