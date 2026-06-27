@@ -149,9 +149,15 @@ function Results({ result }: { result: TiSearchResponse }) {
     const datasets = (result.datasets.length ? result.datasets : defaultDatasets()).filter(item => !/planned|rejected|blocked/i.test(item.status))
     const sources = result.sources.length ? result.sources : defaultSourceLinks()
     const alertItems = alertItemsFor(result)
+    const profileStats = [
+        { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(result.sources.length) },
+        { icon: <Activity className='h-3.5 w-3.5' />, label: 'Updated', value: formatDate(result.generatedAt || result.lastSeen) },
+        { icon: <Database className='h-3.5 w-3.5' />, label: 'Activity', value: activityCountLabel(result.recentActivity.length) },
+        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Monitoring', value: result.status === 'ready' || result.status === 'partial' ? 'Active' : 'Watching' },
+    ]
     return (
         <div className='grid gap-6'>
-            <section className='grid gap-4 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm lg:grid-cols-[1.25fr_0.75fr]'>
+            <section className='grid gap-5 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.95fr)]'>
                 <div className='grid gap-3'>
                     <div className='flex flex-wrap items-center gap-2'>
                         <h1 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>{humanizeSlug(result.query)}</h1>
@@ -160,6 +166,9 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 {humanResultStatus(result.status)}
                             </span>
                         ) : null}
+                        {profileStats.map(item => (
+                            <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
+                        ))}
                     </div>
                     <p className='max-w-4xl text-sm leading-6 text-[#596170]'>{result.summary}</p>
                     <div className='flex flex-wrap gap-2'>
@@ -168,12 +177,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         ))}
                     </div>
                 </div>
-                <div className='grid gap-2 text-sm'>
-                    <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Sources' value={sourceCountLabel(result.sources.length)} />
-                    <Metric icon={<Activity className='h-4 w-4' />} label='Updated' value={formatDate(result.generatedAt || result.lastSeen)} />
-                    <Metric icon={<Database className='h-4 w-4' />} label='Activity' value={activityCountLabel(result.recentActivity.length)} />
-                    <Metric icon={<BellRing className='h-4 w-4' />} label='Monitoring' value={result.status === 'ready' || result.status === 'partial' ? 'Active' : 'Watching'} />
-                </div>
+                <ThreatActorMap result={result} />
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
@@ -506,11 +510,64 @@ function techniqueDescription(attackId: string, name: string, tactic: string, de
     return descriptions[attackId] ?? `${name}: ${detail || `Reported under the ${tactic} tactic.`}`
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function ProfileStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
     return (
-        <div className='flex items-center justify-between gap-4 border border-[#dfe5ee] bg-white px-3 py-2'>
-            <span className='inline-flex items-center gap-2 text-[#667085]'>{icon}{label}</span>
+        <span className='inline-flex items-center gap-1.5 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2.5 py-1 text-xs text-[#667085]'>
+            <span className='text-[#3056d3]'>{icon}</span>
+            <span>{label}</span>
             <span className='font-semibold text-[#171a21]'>{value}</span>
+        </span>
+    )
+}
+
+function ThreatActorMap({ result }: { result: TiSearchResponse }) {
+    const regions = actorMapRegions(result)
+    const hasRegions = regions.length > 0
+    return (
+        <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#f8fafc]'>
+            <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3'>
+                <div>
+                    <h2 className='text-sm font-semibold text-[#171a21]'>Operating Map</h2>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Reported regions and countries connected to this profile.</p>
+                </div>
+                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3]'>{hasRegions ? `${regions.length} mapped` : 'No map yet'}</span>
+            </div>
+            <div className='relative bg-[radial-gradient(circle_at_50%_35%,rgba(48,86,211,0.14),transparent_42%)] p-3'>
+                <svg viewBox='0 0 640 320' role='img' aria-label={`Operating map for ${humanizeSlug(result.query)}`} className='h-64 w-full'>
+                    <rect width='640' height='320' rx='18' fill='#ffffff' />
+                    <path d='M76 114 C110 80 171 72 218 101 C250 121 251 160 214 180 C172 205 110 189 79 155 C61 136 61 127 76 114Z' fill='#e8edf5' />
+                    <path d='M178 205 C209 191 248 196 270 222 C286 241 278 268 250 282 C221 297 181 281 169 251 C160 230 162 215 178 205Z' fill='#e8edf5' />
+                    <path d='M285 99 C330 68 410 70 464 105 C506 132 516 178 476 207 C431 241 348 235 301 201 C263 174 254 122 285 99Z' fill='#e8edf5' />
+                    <path d='M421 86 C456 65 515 68 553 96 C583 119 578 150 540 162 C504 174 444 162 419 134 C402 115 403 97 421 86Z' fill='#e8edf5' />
+                    <path d='M397 205 C432 190 483 203 506 233 C526 258 511 288 474 295 C435 302 397 278 386 246 C379 226 383 211 397 205Z' fill='#e8edf5' />
+                    <path d='M535 207 C570 192 608 205 620 231 C632 257 603 278 566 269 C534 261 515 225 535 207Z' fill='#e8edf5' />
+                    <path d='M48 259 C187 236 316 233 589 255' fill='none' stroke='#d7deea' strokeDasharray='6 8' strokeWidth='2' />
+                    <path d='M57 71 C220 42 392 43 586 72' fill='none' stroke='#d7deea' strokeDasharray='6 8' strokeWidth='2' />
+                    {regions.map(region => (
+                        <g key={region.label}>
+                            <circle cx={region.x} cy={region.y} r={region.radius + 8} fill='#3056d3' opacity='0.12' />
+                            <circle cx={region.x} cy={region.y} r={region.radius} fill='#3056d3' opacity='0.88' />
+                            <circle cx={region.x} cy={region.y} r='3' fill='#ffffff' />
+                            <text x={region.x + 12} y={region.y + 4} fill='#171a21' fontSize='12' fontWeight='700'>{region.label}</text>
+                        </g>
+                    ))}
+                </svg>
+                {!hasRegions ? (
+                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/70 text-center text-sm font-medium text-[#667085]'>
+                        Region mapping will appear when target sectors or country references are available.
+                    </div>
+                ) : null}
+            </div>
+            {hasRegions ? (
+                <div className='grid gap-2 border-t border-[#e8edf5] bg-white px-4 py-3 sm:grid-cols-2'>
+                    {regions.slice(0, 4).map(region => (
+                        <div key={region.label} className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
+                            <span className='font-semibold text-[#171a21]'>{region.label}</span>
+                            <span className='text-[#667085]'>{region.count} mention{region.count === 1 ? '' : 's'}</span>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
         </div>
     )
 }
@@ -560,6 +617,62 @@ function activityCountLabel(count: number) {
 function activitySourceLabel(count: number) {
     if (count <= 0) return 'Source pending'
     return count === 1 ? '1 source' : `${count} sources`
+}
+
+function actorMapRegions(result: TiSearchResponse) {
+    const counts = new Map<string, number>()
+    const values = [
+        ...result.targets.flatMap(target => target.regions),
+        ...result.recentActivity.flatMap(item => item.countries ?? []),
+    ]
+
+    for (const value of values) {
+        const region = normalizeMapRegion(value)
+        if (!region) continue
+        counts.set(region.label, (counts.get(region.label) ?? 0) + 1)
+    }
+
+    return [...counts.entries()]
+        .map(([label, count]) => {
+            const point = mapPointForRegion(label)
+            return { ...point, label, count, radius: Math.min(14, 6 + count * 2) }
+        })
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+}
+
+function normalizeMapRegion(value: string) {
+    const text = value.trim().toLowerCase()
+    if (!text || /global|multiple|unknown|various/.test(text)) return null
+    if (/asia|apac|pacific|taiwan|china|japan|korea|philippines|vietnam|thailand|singapore|hong kong|india|pakistan|southeast/.test(text)) return { label: 'Asia-Pacific' }
+    if (/middle east|iran|iraq|israel|saudi|uae|qatar|kuwait|turkey|levant/.test(text)) return { label: 'Middle East' }
+    if (/europe|eu|uk|united kingdom|germany|france|italy|spain|netherlands|nordic|norway|sweden|poland|ukraine|russia|belarus/.test(text)) return { label: 'Europe' }
+    if (/north america|united states|usa|u\.s\.|us|canada|mexico/.test(text)) return { label: 'North America' }
+    if (/latin|south america|brazil|argentina|chile|colombia|peru/.test(text)) return { label: 'Latin America' }
+    if (/africa|egypt|nigeria|kenya|south africa|morocco/.test(text)) return { label: 'Africa' }
+    if (/australia|oceania|new zealand/.test(text)) return { label: 'Oceania' }
+    return { label: value.trim().replace(/\s+/g, ' ') }
+}
+
+function mapPointForRegion(label: string) {
+    const points: Record<string, { x: number; y: number }> = {
+        'North America': { x: 150, y: 130 },
+        'Latin America': { x: 225, y: 235 },
+        Europe: { x: 337, y: 117 },
+        Africa: { x: 350, y: 198 },
+        'Middle East': { x: 405, y: 158 },
+        'Asia-Pacific': { x: 496, y: 148 },
+        Oceania: { x: 565, y: 238 },
+    }
+    return points[label] ?? fallbackMapPoint(label)
+}
+
+function fallbackMapPoint(label: string) {
+    let hash = 0
+    for (const char of label) hash = (hash * 31 + char.charCodeAt(0)) % 997
+    return {
+        x: 92 + (hash % 470),
+        y: 94 + ((hash * 7) % 150),
+    }
 }
 
 function updateMetaDescription(content: string) {
