@@ -29,7 +29,7 @@ const footerGroups = [
         title: 'Developers',
         links: [
             { label: 'API docs', href: '/developers', icon: Code2 },
-            { label: 'Support', href: '/contact?intent=support', icon: ArrowUpRight },
+            { label: 'Support', href: '/support', icon: ArrowUpRight },
             { label: 'Status', href: '/status', icon: Activity, status: true },
         ],
     },

@@ -6,6 +6,7 @@ const publicRoutes = [
     '/register',
     '/reset-password',
     '/status',
+    '/support',
     '/articles',
     '/articles/bot',
     '/pwned',

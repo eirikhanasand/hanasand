@@ -63,7 +63,7 @@ export default function Contact({ plan = '', intent = '' }: { plan?: string; int
                     </div>
                 </div>
 
-                <form className='grid gap-5 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-[0_20px_70px_rgba(26,35,55,0.10)] md:p-7' onSubmit={formik.handleSubmit} title='Contact sales'>
+                <form className='grid gap-5 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-[0_20px_70px_rgba(26,35,55,0.10)] md:p-7' onSubmit={formik.handleSubmit} title={contactIntent.eyebrow}>
                     <div className='grid gap-1'>
                         <h2 className='text-xl font-semibold'>Start a conversation</h2>
                         <p className='text-sm text-[#667085]'>This opens a drafted email with your details filled in.</p>
@@ -215,6 +215,16 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
         }
     }
 
+    if (normalizedIntent === 'support') {
+        return {
+            subject: 'Support request',
+            message: 'I need help with Hanasand.\n\nPage or feature:\nWhat happened:\nWhat I expected:\nAccount email, if relevant:',
+            eyebrow: 'Support',
+            heading: 'Get help with an account, webhook, API, or terms question.',
+            detail: 'Send the route, account email, webhook, or API workflow you need help with. Support can help with access, billing questions, endpoint changes, and terms-of-service questions.',
+        }
+    }
+
     if (normalizedPlan === 'pilot') {
         return {
             subject: 'Start Pilot threat monitoring',
@@ -248,8 +258,8 @@ function getContactIntent(plan: string, intent: string): ContactIntent {
     return {
         subject: '',
         message: '',
-        eyebrow: 'Contact sales',
-        heading: 'Talk through monitoring for your company, customers, or portfolio.',
-        detail: 'Send the company names, domains, actor concerns, or supplier watchlist you care about. The reply can cover coverage, pricing, and how the alert data would be delivered.',
+        eyebrow: 'Contact',
+        heading: 'Send a product, support, or monitoring request.',
+        detail: 'Use this page for monitoring questions, support requests, API setup, webhook changes, or account help.',
     }
 }

@@ -4,7 +4,7 @@ import { buildRouteMetadata } from '../seo'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Contact',
-    description: 'Contact Hanasand for collaboration, project work, or questions.',
+    description: 'Contact support or send product, monitoring, API, and collaboration questions.',
     path: '/contact',
     keywords: ['contact', 'hanasand', 'developer'],
 })
