@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Camera, DatabaseZap, ExternalLink, Globe2, PlayCircle, Radar } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+import { getTiEnrichmentOverview } from '@/utils/tiAdmin/enrichment'
 import { formatTiDate, getTiAdminOverview, sourceById } from '@/utils/tiAdmin/ops'
 import ManualRunButton from './manualRunButton'
 
@@ -8,6 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export default function TiAdminPage() {
     const { sources, domains, captures, runs } = getTiAdminOverview()
+    const enrichment = getTiEnrichmentOverview()
     const activeSources = sources.filter(source => source.status === 'active').length
     const nextRun = [...sources].sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime())[0]
     const latestRun = [...runs].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0]
@@ -27,6 +29,7 @@ export default function TiAdminPage() {
                 <Stat title='Domains surfaced' value={`${domains.length}`} detail='watchlist/domain pivots' icon={<Globe2 className='h-4 w-4' />} />
                 <Stat title='Screenshots' value={`${captures.length}`} detail='viewable capture records' icon={<Camera className='h-4 w-4' />} />
                 <Stat title='Next run' value={nextRun ? formatTiDate(nextRun.nextRunAt) : 'No schedule'} detail={nextRun?.name || 'No source'} icon={<PlayCircle className='h-4 w-4' />} />
+                <Stat title='Actor enrichment' value={`${enrichment.stats.updatedLastHour}`} detail='updated last hour' icon={<Radar className='h-4 w-4' />} />
             </div>
 
             <div className='grid gap-4 xl:grid-cols-[1.15fr_0.85fr]'>
@@ -94,6 +97,32 @@ export default function TiAdminPage() {
                             </div>
                             <p className='mt-1 font-mono text-sm text-[#596170]'>{domain.domain}</p>
                             <p className='mt-2 text-xs text-[#667085]'>{domain.sourceIds.map(id => sourceById(id)?.name || id).join(', ')}</p>
+                        </Link>
+                    ))}
+                </div>
+            </DashboardPanel>
+
+            <DashboardPanel className='p-5'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div>
+                        <h2 className='text-lg font-semibold text-[#171a21]'>Automatic actor enrichment</h2>
+                        <p className='mt-1 text-sm text-[#596170]'>The background worker keeps stable actor profiles cached while recent activity refreshes separately.</p>
+                    </div>
+                    <div className='flex flex-wrap gap-2'>
+                        <Link href='/dashboard/ti/activity' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#f2f5f9]'>Activity</Link>
+                        <Link href='/dashboard/ti/enrichment' className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white hover:bg-[#2b2f39]'>Enrichment queue</Link>
+                        <Link href='/dashboard/ti/audit' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] hover:bg-[#f2f5f9]'>Audit log</Link>
+                    </div>
+                </div>
+                <div className='mt-4 grid gap-3 lg:grid-cols-3'>
+                    {enrichment.updatedActors.slice(0, 3).map(actor => (
+                        <Link key={actor.id} href={`/ti/${encodeURIComponent(actor.id)}`} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 hover:border-[#b8c5ff] hover:bg-[#f4f7ff]'>
+                            <div className='flex items-center justify-between gap-3'>
+                                <h3 className='font-semibold text-[#171a21]'>{actor.name}</h3>
+                                <span className='rounded-full bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]'>{actor.status}</span>
+                            </div>
+                            <p className='mt-2 text-xs text-[#667085]'>Updated {formatTiDate(actor.lastUpdatedAt)}</p>
+                            <p className='mt-2 text-sm leading-6 text-[#596170]'>{actor.automationEvidence[0]}</p>
                         </Link>
                     ))}
                 </div>

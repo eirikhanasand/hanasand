@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AlarmClockCheck, BrainCircuit, CalendarClock, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
+import { Activity, AlarmClockCheck, BrainCircuit, CalendarClock, ClipboardList, Code2, Database, DatabaseBackup, DatabaseZap, FileCode2, FileWarning, FolderKanban, Gauge, Globe2, Inbox, LayoutDashboard, ListChecks, Network, NotebookText, PanelLeftClose, PanelLeftOpen, PlayCircle, Radar, ScanSearch, Server, Settings2, ShieldCheck, Sparkles, UserRound, UserRoundCheck, Zap } from 'lucide-react'
 import { useSyncExternalStore } from 'react'
 import { getDashboardViewMode, setDashboardViewMode } from '@/utils/layout/viewMode'
 
@@ -83,9 +83,12 @@ export default function DashboardSidebar({
     if (isAdmin) {
         tiAdminItems.push(
             { href: '/dashboard/ti', label: 'TI overview', icon: <Radar className='h-4 w-4' /> },
+            { href: '/dashboard/ti/activity', label: 'TI activity', icon: <Activity className='h-4 w-4' /> },
+            { href: '/dashboard/ti/enrichment', label: 'Actor enrichment', icon: <ListChecks className='h-4 w-4' /> },
             { href: '/dashboard/ti/sources', label: 'TI sources', icon: <DatabaseZap className='h-4 w-4' /> },
             { href: '/dashboard/ti/domains', label: 'TI domains', icon: <Globe2 className='h-4 w-4' /> },
             { href: '/dashboard/ti/runs', label: 'TI runs', icon: <PlayCircle className='h-4 w-4' /> },
+            { href: '/dashboard/ti/audit', label: 'TI audit log', icon: <ClipboardList className='h-4 w-4' /> },
         )
 
         adminItems.push(

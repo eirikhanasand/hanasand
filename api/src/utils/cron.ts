@@ -8,6 +8,7 @@ import purgeDeletedAccounts from './auth/purgeDeletedAccounts.ts'
 import ensureAlwaysRunningVms from './vms/ensureAlwaysRunning.ts'
 import { runDueAutomations } from './automations.ts'
 import runProductionLogMonitors from './status/logMonitors.ts'
+import { warmThreatActorProfileCache } from './ti/search.ts'
 
 export default function cron() {
     schedule('* * * * *', async() => {
@@ -20,6 +21,7 @@ export default function cron() {
                 runProductionLogMonitors(),
                 ensureAlwaysRunningVms(),
                 runDueAutomations(),
+                warmThreatActorProfileCache(),
             ]
 
             if (mailConfig.adminPassword) {
