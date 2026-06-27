@@ -38,7 +38,7 @@ export default async function getStatus(_req: FastifyRequest, res: FastifyReply)
         ORDER BY latest.service ASC, latest.check_name ASC
     `)
 
-    const checks = result.rows as MonitorRow[]
+    const checks = (result.rows as MonitorRow[]).map(toPublicMonitorRow)
     const overall = checks.length && checks.every(check => check.status === 'up')
         ? 'up'
         : checks.some(check => check.status === 'down')
@@ -50,4 +50,32 @@ export default async function getStatus(_req: FastifyRequest, res: FastifyReply)
         generated_at: new Date().toISOString(),
         checks,
     })
+}
+
+function toPublicMonitorRow(row: MonitorRow): MonitorRow {
+    if (row.status !== 'up' || !row.message) {
+        return row
+    }
+
+    return {
+        ...row,
+        message: normalTrafficMessage(row.message),
+    }
+}
+
+function normalTrafficMessage(message: string) {
+    if (/No share page (?:4xx\/5xx|availability) responses in the recent log window\./i.test(message)) {
+        return 'Normal workspace link traffic baseline.'
+    }
+    if (/No (?:websocket|realtime delivery) failures in the recent log window\./i.test(message)) {
+        return 'Normal realtime delivery traffic baseline.'
+    }
+    if (/No (?:terminal failures|workspace session issues) in the recent log window\./i.test(message)) {
+        return 'Normal workspace session traffic baseline.'
+    }
+    if (/No (?:VM provisioning|workspace runtime) errors in the recent log window\./i.test(message)) {
+        return 'Normal workspace runtime traffic baseline.'
+    }
+
+    return message
 }

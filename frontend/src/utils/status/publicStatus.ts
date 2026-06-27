@@ -73,6 +73,31 @@ function publicStatusMessage(message: string | null) {
         return null
     }
 
+    if (/No share page 4xx\/5xx responses in the recent log window\./i.test(message)) {
+        return 'Normal workspace link traffic baseline.'
+    }
+    if (/No share page availability responses in the recent log window\./i.test(message)) {
+        return 'Normal workspace link traffic baseline.'
+    }
+    if (/No websocket failures in the recent log window\./i.test(message)) {
+        return 'Normal realtime delivery traffic baseline.'
+    }
+    if (/No realtime delivery failures in the recent log window\./i.test(message)) {
+        return 'Normal realtime delivery traffic baseline.'
+    }
+    if (/No terminal failures in the recent log window\./i.test(message)) {
+        return 'Normal workspace session traffic baseline.'
+    }
+    if (/No workspace session issues in the recent log window\./i.test(message)) {
+        return 'Normal workspace session traffic baseline.'
+    }
+    if (/No VM provisioning errors in the recent log window\./i.test(message)) {
+        return 'Normal workspace runtime traffic baseline.'
+    }
+    if (/No workspace runtime errors in the recent log window\./i.test(message)) {
+        return 'Normal workspace runtime traffic baseline.'
+    }
+
     return message
         .replace(/VM provisioning/gi, 'workspace runtime')
         .replace(/terminal failures/gi, 'workspace session issues')
