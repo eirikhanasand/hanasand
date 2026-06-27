@@ -57,17 +57,17 @@ const solutions = [
 ]
 
 const stats = [
-    ['Current focus', 'Company exposure alerts'],
-    ['Collection model', 'Owned monitoring'],
-    ['Public indexes', 'Seed and corroboration'],
-    ['Product surface', 'hanasand.com'],
+    ['Alert target', 'Company, vendor, domain, and brand mentions'],
+    ['What gets sent', 'Actor, company, claimed data, source, time, status'],
+    ['Refresh signal', 'New and changed actor-page claims'],
+    ['Buyer workflow', 'Webhook, API, and console review queue'],
 ]
 
 const feedRows = [
-    ['Akira', 'Ntd Apparel', '62 GB claimed', 'current'],
-    ['Aurora', 'Aerospace & Advanced Composites GmbH', '123 GB claimed', 'current'],
-    ['RansomHouse', 'Irec Sas', 'new victim claim', 'recent'],
-    ['Qilin', 'Supplier watchlist match', 'under review', 'review'],
+    { actor: 'Akira', company: 'Ntd Apparel', data: '62 GB claimed', claimedAt: '2026-06-27 10:42 UTC', status: 'current' },
+    { actor: 'Aurora', company: 'Aerospace & Advanced Composites GmbH', data: '123 GB claimed', claimedAt: '2026-06-27 09:18 UTC', status: 'current' },
+    { actor: 'RansomHouse', company: 'Irec Sas', data: 'new victim claim', claimedAt: '2026-06-26 22:31 UTC', status: 'recent' },
+    { actor: 'Qilin', company: 'Supplier watchlist match', data: 'under review', claimedAt: '2026-06-26 18:05 UTC', status: 'review' },
 ]
 
 export default async function Page({
@@ -152,7 +152,7 @@ export default async function Page({
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Monitoring workflow</p>
                         <h2 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>Find the company mention before it becomes a forwarded screenshot.</h2>
                         <p className='text-base leading-7 text-[#596170]'>
-                            Public ransomware indexes are useful starting points. Hanasand adds direct monitoring, freshness checks, actor-page changes, and clean notification packets for buyer workflows.
+                            Each alert is built for the first triage decision: who posted it, which company was named, what data was claimed, when it appeared, and whether it needs action.
                         </p>
                         <div className='grid gap-3'>
                             {stats.map(([label, value]) => (
@@ -172,15 +172,27 @@ export default async function Page({
                             </div>
                             <span className='landing-live-pill shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold'>Live</span>
                         </div>
-                        <div className='divide-y divide-[#eef1f5]'>
-                            {feedRows.map(([actor, victim, data, state]) => (
-                                <div key={`${actor}-${victim}`} className='grid min-w-0 grid-cols-[7rem_minmax(0,1fr)_8.5rem_4.75rem] items-center gap-3 px-4 py-3 text-sm'>
-                                    <span className='truncate font-semibold text-[#171a21]'>{actor}</span>
-                                    <span className='truncate text-[#3d4656]'>{victim}</span>
-                                    <span className='truncate whitespace-nowrap text-[#596170]'>{data}</span>
-                                    <span className='landing-status-pill justify-self-end whitespace-nowrap rounded-full border px-2 py-1 text-xs font-medium'>{state}</span>
+                        <div className='min-w-0 overflow-x-auto'>
+                            <div className='min-w-[48rem]'>
+                                <div className='grid grid-cols-[6.5rem_minmax(12rem,1fr)_9rem_10.5rem_5rem] gap-3 border-b border-[#eef1f5] px-4 py-2 text-[0.68rem] font-semibold uppercase text-[#737c8c]'>
+                                    <span>Actor</span>
+                                    <span>Company</span>
+                                    <span>Claimed data</span>
+                                    <span>Claim time</span>
+                                    <span className='text-right'>Status</span>
                                 </div>
-                            ))}
+                                <div className='divide-y divide-[#eef1f5]'>
+                                    {feedRows.map(({ actor, company, data, claimedAt, status }) => (
+                                        <div key={`${actor}-${company}`} className='grid min-w-0 grid-cols-[6.5rem_minmax(12rem,1fr)_9rem_10.5rem_5rem] items-center gap-3 px-4 py-3 text-sm'>
+                                            <span className='truncate font-semibold text-[#171a21]'>{actor}</span>
+                                            <span className='truncate text-[#3d4656]'>{company}</span>
+                                            <span className='truncate whitespace-nowrap text-[#596170]'>{data}</span>
+                                            <time dateTime={claimedAt.replace(' UTC', 'Z').replace(' ', 'T')} className='truncate whitespace-nowrap font-mono text-xs text-[#596170]'>{claimedAt}</time>
+                                            <span className='landing-status-pill justify-self-end whitespace-nowrap rounded-full border px-2 py-1 text-xs font-medium'>{status}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
