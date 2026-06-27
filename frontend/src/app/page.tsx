@@ -164,25 +164,23 @@ export default async function Page({
                         </div>
                     </div>
 
-                    <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
-                        <div className='rounded-lg border border-[#e2e8f0] bg-white'>
-                            <div className='flex items-center justify-between border-b border-[#eef1f5] px-4 py-3'>
-                                <div>
-                                    <h3 className='text-sm font-semibold text-[#171a21]'>Exposure queue</h3>
-                                    <p className='text-xs text-[#737c8c]'>Recent actor claims matched to watchlist terms</p>
+                    <div className='overflow-hidden rounded-lg border border-[#e2e8f0] bg-white shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
+                        <div className='flex items-center justify-between gap-4 border-b border-[#eef1f5] px-4 py-3'>
+                            <div className='min-w-0'>
+                                <h3 className='text-sm font-semibold text-[#171a21]'>Exposure queue</h3>
+                                <p className='truncate text-xs text-[#737c8c]'>Recent actor claims matched to watchlist terms</p>
+                            </div>
+                            <span className='shrink-0 rounded-full bg-[#e9f8ef] px-2.5 py-1 text-xs font-semibold text-[#147a3b]'>Live</span>
+                        </div>
+                        <div className='divide-y divide-[#eef1f5]'>
+                            {feedRows.map(([actor, victim, data, state]) => (
+                                <div key={`${actor}-${victim}`} className='grid min-w-0 grid-cols-[7rem_minmax(0,1fr)_8.5rem_4.75rem] items-center gap-3 px-4 py-3 text-sm'>
+                                    <span className='truncate font-semibold text-[#171a21]'>{actor}</span>
+                                    <span className='truncate text-[#3d4656]'>{victim}</span>
+                                    <span className='truncate whitespace-nowrap text-[#596170]'>{data}</span>
+                                    <span className='justify-self-end whitespace-nowrap rounded-full border border-[#dfe6f1] bg-[#f8fafc] px-2 py-1 text-xs font-medium text-[#596170]'>{state}</span>
                                 </div>
-                                <span className='rounded-full bg-[#e9f8ef] px-2.5 py-1 text-xs font-semibold text-[#147a3b]'>Live</span>
-                            </div>
-                            <div className='divide-y divide-[#eef1f5]'>
-                                {feedRows.map(([actor, victim, data, state]) => (
-                                    <div key={`${actor}-${victim}`} className='grid gap-3 px-4 py-3 md:grid-cols-[8rem_1fr_9rem_5rem] md:items-center'>
-                                        <span className='text-sm font-semibold text-[#171a21]'>{actor}</span>
-                                        <span className='truncate text-sm text-[#3d4656]'>{victim}</span>
-                                        <span className='text-sm text-[#596170]'>{data}</span>
-                                        <span className='w-fit rounded-full border border-[#dfe6f1] bg-[#f8fafc] px-2 py-1 text-xs font-medium text-[#596170]'>{state}</span>
-                                    </div>
-                                ))}
-                            </div>
+                            ))}
                         </div>
                     </div>
                 </div>

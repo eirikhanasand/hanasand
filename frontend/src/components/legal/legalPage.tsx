@@ -25,7 +25,7 @@ export default function LegalPage({ eyebrow, title, description, sections }: Leg
                     </article>
                 ))}
                 <div className='rounded-lg border border-[#dfe5ee] bg-white p-5 text-sm leading-7 text-[#596170] shadow-sm'>
-                    Questions about these terms can go through <Link href='/contact' className='font-semibold text-[#3056d3]'>contact sales</Link>.
+                    Contact <Link href='/contact?intent=support' className='font-semibold text-[#3056d3]'>support</Link> for questions about these terms of service.
                 </div>
             </section>
         </main>
