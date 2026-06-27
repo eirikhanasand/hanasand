@@ -22,13 +22,17 @@ export default async function getArticles(req: FastifyRequest<{
     const recent = req.query.recent
     const backfill = req.query.backfill
     const sortBy = req.query.sortBy
-    await ensureRepo()
-    void ensureRepositoryUpToDate().catch(error => {
-        req.log.warn({ error }, 'Failed to refresh articles repository')
-    })
+    try {
+        await ensureRepo()
+        void ensureRepositoryUpToDate().catch(error => {
+            req.log.warn({ error }, 'Failed to refresh articles repository')
+        })
+    } catch (error) {
+        req.log.warn({ error }, 'Articles repository is unavailable; serving empty article feed')
+    }
 
     if (!(await fileExists(ARTICLES_DIR))) {
-        return res.status(404).send({ error: 'Articles directory does not exist' })
+        return res.send(emptyArticlesResponse(Boolean(recent)))
     }
 
     const files = await readdir(ARTICLES_DIR)
@@ -96,6 +100,10 @@ export default async function getArticles(req: FastifyRequest<{
             articles: oldArticlesByUpdated,
         } : articlesByUpdated
     )
+}
+
+function emptyArticlesResponse(recent: boolean) {
+    return recent ? { recent: [], articles: [] } : []
 }
 
 export async function getArticle(req: FastifyRequest<{ Params: { id: string } }>, res: FastifyReply) {
