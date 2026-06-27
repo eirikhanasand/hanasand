@@ -85,8 +85,8 @@ export default async function Page({
             <section className='border-b border-[#e3e7ee] bg-[radial-gradient(circle_at_1px_1px,rgba(24,32,52,0.09)_1px,transparent_0)] bg-[length:22px_22px]'>
                 <div className='mx-auto grid w-full max-w-7xl content-start gap-10 px-4 pb-12 pt-16 md:px-8 md:pt-24 lg:pt-28'>
                     <div className='mx-auto grid max-w-5xl justify-items-center gap-6 text-center'>
-                        <Link href='/ti' className='inline-flex items-center gap-2 rounded-full border border-[#b8c5ff] bg-white px-3 py-1.5 text-sm font-medium text-[#2442a8] shadow-sm'>
-                            <span className='rounded-full bg-[#e7edff] px-2 py-0.5 text-xs'>New</span>
+                        <Link href='/ti' className='inline-flex items-center gap-2 rounded-full border border-[#171a21] bg-[#171a21] px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2b2f39] dark:border-[#334767] dark:bg-[#172234] dark:text-[#f5f7fb] dark:hover:bg-[#1d2b42]'>
+                            <span className='rounded-full bg-white/12 px-2 py-0.5 text-xs text-white dark:bg-[#243856] dark:text-[#c9d8ff]'>New</span>
                             Direct actor-page monitoring for company exposure
                             <ArrowRight className='h-4 w-4' />
                         </Link>
@@ -127,7 +127,7 @@ export default async function Page({
                                             <div className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3]'>
                                                 <Icon className='h-5 w-5' />
                                             </div>
-                                            <span className='rounded-full bg-[#eef3ff] px-2.5 py-1 text-xs font-semibold text-[#3056d3]'>{item.badge}</span>
+                                            <span className='rounded-full border border-[#cfd8e6] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] dark:border-[#334767] dark:bg-[#172234] dark:text-[#d9e2f2]'>{item.badge}</span>
                                         </div>
                                         <div className='grid gap-1'>
                                             <h2 className='text-lg font-semibold text-[#171a21]'>{item.title}</h2>
@@ -137,7 +137,7 @@ export default async function Page({
                                     </div>
                                     <div className='flex items-center justify-between border-t border-[#eef1f5] bg-[#f8fafc] px-5 py-3 text-sm'>
                                         <span className='font-medium text-[#2b3340]'>{item.signal}</span>
-                                        <span className='inline-flex items-center gap-1 font-semibold text-[#3056d3]'>Open <ExternalLink className='h-3.5 w-3.5' /></span>
+                                        <span className='inline-flex items-center gap-1 font-semibold text-[#171a21] dark:text-[#d9e2f2]'>Open <ExternalLink className='h-3.5 w-3.5 text-[#3056d3] dark:text-[#9db4ff]' /></span>
                                     </div>
                                 </Link>
                             )
@@ -170,7 +170,7 @@ export default async function Page({
                                 <h3 className='text-sm font-semibold text-[#171a21]'>Exposure queue</h3>
                                 <p className='truncate text-xs text-[#737c8c]'>Recent actor claims matched to watchlist terms</p>
                             </div>
-                            <span className='shrink-0 rounded-full bg-[#e9f8ef] px-2.5 py-1 text-xs font-semibold text-[#147a3b]'>Live</span>
+                            <span className='shrink-0 rounded-full border border-[#b9e8c9] bg-[#e9f8ef] px-2.5 py-1 text-xs font-semibold text-[#147a3b] dark:border-[#295f43] dark:bg-[#123224] dark:text-[#7de0a2]'>Live</span>
                         </div>
                         <div className='divide-y divide-[#eef1f5]'>
                             {feedRows.map(([actor, victim, data, state]) => (
@@ -178,7 +178,7 @@ export default async function Page({
                                     <span className='truncate font-semibold text-[#171a21]'>{actor}</span>
                                     <span className='truncate text-[#3d4656]'>{victim}</span>
                                     <span className='truncate whitespace-nowrap text-[#596170]'>{data}</span>
-                                    <span className='justify-self-end whitespace-nowrap rounded-full border border-[#dfe6f1] bg-[#f8fafc] px-2 py-1 text-xs font-medium text-[#596170]'>{state}</span>
+                                    <span className='justify-self-end whitespace-nowrap rounded-full border border-[#cfd8e6] bg-white px-2 py-1 text-xs font-medium text-[#344054] dark:border-[#334767] dark:bg-[#172234] dark:text-[#d9e2f2]'>{state}</span>
                                 </div>
                             ))}
                         </div>
@@ -193,7 +193,7 @@ export default async function Page({
                             <p className='text-sm font-semibold uppercase text-[#3056d3]'>Solutions</p>
                             <h2 className='text-3xl font-semibold text-[#171a21]'>Monitoring and secure workflow tools in one place.</h2>
                         </div>
-                        <Link href='/dashboard/overview' className='inline-flex w-fit items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 py-2.5 text-sm font-semibold text-[#171a21] shadow-sm transition hover:border-[#bdc7d5]'>
+                        <Link href='/dashboard/overview' className='inline-flex w-fit items-center gap-2 rounded-lg border border-[#171a21] bg-[#171a21] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2b2f39] dark:border-[#334767] dark:bg-[#172234] dark:text-[#f5f7fb] dark:hover:bg-[#1d2b42]'>
                             Go to Console
                             <ArrowRight className='h-4 w-4' />
                         </Link>
@@ -204,7 +204,7 @@ export default async function Page({
                             <Link key={solution.title} href={solution.href} className='grid gap-4 rounded-lg border border-[#e0e5ed] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9d2df]'>
                                 <div className='flex items-center justify-between gap-3'>
                                     <h3 className='text-base font-semibold text-[#171a21]'>{solution.title}</h3>
-                                    <ArrowRight className='h-4 w-4 text-[#3056d3]' />
+                                    <ArrowRight className='h-4 w-4 text-[#171a21] dark:text-[#d9e2f2]' />
                                 </div>
                                 <p className='text-sm leading-6 text-[#596170]'>{solution.detail}</p>
                             </Link>
