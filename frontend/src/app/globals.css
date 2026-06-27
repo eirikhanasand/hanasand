@@ -236,6 +236,7 @@ html.dark:not(.light) header[class*="bg-white/"] {
 }
 
 .dark .enterprise-theme [class*="bg-[#f7f8fb]"],
+.dark .enterprise-theme [class*="bg-[#f5f7fb]"],
 .dark .enterprise-theme [class*="bg-[#f8fafc]"],
 .dark .enterprise-theme [class*="bg-[#fbfcfe]"] {
   background-color: #0b111a !important;
@@ -263,6 +264,8 @@ html.dark:not(.light) header[class*="bg-white/"] {
 .dark .enterprise-theme [class*="text-[#2f3540]"],
 .dark .enterprise-theme [class*="text-[#3a404b]"],
 .dark .enterprise-theme [class*="text-[#2b3340]"],
+.dark .enterprise-theme [class*="text-[#344054]"],
+.dark .enterprise-theme [class*="text-[#364152]"],
 .dark .enterprise-theme [class*="text-[#3d4656]"] {
   color: #f5f7fb !important;
 }
@@ -309,9 +312,21 @@ html.dark:not(.light) header [class*="text-[#7a8493]"] {
 }
 
 html.dark:not(.light) header [class*="hover:bg-[#f1f4f8]"]:hover,
-html.dark:not(.light) header [class*="hover:bg-[#f6f8fb]"]:hover,
-html.dark:not(.light) header [class*="group-hover:bg-[#f1f4f8]"] {
+html.dark:not(.light) header [class*="hover:bg-[#f6f8fb]"]:hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.light .enterprise-theme button:disabled[class*="bg-[#f5f7fb]"],
+.light .enterprise-theme button:disabled[class*="disabled:bg-[#f5f7fb]"] {
+  background-color: #f5f7fb !important;
+  color: #667085 !important;
+}
+
+html.dark:not(.light) .enterprise-theme button:disabled[class*="bg-[#f5f7fb]"],
+html.dark:not(.light) .enterprise-theme button:disabled[class*="disabled:bg-[#f5f7fb]"] {
+  border-color: #2b3647 !important;
+  background-color: #111927 !important;
+  color: #a8b3c5 !important;
 }
 
 .landing-primary-action {
