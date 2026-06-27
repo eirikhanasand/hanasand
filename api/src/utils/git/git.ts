@@ -63,21 +63,46 @@ async function ensureRepoInternal() {
         throw error
     }
 
-    const { stdout: head } = await execAsync(`git -C '${LOCAL_REPO_PATH}' remote show origin`, { timeout: 15000 })
-    const match = head.match(/HEAD branch: (.+)/)
-    const defaultBranch = match ? match[1].trim() : 'main'
+    await execAsync(`git -C '${LOCAL_REPO_PATH}' remote get-url origin`, { timeout: 15000 })
+
+    try {
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' fetch origin --prune`, { timeout: 120000 })
+    } catch (error) {
+        if (await directoryExists(ARTICLES_DIR)) {
+            console.warn('Could not refresh articles origin; using existing article checkout:', error)
+            return
+        }
+        throw error
+    }
+
+    const defaultBranch = await resolveDefaultBranch()
+    const originBranch = `origin/${defaultBranch}`
 
     try {
         await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout ${defaultBranch}`, { timeout: 15000 })
     } catch {
-        await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout -b ${defaultBranch} origin/${defaultBranch}`, { timeout: 15000 })
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' checkout -B ${defaultBranch} ${originBranch}`, { timeout: 15000 })
     }
 
     try {
-        await execAsync(`git -C '${LOCAL_REPO_PATH}' branch --set-upstream-to=origin/${defaultBranch} ${defaultBranch}`, { timeout: 15000 })
+        await execAsync(`git -C '${LOCAL_REPO_PATH}' branch --set-upstream-to=${originBranch} ${defaultBranch}`, { timeout: 15000 })
     } catch (e) {
         console.warn(`Could not set upstream for ${defaultBranch}:`, e)
     }
+}
+
+async function resolveDefaultBranch() {
+    try {
+        const { stdout: head } = await execAsync(`git -C '${LOCAL_REPO_PATH}' remote show origin`, { timeout: 15000 })
+        const match = head.match(/HEAD branch: (.+)/)
+        if (match?.[1]?.trim()) {
+            return match[1].trim()
+        }
+    } catch (error) {
+        console.warn('Could not read article origin HEAD branch; falling back to main:', error)
+    }
+
+    return 'main'
 }
 
 async function directoryExists(path: string) {
