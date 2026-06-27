@@ -10,11 +10,13 @@ interface RunBody {
 }
 
 export async function getTiEnrichment(_req: FastifyRequest, res: FastifyReply) {
+    res.header('cache-control', 'no-store, max-age=0')
     return res.send(getThreatActorEnrichmentOverview())
 }
 
 export async function postTiEnrichmentRun(req: FastifyRequest<{ Body: RunBody }>, res: FastifyReply) {
     const batchSize = Math.min(Math.max(Number(req.body?.batchSize) || 8, 1), 50)
+    res.header('cache-control', 'no-store, max-age=0')
     try {
         const warmed = await warmThreatActorProfileCache(batchSize)
         return res.send({
