@@ -349,6 +349,27 @@ html.dark:not(.light) header [class*="group-hover:bg-[#f1f4f8]"] {
   color: #171a21 !important;
 }
 
+.landing-search-bar {
+  border-color: #d8dee9 !important;
+  background-color: #ffffff !important;
+}
+
+.landing-search-input {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: #171a21 !important;
+}
+
+.landing-search-button {
+  border-left: 1px solid #e0e5ed !important;
+  background-color: transparent !important;
+  color: #171a21 !important;
+}
+
+.landing-search-button:hover {
+  background-color: #f6f8fb !important;
+}
+
 html.dark:not(.light) .landing-primary-action {
   border-color: #334767 !important;
   background-color: #172234 !important;
@@ -382,6 +403,31 @@ html.dark:not(.light) .landing-text-action {
 
 html.dark:not(.light) .landing-action-icon {
   color: #9db4ff !important;
+}
+
+html.dark:not(.light) .landing-search-bar {
+  border-color: #243044 !important;
+  background-color: #111927 !important;
+}
+
+html.dark:not(.light) .landing-search-input {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: #f5f7fb !important;
+}
+
+html.dark:not(.light) .landing-search-input::placeholder {
+  color: #a8b3c5 !important;
+}
+
+html.dark:not(.light) .landing-search-button {
+  border-left-color: #243044 !important;
+  background-color: transparent !important;
+  color: #f5f7fb !important;
+}
+
+html.dark:not(.light) .landing-search-button:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
 }
 
 button:not(:disabled),

@@ -100,17 +100,17 @@ export default async function Page({
                             </p>
                         </div>
 
-                        <form action='/ti' className='grid w-full max-w-3xl gap-3 rounded-lg border border-[#d8dee9] bg-white p-2 shadow-[0_20px_60px_rgba(28,38,61,0.10)] md:grid-cols-[1fr_auto]'>
-                            <label className='flex min-w-0 items-center gap-3 px-3'>
+                        <form action='/ti' className='landing-search-bar grid w-full max-w-3xl gap-0 overflow-hidden rounded-lg border p-0 shadow-[0_20px_60px_rgba(28,38,61,0.10)] md:grid-cols-[1fr_auto]'>
+                            <label className='landing-search-field flex min-w-0 items-center gap-3 px-4'>
                                 <Search className='h-5 w-5 shrink-0 text-[#697386]' />
                                 <input
                                     name='q'
                                     aria-label='Search threat intelligence'
                                     placeholder='Search company, actor, domain, CVE'
-                                    className='h-12 min-w-0 flex-1 bg-transparent text-base font-medium text-[#171a21] outline-none placeholder:text-[#8c95a5]'
+                                    className='landing-search-input h-14 min-w-0 flex-1 bg-transparent text-base font-medium text-[#171a21] outline-none placeholder:text-[#8c95a5]'
                                 />
                             </label>
-                            <button type='submit' className='inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                            <button type='submit' className='landing-search-button inline-flex h-14 items-center justify-center gap-2 px-5 text-sm font-semibold transition'>
                                 Search intelligence
                                 <ChevronRight className='h-4 w-4' />
                             </button>
