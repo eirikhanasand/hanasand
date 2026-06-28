@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { buildDwmAlertGenerationPlan, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertGenerationPlan, buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
@@ -167,6 +167,54 @@ describe("dwm alert repository", () => {
     expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId).sort()).toEqual(["cap_repo_darkweb_acme", "cap_repo_tg_acme"].sort());
     expect(generationPlan.candidates[0].dedupeKeyCandidate).toMatch(/^dwm_dedupe_candidate_/);
 
+    const readiness = buildDwmAlertGenerationReadiness({
+      watchlists: (store as any).listDwmWatchlists(),
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      visibilityPolicy: "admins",
+      sources: store.listSources(),
+      captures: store.listCaptures()
+    });
+    expect(readiness).toMatchObject({
+      schemaVersion: "dwm.alert_generation_readiness.v1",
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      visibilityPolicy: "admins",
+      readyForRebuild: true,
+      readyForCustomerDelivery: false,
+      counts: {
+        activeWatchlists: 2,
+        skippedWatchlists: 1,
+        blockedWatchlists: 0,
+        candidateCount: 1,
+        rawActiveTermCount: 2,
+        duplicateCollapseCount: 1,
+        captureRefCount: 2,
+        matchedCandidateCount: 1,
+        unmatchedCandidateCount: 0
+      },
+      webhookReadiness: {
+        ready: true,
+        routedCandidateCount: 1,
+        missingRouteCandidateCount: 0,
+        webhookDestinationIds: ["webhook_repo_discord", "webhook_repo_backup"]
+      },
+      caseReadiness: {
+        ready: true,
+        candidateCount: 1,
+        casePathTemplate: "/v1/cases/:caseId?alertId=:alertId&dedupeKey=:dedupeKey"
+      },
+      productDedupeBlocker: {
+        blocked: true
+      }
+    });
+    expect(readiness.sourceFamilyCoverage).toEqual([
+      { sourceFamily: "darkweb_metadata", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] },
+      { sourceFamily: "telegram_public", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] }
+    ]);
+    expect(readiness.blockers).toContain("Product alert dedupe/enrichment patch is still pending in dirty dwmProduct.ts.");
+    expect(readiness.plan.candidates[0].webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
+
     const blockedWithoutOrg = buildDwmAlertGenerationPlan({
       watchlists: (store as any).listDwmWatchlists(),
       tenantId: "tenant_repo_acme",
@@ -178,6 +226,18 @@ describe("dwm alert repository", () => {
       { watchlistId: "watch_repo_acme", reason: "missing_org_context", organizationId: "org_repo_acme" },
       { watchlistId: "watch_repo_acme_duplicate", reason: "missing_org_context", organizationId: "org_repo_acme" }
     ]);
+    const readinessWithoutOrg = buildDwmAlertGenerationReadiness({
+      watchlists: (store as any).listDwmWatchlists(),
+      tenantId: "tenant_repo_acme",
+      sources: store.listSources(),
+      captures: store.listCaptures()
+    });
+    expect(readinessWithoutOrg).toMatchObject({
+      readyForRebuild: false,
+      counts: { candidateCount: 0, blockedWatchlists: 2 },
+      plan: { candidates: [] }
+    });
+    expect(JSON.stringify(readinessWithoutOrg.plan.candidates)).not.toContain("acme.com");
     const blockedRebuild = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme" });
     expect(blockedRebuild.savedAlertCount).toBe(0);
     expect(blockedRebuild.generationPlan.blockedWatchlists).toEqual(blockedWithoutOrg.blockedWatchlists);

@@ -51,6 +51,47 @@ export type DwmAlertGenerationPlan = {
   skippedWatchlists: Array<{ watchlistId: string; reason: "paused" | "tenant_mismatch" | "empty_terms" }>;
 };
 
+export type DwmAlertGenerationReadiness = {
+  schemaVersion: "dwm.alert_generation_readiness.v1";
+  tenantId: string;
+  organizationId?: string;
+  visibilityPolicy: DwmAlertVisibilityPolicy;
+  readyForRebuild: boolean;
+  readyForCustomerDelivery: boolean;
+  counts: {
+    activeWatchlists: number;
+    skippedWatchlists: number;
+    blockedWatchlists: number;
+    candidateCount: number;
+    rawActiveTermCount: number;
+    duplicateCollapseCount: number;
+    captureRefCount: number;
+    matchedCandidateCount: number;
+    unmatchedCandidateCount: number;
+  };
+  sourceFamilyCoverage: Array<{ sourceFamily: string; candidateCount: number; captureRefCount: number; watchlistIds: string[] }>;
+  webhookReadiness: {
+    ready: boolean;
+    routedCandidateCount: number;
+    missingRouteCandidateCount: number;
+    webhookDestinationIds: string[];
+    candidateIdsMissingRoute: string[];
+  };
+  caseReadiness: {
+    ready: boolean;
+    candidateCount: number;
+    casePathTemplate: "/v1/cases/:caseId?alertId=:alertId&dedupeKey=:dedupeKey";
+  };
+  productDedupeBlocker: {
+    blocked: boolean;
+    reason: string;
+    requiredPatch: string;
+    requiredFields: string[];
+  };
+  blockers: string[];
+  plan: DwmAlertGenerationPlan;
+};
+
 export type RuntimeDwmAlertStore = {
   listDwmWatchlists(): RuntimeDwmWatchlist[];
   listDwmAlerts(): any[];
@@ -229,6 +270,74 @@ export function buildDwmAlertGenerationPlan(input: {
   };
 }
 
+export function buildDwmAlertGenerationReadiness(input: {
+  watchlists: RuntimeDwmWatchlist[];
+  tenantId: string;
+  organizationId?: string;
+  visibilityPolicy?: DwmAlertVisibilityPolicy;
+  sources?: SourceRecord[];
+  captures?: RawCapture[];
+  productDedupePatched?: boolean;
+}): DwmAlertGenerationReadiness {
+  const plan = buildDwmAlertGenerationPlan(input);
+  const rawActiveTermCount = input.watchlists
+    .filter((watchlist) => watchlist.tenantId === input.tenantId && watchlist.status === "active" && (!watchlist.organizationId || watchlist.organizationId === input.organizationId))
+    .reduce((count, watchlist) => count + watchlist.terms.length, 0);
+  const captureRefCount = plan.candidates.reduce((count, candidate) => count + candidate.captureRefs.length, 0);
+  const sourceFamilyCoverage = buildSourceFamilyCoverage(plan.candidates);
+  const candidateIdsMissingRoute = plan.candidates.filter((candidate) => !candidate.hasWebhookRoute).map((candidate) => candidate.id);
+  const productDedupePatched = input.productDedupePatched === true;
+  const blockers = [
+    plan.blockedWatchlists.length ? "Resolve blocked watchlists before rebuild so org-scoped terms cannot leak into tenant-wide alerts." : undefined,
+    plan.candidateCount === 0 ? "No active watchlist candidates are ready for alert generation." : undefined,
+    captureRefCount === 0 ? "No collected captures currently match active watchlist terms." : undefined,
+    !productDedupePatched ? "Product alert dedupe/enrichment patch is still pending in dirty dwmProduct.ts." : undefined
+  ].filter(Boolean) as string[];
+
+  return {
+    schemaVersion: "dwm.alert_generation_readiness.v1",
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    visibilityPolicy: plan.visibilityPolicy,
+    readyForRebuild: plan.candidateCount > 0 && plan.blockedWatchlists.length === 0,
+    readyForCustomerDelivery: plan.candidateCount > 0 && plan.blockedWatchlists.length === 0 && captureRefCount > 0 && candidateIdsMissingRoute.length === 0 && productDedupePatched,
+    counts: {
+      activeWatchlists: plan.activeWatchlistIds.length,
+      skippedWatchlists: plan.skippedWatchlists.length,
+      blockedWatchlists: plan.blockedWatchlists.length,
+      candidateCount: plan.candidateCount,
+      rawActiveTermCount,
+      duplicateCollapseCount: Math.max(0, rawActiveTermCount - plan.candidateCount),
+      captureRefCount,
+      matchedCandidateCount: plan.candidates.filter((candidate) => candidate.captureRefs.length > 0).length,
+      unmatchedCandidateCount: plan.candidates.filter((candidate) => candidate.captureRefs.length === 0).length
+    },
+    sourceFamilyCoverage,
+    webhookReadiness: {
+      ready: plan.candidateCount > 0 && candidateIdsMissingRoute.length === 0,
+      routedCandidateCount: plan.candidates.filter((candidate) => candidate.hasWebhookRoute).length,
+      missingRouteCandidateCount: candidateIdsMissingRoute.length,
+      webhookDestinationIds: uniqueStrings(plan.candidates.flatMap((candidate) => candidate.webhookDestinationIds)),
+      candidateIdsMissingRoute
+    },
+    caseReadiness: {
+      ready: plan.candidateCount > 0 && plan.blockedWatchlists.length === 0,
+      candidateCount: plan.candidateCount,
+      casePathTemplate: "/v1/cases/:caseId?alertId=:alertId&dedupeKey=:dedupeKey"
+    },
+    productDedupeBlocker: {
+      blocked: !productDedupePatched,
+      reason: productDedupePatched
+        ? "Product dedupe/enrichment contract is marked patched by caller."
+        : "Repository readiness can safely plan org alert inputs, but dirty dwmProduct.ts still owns final alert dedupe/enrichment behavior.",
+      requiredPatch: "Remove actor from product alert dedupe seed, dedupe merged alerts by alert.dedupeKey, and refresh evidenceSummary/webhook payload hash after merges.",
+      requiredFields: ["matchContext", "evidenceSummary", "routingContext", "confidenceReasoning", "provenance", "dedupeKey", "recommendedRoute", "webhookDelivery"]
+    },
+    blockers,
+    plan
+  };
+}
+
 export function dwmAlertToSqlRecord(alert: any) {
   return {
     id: String(alert.id),
@@ -369,6 +478,28 @@ function mergeCaptureRefs(existing: DwmAlertGenerationCaptureRef[], next: DwmAle
   const byId = new Map(existing.map((ref) => [ref.captureId, ref]));
   for (const ref of next) byId.set(ref.captureId, byId.get(ref.captureId) ?? ref);
   return [...byId.values()];
+}
+
+function buildSourceFamilyCoverage(candidates: DwmAlertGenerationCandidate[]): DwmAlertGenerationReadiness["sourceFamilyCoverage"] {
+  const families = new Map<string, { sourceFamily: string; candidateIds: Set<string>; captureRefCount: number; watchlistIds: Set<string> }>();
+  for (const candidate of candidates) {
+    const candidateFamilies = candidate.sourceFamilies.length ? candidate.sourceFamilies : ["unknown"];
+    for (const family of candidateFamilies) {
+      const row = families.get(family) ?? { sourceFamily: family, candidateIds: new Set<string>(), captureRefCount: 0, watchlistIds: new Set<string>() };
+      row.candidateIds.add(candidate.id);
+      row.captureRefCount += candidate.captureRefs.filter((ref) => ref.sourceFamily === family).length;
+      for (const watchlistId of candidate.watchlistIds) row.watchlistIds.add(watchlistId);
+      families.set(family, row);
+    }
+  }
+  return [...families.values()]
+    .map((row) => ({
+      sourceFamily: row.sourceFamily,
+      candidateCount: row.candidateIds.size,
+      captureRefCount: row.captureRefCount,
+      watchlistIds: [...row.watchlistIds]
+    }))
+    .sort((a, b) => a.sourceFamily.localeCompare(b.sourceFamily));
 }
 
 function captureText(capture: RawCapture): string {

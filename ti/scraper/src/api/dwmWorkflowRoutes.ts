@@ -1,5 +1,5 @@
 import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
-import { rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
 import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
@@ -240,6 +240,23 @@ export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, re
   const tenantId = scope.tenantId;
   const deliveries = (options.store as any).listDwmWebhookDeliveries?.() ?? [];
   return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, deliveries: deliveries.filter((row: any) => row.tenantId === tenantId) });
+}
+
+export function getDwmAlertGenerationReadiness(url: URL, options: ApiServerOptions, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
+  const readiness = buildDwmAlertGenerationReadiness({
+    watchlists: (options.store as any).listDwmWatchlists?.() ?? [],
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+    visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization),
+    sources: options.store.listSources(),
+    captures: options.store.listCaptures(),
+    productDedupePatched: false
+  });
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, readiness });
 }
 
 export async function rebuildDwmAlerts(request: Request, options: ApiServerOptions): Promise<Response> {

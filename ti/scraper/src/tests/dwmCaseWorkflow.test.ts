@@ -231,6 +231,68 @@ describe("dwm case workflow", () => {
       expect(analystWatchlistUpdate.visibilityDecision).toMatchObject({ allowed: true, reason: null });
       expect(analystWatchlistUpdate.watchlist.name).toBe("Case watchlist - monitored");
 
+      const adminReadinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/generation-readiness?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "ir-lead@acme.com" }
+      }), options);
+      const adminReadiness = await adminReadinessResponse.json() as any;
+      expect(adminReadinessResponse.status).toBe(200);
+      expect(adminReadiness.visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect(adminReadiness.readiness).toMatchObject({
+        schemaVersion: "dwm.alert_generation_readiness.v1",
+        organizationId,
+        readyForRebuild: true,
+        readyForCustomerDelivery: false,
+        counts: {
+          activeWatchlists: 1,
+          candidateCount: 1,
+          duplicateCollapseCount: 0,
+          blockedWatchlists: 0
+        },
+        webhookReadiness: {
+          ready: true,
+          routedCandidateCount: 1,
+          webhookDestinationIds: [webhookPayload.destination.id]
+        },
+        caseReadiness: {
+          ready: true,
+          casePathTemplate: "/v1/cases/:caseId?alertId=:alertId&dedupeKey=:dedupeKey"
+        },
+        productDedupeBlocker: {
+          blocked: true
+        }
+      });
+      expect(adminReadiness.readiness.plan.candidates[0]).toMatchObject({
+        organizationId,
+        normalizedTerm: "acme.com",
+        watchlistIds: [watchlistId],
+        webhookDestinationIds: [webhookPayload.destination.id],
+        visibilityPolicy: "members"
+      });
+      expect((store as any).listDwmAlerts()).toHaveLength(0);
+
+      const analystReadinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/generation-readiness?organizationId=${organizationId}`, {
+        headers: { "x-actor-id": "analyst-1" }
+      }), options);
+      expect(analystReadinessResponse.status).toBe(200);
+      expect((await analystReadinessResponse.json() as any).readiness.counts.candidateCount).toBe(1);
+
+      const viewerReadinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/generation-readiness?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
+      const viewerReadiness = await viewerReadinessResponse.json() as any;
+      expect(viewerReadinessResponse.status).toBe(200);
+      expect(viewerReadiness.visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect(viewerReadiness.readiness.counts).toMatchObject({ candidateCount: 1, activeWatchlists: 1 });
+
+      const outsiderReadinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/generation-readiness?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "outsider@example.com" }
+      }), options);
+      const outsiderReadiness = await outsiderReadinessResponse.json() as any;
+      expect(outsiderReadinessResponse.status).toBe(403);
+      expect(outsiderReadiness.visibilityDecision).toMatchObject({ allowed: false, reason: "not_member" });
+      expect(outsiderReadiness.readiness).toBeUndefined();
+      expect(JSON.stringify(outsiderReadiness)).not.toContain("acme.com");
+
       const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
         method: "POST",
         headers: { "x-actor-id": "analyst-1" },
