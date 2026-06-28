@@ -527,10 +527,11 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                     <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21]'>{actor.actorClass}</h2>
                     <p className='mt-2 text-sm leading-6 text-[#596170]'>{actor.attribution}</p>
                 </div>
-                <div className='grid min-w-52 grid-cols-3 gap-2 text-center text-xs'>
+                <div className='grid min-w-52 grid-cols-2 gap-2 text-center text-xs md:grid-cols-4'>
                     <EvidenceMetric label='First seen' value={actor.firstSeen} />
                     <EvidenceMetric label='Last seen' value={actor.lastSeen || result.lastSeen} />
                     <EvidenceMetric label='Confidence' value={`${confidence}%`} />
+                    <EvidenceMetric label='Freshness' value={actor.freshness.stale ? 'Needs refresh' : 'Current'} />
                 </div>
             </div>
 
@@ -538,6 +539,7 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 <DossierList title='Motivation' values={actor.motivation} />
                 <DossierList title='Malware and tools' values={actor.malwareTools} artifactKind='tool' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Campaigns' values={actor.campaigns} artifactKind='campaign' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
+                <DossierList title='Indicators' values={actor.indicators} />
                 <DossierList title='Target sectors' values={actor.targetSectors} />
                 <DossierList title='Geographies' values={actor.geographies} artifactKind='country' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Infrastructure' values={actor.infrastructure} artifactKind='infrastructure' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
@@ -547,11 +549,29 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 <EvidencePanel title='Confidence reasoning'>
                     {actor.confidenceReasoning.map(item => <li key={item}>{item}</li>)}
                 </EvidencePanel>
-                <EvidencePanel title='Source provenance'>
-                    {actor.sourceProvenance.map(item => <li key={item}>{item}</li>)}
-                </EvidencePanel>
+                <StructuredProvenancePanel rows={actor.provenanceRows} />
             </div>
         </section>
+    )
+}
+
+function StructuredProvenancePanel({ rows }: { rows: TiActorIntelligenceProfile['provenanceRows'] }) {
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
+            <p className='text-xs font-semibold uppercase text-[#667085]'>Source provenance</p>
+            <div className='mt-2 grid gap-2'>
+                {rows.length ? rows.slice(0, 6).map(row => (
+                    <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-[#eef1f5] bg-white p-2'>
+                        <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <p className='text-xs font-semibold text-[#171a21]'>{row.sourceName}</p>
+                            <span className='text-[11px] text-[#667085]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : `${Math.round((row.confidence ?? 0) * 100)}%`}</span>
+                        </div>
+                        <p className='mt-1 truncate font-mono text-[11px] text-[#667085]'>{row.provenance}</p>
+                        <p className='mt-1 text-xs leading-5 text-[#596170]'>{row.shownBecause}</p>
+                    </div>
+                )) : <p className='text-sm text-[#667085]'>No structured provenance rows returned.</p>}
+            </div>
+        </div>
     )
 }
 
@@ -909,16 +929,16 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
         {
             id: 'alertRebuild',
             label: 'Alert rebuild',
-            payload: actionability.exportPayloads.alertRebuild,
-            route: actionability.exportPayloads.alertRebuild.backedRoute,
-            detail: actionability.exportPayloads.alertRebuild.blocked ? 'Requires org watchlist context before rebuild' : `POST ${actionability.handoffs.alertRebuildEndpoint}`,
+            payload: actionability.createAlertHandoff,
+            route: actionability.createAlertHandoff.backedRoute,
+            detail: actionability.createAlertHandoff.blocked ? actionability.createAlertHandoff.missing.join('; ') : `POST ${actionability.createAlertHandoff.endpoint}`,
         },
         {
             id: 'case',
             label: 'Case',
-            payload: actionability.exportPayloads.case,
-            route: actionability.exportPayloads.case.backedRoute,
-            detail: actionability.exportPayloads.case.blocked ? actionability.handoffs.caseBlockers.join('; ') : `POST ${actionability.handoffs.caseEndpoint}`,
+            payload: actionability.caseHandoff,
+            route: actionability.caseHandoff.backedRoute,
+            detail: actionability.caseHandoff.blocked ? actionability.caseHandoff.missing.join('; ') : `POST ${actionability.caseHandoff.endpoint}`,
         },
         {
             id: 'enrichment',
@@ -952,16 +972,16 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                     <div className='flex items-center justify-between gap-2'>
                         <p className='text-xs font-semibold uppercase text-[#667085]'>Watchlist handoff</p>
                         <span className={actionability.watchlist.state === 'backed_matches' ? 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'rounded-lg bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'}>
-                            {formatLabel(actionability.watchlist.state)}
+                            {formatLabel(actionability.watchlistRelevance.state)}
                         </span>
                     </div>
-                    <p className='mt-2 font-mono text-[11px] text-[#667085]'>POST {actionability.watchlist.endpoint}</p>
+                    <p className='mt-2 font-mono text-[11px] text-[#667085]'>POST {actionability.watchlistRelevance.endpoint}</p>
                     <div className='mt-2 flex flex-wrap gap-1.5'>
-                        {actionability.watchlist.payloads.length ? actionability.watchlist.payloads.slice(0, 6).map(payload => (
-                            <span key={`${payload.kind}-${payload.value}`} className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{payload.kind}: {payload.value}</span>
+                        {actionability.watchlistRelevance.terms.length ? actionability.watchlistRelevance.terms.slice(0, 6).map(payload => (
+                            <span key={`${payload.kind}-${payload.value}`} className={payload.matched ? 'rounded-md bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]' : 'rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'}>{payload.kind}: {payload.value}</span>
                         )) : <span className='text-xs text-[#667085]'>No backed watchlist payload yet</span>}
                     </div>
-                    {actionability.watchlist.blockers.length ? <BlockerList blockers={actionability.watchlist.blockers} /> : null}
+                    {actionability.watchlistRelevance.blockers.length ? <BlockerList blockers={actionability.watchlistRelevance.blockers} /> : null}
                 </div>
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
@@ -1289,7 +1309,7 @@ function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: Ret
         domains,
         rationale: organizations.length
             ? 'Use the actor, aliases, victim organizations, sectors, countries, campaigns, tools, and source domains as candidate watchlist inputs before creating customer alerts.'
-            : 'Use the actor, aliases, sectors, countries, campaigns, tools, and source domains as candidate watchlist inputs; no named customer organization match was returned yet.',
+            : 'Use the actor, aliases, sectors, countries, campaigns, tools, and source domains as candidate watchlist inputs; no customer organization match was returned yet.',
     }
 }
 
@@ -1329,10 +1349,10 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
     const hasOrganizations = watchlist.organizations.length > 0
     const hasActivity = result.recentActivity.length > 0
     const hasActorCore = actor.malwareTools.length > 0 && actor.campaigns.length > 0 && actor.infrastructure.length > 0
-    const actionabilityTasks: EnrichmentTask[] = actionability.enrichmentGaps.map(gap => ({
+    const actionabilityTasks: EnrichmentTask[] = actionability.enrichmentGapQueue.map(gap => ({
         title: gap.title,
         status: gap.severity === 'high' ? 'needs_api' : 'needs_review',
-        detail: `${gap.detail} Dependency: ${gap.dependency}.`,
+        detail: `${gap.detail} Route: ${gap.route}. Source family: ${formatLabel(gap.sourceFamily)}. Required fields: ${gap.requestedFields.join(', ')}. Dependency: ${gap.dependency}.`,
     }))
     return [
         ...actionabilityTasks,

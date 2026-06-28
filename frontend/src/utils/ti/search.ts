@@ -77,11 +77,21 @@ export interface TiActorIntelligenceContract {
     malwareTools?: string[]
     campaigns?: string[]
     infrastructure?: string[]
+    indicators?: string[]
     targetSectors?: string[]
     geographies?: string[]
     confidence?: number
     confidenceReasoning?: string[]
     sourceProvenance?: string[]
+    structuredProvenance?: Array<{
+        sourceId?: string
+        sourceName: string
+        provenance: string
+        reportDate?: string
+        captureId?: string
+        confidence?: number
+        shownBecause: string
+    }>
 }
 
 export interface TiActionabilityContract {
@@ -132,6 +142,9 @@ export interface TiActionabilityContract {
         severity: 'high' | 'medium' | 'low'
         detail: string
         dependency: string
+        route?: string
+        sourceFamily?: 'actor_profile' | 'source_capture' | 'watchlist' | 'alert' | 'case' | 'geography' | 'indicator'
+        requestedFields?: string[]
     }>
     handoffs?: {
         watchlist?: {

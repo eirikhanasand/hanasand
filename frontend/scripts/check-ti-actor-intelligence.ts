@@ -1,4 +1,5 @@
 import { buildActorIntelligence, containsToyThreatIntelCopy } from '../src/utils/ti/actorIntelligence'
+import { actorGeoProfile } from '../src/utils/ti/actorProfile'
 import { buildTiActionability } from '../src/utils/ti/actionability'
 import {
     PUBLIC_TI_HANDOFF_ACTIONS,
@@ -59,6 +60,17 @@ const fixture: TiSearchResponse = {
         url: 'https://www.microsoft.com/en-us/security/blog/',
     }],
     notes: [],
+    actorIntelligence: {
+        indicators: ['SUNBURST supply-chain activity', 'Cloud mailbox access'],
+        structuredProvenance: [{
+            sourceId: 'microsoft',
+            sourceName: 'Microsoft',
+            provenance: 'https://www.microsoft.com/en-us/security/blog/',
+            reportDate: '2024-01-25',
+            confidence: 0.82,
+            shownBecause: 'Microsoft disclosure is the source basis for the returned activity and watchlist relevance.',
+        }],
+    },
     actionability: {
         schemaVersion: 'ti.query.actionability.v1',
         alertDisposition: 'watchlist_required',
@@ -79,6 +91,9 @@ const fixture: TiSearchResponse = {
             severity: 'high',
             detail: 'Case creation is backed by /v1/cases and requires a DWM alert ID.',
             dependency: '/v1/dwm/alerts or /v1/dwm/alerts/rebuild',
+            route: '/dashboard/dwm',
+            sourceFamily: 'alert',
+            requestedFields: ['relatedAlerts[].id', 'relatedAlerts[].casePath'],
         }],
     },
 }
@@ -94,19 +109,32 @@ const victims = [{
 const profile = buildActorIntelligence(fixture, victims)
 const actionability = buildTiActionability(fixture, profile, victims)
 const artifacts = buildActorArtifacts(fixture, profile, victims, actionability)
+const geo = actorGeoProfile(fixture)
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
 assert(profile.malwareTools.includes('SUNBURST'), 'APT29 should include SUNBURST tooling context.')
 assert(profile.campaigns.some(item => /SolarWinds/i.test(item)), 'APT29 should include SolarWinds campaign context.')
+assert(profile.indicators.some(item => /SUNBURST/i.test(item)), 'APT29 should expose indicator context.')
 assert(profile.targetSectors.some(item => /Government/i.test(item)), 'APT29 should include government targeting context.')
 assert(profile.sourceProvenance.length >= 2, 'APT29 should expose source provenance.')
+assert(profile.provenanceRows.some(item => item.sourceName === 'Microsoft' && item.reportDate === '2024-01-25' && item.shownBecause), 'APT29 should expose structured source/date/confidence provenance.')
+assert(profile.provenanceRows.every(item => item.sourceName && item.provenance && item.shownBecause), 'Every actor provenance row should explain why it is shown.')
+assert(profile.freshness.stale, 'APT29 stale public evidence should be explicitly freshness-gated.')
 assert(profile.confidenceReasoning.length >= 2, 'APT29 should expose confidence reasoning.')
 assert(actionability.sourceProvenance.length >= 1, 'Actionability should expose backed provenance rows.')
 assert(actionability.watchlist.payloads.some(item => item.value === 'Microsoft'), 'Actionability should carry watchlist relevance payloads.')
+assert(actionability.watchlistRelevance.schemaVersion === 'ti.public_actor.watchlist_relevance.v1', 'Actionability should expose explicit watchlist relevance fields.')
+assert(actionability.watchlistRelevance.terms.some(item => item.value === 'Microsoft'), 'Watchlist relevance should include backed candidate terms.')
+assert(actionability.createAlertHandoff.kind === 'create_alert' && actionability.createAlertHandoff.endpoint === '/v1/dwm/alerts/rebuild', 'Actionability should expose explicit alert handoff fields.')
+assert(actionability.caseHandoff.kind === 'case' && actionability.caseHandoff.endpoint === '/v1/cases', 'Actionability should expose explicit case handoff fields.')
+assert(actionability.enrichmentGapQueue.some(item => item.route === '/dashboard/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
 assert(actionability.handoffs.caseBlockers.some(item => /DWM alert ID/i.test(item)), 'No-alert fixture should explain missing case dependency.')
 assert(actionability.geographyHandoffs.some(item => item.code === 'US' && item.watchlistTerm?.value.includes('SolarWinds')), 'APT29 geography should map country observations to watchlist actions.')
 assert(actionability.geographyHandoffs.some(item => item.code === 'RU' && item.role === 'operator' && !item.watchlistTerm), 'Operator-origin geography should remain attribution/enrichment context, not an alert term.')
+assert(geo.points.some(item => item.code === 'RU' && item.role === 'operator'), 'APT29 map should include country-level operator attribution.')
+assert(geo.points.some(item => item.code === 'US' && item.role === 'target'), 'APT29 map should include country-level target observations.')
+assert(!geo.points.some(item => /europe|continent|global/i.test(item.label)), 'APT29 map should reject broad region buckets.')
 assert(actionability.sourceClusters.some(item => item.watchlistTerm?.value === 'microsoft.com'), 'Source provenance should map source domains to watchlist action rows.')
 assert(actionability.sourceClusters.some(item => /Attach capture ID/i.test(item.enrichmentTask)), 'Source provenance without capture IDs should create enrichment work.')
 assert(actionability.exportPayloads.watchlist.schemaVersion === 'ti.public_actor.watchlist_handoff.v1', 'Watchlist handoff should be export-ready.')
@@ -207,6 +235,8 @@ assert(backed.relatedCases[0]?.id === 'case_1', 'Backed actionability should pre
 assert(backed.handoffs.casePayload?.alertId === 'dwm_alert_1', 'Backed actionability should produce a case handoff payload.')
 assert(backed.exportPayloads.case.body.alertId === 'dwm_alert_1', 'Backed case export should carry the DWM alert ID.')
 assert(!backed.exportPayloads.case.blocked, 'Backed case export should be open when case payload has no blockers.')
+assert(backed.createAlertHandoff.ready, 'Backed alert handoff should be ready when watchlist context exists.')
+assert(backed.caseHandoff.ready, 'Backed case handoff should be ready when case payload has no blockers.')
 
 const quietFixture: TiSearchResponse = {
     ...fixture,
@@ -239,6 +269,9 @@ assert(quiet.watchlist.state === 'missing_terms', 'Quiet actor should expose mis
 assert(quiet.watchlist.blockers.some(item => /Authenticated organization ID/i.test(item)), 'Quiet actor should explain missing org/auth context for watchlist actions.')
 assert(quiet.exportPayloads.blockers.body.orgRequired === true, 'No-org actor path should export org-required blockers.')
 assert(quiet.exportPayloads.watchlist.missing.some(item => /Authenticated organization ID/i.test(item)), 'No-org watchlist export should carry precise blocked dependency.')
+assert(quiet.watchlistRelevance.state === 'missing_terms', 'Unknown actor should expose missing watchlist relevance without fake terms.')
+assert(quiet.createAlertHandoff.blocked, 'Unknown actor should block alert handoff.')
+assert(quiet.caseHandoff.blocked, 'Unknown actor should block case handoff.')
 assert(quietArtifacts.length === 0, 'Sparse actor path should not invent selectable artifacts.')
 assert(nextActorArtifactId(quietArtifacts, undefined, 'next') === '', 'Keyboard helper should stay empty for sparse actor artifacts.')
 
@@ -249,6 +282,8 @@ assert(containsToyThreatIntelCopy('continent bucket'), 'Copy guard should catch 
 assert(containsToyThreatIntelCopy('prompt'), 'Copy guard should catch prompt language.')
 assert(containsToyThreatIntelCopy('internal rationale'), 'Copy guard should catch internal rationale language.')
 assert(!containsToyThreatIntelCopy(JSON.stringify(profile)), 'Shaped actor intelligence should not contain toy TI copy.')
+assert(!containsToyThreatIntelCopy(JSON.stringify(actionability)), 'Actionability fields should not contain toy TI copy.')
+assert(!containsToyThreatIntelCopy(JSON.stringify(quietProfile)), 'Unknown actor profile should not contain toy TI copy.')
 
 console.log('[ti-actor-intelligence] actor intelligence shaping and copy guardrails passed')
 

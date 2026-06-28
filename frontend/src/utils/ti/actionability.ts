@@ -18,8 +18,12 @@ export type TiActionabilityModel = {
     relatedCases: NonNullable<TiActionabilityContract['relatedCases']>
     sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
     enrichmentGaps: NonNullable<TiActionabilityContract['enrichmentGaps']>
+    enrichmentGapQueue: EnrichmentGapQueueItem[]
     geographyHandoffs: GeographyHandoff[]
     sourceClusters: SourceCluster[]
+    watchlistRelevance: WatchlistRelevanceContract
+    createAlertHandoff: WorkflowHandoffContract
+    caseHandoff: WorkflowHandoffContract
     exportPayloads: {
         watchlist: TiHandoffExportPayload
         alertRebuild: TiHandoffExportPayload
@@ -34,6 +38,41 @@ export type TiActionabilityModel = {
         casePayload?: { alertId: string; title?: string; priority?: string; note?: string }
         caseBlockers: string[]
     }
+}
+
+export type WatchlistRelevanceContract = {
+    schemaVersion: 'ti.public_actor.watchlist_relevance.v1'
+    state: TiActionabilityModel['watchlist']['state']
+    endpoint: string
+    matches: NonNullable<TiActionabilityContract['watchlistMatches']>
+    candidates: WatchlistCandidate[]
+    terms: Array<{ kind: WatchlistCandidate['kind']; value: string; notes: string; matched: boolean }>
+    blockers: string[]
+    provenance: TiHandoffExportPayload['provenance']
+}
+
+export type WorkflowHandoffContract = {
+    schemaVersion: 'ti.public_actor.workflow_handoff.v1'
+    kind: 'create_alert' | 'case'
+    method: 'POST'
+    endpoint: string
+    ready: boolean
+    blocked: boolean
+    missing: string[]
+    payload: Record<string, unknown>
+    backedRoute?: string
+    provenance: TiHandoffExportPayload['provenance']
+}
+
+export type EnrichmentGapQueueItem = {
+    id: string
+    title: string
+    severity: 'high' | 'medium' | 'low'
+    detail: string
+    dependency: string
+    route: string
+    sourceFamily: 'actor_profile' | 'source_capture' | 'watchlist' | 'alert' | 'case' | 'geography' | 'indicator'
+    requestedFields: string[]
 }
 
 type WatchlistCandidate = {
@@ -123,6 +162,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         geographyHandoffs,
         sourceClusters,
     })
+    const enrichmentGapQueue = buildEnrichmentGapQueue(enrichmentGaps)
 
     return {
         alertDisposition,
@@ -140,8 +180,20 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         relatedCases,
         sourceProvenance,
         enrichmentGaps,
+        enrichmentGapQueue,
         geographyHandoffs,
         sourceClusters,
+        watchlistRelevance: buildWatchlistRelevance({
+            state: matches.length ? 'backed_matches' : candidates.length ? 'candidate_handoff' : 'missing_terms',
+            endpoint: watchlistEndpoint,
+            matches,
+            candidates,
+            watchlistPayloads,
+            blockers: watchlistBlockers,
+            provenance: exportPayloads.watchlist.provenance,
+        }),
+        createAlertHandoff: buildCreateAlertHandoff(exportPayloads.alertRebuild),
+        caseHandoff: buildCaseHandoff(exportPayloads.case),
         exportPayloads,
         handoffs: {
             watchlistEndpoint,
@@ -151,6 +203,73 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
             caseBlockers,
         },
     }
+}
+
+function buildWatchlistRelevance(input: {
+    state: WatchlistRelevanceContract['state']
+    endpoint: string
+    matches: WatchlistRelevanceContract['matches']
+    candidates: WatchlistCandidate[]
+    watchlistPayloads: Array<{ kind: WatchlistCandidate['kind']; value: string; notes: string }>
+    blockers: string[]
+    provenance: TiHandoffExportPayload['provenance']
+}): WatchlistRelevanceContract {
+    return {
+        schemaVersion: 'ti.public_actor.watchlist_relevance.v1',
+        state: input.state,
+        endpoint: input.endpoint,
+        matches: input.matches,
+        candidates: input.candidates,
+        terms: input.watchlistPayloads.map(term => ({
+            ...term,
+            matched: input.matches.some(match => match.kind === term.kind && match.value.toLowerCase() === term.value.toLowerCase()),
+        })),
+        blockers: input.blockers,
+        provenance: input.provenance,
+    }
+}
+
+function buildCreateAlertHandoff(payload: TiHandoffExportPayload): WorkflowHandoffContract {
+    return {
+        schemaVersion: 'ti.public_actor.workflow_handoff.v1',
+        kind: 'create_alert',
+        method: 'POST',
+        endpoint: payload.endpoint ?? '/v1/dwm/alerts/rebuild',
+        ready: !payload.blocked,
+        blocked: payload.blocked,
+        missing: payload.missing,
+        payload: payload.body,
+        backedRoute: payload.backedRoute,
+        provenance: payload.provenance,
+    }
+}
+
+function buildCaseHandoff(payload: TiHandoffExportPayload): WorkflowHandoffContract {
+    return {
+        schemaVersion: 'ti.public_actor.workflow_handoff.v1',
+        kind: 'case',
+        method: 'POST',
+        endpoint: payload.endpoint ?? '/v1/cases',
+        ready: !payload.blocked,
+        blocked: payload.blocked,
+        missing: payload.missing,
+        payload: payload.body,
+        backedRoute: payload.backedRoute,
+        provenance: payload.provenance,
+    }
+}
+
+function buildEnrichmentGapQueue(gaps: NonNullable<TiActionabilityContract['enrichmentGaps']>): EnrichmentGapQueueItem[] {
+    return gaps.map(gap => ({
+        id: gap.id,
+        title: gap.title,
+        severity: gap.severity,
+        detail: gap.detail,
+        dependency: gap.dependency,
+        route: gap.route ?? routeForGap(gap),
+        sourceFamily: gap.sourceFamily ?? sourceFamilyForGap(gap),
+        requestedFields: gap.requestedFields?.length ? gap.requestedFields : requestedFieldsForGap(gap),
+    }))
 }
 
 function buildExportPayloads(input: {
@@ -395,6 +514,9 @@ function normalizeEnrichmentGaps(contractGaps: TiActionabilityContract['enrichme
             severity: 'high',
             detail: 'Returned sources identify provenance, but no capture IDs are attached for alert replay or case evidence.',
             dependency: 'TI search response sourceProvenance[].captureId or DWM alert evidence provenance',
+            route: '/dashboard/ti/enrichment',
+            sourceFamily: 'source_capture',
+            requestedFields: ['sourceProvenance[].captureId', 'sourceProvenance[].sourceId', 'sourceProvenance[].provenance'],
         })
     }
     if (!result.actionability?.relatedAlerts?.length) {
@@ -404,6 +526,9 @@ function normalizeEnrichmentGaps(contractGaps: TiActionabilityContract['enrichme
             severity: result.recentActivity.length ? 'medium' : 'high',
             detail: 'No related DWM alert IDs were returned, so the public result cannot open or create a backed case yet.',
             dependency: '/v1/dwm/alerts or /v1/dwm/alerts/rebuild alert ID',
+            route: '/dashboard/dwm',
+            sourceFamily: 'alert',
+            requestedFields: ['relatedAlerts[].id', 'relatedAlerts[].casePath', 'handoffs.alertRebuild.endpoint'],
         })
     }
     if (!actor.malwareTools.length || !actor.campaigns.length) {
@@ -413,9 +538,40 @@ function normalizeEnrichmentGaps(contractGaps: TiActionabilityContract['enrichme
             severity: 'medium',
             detail: 'Actor tools and campaigns are needed to enrich watchlists and explain defensive relevance.',
             dependency: 'TiSearchResponse.actorIntelligence.malwareTools/campaigns',
+            route: '/dashboard/ti/enrichment',
+            sourceFamily: 'actor_profile',
+            requestedFields: ['actorIntelligence.malwareTools', 'actorIntelligence.campaigns', 'actorIntelligence.sourceProvenance'],
         })
     }
     return uniqueBy(gaps, gap => gap.id).slice(0, 8)
+}
+
+function routeForGap(gap: NonNullable<TiActionabilityContract['enrichmentGaps']>[number]) {
+    if (/alert|dwm/i.test(`${gap.id} ${gap.dependency}`)) return '/dashboard/dwm'
+    if (/case/i.test(`${gap.id} ${gap.dependency}`)) return '/dashboard/ti/workbench'
+    return '/dashboard/ti/enrichment'
+}
+
+function sourceFamilyForGap(gap: NonNullable<TiActionabilityContract['enrichmentGaps']>[number]): EnrichmentGapQueueItem['sourceFamily'] {
+    const text = `${gap.id} ${gap.title} ${gap.detail} ${gap.dependency}`.toLowerCase()
+    if (text.includes('capture') || text.includes('source')) return 'source_capture'
+    if (text.includes('watchlist')) return 'watchlist'
+    if (text.includes('alert')) return 'alert'
+    if (text.includes('case')) return 'case'
+    if (text.includes('country') || text.includes('geograph')) return 'geography'
+    if (text.includes('indicator') || text.includes('ioc')) return 'indicator'
+    return 'actor_profile'
+}
+
+function requestedFieldsForGap(gap: NonNullable<TiActionabilityContract['enrichmentGaps']>[number]) {
+    const family = sourceFamilyForGap(gap)
+    if (family === 'source_capture') return ['sourceProvenance[].sourceId', 'sourceProvenance[].captureId', 'sourceProvenance[].provenance']
+    if (family === 'alert') return ['relatedAlerts[].id', 'relatedAlerts[].status', 'relatedAlerts[].casePath']
+    if (family === 'case') return ['relatedCases[].id', 'handoffs.caseCreate.payload.alertId']
+    if (family === 'watchlist') return ['watchlistMatches[].organizationId', 'watchlistMatches[].watchlistItemId']
+    if (family === 'geography') return ['targets[].regions', 'recentActivity[].countries', 'actorIntelligence.geographies']
+    if (family === 'indicator') return ['actorIntelligence.indicators', 'actorIntelligence.infrastructure']
+    return ['actorIntelligence.malwareTools', 'actorIntelligence.campaigns', 'actorIntelligence.confidenceReasoning']
 }
 
 function buildGeographyHandoffs(result: TiSearchResponse, victimObservations: VictimObservation[], candidates: WatchlistCandidate[]): GeographyHandoff[] {
