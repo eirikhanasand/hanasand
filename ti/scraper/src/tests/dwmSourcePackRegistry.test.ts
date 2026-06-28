@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  applyDwmSourcePackValidationResults,
   buildDwmSourcePackPersistenceShape,
+  buildDwmSourcePackWorkerIntegrationShape,
   DwmSourcePackPostgresAdapter,
   InMemoryDwmSourcePackRegistryAdapter,
+  InMemoryDwmSourcePackValidationQueueAdapter,
+  enqueueDwmSourcePackValidationJobs,
   planDwmSourcePackBulkImport,
   planDwmSourcePackValidationBatch,
   runDwmSourcePackValidationJob,
@@ -292,6 +296,63 @@ describe("dwm source pack registry adapter", () => {
     expect(plan.safeOutput).toMatchObject({ rawDuplicateTargetsStored: false, liveNetworkScrapeStarted: false });
   });
 
+  test("exposes worker integration shape for DB-backed validation queues and active source rows", () => {
+    expect(buildDwmSourcePackWorkerIntegrationShape()).toMatchObject({
+      schemaVersion: "ti.dwm_source_pack_worker_integration.v1",
+      tables: {
+        dwm_source_pack_validation_jobs: expect.arrayContaining(["job_key", "pack_ids_json", "request_ids_json", "family_concurrency_json", "safe_rejected_rows_json"]),
+        dwm_source_pack_active_source_rows: expect.arrayContaining(["source_id", "candidate_id", "target_raw_stored", "validation_job_key"])
+      },
+      indexes: expect.arrayContaining([
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_dwm_source_pack_validation_jobs_key ON dwm_source_pack_validation_jobs(job_key)"
+      ]),
+      guardrails: expect.arrayContaining(["job_key is the idempotency key and must be unique"]),
+      safeOutput: { liveNetworkScrapeStarted: false }
+    });
+  });
+
+  test("enqueues source pack validation jobs idempotently with worker controls and safe rejected rows", () => {
+    const queue = new InMemoryDwmSourcePackValidationQueueAdapter();
+    const sourcePack = pack({
+      id: "pack_worker_queue",
+      requestId: "req_worker_queue",
+      candidates: [
+        candidate({ id: "cand_worker_tg", declaredFamily: "telegram", targetRef: { hash: "worker_shared", preview: "telegram:worker", family: "telegram", rawStored: false } }),
+        candidate({ id: "cand_worker_onion", declaredFamily: "darkweb_onion" }),
+        candidate({ id: "cand_worker_dup", declaredFamily: "telegram", targetRef: { hash: "worker_shared", preview: "telegram:duplicate", family: "telegram", rawStored: false } })
+      ]
+    });
+    const plan = planDwmSourcePackValidationBatch([sourcePack], {
+      chunkSize: 3,
+      perFamilyConcurrency: { telegram: 5, darkweb_onion: 1 },
+      maxAttempts: 4,
+      backoffSeconds: 90,
+      generatedAt: "2026-06-28T12:00:00.000Z"
+    });
+
+    const first = enqueueDwmSourcePackValidationJobs(queue, [sourcePack], plan, { generatedAt: "2026-06-28T12:01:00.000Z" });
+    const second = enqueueDwmSourcePackValidationJobs(queue, [sourcePack], plan, { generatedAt: "2026-06-28T12:02:00.000Z" });
+
+    expect(first.summary).toMatchObject({ enqueuedCount: 1, duplicateCount: 0, jobCount: 1, candidateCount: 3, safeRejectedRowCount: 1 });
+    expect(second.summary).toMatchObject({ enqueuedCount: 0, duplicateCount: 1, jobCount: 1 });
+    expect(queue.list()).toHaveLength(1);
+    expect(queue.list()[0]).toMatchObject({
+      packIds: ["pack_worker_queue"],
+      requestIds: ["req_worker_queue"],
+      status: "queued",
+      candidateIds: ["cand_worker_tg", "cand_worker_onion", "cand_worker_dup"],
+      familyConcurrency: { telegram: 5, darkweb_onion: 1 },
+      retry: { attempt: 0, maxAttempts: 4, backoffSeconds: 90 },
+      safeRejectedRows: [{
+        candidateId: "cand_worker_dup",
+        targetRef: { rawStored: false },
+        reason: "duplicate_target_ref"
+      }]
+    });
+    expect(queue.list()[0].jobKey).toContain("pack_worker_queue:req_worker_queue:0");
+    expect(JSON.stringify(queue.list())).not.toContain("@raw");
+  });
+
   test("runs fake no-network validators across source families and validation states", () => {
     const validationPack = pack({
       id: "pack_validation_families",
@@ -347,6 +408,68 @@ describe("dwm source pack registry adapter", () => {
     expect(allRetry.job).toMatchObject({ status: "retry_scheduled", retry: { attempt: 1, retryAfter: expect.any(String) } });
     expect(allDisabled.job.status).toBe("disabled");
     expect(run.safeOutput).toMatchObject({ liveNetworkScrapeStarted: false, rawUnsafeRowsStored: false });
+  });
+
+  test("applies validation results into active source rows without live network collection", () => {
+    const queue = new InMemoryDwmSourcePackValidationQueueAdapter();
+    const sourcePack = pack({
+      id: "pack_worker_activation",
+      requestId: "req_worker_activation",
+      candidates: [
+        candidate({ id: "cand_activation_tg", declaredFamily: "telegram" }),
+        candidate({ id: "cand_activation_onion", declaredFamily: "darkweb_metadata", policyBoundary: { metadataOnly: true, noPrivateAccess: true } }),
+        candidate({ id: "cand_activation_retry", declaredFamily: "public_advisory" }),
+        candidate({ id: "cand_activation_disabled", declaredFamily: "clear_web" })
+      ]
+    });
+    const plan = planDwmSourcePackValidationBatch([sourcePack], { chunkSize: 4, generatedAt: "2026-06-28T12:00:00.000Z" });
+    const receipt = enqueueDwmSourcePackValidationJobs(queue, [sourcePack], plan, { generatedAt: "2026-06-28T12:00:00.000Z" }).receipts[0];
+    const run = runDwmSourcePackValidationJob(receipt.record.job, sourcePack, fakeValidator, {
+      generatedAt: "2026-06-28T12:05:00.000Z"
+    });
+    queue.transition(receipt.jobKey, run.job.status, { job: run.job, updatedAt: "2026-06-28T12:05:00.000Z" });
+
+    const activation = applyDwmSourcePackValidationResults(sourcePack, queue.get(receipt.jobKey)!, run.results, {
+      generatedAt: "2026-06-28T12:06:00.000Z",
+      actor: "source-pack-worker"
+    });
+
+    expect(activation.summary).toEqual({
+      activeSourceCount: 2,
+      blockedCandidateCount: 2,
+      retryScheduledCount: 1,
+      failedCount: 0,
+      disabledCount: 1
+    });
+    expect(activation.activeSources).toMatchObject([
+      {
+        sourceId: "src_cand_activation_tg",
+        candidateId: "cand_activation_tg",
+        packId: "pack_worker_activation",
+        requestId: "req_worker_activation",
+        family: "telegram",
+        targetRawStored: false,
+        activationState: "active_canary",
+        validationJobKey: receipt.jobKey,
+        alertGradeEvidenceEligible: true
+      },
+      {
+        sourceId: "src_cand_activation_onion",
+        candidateId: "cand_activation_onion",
+        family: "darkweb_metadata",
+        targetRawStored: false,
+        activationState: "metadata_only_active",
+        alertGradeEvidenceEligible: true
+      }
+    ]);
+    expect(activation.pack.candidates).toMatchObject([
+      { id: "cand_activation_tg", status: "active", decision: "approved", activationState: "active_canary" },
+      { id: "cand_activation_onion", status: "active", decision: "approved", activationState: "metadata_only_active" },
+      { id: "cand_activation_retry", status: "retry_scheduled", decision: "retry_scheduled", failure: { code: "parser_timeout" } },
+      { id: "cand_activation_disabled", status: "disabled", decision: "suppressed" }
+    ]);
+    expect(activation.safeOutput).toMatchObject({ liveNetworkScrapeStarted: false, rawUnsafeRowsStored: false });
+    expect(JSON.stringify(activation)).not.toContain("rawPayload");
   });
 
   test("computes source health rollups for stale parser failures activation lag and retry windows", () => {

@@ -154,6 +154,66 @@ export type DwmSourcePackHealthRollup = {
   nextRetryWindows: Array<{ candidateId: string; retryAfter?: string; retryHint?: string; failure?: Record<string, unknown> }>;
 };
 
+export type DwmSourcePackValidationQueueRecord = {
+  jobKey: string;
+  job: DwmSourcePackValidationJob;
+  packIds: string[];
+  requestIds: string[];
+  status: DwmSourcePackValidationState;
+  candidateIds: string[];
+  familyConcurrency: Partial<Record<DwmSourcePackFamily, number>>;
+  retry: DwmSourcePackValidationJob["retry"];
+  safeRejectedRows: DwmSourcePackValidationJob["safeRejectedRows"];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DwmSourcePackValidationQueueReceipt = {
+  status: "enqueued" | "duplicate";
+  jobKey: string;
+  record: DwmSourcePackValidationQueueRecord;
+};
+
+export interface DwmSourcePackValidationQueueAdapter {
+  enqueue(record: DwmSourcePackValidationQueueRecord): DwmSourcePackValidationQueueReceipt;
+  get(jobKey: string): DwmSourcePackValidationQueueRecord | undefined;
+  list(): DwmSourcePackValidationQueueRecord[];
+  transition(jobKey: string, status: DwmSourcePackValidationState, patch?: Partial<DwmSourcePackValidationQueueRecord>): DwmSourcePackValidationQueueRecord;
+}
+
+export type DwmSourcePackActiveSourceRow = {
+  sourceId: string;
+  candidateId: string;
+  packId: string;
+  requestId: string;
+  family: DwmSourcePackFamily;
+  sourceType: string;
+  targetHash: string;
+  targetPreview: string;
+  targetRawStored: false;
+  parserStatus: string;
+  policyBoundary?: Record<string, unknown>;
+  status: "active";
+  activationState: "active_canary" | "metadata_only_active";
+  activatedAt: string;
+  validationJobKey: string;
+  alertGradeEvidenceEligible: boolean;
+};
+
+export type DwmSourcePackActivationResult = {
+  pack: DwmSourcePackRecord;
+  activeSources: DwmSourcePackActiveSourceRow[];
+  blockedCandidates: Array<{ candidateId: string; state: string; reason?: string }>;
+  summary: {
+    activeSourceCount: number;
+    blockedCandidateCount: number;
+    retryScheduledCount: number;
+    failedCount: number;
+    disabledCount: number;
+  };
+  safeOutput: Record<string, boolean>;
+};
+
 export type DwmSourcePackListResult = {
   items: DwmSourcePackRecord[];
   nextCursor?: string;
@@ -291,6 +351,36 @@ export class InMemoryDwmSourcePackRegistryAdapter implements DwmSourcePackRegist
   }
 }
 
+export class InMemoryDwmSourcePackValidationQueueAdapter implements DwmSourcePackValidationQueueAdapter {
+  private readonly records = new Map<string, DwmSourcePackValidationQueueRecord>();
+
+  enqueue(record: DwmSourcePackValidationQueueRecord): DwmSourcePackValidationQueueReceipt {
+    assertSafeValidationQueueRecord(record);
+    const previous = this.records.get(record.jobKey);
+    if (previous) return { status: "duplicate", jobKey: record.jobKey, record: clone(previous) };
+    this.records.set(record.jobKey, clone(record));
+    return { status: "enqueued", jobKey: record.jobKey, record: clone(record) };
+  }
+
+  get(jobKey: string): DwmSourcePackValidationQueueRecord | undefined {
+    const record = this.records.get(jobKey);
+    return record ? clone(record) : undefined;
+  }
+
+  list(): DwmSourcePackValidationQueueRecord[] {
+    return [...this.records.values()].map((record) => clone(record)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  transition(jobKey: string, status: DwmSourcePackValidationState, patch: Partial<DwmSourcePackValidationQueueRecord> = {}): DwmSourcePackValidationQueueRecord {
+    const previous = this.records.get(jobKey);
+    if (!previous) throw new Error(`Unknown validation job ${jobKey}`);
+    const next = { ...previous, ...clone(patch), jobKey, status, job: { ...previous.job, ...patch.job, status }, updatedAt: patch.updatedAt ?? previous.updatedAt };
+    assertSafeValidationQueueRecord(next);
+    this.records.set(jobKey, next);
+    return clone(next);
+  }
+}
+
 export function buildDwmSourcePackPersistenceShape() {
   return {
     schemaVersion: "ti.dwm_source_pack_registry.v1",
@@ -343,6 +433,56 @@ export function buildDwmSourcePackPersistenceShape() {
       "raw payload, capture body, credential, and downloaded leak rows are not pack registry columns",
       "collection remains controlled by source promotion and frontier queue contracts"
     ]
+  };
+}
+
+export function buildDwmSourcePackWorkerIntegrationShape() {
+  return {
+    schemaVersion: "ti.dwm_source_pack_worker_integration.v1",
+    tables: {
+      dwm_source_pack_validation_jobs: [
+        "job_key",
+        "pack_ids_json",
+        "request_ids_json",
+        "status",
+        "candidate_ids_json",
+        "family_concurrency_json",
+        "retry_json",
+        "safe_rejected_rows_json",
+        "job_json",
+        "created_at",
+        "updated_at"
+      ],
+      dwm_source_pack_active_source_rows: [
+        "source_id",
+        "candidate_id",
+        "pack_id",
+        "request_id",
+        "declared_family",
+        "source_type",
+        "target_hash",
+        "target_preview",
+        "target_raw_stored",
+        "parser_status",
+        "policy_boundary_json",
+        "activation_state",
+        "activated_at",
+        "validation_job_key"
+      ]
+    },
+    indexes: [
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_dwm_source_pack_validation_jobs_key ON dwm_source_pack_validation_jobs(job_key)",
+      "CREATE INDEX IF NOT EXISTS idx_dwm_source_pack_validation_jobs_status ON dwm_source_pack_validation_jobs(status, updated_at)",
+      "CREATE INDEX IF NOT EXISTS idx_dwm_source_pack_validation_jobs_pack ON dwm_source_pack_validation_jobs USING GIN(pack_ids_json)",
+      "CREATE INDEX IF NOT EXISTS idx_dwm_source_pack_active_source_rows_candidate ON dwm_source_pack_active_source_rows(candidate_id)"
+    ],
+    guardrails: [
+      "job_key is the idempotency key and must be unique",
+      "target_raw_stored must remain false for active source rows",
+      "worker tests must use validator fixtures rather than live network probes",
+      "restricted sources can only activate into metadata_only_active rows"
+    ],
+    safeOutput: sourcePackSafeOutput()
   };
 }
 
@@ -681,6 +821,163 @@ export function sourcePackHealthRollup(
   return { coverage, staleSources, parserFailures, activationLag, nextRetryWindows };
 }
 
+export function sourcePackValidationJobKey(job: DwmSourcePackValidationJob, requestIds: string[] = []): string {
+  return [
+    "dwm_source_pack_validation",
+    [...job.packIds].sort().join("+"),
+    [...requestIds].sort().join("+"),
+    job.cursor,
+    job.candidateIds.join("+")
+  ].join(":");
+}
+
+export function enqueueDwmSourcePackValidationJobs(
+  adapter: DwmSourcePackValidationQueueAdapter,
+  packs: DwmSourcePackRecord[],
+  plan: DwmSourcePackValidationBatchPlan,
+  options: { generatedAt?: string } = {}
+) {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const packById = new Map(packs.map((pack) => [pack.id, pack]));
+  const receipts = plan.jobs.map((job) => {
+    const requestIds = job.packIds.map((packId) => packById.get(packId)?.requestId).filter((requestId): requestId is string => Boolean(requestId));
+    const record: DwmSourcePackValidationQueueRecord = {
+      jobKey: sourcePackValidationJobKey(job, requestIds),
+      job,
+      packIds: job.packIds,
+      requestIds,
+      status: job.status,
+      candidateIds: job.candidateIds,
+      familyConcurrency: job.familyConcurrency,
+      retry: job.retry,
+      safeRejectedRows: job.safeRejectedRows,
+      createdAt: generatedAt,
+      updatedAt: generatedAt
+    };
+    return adapter.enqueue(record);
+  });
+
+  return {
+    receipts,
+    summary: {
+      enqueuedCount: receipts.filter((receipt) => receipt.status === "enqueued").length,
+      duplicateCount: receipts.filter((receipt) => receipt.status === "duplicate").length,
+      jobCount: receipts.length,
+      candidateCount: plan.summary.candidateCount,
+      safeRejectedRowCount: plan.safeRejectedRows.length
+    },
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
+export function applyDwmSourcePackValidationResults(
+  pack: DwmSourcePackRecord,
+  job: DwmSourcePackValidationQueueRecord | DwmSourcePackValidationJob,
+  results: DwmSourceCandidateValidationResult[],
+  options: { generatedAt?: string; actor?: string } = {}
+): DwmSourcePackActivationResult {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const jobRecord = "job" in job ? job : undefined;
+  const validationJob = "job" in job ? job.job : job;
+  const jobKey = jobRecord?.jobKey ?? sourcePackValidationJobKey(validationJob, [pack.requestId]);
+  const resultByCandidate = new Map(results.map((result) => [result.candidateId, result]));
+  const activeSources: DwmSourcePackActiveSourceRow[] = [];
+  const blockedCandidates: DwmSourcePackActivationResult["blockedCandidates"] = [];
+  const counters = { retryScheduledCount: 0, failedCount: 0, disabledCount: 0 };
+
+  const candidates = pack.candidates.map((candidate) => {
+    const result = resultByCandidate.get(candidate.id);
+    if (!result || !validationJob.candidateIds.includes(candidate.id)) return clone(candidate);
+    const validationResult = { state: result.state, parserStatus: result.parserStatus, validatedAt: generatedAt, validationJobKey: jobKey };
+    if (result.state === "active") {
+      const sourceId = candidate.sourceId ?? `src_${candidate.id}`;
+      activeSources.push(activeSourceRowForCandidate(pack, candidate, {
+        sourceId,
+        parserStatus: result.parserStatus,
+        validationJobKey: jobKey,
+        activatedAt: generatedAt
+      }));
+      return {
+        ...clone(candidate),
+        sourceId,
+        status: "active",
+        decision: "approved",
+        activationState: candidate.declaredFamily === "darkweb_onion" || candidate.declaredFamily === "darkweb_metadata" ? "metadata_only_active" : "active_canary",
+        parserStatus: result.parserStatus,
+        healthStatus: "validated",
+        validationResult
+      };
+    }
+    if (result.state === "retry_scheduled") {
+      counters.retryScheduledCount += 1;
+      blockedCandidates.push({ candidateId: candidate.id, state: result.state, reason: result.failure?.message });
+      return {
+        ...clone(candidate),
+        status: "retry_scheduled",
+        decision: "retry_scheduled",
+        parserStatus: result.parserStatus,
+        failure: result.failure,
+        retryHint: result.failure ? `retry after backoff: ${result.failure.code}` : candidate.retryHint,
+        validationResult
+      };
+    }
+    if (result.state === "disabled") {
+      counters.disabledCount += 1;
+      blockedCandidates.push({ candidateId: candidate.id, state: result.state, reason: result.failure?.message ?? "validator disabled source" });
+      return {
+        ...clone(candidate),
+        status: "disabled",
+        decision: "suppressed",
+        parserStatus: result.parserStatus,
+        failure: result.failure,
+        validationResult
+      };
+    }
+    counters.failedCount += 1;
+    blockedCandidates.push({ candidateId: candidate.id, state: result.state, reason: result.failure?.message ?? "validation failed" });
+    return {
+      ...clone(candidate),
+      status: "failed",
+      decision: "validation_failed",
+      parserStatus: result.parserStatus,
+      failure: result.failure,
+      validationResult
+    };
+  });
+
+  const nextPack = {
+    ...clone(pack),
+    updatedAt: generatedAt,
+    candidates,
+    audit: [
+      ...pack.audit,
+      {
+        at: generatedAt,
+        action: "source_pack_validation_applied",
+        actor: options.actor ?? "source-pack-worker",
+        jobKey,
+        activeSourceCount: activeSources.length,
+        blockedCandidateCount: blockedCandidates.length
+      }
+    ]
+  };
+
+  assertSafePackRecord(nextPack);
+  return {
+    pack: nextPack,
+    activeSources,
+    blockedCandidates,
+    summary: {
+      activeSourceCount: activeSources.length,
+      blockedCandidateCount: blockedCandidates.length,
+      retryScheduledCount: counters.retryScheduledCount,
+      failedCount: counters.failedCount,
+      disabledCount: counters.disabledCount
+    },
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
 export function buildDwmSourcePackRegistrySql() {
   return {
     createPacksTable: `
@@ -763,6 +1060,13 @@ function assertSafePackRecord(pack: DwmSourcePackRecord) {
   }
 }
 
+function assertSafeValidationQueueRecord(record: DwmSourcePackValidationQueueRecord) {
+  assertNoUnsafeKeys(record);
+  for (const row of record.safeRejectedRows) {
+    if (row.targetRef.rawStored !== false) throw new Error("Source pack validation rejected rows must not store raw targets");
+  }
+}
+
 function sourcePackSafeOutput() {
   return {
     rawUnsafeRowsStored: false,
@@ -770,6 +1074,31 @@ function sourcePackSafeOutput() {
     rawDuplicateTargetsStored: false,
     liveNetworkScrapeStarted: false,
     restrictedPayloadDownloadAllowed: false
+  };
+}
+
+function activeSourceRowForCandidate(
+  pack: DwmSourcePackRecord,
+  candidate: DwmSourcePackCandidateRecord,
+  input: { sourceId: string; parserStatus: string; validationJobKey: string; activatedAt: string }
+): DwmSourcePackActiveSourceRow {
+  return {
+    sourceId: input.sourceId,
+    candidateId: candidate.id,
+    packId: pack.id,
+    requestId: pack.requestId,
+    family: candidate.declaredFamily,
+    sourceType: candidate.type,
+    targetHash: candidate.targetRef.hash,
+    targetPreview: candidate.targetRef.preview,
+    targetRawStored: false,
+    parserStatus: input.parserStatus,
+    policyBoundary: candidate.policyBoundary,
+    status: "active",
+    activationState: candidate.declaredFamily === "darkweb_onion" || candidate.declaredFamily === "darkweb_metadata" ? "metadata_only_active" : "active_canary",
+    activatedAt: input.activatedAt,
+    validationJobKey: input.validationJobKey,
+    alertGradeEvidenceEligible: !["darkweb_onion", "darkweb_metadata"].includes(candidate.declaredFamily) || candidate.policyBoundary?.metadataOnly === true
   };
 }
 
