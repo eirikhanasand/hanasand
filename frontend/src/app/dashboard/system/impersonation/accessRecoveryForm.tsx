@@ -43,33 +43,46 @@ type RecoveryPayload = {
     error?: string
 }
 
-type DecisionPayload = {
-    decision?: {
-        schemaVersion: string
-        requestId: string
-        organizationId: string
-        inviteId: string
-        requestedBy: string
-        approvalRequired: boolean
+type DecisionDetail = {
+    schemaVersion: string
+    requestId: string
+    organizationId: string
+    inviteId: string
+    requestedBy: string
+    approvalRequired: boolean
+    status: string
+    approvedBy: string | null
+    approvedAt: string | null
+    deniedBy: string | null
+    deniedAt: string | null
+    decisionReason: string | null
+    outcome: string
+    auditEventIds?: number[]
+    invite: {
+        id: string
+        email: string
+        role: string
         status: string
-        approvedBy: string | null
-        approvedAt: string | null
-        deniedBy: string | null
-        deniedAt: string | null
-        decisionReason: string | null
+        expiresAt: string
+    }
+    audit: {
+        query: string
+        actionType: string
         outcome: string
-        invite: {
-            id: string
-            email: string
-            role: string
-            status: string
-            expiresAt: string
-        }
-        audit: {
-            query: string
-            actionType: string
-            outcome: string
-        }
+        eventIds?: number[]
+    }
+    copyText: string
+}
+
+type DecisionPayload = {
+    decision?: DecisionDetail
+    error?: string
+}
+
+type ApprovalSearchPayload = {
+    approvals?: DecisionDetail[]
+    detail?: {
+        schemaVersion: string
         copyText: string
     }
     error?: string
@@ -81,10 +94,13 @@ const textAreaClass = 'min-h-20 rounded-lg border border-white/10 bg-black/24 px
 export default function AccessRecoveryForm() {
     const [result, setResult] = useState<RecoveryPayload | null>(null)
     const [decisionResult, setDecisionResult] = useState<DecisionPayload | null>(null)
+    const [searchResult, setSearchResult] = useState<ApprovalSearchPayload | null>(null)
     const [message, setMessage] = useState('')
     const [decisionMessage, setDecisionMessage] = useState('')
+    const [searchMessage, setSearchMessage] = useState('')
     const [submitting, setSubmitting] = useState(false)
     const [decisionSubmitting, setDecisionSubmitting] = useState(false)
+    const [searchSubmitting, setSearchSubmitting] = useState(false)
 
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -154,6 +170,34 @@ export default function AccessRecoveryForm() {
             setDecisionMessage(error instanceof Error ? error.message : 'Access recovery decision failed.')
         } finally {
             setDecisionSubmitting(false)
+        }
+    }
+
+    async function submitSearch(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        const form = new FormData(event.currentTarget)
+        const query = new URLSearchParams()
+        for (const key of ['request', 'org', 'status', 'outcome', 'requester', 'approver', 'from', 'to'] as const) {
+            const value = String(form.get(key) || '').trim()
+            if (value) query.set(key, value)
+        }
+
+        setSearchSubmitting(true)
+        setSearchMessage('')
+        setSearchResult(null)
+        try {
+            const response = await fetch(`/api/backend/admin/support/access-recovery${query.toString() ? `?${query}` : ''}`)
+            const body = await response.json().catch(() => ({})) as ApprovalSearchPayload
+            if (!response.ok) {
+                setSearchMessage(body.error || 'Approval search failed.')
+                return
+            }
+            setSearchResult(body)
+            setSearchMessage(`${body.approvals?.length || 0} approval records`)
+        } catch (error) {
+            setSearchMessage(error instanceof Error ? error.message : 'Approval search failed.')
+        } finally {
+            setSearchSubmitting(false)
         }
     }
 
@@ -230,6 +274,61 @@ export default function AccessRecoveryForm() {
                         <a className='text-sm font-semibold text-[#f07d33] hover:text-[#ff944d]' href={`/dashboard/system/impersonation?request=${encodeURIComponent(decisionResult.decision.requestId)}&source=admin&service=hanasand-api`}>
                             Open decision audit
                         </a>
+                    </div>
+                ) : null}
+            </form>
+
+            <form className='grid gap-3 border-t border-white/8 pt-4' onSubmit={submitSearch}>
+                <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9rem_9rem]'>
+                    <input className={inputClass} name='request' placeholder='Request id' />
+                    <input className={inputClass} name='org' placeholder='Organization id' />
+                    <select className={inputClass} name='status' defaultValue=''>
+                        <option value=''>status</option>
+                        <option value='pending_approval'>pending</option>
+                        <option value='approved'>approved</option>
+                        <option value='denied'>denied</option>
+                        <option value='not_required'>not required</option>
+                    </select>
+                    <select className={inputClass} name='outcome' defaultValue=''>
+                        <option value=''>outcome</option>
+                        <option value='success'>success</option>
+                        <option value='denied'>denied</option>
+                        <option value='failed'>failed</option>
+                    </select>
+                </div>
+                <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem_10rem_auto] lg:items-center'>
+                    <input className={inputClass} name='requester' placeholder='Requester' />
+                    <input className={inputClass} name='approver' placeholder='Approver or denier' />
+                    <input className={inputClass} name='from' type='datetime-local' />
+                    <input className={inputClass} name='to' type='datetime-local' />
+                    <button className='h-10 rounded-lg bg-[#f07d33] px-4 text-sm font-semibold text-black transition hover:bg-[#ff944d] disabled:cursor-not-allowed disabled:opacity-55' disabled={searchSubmitting} type='submit'>
+                        {searchSubmitting ? 'Searching...' : 'Search approvals'}
+                    </button>
+                </div>
+                {searchMessage ? <p className='text-sm text-bright/58'>{searchMessage}</p> : null}
+                {searchResult?.approvals?.length ? (
+                    <div className='grid gap-2 border-t border-white/8 pt-3'>
+                        {searchResult.approvals.map(approval => (
+                            <div className='grid gap-2 rounded-lg border border-white/8 bg-white/[0.03] p-3 text-sm text-bright/66' key={approval.requestId}>
+                                <div className='flex flex-wrap gap-2 text-bright/78'>
+                                    <span>{approval.status}</span>
+                                    <span>{approval.outcome}</span>
+                                    <span>{approval.invite.email}</span>
+                                    <span>{approval.invite.status}</span>
+                                    <span>request {approval.requestId}</span>
+                                </div>
+                                <div className='flex flex-wrap gap-2 text-xs text-bright/42'>
+                                    <span>requested by {approval.requestedBy}</span>
+                                    {approval.approvedBy ? <span>approved by {approval.approvedBy}</span> : null}
+                                    {approval.deniedBy ? <span>denied by {approval.deniedBy}</span> : null}
+                                    {approval.auditEventIds?.length ? <span>audit {approval.auditEventIds.join(', ')}</span> : null}
+                                </div>
+                                <textarea className={textAreaClass} readOnly value={approval.copyText} />
+                                <a className='text-sm font-semibold text-[#f07d33] hover:text-[#ff944d]' href={`/dashboard/system/impersonation?request=${encodeURIComponent(approval.requestId)}&source=admin&service=hanasand-api`}>
+                                    Open request audit
+                                </a>
+                            </div>
+                        ))}
                     </div>
                 ) : null}
             </form>

@@ -128,6 +128,7 @@ import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
 import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, stopImpersonation } from './handlers/impersonation.ts'
 import {
     getAdminAuditEvents,
+    getSupportAccessRecoveryApprovals,
     getSupportOrganization,
     getSupportUser,
     postSupportAccessRecovery,
@@ -204,6 +205,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/admin/audit-events', getAdminAuditEvents)
     fastify.get('/admin/support/users/:id', getSupportUser)
     fastify.get('/admin/support/organizations/:id', getSupportOrganization)
+    fastify.get('/admin/support/access-recovery', getSupportAccessRecoveryApprovals)
     fastify.post('/admin/support/organizations/:id/invites', postSupportOrganizationInvite)
     fastify.post('/admin/support/organizations/:id/access-recovery', postSupportAccessRecovery)
     fastify.post('/admin/support/access-recovery/:requestId/approve', postSupportAccessRecoveryApprove)

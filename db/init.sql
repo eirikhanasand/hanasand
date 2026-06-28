@@ -488,6 +488,9 @@ CREATE TABLE IF NOT EXISTS admin_access_recovery_approvals (
 CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_org_status ON admin_access_recovery_approvals(organization_id, status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_invite ON admin_access_recovery_approvals(invite_id);
 CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_requested_by ON admin_access_recovery_approvals(requested_by, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_outcome_updated ON admin_access_recovery_approvals(outcome, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_approved_by ON admin_access_recovery_approvals(approved_by, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_denied_by ON admin_access_recovery_approvals(denied_by, updated_at DESC);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;
