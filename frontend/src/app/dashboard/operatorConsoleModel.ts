@@ -107,6 +107,19 @@ export type DwmDeliveryItem = {
     error?: string
 }
 
+export type DwmAlertAccessState = {
+    status: 'loaded' | 'identity_missing' | 'visibility_denied' | 'unavailable'
+    code?: string
+    message?: string
+    reason?: string
+    attemptedIdentity?: {
+        userEmail?: string
+        userId?: string
+        actor?: string
+        source?: string
+    }
+}
+
 export function buildPublicTiHandoffCase(input: {
     decode: PublicTiHandoffDecodeResult | null
     scope: OperatorScope
@@ -440,6 +453,7 @@ export function buildReadinessCases(input: {
     organizationState: DwmOrganizationState
     liveAlertCount: number
     renderedAlertCount: number
+    alertAccessState?: DwmAlertAccessState
 }): WorkbenchCase[] {
     const now = new Date().toISOString()
     const organization = input.organizationState.selectedOrganization
@@ -453,6 +467,16 @@ export function buildReadinessCases(input: {
     const latestDelivery = input.deliveries[0]
     const deliveryFailures = input.deliveries.filter(item => item.status === 'failed' || item.status === 'skipped').length
     const orgWebhookFailures = orgWebhooks.filter(item => item.lastTestStatus === 'failed').length
+    const alertVisibilityBlocked = input.alertAccessState?.status === 'identity_missing' || input.alertAccessState?.status === 'visibility_denied'
+    const alertAccessMessage = input.alertAccessState?.message || (input.alertAccessState?.status === 'identity_missing'
+        ? 'DWM alert access requires an active organization member identity.'
+        : 'DWM alert visibility could not be verified for this organization scope.')
+    const attemptedAlertIdentity = [
+        input.alertAccessState?.attemptedIdentity?.userEmail ? `userEmail=${input.alertAccessState.attemptedIdentity.userEmail}` : '',
+        input.alertAccessState?.attemptedIdentity?.userId ? `userId=${input.alertAccessState.attemptedIdentity.userId}` : '',
+        input.alertAccessState?.attemptedIdentity?.actor ? `actor=${input.alertAccessState.attemptedIdentity.actor}` : '',
+        input.alertAccessState?.attemptedIdentity?.source ? `source=${input.alertAccessState.attemptedIdentity.source}` : '',
+    ].filter(Boolean).join('; ')
     const path = operatorPath({
         scope: input.scope,
         organization,
@@ -611,30 +635,37 @@ export function buildReadinessCases(input: {
             id: 'alert_generation',
             kind: 'alert_readiness',
             queue: 'Alert generation',
-            title: input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
+            title: alertVisibilityBlocked ? 'DWM alert visibility blocked' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
             severity: input.liveAlertCount ? 'medium' : 'high',
-            status: input.liveAlertCount ? 'alerts_ready' : 'demo_or_empty',
-            priority: input.liveAlertCount ? 240 : 350,
-            confidence: input.liveAlertCount ? 90 : 58,
-            subtitle: input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} loaded from backend.` : `${input.renderedAlertCount} fallback alert${input.renderedAlertCount === 1 ? '' : 's'} rendered so the workflow is inspectable, but real alert generation has not been verified.`,
-            recommendedAction: input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and stop relying on fallback cases for sales demos.',
+            status: alertVisibilityBlocked ? input.alertAccessState?.code || input.alertAccessState?.status || 'organization_visibility_denied' : input.liveAlertCount ? 'alerts_ready' : 'demo_or_empty',
+            priority: alertVisibilityBlocked ? 395 : input.liveAlertCount ? 240 : 350,
+            confidence: alertVisibilityBlocked ? 86 : input.liveAlertCount ? 90 : 58,
+            subtitle: alertVisibilityBlocked
+                ? `${alertAccessMessage}${attemptedAlertIdentity ? ` Attempted identity: ${attemptedAlertIdentity}.` : ''}`
+                : input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} loaded from backend.` : `${input.renderedAlertCount} fallback alert${input.renderedAlertCount === 1 ? '' : 's'} rendered so the workflow is inspectable, but real alert generation has not been verified.`,
+            recommendedAction: alertVisibilityBlocked
+                ? 'Open the dashboard as an active organization member or fix the org membership/session identity before treating the alert queue as empty.'
+                : input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and stop relying on fallback cases for sales demos.',
             evidence: [{
                 id: 'ev_alert_generation',
                 sourceName: 'DWM alerts API',
                 sourceFamily: 'alert workflow',
                 captureMode: 'api snapshot',
                 redactionState: 'customer safe',
-                contentHash: '/api/dwm/alerts',
-                excerpt: input.liveAlertCount ? 'Alerts came from GET /v1/dwm/alerts for the selected operator scope.' : 'The page is using fallback DWM cases because GET /v1/dwm/alerts returned no saved alerts or backend is absent.',
+                contentHash: input.alertAccessState?.code || '/api/dwm/alerts',
+                excerpt: alertVisibilityBlocked ? alertAccessMessage : input.liveAlertCount ? 'Alerts came from GET /v1/dwm/alerts for the selected operator scope.' : 'The page is using fallback DWM cases because GET /v1/dwm/alerts returned no saved alerts or backend is absent.',
                 observedAt: now,
                 provenance: 'GET /api/dwm/alerts + POST /api/dwm/alerts/rebuild',
-                confidence: input.liveAlertCount ? 90 : 58,
+                confidence: alertVisibilityBlocked ? 86 : input.liveAlertCount ? 90 : 58,
             }],
-            timeline: [{ id: 'alert_generation_at', at: now, title: input.liveAlertCount ? 'Alerts loaded' : 'Alert generation not proven', body: input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
-            nextTasks: input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
+            timeline: [{ id: 'alert_generation_at', at: now, title: alertVisibilityBlocked ? 'Alert visibility denied' : input.liveAlertCount ? 'Alerts loaded' : 'Alert generation not proven', body: alertVisibilityBlocked ? alertAccessMessage : input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
+            nextTasks: alertVisibilityBlocked
+                ? ['Owner: operator. Verify the dashboard session maps to an active organization member.', 'Retry GET /api/dwm/alerts with userEmail or userId for the selected organization.', 'Do not treat fallback alerts as proof until org visibility succeeds.']
+                : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
             relatedLinks: [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: '/api/dwm/alerts', label: 'Alerts API' }],
             workflowPath: path,
-            actions: activeWatchlists.length ? [{
+            missingDependency: alertVisibilityBlocked ? alertAccessMessage : undefined,
+            actions: !alertVisibilityBlocked && activeWatchlists.length ? [{
                 id: 'rebuild_alerts',
                 label: 'Rebuild alerts',
                 method: 'POST',

@@ -8,7 +8,7 @@ import { demoDwmProductSnapshot, type DwmAlert, type DwmSeverity } from '@/utils
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
-import { buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
+import { buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,12 +40,21 @@ export default async function Page({
     const scope: OperatorScope = organizationState.selectedOrganization
         ? { tenantId: organizationState.selectedOrganization.tenantId, organizationId: organizationState.selectedOrganization.id }
         : { tenantId: 'default' }
-    const [liveAlerts, watchlists, operations, deliveries] = await Promise.all([
-        loadDwmAlerts(scope),
-        loadDwmWatchlists(scope),
-        loadDwmOperations(scope),
-        loadDwmDeliveries(scope),
+    const viewerIdentity = resolveDashboardViewerIdentity({
+        userId: impersonatingId || id,
+        userName: impersonatingName || name,
+        userEmail: Cookies.get('email')?.value || Cookies.get('user_email')?.value || Cookies.get('userEmail')?.value || Headers.get('x-user-email') || '',
+        headerUserId: Headers.get('x-user-id') || '',
+        headerActor: Headers.get('x-actor-id') || '',
+        members: organizationState.members,
+    })
+    const [alertLoad, watchlists, operations, deliveries] = await Promise.all([
+        loadDwmAlerts(scope, viewerIdentity),
+        loadDwmWatchlists(scope, viewerIdentity),
+        loadDwmOperations(scope, viewerIdentity),
+        loadDwmDeliveries(scope, viewerIdentity),
     ])
+    const liveAlerts = alertLoad.alerts
     const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
     const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
     const publicTiHandoff = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
@@ -60,6 +69,7 @@ export default async function Page({
         organizationState,
         liveAlertCount: liveAlerts.length,
         renderedAlertCount: alerts.length,
+        alertAccessState: alertLoad.accessState,
     })
     const orgContext = buildOrgOperatingContext({
         backendConfigured: Boolean(process.env.TI_SCRAPER_API_BASE),
@@ -149,29 +159,97 @@ function CompactStat({ label, value, tone = 'neutral' }: { label: string, value:
     )
 }
 
-async function loadDwmAlerts(scope: OperatorScope): Promise<DwmAlert[]> {
+export type DashboardViewerIdentity = {
+    userEmail?: string
+    userId?: string
+    actor?: string
+    source: 'session' | 'org_member_match' | 'single_active_org_member' | 'anonymous'
+}
+
+export function resolveDashboardViewerIdentity(input: {
+    userId?: string
+    userName?: string
+    userEmail?: string
+    headerUserId?: string
+    headerActor?: string
+    members: DwmOrganizationMember[]
+}): DashboardViewerIdentity {
+    const explicitEmail = emailLike(input.userEmail) || emailLike(input.userName)
+    const explicitUserId = normalizeIdentity(input.headerUserId) || normalizeIdentity(input.userId)
+    const explicitActor = normalizeIdentity(input.headerActor) || explicitUserId || explicitEmail
+    const activeMembers = input.members.filter(member => member.status === 'active')
+    const matchedMember = activeMembers.find(member => {
+        const candidates = [member.id, member.email, member.userId].map(normalizeIdentity).filter(Boolean)
+        return candidates.some(candidate => [explicitEmail, explicitUserId, explicitActor].includes(candidate))
+    })
+
+    if (matchedMember) {
+        return {
+            userEmail: matchedMember.email,
+            userId: matchedMember.userId || matchedMember.id,
+            actor: explicitActor || matchedMember.email,
+            source: 'org_member_match',
+        }
+    }
+
+    if (explicitEmail || explicitUserId || explicitActor) {
+        return {
+            userEmail: explicitEmail,
+            userId: explicitUserId,
+            actor: explicitActor,
+            source: 'session',
+        }
+    }
+
+    if (activeMembers.length === 1) {
+        return {
+            userEmail: activeMembers[0].email,
+            userId: activeMembers[0].userId || activeMembers[0].id,
+            actor: activeMembers[0].email,
+            source: 'single_active_org_member',
+        }
+    }
+
+    return { source: 'anonymous' }
+}
+
+async function loadDwmAlerts(scope: OperatorScope, identity: DashboardViewerIdentity): Promise<{ alerts: DwmAlert[], accessState: DwmAlertAccessState }> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return []
+    if (!base) return { alerts: [], accessState: { status: 'unavailable', message: 'TI scraper backend is not configured.' } }
 
     try {
         const target = new URL('/v1/dwm/alerts', base)
-        applyScope(target, scope)
+        applyScope(target, scope, identity)
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!response.ok) return []
+        if (!response.ok) {
+            const failure = await readDwmApiFailure(response)
+            return {
+                alerts: [],
+                accessState: {
+                    status: failure.code === 'organization_visibility_denied' || response.status === 401 || response.status === 403
+                        ? identity.source === 'anonymous' ? 'identity_missing' : 'visibility_denied'
+                        : 'unavailable',
+                    code: failure.code,
+                    message: failure.message || `DWM alerts returned HTTP ${response.status}.`,
+                    reason: failure.reason,
+                    attemptedIdentity: identityPayload(identity),
+                },
+            }
+        }
         const payload = await response.json() as { alerts?: DwmAlert[] }
-        return payload.alerts || []
+        return { alerts: payload.alerts || [], accessState: { status: 'loaded', attemptedIdentity: identityPayload(identity) } }
     } catch {
-        return []
+        return { alerts: [], accessState: { status: 'unavailable', message: 'DWM alerts API could not be reached.', attemptedIdentity: identityPayload(identity) } }
     }
 }
 
-async function loadDwmWatchlists(scope: OperatorScope): Promise<DwmWatchlistSummary[]> {
+async function loadDwmWatchlists(scope: OperatorScope, identity: DashboardViewerIdentity): Promise<DwmWatchlistSummary[]> {
     const base = process.env.TI_SCRAPER_API_BASE
     if (!base) return []
 
     try {
         const target = new URL('/v1/dwm/watchlists', base)
-        applyScope(target, scope)
+        applyScope(target, scope, identity)
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
         if (!response.ok) return []
         const payload = await response.json() as { watchlists?: DwmWatchlistSummary[] }
@@ -181,13 +259,13 @@ async function loadDwmWatchlists(scope: OperatorScope): Promise<DwmWatchlistSumm
     }
 }
 
-async function loadDwmOperations(scope: OperatorScope): Promise<DwmOperationsSnapshot | null> {
+async function loadDwmOperations(scope: OperatorScope, identity: DashboardViewerIdentity): Promise<DwmOperationsSnapshot | null> {
     const base = process.env.TI_SCRAPER_API_BASE
     if (!base) return null
 
     try {
         const target = new URL('/v1/dwm/operations', base)
-        applyScope(target, scope)
+        applyScope(target, scope, identity)
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
         if (!response.ok) return null
         return await response.json() as DwmOperationsSnapshot
@@ -196,13 +274,13 @@ async function loadDwmOperations(scope: OperatorScope): Promise<DwmOperationsSna
     }
 }
 
-async function loadDwmDeliveries(scope: OperatorScope): Promise<DwmDeliveryItem[]> {
+async function loadDwmDeliveries(scope: OperatorScope, identity: DashboardViewerIdentity): Promise<DwmDeliveryItem[]> {
     const base = process.env.TI_SCRAPER_API_BASE
     if (!base) return []
 
     try {
         const target = new URL('/v1/dwm/webhooks/deliveries', base)
-        applyScope(target, scope)
+        applyScope(target, scope, identity)
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
         if (!response.ok) return []
         const payload = await response.json() as { deliveries?: DwmDeliveryItem[] }
@@ -212,12 +290,47 @@ async function loadDwmDeliveries(scope: OperatorScope): Promise<DwmDeliveryItem[
     }
 }
 
-function applyScope(target: URL, scope: OperatorScope) {
+export function applyScope(target: URL, scope: OperatorScope, identity?: DashboardViewerIdentity) {
     if (scope.organizationId) {
         target.searchParams.set('organizationId', scope.organizationId)
+        if (identity?.userEmail) target.searchParams.set('userEmail', identity.userEmail)
+        if (identity?.userId) target.searchParams.set('userId', identity.userId)
+        if (identity?.actor) target.searchParams.set('actor', identity.actor)
         return
     }
     target.searchParams.set('tenantId', scope.tenantId)
+}
+
+async function readDwmApiFailure(response: Response): Promise<{ code?: string, message?: string, reason?: string }> {
+    try {
+        const payload = await response.json() as { error?: { code?: string, message?: string, reason?: string } }
+        return {
+            code: payload.error?.code,
+            message: payload.error?.message,
+            reason: payload.error?.reason,
+        }
+    } catch {
+        return {}
+    }
+}
+
+function identityPayload(identity: DashboardViewerIdentity): DwmAlertAccessState['attemptedIdentity'] {
+    return {
+        userEmail: identity.userEmail,
+        userId: identity.userId,
+        actor: identity.actor,
+        source: identity.source,
+    }
+}
+
+function emailLike(value: unknown) {
+    const normalized = normalizeIdentity(value)
+    return normalized && normalized.includes('@') ? normalized : undefined
+}
+
+function normalizeIdentity(value: unknown) {
+    const normalized = String(value ?? '').trim().toLowerCase()
+    return normalized || undefined
 }
 
 async function loadDwmOrganizationState(): Promise<DwmOrganizationState> {

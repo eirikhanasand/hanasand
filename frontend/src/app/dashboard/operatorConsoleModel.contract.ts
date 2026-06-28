@@ -1,5 +1,6 @@
 import { PUBLIC_TI_HANDOFF_ACTIONS, PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_HANDOFF_SOURCE, validatePublicTiHandoffPayload, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
-import { buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
+import { applyScope, resolveDashboardViewerIdentity } from './page'
+import { buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
 import type { OperatorActionRailRow, WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchPublicTiHandoff, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
@@ -114,6 +115,66 @@ const cases = buildReadinessCases({
     organizationState,
     liveAlertCount: 1,
     renderedAlertCount: 1,
+})
+const liveProofOrganizationState = {
+    organizations: [{
+        id: 'hanasand-live-proof-20260628',
+        tenantId: 'hanasand-live-proof-20260628',
+        name: 'Hanasand live proof',
+        slug: 'hanasand-live-proof-20260628',
+        status: 'active',
+        alertVisibilityPolicy: 'members',
+        createdAt: '2026-06-28T12:00:00.000Z',
+        updatedAt: '2026-06-28T12:00:00.000Z',
+    }],
+    selectedOrganization: {
+        id: 'hanasand-live-proof-20260628',
+        tenantId: 'hanasand-live-proof-20260628',
+        name: 'Hanasand live proof',
+        slug: 'hanasand-live-proof-20260628',
+        status: 'active',
+        alertVisibilityPolicy: 'members',
+        createdAt: '2026-06-28T12:00:00.000Z',
+        updatedAt: '2026-06-28T12:00:00.000Z',
+    },
+    members: [{
+        id: 'mem_live_proof',
+        organizationId: 'hanasand-live-proof-20260628',
+        email: 'live-proof@hanasand.com',
+        userId: 'user_live_proof',
+        role: 'owner',
+        status: 'active',
+        acceptedAt: '2026-06-28T12:00:00.000Z',
+        createdAt: '2026-06-28T12:00:00.000Z',
+        updatedAt: '2026-06-28T12:00:00.000Z',
+    }],
+    pendingInvites: [],
+    webhooks: [],
+} satisfies DwmOrganizationState
+const liveProofIdentity = resolveDashboardViewerIdentity({
+    userId: 'user_live_proof',
+    userName: 'Live Proof',
+    members: liveProofOrganizationState.members,
+})
+const liveProofAlertsUrl = new URL('https://ti-scraper.example/v1/dwm/alerts')
+applyScope(liveProofAlertsUrl, { tenantId: 'hanasand-live-proof-20260628', organizationId: 'hanasand-live-proof-20260628' }, liveProofIdentity)
+const deniedAlertAccess = {
+    status: 'visibility_denied',
+    code: 'organization_visibility_denied',
+    message: 'DWM alert access requires an active organization member identity.',
+    reason: 'not_member',
+    attemptedIdentity: { source: 'anonymous' },
+} satisfies DwmAlertAccessState
+const deniedAlertReadinessCases = buildReadinessCases({
+    backendConfigured: true,
+    scope: { tenantId: 'hanasand-live-proof-20260628', organizationId: 'hanasand-live-proof-20260628' },
+    watchlists: [],
+    operations: null,
+    deliveries: [],
+    organizationState: liveProofOrganizationState,
+    liveAlertCount: 0,
+    renderedAlertCount: 1,
+    alertAccessState: deniedAlertAccess,
 })
 const orgContext = buildOrgOperatingContext({
     backendConfigured: true,
@@ -473,6 +534,11 @@ const readOnlyCaseDetail = {
 }
 
 void _contract
+void (liveProofIdentity.userEmail satisfies string | undefined)
+void (liveProofAlertsUrl.searchParams.get('userEmail') satisfies string | null)
+void (liveProofAlertsUrl.searchParams.get('organizationId') satisfies string | null)
+void (deniedAlertReadinessCases.find(item => item.kind === 'alert_readiness')?.status satisfies string | undefined)
+void (deniedAlertReadinessCases.find(item => item.kind === 'alert_readiness')?.missingDependency satisfies string | undefined)
 void _requiresWorkflowPath
 void _requiresBackedActions
 void (orgContext satisfies WorkbenchOrgContext)
