@@ -111,12 +111,18 @@ describe("dwm source requests", () => {
     expect(body.request).toMatchObject({ sourcePackId: "pack_apt29_growth", label: "APT29 source-growth pack" });
     expect(body.packStatus).toMatchObject({
       sourcePackId: "pack_apt29_growth",
+      totalCandidateCount: 7,
       persistedCandidateCount: 5,
       rejectedCount: 1,
       duplicateCount: 1,
       suppressedCount: 1,
       queuedForCollectionCount: 0,
       safeOutput: { rawUnsafeRowsStored: false }
+    });
+    expect(body.packRegistry).toMatchObject({
+      id: "pack_apt29_growth",
+      candidateIds: expect.any(Array),
+      safeOutput: { rawRejectedTargetsStored: false, rawDuplicateTargetsStored: false }
     });
 
     const publicCandidate = body.acceptedCandidates.find((candidate: any) => candidate.family === "telegram_public" && candidate.status === "queued");
@@ -260,10 +266,13 @@ describe("dwm source requests", () => {
     expect(status.status).toBe(200);
     expect(statusBody.packStatus).toMatchObject({
       sourcePackId: "pack_apt29_growth",
+      totalCandidateCount: 7,
       persistedCandidateCount: 5,
+      registryOnlyCandidateCount: 2,
       activeCount: 1,
       suppressedCount: 2,
-      rejectedCount: 1,
+      rejectedCount: 2,
+      duplicateCount: 1,
       capturesObservedCount: 1,
       alertRebuild: { completedCount: 1 },
       safeOutput: { liveNetworkScrapeStarted: false }
@@ -277,7 +286,137 @@ describe("dwm source requests", () => {
       lifecycle: { collectionStatus: "capture_observed" },
       alertRebuild: { status: "completed", alertCount: 1 }
     });
+    expect(statusBody.registry.candidates.find((candidate: any) => candidate.status === "duplicate")).toMatchObject({
+      intakeStatus: "duplicate",
+      targetRef: { rawStored: false },
+      collectionTrigger: { queued: false, unsafeJobQueued: false, reason: "duplicate_skipped" }
+    });
+    expect(JSON.stringify(statusBody.registry)).not.toContain("not-a-public-channel");
+
+    const listed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_list", sourcePackLabel: "APT29 source-growth pack" })
+    }), { store, frontier });
+    const listedBody = await listed.json() as any;
+    expect(listed.status).toBe(200);
+    expect(listedBody.summary).toMatchObject({
+      packCount: 1,
+      totalCandidates: 7,
+      activeCount: 1,
+      duplicateCount: 1,
+      queuedForCollectionCount: 1
+    });
+    expect(listedBody.packs[0]).toMatchObject({ id: "pack_apt29_growth", packStatus: { capturesObservedCount: 1 } });
     expect(frontier.snapshot()).toHaveLength(1);
+  });
+
+  test("persists all-rejected source packs without storing raw unsafe rows", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_all_rejected",
+        sourcePackLabel: "All rejected pack",
+        requestedBy: "source-growth-worker",
+        candidates: [
+          { target: "not-a-public-channel", type: "telegram_channel" },
+          { target: "metadata://darkweb/credential-dump-password-payload", type: "restricted_metadata" }
+        ]
+      })
+    }), { store, frontier });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(201);
+    expect(body.summary).toMatchObject({ acceptedCount: 0, rejectedCount: 2, duplicateCount: 0 });
+    expect(body.packStatus).toMatchObject({
+      sourcePackId: "pack_all_rejected",
+      totalCandidateCount: 2,
+      persistedCandidateCount: 0,
+      registryOnlyCandidateCount: 2,
+      rejectedCount: 2,
+      queuedForCollectionCount: 0
+    });
+    expect(store.listSources()).toHaveLength(0);
+    expect(frontier.snapshot()).toHaveLength(0);
+
+    const status = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_status", sourcePackId: "pack_all_rejected" })
+    }), { store, frontier });
+    const statusBody = await status.json() as any;
+    expect(status.status).toBe(200);
+    expect(statusBody.registry).toMatchObject({
+      id: "pack_all_rejected",
+      candidateIds: [expect.any(String), expect.any(String)],
+      safeOutput: {
+        rawUnsafeRowsStored: false,
+        rawRejectedTargetsStored: false,
+        restrictedPayloadDownloadAllowed: false
+      }
+    });
+    expect(statusBody.registry.candidates.every((candidate: any) => candidate.targetRef.rawStored === false)).toBe(true);
+    expect(statusBody.packStatus.failureReasons).toHaveLength(2);
+    expect(JSON.stringify(statusBody.registry)).not.toContain("not-a-public-channel");
+    expect(JSON.stringify(statusBody.registry)).not.toContain("credential-dump-password-payload");
+
+    const listed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_list", sourcePackLabel: "All rejected pack" })
+    }), { store, frontier });
+    const listedBody = await listed.json() as any;
+    expect(listed.status).toBe(200);
+    expect(listedBody.summary).toMatchObject({ packCount: 1, totalCandidates: 2, rejectedCount: 2, queuedForCollectionCount: 0 });
+  });
+
+  test("persists duplicate-only packs with source references and no queued work", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const existing = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ target: "@duplicate_registry_cti", type: "telegram_channel", tenantId: "tenant_acme", activate: false })
+    }), { store, frontier });
+    const existingBody = await existing.json() as any;
+
+    const pack = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_duplicate_only",
+        sourcePackLabel: "Duplicate-only pack",
+        tenantId: "tenant_acme",
+        candidates: [
+          { target: "@duplicate_registry_cti", type: "telegram_channel" }
+        ]
+      })
+    }), { store, frontier });
+    const packBody = await pack.json() as any;
+
+    expect(pack.status).toBe(201);
+    expect(packBody.summary).toMatchObject({ acceptedCount: 0, rejectedCount: 0, duplicateCount: 1 });
+    expect(packBody.packStatus).toMatchObject({
+      sourcePackId: "pack_duplicate_only",
+      totalCandidateCount: 1,
+      persistedCandidateCount: 0,
+      registryOnlyCandidateCount: 1,
+      duplicateCount: 1,
+      queuedForCollectionCount: 0
+    });
+    expect(store.listSources()).toHaveLength(1);
+    expect(frontier.snapshot()).toHaveLength(0);
+
+    const status = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_status", sourcePackId: "pack_duplicate_only" })
+    }), { store, frontier });
+    const statusBody = await status.json() as any;
+    expect(status.status).toBe(200);
+    expect(statusBody.registry.candidates[0]).toMatchObject({
+      status: "duplicate",
+      duplicateOf: existingBody.source.id,
+      targetRef: { rawStored: false },
+      collectionTrigger: { queued: false, unsafeJobQueued: false, reason: "duplicate_skipped" }
+    });
+    expect(JSON.stringify(statusBody.registry)).not.toContain("@duplicate_registry_cti");
   });
 
   test("persists restricted metadata source candidates instead of dropping them into a queue only", async () => {

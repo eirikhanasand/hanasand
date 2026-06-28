@@ -24,7 +24,7 @@ type DwmSourceRequestBody = {
   sourcePackId?: string;
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
-  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review";
+  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list";
   packAction?: "approve" | "promote" | "reject" | "retry" | "suppress";
   sourceId?: string;
   candidateId?: string;
@@ -48,6 +48,51 @@ type DwmSourcePackCandidate = {
   suppress?: boolean;
   reason?: string;
 };
+
+type SourcePackRegistry = {
+  id: string;
+  label: string;
+  tenantId?: string;
+  scope?: string;
+  requestedBy: string;
+  requestedAt: string;
+  updatedAt: string;
+  requestId: string;
+  safeOutput: Record<string, boolean>;
+  candidates: SourcePackRegistryCandidate[];
+  audit: Array<Record<string, unknown>>;
+};
+
+type SourcePackRegistryCandidate = {
+  id: string;
+  sourceId?: string;
+  family: string;
+  type: string;
+  index: number;
+  targetRef: {
+    hash: string;
+    preview: string;
+    family: string;
+    rawStored: false;
+  };
+  requestedBy: string;
+  requestedAt: string;
+  status: string;
+  intakeStatus: string;
+  decision?: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  reason?: string;
+  duplicateOf?: string;
+  failure?: Record<string, unknown>;
+  policyBoundary?: Record<string, unknown>;
+  validationResult?: Record<string, unknown>;
+  parserStatus?: string;
+  healthStatus?: string;
+  retryHint?: string;
+};
+
+const sourcePackRegistries = new WeakMap<object, Map<string, SourcePackRegistry>>();
 
 export async function createDwmSourceRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<DwmSourceRequestBody>(request);
@@ -175,6 +220,8 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
   const accepted: Array<Record<string, unknown>> = [];
   const rejected: Array<Record<string, unknown>> = [];
   const duplicates: Array<Record<string, unknown>> = [];
+  const registryCandidates: SourcePackRegistryCandidate[] = [];
+  const requestId = stableId("dwm_candidate_pack_request", `${sourcePackId}:${generatedAt}`);
 
   for (const [index, input] of (body.candidates ?? []).slice(0, limit).entries()) {
     const target = String(input.target ?? "").trim();
@@ -193,16 +240,32 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
       : createTelegramSourceFromTarget(target, requestBody, options);
 
     if (result.kind === "error") {
+      const failure = {
+        code: result.code,
+        message: result.message,
+        retryHint: type === "telegram_channel" ? "submit a public @handle or https://t.me/<channel> URL" : "submit a metadata-only target without payload, credential, or download intent"
+      };
       rejected.push({
         sourcePackId,
         sourcePackLabel,
         index,
         target,
         type,
-        code: result.code,
-        message: result.message,
-        retryHint: type === "telegram_channel" ? "submit a public @handle or https://t.me/<channel> URL" : "submit a metadata-only target without payload, credential, or download intent"
+        ...failure
       });
+      registryCandidates.push(sourcePackRegistryCandidate({
+        sourcePackId,
+        index,
+        target,
+        type,
+        requestedBy: input.requestedBy ?? body.requestedBy ?? "source-pack",
+        requestedAt: generatedAt,
+        status: "rejected",
+        intakeStatus: "rejected",
+        decision: "rejected_at_intake",
+        reason: result.message,
+        failure
+      }));
       continue;
     }
     if (result.kind === "duplicate") {
@@ -215,6 +278,19 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
         duplicateOf: result.duplicateOf,
         nextAction: "Use the existing source or change the source scope; duplicate candidates are not queued."
       });
+      registryCandidates.push(sourcePackRegistryCandidate({
+        sourcePackId,
+        index,
+        target,
+        type,
+        requestedBy: input.requestedBy ?? body.requestedBy ?? "source-pack",
+        requestedAt: generatedAt,
+        status: "duplicate",
+        intakeStatus: "duplicate",
+        decision: "duplicate_skipped",
+        duplicateOf: result.duplicateOf,
+        reason: "Duplicate candidate skipped during intake"
+      }));
       continue;
     }
 
@@ -236,19 +312,53 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
       })
       : packedSource;
     accepted.push(sourcePackCandidateItem(source, input.suppress === true ? "suppressed" : "accepted"));
+    registryCandidates.push(sourcePackRegistryCandidate({
+      sourcePackId,
+      index,
+      target,
+      type,
+      requestedBy: input.requestedBy ?? body.requestedBy ?? "source-pack",
+      requestedAt: generatedAt,
+      status: source.status === "suppressed" ? "suppressed" : sourceCandidate(source).status,
+      intakeStatus: input.suppress === true ? "suppressed" : "accepted",
+      decision: input.suppress === true ? "suppressed_at_intake" : "queued_for_review",
+      reason: input.suppress === true ? input.reason ?? "source-pack candidate suppressed during intake" : undefined,
+      source
+    }));
   }
+
+  const registry = upsertSourcePackRegistry(options, {
+    id: sourcePackId,
+    label: sourcePackLabel,
+    tenantId: body.tenantId,
+    scope: body.scope,
+    requestedBy: body.requestedBy ?? "source-pack",
+    requestedAt: generatedAt,
+    updatedAt: generatedAt,
+    requestId,
+    safeOutput: sourcePackSafeOutput(),
+    candidates: registryCandidates,
+    audit: [{
+      at: generatedAt,
+      action: "pack_intake",
+      actor: body.requestedBy ?? "source-pack",
+      reason: "source candidate pack submitted",
+      acceptedCount: accepted.length,
+      rejectedCount: rejected.length,
+      duplicateCount: duplicates.length
+    }]
+  });
 
   const packStatus = sourcePackRollup({
     sourcePackId,
     sourcePackLabel,
     sources: sourcesForPack(sourcePackId, options),
-    rejected,
-    duplicates
+    registry
   });
 
   return {
     request: {
-      id: stableId("dwm_candidate_pack_request", `${sourcePackId}:${generatedAt}`),
+      id: requestId,
       type: "candidate_pack",
       sourcePackId,
       label: sourcePackLabel,
@@ -270,11 +380,8 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
       queuedForCollectionCount: accepted.filter((item) => (item.operationalNextStep as any)?.collectionTrigger?.queued === true).length
     },
     packStatus,
-    safeOutput: {
-      rawUnsafeRowsStored: false,
-      liveNetworkScrapeStarted: false,
-      restrictedPayloadDownloadAllowed: false
-    }
+    packRegistry: sourcePackRegistryStatus(registry, options),
+    safeOutput: sourcePackSafeOutput()
   };
 }
 
@@ -344,6 +451,134 @@ function saveSourcePackMetadata(source: SourceRecord, options: ApiServerOptions,
       }
     }
   } as SourceRecord);
+}
+
+function sourcePackStore(options: ApiServerOptions): Map<string, SourcePackRegistry> {
+  const key = options.store as object;
+  let registry = sourcePackRegistries.get(key);
+  if (!registry) {
+    registry = new Map<string, SourcePackRegistry>();
+    sourcePackRegistries.set(key, registry);
+  }
+  return registry;
+}
+
+function upsertSourcePackRegistry(options: ApiServerOptions, pack: SourcePackRegistry): SourcePackRegistry {
+  const registry = sourcePackStore(options);
+  const previous = registry.get(pack.id);
+  const next = previous ? {
+    ...previous,
+    ...pack,
+    candidates: dedupePackCandidates([...previous.candidates, ...pack.candidates]),
+    audit: [...previous.audit, ...pack.audit]
+  } : pack;
+  registry.set(pack.id, next);
+  return next;
+}
+
+function updateSourcePackRegistryDecision(options: ApiServerOptions, source: SourceRecord, input: {
+  action: string;
+  actor: string;
+  reason?: string;
+  at: string;
+}) {
+  const candidate = sourceCandidate(source);
+  const sourcePackId = String(candidate.sourcePackId ?? "").trim();
+  if (!sourcePackId) return;
+  const registry = sourcePackStore(options);
+  const pack = registry.get(sourcePackId);
+  if (!pack) return;
+  registry.set(sourcePackId, {
+    ...pack,
+    updatedAt: input.at,
+    candidates: pack.candidates.map((item) => item.id === candidate.id ? {
+      ...item,
+      status: candidate.status,
+      decision: input.action,
+      decidedBy: input.actor,
+      decidedAt: input.at,
+      reason: input.reason,
+      sourceId: source.id,
+      policyBoundary: candidate.policyBoundary,
+      validationResult: candidate.validationResult,
+      parserStatus: candidate.parserStatus,
+      healthStatus: candidate.healthStatus
+    } : item),
+    audit: [
+      ...pack.audit,
+      { at: input.at, action: input.action, actor: input.actor, reason: input.reason, candidateId: candidate.id, sourceId: source.id }
+    ]
+  });
+}
+
+function dedupePackCandidates(candidates: SourcePackRegistryCandidate[]): SourcePackRegistryCandidate[] {
+  const seen = new Map<string, SourcePackRegistryCandidate>();
+  for (const candidate of candidates) seen.set(candidate.id, candidate);
+  return [...seen.values()].sort((a, b) => a.index - b.index);
+}
+
+function sourcePackRegistryCandidate(input: {
+  sourcePackId: string;
+  index: number;
+  target: string;
+  type: string;
+  requestedBy: string;
+  requestedAt: string;
+  status: string;
+  intakeStatus: string;
+  source?: SourceRecord;
+  decision?: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  reason?: string;
+  duplicateOf?: string;
+  failure?: Record<string, unknown>;
+  retryHint?: string;
+}): SourcePackRegistryCandidate {
+  const candidate = input.source ? sourceCandidate(input.source) : undefined;
+  const family = candidate?.family ?? (input.type === "restricted_metadata" ? "darkweb_metadata" : "telegram_public");
+  return {
+    id: candidate?.id ?? stableId("dwm_source_pack_candidate", `${input.sourcePackId}:${input.index}:${input.type}:${input.target}`),
+    sourceId: input.source?.id,
+    family,
+    type: input.type,
+    index: input.index,
+    targetRef: safeTargetRef(input.target, family),
+    requestedBy: input.requestedBy,
+    requestedAt: input.requestedAt,
+    status: input.status,
+    intakeStatus: input.intakeStatus,
+    decision: input.decision,
+    decidedBy: input.decidedBy,
+    decidedAt: input.decidedAt,
+    reason: input.reason,
+    duplicateOf: input.duplicateOf,
+    failure: input.failure,
+    policyBoundary: candidate?.policyBoundary ?? (family === "darkweb_metadata" ? restrictedMetadataBoundary() : publicTelegramBoundary()),
+    validationResult: candidate?.validationResult ?? (input.failure ? { allowed: false, reason: input.reason ?? input.failure?.message, checkedAt: input.requestedAt } : undefined),
+    parserStatus: candidate?.parserStatus,
+    healthStatus: candidate?.healthStatus,
+    retryHint: input.retryHint ?? (input.failure?.retryHint ? String(input.failure.retryHint) : undefined)
+  };
+}
+
+function safeTargetRef(target: string, family: string) {
+  return {
+    hash: hashContent(target),
+    preview: `${family}:${hashContent(target).slice(0, 12)}`,
+    family,
+    rawStored: false as const
+  };
+}
+
+function sourcePackSafeOutput() {
+  return {
+    rawUnsafeRowsStored: false,
+    rawRejectedTargetsStored: false,
+    rawDuplicateTargetsStored: false,
+    liveNetworkScrapeStarted: false,
+    restrictedPayloadDownloadAllowed: false
+  };
 }
 
 function handleSourcePackReview(body: DwmSourceRequestBody, options: ApiServerOptions): Response {
@@ -416,6 +651,12 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
       approveMetadataOnly: isRestrictedMetadataSource(source)
     });
     const operations = persistOperationalNextStep(activated, options, "pack_review");
+    updateSourcePackRegistryDecision(options, operations.source, {
+      action: "approved",
+      actor: input.actor,
+      reason: body.reason,
+      at: input.reviewedAt
+    });
     return sourcePackReviewResult(operations.source, "approved", {
       reviewedAt: input.reviewedAt,
       actor: input.actor,
@@ -435,6 +676,12 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
       parserStatus: "not_scheduled",
       activationState: "rejected"
     });
+    updateSourcePackRegistryDecision(options, rejected, {
+      action: "rejected",
+      actor: input.actor,
+      reason: body.reason,
+      at: input.reviewedAt
+    });
     return sourcePackReviewResult(rejected, "rejected", { reviewedAt: input.reviewedAt, actor: input.actor, reason: body.reason });
   }
 
@@ -447,6 +694,12 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
       healthStatus: "suppressed",
       parserStatus: "not_scheduled",
       activationState: "suppressed"
+    });
+    updateSourcePackRegistryDecision(options, suppressed, {
+      action: "suppressed",
+      actor: input.actor,
+      reason: body.reason,
+      at: input.reviewedAt
     });
     return sourcePackReviewResult(suppressed, "suppressed", { reviewedAt: input.reviewedAt, actor: input.actor, reason: body.reason });
   }
@@ -466,6 +719,12 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
     errorCode: body.errorCode ?? "pack_retry_requested",
     reason: body.reason ?? "operator requested source-pack retry"
   }, options);
+  updateSourcePackRegistryDecision(options, failed.source, {
+    action: "retry_scheduled",
+    actor: input.actor,
+    reason: body.reason,
+    at: input.reviewedAt
+  });
   return sourcePackReviewResult(failed.source, "retry_scheduled", {
     reviewedAt: input.reviewedAt,
     actor: input.actor,
@@ -504,20 +763,43 @@ function sourcePackReviewResult(source: SourceRecord | undefined, reviewStatus: 
 }
 
 function sourcePackStatusResponse(body: DwmSourceRequestBody, options: ApiServerOptions) {
-  const sources = lookupSourcePackReviewSources(body, options);
-  const sourcePackId = String(body.sourcePackId ?? (sources[0] ? sourceCandidate(sources[0]).sourcePackId : "") ?? "").trim();
-  const sourcePackLabel = String((sources[0] ? sourceCandidate(sources[0]).sourcePackLabel : undefined) ?? (sourcePackId || "source pack"));
+  const registry = findSourcePackRegistry(body, options);
+  const sources = registry ? sourcesForPack(registry.id, options) : lookupSourcePackReviewSources(body, options);
+  const sourcePackId = String(registry?.id ?? body.sourcePackId ?? (sources[0] ? sourceCandidate(sources[0]).sourcePackId : "") ?? "").trim();
+  const sourcePackLabel = String(registry?.label ?? (sources[0] ? sourceCandidate(sources[0]).sourcePackLabel : undefined) ?? (sourcePackId || "source pack"));
+  const registryStatus = registry ? sourcePackRegistryStatus(registry, options) : undefined;
   return {
     action: "pack_status",
     sourcePackId: sourcePackId || undefined,
     sourcePackLabel,
-    candidates: sources.map((source) => sourcePackStatusItem(source)),
-    packStatus: sourcePackRollup({ sourcePackId: sourcePackId || undefined, sourcePackLabel, sources }),
-    safeOutput: {
-      rawUnsafeRowsStored: false,
-      liveNetworkScrapeStarted: false,
-      restrictedPayloadDownloadAllowed: false
-    }
+    candidates: registryStatus?.candidates ?? sources.map((source) => sourcePackStatusItem(source)),
+    packStatus: sourcePackRollup({ sourcePackId: sourcePackId || undefined, sourcePackLabel, sources, registry }),
+    registry: registryStatus,
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
+function sourcePackListResponse(body: DwmSourceRequestBody, options: ApiServerOptions) {
+  const label = String(body.sourcePackLabel ?? "").trim();
+  const tenantId = String(body.tenantId ?? "").trim();
+  const packs = [...sourcePackStore(options).values()]
+    .filter((pack) => !label || pack.label === label)
+    .filter((pack) => !tenantId || pack.tenantId === tenantId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, Math.max(1, Math.min(body.limit ?? 100, 100)))
+    .map((pack) => sourcePackRegistryStatus(pack, options));
+  return {
+    action: "pack_list",
+    packs,
+    summary: {
+      packCount: packs.length,
+      totalCandidates: packs.reduce((sum, pack) => sum + pack.packStatus.totalCandidateCount, 0),
+      activeCount: packs.reduce((sum, pack) => sum + pack.packStatus.activeCount, 0),
+      rejectedCount: packs.reduce((sum, pack) => sum + pack.packStatus.rejectedCount, 0),
+      duplicateCount: packs.reduce((sum, pack) => sum + pack.packStatus.duplicateCount, 0),
+      queuedForCollectionCount: packs.reduce((sum, pack) => sum + pack.packStatus.queuedForCollectionCount, 0)
+    },
+    safeOutput: sourcePackSafeOutput()
   };
 }
 
@@ -542,8 +824,112 @@ function sourcePackStatusItem(source: SourceRecord) {
   };
 }
 
-function lookupSourcePackReviewSources(body: DwmSourceRequestBody, options: ApiServerOptions): SourceRecord[] {
+function sourcePackRegistryStatus(pack: SourcePackRegistry, options: ApiServerOptions) {
+  const sources = sourcesForPack(pack.id, options);
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const candidates = pack.candidates.map((candidate) => {
+    const source = candidate.sourceId ? sourceById.get(candidate.sourceId) : undefined;
+    if (source) {
+      return {
+        ...sourcePackStatusItem(source),
+        index: candidate.index,
+        intakeStatus: candidate.intakeStatus,
+        decision: candidate.decision,
+        decidedBy: candidate.decidedBy,
+        decidedAt: candidate.decidedAt,
+        reason: candidate.reason,
+        targetRef: candidate.targetRef
+      };
+    }
+    return {
+      id: candidate.id,
+      sourcePackId: pack.id,
+      sourcePackLabel: pack.label,
+      sourceId: candidate.sourceId,
+      index: candidate.index,
+      family: candidate.family,
+      type: candidate.type,
+      targetRef: candidate.targetRef,
+      status: candidate.status,
+      intakeStatus: candidate.intakeStatus,
+      decision: candidate.decision,
+      decidedBy: candidate.decidedBy,
+      decidedAt: candidate.decidedAt,
+      reason: candidate.reason,
+      duplicateOf: candidate.duplicateOf,
+      failure: candidate.failure,
+      retryHint: candidate.retryHint,
+      health: {
+        status: candidate.status === "duplicate" ? "duplicate_skipped" : candidate.status === "rejected" ? "blocked" : candidate.healthStatus ?? "not_tested",
+        lastError: candidate.failure?.code,
+        lastCollectionOutcome: undefined
+      },
+      parser: {
+        status: "not_scheduled",
+        profile: candidate.family === "darkweb_metadata" ? "restricted_metadata" : "public_channel_handoff",
+        warnings: candidate.failure?.message ? [String(candidate.failure.message)] : []
+      },
+      lifecycle: {
+        status: candidate.status,
+        activationState: candidate.decision ?? candidate.status,
+        parserStatus: "not_scheduled",
+        healthStatus: candidate.status === "duplicate" ? "duplicate_skipped" : "blocked",
+        persisted: true,
+        registryOnly: true
+      },
+      policyBoundary: candidate.policyBoundary,
+      validationResult: candidate.validationResult,
+      collectionTrigger: {
+        id: stableId("dwm_collection_trigger", `${candidate.id}:registry_only`),
+        type: "frontier_collection",
+        queued: false,
+        unsafeJobQueued: false,
+        reason: candidate.status === "duplicate" ? "duplicate_skipped" : "intake_rejected",
+        candidateId: candidate.id,
+        policyBoundary: candidate.policyBoundary,
+        parserStatus: "not_scheduled"
+      },
+      alertRebuild: {
+        id: stableId("dwm_alert_rebuild_trigger", `${candidate.id}:registry_only`),
+        candidateId: candidate.id,
+        queued: false,
+        skipped: true,
+        reason: "no_capture_for_registry_only_candidate"
+      },
+      operationalNextStep: candidate.status === "duplicate"
+        ? "Use the existing source referenced by duplicateOf; no collection is queued for this row."
+        : "Fix the candidate target or policy boundary, then resubmit it in a new pack."
+    };
+  });
+  return {
+    id: pack.id,
+    label: pack.label,
+    tenantId: pack.tenantId,
+    scope: pack.scope,
+    requestedBy: pack.requestedBy,
+    requestedAt: pack.requestedAt,
+    updatedAt: pack.updatedAt,
+    requestId: pack.requestId,
+    candidates,
+    candidateIds: candidates.map((candidate) => candidate.id),
+    sourceIds: candidates.map((candidate) => candidate.sourceId).filter(Boolean),
+    packStatus: sourcePackRollup({ sourcePackId: pack.id, sourcePackLabel: pack.label, sources, registry: pack }),
+    audit: pack.audit,
+    safeOutput: pack.safeOutput
+  };
+}
+
+function findSourcePackRegistry(body: DwmSourceRequestBody, options: ApiServerOptions): SourcePackRegistry | undefined {
+  const registry = sourcePackStore(options);
   const sourcePackId = String(body.sourcePackId ?? "").trim();
+  if (sourcePackId && registry.has(sourcePackId)) return registry.get(sourcePackId);
+  const label = String(body.sourcePackLabel ?? "").trim();
+  if (label) return [...registry.values()].find((pack) => pack.label === label);
+  return undefined;
+}
+
+function lookupSourcePackReviewSources(body: DwmSourceRequestBody, options: ApiServerOptions): SourceRecord[] {
+  const sourcePackId = String(body.sourcePackId ?? findSourcePackRegistry(body, options)?.id ?? "").trim();
   const sourceIds = new Set([body.sourceId, ...(body.sourceIds ?? [])].filter(Boolean).map(String));
   const candidateIds = new Set([body.candidateId, ...(body.candidateIds ?? [])].filter(Boolean).map(String));
   return options.store.listSources().filter((source) => {
@@ -562,10 +948,14 @@ function sourcePackRollup(input: {
   sourcePackId?: string;
   sourcePackLabel?: string;
   sources: SourceRecord[];
+  registry?: SourcePackRegistry;
   rejected?: Array<Record<string, unknown>>;
   duplicates?: Array<Record<string, unknown>>;
 }) {
   const candidates = input.sources.map((source) => ({ source, candidate: sourceCandidate(source) }));
+  const registryOnly = (input.registry?.candidates ?? []).filter((item) => !item.sourceId);
+  const registryRejectedCount = registryOnly.filter((item) => item.status === "rejected").length;
+  const registryDuplicateCount = registryOnly.filter((item) => item.status === "duplicate").length;
   const queuedJobIds = candidates
     .map(({ candidate }) => candidate.collectionTrigger?.jobId ?? candidate.collectionTrigger?.taskId)
     .filter(Boolean);
@@ -584,30 +974,43 @@ function sourcePackRollup(input: {
   const alertRebuild = candidates
     .map(({ candidate }) => candidate.alertRebuild)
     .filter(Boolean);
-  const byStatus = candidates.reduce<Record<string, number>>((acc, { candidate }) => {
-    const status = String(candidate.status ?? "unknown");
+  const byStatus = [
+    ...candidates.map(({ candidate }) => String(candidate.status ?? "unknown")),
+    ...registryOnly.map((candidate) => candidate.status)
+  ].reduce<Record<string, number>>((acc, status) => {
     acc[status] = (acc[status] ?? 0) + 1;
     return acc;
   }, {});
-  const byFamily = candidates.reduce<Record<string, number>>((acc, { candidate }) => {
-    const family = String(candidate.family ?? "unknown");
+  const byFamily = [
+    ...candidates.map(({ candidate }) => String(candidate.family ?? "unknown")),
+    ...registryOnly.map((candidate) => candidate.family)
+  ].reduce<Record<string, number>>((acc, family) => {
     acc[family] = (acc[family] ?? 0) + 1;
     return acc;
   }, {});
-  const policyBoundaries = candidates.map(({ candidate }) => ({
-    candidateId: candidate.id,
-    family: candidate.family,
-    policyBoundary: candidate.policyBoundary
-  }));
+  const policyBoundaries = [
+    ...candidates.map(({ candidate }) => ({
+      candidateId: candidate.id,
+      family: candidate.family,
+      policyBoundary: candidate.policyBoundary
+    })),
+    ...registryOnly.map((candidate) => ({
+      candidateId: candidate.id,
+      family: candidate.family,
+      policyBoundary: candidate.policyBoundary
+    }))
+  ];
   return {
     sourcePackId: input.sourcePackId,
     sourcePackLabel: input.sourcePackLabel,
+    totalCandidateCount: input.registry?.candidates.length ?? candidates.length + (input.rejected?.length ?? 0) + (input.duplicates?.length ?? 0),
     persistedCandidateCount: candidates.length,
+    registryOnlyCandidateCount: registryOnly.length,
     acceptedCount: candidates.filter(({ source }) => !["rejected", "suppressed"].includes(String(source.status))).length,
     activeCount: candidates.filter(({ source }) => source.status === "active").length,
     approvalRequiredCount: candidates.filter(({ candidate }) => candidate.status === "approval_required").length,
-    rejectedCount: candidates.filter(({ source }) => source.status === "rejected").length + (input.rejected?.length ?? 0),
-    duplicateCount: input.duplicates?.length ?? 0,
+    rejectedCount: candidates.filter(({ source }) => source.status === "rejected").length + registryRejectedCount + (input.registry ? 0 : input.rejected?.length ?? 0),
+    duplicateCount: registryDuplicateCount + (input.registry ? 0 : input.duplicates?.length ?? 0),
     suppressedCount: candidates.filter(({ source }) => source.status === "suppressed").length,
     queuedJobIds,
     queuedForCollectionCount: queuedJobIds.length,
@@ -620,6 +1023,17 @@ function sourcePackRollup(input: {
     },
     lastCaptureOutcomes,
     retryBackoff,
+    failureReasons: [
+      ...registryOnly.map((item) => ({ candidateId: item.id, code: item.failure?.code, message: item.failure?.message, retryHint: item.retryHint })),
+      ...candidates
+        .filter(({ candidate }) => candidate.lastCollectionOutcome?.status === "failed")
+        .map(({ candidate }) => ({
+          candidateId: candidate.id,
+          code: candidate.lastCollectionOutcome.errorCode,
+          message: candidate.lastCollectionOutcome.reason,
+          retryHint: candidate.lastCollectionOutcome.retryAfter ? `retry after ${candidate.lastCollectionOutcome.retryAfter}` : undefined
+        }))
+    ].filter((item) => item.code || item.message),
     byStatus,
     byFamily,
     policyBoundaries,
@@ -697,6 +1111,7 @@ function telegramSourceFromRequest(input: { target: string; channel: string; bod
 }
 
 function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiServerOptions): Response {
+  if (body.action === "pack_list") return json(sourcePackListResponse(body, options), 200);
   if (body.action === "pack_status") return json(sourcePackStatusResponse(body, options), 200);
   if (body.action === "pack_review") return handleSourcePackReview(body, options);
 
