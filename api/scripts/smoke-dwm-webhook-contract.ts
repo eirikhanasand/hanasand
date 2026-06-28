@@ -160,6 +160,96 @@ expect(bridgeSerialized.includes('watchlist_bridge_contract'), 'Dispatch payload
 expect(bridgeSerialized.includes('dwm_dedupe_bridge_contract'), 'Dispatch payload should propagate dedupe key.', bridgePayload)
 expect(bridgeSerialized.includes('/dashboard/dwm?alert=alert_bridge_contract'), 'Dispatch payload should propagate case path.', bridgePayload)
 
+const replayWorkflowAlert = {
+    id: 'alert_replay_contract',
+    title: 'Replay Acme credential exposure',
+    severity: 'high',
+    company: 'Acme Security',
+    domain: 'acme-security.com',
+    sourceFamily: 'telegram_public',
+    claimSummary: 'Replay should resend the customer notification without changing analyst workflow state.',
+    matchedTerm: { value: 'acme-security.com', kind: 'domain' },
+    evidenceCount: 3,
+    evidence: [
+        { label: 'Public channel match', detail: 'Public channel message matched acme-security.com.' },
+    ],
+    dedupeKey: 'dwm_dedupe_replay_contract',
+    route: 'identity_response',
+    casePath: '/v1/cases/case_replay_contract?alertId=alert_replay_contract&dedupeKey=dwm_dedupe_replay_contract',
+    reviewState: 'needs_review',
+    deliveryState: 'ready_to_send',
+    replayCount: 2,
+    workflowContext: {
+        caseIdCandidate: 'case_replay_contract',
+        casePath: '/v1/cases/case_replay_contract?alertId=alert_replay_contract&dedupeKey=dwm_dedupe_replay_contract',
+        dedupeKey: 'dwm_dedupe_replay_contract',
+        watchlistItemIds: ['watchlist_item_replay_contract'],
+        evidenceCount: 3,
+        recommendedRoute: 'identity_response',
+    },
+    webhookContext: {
+        alertId: 'alert_replay_contract',
+        organizationId: 'org_contract',
+        watchlistItemIds: ['watchlist_item_replay_contract'],
+        sourceFamily: 'telegram_public',
+        evidenceCount: 3,
+        dedupeKey: 'dwm_dedupe_replay_contract',
+        recommendedRoute: 'identity_response',
+        casePath: '/v1/cases/case_replay_contract?alertId=alert_replay_contract&dedupeKey=dwm_dedupe_replay_contract',
+    },
+    watchlist: {
+        id: 'watchlist_item_replay_contract',
+        name: 'Replay contract watchlist',
+        terms: ['acme-security.com'],
+    },
+}
+const replayWorkflowBefore = JSON.stringify(replayWorkflowAlert)
+const replayPlan = buildDwmAlertWebhookDispatchPlan({
+    ownerId: 'owner_contract',
+    input: {
+        organizationId: 'org_contract',
+        eventType: 'dwm.alert.replayed',
+        alert: replayWorkflowAlert,
+    },
+    destinations: [
+        {
+            id: 'destination_replay_contract',
+            org_id: 'org_contract',
+            name: 'Replay Discord',
+            kind: 'discord',
+            status: 'active',
+            events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        },
+    ],
+})
+const replayPayload = buildDwmAlertDeliveryPayload({
+    destination: {
+        id: replayPlan.selectedDestinations[0].id,
+        kind: 'discord',
+        name: replayPlan.selectedDestinations[0].name,
+        org_id: replayPlan.orgId,
+    },
+    eventType: replayPlan.eventType,
+    deliveryId: 'delivery_replay_contract',
+    alert: replayPlan.alert,
+}) as Record<string, unknown>
+const replayContext = replayPayload._hanasand as Record<string, unknown>
+const replayAlertContext = replayContext.alert as Record<string, unknown>
+const replayDeliveryContext = replayContext.delivery as Record<string, unknown>
+const replayWatchlistContext = replayContext.watchlist as Record<string, unknown>
+const replaySerialized = JSON.stringify(replayPayload)
+
+expect(replayPlan.selectedDestinations.length === 1, 'Replay dispatch should select the active org destination.', replayPlan)
+expect(replayPlan.eventType === 'dwm.alert.replayed', 'Replay dispatch should preserve replay event type.', replayPlan)
+expect(replayAlertContext.id === 'alert_replay_contract', 'Replay payload should link to the same alert id.', replayPayload)
+expect(replayDeliveryContext.replay === true, 'Replay payload should mark delivery as replay.', replayPayload)
+expect(replayDeliveryContext.dedupeKey === 'dwm_dedupe_replay_contract', 'Replay payload should link to the same alert dedupe key.', replayPayload)
+expect(replayDeliveryContext.casePath === replayWorkflowAlert.casePath, 'Replay payload should link to the same case path.', replayPayload)
+expect(replayAlertContext.deliveryState === 'ready_to_send', 'Replay payload should preserve alert delivery state.', replayPayload)
+expect(replayWatchlistContext.id === 'watchlist_item_replay_contract', 'Replay payload should preserve watchlist context.', replayPayload)
+expect(replaySerialized.includes('dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract'), 'Replay payload should use event-scoped idempotency for the same dedupe key.', replayPayload)
+expect(JSON.stringify(replayWorkflowAlert) === replayWorkflowBefore, 'Replay dispatch/payload builders should not mutate alert workflow state.', replayWorkflowAlert)
+
 console.log(JSON.stringify({
     ok: true,
     checked: [
@@ -172,6 +262,8 @@ console.log(JSON.stringify({
         'disabled destination skip',
         'org/watchlist context propagation',
         'route/dedupe/case context',
+        'replay alert/dedupe/case linkage',
+        'replay workflow immutability',
         'secret-free payload',
     ],
 }, null, 2))
