@@ -160,6 +160,13 @@ const SECRET_KEY_SOURCE = process.env.DWM_WEBHOOK_SECRET_KEY
     || 'hanasand-dwm-webhooks-development-key'
 const SECRET_KEY = crypto.createHash('sha256').update(SECRET_KEY_SOURCE).digest()
 const IV_LENGTH = 12
+const DISCORD_CONTENT_LIMIT = 2000
+const DISCORD_EMBED_TITLE_LIMIT = 256
+const DISCORD_EMBED_DESCRIPTION_LIMIT = 4096
+const DISCORD_EMBED_FIELD_NAME_LIMIT = 256
+const DISCORD_EMBED_FIELD_VALUE_LIMIT = 1024
+const DISCORD_EMBED_FIELD_LIMIT = 25
+const DISCORD_EMBED_FOOTER_TEXT_LIMIT = 2048
 
 export function toDwmWebhookDestination(row: DwmWebhookDestinationRow) {
     return {
@@ -863,11 +870,13 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
                 provenance: payloadAlert.provenance || null,
                 dedupeKey: clean(payloadAlert.dedupeKey) || clean(payloadDelivery.dedupeKey) || dedupeFromIdempotencyKey(delivery.idempotencyKey),
                 casePath: clean(payloadAlert.casePath) || clean(payloadDelivery.casePath) || delivery.casePath,
+                alertUrl: clean(payloadAlert.alertUrl) || clean(payloadDelivery.alertUrl),
                 caseId: clean(payloadAlert.caseId) || clean(payloadAlert.caseIdCandidate),
             },
             delivery: payloadDelivery,
             links: {
                 casePath: clean(payloadDelivery.casePath) || clean(payloadAlert.casePath) || delivery.casePath,
+                alertUrl: clean(payloadDelivery.alertUrl) || clean(payloadAlert.alertUrl),
             },
         },
         response: {
@@ -977,6 +986,7 @@ export function buildDwmAlertWebhookNotificationInput(
         recordOrEmpty(alert.webhookDelivery).recommendedRoute
     )
     const casePath = firstClean(alert.casePath, alert.caseUrl, webhookContext.casePath, workflowContext.casePath)
+    const alertUrl = firstClean(alert.alertUrl, alert.alertURL, alert.deepLink, alert.url, webhookContext.alertUrl, webhookContext.deepLink, workflowContext.alertUrl, workflowContext.deepLink)
     const caseId = firstClean(alert.caseId, alert.caseIdCandidate, webhookContext.caseIdCandidate, workflowContext.caseIdCandidate)
     const evidenceCount = parseCount(alert.evidenceCount ?? webhookContext.evidenceCount ?? workflowContext.evidenceCount)
     const sourceFamily = firstClean(alert.sourceFamily, webhookContext.sourceFamily, workflowContext.sourceFamily)
@@ -1021,6 +1031,7 @@ export function buildDwmAlertWebhookNotificationInput(
             route,
             recommendedRoute: route,
             casePath,
+            alertUrl,
             caseId,
             provenance,
         },
@@ -1139,6 +1150,7 @@ export function buildDwmAlertDeliveryPayload({
             dryRunDefault: true,
             route: normalizedAlert.route,
             casePath: normalizedAlert.casePath,
+            alertUrl: normalizedAlert.alertUrl,
             dedupeKey: displayDedupeKey,
         },
     }
@@ -1148,36 +1160,50 @@ export function buildDwmAlertDeliveryPayload({
     }
 
     return {
-        content: `${severityEmoji(normalizedAlert.severity)} ${normalizedAlert.title}`,
+        content: discordText(`${severityEmoji(normalizedAlert.severity)} ${normalizedAlert.title}`, DISCORD_CONTENT_LIMIT),
         allowed_mentions: { parse: [] },
         embeds: [
             {
-                title: normalizedAlert.title,
-                description: normalizedAlert.claimSummary,
+                title: discordText(normalizedAlert.title, DISCORD_EMBED_TITLE_LIMIT),
+                description: discordText(normalizedAlert.claimSummary, DISCORD_EMBED_DESCRIPTION_LIMIT),
                 color: severityColor(normalizedAlert.severity),
                 timestamp: normalizedAlert.firstSeenAt || context.occurredAt,
                 fields: [
-                    { name: 'Organization', value: context.org.name, inline: true },
-                    { name: 'Severity', value: normalizedAlert.severity.toUpperCase(), inline: true },
-                    { name: 'Company / domain', value: normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value || 'Not provided', inline: true },
-                    watchlist.name || watchlist.terms.length ? { name: 'Watchlist', value: [watchlist.name, watchlist.terms[0]].filter(Boolean).join(' | '), inline: true } : null,
-                    { name: 'Source family', value: normalizedAlert.sourceFamily || 'Unknown', inline: true },
-                    { name: 'Evidence count', value: String(normalizedAlert.evidenceCount), inline: true },
-                    normalizedAlert.evidenceSummary ? { name: 'Evidence summary', value: normalizedAlert.evidenceSummary, inline: false } : null,
-                    { name: 'Route', value: normalizedAlert.route, inline: true },
-                    { name: 'Dedupe key', value: displayDedupeKey, inline: false },
-                    normalizedAlert.caseId ? { name: 'Case ID', value: normalizedAlert.caseId, inline: true } : null,
-                    normalizedAlert.casePath ? { name: 'Case', value: normalizedAlert.casePath, inline: false } : null,
-                    normalizedAlert.provenanceSummary ? { name: 'Provenance', value: normalizedAlert.provenanceSummary, inline: false } : null,
-                    { name: 'Recommended action', value: normalizedAlert.recommendedAction, inline: false },
-                ].filter(Boolean),
+                    discordField('Organization', context.org.name, true),
+                    discordField('Severity', normalizedAlert.severity.toUpperCase(), true),
+                    discordField('Company / domain', normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value || 'Not provided', true),
+                    watchlist.name || watchlist.terms.length ? discordField('Watchlist', [watchlist.name, watchlist.terms[0]].filter(Boolean).join(' | '), true) : null,
+                    discordField('Source family', normalizedAlert.sourceFamily || 'Unknown', true),
+                    discordField('Evidence count', String(normalizedAlert.evidenceCount), true),
+                    normalizedAlert.evidenceSummary ? discordField('Evidence summary', normalizedAlert.evidenceSummary, false) : null,
+                    discordField('Route', normalizedAlert.route, true),
+                    discordField('Dedupe key', displayDedupeKey, false),
+                    normalizedAlert.caseId ? discordField('Case ID', normalizedAlert.caseId, true) : null,
+                    normalizedAlert.casePath ? discordField('Case', normalizedAlert.casePath, false) : null,
+                    normalizedAlert.alertUrl ? discordField('Alert URL', normalizedAlert.alertUrl, false) : null,
+                    normalizedAlert.provenanceSummary ? discordField('Provenance', normalizedAlert.provenanceSummary, false) : null,
+                    discordField('Recommended action', normalizedAlert.recommendedAction, false),
+                ].filter(Boolean).slice(0, DISCORD_EMBED_FIELD_LIMIT),
                 footer: {
-                    text: `Hanasand DWM ${eventType.replace('dwm.alert.', '')} | ${normalizedAlert.id} | ${watchlist.id || 'no-watchlist'}`,
+                    text: discordText(`Hanasand DWM ${eventType.replace('dwm.alert.', '')} | ${normalizedAlert.id} | ${watchlist.id || 'no-watchlist'}`, DISCORD_EMBED_FOOTER_TEXT_LIMIT),
                 },
             },
         ],
         _hanasand: context,
     }
+}
+
+function discordField(name: string, value: string, inline: boolean) {
+    return {
+        name: discordText(name, DISCORD_EMBED_FIELD_NAME_LIMIT),
+        value: discordText(value || 'Not provided', DISCORD_EMBED_FIELD_VALUE_LIMIT),
+        inline,
+    }
+}
+
+function discordText(value: string, max: number) {
+    const text = clean(value) || 'Not provided'
+    return truncate(text, max)
 }
 
 export function redactWebhookEndpoint(endpointUrl: string) {
@@ -1538,6 +1564,12 @@ function normalizeAlert(alert: Record<string, unknown>) {
         || clean(alert.caseUrl)
         || clean(alert.path)
         || (id === 'webhook_test' ? '/dashboard/dwm' : `/dashboard/dwm?alert=${encodeURIComponent(id)}`)
+    const alertUrl = clean(alert.alertUrl)
+        || clean(alert.alertURL)
+        || clean(alert.deepLink)
+        || clean(alert.url)
+        || clean(alert.caseUrl)
+        || (casePath.startsWith('http://') || casePath.startsWith('https://') ? casePath : '')
 
     return {
         id,
@@ -1557,6 +1589,7 @@ function normalizeAlert(alert: Record<string, unknown>) {
         deliveryState: clean(alert.deliveryState) || 'pending_review',
         route,
         casePath,
+        alertUrl,
         caseId: clean(alert.caseId) || clean(alert.caseIdCandidate) || clean((alert.workflowContext as Record<string, unknown> | undefined)?.caseIdCandidate),
         evidence,
         evidenceCount: evidence.length || evidenceCount,

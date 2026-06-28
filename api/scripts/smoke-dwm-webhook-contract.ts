@@ -71,6 +71,7 @@ const payload = buildDwmAlertDeliveryPayload({
         dedupeKey: 'dwm_dedupe_acme_contract',
         route: 'customer_discord',
         casePath: '/dashboard/dwm?alert=alert_contract',
+        alertUrl: 'https://app.hanasand.local/dashboard/dwm?alert=alert_contract',
         caseId: 'case_contract',
         provenance: { captureIds: ['capture_contract'], sourceIds: ['source_contract'], primaryCaptureId: 'capture_contract' },
         watchlist: {
@@ -95,10 +96,57 @@ expect(serialized.includes('dwm_dedupe_acme_contract'), 'Payload should include 
 expect(serialized.includes('dwm.alert.replayed:org_contract:destination_contract:dwm_dedupe_acme_contract'), 'Payload should include destination idempotency key.', payload)
 expect(serialized.includes('case_contract'), 'Payload should include case id.', payload)
 expect(serialized.includes('/dashboard/dwm?alert=alert_contract'), 'Payload should include case path.', payload)
+expect(serialized.includes('Alert URL') && serialized.includes('https://app.hanasand.local/dashboard/dwm?alert=alert_contract'), 'Payload should include alert URL/deep link.', payload)
 expect(serialized.includes('capture_contract') && serialized.includes('source_contract'), 'Payload should include provenance summary.', payload)
 expect(!serialized.includes(secret), 'Payload should never include webhook secret.', payload)
 
 expect(redactWebhookEndpoint(endpoint) === 'https://discord.com/api/webhooks/987654321/...', 'Redaction helper should hide Discord token.')
+
+const longDiscordPayload = buildDwmAlertDeliveryPayload({
+    destination: {
+        id: 'destination_long_contract',
+        kind: 'discord',
+        name: 'Long Discord',
+        org_id: 'org_contract',
+    },
+    eventType: 'dwm.alert.created',
+    deliveryId: 'delivery_long_contract',
+    alert: {
+        id: 'alert_long_contract',
+        title: `Critical ${'title '.repeat(80)}`,
+        severity: 'critical',
+        company: 'Acme Security',
+        sourceFamily: 'telegram_public',
+        claimSummary: 'summary '.repeat(900),
+        recommendedAction: 'action '.repeat(400),
+        matchedTerm: { value: 'acme-security.com', kind: 'domain' },
+        evidence: [
+            { label: 'Long evidence label '.repeat(25), detail: 'evidence detail '.repeat(120) },
+            { label: 'Second evidence', detail: 'secondary detail '.repeat(120) },
+            { label: 'Third evidence', detail: 'tertiary detail '.repeat(120) },
+        ],
+        dedupeKey: 'dwm_dedupe_long_contract',
+        route: 'customer_discord',
+        casePath: '/dashboard/dwm?alert=alert_long_contract',
+        alertUrl: 'https://app.hanasand.local/dashboard/dwm?alert=alert_long_contract&case=case_long_contract',
+        watchlist: {
+            id: 'watchlist_long_contract',
+            name: 'Long watchlist',
+            terms: ['acme-security.com'],
+        },
+    },
+}) as Record<string, unknown>
+const longEmbed = (longDiscordPayload.embeds as Array<Record<string, unknown>>)[0]
+const longFields = longEmbed.fields as Array<Record<string, unknown>>
+const longContext = longDiscordPayload._hanasand as Record<string, unknown>
+const longAlertContext = longContext.alert as Record<string, unknown>
+
+expect(String(longDiscordPayload.content).length <= 2000, 'Discord content should respect the 2000 character limit.', longDiscordPayload)
+expect(String(longEmbed.title).length <= 256, 'Discord embed title should respect the 256 character limit.', longEmbed)
+expect(String(longEmbed.description).length <= 4096, 'Discord embed description should respect the 4096 character limit.', longEmbed)
+expect(longFields.length <= 25, 'Discord embed fields should respect the 25 field limit.', longFields)
+expect(longFields.every(field => String(field.name).length <= 256 && String(field.value).length <= 1024), 'Discord embed fields should respect name/value limits.', longFields)
+expect(JSON.stringify(longDiscordPayload).includes('Alert URL') && longAlertContext.alertUrl === 'https://app.hanasand.local/dashboard/dwm?alert=alert_long_contract&case=case_long_contract', 'Long Discord payload should preserve alert deep link context.', longDiscordPayload)
 
 const dispatchPlan = buildDwmAlertWebhookDispatchPlan({
     ownerId: 'owner_contract',
@@ -193,6 +241,7 @@ const replayWorkflowAlert = {
     dedupeKey: 'dwm_dedupe_replay_contract',
     route: 'identity_response',
     casePath: '/v1/cases/case_replay_contract?alertId=alert_replay_contract&dedupeKey=dwm_dedupe_replay_contract',
+    alertUrl: 'https://app.hanasand.local/v1/cases/case_replay_contract?alertId=alert_replay_contract&dedupeKey=dwm_dedupe_replay_contract',
     reviewState: 'needs_review',
     deliveryState: 'ready_to_send',
     replayCount: 2,
@@ -282,6 +331,7 @@ expect(replayTriggerInput.organizationId === 'org_contract', 'Replay trigger inp
 expect(replayTriggerInput.watchlistItemId === 'watchlist_item_replay_contract', 'Replay trigger input should map watchlist item id from workflow context.', replayTriggerInput)
 expect(replayTriggerInput.sourceFamily === 'telegram_public', 'Replay trigger input should map source family.', replayTriggerInput)
 expect(replayTriggerInput.casePath === replayWorkflowAlert.casePath, 'Replay trigger input should map case path.', replayTriggerInput)
+expect((replayTriggerInput.alert as Record<string, unknown>).alertUrl === replayWorkflowAlert.alertUrl, 'Replay trigger input should map alert URL/deep link.', replayTriggerInput)
 expect(replayTriggerInput.dedupeKey === 'dwm_dedupe_replay_contract', 'Replay trigger input should map dedupe key.', replayTriggerInput)
 expect(targetedReplayTriggerInput.destinationId === 'destination_replay_contract' && targetedReplayTriggerInput.dryRun === true && targetedReplayTriggerInput.live === false, 'Replay handoff should accept destination selection plus dry-run/live mode.', targetedReplayTriggerInput)
 expect(apiDeliveryRequestInput.organizationId === 'org_contract' && apiDeliveryRequestInput.destinationId === 'destination_replay_contract', 'API delivery bridge should normalize persisted alert org and destination context.', apiDeliveryRequestInput)
@@ -293,6 +343,7 @@ expect(replayAlertContext.id === 'alert_replay_contract', 'Replay payload should
 expect(replayDeliveryContext.replay === true, 'Replay payload should mark delivery as replay.', replayPayload)
 expect(replayDeliveryContext.dedupeKey === 'dwm_dedupe_replay_contract', 'Replay payload should link to the same alert dedupe key.', replayPayload)
 expect(replayDeliveryContext.casePath === replayWorkflowAlert.casePath, 'Replay payload should link to the same case path.', replayPayload)
+expect(replayDeliveryContext.alertUrl === replayWorkflowAlert.alertUrl, 'Replay payload should link to the alert URL/deep link.', replayPayload)
 expect(replayAlertContext.deliveryState === 'ready_to_send', 'Replay payload should preserve alert delivery state.', replayPayload)
 expect(replayWatchlistContext.id === 'watchlist_item_replay_contract', 'Replay payload should preserve watchlist context.', replayPayload)
 expect(replaySerialized.includes('dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract'), 'Replay payload should use event-scoped idempotency for the same dedupe key.', replayPayload)
@@ -894,6 +945,7 @@ expect(deliveryPreview.context.org.id === 'org_contract', 'Test preview should e
 expect(deliveryPreview.context.watchlist.id === 'watchlist_item_replay_contract', 'Test preview should expose watchlist context.', deliveryPreview)
 expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.context.alert.evidenceCount === 3, 'Test preview should expose alert severity and evidence count.', deliveryPreview)
 expect(deliveryPreview.context.alert.casePath === replayWorkflowAlert.casePath && deliveryPreview.context.links.casePath === replayWorkflowAlert.casePath, 'Test preview should expose case/deep-link context.', deliveryPreview)
+expect(deliveryPreview.context.alert.alertUrl === replayWorkflowAlert.alertUrl && deliveryPreview.context.links.alertUrl === replayWorkflowAlert.alertUrl, 'Test preview should expose alert URL/deep-link context.', deliveryPreview)
 expect(!JSON.stringify(deliveryPreview).includes(secret), 'Test preview should not leak endpoint secrets.', deliveryPreview)
 expect(readiness.destinationCount === 3 && readiness.activeDestinationCount === 2 && readiness.disabledDestinationCount === 1, 'Readiness should roll up multiple destinations.', readiness)
 expect(readiness.blockers.includes('live_delivery_disabled') && readiness.retryScheduledCount === 1, 'Readiness should expose live-send blockers and retry schedule count.', readiness)
@@ -911,6 +963,8 @@ console.log(JSON.stringify({
         'endpoint redaction/hash',
         'HTTPS-only customer endpoint validation',
         'Discord payload formatting',
+        'Discord payload alert URL/deep link',
+        'Discord payload truncation limits',
         'destination selection',
         'disabled destination skip',
         'org/watchlist context propagation',
