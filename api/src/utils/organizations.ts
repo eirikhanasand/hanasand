@@ -9,6 +9,7 @@ export type InviteInput = {
     email?: unknown
     emails?: unknown
     role?: unknown
+    expiresAt?: unknown
 }
 
 export type WatchlistInput = {
@@ -38,6 +39,7 @@ export type OrganizationInviteRow = {
     accepted_by?: string | null
     status: 'pending' | 'accepted' | 'revoked'
     created_at: string
+    expires_at: string
     accepted_at?: string | null
 }
 
@@ -107,7 +109,8 @@ export function normalizeInviteInput(body: InviteInput | undefined) {
     }
 
     const role = normalizeInviteRole(body?.role)
-    return { emails, role }
+    const expiresAt = normalizeInviteExpiry(body?.expiresAt)
+    return { emails, role, expiresAt }
 }
 
 export function normalizeWatchlistInput(body: WatchlistInput | undefined) {
@@ -165,6 +168,7 @@ export function toInvite(row: OrganizationInviteRow) {
         acceptedBy: row.accepted_by ?? null,
         status: row.status,
         createdAt: row.created_at,
+        expiresAt: row.expires_at,
         acceptedAt: row.accepted_at ?? null,
     }
 }
@@ -204,6 +208,23 @@ function normalizeInviteRole(value: unknown): OrganizationRole {
     }
 
     return role as OrganizationRole
+}
+
+function normalizeInviteExpiry(value: unknown) {
+    if (typeof value !== 'string' || !value.trim()) {
+        return new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+    }
+
+    const expiresAt = new Date(value)
+    if (!Number.isFinite(expiresAt.getTime())) {
+        throw new Error('Invite expiry must be a valid date.')
+    }
+
+    if (expiresAt.getTime() <= Date.now()) {
+        throw new Error('Invite expiry must be in the future.')
+    }
+
+    return expiresAt.toISOString()
 }
 
 function normalizeWatchlistValue(kind: WatchlistKind, value: unknown) {

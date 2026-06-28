@@ -524,11 +524,13 @@ export default async function ensureSchema() {
             invited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '14 days'),
             accepted_by TEXT REFERENCES users(id) ON DELETE SET NULL,
             accepted_at TIMESTAMPTZ,
             UNIQUE (organization_id, email)
         )
     `)
+    await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL \'14 days\')')
     await run('ALTER TABLE organization_invites ADD COLUMN IF NOT EXISTS accepted_by TEXT REFERENCES users(id) ON DELETE SET NULL')
     await run(`
         CREATE TABLE IF NOT EXISTS organization_watchlist_items (

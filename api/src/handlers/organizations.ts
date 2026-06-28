@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { randomUUID } from 'crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import recordLog from '#utils/logs/recordLog.ts'
 import {
     normalizeInviteInput,
     normalizeOrganizationInput,
@@ -99,6 +100,10 @@ export async function postOrganization(req: FastifyRequest<{ Body: OrganizationI
         FROM new_organization
         JOIN owner_membership ON owner_membership.organization_id = new_organization.id
     `, [organizationId, input.name, slug, userId])
+    logOrganizationEvent(req, 'organization_created', organizationId, userId, {
+        name: input.name,
+        slug,
+    })
 
     return res.status(201).send({ organization: toOrganization({
         ...(organization.rows[0] as OrganizationRow),
@@ -141,6 +146,8 @@ export async function getOrganizationInvites(req: FastifyRequest<{ Params: Organ
         SELECT *
         FROM organization_invites
         WHERE organization_id = $1
+          AND status = 'pending'
+          AND expires_at > NOW()
         ORDER BY status ASC, created_at DESC
     `, [req.params.id])
 
@@ -210,20 +217,27 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
     const rows: OrganizationInviteRow[] = []
     for (const email of input.emails) {
         const invite = await run(`
-            INSERT INTO organization_invites (id, organization_id, email, role, invited_by, status)
-            VALUES ($1, $2, $3, $4, $5, 'pending')
+            INSERT INTO organization_invites (id, organization_id, email, role, invited_by, status, expires_at)
+            VALUES ($1, $2, $3, $4, $5, 'pending', $6)
             ON CONFLICT (organization_id, email)
             DO UPDATE SET role = EXCLUDED.role,
                           invited_by = EXCLUDED.invited_by,
                           status = 'pending',
                           accepted_at = NULL,
+                          accepted_by = NULL,
+                          expires_at = EXCLUDED.expires_at,
                           created_at = NOW()
             RETURNING *
-        `, [randomUUID(), req.params.id, email, input.role, userId])
+        `, [randomUUID(), req.params.id, email, input.role, userId, input.expiresAt])
         rows.push(invite.rows[0] as OrganizationInviteRow)
     }
 
     await touchOrganization(req.params.id)
+    logOrganizationEvent(req, 'organization_invites_created', req.params.id, userId, {
+        inviteCount: rows.length,
+        role: input.role,
+        expiresAt: input.expiresAt,
+    })
     return res.status(201).send({ invites: rows.map(toInvite) })
 }
 
@@ -241,6 +255,7 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
                 accepted_by = $2
             WHERE id = $1
               AND status = 'pending'
+              AND expires_at > NOW()
             RETURNING *
         ),
         member AS (
@@ -266,6 +281,7 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
             accepted_invite.accepted_by,
             accepted_invite.status AS invite_status,
             accepted_invite.created_at AS invite_created_at,
+            accepted_invite.expires_at,
             accepted_invite.accepted_at,
             member.user_id,
             member.role AS member_role,
@@ -290,6 +306,7 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
         invite_status: 'accepted'
         invite_created_at: string
         accepted_at: string
+        expires_at: string
         user_id: string
         member_role: OrganizationRole
         member_status: 'active'
@@ -298,6 +315,10 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
     }
 
     await touchOrganization(row.organization_id)
+    logOrganizationEvent(req, 'organization_invite_accepted', row.organization_id, userId, {
+        inviteId: row.invite_id,
+        role: row.member_role,
+    })
     const organization = await loadOrganizationForMember(row.organization_id, userId)
     return res.send({
         invite: toInvite({
@@ -309,6 +330,7 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
             accepted_by: row.accepted_by,
             status: row.invite_status,
             created_at: row.invite_created_at,
+            expires_at: row.expires_at,
             accepted_at: row.accepted_at,
         }),
         membership: {
@@ -399,6 +421,11 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
     `, [randomUUID(), req.params.id, input.kind, input.value, input.notes, userId])
 
     await touchOrganization(req.params.id)
+    logOrganizationEvent(req, 'organization_watchlist_upserted', req.params.id, userId, {
+        watchlistItemId: result.rows[0]?.id,
+        kind: input.kind,
+        value: input.value,
+    })
     return res.status(201).send({ watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow) })
 }
 
@@ -432,6 +459,9 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
     }
 
     await touchOrganization(req.params.organizationId)
+    logOrganizationEvent(req, 'organization_watchlist_archived', req.params.organizationId, userId, {
+        watchlistItemId: req.params.itemId,
+    })
     return res.send({ watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow) })
 }
 
@@ -491,4 +521,19 @@ function normalizeOptionalKind(value: unknown): WatchlistKind | null {
 
     const kind = value.trim().toLowerCase()
     return ['company', 'domain', 'vendor'].includes(kind) ? kind as WatchlistKind : null
+}
+
+function logOrganizationEvent(req: FastifyRequest, action: string, organizationId: string, actorId: string, metadata: Record<string, unknown>) {
+    void recordLog({
+        service: 'hanasand-api',
+        level: 'info',
+        message: action,
+        metadata: {
+            category: 'organization',
+            action,
+            organizationId,
+            actorId,
+            ...metadata,
+        },
+    }).catch(error => req.log.warn({ error, action, organizationId }, 'Failed to persist organization event log'))
 }

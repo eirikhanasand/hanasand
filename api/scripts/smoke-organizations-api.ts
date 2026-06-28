@@ -18,6 +18,7 @@ const organizations = new Map<string, Row>()
 const members = new Map<string, Row>()
 const invites = new Map<string, Row>()
 const watchlists = new Map<string, Row>()
+const serviceLogs: Row[] = []
 
 mock.module('#db', () => ({ default: fakeRun }))
 mock.module('#utils/auth/tokenWrapper.ts', () => ({
@@ -67,6 +68,7 @@ const inviteResponse = await app.inject({
 assert.equal(inviteResponse.statusCode, 201, inviteResponse.body)
 const invite = parseBody(inviteResponse.body).invites[0]
 assert.equal(invite.status, 'pending')
+assert.ok(Date.parse(invite.expiresAt) > Date.now())
 
 const acceptResponse = await app.inject({
     method: 'POST',
@@ -77,8 +79,17 @@ assert.equal(acceptResponse.statusCode, 200, acceptResponse.body)
 const accepted = parseBody(acceptResponse.body)
 assert.equal(accepted.invite.status, 'accepted')
 assert.equal(accepted.invite.acceptedBy, 'org_smoke_member')
+assert.equal(accepted.invite.expiresAt, invite.expiresAt)
 assert.equal(accepted.membership.userId, 'org_smoke_member')
 assert.equal(accepted.membership.role, 'member')
+
+const pendingInvitesResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(pendingInvitesResponse.statusCode, 200, pendingInvitesResponse.body)
+assert.deepEqual(parseBody(pendingInvitesResponse.body).invites, [])
 
 const membersResponse = await app.inject({
     method: 'GET',
@@ -107,6 +118,7 @@ const memberWatchlistResponse = await app.inject({
 assert.equal(memberWatchlistResponse.statusCode, 200, memberWatchlistResponse.body)
 const memberWatchlist = parseBody(memberWatchlistResponse.body).watchlistItems
 assert.equal(memberWatchlist.length, 1)
+assert.ok(memberWatchlist[0].id)
 assert.equal(memberWatchlist[0].organizationId, organization.id)
 assert.equal(memberWatchlist[0].value, 'acme-shared.example')
 
@@ -135,6 +147,9 @@ const outsiderResponse = await app.inject({
     headers: authHeaders('org_smoke_outsider', 'outsider-token'),
 })
 assert.equal(outsiderResponse.statusCode, 404, outsiderResponse.body)
+assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upserted'))
 
 await app.close()
 console.log('Organization API smoke passed for invite acceptance, membership, shared watchlists, and outsider isolation.')
@@ -159,6 +174,11 @@ async function fakeRun(query: string, params: any[] = []) {
         return rows([...organizations.values()].filter(org => org.slug === slug || org.slug.startsWith(prefix)).map(org => ({ slug: org.slug })))
     }
 
+    if (compact.startsWith('INSERT INTO service_logs')) {
+        serviceLogs.push({ service: params[0], host: params[1], level: params[2], message: params[3], metadata: JSON.parse(params[4]) })
+        return rows([])
+    }
+
     if (compact.includes('WITH new_organization AS')) {
         const [id, name, slug, userId] = params
         const org = nowRow({ id, name, slug, created_by: userId })
@@ -175,15 +195,15 @@ async function fakeRun(query: string, params: any[] = []) {
     }
 
     if (compact.startsWith('SELECT * FROM organization_invites WHERE organization_id')) {
-        return rows([...invites.values()].filter(invite => invite.organization_id === params[0]))
+        return rows([...invites.values()].filter(invite => invite.organization_id === params[0] && invite.status === 'pending' && Date.parse(invite.expires_at) > Date.now()))
     }
 
     if (compact.startsWith('INSERT INTO organization_invites')) {
-        const [id, organizationId, email, role, invitedBy] = params
+        const [id, organizationId, email, role, invitedBy, expiresAt] = params
         const existing = [...invites.values()].find(invite => invite.organization_id === organizationId && invite.email === email)
         const invite = existing
-            ? { ...existing, role, invited_by: invitedBy, status: 'pending', accepted_at: null, accepted_by: null, created_at: iso() }
-            : nowRow({ id, organization_id: organizationId, email, role, invited_by: invitedBy, status: 'pending', accepted_at: null, accepted_by: null })
+            ? { ...existing, role, invited_by: invitedBy, status: 'pending', accepted_at: null, accepted_by: null, expires_at: expiresAt, created_at: iso() }
+            : nowRow({ id, organization_id: organizationId, email, role, invited_by: invitedBy, status: 'pending', accepted_at: null, accepted_by: null, expires_at: expiresAt })
         invites.set(invite.id, invite)
         return rows([invite])
     }
@@ -191,7 +211,7 @@ async function fakeRun(query: string, params: any[] = []) {
     if (compact.includes('WITH accepted_invite AS')) {
         const [inviteId, userId] = params
         const invite = invites.get(inviteId)
-        if (!invite || invite.status !== 'pending') return rows([])
+        if (!invite || invite.status !== 'pending' || Date.parse(invite.expires_at) <= Date.now()) return rows([])
         const acceptedAt = iso()
         const acceptedInvite = { ...invite, status: 'accepted', accepted_by: userId, accepted_at: acceptedAt }
         invites.set(inviteId, acceptedInvite)
@@ -213,6 +233,7 @@ async function fakeRun(query: string, params: any[] = []) {
             accepted_by: acceptedInvite.accepted_by,
             invite_status: acceptedInvite.status,
             invite_created_at: acceptedInvite.created_at,
+            expires_at: acceptedInvite.expires_at,
             accepted_at: acceptedInvite.accepted_at,
             user_id: member.user_id,
             member_role: member.role,
