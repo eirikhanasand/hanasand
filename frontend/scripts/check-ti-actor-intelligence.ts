@@ -1,5 +1,6 @@
 import { buildActorIntelligence, containsToyThreatIntelCopy } from '../src/utils/ti/actorIntelligence'
 import { buildTiActionability } from '../src/utils/ti/actionability'
+import { buildActorArtifactHandoffs, buildActorArtifacts } from '../src/utils/ti/actorWorkbench'
 import type { TiSearchResponse } from '../src/utils/ti/search'
 
 const fixture: TiSearchResponse = {
@@ -81,6 +82,7 @@ const victims = [{
 }]
 const profile = buildActorIntelligence(fixture, victims)
 const actionability = buildTiActionability(fixture, profile, victims)
+const artifacts = buildActorArtifacts(fixture, profile, victims, actionability)
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
 assert(profile.malwareTools.includes('SUNBURST'), 'APT29 should include SUNBURST tooling context.')
@@ -103,6 +105,15 @@ assert(actionability.exportPayloads.alertRebuild.endpoint === '/v1/dwm/alerts/re
 assert(Array.isArray(actionability.exportPayloads.case.body.requiredBeforePost), 'Case handoff should expose dependencies before POST.')
 assert(actionability.exportPayloads.enrichment.schemaVersion === 'ti.public_actor.enrichment_queue.v1', 'Enrichment queue handoff should be shaped for source/capture work.')
 assert(JSON.stringify(actionability.exportPayloads.enrichment.body).includes('capture'), 'Enrichment handoff should include capture/source work.')
+assert(artifacts.some(item => item.kind === 'country' && item.label === 'United States' && item.watchlistTerms.some(term => /SolarWinds/i.test(term.value))), 'APT29 artifact workbench should turn geography into watchlist-relevant evidence.')
+assert(artifacts.some(item => item.kind === 'tool' && item.label === 'SUNBURST'), 'APT29 artifact workbench should expose malware/tool artifacts.')
+assert(artifacts.some(item => item.kind === 'campaign' && /SolarWinds/i.test(item.label)), 'APT29 artifact workbench should expose campaign artifacts.')
+const usArtifact = artifacts.find(item => item.kind === 'country' && item.label === 'United States')
+assert(usArtifact?.provenance.length, 'Selected artifact should expose provenance.')
+const usHandoffs = usArtifact ? buildActorArtifactHandoffs(fixture, usArtifact, actionability) : null
+assert(usHandoffs?.watchlist.body.selectedArtifact, 'Selected artifact watchlist handoff should carry selectedArtifact context.')
+assert(JSON.stringify(usHandoffs?.case.body).includes('selectedArtifact'), 'Selected artifact case handoff should carry selectedArtifact context.')
+assert(JSON.stringify(usHandoffs?.enrichment.body).includes('United States'), 'Selected artifact enrichment handoff should carry artifact-specific task context.')
 
 const backed = buildTiActionability({
     ...fixture,
@@ -174,12 +185,14 @@ const quietFixture: TiSearchResponse = {
 }
 const quietProfile = buildActorIntelligence(quietFixture, [])
 const quiet = buildTiActionability(quietFixture, quietProfile, [])
+const quietArtifacts = buildActorArtifacts(quietFixture, quietProfile, [], quiet)
 assert(!quiet.shouldAlert, 'Quiet actor should not be alertable.')
 assert(quiet.relatedAlerts.length === 0 && quiet.relatedCases.length === 0, 'Quiet actor should honestly show no current alert or case.')
 assert(quiet.watchlist.state === 'missing_terms', 'Quiet actor should expose missing watchlist terms.')
 assert(quiet.watchlist.blockers.some(item => /Authenticated organization ID/i.test(item)), 'Quiet actor should explain missing org/auth context for watchlist actions.')
 assert(quiet.exportPayloads.blockers.body.orgRequired === true, 'No-org actor path should export org-required blockers.')
 assert(quiet.exportPayloads.watchlist.missing.some(item => /Authenticated organization ID/i.test(item)), 'No-org watchlist export should carry precise blocked dependency.')
+assert(quietArtifacts.length === 0, 'Sparse actor path should not invent selectable artifacts.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')

@@ -4,6 +4,7 @@ import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
+import { buildActorArtifactHandoffs, buildActorArtifacts, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind } from '@/utils/ti/actorWorkbench'
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
@@ -158,12 +159,16 @@ function Results({ result }: { result: TiSearchResponse }) {
     const victimObservations = useMemo(() => victimObservationsFor(result), [result])
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
+    const actorArtifacts = useMemo(() => buildActorArtifacts(result, actorIntel, victimObservations, actionability), [result, actorIntel, victimObservations, actionability])
     const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById), [result, victimObservations, sourceUrlById])
     const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources, actorIntel), [result, victimObservations, sources, actorIntel])
     const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
+    const [selectedArtifactId, setSelectedArtifactId] = useState(actorArtifacts[0]?.id ?? '')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [notes, setNotes] = useState<Record<string, string>>({})
     const selected = workItems.find(item => item.id === selectedId) ?? workItems[0]
+    const selectedArtifact = actorArtifacts.find(item => item.id === selectedArtifactId) ?? actorArtifacts[0]
+    const selectedArtifactHandoffs = selectedArtifact ? buildActorArtifactHandoffs(result, selectedArtifact, actionability) : null
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedNote = selected ? notes[selected.id] ?? '' : ''
     const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
@@ -184,6 +189,23 @@ function Results({ result }: { result: TiSearchResponse }) {
         { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Queue', value: `${queueCounts.open} open` },
         { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Mode', value: result.status === 'ready' || result.status === 'partial' ? 'Live' : 'Watching' },
     ]
+
+    useEffect(() => {
+        if (!workItems.length) return
+        if (!workItems.some(item => item.id === selectedId)) setSelectedId(workItems[0]?.id ?? '')
+    }, [selectedId, workItems])
+
+    useEffect(() => {
+        if (!actorArtifacts.length) return
+        if (!actorArtifacts.some(item => item.id === selectedArtifactId)) setSelectedArtifactId(actorArtifacts[0]?.id ?? '')
+    }, [actorArtifacts, selectedArtifactId])
+
+    function selectArtifactBy(kind: ActorArtifactKind, value: string) {
+        const normalized = value.toLowerCase()
+        const artifact = actorArtifacts.find(item => item.kind === kind && item.label.toLowerCase() === normalized)
+            ?? actorArtifacts.find(item => item.kind === kind && item.id.endsWith(normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')))
+        if (artifact) setSelectedArtifactId(artifact.id)
+    }
 
     function applyDecision(status: LocalDecision['status']) {
         if (!selected) return
@@ -273,7 +295,16 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <main className='order-1 min-w-0 p-4 lg:order-none'>
                         {selected ? (
                             <div className='grid gap-4'>
-                                <ActorIntelligenceDossier actor={actorIntel} result={result} />
+                                <ActorIntelligenceDossier
+                                    actor={actorIntel}
+                                    result={result}
+                                    artifacts={actorArtifacts}
+                                    selectedArtifactId={selectedArtifact?.id}
+                                    onSelectArtifact={setSelectedArtifactId}
+                                />
+                                {selectedArtifact && selectedArtifactHandoffs ? (
+                                    <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
+                                ) : null}
 
                                 <section data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -324,7 +355,13 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         {result.ttps.length ? result.ttps.map(item => (
                                             <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                                                 <div className='flex flex-wrap items-center gap-2'>
-                                                    <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
+                                                    <button
+                                                        type='button'
+                                                        onClick={() => selectArtifactBy('technique', item.attackId ? `${item.attackId} ${item.name}` : item.name)}
+                                                        className='text-left text-sm font-semibold text-[#171a21] transition hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+                                                    >
+                                                        {item.name}
+                                                    </button>
                                                     {item.attackId ? <TechniqueBadge attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} /> : null}
                                                 </div>
                                                 <p className='text-xs text-[#667085]'>{item.tactic} · {Math.round(item.confidence * 100)}% confidence</p>
@@ -334,7 +371,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     </Panel>
                                 </section>
 
-                                <ThreatActorMap result={result} actionability={actionability} />
+                                <ThreatActorMap result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} />
                             </div>
                         ) : (
                             <div className='grid min-h-96 place-items-center rounded-lg border border-dashed border-[#d8dee9] bg-white p-8 text-center text-sm text-[#667085]'>Search is still building an analyst queue.</div>
@@ -465,8 +502,15 @@ type EnrichmentTask = {
     detail: string
 }
 
-function ActorIntelligenceDossier({ actor, result }: { actor: TiActorIntelligenceProfile; result: TiSearchResponse }) {
+function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId, onSelectArtifact }: {
+    actor: TiActorIntelligenceProfile
+    result: TiSearchResponse
+    artifacts: ActorArtifact[]
+    selectedArtifactId?: string
+    onSelectArtifact: (artifactId: string) => void
+}) {
     const confidence = Math.round(actor.confidence * 100)
+    const artifactByLookup = new Map(artifacts.map(artifact => [`${artifact.kind}:${artifact.label.toLowerCase()}`, artifact]))
     return (
         <section data-ti-actor-dossier='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -484,11 +528,11 @@ function ActorIntelligenceDossier({ actor, result }: { actor: TiActorIntelligenc
 
             <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 <DossierList title='Motivation' values={actor.motivation} />
-                <DossierList title='Malware and tools' values={actor.malwareTools} />
-                <DossierList title='Campaigns' values={actor.campaigns} />
+                <DossierList title='Malware and tools' values={actor.malwareTools} artifactKind='tool' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
+                <DossierList title='Campaigns' values={actor.campaigns} artifactKind='campaign' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Target sectors' values={actor.targetSectors} />
-                <DossierList title='Geographies' values={actor.geographies} />
-                <DossierList title='Infrastructure' values={actor.infrastructure} />
+                <DossierList title='Geographies' values={actor.geographies} artifactKind='country' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
+                <DossierList title='Infrastructure' values={actor.infrastructure} artifactKind='infrastructure' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
             </div>
 
             <div className='mt-4 grid gap-3 xl:grid-cols-2'>
@@ -503,16 +547,83 @@ function ActorIntelligenceDossier({ actor, result }: { actor: TiActorIntelligenc
     )
 }
 
-function DossierList({ title, values }: { title: string; values: string[] }) {
+function DossierList({ title, values, artifactKind, artifactByLookup, selectedArtifactId, onSelectArtifact }: {
+    title: string
+    values: string[]
+    artifactKind?: ActorArtifactKind
+    artifactByLookup?: Map<string, ActorArtifact>
+    selectedArtifactId?: string
+    onSelectArtifact?: (artifactId: string) => void
+}) {
     return (
         <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
             <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
             <div className='mt-2 flex flex-wrap gap-1.5'>
-                {values.length ? values.slice(0, 8).map(value => (
-                    <span key={value} className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-xs font-semibold text-[#344054]'>{value}</span>
-                )) : <span className='text-xs text-[#667085]'>Not returned</span>}
+                {values.length ? values.slice(0, 8).map(value => {
+                    const artifact = artifactKind ? artifactByLookup?.get(`${artifactKind}:${value.toLowerCase()}`) : undefined
+                    if (!artifact || !onSelectArtifact) {
+                        return <span key={value} className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-xs font-semibold text-[#344054]'>{value}</span>
+                    }
+                    const active = artifact.id === selectedArtifactId
+                    return (
+                        <button
+                            key={value}
+                            type='button'
+                            onClick={() => onSelectArtifact(artifact.id)}
+                            className={`rounded-md border px-2 py-1 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#dfe5ee] bg-white text-[#344054] hover:border-[#b8c5ff] hover:bg-[#f8fafc]'}`}
+                        >
+                            {value}
+                        </button>
+                    )
+                }) : <span className='text-xs text-[#667085]'>Not returned</span>}
             </div>
         </div>
+    )
+}
+
+function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifact; handoffs: ActorArtifactHandoffs }) {
+    const payloadRows = [
+        { id: 'watchlist', label: 'Copy watchlist candidate', payload: handoffs.watchlist, route: handoffs.watchlist.backedRoute, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
+        { id: 'alert', label: 'Copy alert rebuild instruction', payload: handoffs.alertRebuild, route: handoffs.alertRebuild.backedRoute, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : `Ready for ${handoffs.alertRebuild.endpoint}` },
+        { id: 'case', label: 'Copy case handoff', payload: handoffs.case, route: handoffs.case.backedRoute, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : `Ready for ${handoffs.case.endpoint}` },
+        { id: 'enrichment', label: 'Copy enrichment queue item', payload: handoffs.enrichment, route: handoffs.enrichment.backedRoute, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
+    ]
+
+    return (
+        <section data-ti-selected-artifact='true' className='rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3]'>Selected Intelligence</p>
+                    <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21]'>{artifact.label}</h2>
+                    <p className='mt-1 text-sm leading-6 text-[#596170]'>{formatLabel(artifact.kind)} · {artifact.subtitle}</p>
+                </div>
+                <div className='grid min-w-48 grid-cols-2 gap-2 text-center text-xs'>
+                    <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
+                    <EvidenceMetric label='Confidence' value={`${Math.round(artifact.confidence * 100)}%`} />
+                </div>
+            </div>
+            <div className='mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
+                <div className='grid gap-3 md:grid-cols-2'>
+                    <EvidencePanel title='Evidence'>
+                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{line}</li>) : <li>No evidence text is attached to this artifact.</li>}
+                    </EvidencePanel>
+                    <EvidencePanel title='Provenance'>
+                        {artifact.provenance.length ? artifact.provenance.slice(0, 6).map(line => <li key={line}>{line}</li>) : <li>Source provenance is missing for this artifact.</li>}
+                    </EvidencePanel>
+                    <EvidencePanel title='Watchlist relevance'>
+                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {term.notes}</li>) : <li>No customer watchlist term is attached to this artifact.</li>}
+                    </EvidencePanel>
+                    <EvidencePanel title='Enrichment gaps'>
+                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{task}</li>) : <li>No enrichment gap is attached to this artifact.</li>}
+                    </EvidencePanel>
+                </div>
+                <div className='grid content-start gap-2'>
+                    {payloadRows.map(row => (
+                        <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.blocked} />
+                    ))}
+                </div>
+            </div>
+        </section>
     )
 }
 
@@ -709,7 +820,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
             label: 'Watchlist',
             payload: actionability.exportPayloads.watchlist,
             route: actionability.exportPayloads.watchlist.backedRoute,
-            detail: `${actionability.watchlist.payloads.length} term${actionability.watchlist.payloads.length === 1 ? '' : 's'} shaped for ${actionability.watchlist.endpoint}`,
+            detail: `${actionability.watchlist.payloads.length} term${actionability.watchlist.payloads.length === 1 ? '' : 's'} for ${actionability.watchlist.endpoint}`,
         },
         {
             id: 'alertRebuild',
@@ -913,7 +1024,7 @@ function BlockerList({ blockers }: { blockers: string[] }) {
 
 function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     return (
-        <Panel title='Source and Enrichment Tasks' description='Concrete collection or backend contract work needed for this actor/query to feed stronger alerts.' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Source and Enrichment Tasks' description='Collection and API work needed for this actor/query to feed stronger alerts.' icon={<Database className='h-4 w-4' />}>
             <div className='grid gap-2'>
                 {tasks.map(task => (
                     <div key={task.title} className='rounded-lg border border-[#eef1f5] bg-white p-3'>
@@ -1146,12 +1257,12 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
             status: hasActorCore ? 'ready' : 'needs_api',
             detail: hasActorCore
                 ? `Actor profile includes ${actor.malwareTools.length} tools, ${actor.campaigns.length} campaigns, and ${actor.infrastructure.length} infrastructure patterns for alert enrichment.`
-                : 'Search responses should return malware/tools, campaigns, infrastructure, confidence reasoning, and source provenance so public actor pages are not dependent on frontend fallbacks.',
+                : 'Missing actorIntelligence.malwareTools, campaigns, infrastructure, confidence reasoning, or source provenance in the search response.',
         },
         {
             title: 'Persist alert review decision',
             status: 'needs_api',
-            detail: 'Public /ti pages only keep scratch notes locally. The backend contract should accept selected finding id, review state, owner, rationale, and delivery hold/release state.',
+            detail: 'Public /ti scratch notes are session-local. Persisted review needs selected finding id, review state, owner, rationale, and delivery hold/release state in the authenticated case workflow.',
         },
         {
             title: 'Attach source capture provenance',
@@ -1165,14 +1276,14 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
             status: hasOrganizations ? 'watch' : 'needs_api',
             detail: hasOrganizations
                 ? `Candidate watched objects include ${watchlist.organizations.slice(0, 3).join(', ')}.`
-                : 'No watched organization/domain match is returned by the public API. Add a watchlist-match field to the search response for sellable alerts.',
+                : 'Missing watchlistMatches or organization/domain relevance for this public result.',
         },
         {
             title: 'Promote evidence to case queue',
             status: hasReviewInbox ? 'ready' : selected?.kind === 'exposure' || hasActivity ? 'needs_review' : 'needs_api',
             detail: hasReviewInbox
                 ? 'The response includes metadata review inbox items that can feed authenticated case work.'
-                : 'The UI builds a local queue from returned profile/activity fields; the backend should return stable case ids for persisted work.',
+                : 'No stable related case id is attached; this page can export a handoff payload but cannot persist the case from public context.',
         },
     ]
 }
@@ -1207,7 +1318,7 @@ function domainFromUrl(value?: string) {
 }
 
 function taskStatusLabel(status: EnrichmentTask['status']) {
-    if (status === 'needs_api') return 'backend contract'
+    if (status === 'needs_api') return 'API work'
     if (status === 'needs_review') return 'review'
     if (status === 'watch') return 'watchlist'
     return 'ready'
@@ -1521,7 +1632,7 @@ function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNo
     )
 }
 
-function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; actionability: TiActionabilityModel }) {
+function ThreatActorMap({ result, actionability, onSelectCountry }: { result: TiSearchResponse; actionability: TiActionabilityModel; onSelectCountry?: (country: string) => void }) {
     const geo = actorGeoProfile(result)
     const hasPoints = geo.points.length > 0
     const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
@@ -1532,8 +1643,10 @@ function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; a
     const focusCountry = useCallback((code: string) => {
         const coords = countryCentroids[code]
         setSelectedCode(code)
+        const point = geo.points.find(item => item.code === code)
+        if (point) onSelectCountry?.(point.label)
         if (coords) setViewBox(getCountryFocusView(coords))
-    }, [])
+    }, [geo.points, onSelectCountry])
     const mapPaths = useMemo(() => mapData.features.map((feature, index) => {
         let d = ''
         const code = countryCodeForMapFeature(feature.properties?.name)
