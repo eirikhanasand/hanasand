@@ -150,15 +150,71 @@ describe("dwm source requests", () => {
     expect(activatedBody.source.status).toBe("active");
     expect(activatedBody.candidate).toMatchObject({ status: "active", decidedBy: "analyst-1" });
     expect(activatedBody.lifecycle.activationState).toBe("active_canary");
+    expect(activatedBody.collectionTrigger).toMatchObject({
+      queued: true,
+      queue: "frontier",
+      candidateId: createdBody.candidate.id,
+      activeSourceId: createdBody.source.id,
+      unsafeJobQueued: false,
+      parserStatus: "telegram_public_parser_ready",
+      policyBoundary: { noPrivateAccess: true }
+    });
+    expect(activatedBody.collectionTrigger.jobId).toEqual(expect.any(String));
+    expect(activatedBody.alertRebuild).toMatchObject({
+      queued: false,
+      skipped: true,
+      reason: "collection_queued_alert_rebuild_waits_for_new_captures",
+      contract: { endpoint: "/v1/dwm/alerts/rebuild", requiredAfter: "capture_persisted" }
+    });
+    const queuedTask = store.getSource(createdBody.source.id)?.metadata.sourceCandidate.collectionTrigger;
+    expect(queuedTask).toMatchObject({ queued: true, jobId: activatedBody.collectionTrigger.jobId });
+    expect((activatedBody.collectionTrigger.jobId as string).startsWith("task_")).toBe(true);
     expect(store.getSource(createdBody.source.id)?.metadata.sourceRequestAudit).toHaveLength(3);
+  });
+
+  test("promoting a public Telegram candidate queues a real frontier collection task", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ target: "@queued_public_cti", type: "telegram_channel", tenantId: "tenant_acme", scope: "APT29", activate: false })
+    }), { store, frontier });
+    const createdBody = await created.json() as any;
+
+    const promoted = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "promote", candidateId: createdBody.candidate.id, approvedBy: "analyst-queue" })
+    }), { store, frontier });
+    const body = await promoted.json() as any;
+
+    expect(promoted.status).toBe(200);
+    expect(body.collectionTrigger).toMatchObject({
+      queued: true,
+      candidateId: createdBody.candidate.id,
+      sourceId: createdBody.source.id,
+      activeSourceId: createdBody.source.id,
+      policyBoundary: { publicOnly: true },
+      parserStatus: "telegram_public_parser_ready"
+    });
+    expect(frontier.snapshot()).toHaveLength(1);
+    expect((frontier.snapshot()[0] as any).task).toMatchObject({
+      id: body.collectionTrigger.jobId,
+      sourceId: createdBody.source.id,
+      sourceType: "telegram_public",
+      tenantId: "tenant_acme",
+      targetUrl: "https://t.me/queued_public_cti",
+      planning: { budgetClass: "source_health_probe", sourceCandidateId: createdBody.candidate.id }
+    });
+    expect(body.alertRebuild).toMatchObject({ queued: false, skipped: true });
   });
 
   test("requires metadata-only approval before restricted source activation", async () => {
     const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
     const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({ target: "metadata://darkweb/akira/claims", type: "restricted_metadata", tenantId: "tenant_acme", priority: "critical", requestedBy: "analyst-1" })
-    }), { store, frontier: new FocusedFrontier() });
+    }), { store, frontier });
     const createdBody = await created.json() as any;
     expect(createdBody.candidate).toMatchObject({
       requestedBy: "analyst-1",
@@ -169,7 +225,7 @@ describe("dwm source requests", () => {
     const validated = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({ action: "validate", candidateId: createdBody.candidate.id, decidedBy: "analyst-1" })
-    }), { store, frontier: new FocusedFrontier() });
+    }), { store, frontier });
     const validatedBody = await validated.json() as any;
     expect(validated.status).toBe(200);
     expect(validatedBody.candidate.validationResult).toMatchObject({ allowed: false, policyGated: true });
@@ -178,10 +234,19 @@ describe("dwm source requests", () => {
     const blocked = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({ action: "activate", sourceId: createdBody.source.id, approvedBy: "analyst-1" })
-    }), { store, frontier: new FocusedFrontier() });
+    }), { store, frontier });
     const blockedBody = await blocked.json() as any;
     expect(blocked.status).toBe(409);
     expect(blockedBody.error.code).toBe("metadata_only_approval_required");
+    expect(blockedBody.collectionTrigger).toMatchObject({
+      queued: false,
+      unsafeJobQueued: false,
+      reason: "metadata_only_approval_required",
+      candidateId: createdBody.candidate.id,
+      policyBoundary: { metadataOnly: true }
+    });
+    expect(blockedBody.alertRebuild).toMatchObject({ queued: false, skipped: true, reason: "metadata_only_approval_required" });
+    expect(frontier.snapshot()).toHaveLength(0);
     expect(store.getSource(createdBody.source.id)?.status).toBe("candidate");
 
     const activated = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
@@ -193,7 +258,7 @@ describe("dwm source requests", () => {
         approvedBy: "analyst-1",
         reason: "operator approved metadata-only actor coverage"
       })
-    }), { store, frontier: new FocusedFrontier() });
+    }), { store, frontier });
     const activatedBody = await activated.json() as any;
     expect(activated.status).toBe(200);
     expect(activatedBody.source).toMatchObject({
@@ -205,43 +270,54 @@ describe("dwm source requests", () => {
       status: "active",
       approvalTicket: { status: "approved", unsafeScrapingAllowed: false }
     });
+    expect(activatedBody.collectionTrigger).toMatchObject({
+      queued: false,
+      unsafeJobQueued: false,
+      metadataOnly: true,
+      reason: "restricted_metadata_requires_metadata_worker_contract"
+    });
     expect(activatedBody.policy).toMatchObject({ allowed: true, collectionMode: "metadata_only" });
     expect(activatedBody.policy.boundary.payloadPathsBlocked).toBe(true);
   });
 
   test("records retry suppress and rejection lifecycle decisions on persisted candidates", async () => {
     const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
     const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({ target: "@rejectable_public_cti", type: "telegram_channel", activate: false })
-    }), { store, frontier: new FocusedFrontier() });
+    }), { store, frontier });
     const createdBody = await created.json() as any;
 
     const retry = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({ action: "retry", sourceId: createdBody.source.id, decidedBy: "analyst-2", reason: "parser timeout recovered" })
-    }), { store, frontier: new FocusedFrontier() });
+    }), { store, frontier });
     const retryBody = await retry.json() as any;
     expect(retry.status).toBe(200);
     expect(retryBody.lifecycle.healthStatus).toBe("retry_scheduled");
     expect(retryBody.candidate.status).toBe("retry_scheduled");
+    expect(retryBody.collectionTrigger.queued).toBe(false);
 
     const suppressed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({ action: "suppress", sourceId: createdBody.source.id, decidedBy: "analyst-2", reason: "duplicate candidate from same channel family" })
-    }), { store, frontier: new FocusedFrontier() });
+    }), { store, frontier });
     const suppressedBody = await suppressed.json() as any;
     expect(suppressed.status).toBe(200);
     expect(suppressedBody.source.status).toBe("suppressed");
     expect(suppressedBody.candidate).toMatchObject({ status: "suppressed", activationDecision: "suppressed_by_operator" });
+    expect(suppressedBody.collectionTrigger).toMatchObject({ queued: false, unsafeJobQueued: false });
 
     const rejected = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({ action: "reject", sourceId: createdBody.source.id, decidedBy: "analyst-2", reason: "not relevant to watchlist scope" })
-    }), { store, frontier: new FocusedFrontier() });
+    }), { store, frontier });
     const rejectedBody = await rejected.json() as any;
     expect(rejected.status).toBe(200);
     expect(rejectedBody.source.status).toBe("rejected");
+    expect(rejectedBody.collectionTrigger).toMatchObject({ queued: false, unsafeJobQueued: false });
+    expect(frontier.snapshot()).toHaveLength(0);
     expect(rejectedBody.lifecycle.audit.map((event: any) => event.action)).toEqual(["retry", "suppress", "reject"]);
   });
 

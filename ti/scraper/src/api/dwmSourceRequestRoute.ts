@@ -282,8 +282,12 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
           message: "Restricted metadata activation requires approveMetadataOnly=true and an approving operator."
         },
         source,
+        candidate: sourceCandidate(source),
         lifecycle: sourceLifecycle(source),
-        policy: sourcePolicyPosture(source)
+        policy: sourcePolicyPosture(source),
+        parser: sourceParserStatus(source),
+        collectionTrigger: skippedCollectionTrigger(source, "metadata_only_approval_required"),
+        alertRebuild: skippedAlertRebuild(source, "metadata_only_approval_required")
       }, 409);
     }
     const activated = saveLifecyclePatch(source, options, {
@@ -296,7 +300,8 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
       activationState: isRestrictedMetadataSource(source) ? "metadata_only_approved" : "active_canary",
       approveMetadataOnly: isRestrictedMetadataSource(source)
     });
-    return json(lifecycleResponse(activated, "activate"), 200);
+    const operations = persistOperationalNextStep(activated, options, body.action);
+    return json(lifecycleResponse(operations.source, "activate", operations), 200);
   }
   return json({ error: { code: "unsupported_action", message: `Unsupported source lifecycle action: ${body.action}` } }, 400);
 }
@@ -381,7 +386,7 @@ function restrictedMetadataSourceFromRequest(input: { target: string; body: DwmS
   } as SourceRecord;
 }
 
-function lifecycleResponse(source: SourceRecord, action: string) {
+function lifecycleResponse(source: SourceRecord, action: string, operations?: OperationalNextStep) {
   const candidate = sourceCandidate(source);
   return {
     action,
@@ -391,6 +396,8 @@ function lifecycleResponse(source: SourceRecord, action: string) {
     policy: sourcePolicyPosture(source),
     health: sourceHealthStatus(source),
     parser: sourceParserStatus(source),
+    collectionTrigger: operations?.collectionTrigger ?? source.metadata?.sourceCandidate?.collectionTrigger ?? skippedCollectionTrigger(source, action === "promote" || action === "activate" ? "not_queued" : "not_a_promotion_action"),
+    alertRebuild: operations?.alertRebuild ?? source.metadata?.sourceCandidate?.alertRebuild ?? skippedAlertRebuild(source, "captures_required_before_alert_rebuild"),
     nextAction: nextSourceAction(source)
   };
 }
@@ -623,6 +630,142 @@ function sourceParserStatus(source: SourceRecord) {
     profile: isRestrictedMetadataSource(source) ? "restricted_metadata" : source.type === "telegram_public" ? "public_channel_handoff" : "default",
     lastValidatedAt: source.metadata?.validationResult?.checkedAt ?? sourceCandidate(source).validationResult?.checkedAt,
     warnings: []
+  };
+}
+
+type OperationalNextStep = {
+  source: SourceRecord;
+  collectionTrigger: Record<string, unknown>;
+  alertRebuild: Record<string, unknown>;
+};
+
+function persistOperationalNextStep(source: SourceRecord, options: ApiServerOptions, action: string): OperationalNextStep {
+  const collectionTrigger = buildCollectionTrigger(source, options, action);
+  const alertRebuild = buildAlertRebuildTrigger(source, collectionTrigger);
+  const candidate = sourceCandidate(source);
+  const next = options.store.saveSource({
+    ...source,
+    metadata: {
+      ...(source.metadata ?? {}),
+      sourceCandidate: {
+        ...candidate,
+        collectionTrigger,
+        alertRebuild
+      },
+      collectionTrigger,
+      alertRebuild
+    }
+  } as SourceRecord);
+  return { source: next, collectionTrigger, alertRebuild };
+}
+
+function buildCollectionTrigger(source: SourceRecord, options: ApiServerOptions, action: string) {
+  const candidate = sourceCandidate(source);
+  const triggerId = stableId("dwm_collection_trigger", `${candidate.id}:${source.id}:${action}`);
+  if (source.status !== "active") return skippedCollectionTrigger(source, "source_not_active", triggerId);
+  if (isRestrictedMetadataSource(source)) {
+    return {
+      ...skippedCollectionTrigger(source, "restricted_metadata_requires_metadata_worker_contract", triggerId),
+      metadataOnly: true,
+      unsafeJobQueued: false,
+      approvalTicketId: candidate.approvalTicket?.id
+    };
+  }
+  if (source.type !== "telegram_public") return skippedCollectionTrigger(source, "unsupported_source_family", triggerId);
+
+  const discoveredAt = nowIso();
+  const scope = String(candidate.scope ?? source.metadata?.scope ?? "public threat intelligence").trim();
+  const intelRequestId = stableId("dwm_source_candidate_collection", `${candidate.id}:${source.id}`);
+  const score = options.frontier.add({
+    source,
+    tenantId: source.tenantId ?? candidate.tenantId,
+    intelRequestId,
+    url: source.url,
+    discoveredAt,
+    anchorText: `${scope} public Telegram CTI collection candidate`,
+    surroundingText: `${scope} ransomware malware exploit credential broker threat intelligence public channel`,
+    parentTitle: source.name,
+    parentText: source.legalNotes,
+    parentRelevance: 0.92,
+    destinationTitle: source.name,
+    destinationText: `${scope} public Telegram source approved for bounded preview collection`,
+    destinationRelevance: 0.9,
+    novelty: 0.8,
+    freshness: 0.85,
+    fairnessKey: `source-candidate:${candidate.id}`,
+    budgetKey: "public_channel_window",
+    planning: {
+      budgetClass: "source_health_probe",
+      sourceCandidateId: candidate.id,
+      triggerId
+    },
+    maxBytes: 64_000
+  });
+  const task = options.frontier.snapshot().map((item: any) => item.task ?? item).find((item: any) => item.intelRequestId === intelRequestId && item.sourceId === source.id);
+  return {
+    id: triggerId,
+    type: "frontier_collection",
+    queued: score.decision === "enqueue",
+    unsafeJobQueued: false,
+    queue: "frontier",
+    jobId: task?.id,
+    taskId: task?.id,
+    candidateId: candidate.id,
+    sourceId: source.id,
+    activeSourceId: source.id,
+    scoreDecision: score.decision,
+    scoreReason: score.reason,
+    queuedAt: discoveredAt,
+    policyBoundary: candidate.policyBoundary,
+    parserStatus: parserStatusForSource(source)
+  };
+}
+
+function buildAlertRebuildTrigger(source: SourceRecord, collectionTrigger: Record<string, unknown>) {
+  const candidate = sourceCandidate(source);
+  return {
+    id: stableId("dwm_alert_rebuild_trigger", `${candidate.id}:${source.id}`),
+    candidateId: candidate.id,
+    sourceId: source.id,
+    queued: false,
+    skipped: true,
+    reason: collectionTrigger.queued === true
+      ? "collection_queued_alert_rebuild_waits_for_new_captures"
+      : "collection_not_queued",
+    contract: {
+      endpoint: "/v1/dwm/alerts/rebuild",
+      requiredAfter: "capture_persisted",
+      requiredFields: ["tenantId", "watchlistIds", "captureIds"],
+      orgScope: "use existing DWM watchlist/org resolution lane"
+    }
+  };
+}
+
+function skippedCollectionTrigger(source: SourceRecord, reason: string, id?: string) {
+  const candidate = sourceCandidate(source);
+  return {
+    id: id ?? stableId("dwm_collection_trigger", `${candidate.id}:${source.id}:${reason}`),
+    type: "frontier_collection",
+    queued: false,
+    unsafeJobQueued: false,
+    reason,
+    candidateId: candidate.id,
+    sourceId: source.id,
+    activeSourceId: source.status === "active" ? source.id : undefined,
+    policyBoundary: candidate.policyBoundary,
+    parserStatus: parserStatusForSource(source)
+  };
+}
+
+function skippedAlertRebuild(source: SourceRecord, reason: string) {
+  const candidate = sourceCandidate(source);
+  return {
+    id: stableId("dwm_alert_rebuild_trigger", `${candidate.id}:${source.id}:${reason}`),
+    candidateId: candidate.id,
+    sourceId: source.id,
+    queued: false,
+    skipped: true,
+    reason
   };
 }
 
