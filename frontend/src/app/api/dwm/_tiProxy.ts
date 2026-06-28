@@ -24,6 +24,7 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             headers: {
                 'content-type': 'application/json',
                 'x-tenant-id': request.headers.get('x-tenant-id') || 'default',
+                'x-organization-id': request.headers.get('x-organization-id') || '',
             },
             signal: AbortSignal.timeout(options.timeoutMs ?? 12000),
         }

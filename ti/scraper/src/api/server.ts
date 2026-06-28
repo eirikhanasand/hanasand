@@ -9,6 +9,7 @@ import { nowIso } from "../utils.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
 import { contractIndex } from "./contractsRoute.ts";
 import { error, json, numberQuery, page, readJson } from "./http.ts";
+import { createOrganization, createOrganizationInvites, createWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook } from "./organizationRoutes.ts";
 import { publicChannelApplyPlan, publicChannelStatus } from "./publicChannelDispatch.ts";
 import { qualityPayload } from "./qualityRoute.ts";
 import { createRun, runResults, runStatus } from "./runRoutes.ts";
@@ -27,6 +28,13 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/health") return json({ ok: true, service: "ti-scraper", generatedAt: nowIso() });
     if (url.pathname === "/v1/contracts") return json(contractIndex());
     if (url.pathname === "/v1/metrics") return json(metrics(options));
+    if (url.pathname === "/v1/organizations" && request.method === "GET") return listOrganizations(url, options);
+    if (url.pathname === "/v1/organizations" && request.method === "POST") return createOrganization(request, options);
+    if (/^\/v1\/organizations\/[^/]+\/members$/.test(url.pathname) && request.method === "GET") return listOrganizationMembers(url, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/organizations\/[^/]+\/invites$/.test(url.pathname) && request.method === "POST") return createOrganizationInvites(request, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "GET") return listWebhookDestinations(url, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "POST") return createWebhookDestination(request, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/organizations\/[^/]+\/webhooks\/test$/.test(url.pathname) && request.method === "POST") return testOrganizationWebhook(request, options, url.pathname.split("/")[3]);
     if (url.pathname === "/v1/sources" && request.method === "GET") return json({ sources: page(options.store.listSources(), url) });
     if (url.pathname === "/v1/sources" && request.method === "POST") return createSource(request, options);
     if (url.pathname.startsWith("/v1/sources/") && request.method === "PATCH") return updateSource(request, options, url.pathname.split("/")[3]);
@@ -40,7 +48,9 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/darkweb/status") return json({ status: buildDarkwebIndexStatus({ sources: options.store.listSources(), captures: options.store.listCaptures() } as any) });
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
     if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "GET") {
-      const tenantId = url.searchParams.get("tenantId") ?? undefined;
+      const scope = resolveOrganizationScope({ url, request }, options);
+      if (scope.error) return scope.error;
+      const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
       return json(buildDwmProductSnapshot({
         tenantId,
@@ -61,7 +71,9 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       }));
     }
     if ((url.pathname === "/v1/dwm/operations" || url.pathname === "/api/dwm/operations") && request.method === "GET") {
-      const tenantId = url.searchParams.get("tenantId") ?? undefined;
+      const scope = resolveOrganizationScope({ url, request }, options);
+      if (scope.error) return scope.error;
+      const tenantId = scope.tenantId;
       const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
       return json(buildDwmOperationsSnapshot({
         tenantId,
@@ -72,13 +84,17 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
       }));
     }
     if (url.pathname === "/v1/dwm/source-requests" && request.method === "POST") return createDwmSourceRequest(request, options);
-    if ((url.pathname === "/v1/dwm/source-inventory" || url.pathname === "/api/dwm/source-inventory") && request.method === "GET") return json(buildDwmSourceInventory({
-      tenantId: url.searchParams.get("tenantId") ?? undefined,
+    if ((url.pathname === "/v1/dwm/source-inventory" || url.pathname === "/api/dwm/source-inventory") && request.method === "GET") {
+      const scope = resolveOrganizationScope({ url, request }, options);
+      if (scope.error) return scope.error;
+      return json(buildDwmSourceInventory({
+      tenantId: scope.tenantId,
       watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? ""),
       sources: options.store.listSources(),
       captures: options.store.listCaptures(),
       includeCandidates: url.searchParams.get("full") === "true"
     }));
+    }
     if ((url.pathname === "/v1/dwm/source-packs" || url.pathname === "/api/dwm/source-packs") && request.method === "GET") {
       const catalog = buildDwmSeedCatalog({ watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? "") });
       return json({

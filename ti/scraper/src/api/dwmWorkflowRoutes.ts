@@ -18,9 +18,11 @@ type DwmWatchlist = {
 };
 
 export function listDwmWatchlists(url: URL, options: ApiServerOptions): Response {
-  const tenantId = url.searchParams.get("tenantId") ?? undefined;
+  const scope = resolveOrganizationScope({ url }, options);
+  if (scope.error) return scope.error;
+  const tenantId = scope.tenantId;
   const watchlists = (options.store as any).listDwmWatchlists?.() ?? [];
-  return json({ watchlists: tenantId ? watchlists.filter((row: DwmWatchlist) => row.tenantId === tenantId) : watchlists });
+  return json({ organization: scope.organization, watchlists: watchlists.filter((row: DwmWatchlist) => row.tenantId === tenantId) });
 }
 
 export async function createDwmWatchlist(request: Request, options: ApiServerOptions): Promise<Response> {
@@ -29,36 +31,48 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
   if (!terms.length) return json({ error: { code: "missing_terms", message: "Add at least one company, domain, vendor, brand, VIP, or product term." } }, 400);
 
   const generatedAt = nowIso();
-  const tenantId = String(body.tenantId ?? request.headers.get("x-tenant-id") ?? "default");
+  const scope = resolveOrganizationScope({ body, request }, options);
+  if (scope.error) return scope.error;
+  const tenantId = scope.tenantId;
   const webhookUrl = normalizeWebhookUrl(body.webhookUrl);
   if (body.webhookUrl && !webhookUrl) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." } }, 400);
+  const webhookDestinationId = body.webhookDestinationId ? String(body.webhookDestinationId) : undefined;
+  const webhookDestination = webhookDestinationId ? findWebhookDestination(options, webhookDestinationId) : undefined;
+  if (webhookDestinationId && (!webhookDestination || webhookDestination.organizationId !== scope.organizationId)) {
+    return json({ error: { code: "invalid_webhook_destination", message: "Webhook destination must belong to the selected organization." } }, 400);
+  }
   const id = body.id ?? stableId("dwm_watchlist", `${tenantId}:${terms.map((term) => term.value).join("|")}`);
   const existing = (options.store as any).getDwmWatchlist?.(id);
   const watchlist: DwmWatchlist = {
     id,
     tenantId,
+    organizationId: scope.organizationId ?? existing?.organizationId,
     name: String(body.name ?? "Company exposure watchlist"),
     terms,
     webhookUrl,
+    webhookDestinationId: webhookDestinationId ?? existing?.webhookDestinationId,
     status: body.status === "paused" ? "paused" : "active",
     createdAt: existing?.createdAt ?? generatedAt,
     updatedAt: generatedAt
   };
   (options.store as any).saveDwmWatchlist(watchlist);
-  return json({ watchlist }, 201);
+  return json({ organization: scope.organization, watchlist }, 201);
 }
 
 export function listDwmAlerts(url: URL, options: ApiServerOptions): Response {
-  const tenantId = url.searchParams.get("tenantId") ?? undefined;
+  const scope = resolveOrganizationScope({ url }, options);
+  if (scope.error) return scope.error;
+  const tenantId = scope.tenantId;
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
-  return json({ alerts: tenantId ? alerts.filter((row: any) => row.tenantId === tenantId) : alerts });
+  return json({ organization: scope.organization, alerts: alerts.filter((row: any) => row.tenantId === tenantId) });
 }
 
 export function getDwmAlertDetail(url: URL, options: ApiServerOptions, alertId: string | undefined): Response {
   const alert = findDwmAlert(options, alertId);
   if (!alert) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
-  const tenantId = url.searchParams.get("tenantId") ?? undefined;
-  if (tenantId && alert.tenantId !== tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
+  const scope = resolveOrganizationScope({ url }, options);
+  if (scope.error) return scope.error;
+  if (alert.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
   return json(buildDwmAlertDetail(alert, options));
 }
 
@@ -126,14 +140,18 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
 }
 
 export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions): Response {
-  const tenantId = url.searchParams.get("tenantId") ?? undefined;
+  const scope = resolveOrganizationScope({ url }, options);
+  if (scope.error) return scope.error;
+  const tenantId = scope.tenantId;
   const deliveries = (options.store as any).listDwmWebhookDeliveries?.() ?? [];
-  return json({ deliveries: tenantId ? deliveries.filter((row: any) => row.tenantId === tenantId) : deliveries });
+  return json({ organization: scope.organization, deliveries: deliveries.filter((row: any) => row.tenantId === tenantId) });
 }
 
 export async function rebuildDwmAlerts(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<any>(request);
-  const tenantId = String(body.tenantId ?? request.headers.get("x-tenant-id") ?? "default");
+  const scope = resolveOrganizationScope({ body, request }, options);
+  if (scope.error) return scope.error;
+  const tenantId = scope.tenantId;
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const terms = watchlists.flatMap((watchlist: DwmWatchlist) => watchlist.terms);
   if (!terms.length) return json({ error: { code: "missing_watchlist", message: "Create an active DWM watchlist before rebuilding alerts." } }, 400);
@@ -151,6 +169,7 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
       ...alert,
       id: existing?.id ?? alert.id,
       tenantId,
+      organizationId: scope.organizationId,
       watchlistIds: watchlists.map((watchlist: DwmWatchlist) => watchlist.id),
       reviewState: existing?.reviewState ?? alert.reviewState,
       deliveryState: existing?.deliveryState ?? "pending_review",
@@ -164,51 +183,64 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
       updatedAt: snapshot.generatedAt
     });
   });
-  return json({ rebuiltAt: snapshot.generatedAt, savedAlertCount: saved.length, alerts: saved, readiness: snapshot.readiness });
+  return json({ organization: scope.organization, rebuiltAt: snapshot.generatedAt, savedAlertCount: saved.length, alerts: saved, readiness: snapshot.readiness });
 }
 
 export async function deliverDwmWebhooks(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<any>(request);
-  const tenantId = String(body.tenantId ?? request.headers.get("x-tenant-id") ?? "default");
+  const scope = resolveOrganizationScope({ body, request }, options);
+  if (scope.error) return scope.error;
+  const tenantId = scope.tenantId;
   const dryRun = body.dryRun === true;
   const fetcher = typeof options.webhookFetch === "function" ? options.webhookFetch as typeof fetch : fetch;
-  const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active" && row.webhookUrl);
+  const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
+  const orgDestinations = organizationWebhookDestinations(options, scope.organizationId);
   const alerts = ((options.store as any).listDwmAlerts?.() ?? []).filter((alert: any) => alert.tenantId === tenantId && (body.alertId ? alert.id === body.alertId : alert.deliveryState !== "delivered"));
   const generatedAt = nowIso();
   const deliveries: any[] = [];
 
   for (const alert of alerts.slice(0, Math.max(1, Math.min(Number(body.limit ?? 25), 100)))) {
     const watchlist = watchlists.find((row: DwmWatchlist) => alert.watchlistIds?.includes(row.id)) ?? watchlists[0];
-    if (!watchlist?.webhookUrl) {
+    const destination = selectWebhookDestination(options, orgDestinations, watchlist, body.webhookDestinationId ? String(body.webhookDestinationId) : undefined);
+    const webhookUrl = normalizeWebhookUrl(destination?.url) ?? normalizeWebhookUrl(watchlist?.webhookUrl);
+    const deliveryKind = destination?.kind ?? inferWebhookKind(webhookUrl ?? "");
+    if (!webhookUrl) {
       const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:missing-webhook:${generatedAt}`);
       deliveries.push((options.store as any).saveDwmWebhookDelivery({
         id: deliveryId,
+        organizationId: scope.organizationId,
         tenantId,
         alertId: alert.id,
         watchlistId: alert.watchlistIds?.[0] ?? "missing_watchlist",
+        webhookDestinationId: destination?.id,
         endpointHash: "missing_webhook_url",
         dedupeKey: alert.webhookDelivery?.dedupeKey ?? deliveryId,
         attemptedAt: generatedAt,
         dryRun,
         payloadHash: "not_sent",
+        deliveryKind,
         status: "skipped",
         httpStatus: 0,
         error: "No webhook URL configured for the active watchlist."
       }));
       continue;
     }
-    const payload = buildWebhookPayload(alert, watchlist, generatedAt);
-    const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${watchlist.id}:${alert.webhookDelivery?.dedupeKey ?? ""}`);
+    const payload = buildWebhookPayload(alert, watchlist, generatedAt, destination);
+    const requestBody = buildWebhookRequestBody(deliveryKind, payload);
+    const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${destination?.id ?? watchlist.id}:${alert.webhookDelivery?.dedupeKey ?? ""}`);
     const baseDelivery = {
       id: deliveryId,
+      organizationId: scope.organizationId,
       tenantId,
       alertId: alert.id,
       watchlistId: watchlist.id,
-      endpointHash: stableId("endpoint", watchlist.webhookUrl),
+      webhookDestinationId: destination?.id,
+      endpointHash: stableId("endpoint", webhookUrl),
       dedupeKey: alert.webhookDelivery?.dedupeKey ?? deliveryId,
       attemptedAt: generatedAt,
       dryRun,
-      payloadHash: stableId("payload", JSON.stringify(payload))
+      payloadHash: stableId("payload", JSON.stringify(requestBody)),
+      deliveryKind
     };
 
     if (dryRun) {
@@ -217,15 +249,10 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     }
 
     try {
-      const response = await fetcher(watchlist.webhookUrl, {
+      const response = await fetcher(webhookUrl, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-hanasand-event": "darkweb.monitoring.match",
-          "x-hanasand-delivery-id": deliveryId,
-          "x-hanasand-dedupe-key": baseDelivery.dedupeKey
-        },
-        body: JSON.stringify(payload)
+        headers: webhookHeaders("darkweb.monitoring.match", deliveryId, baseDelivery.dedupeKey),
+        body: JSON.stringify(requestBody)
       });
       const ok = response.status >= 200 && response.status < 300;
       deliveries.push((options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status }));
@@ -235,38 +262,48 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     }
   }
 
-  return json({ deliveredAt: generatedAt, attemptedCount: deliveries.length, deliveries });
+  return json({ organization: scope.organization, deliveredAt: generatedAt, attemptedCount: deliveries.length, deliveries });
 }
 
 export async function testDwmWebhook(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<any>(request);
-  const tenantId = String(body.tenantId ?? request.headers.get("x-tenant-id") ?? "default");
+  const scope = resolveOrganizationScope({ body, request }, options);
+  if (scope.error) return scope.error;
+  const tenantId = scope.tenantId;
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const watchlist = body.watchlistId ? watchlists.find((row: DwmWatchlist) => row.id === body.watchlistId) : watchlists.find((row: DwmWatchlist) => row.webhookUrl) ?? watchlists[0];
-  const webhookUrl = normalizeWebhookUrl(body.webhookUrl) ?? normalizeWebhookUrl(watchlist?.webhookUrl);
+  const destination = selectWebhookDestination(options, organizationWebhookDestinations(options, scope.organizationId), watchlist, body.webhookDestinationId ? String(body.webhookDestinationId) : undefined);
+  const webhookUrl = normalizeWebhookUrl(body.webhookUrl) ?? normalizeWebhookUrl(destination?.url) ?? normalizeWebhookUrl(watchlist?.webhookUrl);
   if (!webhookUrl) return json({ error: { code: "missing_webhook_url", message: "Save a valid webhook URL before testing delivery." } }, 400);
 
   const generatedAt = nowIso();
   const fetcher = typeof options.webhookFetch === "function" ? options.webhookFetch as typeof fetch : fetch;
   const deliveryId = stableId("dwm_delivery", `${tenantId}:webhook_test:${webhookUrl}:${generatedAt}`);
+  const deliveryKind = destination?.kind ?? inferWebhookKind(webhookUrl);
   const payload = {
     eventType: "darkweb.monitoring.test",
+    organizationId: scope.organizationId,
     tenantId,
     watchlistId: watchlist?.id ?? "ad_hoc_webhook_test",
+    webhookDestinationId: destination?.id,
     generatedAt,
     message: "Hanasand dark web monitoring webhook test.",
     expectedAlertEvent: "darkweb.monitoring.match"
   };
+  const requestBody = buildWebhookRequestBody(deliveryKind, payload);
   const baseDelivery = {
     id: deliveryId,
+    organizationId: scope.organizationId,
     tenantId,
     alertId: "webhook_test",
     watchlistId: watchlist?.id ?? "ad_hoc_webhook_test",
+    webhookDestinationId: destination?.id,
     endpointHash: stableId("endpoint", webhookUrl),
     dedupeKey: deliveryId,
     attemptedAt: generatedAt,
     dryRun: body.dryRun === true,
-    payloadHash: stableId("payload", JSON.stringify(payload))
+    payloadHash: stableId("payload", JSON.stringify(requestBody)),
+    deliveryKind
   };
 
   if (body.dryRun === true) {
@@ -277,13 +314,8 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
   try {
     const response = await fetcher(webhookUrl, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-hanasand-event": "darkweb.monitoring.test",
-        "x-hanasand-delivery-id": deliveryId,
-        "x-hanasand-dedupe-key": deliveryId
-      },
-      body: JSON.stringify(payload)
+      headers: webhookHeaders("darkweb.monitoring.test", deliveryId, deliveryId),
+      body: JSON.stringify(requestBody)
     });
     const ok = response.status >= 200 && response.status < 300;
     const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
@@ -300,12 +332,14 @@ export function storedWatchlistTerms(options: ApiServerOptions, tenantId: string
     .flatMap((row: DwmWatchlist) => row.terms);
 }
 
-function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: string) {
+function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: string, destination?: WebhookDestination) {
   return {
     eventType: alert.eventType,
     alertId: alert.id,
+    organizationId: alert.organizationId ?? watchlist.organizationId,
     tenantId: alert.tenantId,
     watchlistId: watchlist.id,
+    webhookDestinationId: destination?.id,
     generatedAt,
     severity: alert.severity,
     confidence: alert.confidence,
@@ -335,6 +369,13 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     })),
     delivery: alert.webhookDelivery
   };
+}
+
+function selectWebhookDestination(options: ApiServerOptions, orgDestinations: WebhookDestination[], watchlist: DwmWatchlist | undefined, requestedDestinationId?: string): WebhookDestination | undefined {
+  if (requestedDestinationId) return orgDestinations.find((row) => row.id === requestedDestinationId);
+  const watchlistDestination = findWebhookDestination(options, watchlist?.webhookDestinationId);
+  if (watchlistDestination && orgDestinations.some((row) => row.id === watchlistDestination.id)) return watchlistDestination;
+  return orgDestinations[0];
 }
 
 function findDwmAlert(options: ApiServerOptions, alertId: string | undefined) {
