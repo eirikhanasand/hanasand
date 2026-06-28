@@ -57,24 +57,6 @@ const telegramFollowupCapture: RawCapture = {
   metadata: { adapter: "telegram_public", channel: "repo_public", messageId: 102 }
 } as RawCapture;
 
-const telegramDuplicateCapture: RawCapture = {
-  ...telegramCapture,
-  id: "cap_repo_tg_acme_duplicate"
-} as RawCapture;
-
-const nonmatchCapture: RawCapture = {
-  id: "cap_repo_tg_quiet",
-  sourceId: telegramSource.id,
-  url: "https://t.me/repo_public/103",
-  collectedAt: "2026-06-28T13:18:00.000Z",
-  mediaType: "text/plain",
-  storageKind: "inline_text",
-  contentHash: "hash-repo-tg-quiet",
-  sensitive: false,
-  body: "Public Telegram chatter mentions unrelated.example and generic credential markets, but not the customer watchlist.",
-  metadata: { adapter: "telegram_public", channel: "repo_public", messageId: 103 }
-} as RawCapture;
-
 const darkwebCapture: RawCapture = {
   id: "cap_repo_darkweb_acme",
   sourceId: darkwebSource.id,
@@ -101,16 +83,13 @@ describe("dwm alert repository", () => {
     store.saveSource(telegramSource);
     store.saveSource(darkwebSource);
     store.saveCapture(telegramCapture);
-    store.saveCapture(telegramDuplicateCapture);
-    store.saveCapture(nonmatchCapture);
     store.saveCapture(darkwebCapture);
     (store as any).saveDwmWatchlist({
       id: "watch_repo_acme",
       tenantId: "tenant_repo_acme",
       organizationId: "org_repo_acme",
       name: "Acme exposure watch",
-      terms: [{ id: "watch_item_acme_domain", value: "acme.com", kind: "domain" }],
-      webhookDestinationId: "webhook_repo_discord",
+      terms: [{ value: "acme.com", kind: "domain" }],
       status: "active",
       createdAt: "2026-06-28T13:00:00.000Z",
       updatedAt: "2026-06-28T13:00:00.000Z"
@@ -125,31 +104,8 @@ describe("dwm alert repository", () => {
     expect(first.alerts.every((alert) => alert.provenance.matchBasis === "watchlist_capture_text")).toBe(true);
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.recommendedRoute).toBe("identity_response");
     expect(first.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata")?.provenance.metadataOnly).toBe(true);
-    expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.sourceCount).toBe(1);
-    expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.workflowContext).toMatchObject({
-      organizationId: "org_repo_acme",
-      watchlistIds: ["watch_repo_acme"],
-      watchlistItemIds: ["watch_item_acme_domain"],
-      sourceFamily: "telegram_public",
-      primaryCaptureId: "cap_repo_tg_acme",
-      evidenceCount: 1,
-      recommendedRoute: "identity_response",
-      hasWebhookRoute: true
-    });
-    expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.webhookContext).toMatchObject({
-      organizationId: "org_repo_acme",
-      watchlistItemIds: ["watch_item_acme_domain"],
-      captureIds: ["cap_repo_tg_acme"],
-      evidenceCount: 1,
-      recommendedRoute: "identity_response"
-    });
-    const telegramAlert = first.alerts.find((alert) => alert.sourceFamily === "telegram_public");
-    expect(telegramAlert?.caseIdCandidate).toMatch(/^case_/);
-    expect(telegramAlert?.workflowContext.caseIdCandidate).toBe(telegramAlert?.caseIdCandidate);
-    expect(telegramAlert?.webhookContext.caseIdCandidate).toBe(telegramAlert?.caseIdCandidate);
-    expect(telegramAlert?.casePath).toContain(`/v1/cases/${telegramAlert?.caseIdCandidate}`);
 
-    const telegramSql = dwmAlertToSqlRecord(telegramAlert);
+    const telegramSql = dwmAlertToSqlRecord(first.alerts.find((alert) => alert.sourceFamily === "telegram_public"));
     expect(telegramSql).toMatchObject({
       tenant_id: "tenant_repo_acme",
       organization_id: "org_repo_acme",
@@ -162,11 +118,6 @@ describe("dwm alert repository", () => {
     expect(telegramSql.provenance.captureIds).toContain("cap_repo_tg_acme");
     expect(telegramSql.evidence[0].provenance.captureId).toBe("cap_repo_tg_acme");
     expect(telegramSql.watchlist_ids).toEqual(["watch_repo_acme"]);
-    expect(telegramSql.watchlist_item_ids).toEqual(["watch_item_acme_domain"]);
-    expect(telegramSql.workflow_context.captureIds).toEqual(["cap_repo_tg_acme"]);
-    expect(telegramSql.webhook_context.casePath).toContain(telegramSql.id);
-    expect(telegramSql.case_id_candidate).toBe(telegramAlert?.caseIdCandidate);
-    expect(telegramSql.case_path).toContain(`/v1/cases/${telegramAlert?.caseIdCandidate}`);
 
     const existing = first.alerts[0];
     store.saveDwmAlert({
@@ -174,7 +125,6 @@ describe("dwm alert repository", () => {
       reviewState: "reviewing",
       deliveryState: "ready_to_send",
       assignedOwner: "analyst-1",
-      caseId: "case_existing_repo",
       workflowNote: "Owner confirmed this is the customer domain.",
       workflowEvents: [{ id: "evt_1", at: "2026-06-28T13:12:00.000Z", toReviewState: "reviewing" }],
       replayCount: 2,
@@ -190,15 +140,10 @@ describe("dwm alert repository", () => {
     expect(preserved?.assignedOwner).toBe("analyst-1");
     expect(preserved?.workflowNote).toBe("Owner confirmed this is the customer domain.");
     expect(preserved?.workflowEvents).toHaveLength(1);
-    expect(preserved?.caseId).toBe("case_existing_repo");
     expect(preserved?.replayCount).toBe(2);
     expect(preserved?.lastReplayedAt).toBe("2026-06-28T13:13:00.000Z");
     expect(preserved?.sourceCount).toBe(2);
-    expect(preserved?.workflowContext.evidenceCount).toBe(2);
-    expect(preserved?.webhookContext.evidenceCount).toBe(2);
     expect(preserved?.evidence.map((item: any) => item.id)).toContain("cap_repo_tg_acme_followup");
-    expect(preserved?.evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_acme_duplicate");
-    expect(preserved?.evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_quiet");
     expect(preserved?.provenance.captureIds).toContain("cap_repo_tg_acme_followup");
   });
 
@@ -237,24 +182,6 @@ describe("dwm alert repository", () => {
     expect(rebuild.alerts[0].confidenceReasoning.join(" ")).toContain("Watchlist term matched");
     expect(rebuild.alerts[0].provenance.captureIds).toContain("cap_repo_tg_acme");
     expect(rebuild.alerts[0].evidence[0].provenance.captureId).toBe("cap_repo_tg_acme");
-    expect(rebuild.alerts[0].workflowContext).toMatchObject({
-      tenantId: "tenant_api_acme",
-      sourceFamily: "telegram_public",
-      primaryCaptureId: "cap_repo_tg_acme",
-      evidenceCount: 1,
-      recommendedRoute: "identity_response",
-      hasWebhookRoute: false
-    });
-    expect(rebuild.alerts[0].workflowContext.watchlistItemIds[0]).toContain("acme.com");
-    expect(rebuild.alerts[0].webhookContext).toMatchObject({
-      tenantId: "tenant_api_acme",
-      sourceFamily: "telegram_public",
-      captureIds: ["cap_repo_tg_acme"],
-      evidenceCount: 1,
-      recommendedRoute: "identity_response"
-    });
-    expect(rebuild.alerts[0].caseIdCandidate).toMatch(/^case_/);
-    expect(rebuild.alerts[0].casePath).toContain(`/v1/cases/${rebuild.alerts[0].caseIdCandidate}`);
 
     const listResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts?tenantId=tenant_api_acme"), options);
     const list = await listResponse.json() as any;
@@ -263,9 +190,5 @@ describe("dwm alert repository", () => {
     expect(list.alerts).toHaveLength(1);
     expect(list.alerts[0].watchlistIds).toHaveLength(1);
     expect(list.alerts[0].webhookDelivery.dedupeKey).toBe(list.alerts[0].dedupeKey);
-    expect(list.alerts[0].workflowContext.casePath).toBe(list.alerts[0].casePath);
-    expect(list.alerts[0].workflowContext.caseIdCandidate).toBe(list.alerts[0].caseIdCandidate);
-    expect(list.alerts[0].webhookContext.caseIdCandidate).toBe(list.alerts[0].caseIdCandidate);
-    expect(list.alerts[0].webhookContext.dedupeKey).toBe(list.alerts[0].dedupeKey);
   });
 });

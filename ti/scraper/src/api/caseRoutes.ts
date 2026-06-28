@@ -155,7 +155,6 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
 function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown) {
   const alert = findDwmAlert(options, caseRecord.alertId);
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
-  const watchlists = caseWatchlists(options, alert, caseRecord);
   const timeline = [
     { id: `${caseRecord.id}:created`, at: caseRecord.createdAt, type: "case_created", title: "Case opened", detail: caseRecord.summary },
     ...(caseRecord.workflowEvents ?? []).map((event) => ({
@@ -180,27 +179,6 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     organization,
     case: caseRecord,
     alert,
-    alertContext: alert ? {
-      id: alert.id,
-      caseIdCandidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate,
-      casePath: alert.casePath ?? alert.workflowContext?.casePath,
-      workflowContext: alert.workflowContext,
-      webhookContext: alert.webhookContext,
-      provenance: alert.provenance,
-      workflowEvents: alert.workflowEvents ?? [],
-      reviewState: alert.reviewState,
-      deliveryState: alert.deliveryState,
-      assignedOwner: alert.assignedOwner,
-      workflowNote: alert.workflowNote
-    } : undefined,
-    watchlists,
-    deliveryContext: {
-      deliveryCount: deliveries.length,
-      latestDelivery: deliveries.sort((a: any, b: any) => String(b.attemptedAt ?? "").localeCompare(String(a.attemptedAt ?? "")))[0],
-      delivered: deliveries.some((delivery: any) => delivery.status === "delivered"),
-      failed: deliveries.filter((delivery: any) => delivery.status === "failed"),
-      retryable: deliveries.some((delivery: any) => delivery.status === "failed" || delivery.status === "skipped")
-    },
     deliveries,
     evidence: alert?.evidence ?? [],
     timeline,
@@ -213,14 +191,11 @@ function syncAlertForCase(options: ApiServerOptions, alert: any, caseRecord: Ana
     : caseRecord.status === "suppressed" ? "false_positive_candidate"
     : caseRecord.status === "closed" ? "resolved"
     : caseRecord.status === "escalated" ? "route_to_customer"
-    : event.action === "reopen" ? "reviewing"
     : alert.reviewState;
   const deliveryState = caseRecord.status === "suppressed" || caseRecord.status === "false_positive" ? "muted" : alert.deliveryState;
   (options.store as any).saveDwmAlert({
     ...alert,
     caseId: caseRecord.id,
-    caseIdCandidate: alert.caseIdCandidate ?? caseRecord.id,
-    casePath: alert.casePath ?? `/v1/cases/${encodeURIComponent(caseRecord.id)}?alertId=${encodeURIComponent(alert.id)}`,
     assignedOwner: caseRecord.assignedOwner,
     reviewState,
     deliveryState,
@@ -239,24 +214,6 @@ function syncAlertForCase(options: ApiServerOptions, alert: any, caseRecord: Ana
       note: `Case ${event.action}: ${event.note ?? "No note."}`
     }]
   });
-}
-
-function caseWatchlists(options: ApiServerOptions, alert: any, caseRecord: AnalystCase) {
-  const ids = new Set([...(alert?.watchlistIds ?? []), ...(alert?.workflowContext?.watchlistIds ?? [])].filter(Boolean));
-  return ((options.store as any).listDwmWatchlists?.() ?? [])
-    .filter((watchlist: any) => watchlist.tenantId === caseRecord.tenantId)
-    .filter((watchlist: any) => !ids.size || ids.has(watchlist.id))
-    .map((watchlist: any) => ({
-      id: watchlist.id,
-      organizationId: watchlist.organizationId,
-      tenantId: watchlist.tenantId,
-      name: watchlist.name,
-      status: watchlist.status,
-      webhookDestinationId: watchlist.webhookDestinationId,
-      hasWebhookUrl: Boolean(watchlist.webhookUrl),
-      matchedTerms: (watchlist.terms ?? []).filter((term: any) => String(term.value ?? "").toLowerCase() === String(alert?.matchedTerm?.value ?? "").toLowerCase()),
-      termCount: (watchlist.terms ?? []).length
-    }));
 }
 
 function nextActionsForCase(caseRecord: AnalystCase, alert: any, deliveries: any[]) {
