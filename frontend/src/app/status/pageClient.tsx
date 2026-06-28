@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { ServiceStatus } from '@/utils/status/getStatus'
 import { Activity, AlertCircle, BadgeCheck, BellRing, Binoculars, CheckCircle, Code2, HeartPulse, Inbox, Search, ShieldAlert, Timer, Webhook, XCircle } from 'lucide-react'
 import ErrorNotice from '@/components/error/errorNotice'
-import { useRouter } from 'next/navigation'
 
 type DashboardProps = {
     trafficSummary: {
@@ -39,22 +38,31 @@ function relativeTime(value: string, now: number | null) {
 }
 
 export default function StatusDashboard({ trafficSummary, serviceStatus }: DashboardProps) {
-    const router = useRouter()
     const [now, setNow] = useState<number | null>(null)
+    const [currentStatus, setCurrentStatus] = useState(serviceStatus)
 
     useEffect(() => {
         setNow(Date.now())
         const clock = window.setInterval(() => setNow(Date.now()), 1000)
-        const refresh = window.setInterval(() => router.refresh(), 60000)
+        const refreshStatus = async() => {
+            try {
+                const response = await fetch('/api/status', { cache: 'no-store' })
+                if (!response.ok) return
+                setCurrentStatus(await response.json() as ServiceStatus)
+            } catch {
+                // Keep the latest visible status instead of replacing it with a transient fetch failure.
+            }
+        }
+        const refresh = window.setInterval(refreshStatus, 30000)
 
         return () => {
             window.clearInterval(clock)
             window.clearInterval(refresh)
         }
-    }, [router])
+    }, [])
 
     const nowMs = now ?? Date.now()
-    const visibleChecks = serviceStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs))
+    const visibleChecks = currentStatus.checks.filter((check) => isCurrentPublicCheck(check, nowMs))
     const { endpointCount, domainCount, liveSurfaceCount } = trafficSummary
     const statusTone = {
         up: 'border-[#bde8ca] bg-[#e9f8ef] text-[#11612f]',
@@ -73,14 +81,14 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                             Public availability for the Hanasand web, monitoring, and notification surfaces.
                         </p>
                     </div>
-                    <div className={`grid gap-3 rounded-lg border p-4 shadow-sm ${statusTone[serviceStatus.overall]}`}>
+                    <div className={`grid gap-3 rounded-lg border p-4 shadow-sm ${statusTone[currentStatus.overall]}`}>
                         <div className='flex items-center justify-between gap-3'>
                             <span className='text-xs font-semibold uppercase'>Overall health</span>
-                            <span className='rounded-md bg-white/70 px-2 py-1 text-xs font-semibold'>{serviceStatus.overall.toUpperCase()}</span>
+                            <span className='rounded-md bg-white/70 px-2 py-1 text-xs font-semibold'>{currentStatus.overall.toUpperCase()}</span>
                         </div>
                         <div className='text-2xl font-semibold'>{visibleChecks.length} public check{visibleChecks.length === 1 ? '' : 's'}</div>
                         <p className='text-sm leading-6'>
-                            Snapshot generated {relativeTime(serviceStatus.generated_at, now)}.
+                            Checked {relativeTime(latestCheckedAt(currentStatus), now)}.
                         </p>
                     </div>
                 </div>
@@ -140,7 +148,7 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                                 <Inbox className='h-5 w-5' />
                             </div>
                             <h2 className='mt-3 text-base font-semibold text-[#171a21]'>No public monitor checks yet</h2>
-                            <p className='mt-1 max-w-md leading-6'>The status shell is healthy, but no current public checks are available in this snapshot.</p>
+                            <p className='mt-1 max-w-md leading-6'>The status page is healthy, but no current public checks are available yet.</p>
                         </div>
                     </div>}
                 </div>
@@ -168,15 +176,23 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                         : 'No unusual public traffic spike is visible in the current status window.'}
                 />
                 <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm md:col-span-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Monitor snapshot</p>
-                    <h3 className='mt-3 text-lg font-semibold text-[#171a21]'>{relativeTime(serviceStatus.generated_at, now)}</h3>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Latest check</p>
+                    <h3 className='mt-3 text-lg font-semibold text-[#171a21]'>Checked {relativeTime(latestCheckedAt(currentStatus), now)}</h3>
                     <p className='mt-1 text-sm text-[#596170]'>
-                        Latest health check for the services above.
+                        The time updates live; checks refresh in the background.
                     </p>
                 </div>
             </section>
         </div>
     )
+}
+
+function latestCheckedAt(status: ServiceStatus) {
+    const newestCheck = status.checks
+        .map(check => check.checked_at)
+        .filter(Boolean)
+        .sort((left, right) => Date.parse(right) - Date.parse(left))[0]
+    return newestCheck || status.generated_at
 }
 
 function SummaryCard({ icon, label, title, body }: { icon: React.ReactNode, label: string, title: string, body: string }) {
