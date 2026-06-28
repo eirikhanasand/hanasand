@@ -8,7 +8,7 @@ import { demoDwmProductSnapshot, type DwmAlert, type DwmSeverity } from '@/utils
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
-import { buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
+import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, resolveDashboardViewerIdentity, type DashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -159,60 +159,6 @@ function CompactStat({ label, value, tone = 'neutral' }: { label: string, value:
     )
 }
 
-export type DashboardViewerIdentity = {
-    userEmail?: string
-    userId?: string
-    actor?: string
-    source: 'session' | 'org_member_match' | 'single_active_org_member' | 'anonymous'
-}
-
-export function resolveDashboardViewerIdentity(input: {
-    userId?: string
-    userName?: string
-    userEmail?: string
-    headerUserId?: string
-    headerActor?: string
-    members: DwmOrganizationMember[]
-}): DashboardViewerIdentity {
-    const explicitEmail = emailLike(input.userEmail) || emailLike(input.userName)
-    const explicitUserId = normalizeIdentity(input.headerUserId) || normalizeIdentity(input.userId)
-    const explicitActor = normalizeIdentity(input.headerActor) || explicitUserId || explicitEmail
-    const activeMembers = input.members.filter(member => member.status === 'active')
-    const matchedMember = activeMembers.find(member => {
-        const candidates = [member.id, member.email, member.userId].map(normalizeIdentity).filter(Boolean)
-        return candidates.some(candidate => [explicitEmail, explicitUserId, explicitActor].includes(candidate))
-    })
-
-    if (matchedMember) {
-        return {
-            userEmail: matchedMember.email,
-            userId: matchedMember.userId || matchedMember.id,
-            actor: explicitActor || matchedMember.email,
-            source: 'org_member_match',
-        }
-    }
-
-    if (explicitEmail || explicitUserId || explicitActor) {
-        return {
-            userEmail: explicitEmail,
-            userId: explicitUserId,
-            actor: explicitActor,
-            source: 'session',
-        }
-    }
-
-    if (activeMembers.length === 1) {
-        return {
-            userEmail: activeMembers[0].email,
-            userId: activeMembers[0].userId || activeMembers[0].id,
-            actor: activeMembers[0].email,
-            source: 'single_active_org_member',
-        }
-    }
-
-    return { source: 'anonymous' }
-}
-
 async function loadDwmAlerts(scope: OperatorScope, identity: DashboardViewerIdentity): Promise<{ alerts: DwmAlert[], accessState: DwmAlertAccessState }> {
     const base = process.env.TI_SCRAPER_API_BASE
     if (!base) return { alerts: [], accessState: { status: 'unavailable', message: 'TI scraper backend is not configured.' } }
@@ -290,17 +236,6 @@ async function loadDwmDeliveries(scope: OperatorScope, identity: DashboardViewer
     }
 }
 
-export function applyScope(target: URL, scope: OperatorScope, identity?: DashboardViewerIdentity) {
-    if (scope.organizationId) {
-        target.searchParams.set('organizationId', scope.organizationId)
-        if (identity?.userEmail) target.searchParams.set('userEmail', identity.userEmail)
-        if (identity?.userId) target.searchParams.set('userId', identity.userId)
-        if (identity?.actor) target.searchParams.set('actor', identity.actor)
-        return
-    }
-    target.searchParams.set('tenantId', scope.tenantId)
-}
-
 async function readDwmApiFailure(response: Response): Promise<{ code?: string, message?: string, reason?: string }> {
     try {
         const payload = await response.json() as { error?: { code?: string, message?: string, reason?: string } }
@@ -321,16 +256,6 @@ function identityPayload(identity: DashboardViewerIdentity): DwmAlertAccessState
         actor: identity.actor,
         source: identity.source,
     }
-}
-
-function emailLike(value: unknown) {
-    const normalized = normalizeIdentity(value)
-    return normalized && normalized.includes('@') ? normalized : undefined
-}
-
-function normalizeIdentity(value: unknown) {
-    const normalized = String(value ?? '').trim().toLowerCase()
-    return normalized || undefined
 }
 
 async function loadDwmOrganizationState(): Promise<DwmOrganizationState> {
