@@ -3,7 +3,17 @@ import { randomUUID } from 'crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { actorHasAdminSupportAccess, recordAdminAuditEvent, requireAuditReason } from '#utils/adminAudit.ts'
-import { normalizeInviteInput, toInvite, toOrganization, type InviteInput, type OrganizationInviteRow, type OrganizationRow } from '#utils/organizations.ts'
+import {
+    buildOrganizationDwmAlertReference,
+    normalizeInviteInput,
+    toInvite,
+    toOrganization,
+    toWatchlistItem,
+    type InviteInput,
+    type OrganizationInviteRow,
+    type OrganizationRow,
+    type OrganizationWatchlistRow,
+} from '#utils/organizations.ts'
 
 type AuditQuery = {
     q?: string
@@ -32,6 +42,14 @@ type UserParams = {
 
 type SupportInviteBody = InviteInput & {
     reason?: unknown
+    context?: unknown
+}
+
+type SupportAccessRecoveryBody = InviteInput & {
+    targetUserId?: unknown
+    reason?: unknown
+    context?: unknown
+    caseId?: unknown
 }
 
 export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply) {
@@ -134,9 +152,16 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
         LIMIT ${add(limit)}
     `, values)
 
+    const events = result.rows.map(toAdminAuditEvent)
     return res.send({
-        events: result.rows,
+        events,
         filters: { q, org, actor: actorFilter, target, action, severity, source, service, entity, request, outcome, from, to, limit },
+        detail: {
+            schemaVersion: 'admin.audit.timeline.v1',
+            generatedAt: new Date().toISOString(),
+            filters: { q, org, actor: actorFilter, target, action, severity, source, service, entity, request, outcome, from, to, limit },
+            copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
+        },
     })
 }
 
@@ -159,7 +184,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
-    const [members, invites, audit] = await Promise.all([
+    const [members, invites, watchlists, audit] = await Promise.all([
         run(`
             SELECT
                 om.organization_id,
@@ -188,6 +213,13 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             ORDER BY status ASC, created_at DESC
         `, [organization.id]),
         run(`
+            SELECT *
+            FROM organization_watchlist_items
+            WHERE organization_id = $1
+              AND archived_at IS NULL
+            ORDER BY kind ASC, value ASC
+        `, [organization.id]),
+        run(`
             SELECT id, action_type, severity, source, service, actor_id, target_type, target_id, entity_id, request_id, outcome, reason, context, created_at
             FROM admin_audit_events
             WHERE organization_id = $1
@@ -207,13 +239,34 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         context: {
             memberCount: members.rows.length,
             pendingInviteCount: invites.rows.filter((invite: { status: string }) => invite.status === 'pending').length,
+            watchlistItemCount: watchlists.rows.length,
         },
     })
 
+    const watchlistItems = watchlists.rows as OrganizationWatchlistRow[]
+    const alertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(organization, item))
     return res.send({
         organization: toOrganization(organization),
         members: members.rows.map(toSupportMember),
         invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
+        watchlistItems: watchlistItems.map(toWatchlistItem),
+        alertReadiness: {
+            schemaVersion: 'support.organization.alert_readiness.v1',
+            organizationId: organization.id,
+            watchlistItemCount: alertReferences.length,
+            generatedAlertReferences: alertReferences,
+            links: {
+                api: `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`,
+                console: `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}`,
+                audit: `/dashboard/system/impersonation?org=${encodeURIComponent(organization.id)}&action=support.organization`,
+            },
+        },
+        supportLinks: {
+            inspectUser: '/api/admin/support/users/:id',
+            inviteAssist: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/invites`,
+            accessRecovery: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/access-recovery`,
+            audit: `/api/admin/audit-events?org=${encodeURIComponent(organization.id)}`,
+        },
         recentAuditEvents: audit.rows,
     })
 }
@@ -321,16 +374,18 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
     const rows: OrganizationInviteRow[] = []
     for (const email of input.emails) {
         const invite = await run(`
-            INSERT INTO organization_invites (id, organization_id, email, role, invited_by, status)
-            VALUES ($1, $2, $3, $4, $5, 'pending')
+            INSERT INTO organization_invites (id, organization_id, email, role, invited_by, status, expires_at)
+            VALUES ($1, $2, $3, $4, $5, 'pending', $6)
             ON CONFLICT (organization_id, email)
             DO UPDATE SET role = EXCLUDED.role,
                           invited_by = EXCLUDED.invited_by,
                           status = 'pending',
                           accepted_at = NULL,
+                          accepted_by = NULL,
+                          expires_at = EXCLUDED.expires_at,
                           created_at = NOW()
             RETURNING *
-        `, [randomUUID(), organization.id, email, input.role, actor.id])
+        `, [randomUUID(), organization.id, email, input.role, actor.id, input.expiresAt])
         rows.push(invite.rows[0] as OrganizationInviteRow)
     }
 
@@ -348,11 +403,121 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
         context: {
             emails: rows.map(row => row.email),
             role: input.role,
+            expiresAt: input.expiresAt,
             inviteIds: rows.map(row => row.id),
+            supportContext: cleanContext(req.body?.context),
         },
     })
 
     return res.status(201).send({ invites: rows.map(toInvite) })
+}
+
+export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: OrganizationParams, Body: SupportAccessRecoveryBody }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    let reason: string
+    let input: ReturnType<typeof normalizeInviteInput>
+    try {
+        reason = requireAuditReason(req.body?.reason, 'Access recovery reason')
+        input = normalizeInviteInput({
+            email: req.body?.email,
+            emails: req.body?.emails,
+            role: req.body?.role || 'admin',
+            expiresAt: req.body?.expiresAt,
+        })
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid access recovery request.' })
+    }
+
+    if (input.emails.length !== 1) {
+        return res.status(400).send({ error: 'Access recovery creates one controlled invite at a time.' })
+    }
+
+    const organization = await loadOrganizationSupportDetail(req.params.id)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const targetUserId = text(req.body?.targetUserId)
+    const existingMembership = targetUserId
+        ? await run(`
+            SELECT organization_id, user_id, role, status
+            FROM organization_members
+            WHERE organization_id = $1
+              AND user_id = $2
+            LIMIT 1
+        `, [organization.id, targetUserId])
+        : { rows: [] }
+
+    const invite = await run(`
+        INSERT INTO organization_invites (id, organization_id, email, role, invited_by, status, expires_at)
+        VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+        ON CONFLICT (organization_id, email)
+        DO UPDATE SET role = EXCLUDED.role,
+                      invited_by = EXCLUDED.invited_by,
+                      status = 'pending',
+                      accepted_at = NULL,
+                      accepted_by = NULL,
+                      expires_at = EXCLUDED.expires_at,
+                      created_at = NOW()
+        RETURNING *
+    `, [randomUUID(), organization.id, input.emails[0], input.role, actor.id, input.expiresAt])
+    const inviteRow = invite.rows[0] as OrganizationInviteRow
+    await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
+
+    const requestId = supportRequestId(req)
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.organization.access_recovery',
+        actorId: actor.id,
+        targetType: targetUserId ? 'user' : 'invite',
+        targetId: targetUserId || inviteRow.email,
+        organizationId: organization.id,
+        entityId: inviteRow.id,
+        requestId,
+        severity: 'warning',
+        outcome: 'success',
+        reason,
+        context: {
+            email: inviteRow.email,
+            role: inviteRow.role,
+            expiresAt: inviteRow.expires_at,
+            inviteId: inviteRow.id,
+            targetUserId: targetUserId || null,
+            existingMembership: existingMembership.rows[0] || null,
+            caseId: text(req.body?.caseId) || null,
+            supportContext: cleanContext(req.body?.context),
+            mutation: 'controlled_invite_only',
+        },
+    })
+
+    return res.status(201).send({
+        recovery: {
+            schemaVersion: 'support.access_recovery.v1',
+            organization: toOrganization(organization),
+            targetUserId: targetUserId || null,
+            invite: toInvite(inviteRow),
+            existingMembership: existingMembership.rows[0] || null,
+            reason,
+            requestId,
+            audit: {
+                actionType: 'support.organization.access_recovery',
+                source: 'admin',
+                service: 'hanasand-api',
+                outcome: 'success',
+                severity: 'warning',
+                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&outcome=success&source=admin&service=hanasand-api`,
+            },
+            copyText: [
+                `Access recovery invite created for ${inviteRow.email}`,
+                `Org: ${organization.name} (${organization.id})`,
+                `Role: ${inviteRow.role}`,
+                `Expires: ${inviteRow.expires_at}`,
+                `Request: ${requestId}`,
+                `Reason: ${reason}`,
+            ].join('\n'),
+        },
+    })
 }
 
 async function requireAdminSupport(req: FastifyRequest, res: FastifyReply) {
@@ -444,8 +609,43 @@ function toSupportInvite(row: Record<string, unknown>) {
         invitedBy: row.invited_by,
         status: row.status,
         createdAt: row.created_at,
+        expiresAt: row.expires_at,
         acceptedAt: row.accepted_at,
     }
+}
+
+function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
+    const event = row as Record<string, any>
+    return {
+        ...event,
+        detail: {
+            schemaVersion: 'admin.audit.event_detail.v1',
+            actionType: event.action_type,
+            source: event.source,
+            service: event.service,
+            severity: event.severity,
+            outcome: event.outcome,
+            actorId: event.actor_id,
+            targetType: event.target_type,
+            targetId: event.target_id,
+            organizationId: event.organization_id,
+            entityId: event.entity_id,
+            requestId: event.request_id,
+            reason: event.reason,
+            context: event.context || {},
+            copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
+        },
+    }
+}
+
+function cleanContext(value: unknown) {
+    return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 1000) : ''
+}
+
+function supportRequestId(req: FastifyRequest) {
+    const header = req.headers['x-request-id']
+    if (Array.isArray(header)) return header[0] || req.id
+    return header || req.id
 }
 
 function text(value: unknown) {

@@ -158,13 +158,15 @@ async function main() {
     const started = await request('/impersonation/start', {
         method: 'POST',
         headers: authHeaders(adminId, adminToken),
-        body: JSON.stringify({ target_id: targetId, reason: 'impersonation regression smoke', duration_minutes: 15 }),
+        body: JSON.stringify({ target_id: targetId, reason: 'impersonation regression smoke', duration_minutes: 15, scope: ['read_profile', 'read_org'] }),
     })
     expect(started.response.status === 200, 'Admin start should succeed.', started.body)
     expect(started.body?.token && started.body.token !== targetId, 'Start should return an opaque token.', started.body)
     expect(started.body?.session?.target?.id === targetId, 'Start should return the target.', started.body)
     expect(started.body?.session?.reason === 'impersonation regression smoke', 'Start should echo the audited reason.', started.body)
     expect(started.body?.session?.duration_minutes === 15, 'Start should honor bounded duration.', started.body)
+    expect(started.body?.session?.scope?.includes('read_org'), 'Start should return scoped impersonation permissions.', started.body)
+    expect(started.body?.audit?.requestId && started.body?.audit?.api?.includes('/api/admin/audit-events'), 'Start should return visible audit link metadata.', started.body)
 
     const impersonationToken = started.body.token
     const sessionId = started.body.session.id
@@ -206,7 +208,7 @@ async function main() {
     expect(filtered.body.events.length >= 1 && filtered.body.events.length <= 10, 'Filtered audit fetch should respect filters and limit.', filtered.body.events)
     expect(filtered.body.events.every(event => event.actor_id === adminId && event.target_id === targetId && event.method === 'GET' && event.session_id === sessionId), 'Filtered audit events should match requested filters.', filtered.body.events)
 
-    const adminAudit = await request(`/admin/audit-events?actor=${encodeURIComponent(adminId)}&target=${encodeURIComponent(targetId)}&action=${encodeURIComponent('impersonation')}&severity=warning&entity=${encodeURIComponent(sessionId.slice(0, 8))}&outcome=success&limit=25`, {
+    const adminAudit = await request(`/admin/audit-events?actor=${encodeURIComponent(adminId)}&target=${encodeURIComponent(targetId)}&action=${encodeURIComponent('impersonation')}&severity=warning&source=admin&service=hanasand-api&request=${encodeURIComponent(started.body.audit.requestId)}&entity=${encodeURIComponent(sessionId.slice(0, 8))}&outcome=success&limit=25`, {
         headers: authHeaders(adminId, adminToken),
     })
     expect(adminAudit.response.status === 200 && Array.isArray(adminAudit.body?.events), 'Admin audit feed should be available.', adminAudit.body)
@@ -235,6 +237,7 @@ async function main() {
         checked: [
             'admin-only start',
             'required reason and scoped duration',
+            'visible audit link and scoped permissions',
             'missing/inactive/self targets',
             'legacy target header ignored',
             'opaque hashed session storage',

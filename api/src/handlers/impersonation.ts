@@ -4,7 +4,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { actorHasAdminSupportAccess, recordAdminAuditEvent, requireAuditReason } from '#utils/adminAudit.ts'
 
-type StartBody = { target_id?: string, reason?: string, duration_minutes?: number | string }
+type StartBody = { target_id?: string, reason?: string, duration_minutes?: number | string, scope?: unknown }
 type EventQuery = {
     q?: string
     actor?: string
@@ -48,6 +48,7 @@ async function audit(req: FastifyRequest, sessionId: string | null, actorId: str
     ]).catch(error => {
         req.log.warn({ error, actorId, targetId, actionPath }, 'Failed to audit impersonation lifecycle event')
     })
+    const requestId = supportRequestId(req)
     await recordAdminAuditEvent(req, {
         actionType,
         actorId,
@@ -57,12 +58,14 @@ async function audit(req: FastifyRequest, sessionId: string | null, actorId: str
         severity: actionType.endsWith('.start') ? 'warning' : 'notice',
         outcome: 'success',
         reason,
+        requestId,
         context: {
             sessionId,
             path: actionPath,
             ...context,
         },
     })
+    return requestId
 }
 
 export async function startImpersonation(req: FastifyRequest, res: FastifyReply) {
@@ -106,6 +109,7 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
 
     const rawToken = `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`
     const durationMinutes = normalizeDurationMinutes(body?.duration_minutes)
+    const scope = normalizeImpersonationScope(body?.scope)
     const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000)
     const session = await run(`
         INSERT INTO impersonation_sessions (token_hash, actor_id, target_id, reason, expires_at)
@@ -113,7 +117,7 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
         RETURNING id, created_at, expires_at
     `, [hashToken(rawToken), actor.id, target.id, reason, expiresAt.toISOString()])
     const row = session.rows[0] as { id: string, created_at: string, expires_at: string }
-    await audit(req, row.id, actor.id, target.id, '/api/impersonation/start', 'impersonation.start', reason, { durationMinutes })
+    const requestId = await audit(req, row.id, actor.id, target.id, '/api/impersonation/start', 'impersonation.start', reason, { durationMinutes, scope })
 
     return res.send({
         token: rawToken,
@@ -123,9 +127,11 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
             target,
             reason,
             duration_minutes: durationMinutes,
+            scope,
             created_at: row.created_at,
             expires_at: row.expires_at,
         },
+        audit: auditLink('impersonation.start', requestId),
     })
 }
 
@@ -151,7 +157,8 @@ export async function stopImpersonation(req: FastifyRequest, res: FastifyReply) 
     `, [hashToken(token), actor.authenticatedId])
     const row = result.rows[0] as { id: string, actor_id: string, target_id: string } | undefined
     if (row) {
-        await audit(req, row.id, row.actor_id, row.target_id, '/api/impersonation/stop', 'impersonation.stop')
+        const requestId = await audit(req, row.id, row.actor_id, row.target_id, '/api/impersonation/stop', 'impersonation.stop')
+        return res.send({ ok: true, audit: auditLink('impersonation.stop', requestId) })
     }
     return res.send({ ok: true })
 }
@@ -251,6 +258,30 @@ function normalizeDurationMinutes(value: unknown) {
     }
 
     return Math.min(Math.max(Math.trunc(parsed), 5), 240)
+}
+
+function normalizeImpersonationScope(value: unknown) {
+    const allowed = new Set(['read_profile', 'read_org', 'support_debug'])
+    const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+    const scope = raw
+        .map(item => typeof item === 'string' ? item.trim().toLowerCase() : '')
+        .filter(item => allowed.has(item))
+    return scope.length ? Array.from(new Set(scope)) : ['read_profile']
+}
+
+function auditLink(actionType: string, requestId: string) {
+    return {
+        actionType,
+        requestId,
+        href: `/dashboard/system/impersonation?request=${encodeURIComponent(requestId)}&action=${encodeURIComponent(actionType)}&source=admin&service=hanasand-api`,
+        api: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&action=${encodeURIComponent(actionType)}&source=admin&service=hanasand-api`,
+    }
+}
+
+function supportRequestId(req: FastifyRequest) {
+    const header = req.headers['x-request-id']
+    if (Array.isArray(header)) return header[0] || req.id
+    return header || req.id
 }
 
 export async function getImpersonationCurrent(req: FastifyRequest, res: FastifyReply) {

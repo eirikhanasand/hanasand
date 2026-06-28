@@ -126,7 +126,7 @@ import { getDesktopAgentPresence, postDesktopAgentPresence } from './handlers/de
 import { deleteAutomation, getAutomation, getAutomations, postAutomation, postAutomationRunNow, putAutomation } from './handlers/automations.ts'
 import { getSystemCronJobs, putSystemCronJob } from './handlers/systemCron.ts'
 import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, stopImpersonation } from './handlers/impersonation.ts'
-import { getAdminAuditEvents, getSupportOrganization, getSupportUser, postSupportOrganizationInvite } from './handlers/adminSupport.ts'
+import { getAdminAuditEvents, getSupportOrganization, getSupportUser, postSupportAccessRecovery, postSupportOrganizationInvite } from './handlers/adminSupport.ts'
 import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUserProjects, getUserShares, postShare, putShare, toggleShareLock } from './handlers/share.ts'
 import postTiSearch, { postTiSearchBatch } from './handlers/ti/search.ts'
 import { getTiEnrichment, postTiEnrichmentRun } from './handlers/ti/enrichment.ts'
@@ -184,6 +184,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/admin/support/users/:id', getSupportUser)
     fastify.get('/admin/support/organizations/:id', getSupportOrganization)
     fastify.post('/admin/support/organizations/:id/invites', postSupportOrganizationInvite)
+    fastify.post('/admin/support/organizations/:id/access-recovery', postSupportAccessRecovery)
 
     // User handlers
     fastify.get('/users', getUsers)

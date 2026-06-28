@@ -41,6 +41,8 @@ const checks: Array<() => void> = [
     () => assertMatches('api/src/handlers/impersonation.ts', /INSERT INTO impersonation_sessions[\s\S]+token_hash/, 'hashed token persistence'),
     () => assertIncludes('api/src/handlers/impersonation.ts', 'requireAuditReason(body?.reason', 'required impersonation reason'),
     () => assertIncludes('api/src/handlers/impersonation.ts', 'durationMinutes', 'scoped impersonation duration'),
+    () => assertIncludes('api/src/handlers/impersonation.ts', 'normalizeImpersonationScope', 'explicit impersonation scope'),
+    () => assertIncludes('api/src/handlers/impersonation.ts', 'auditLink', 'visible impersonation audit link'),
     () => assertIncludes('api/src/handlers/impersonation.ts', 'recordAdminAuditEvent', 'structured admin audit event'),
     () => assertIncludes('frontend/src/utils/impersonation/client.ts', '/api/impersonation/start', 'web same-origin start preflight'),
     () => assertIncludes('frontend/src/app/api/impersonation/start/route.ts', 'httpOnly: true', 'web HttpOnly impersonation cookies'),
