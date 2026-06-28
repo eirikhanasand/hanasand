@@ -45,22 +45,23 @@ function fail(message) {
 }
 
 const scoreboard = JSON.parse(fs.readFileSync(scoreboardPath, "utf8"));
-const recentGitLog = execSync("git log --oneline -16", { encoding: "utf8" });
+const gitLogWindow = 20;
+const recentGitLog = execSync(`git log --oneline -${gitLogWindow}`, { encoding: "utf8" });
 
 if (!Array.isArray(scoreboard.rows)) {
   fail("rows must be an array");
 }
 if (scoreboard.latestCommit && !recentGitLog.includes(scoreboard.latestCommit)) {
-  fail(`latestCommit ${scoreboard.latestCommit} is not present in git log --oneline -16`);
+  fail(`latestCommit ${scoreboard.latestCommit} is not present in git log --oneline -${gitLogWindow}`);
 }
 for (const commit of scoreboard.recentConfirmedCommits || []) {
   if (!recentGitLog.includes(commit)) {
-    fail(`recentConfirmedCommits entry ${commit} is not present in git log --oneline -16`);
+    fail(`recentConfirmedCommits entry ${commit} is not present in git log --oneline -${gitLogWindow}`);
   }
 }
 for (const item of scoreboard.absentExpectedCommits || []) {
   if (item.commit && recentGitLog.includes(item.commit)) {
-    fail(`absentExpectedCommits entry ${item.commit} is now present in git log --oneline -16`);
+    fail(`absentExpectedCommits entry ${item.commit} is now present in git log --oneline -${gitLogWindow}`);
   }
 }
 
@@ -77,7 +78,10 @@ for (const row of scoreboard.rows) {
   if (!Array.isArray(row.measurableKpi) || row.measurableKpi.length === 0) {
     fail(`${row.id} needs at least one measurableKpi`);
   }
-  const statusText = `${row.currentStatus} ${row.nextCodeSlice} ${row.blocker}`.toLowerCase();
+  const statusText = `${row.currentStatus} ${row.nextCodeSlice} ${row.blocker}`
+    .toLowerCase()
+    .replace(/\bnot[- ](?:yet[- ])?(?:complete|completed|ready)\b/g, "")
+    .replace(/\bnot[- ](?:complete|completed|ready)\b/g, "");
   const claimsComplete = /\b(complete|completed|ready)\b/.test(statusText);
   const hasCustomerWorkflowKpi = row.measurableKpi.some((kpi) =>
     workflowKpiPrefixes.some((prefix) => kpi.startsWith(prefix)),
@@ -103,6 +107,9 @@ console.log(`CTI/XDR scoreboard ${scoreboard.updatedAt}`);
 console.log(`rows=${scoreboard.rows.length} required=${requiredRows.length} source=${scoreboard.sourceDoc}`);
 if (scoreboard.latestCommit) {
   console.log(`latestCommit=${scoreboard.latestCommit}`);
+}
+if (scoreboard.fullyImplementedWorkflow === false) {
+  console.log(`fullyImplementedWorkflow=false blockers=${(scoreboard.workflowBlockers || []).join(",")}`);
 }
 if (Array.isArray(scoreboard.absentExpectedCommits) && scoreboard.absentExpectedCommits.length > 0) {
   console.log(`absent=${scoreboard.absentExpectedCommits.map((item) => item.commit).join(",")}`);
