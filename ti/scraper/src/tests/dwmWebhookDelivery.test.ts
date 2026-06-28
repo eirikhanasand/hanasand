@@ -65,6 +65,16 @@ describe("dwm webhook delivery", () => {
     expect(delivered.deliveries[0].status).toBe("delivered");
     expect(seen[0].url).toBe("https://hooks.example.com/dwm");
     expect(seen[0].body.eventType).toBe("darkweb.monitoring.match");
+    expect(seen[0].body).toMatchObject({
+      tenantId: "tenant_acme",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_webhook_acme"],
+      evidenceCount: 1,
+      recommendedRoute: "identity_response"
+    });
+    expect(seen[0].body.caseIdCandidate).toMatch(/^case_/);
+    expect(seen[0].body.casePath).toContain(`/v1/cases/${seen[0].body.caseIdCandidate}`);
+    expect(seen[0].body.watchlistItemIds[0]).toContain("acme.com");
     expect(seen[0].body.matchContext).toMatchObject({
       normalizedTerm: "acme.com",
       termKind: "domain"

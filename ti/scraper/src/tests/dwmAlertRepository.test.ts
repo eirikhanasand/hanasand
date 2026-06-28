@@ -181,7 +181,7 @@ describe("dwm alert repository", () => {
       organizationId: "org_repo_acme",
       visibilityPolicy: "admins",
       readyForRebuild: true,
-      readyForCustomerDelivery: false,
+      readyForCustomerDelivery: true,
       counts: {
         activeWatchlists: 2,
         skippedWatchlists: 1,
@@ -205,14 +205,14 @@ describe("dwm alert repository", () => {
         casePathTemplate: "/v1/cases/:caseId?alertId=:alertId&dedupeKey=:dedupeKey"
       },
       productDedupeBlocker: {
-        blocked: true
+        blocked: false
       }
     });
     expect(readiness.sourceFamilyCoverage).toEqual([
       { sourceFamily: "darkweb_metadata", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] },
       { sourceFamily: "telegram_public", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] }
     ]);
-    expect(readiness.blockers).toContain("Product alert dedupe/enrichment patch is still pending in dirty dwmProduct.ts.");
+    expect(readiness.blockers).toEqual([]);
     expect(readiness.plan.candidates[0].webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
 
     const blockedWithoutOrg = buildDwmAlertGenerationPlan({
@@ -304,28 +304,30 @@ describe("dwm alert repository", () => {
     const existing = first.alerts[0];
     store.saveDwmAlert({
       ...existing,
-      reviewState: "reviewing",
-      deliveryState: "ready_to_send",
+      reviewState: "false_positive",
+      deliveryState: "muted",
       assignedOwner: "analyst-1",
       caseId: "case_existing_repo",
-      workflowNote: "Owner confirmed this is the customer domain.",
-      workflowEvents: [{ id: "evt_1", at: "2026-06-28T13:12:00.000Z", toReviewState: "reviewing" }],
+      workflowNote: "Owner suppressed this as a duplicate customer-domain decision.",
+      workflowEvents: [{ id: "evt_1", at: "2026-06-28T13:12:00.000Z", toReviewState: "false_positive", toDeliveryState: "muted" }],
       replayCount: 2,
-      lastReplayedAt: "2026-06-28T13:13:00.000Z"
+      lastReplayedAt: "2026-06-28T13:13:00.000Z",
+      deliveredAt: "2026-06-28T13:14:00.000Z"
     });
     store.saveCapture(telegramFollowupCapture);
 
     const second = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme", organizationId: "org_repo_acme", visibilityPolicy: "admins" });
     const preserved = second.alerts.find((alert) => alert.id === existing.id);
 
-    expect(preserved?.reviewState).toBe("reviewing");
-    expect(preserved?.deliveryState).toBe("ready_to_send");
+    expect(preserved?.reviewState).toBe("false_positive");
+    expect(preserved?.deliveryState).toBe("muted");
     expect(preserved?.assignedOwner).toBe("analyst-1");
-    expect(preserved?.workflowNote).toBe("Owner confirmed this is the customer domain.");
+    expect(preserved?.workflowNote).toBe("Owner suppressed this as a duplicate customer-domain decision.");
     expect(preserved?.workflowEvents).toHaveLength(1);
     expect(preserved?.caseId).toBe("case_existing_repo");
     expect(preserved?.replayCount).toBe(2);
     expect(preserved?.lastReplayedAt).toBe("2026-06-28T13:13:00.000Z");
+    expect(preserved?.deliveredAt).toBe("2026-06-28T13:14:00.000Z");
     expect(preserved?.sourceCount).toBe(2);
     expect(preserved?.workflowContext.evidenceCount).toBe(2);
     expect(preserved?.webhookContext.evidenceCount).toBe(2);

@@ -112,6 +112,29 @@ describe("organization shared DWM workflow", () => {
       expect(rebuildPayload.savedAlertCount).toBe(1);
       expect(rebuildPayload.alerts[0].organizationId).toBe(organizationId);
       expect(rebuildPayload.alerts[0].tenantId).toBe(organizationId);
+      expect(rebuildPayload.alerts[0]).toMatchObject({
+        eventType: "darkweb.monitoring.match",
+        sourceFamily: "telegram_public",
+        recommendedRoute: "identity_response"
+      });
+      expect(rebuildPayload.alerts[0].workflowContext).toMatchObject({
+        organizationId,
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_org_acme"],
+        primaryCaptureId: "cap_org_acme",
+        evidenceCount: 1,
+        hasWebhookRoute: true,
+        webhookDestinationIds: [webhookPayload.destination.id]
+      });
+      expect(rebuildPayload.alerts[0].workflowContext.watchlistIds).toEqual([watchlistPayload.watchlist.id]);
+      expect(rebuildPayload.alerts[0].workflowContext.watchlistItemIds[0]).toContain("acme.com");
+      expect(rebuildPayload.alerts[0].webhookContext).toMatchObject({
+        organizationId,
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_org_acme"],
+        evidenceCount: 1,
+        recommendedRoute: "identity_response"
+      });
 
       const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
         headers: { "x-user-email": "owner@acme.com" }
@@ -139,6 +162,16 @@ describe("organization shared DWM workflow", () => {
       expect(seen[0].body.content).toContain("Hanasand alert");
       expect(seen[0].body.embeds[0].fields.some((field: any) => field.name === "Matched term" && field.value === "acme.com")).toBe(true);
       expect(seen[0].body.hanasand.organizationId).toBe(organizationId);
+      expect(seen[0].body.hanasand).toMatchObject({
+        watchlistId: watchlistPayload.watchlist.id,
+        webhookDestinationId: webhookPayload.destination.id,
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_org_acme"],
+        evidenceCount: 1,
+        recommendedRoute: "identity_response"
+      });
+      expect(seen[0].body.hanasand.watchlistItemIds[0]).toContain("acme.com");
+      expect(seen[0].body.hanasand.casePath).toContain(`/v1/cases/${seen[0].body.hanasand.caseIdCandidate}`);
 
       const rehydrated = new FileBackedScraperStore({ snapshotPath });
       expect((rehydrated as any).listOrganizations()).toHaveLength(1);

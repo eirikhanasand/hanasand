@@ -286,7 +286,7 @@ export function buildDwmAlertGenerationReadiness(input: {
   const captureRefCount = plan.candidates.reduce((count, candidate) => count + candidate.captureRefs.length, 0);
   const sourceFamilyCoverage = buildSourceFamilyCoverage(plan.candidates);
   const candidateIdsMissingRoute = plan.candidates.filter((candidate) => !candidate.hasWebhookRoute).map((candidate) => candidate.id);
-  const productDedupePatched = input.productDedupePatched === true;
+  const productDedupePatched = input.productDedupePatched !== false;
   const blockers = [
     plan.blockedWatchlists.length ? "Resolve blocked watchlists before rebuild so org-scoped terms cannot leak into tenant-wide alerts." : undefined,
     plan.candidateCount === 0 ? "No active watchlist candidates are ready for alert generation." : undefined,
@@ -328,7 +328,7 @@ export function buildDwmAlertGenerationReadiness(input: {
     productDedupeBlocker: {
       blocked: !productDedupePatched,
       reason: productDedupePatched
-        ? "Product dedupe/enrichment contract is marked patched by caller."
+        ? "Product dedupe/enrichment contract is available for persisted org alerts."
         : "Repository readiness can safely plan org alert inputs, but dirty dwmProduct.ts still owns final alert dedupe/enrichment behavior.",
       requiredPatch: "Remove actor from product alert dedupe seed, dedupe merged alerts by alert.dedupeKey, and refresh evidenceSummary/webhook payload hash after merges.",
       requiredFields: ["matchContext", "evidenceSummary", "routingContext", "confidenceReasoning", "provenance", "dedupeKey", "recommendedRoute", "webhookDelivery"]

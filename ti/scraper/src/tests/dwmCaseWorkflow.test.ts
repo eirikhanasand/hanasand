@@ -241,7 +241,7 @@ describe("dwm case workflow", () => {
         schemaVersion: "dwm.alert_generation_readiness.v1",
         organizationId,
         readyForRebuild: true,
-        readyForCustomerDelivery: false,
+        readyForCustomerDelivery: true,
         counts: {
           activeWatchlists: 1,
           candidateCount: 1,
@@ -258,9 +258,10 @@ describe("dwm case workflow", () => {
           casePathTemplate: "/v1/cases/:caseId?alertId=:alertId&dedupeKey=:dedupeKey"
         },
         productDedupeBlocker: {
-          blocked: true
+          blocked: false
         }
       });
+      expect(adminReadiness.readiness.blockers).toEqual([]);
       expect(adminReadiness.readiness.plan.candidates[0]).toMatchObject({
         organizationId,
         normalizedTerm: "acme.com",

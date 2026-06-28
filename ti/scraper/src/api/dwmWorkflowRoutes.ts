@@ -253,8 +253,7 @@ export function getDwmAlertGenerationReadiness(url: URL, options: ApiServerOptio
     organizationId: scope.organizationId,
     visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization),
     sources: options.store.listSources(),
-    captures: options.store.listCaptures(),
-    productDedupePatched: false
+    captures: options.store.listCaptures()
   });
   return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, readiness });
 }
