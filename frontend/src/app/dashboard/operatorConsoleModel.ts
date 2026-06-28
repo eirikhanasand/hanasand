@@ -111,6 +111,9 @@ export function buildOrgOperatingContext(input: {
     scope: OperatorScope
     watchlists: DwmWatchlistSummary[]
     organizationState: DwmOrganizationState
+    operations?: DwmOperationsSnapshot | null
+    deliveries?: DwmDeliveryItem[]
+    liveAlertCount?: number
 }) {
     const organization = input.organizationState.selectedOrganization
     const activeMembers = input.organizationState.members.filter(item => item.status === 'active')
@@ -118,6 +121,7 @@ export function buildOrgOperatingContext(input: {
     const activeWatchlists = input.watchlists.filter(item => item.status === 'active')
     const activeWebhooks = input.organizationState.webhooks.filter(item => item.status === 'active')
     const termCount = activeWatchlists.reduce((sum, item) => sum + (item.terms || []).length, 0)
+    const latestDelivery = (input.deliveries || [])[0]
     const blockedReasons = [
         !input.backendConfigured ? 'TI_SCRAPER_API_BASE is not configured; org/team/watchlist state cannot be loaded.' : '',
         !organization ? 'No selected organization returned from GET /api/organizations.' : '',
@@ -141,6 +145,27 @@ export function buildOrgOperatingContext(input: {
             activeWebhookCount: activeWebhooks.length,
             alertVisibilityPolicy: organization?.alertVisibilityPolicy || 'members',
             blockedReasons,
+            liveAlertCount: input.liveAlertCount ?? 0,
+            sourceCoverage: input.operations ? {
+                sourceCount: input.operations.counts.sourceCount,
+                activeSourceCount: input.operations.counts.activeSourceCount,
+                captureCount: input.operations.counts.captureCount,
+                watchlistMatchCount: input.operations.counts.watchlistMatchCount,
+                latestRunStatus: input.operations.latestRun?.status,
+                latestRunAt: input.operations.latestRun?.updatedAt,
+            } : undefined,
+            latestDelivery: latestDelivery ? {
+                id: latestDelivery.id,
+                alertId: latestDelivery.alertId,
+                status: latestDelivery.status,
+                deliveryKind: latestDelivery.deliveryKind,
+                attemptedAt: latestDelivery.attemptedAt,
+                webhookDestinationId: latestDelivery.webhookDestinationId,
+                endpointHash: latestDelivery.endpointHash,
+                payloadHash: latestDelivery.payloadHash,
+                httpStatus: latestDelivery.httpStatus,
+                error: latestDelivery.error,
+            } : undefined,
         },
         links: organization ? [
             { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' },

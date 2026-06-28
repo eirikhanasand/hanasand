@@ -1,5 +1,5 @@
 import { buildOrgOperatingContext, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
-import type { WorkbenchAction, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchOrgContext, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
+import type { WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
     organizations: [{
@@ -119,6 +119,9 @@ const orgContext = buildOrgOperatingContext({
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
     watchlists,
     organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
 })
 const blockedOrgContext = buildOrgOperatingContext({
     backendConfigured: false,
@@ -210,6 +213,29 @@ const watchlistPausePayload = {
     webhookDestinationId: 'wh_discord_soc',
 } satisfies WorkbenchWatchlistUpsertPayload
 const missingWatchlistPatchEndpoint = 'PATCH/DELETE /api/dwm/watchlists/:id is not available; use POST /api/dwm/watchlists upsert or pause the watchlist.'
+const keyboardSelectionState = {
+    selectedId: 'alert_acme_1',
+    focusedRegion: 'queue',
+    lastKey: 'ArrowDown',
+} satisfies WorkbenchKeyboardState
+const actionOutcome = {
+    ok: true,
+    text: 'Case case_acme_1 owner saved.',
+    source: 'case_mutation',
+} satisfies WorkbenchActionOutcome
+const readinessEvidenceReady = {
+    status: 'ready',
+    webhookDestinationId: 'wh_discord_soc',
+    deliveryId: 'deliv_acme_1',
+    activeSourceCount: operations.counts.activeSourceCount,
+    sourceCount: operations.counts.sourceCount,
+} satisfies WorkbenchReadinessEvidenceState
+const readinessEvidenceBlocked = {
+    status: 'blocked',
+    reason: 'No delivery rows are available from /api/dwm/webhooks/deliveries.',
+    activeSourceCount: 0,
+    sourceCount: 0,
+} satisfies WorkbenchReadinessEvidenceState
 
 const blockedFallbackAlert = {
     ...selectedLiveAlert,
@@ -234,6 +260,54 @@ const visibleCaseDetail = {
             allowedRoles: ['owner', 'admin'],
         },
     },
+    case: {
+        id: 'case_acme_1',
+        alertId: 'alert_acme_1',
+        title: 'CRITICAL Acme Security',
+        summary: 'acme.com matched backed DWM evidence.',
+        status: 'open',
+        assignedOwner: 'owner@acme.example',
+        updatedAt: '2026-06-28T10:13:00.000Z',
+        lastDecision: 'Confirmed customer-owned term; delivery route ready.',
+        workflowEvents: [{
+            id: 'evt_assign_1',
+            at: '2026-06-28T10:13:00.000Z',
+            actor: 'dashboard',
+            action: 'assign',
+            fromOwner: 'unassigned',
+            toOwner: 'owner@acme.example',
+            note: 'Assigned from org member picker.',
+        }, {
+            id: 'evt_note_1',
+            at: '2026-06-28T10:14:00.000Z',
+            actor: 'dashboard',
+            action: 'note',
+            note: 'Evidence reviewed from selected case detail.',
+        }],
+    },
+    deliveryContext: {
+        deliveryCount: 1,
+        latestDelivery: deliveries[0],
+        delivered: true,
+        retryable: false,
+        failed: [],
+    },
+    timeline: [{
+        id: 'evt_assign_1',
+        at: '2026-06-28T10:13:00.000Z',
+        title: 'assign',
+        detail: 'Assigned from org member picker. · Owner: owner@acme.example',
+        eventType: 'case.assign',
+        actor: 'dashboard',
+        rationale: 'Assigned from org member picker.',
+        fromOwner: 'unassigned',
+        toOwner: 'owner@acme.example',
+    }],
+    nextAllowedActions: [
+        { id: 'assign', label: 'Assign owner', method: 'PATCH', enabled: true },
+        { id: 'close', label: 'Close', method: 'PATCH', requiresRationale: true, enabled: true },
+        { id: 'deliver_webhook', label: 'Deliver webhook', method: 'POST', enabled: true },
+    ],
 }
 const readOnlyCaseDetail = {
     generatedAt: '2026-06-28T10:14:00.000Z',
@@ -255,6 +329,8 @@ void _requiresWorkflowPath
 void _requiresBackedActions
 void (orgContext satisfies WorkbenchOrgContext)
 void (orgContext.createWatchlistAction satisfies WorkbenchAction | undefined)
+void (orgContext.readiness.sourceCoverage?.activeSourceCount satisfies number | undefined)
+void (orgContext.readiness.latestDelivery satisfies WorkbenchDeliveryEvidence | undefined)
 void (blockedOrgContext.readiness.blockedReasons satisfies string[])
 void (selectedLiveAlert.actions satisfies WorkbenchAction[])
 void (selectedLiveAlert.deliveryEvidence satisfies WorkbenchDeliveryEvidence[])
@@ -264,6 +340,12 @@ void (invitePayload satisfies WorkbenchInvitePayload)
 void (watchlistAddPayload satisfies WorkbenchWatchlistUpsertPayload)
 void (watchlistPausePayload satisfies WorkbenchWatchlistUpsertPayload)
 void (missingWatchlistPatchEndpoint satisfies string)
+void (keyboardSelectionState satisfies WorkbenchKeyboardState)
+void (actionOutcome satisfies WorkbenchActionOutcome)
+void (readinessEvidenceReady satisfies WorkbenchReadinessEvidenceState)
+void (readinessEvidenceBlocked satisfies WorkbenchReadinessEvidenceState)
 void (blockedFallbackAlert.missingDependency satisfies string)
+void (visibleCaseDetail.case.workflowEvents[0]?.toOwner satisfies string | undefined)
+void (visibleCaseDetail.nextAllowedActions[0]?.id satisfies string | undefined)
 void (visibleCaseDetail.access.visibilityDecision.allowedRoles satisfies string[])
 void (readOnlyCaseDetail.access.readOnly satisfies boolean)

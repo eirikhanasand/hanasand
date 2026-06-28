@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { CheckCircle2, Clock3, ExternalLink, FileText, Filter, Fingerprint, ListChecks, MessageSquareText, Search, ShieldAlert, UserRound } from 'lucide-react'
 
 export type WorkbenchEvidence = {
@@ -84,6 +84,27 @@ export type WorkbenchDeliveryEvidence = {
     error?: string
 }
 
+export type WorkbenchKeyboardState = {
+    selectedId: string
+    focusedRegion: 'queue' | 'detail-actions'
+    lastKey: 'ArrowUp' | 'ArrowDown' | 'Home' | 'End' | 'ArrowRight' | 'Enter'
+}
+
+export type WorkbenchActionOutcome = {
+    ok: boolean
+    text: string
+    source?: 'case_mutation' | 'dwm_action' | 'org_action' | 'watchlist_action' | 'session_local'
+}
+
+export type WorkbenchReadinessEvidenceState = {
+    status: 'ready' | 'blocked'
+    reason?: string
+    webhookDestinationId?: string
+    deliveryId?: string
+    activeSourceCount?: number
+    sourceCount?: number
+}
+
 export type WorkbenchOrgContext = {
     scope: { tenantId: string, organizationId?: string }
     organization?: {
@@ -107,6 +128,16 @@ export type WorkbenchOrgContext = {
         activeWebhookCount: number
         alertVisibilityPolicy: 'members' | 'admins' | 'owners'
         blockedReasons: string[]
+        liveAlertCount?: number
+        sourceCoverage?: {
+            sourceCount: number
+            activeSourceCount: number
+            captureCount: number
+            watchlistMatchCount: number
+            latestRunStatus?: string
+            latestRunAt?: string
+        }
+        latestDelivery?: WorkbenchDeliveryEvidence
     }
     links: Array<{ href: string, label: string }>
     createWatchlistAction?: WorkbenchAction
@@ -158,12 +189,49 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [caseDetails, setCaseDetails] = useState<Record<string, CaseDetailState>>({})
     const [busyAction, setBusyAction] = useState<string | null>(null)
-    const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
+    const [message, setMessage] = useState<WorkbenchActionOutcome | null>(null)
     const cases = useMemo(() => filterCases(initialCases, filter, query), [initialCases, filter, query])
     const selected = initialCases.find(item => item.id === selectedId) ?? cases[0] ?? initialCases[0]
     const queues = queueSummary(initialCases)
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedCaseDetail = selected ? caseDetails[selected.id] : undefined
+
+    const focusQueueIndex = useCallback((nextIndex: number) => {
+        const next = cases[nextIndex]
+        if (!next) return
+        setSelectedId(next.id)
+        requestAnimationFrame(() => {
+            document.querySelector<HTMLButtonElement>(`[data-queue-index="${nextIndex}"]`)?.focus()
+        })
+    }, [cases])
+
+    const focusDetailAction = useCallback(() => {
+        requestAnimationFrame(() => {
+            document.querySelector<HTMLButtonElement>('[data-detail-action]')?.focus()
+        })
+    }, [])
+
+    const handleQueueKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+        if (!cases.length) return
+        if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            focusQueueIndex(Math.min(index + 1, cases.length - 1))
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            focusQueueIndex(Math.max(index - 1, 0))
+        } else if (event.key === 'Home') {
+            event.preventDefault()
+            focusQueueIndex(0)
+        } else if (event.key === 'End') {
+            event.preventDefault()
+            focusQueueIndex(cases.length - 1)
+        } else if (event.key === 'ArrowRight' || event.key === 'Enter') {
+            event.preventDefault()
+            const item = cases[index]
+            if (item) setSelectedId(item.id)
+            focusDetailAction()
+        }
+    }, [cases, focusDetailAction, focusQueueIndex])
 
     const refreshCaseDetail = useCallback(async (itemId: string, href: string, options: { loading?: boolean } = {}) => {
         if (options.loading !== false) setCaseDetails(current => ({ ...current, [itemId]: { status: 'loading' } }))
@@ -438,26 +506,33 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                             </div>
                         </div>
                         <div className={`${compact ? 'max-h-[calc(100vh-250px)]' : 'max-h-[620px]'} overflow-auto p-2`}>
-                            {cases.map(item => (
-                                <button
-                                    key={item.id}
-                                    type='button'
-                                    onClick={() => setSelectedId(item.id)}
-                                    className={`w-full rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
-                                >
-                                    <div className='flex items-center justify-between gap-2'>
-                                        <span className='truncate text-sm font-semibold text-[#171a21]'>{item.title}</span>
-                                        <span className={severityClass(item.severity)}>{item.severity}</span>
-                                    </div>
-                                    <p className='mt-1 truncate text-xs text-[#667085]'>{item.queue} · {item.owner}</p>
-                                    <p className='mt-2 line-clamp-2 text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
-                                    <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#667085]'>
-                                        <span className='rounded-full bg-white px-2 py-0.5'>{label(item.status)}</span>
-                                        <span>{item.confidence}%</span>
-                                        <span>{relativeTime(item.updatedAt)}</span>
-                                    </div>
-                                </button>
-                            ))}
+                            <div role='listbox' aria-label='Analyst work queue' className='grid gap-1'>
+                                {cases.map((item, index) => (
+                                    <button
+                                        key={item.id}
+                                        type='button'
+                                        role='option'
+                                        aria-selected={selected?.id === item.id}
+                                        data-queue-case-id={item.id}
+                                        data-queue-index={index}
+                                        onClick={() => setSelectedId(item.id)}
+                                        onKeyDown={event => handleQueueKeyDown(event, index)}
+                                        className={`w-full rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
+                                    >
+                                        <div className='flex items-center justify-between gap-2'>
+                                            <span className='truncate text-sm font-semibold text-[#171a21]'>{item.title}</span>
+                                            <span className={severityClass(item.severity)}>{item.severity}</span>
+                                        </div>
+                                        <p className='mt-1 truncate text-xs text-[#667085]'>{item.queue} · {item.owner}</p>
+                                        <p className='mt-2 line-clamp-2 text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
+                                        <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#667085]'>
+                                            <span className='rounded-full bg-white px-2 py-0.5'>{label(item.status)}</span>
+                                            <span>{item.confidence}%</span>
+                                            <span>{relativeTime(item.updatedAt)}</span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
                             {!cases.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-white p-4 text-sm text-[#596170]'>No cases match this filter.</p>}
                         </div>
                     </aside>
@@ -473,6 +548,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 compact={compact}
                                 caseDetail={selectedCaseDetail}
                                 orgContext={orgContext}
+                                actionMessage={message}
                                 onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onOwnerDraftChange={value => setOwnerDrafts(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={(decision) => applyDecision(selected, decision)}
@@ -570,6 +646,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, invit
                     <OperatorRow label='Org' value={orgContext?.organization ? `${orgContext.organization.name} · ${orgContext.organization.id}` : 'missing'} tone={orgContext?.organization ? 'ready' : 'blocked'} />
                     <OperatorRow label='Members' value={`${orgContext?.readiness.activeMemberCount ?? 0} active · ${orgContext?.readiness.pendingInviteCount ?? 0} pending`} tone={orgContext?.readiness.activeMemberCount ? 'ready' : 'blocked'} />
                     <OperatorRow label='Watchlists' value={`${orgContext?.readiness.activeWatchlistCount ?? 0} active · ${orgContext?.readiness.termCount ?? 0} terms`} tone={orgContext?.readiness.activeWatchlistCount ? 'ready' : 'needs_action'} />
+                    <OperatorReadinessRows orgContext={orgContext} selected={selected} caseDetail={caseDetail} />
                     <OperatorRow label='Visibility' value={visibility ? `${visibility.alertVisibilityPolicy} · ${visibility.allowed ? 'visible' : visibility.reason || 'blocked'}` : `${orgContext?.readiness.alertVisibilityPolicy || 'members'} policy`} tone={visibility?.allowed === false ? 'blocked' : 'ready'} />
                     <OperatorRow label='Case role' value={access?.role ? `${access.role}${access.readOnly ? ' · read only' : ' · can mutate'}` : 'no case access response'} tone={access ? access.readOnly ? 'needs_action' : 'ready' : 'needs_action'} />
                 </div>
@@ -732,6 +809,36 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, invit
                 </div>
             </div>
         </section>
+    )
+}
+
+function OperatorReadinessRows({ orgContext, selected, caseDetail }: { orgContext?: WorkbenchOrgContext, selected?: WorkbenchCase, caseDetail?: CaseDetailState }) {
+    const latestDetailDelivery = caseDetail?.status === 'ready' ? caseDetail.detail.deliveryContext?.latestDelivery : undefined
+    const latestDelivery = latestDetailDelivery || selected?.deliveryEvidence?.[0] || orgContext?.readiness.latestDelivery
+    const destination = (orgContext?.webhookDestinations || []).find(item => item.id === latestDelivery?.webhookDestinationId) || orgContext?.webhookDestinations[0]
+    const sourceCoverage = orgContext?.readiness.sourceCoverage
+    const detailAlert = caseDetail?.status === 'ready' ? caseDetail.detail.alert : undefined
+    const sourceValue = detailAlert?.sourceFamily
+        ? `${label(detailAlert.sourceFamily)} · ${detailAlert.sourceCount ?? selected?.sourceLabel ?? 'source count missing'}`
+        : sourceCoverage
+            ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active · ${sourceCoverage.watchlistMatchCount} matches`
+            : selected?.sourceLabel || 'source coverage missing'
+    const sourceTone: WorkbenchWorkflowStep['status'] = detailAlert?.sourceFamily || (sourceCoverage && sourceCoverage.activeSourceCount > 0) ? 'ready' : 'blocked'
+    const webhookValue = destination
+        ? `${destination.name} · ${destination.status}${destination.lastTestStatus ? ` · test ${destination.lastTestStatus}` : ''}`
+        : 'destination missing'
+    const webhookTone: WorkbenchWorkflowStep['status'] = destination?.status === 'active' ? destination.lastTestStatus === 'failed' ? 'blocked' : 'ready' : 'blocked'
+    const deliveryValue = latestDelivery
+        ? `${latestDelivery.id} · ${latestDelivery.status} · ${relativeTime(latestDelivery.attemptedAt)}`
+        : 'no delivery/test row'
+    const deliveryTone: WorkbenchWorkflowStep['status'] = latestDelivery ? latestDelivery.status === 'failed' || latestDelivery.status === 'skipped' ? 'blocked' : 'ready' : 'needs_action'
+
+    return (
+        <>
+            <OperatorRow label='Webhook' value={webhookValue} tone={webhookTone} />
+            <OperatorRow label='Last delivery' value={deliveryValue} tone={deliveryTone} />
+            <OperatorRow label='Source health' value={sourceValue} tone={sourceTone} />
+        </>
     )
 }
 
@@ -1058,6 +1165,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
     return (
         <button
             type='button'
+            data-detail-action={action}
             onClick={onClick}
             disabled={disabled}
             title={blockedReason}
@@ -1068,7 +1176,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
     )
 }
 
-function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, orgContext, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
+function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
@@ -1077,6 +1185,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     compact: boolean
     caseDetail?: CaseDetailState
     orgContext?: WorkbenchOrgContext
+    actionMessage: WorkbenchActionOutcome | null
     onNoteChange: (value: string) => void
     onOwnerDraftChange: (value: string) => void
     onDecision: (decision: LocalDecision) => void | Promise<void>
@@ -1179,6 +1288,13 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                     onSend={onSend}
                 />
             </section>
+
+            <CaseContinuityPanel
+                item={item}
+                decision={decision}
+                caseDetail={caseDetail}
+                actionMessage={actionMessage}
+            />
 
             {(item.workflowPath?.length || item.actions?.length) ? (
                 <section className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -1330,6 +1446,117 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     )
 }
 
+function CaseContinuityPanel({ item, decision, caseDetail, actionMessage }: { item: WorkbenchCase, decision?: LocalDecision, caseDetail?: CaseDetailState, actionMessage: WorkbenchActionOutcome | null }) {
+    const detail = caseDetail?.status === 'ready' ? caseDetail.detail : undefined
+    const caseRecord = detail?.case
+    const workflowEvents = [...(caseRecord?.workflowEvents || []), ...(detail?.alertContext?.workflowEvents || [])]
+    const ownerEvents = workflowEvents
+        .filter(event => event.toOwner || event.fromOwner || event.action === 'assign')
+        .slice(-4)
+        .reverse()
+    const noteEvents = workflowEvents
+        .filter(event => event.note)
+        .slice(-4)
+        .reverse()
+    const visibility = detail?.access?.visibilityDecision
+    const allowedActions = detail?.nextAllowedActions || []
+    const latestTimeline = (detail?.timeline || [])
+        .filter(row => row.rationale || row.toOwner || row.toStatus || row.eventType)
+        .slice(-5)
+        .reverse()
+    const refreshText = caseDetail?.status === 'loading'
+        ? 'refreshing /api/cases/:id'
+        : caseDetail?.status === 'error'
+            ? caseDetail.error
+            : detail
+                ? `refreshed ${relativeTime(detail.generatedAt)}`
+                : item.caseDetailHref ? 'case detail not loaded yet' : item.missingDependency || 'no backed case detail route'
+
+    return (
+        <section className='rounded-lg border border-[#dfe5ee] bg-white'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#171a21]'>Continuity</h3>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Assignee changes, rationale, action outcome, allowed moves, visibility, and refresh state.</p>
+                </div>
+                <span className={workflowStatusClass(caseDetail?.status === 'error' || (!detail && !item.caseDetailHref) ? 'blocked' : caseDetail?.status === 'loading' ? 'needs_action' : 'ready')}>{caseDetail?.status || (item.caseDetailHref ? 'pending' : 'blocked')}</span>
+            </div>
+            <div className='grid gap-3 p-4 xl:grid-cols-[0.85fr_1fr_0.85fr]'>
+                <div className='grid gap-3'>
+                    <ContinuityBlock title='Assignee history'>
+                        <p className='text-xs text-[#667085]'>Latest owner: <span className='font-semibold text-[#344054]'>{caseRecord?.assignedOwner || item.owner || 'unassigned'}</span></p>
+                        <div className='mt-2 grid gap-2'>
+                            {ownerEvents.map(event => (
+                                <ContinuityEvent key={event.id} title={event.toOwner || event.fromOwner || event.action} detail={`${event.fromOwner || 'unassigned'} -> ${event.toOwner || caseRecord?.assignedOwner || 'unassigned'} · ${event.actor || 'unknown actor'}`} at={event.at} />
+                            ))}
+                            {!ownerEvents.length && <p className='text-xs leading-5 text-[#667085]'>No assignment event returned. Using latest owner from case detail or selected queue item.</p>}
+                        </div>
+                    </ContinuityBlock>
+                    <ContinuityBlock title='Visibility decision'>
+                        <p className='text-xs leading-5 text-[#667085]'>
+                            {visibility ? `${visibility.allowed ? 'Visible' : 'Blocked'} under ${visibility.alertVisibilityPolicy}; roles ${visibility.allowedRoles.join(', ')}${visibility.reason ? `; reason ${visibility.reason}` : ''}.` : 'No organization visibility decision returned by /api/cases/:id.'}
+                        </p>
+                        <p className='mt-2 text-xs text-[#667085]'>Mutations: <span className='font-semibold text-[#344054]'>{detail?.access?.readOnly ? 'read-only' : detail ? 'allowed' : 'requires case detail'}</span></p>
+                    </ContinuityBlock>
+                </div>
+                <ContinuityBlock title='Rationale timeline'>
+                    <div className='grid gap-2'>
+                        {noteEvents.map(event => (
+                            <ContinuityEvent key={event.id} title={label(event.action)} detail={event.note || 'No rationale'} at={event.at} />
+                        ))}
+                        {caseRecord?.lastDecision && <p className='rounded-lg border border-[#e0e5ed] bg-white p-2 text-xs leading-5 text-[#596170]'>Last decision: {caseRecord.lastDecision}</p>}
+                        {decision?.status && <p className='rounded-lg border border-[#fed7aa] bg-[#fff7ed] p-2 text-xs leading-5 text-[#596170]'>Session-local: {label(decision.status)}{decision.reason ? ` · ${decision.reason}` : ''}</p>}
+                        {!noteEvents.length && !caseRecord?.lastDecision && !decision?.status && <p className='text-xs leading-5 text-[#667085]'>No note or decision rationale has been returned yet.</p>}
+                    </div>
+                </ContinuityBlock>
+                <div className='grid gap-3'>
+                    <ContinuityBlock title='Action outcome'>
+                        <p className={`text-xs leading-5 ${actionMessage ? actionMessage.ok ? 'text-[#147a3b]' : 'text-[#9a3412]' : 'text-[#667085]'}`}>
+                            {actionMessage?.text || 'No action has run in this console session.'}
+                        </p>
+                        <p className='mt-2 text-xs text-[#667085]'>Refresh: {refreshText}</p>
+                    </ContinuityBlock>
+                    <ContinuityBlock title='Next allowed actions'>
+                        <div className='flex flex-wrap gap-2'>
+                            {allowedActions.map(action => (
+                                <span key={action.id} title={action.disabledReason} className={workflowStatusClass(action.enabled ? 'ready' : 'blocked')}>{action.label}</span>
+                            ))}
+                            {!allowedActions.length && <span className='text-xs text-[#667085]'>No backed action matrix returned.</span>}
+                        </div>
+                    </ContinuityBlock>
+                    <ContinuityBlock title='Recent audit'>
+                        <div className='grid gap-2'>
+                            {latestTimeline.slice(0, 3).map(row => (
+                                <ContinuityEvent key={row.id} title={row.title} detail={row.detail || row.rationale || row.eventType || 'case event'} at={row.at} />
+                            ))}
+                            {!latestTimeline.length && <p className='text-xs leading-5 text-[#667085]'>Audit trail appears after the case API returns timeline events.</p>}
+                        </div>
+                    </ContinuityBlock>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+function ContinuityBlock({ title, children }: { title: string, children: React.ReactNode }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <h4 className='text-xs font-semibold uppercase text-[#667085]'>{title}</h4>
+            <div className='mt-2'>{children}</div>
+        </div>
+    )
+}
+
+function ContinuityEvent({ title, detail, at }: { title: string, detail: string, at?: string }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-white p-2'>
+            <p className='text-xs font-semibold text-[#171a21]'>{title}</p>
+            <p className='mt-1 text-xs leading-5 text-[#667085]'>{detail}</p>
+            {at && <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(at)}</p>}
+        </div>
+    )
+}
+
 type LocalDecision = {
     status?: string
     owner?: string
@@ -1369,15 +1596,20 @@ type CaseDetailPayload = {
         status?: string
         priority?: string
         assignedOwner?: string
+        createdAt?: string
         updatedAt: string
+        closedAt?: string
+        lastDecision?: string
+        workflowEvents?: CaseWorkflowEvent[]
     }
-    alert?: { id?: string }
+    alert?: { id?: string, sourceFamily?: string, sourceCount?: number, reviewState?: string, deliveryState?: string, matchedTerm?: { value?: string, kind?: string } }
     alertContext?: {
         id?: string
         reviewState?: string
         deliveryState?: string
         assignedOwner?: string
         workflowNote?: string
+        workflowEvents?: CaseWorkflowEvent[]
     }
     deliveryContext?: {
         deliveryCount: number
@@ -1439,6 +1671,25 @@ type CaseTimelineItem = {
     at: string
     title: string
     detail: string
+    eventType?: string
+    actor?: string
+    rationale?: string
+    fromStatus?: string
+    toStatus?: string
+    fromOwner?: string
+    toOwner?: string
+}
+
+type CaseWorkflowEvent = {
+    id: string
+    at: string
+    actor?: string
+    action: string
+    fromStatus?: string
+    toStatus?: string
+    fromOwner?: string
+    toOwner?: string
+    note?: string
 }
 
 function DecisionButton({ busy = false, onClick, children }: { busy?: boolean, onClick: () => void | Promise<void>, children: string }) {

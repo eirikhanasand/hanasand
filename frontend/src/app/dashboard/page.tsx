@@ -62,6 +62,9 @@ export default async function Page({
         scope,
         watchlists,
         organizationState,
+        operations,
+        deliveries,
+        liveAlertCount: liveAlerts.length,
     })
     const cases = buildWorkbenchCases(overview, alerts, readinessCases, liveAlerts.length > 0, scope, deliveries)
     const displayName = impersonatingName || impersonatingId || name
