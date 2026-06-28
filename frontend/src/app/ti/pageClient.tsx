@@ -152,12 +152,15 @@ function Results({ result }: { result: TiSearchResponse }) {
     const alertItems = alertItemsFor(result)
     const victimObservations = victimObservationsFor(result)
     const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById), [result, victimObservations, sourceUrlById])
+    const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources), [result, victimObservations, sources])
     const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [notes, setNotes] = useState<Record<string, string>>({})
     const selected = workItems.find(item => item.id === selectedId) ?? workItems[0]
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedNote = selected ? notes[selected.id] ?? '' : ''
+    const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
+    const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources)
     const sessionEvents = Object.entries(localDecisions).map(([id, decision]) => {
         const item = workItems.find(entry => entry.id === id)
         return {
@@ -289,6 +292,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='Provenance' value={selected.provenance} />
                                     </div>
 
+                                    <CustomerAlertFit selected={selected} watchlist={watchlist} alertPacket={alertPacket} />
+
                                     <div className='mt-4 grid gap-3 md:grid-cols-2'>
                                         <EvidencePanel title='Evidence'>
                                             {selected.evidence.map(line => <li key={line}>{line}</li>)}
@@ -328,6 +333,9 @@ function Results({ result }: { result: TiSearchResponse }) {
                     </main>
 
                     <aside className='order-3 grid content-start gap-4 border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:border-l lg:border-t-0'>
+                        {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
+                        <EnrichmentTasksPanel tasks={enrichmentTasks} />
+
                         <div data-ti-actions='true'>
                             <ActionPanel
                                 note={selectedNote}
@@ -421,6 +429,30 @@ type LocalDecision = {
     status: 'reviewing' | 'assigned' | 'escalated' | 'suppressed' | 'closed' | 'reopened'
     reason: string
     decidedAt: string
+}
+
+type WatchlistRelevance = {
+    terms: string[]
+    organizations: string[]
+    sectors: string[]
+    countries: string[]
+    domains: string[]
+    rationale: string
+}
+
+type AlertPacket = {
+    title: string
+    customerValue: string
+    watchTerms: string[]
+    evidenceBasis: string[]
+    routing: string
+    blockedUntil: string[]
+}
+
+type EnrichmentTask = {
+    title: string
+    status: 'ready' | 'needs_api' | 'needs_review' | 'watch'
+    detail: string
 }
 
 function analystWorkItemsFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sourceUrlById: Map<string, string | undefined>): AnalystWorkItem[] {
@@ -530,6 +562,96 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
     }]
 }
 
+function CustomerAlertFit({ selected, watchlist, alertPacket }: { selected: AnalystWorkItem; watchlist: WatchlistRelevance; alertPacket: AlertPacket | null }) {
+    return (
+        <div className='mt-4 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3'>
+            <div className='flex flex-wrap items-center justify-between gap-3'>
+                <div>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Customer Alert Fit</p>
+                    <p className='mt-1 text-sm leading-6 text-[#596170]'>{alertPacket?.customerValue ?? watchlist.rationale}</p>
+                </div>
+                <span className={severityClass(selected.severity)}>{selected.kind === 'exposure' ? 'alert candidate' : 'context for watchlists'}</span>
+            </div>
+            <div className='mt-3 grid gap-3 md:grid-cols-3'>
+                <WatchlistBlock title='Watch terms' values={watchlist.terms} />
+                <WatchlistBlock title='Organizations' values={watchlist.organizations} />
+                <WatchlistBlock title='Sectors / countries' values={[...watchlist.sectors.slice(0, 4), ...watchlist.countries.slice(0, 4)]} />
+            </div>
+            {watchlist.domains.length ? (
+                <div className='mt-3'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Domains to monitor</p>
+                    <div className='mt-2 flex flex-wrap gap-2'>
+                        {watchlist.domains.map(domain => <span key={domain} className='rounded-full border border-[#d8dee9] bg-white px-2.5 py-1 font-mono text-xs text-[#344054]'>{domain}</span>)}
+                    </div>
+                </div>
+            ) : null}
+        </div>
+    )
+}
+
+function WatchlistBlock({ title, values }: { title: string; values: string[] }) {
+    const visible = values.slice(0, 6)
+    return (
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3'>
+            <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
+            <div className='mt-2 flex flex-wrap gap-1.5'>
+                {visible.length ? visible.map(value => (
+                    <span key={value} className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{value}</span>
+                )) : <span className='text-xs text-[#667085]'>Not returned</span>}
+            </div>
+        </div>
+    )
+}
+
+function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
+    return (
+        <Panel title='Alert Packet' description='Customer-facing alert ingredients derived from the selected finding and returned profile data. Sending remains a console/API workflow.' icon={<BellRing className='h-4 w-4' />}>
+            <div className='grid gap-3'>
+                <div>
+                    <p className='text-sm font-semibold text-[#171a21]'>{packet.title}</p>
+                    <p className='mt-1 text-xs leading-5 text-[#596170]'>{packet.customerValue}</p>
+                </div>
+                <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Evidence basis</p>
+                    <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170]'>
+                        {packet.evidenceBasis.map(item => <li key={item}>{item}</li>)}
+                    </ul>
+                </div>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Routing</p>
+                    <p className='mt-1 text-xs leading-5 text-[#596170]'>{packet.routing}</p>
+                </div>
+                {packet.blockedUntil.length ? (
+                    <div className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3'>
+                        <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Blocked until</p>
+                        <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00]'>
+                            {packet.blockedUntil.map(item => <li key={item}>{item}</li>)}
+                        </ul>
+                    </div>
+                ) : null}
+            </div>
+        </Panel>
+    )
+}
+
+function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
+    return (
+        <Panel title='Source and Enrichment Tasks' description='Concrete collection or backend contract work needed for this actor/query to feed stronger alerts.' icon={<Database className='h-4 w-4' />}>
+            <div className='grid gap-2'>
+                {tasks.map(task => (
+                    <div key={task.title} className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                        <div className='flex items-center justify-between gap-2'>
+                            <p className='text-xs font-semibold text-[#171a21]'>{task.title}</p>
+                            <span className={taskStatusClass(task.status)}>{taskStatusLabel(task.status)}</span>
+                        </div>
+                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{task.detail}</p>
+                    </div>
+                ))}
+            </div>
+        </Panel>
+    )
+}
+
 function ActionPanel({ note, decision, onNoteChange, onDecision }: {
     note: string
     decision?: LocalDecision
@@ -537,7 +659,7 @@ function ActionPanel({ note, decision, onNoteChange, onDecision }: {
     onDecision: (status: LocalDecision['status']) => void
 }) {
     return (
-        <Panel title='Analyst Actions' description='Actions on this public page are session-local. Persisted assignment, delivery, and audit logging live in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
+        <Panel title='Session Notes' description='These controls are local to this browser session. Use them for scratch triage only; persisted assignment, delivery, and audit logging live in the authenticated console/API workflow.' icon={<ClipboardList className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 {decision ? (
                     <div className='rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3 text-xs leading-5 text-[#147a3b]'>
@@ -545,13 +667,13 @@ function ActionPanel({ note, decision, onNoteChange, onDecision }: {
                     </div>
                 ) : (
                     <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 text-xs leading-5 text-[#667085]'>
-                        No local decision recorded yet.
+                        No local scratch decision recorded yet.
                     </div>
                 )}
                 <textarea
                     value={note}
                     onChange={event => onNoteChange(event.target.value)}
-                    placeholder='Decision rationale, owner, or next evidence to collect...'
+                    placeholder='Scratch rationale, proposed owner, or next evidence to collect...'
                     className='min-h-24 resize-y rounded-lg border border-[#d8dee9] bg-white p-3 text-sm leading-6 text-[#171a21] outline-none transition placeholder:text-[#98a2b3] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
                 />
                 <div className='grid grid-cols-2 gap-2'>
@@ -660,6 +782,108 @@ function defaultNextStepsFor(result: TiSearchResponse): NonNullable<TiSearchResp
     }]
 }
 
+function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sources: TiSearchResponse['sources']): WatchlistRelevance {
+    const organizations = unique([
+        ...victimObservations.map(item => item.victim),
+        ...result.recentActivity.map(item => item.victimName).filter((value): value is string => Boolean(value)),
+        ...(result.analystLoop?.metadataReviewInbox.flatMap(item => [item.company, item.victim]).filter((value): value is string => Boolean(value)) ?? []),
+    ]).slice(0, 10)
+    const sectors = unique([
+        ...victimObservations.map(item => item.sector),
+        ...result.targets.map(item => item.sector),
+        ...result.recentActivity.flatMap(item => item.affectedSectors ?? []),
+    ].filter(value => !/not stated/i.test(value))).slice(0, 10)
+    const countries = unique([
+        ...victimObservations.map(item => item.country),
+        ...result.targets.flatMap(item => item.regions),
+        ...result.recentActivity.flatMap(item => item.countries ?? []),
+    ].filter(value => !/not stated/i.test(value))).slice(0, 10)
+    const domains = unique(sources.map(source => source.url || linkFromText(source.provenance)).map(domainFromUrl).filter((value): value is string => Boolean(value))).slice(0, 8)
+    const terms = unique([
+        result.query,
+        humanizeSlug(result.query),
+        ...result.aliases,
+        ...organizations,
+        ...sectors,
+    ].filter(Boolean)).slice(0, 14)
+
+    return {
+        terms,
+        organizations,
+        sectors,
+        countries,
+        domains,
+        rationale: organizations.length
+            ? 'Use the actor, aliases, victim organizations, sectors, countries, and source domains as candidate watchlist inputs before creating customer alerts.'
+            : 'Use the actor, aliases, sectors, countries, and source domains as candidate watchlist inputs; no named customer organization match was returned yet.',
+    }
+}
+
+function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, watchlist: WatchlistRelevance): AlertPacket {
+    const isCustomerAlert = selected.kind === 'exposure' || Boolean(watchlist.organizations.some(org => selected.title.toLowerCase().includes(org.toLowerCase())))
+    const evidenceBasis = unique([
+        `${selected.source}; ${selected.provenance}`,
+        `Timestamp: ${selected.timestamp}`,
+        `Confidence: ${Math.round(selected.confidence * 100)}%`,
+        ...selected.evidence.slice(0, 3),
+    ])
+    const blockedUntil = [
+        selected.href ? '' : 'A source URL or internal capture reference is attached.',
+        isCustomerAlert ? '' : 'A watched company, domain, vendor, or portfolio term matches this finding.',
+        selected.confidence >= 0.7 ? '' : 'Confidence is raised or corroborating evidence is added.',
+    ].filter(Boolean)
+
+    return {
+        title: isCustomerAlert ? `Candidate customer alert: ${selected.title}` : `Actor context packet: ${selected.title}`,
+        customerValue: isCustomerAlert
+            ? 'This finding has enough structure to enter the alert review workflow: named object, evidence basis, timestamp, source/provenance, confidence, and routing guidance.'
+            : 'This finding strengthens watchlist and detection context, but should not become a customer alert until it matches a watched organization, domain, vendor, or portfolio term.',
+        watchTerms: watchlist.terms.slice(0, 8),
+        evidenceBasis,
+        routing: selected.kind === 'tradecraft'
+            ? 'Route to detection/hunting enrichment before customer notification.'
+            : selected.kind === 'victim' && !isCustomerAlert
+                ? 'Route to actor-profile enrichment and watchlist expansion.'
+                : 'Route to alert review, source verification, and customer delivery only after the console workflow persists it.',
+        blockedUntil,
+    }
+}
+
+function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem | undefined, watchlist: WatchlistRelevance, sources: TiSearchResponse['sources']): EnrichmentTask[] {
+    const hasReviewInbox = Boolean(result.analystLoop?.metadataReviewInbox.length)
+    const hasSourceUrls = sources.some(source => source.url || linkFromText(source.provenance))
+    const hasOrganizations = watchlist.organizations.length > 0
+    const hasActivity = result.recentActivity.length > 0
+    return [
+        {
+            title: 'Persist alert review decision',
+            status: 'needs_api',
+            detail: 'Public /ti pages only keep scratch notes locally. The backend contract should accept selected finding id, review state, owner, rationale, and delivery hold/release state.',
+        },
+        {
+            title: 'Attach source capture provenance',
+            status: hasSourceUrls ? 'ready' : 'needs_api',
+            detail: hasSourceUrls
+                ? 'Returned sources include URL/provenance references that can be opened or mapped into console evidence.'
+                : 'The search response needs source URLs, capture ids, or redacted source hashes for every queue item before analyst trust is strong.',
+        },
+        {
+            title: 'Map actor to customer watchlists',
+            status: hasOrganizations ? 'watch' : 'needs_api',
+            detail: hasOrganizations
+                ? `Candidate watched objects include ${watchlist.organizations.slice(0, 3).join(', ')}.`
+                : 'No watched organization/domain match is returned by the public API. Add a watchlist-match field to the search response for sellable alerts.',
+        },
+        {
+            title: 'Promote evidence to case queue',
+            status: hasReviewInbox ? 'ready' : selected?.kind === 'exposure' || hasActivity ? 'needs_review' : 'needs_api',
+            detail: hasReviewInbox
+                ? 'The response includes metadata review inbox items that can feed authenticated case work.'
+                : 'The UI builds a local queue from returned profile/activity fields; the backend should return stable case ids for persisted work.',
+        },
+    ]
+}
+
 function queueCountsFor(items: AnalystWorkItem[], decisions: Record<string, LocalDecision>) {
     return items.reduce((counts, item) => {
         const decision = decisions[item.id]
@@ -668,6 +892,39 @@ function queueCountsFor(items: AnalystWorkItem[], decisions: Record<string, Loca
         if (item.severity === 'critical' || item.severity === 'high') counts.high += 1
         return counts
     }, { open: 0, high: 0, closed: 0 })
+}
+
+function unique(values: string[]) {
+    const seen = new Set<string>()
+    return values.map(value => value.trim()).filter(value => {
+        const key = value.toLowerCase()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+    })
+}
+
+function domainFromUrl(value?: string) {
+    if (!value) return null
+    try {
+        return new URL(value).hostname.replace(/^www\./, '')
+    } catch {
+        return null
+    }
+}
+
+function taskStatusLabel(status: EnrichmentTask['status']) {
+    if (status === 'needs_api') return 'backend contract'
+    if (status === 'needs_review') return 'review'
+    if (status === 'watch') return 'watchlist'
+    return 'ready'
+}
+
+function taskStatusClass(status: EnrichmentTask['status']) {
+    if (status === 'ready') return 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'
+    if (status === 'watch') return 'rounded-lg bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'
+    if (status === 'needs_review') return 'rounded-lg bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]'
+    return 'rounded-lg bg-[#fff1f0] px-2 py-1 text-[11px] font-semibold text-[#b42318]'
 }
 
 function severityClass(severity: AnalystWorkItem['severity']) {
