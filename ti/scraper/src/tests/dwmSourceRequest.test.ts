@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
+import { InMemoryDwmSourcePackRegistryAdapter } from "../storage/dwmSourcePackRegistry.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
 describe("dwm source requests", () => {
@@ -420,6 +421,60 @@ describe("dwm source requests", () => {
       rawUnsafeRowsStored: false,
       restrictedPayloadDownloadAllowed: false
     });
+  });
+
+  test("retrieves source packs across scraper store restarts through durable adapter", async () => {
+    const sourcePackRegistry = new InMemoryDwmSourcePackRegistryAdapter();
+    const firstStore = new InMemoryScraperStore();
+    const firstFrontier = new FocusedFrontier();
+    const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_durable_restart",
+        sourcePackLabel: "Durable Telegram restart pack",
+        requestId: "req_durable_restart",
+        requestedBy: "source-growth-worker",
+        candidates: [
+          { target: "@durable_restart_cti", type: "telegram_channel", family: "telegram" },
+          { target: "not-a-public-channel", type: "telegram_channel", family: "telegram" }
+        ]
+      })
+    }), { store: firstStore, frontier: firstFrontier, sourcePackRegistry });
+    const createdBody = await created.json() as any;
+    expect(created.status).toBe(201);
+    expect(createdBody.packStatus).toMatchObject({
+      totalCandidateCount: 2,
+      familyCoverage: { telegram: { total: 2, pending: 1, blocked: 1 } }
+    });
+
+    const restartedStore = new InMemoryScraperStore();
+    const restartedFrontier = new FocusedFrontier();
+    const status = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_status", sourcePackId: "pack_durable_restart" })
+    }), { store: restartedStore, frontier: restartedFrontier, sourcePackRegistry });
+    const statusBody = await status.json() as any;
+    expect(status.status).toBe(200);
+    expect(statusBody.registry).toMatchObject({
+      id: "pack_durable_restart",
+      requestId: createdBody.request.id,
+      familyCoverage: { telegram: { total: 2, blocked: 1 } },
+      packStatus: {
+        totalCandidateCount: 2,
+        registryOnlyCandidateCount: 2,
+        queuedForCollectionCount: 0
+      }
+    });
+    expect(statusBody.registry.candidates.every((candidate: any) => candidate.targetRef.rawStored === false)).toBe(true);
+
+    const listed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_list", family: "telegram", decision: "rejected_at_intake", limit: 1 })
+    }), { store: restartedStore, frontier: restartedFrontier, sourcePackRegistry });
+    const listedBody = await listed.json() as any;
+    expect(listed.status).toBe(200);
+    expect(listedBody.summary).toMatchObject({ packCount: 1, totalMatchedPacks: 1, totalCandidates: 2 });
+    expect(listedBody.packs[0]).toMatchObject({ id: "pack_durable_restart", familyCoverage: { telegram: { total: 2 } } });
   });
 
   test("persists all-rejected source packs without storing raw unsafe rows", async () => {

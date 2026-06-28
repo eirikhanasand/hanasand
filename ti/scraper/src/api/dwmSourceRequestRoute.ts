@@ -3,6 +3,14 @@ import { evaluateTelegramPublicCompliance } from "../policy/telegramCollectionPo
 import { evaluateMetadataOnlySource } from "../policy/metadataCollectionPolicy.ts";
 import { buildDwmProductSnapshot } from "../product/dwmProduct.ts";
 import { applyDwmSeedCatalog, sourceDedupeKey } from "../product/dwmSourceInventory.ts";
+import {
+  InMemoryDwmSourcePackRegistryAdapter,
+  type DwmSourcePackCandidateRecord,
+  type DwmSourcePackFamily,
+  type DwmSourcePackListQuery,
+  type DwmSourcePackRecord,
+  type DwmSourcePackRegistryAdapter
+} from "../storage/dwmSourcePackRegistry.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
@@ -22,6 +30,15 @@ type DwmSourceRequestBody = {
   candidates?: DwmSourcePackCandidate[];
   sourcePackLabel?: string;
   sourcePackId?: string;
+  cursor?: string;
+  createdFrom?: string;
+  createdTo?: string;
+  family?: SourceGrowthFamily;
+  decision?: string;
+  activationState?: string;
+  parserStatus?: string;
+  lastFailure?: string;
+  requestId?: string;
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
   action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list";
@@ -52,57 +69,11 @@ type DwmSourcePackCandidate = {
   reason?: string;
 };
 
-type SourceGrowthFamily = "telegram" | "darkweb_onion" | "darkweb_metadata" | "actor_page" | "public_advisory" | "clear_web";
+type SourceGrowthFamily = DwmSourcePackFamily;
+type SourcePackRegistry = DwmSourcePackRecord;
+type SourcePackRegistryCandidate = DwmSourcePackCandidateRecord;
 
-type SourcePackRegistry = {
-  id: string;
-  label: string;
-  tenantId?: string;
-  scope?: string;
-  requestedBy: string;
-  requestedAt: string;
-  updatedAt: string;
-  requestId: string;
-  safeOutput: Record<string, boolean>;
-  candidates: SourcePackRegistryCandidate[];
-  audit: Array<Record<string, unknown>>;
-};
-
-type SourcePackRegistryCandidate = {
-  id: string;
-  sourceId?: string;
-  family: string;
-  declaredFamily: SourceGrowthFamily;
-  type: string;
-  refLabel?: string;
-  parserExpectation: string;
-  index: number;
-  targetRef: {
-    hash: string;
-    preview: string;
-    family: string;
-    rawStored: false;
-  };
-  requestedBy: string;
-  requestedAt: string;
-  status: string;
-  intakeStatus: string;
-  decision?: string;
-  decidedBy?: string;
-  decidedAt?: string;
-  reason?: string;
-  duplicateOf?: string;
-  failure?: Record<string, unknown>;
-  policyBoundary?: Record<string, unknown>;
-  validationResult?: Record<string, unknown>;
-  parserStatus?: string;
-  healthStatus?: string;
-  activationState?: string;
-  lastTestOutcome?: Record<string, unknown>;
-  retryHint?: string;
-};
-
-const sourcePackRegistries = new WeakMap<object, Map<string, SourcePackRegistry>>();
+const sourcePackRegistries = new WeakMap<object, InMemoryDwmSourcePackRegistryAdapter>();
 
 export async function createDwmSourceRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<DwmSourceRequestBody>(request);
@@ -487,27 +458,20 @@ function saveSourcePackMetadata(source: SourceRecord, options: ApiServerOptions,
   } as SourceRecord);
 }
 
-function sourcePackStore(options: ApiServerOptions): Map<string, SourcePackRegistry> {
+function sourcePackStore(options: ApiServerOptions): DwmSourcePackRegistryAdapter {
+  const configured = options.sourcePackRegistry as DwmSourcePackRegistryAdapter | undefined;
+  if (configured && typeof configured.save === "function" && typeof configured.get === "function" && typeof configured.list === "function") return configured;
   const key = options.store as object;
   let registry = sourcePackRegistries.get(key);
   if (!registry) {
-    registry = new Map<string, SourcePackRegistry>();
+    registry = new InMemoryDwmSourcePackRegistryAdapter();
     sourcePackRegistries.set(key, registry);
   }
   return registry;
 }
 
 function upsertSourcePackRegistry(options: ApiServerOptions, pack: SourcePackRegistry): SourcePackRegistry {
-  const registry = sourcePackStore(options);
-  const previous = registry.get(pack.id);
-  const next = previous ? {
-    ...previous,
-    ...pack,
-    candidates: dedupePackCandidates([...previous.candidates, ...pack.candidates]),
-    audit: [...previous.audit, ...pack.audit]
-  } : pack;
-  registry.set(pack.id, next);
-  return next;
+  return sourcePackStore(options).save(sourcePackWithRollups(pack, options));
 }
 
 function updateSourcePackRegistryDecision(options: ApiServerOptions, source: SourceRecord, input: {
@@ -522,7 +486,7 @@ function updateSourcePackRegistryDecision(options: ApiServerOptions, source: Sou
   const registry = sourcePackStore(options);
   const pack = registry.get(sourcePackId);
   if (!pack) return;
-  registry.set(sourcePackId, {
+  registry.save(sourcePackWithRollups({
     ...pack,
     updatedAt: input.at,
     candidates: pack.candidates.map((item) => item.id === candidate.id ? {
@@ -542,13 +506,30 @@ function updateSourcePackRegistryDecision(options: ApiServerOptions, source: Sou
       ...pack.audit,
       { at: input.at, action: input.action, actor: input.actor, reason: input.reason, candidateId: candidate.id, sourceId: source.id }
     ]
-  });
+  }, options));
 }
 
-function dedupePackCandidates(candidates: SourcePackRegistryCandidate[]): SourcePackRegistryCandidate[] {
-  const seen = new Map<string, SourcePackRegistryCandidate>();
-  for (const candidate of candidates) seen.set(candidate.id, candidate);
-  return [...seen.values()].sort((a, b) => a.index - b.index);
+function sourcePackWithRollups(pack: SourcePackRegistry, options: ApiServerOptions): SourcePackRegistry {
+  const sources = sourcesForPack(pack.id, options);
+  const rollup = sourcePackRollup({ sourcePackId: pack.id, sourcePackLabel: pack.label, sources, registry: pack });
+  return {
+    ...pack,
+    familyCoverage: rollup.familyCoverage,
+    healthRollup: {
+      totalCandidateCount: rollup.totalCandidateCount,
+      activeCount: rollup.activeCount,
+      approvalRequiredCount: rollup.approvalRequiredCount,
+      rejectedCount: rollup.rejectedCount,
+      duplicateCount: rollup.duplicateCount,
+      suppressedCount: rollup.suppressedCount,
+      queuedJobIds: rollup.queuedJobIds,
+      queuedForCollectionCount: rollup.queuedForCollectionCount,
+      capturesObservedCount: rollup.capturesObservedCount,
+      alertRebuild: rollup.alertRebuild,
+      retryBackoff: rollup.retryBackoff,
+      failureReasons: rollup.failureReasons
+    }
+  };
 }
 
 function sourcePackRegistryCandidate(input: {
@@ -822,19 +803,18 @@ function sourcePackStatusResponse(body: DwmSourceRequestBody, options: ApiServer
 }
 
 function sourcePackListResponse(body: DwmSourceRequestBody, options: ApiServerOptions) {
-  const label = String(body.sourcePackLabel ?? "").trim();
-  const tenantId = String(body.tenantId ?? "").trim();
-  const packs = [...sourcePackStore(options).values()]
-    .filter((pack) => !label || pack.label === label)
-    .filter((pack) => !tenantId || pack.tenantId === tenantId)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, Math.max(1, Math.min(body.limit ?? 100, 100)))
+  const query = sourcePackListQuery(body);
+  const listed = sourcePackStore(options).list(query);
+  const packs = listed.items
+    .filter((pack) => !body.tenantId || pack.tenantId === body.tenantId)
     .map((pack) => sourcePackRegistryStatus(pack, options));
   return {
     action: "pack_list",
     packs,
+    nextCursor: listed.nextCursor,
     summary: {
       packCount: packs.length,
+      totalMatchedPacks: listed.total,
       totalCandidates: packs.reduce((sum, pack) => sum + pack.packStatus.totalCandidateCount, 0),
       activeCount: packs.reduce((sum, pack) => sum + pack.packStatus.activeCount, 0),
       rejectedCount: packs.reduce((sum, pack) => sum + pack.packStatus.rejectedCount, 0),
@@ -842,6 +822,22 @@ function sourcePackListResponse(body: DwmSourceRequestBody, options: ApiServerOp
       queuedForCollectionCount: packs.reduce((sum, pack) => sum + pack.packStatus.queuedForCollectionCount, 0)
     },
     safeOutput: sourcePackSafeOutput()
+  };
+}
+
+function sourcePackListQuery(body: DwmSourceRequestBody): DwmSourcePackListQuery {
+  return {
+    family: body.family,
+    decision: body.decision,
+    activationState: body.activationState,
+    parserStatus: body.parserStatus,
+    lastFailure: body.lastFailure,
+    requestId: body.requestId,
+    label: body.sourcePackLabel,
+    createdFrom: body.createdFrom,
+    createdTo: body.createdTo,
+    cursor: body.cursor,
+    limit: body.limit
   };
 }
 
@@ -979,9 +975,9 @@ function sourcePackRegistryStatus(pack: SourcePackRegistry, options: ApiServerOp
 function findSourcePackRegistry(body: DwmSourceRequestBody, options: ApiServerOptions): SourcePackRegistry | undefined {
   const registry = sourcePackStore(options);
   const sourcePackId = String(body.sourcePackId ?? "").trim();
-  if (sourcePackId && registry.has(sourcePackId)) return registry.get(sourcePackId);
+  if (sourcePackId) return registry.get(sourcePackId);
   const label = String(body.sourcePackLabel ?? "").trim();
-  if (label) return [...registry.values()].find((pack) => pack.label === label);
+  if (label) return registry.list({ label, limit: 1 }).items[0];
   return undefined;
 }
 
@@ -1010,7 +1006,8 @@ function sourcePackRollup(input: {
   duplicates?: Array<Record<string, unknown>>;
 }) {
   const candidates = input.sources.map((source) => ({ source, candidate: sourceCandidate(source) }));
-  const registryOnly = (input.registry?.candidates ?? []).filter((item) => !item.sourceId);
+  const currentSourceIds = new Set(input.sources.map((source) => source.id));
+  const registryOnly = (input.registry?.candidates ?? []).filter((item) => !item.sourceId || !currentSourceIds.has(item.sourceId));
   const registryRejectedCount = registryOnly.filter((item) => item.status === "rejected").length;
   const registryDuplicateCount = registryOnly.filter((item) => item.status === "duplicate").length;
   const queuedJobIds = candidates
