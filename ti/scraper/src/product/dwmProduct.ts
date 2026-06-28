@@ -6,6 +6,8 @@ export type DwmSourceFamily = "telegram_public" | "darkweb_metadata" | "actor_pa
 export type DwmSeverity = "critical" | "high" | "medium" | "low";
 export type DwmReviewState = "needs_review" | "validate_identity" | "route_to_customer" | "watching" | "false_positive_candidate";
 export type DwmArtifactType = "telegram_mention" | "ransomware_claim" | "infostealer_hint" | "session_or_token_hint" | "nhi_exposure_hint" | "vendor_claim" | "public_report" | "metadata_match";
+export type DwmCaptureMode = "public_message" | "metadata_only" | "public_report" | "unknown";
+export type DwmRecommendedRoute = "identity_response" | "vendor_risk" | "incident_response" | "brand_protection" | "analyst_review";
 
 export interface DwmWatchTerm {
   value: string;
@@ -19,10 +21,21 @@ export interface DwmEvidenceRef {
   sourceFamily: DwmSourceFamily;
   url?: string;
   firstSeenAt: string;
-  captureMode: "public_message" | "metadata_only" | "public_report" | "unknown";
+  observedAt: string;
+  captureMode: DwmCaptureMode;
   redactionState: "redacted" | "metadata_only" | "public_safe";
   contentHash: string;
   excerpt: string;
+  provenance: {
+    captureId: string;
+    sourceId: string;
+    sourceType?: string;
+    collector?: string;
+    captureMode: DwmCaptureMode;
+    retentionClass?: string;
+    storageKind?: string;
+    metadataOnly: boolean;
+  };
 }
 
 export interface DwmAlert {
@@ -39,11 +52,24 @@ export interface DwmAlert {
   firstSeenAt: string;
   lastSeenAt: string;
   claimSummary: string;
+  confidenceReasoning: string[];
+  provenance: {
+    generatedAt: string;
+    matchBasis: "watchlist_capture_text";
+    matchedEvidenceIds: string[];
+    sourceFamilies: DwmSourceFamily[];
+    captureIds: string[];
+    sourceIds: string[];
+    extractorVersions: string[];
+    metadataOnly: boolean;
+  };
+  dedupeKey: string;
   reviewState: DwmReviewState;
   recommendedAction: string;
+  recommendedRoute: DwmRecommendedRoute;
   evidence: DwmEvidenceRef[];
   webhookDelivery: {
-    recommendedRoute: "identity_response" | "vendor_risk" | "incident_response" | "brand_protection" | "analyst_review";
+    recommendedRoute: DwmRecommendedRoute;
     payloadHash: string;
     dedupeKey: string;
   };
@@ -219,10 +245,12 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
     const severity = inferSeverity(text, artifactType, sourceFamily);
     const actor = inferActor(capture, text);
     const confidence = inferConfidence({ text, source, sourceFamily, artifactType });
-    const alertSeed = `${matchedTerm.value}:${capture.id}:${artifactType}:${sourceFamily}`;
+    const confidenceReasoning = confidenceReasoningFor({ text, source, sourceFamily, artifactType, confidence });
+    const dedupeSeed = alertDedupeSeed(matchedTerm, artifactType, sourceFamily, actor);
+    const delivery = deliveryFor(matchedTerm, artifactType, sourceFamily, dedupeSeed);
 
     matches.push({
-      id: stableId("dwm_alert", alertSeed),
+      id: stableId("dwm_alert", dedupeSeed),
       eventType: "darkweb.monitoring.match",
       severity,
       confidence,
@@ -235,10 +263,14 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
       firstSeenAt: String((capture as any).collectedAt ?? input.generatedAt),
       lastSeenAt: String((capture as any).collectedAt ?? input.generatedAt),
       claimSummary: summarizeClaim({ matchedTerm, text, artifactType, sourceFamily, actor }),
+      confidenceReasoning,
+      provenance: provenanceForAlert(input.generatedAt, [evidence]),
+      dedupeKey: delivery.dedupeKey,
       reviewState: reviewStateFor(artifactType, sourceFamily),
       recommendedAction: recommendedActionFor(artifactType, sourceFamily, matchedTerm),
+      recommendedRoute: delivery.recommendedRoute,
       evidence: [evidence],
-      webhookDelivery: deliveryFor(matchedTerm, artifactType, sourceFamily, alertSeed)
+      webhookDelivery: delivery
     });
   }
 
@@ -248,17 +280,29 @@ function buildAlerts(input: { watchlist: DwmWatchTerm[]; sources: SourceRecord[]
 function buildEvidenceRef(capture: RawCapture, source: SourceRecord | undefined, sourceFamily: DwmSourceFamily): DwmEvidenceRef {
   const text = captureText(capture);
   const captureMode = sourceFamily === "telegram_public" ? "public_message" : sourceFamily === "darkweb_metadata" ? "metadata_only" : sourceFamily === "public_advisory" ? "public_report" : "unknown";
+  const collectedAt = String((capture as any).collectedAt ?? nowIso());
   return {
     id: String((capture as any).id),
     sourceId: String((capture as any).sourceId ?? (source as any)?.id ?? "unknown"),
     sourceName: String((source as any)?.name ?? sourceFamilyLabels[sourceFamily]),
     sourceFamily,
     url: String((capture as any).url ?? (source as any)?.url ?? "") || undefined,
-    firstSeenAt: String((capture as any).collectedAt ?? nowIso()),
+    firstSeenAt: collectedAt,
+    observedAt: collectedAt,
     captureMode,
     redactionState: captureMode === "metadata_only" ? "metadata_only" : "redacted",
     contentHash: String((capture as any).contentHash ?? hashContent(text)),
-    excerpt: safeExcerpt(text)
+    excerpt: safeExcerpt(text),
+    provenance: {
+      captureId: String((capture as any).id),
+      sourceId: String((capture as any).sourceId ?? (source as any)?.id ?? "unknown"),
+      sourceType: String((source as any)?.type ?? (capture.metadata as any)?.adapter ?? "") || undefined,
+      collector: String((capture.metadata as any)?.adapter ?? (capture.metadata as any)?.collector ?? "") || undefined,
+      captureMode,
+      retentionClass: String((capture as any).retentionClass ?? (capture.metadata as any)?.retentionClass ?? "") || undefined,
+      storageKind: String((capture as any).storageKind ?? "") || undefined,
+      metadataOnly: captureMode === "metadata_only" || (capture as any).storageKind === "metadata_only"
+    }
   };
 }
 
@@ -434,18 +478,40 @@ function buildDemoAlerts(watchlist: DwmWatchTerm[], generatedAt: string): DwmAle
     firstSeenAt: generatedAt,
     lastSeenAt: generatedAt,
     claimSummary: `Public Telegram broker-room metadata claims ${matchedTerm.value} appears in a stealer-log bundle with corporate URLs and session artifacts.`,
+    confidenceReasoning: ["Demo alert uses seeded public Telegram broker-room metadata.", "Identity response route is selected because the demo artifact references sessions."],
+    provenance: {
+      generatedAt,
+      matchBasis: "watchlist_capture_text",
+      matchedEvidenceIds: [stableId("dwm_ev_demo", seed)],
+      sourceFamilies: ["telegram_public"],
+      captureIds: [stableId("dwm_ev_demo", seed)],
+      sourceIds: ["demo_telegram_public"],
+      extractorVersions: ["demo"],
+      metadataOnly: false
+    },
+    dedupeKey: deliveryFor(matchedTerm, "infostealer_hint", "telegram_public", seed).dedupeKey,
     reviewState: "validate_identity",
     recommendedAction: "Validate the identity match, rotate sessions and keys if confirmed, and route to incident response without storing raw stolen material.",
+    recommendedRoute: "identity_response",
     evidence: [{
       id: stableId("dwm_ev_demo", seed),
       sourceId: "demo_telegram_public",
       sourceName: "Public Telegram broker-room coverage",
       sourceFamily: "telegram_public",
       firstSeenAt: generatedAt,
+      observedAt: generatedAt,
       captureMode: "public_message",
       redactionState: "redacted",
       contentHash: hashContent(seed),
-      excerpt: `${matchedTerm.value} matched in a redacted public Telegram stealer-log listing.`
+      excerpt: `${matchedTerm.value} matched in a redacted public Telegram stealer-log listing.`,
+      provenance: {
+        captureId: stableId("dwm_ev_demo", seed),
+        sourceId: "demo_telegram_public",
+        sourceType: "telegram_public",
+        collector: "demo",
+        captureMode: "public_message",
+        metadataOnly: false
+      }
     }],
     webhookDelivery: deliveryFor(matchedTerm, "infostealer_hint", "telegram_public", seed)
   }];
@@ -463,8 +529,10 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
     current.sourceCount += alert.sourceCount;
     current.evidence = [...current.evidence, ...alert.evidence];
     current.confidence = Math.min(99, Math.max(current.confidence, alert.confidence) + 3);
+    current.confidenceReasoning = uniqueStrings([...current.confidenceReasoning, ...alert.confidenceReasoning, "Multiple recent captures support the same watchlist alert."]);
     current.firstSeenAt = current.firstSeenAt < alert.firstSeenAt ? current.firstSeenAt : alert.firstSeenAt;
     current.lastSeenAt = current.lastSeenAt > alert.lastSeenAt ? current.lastSeenAt : alert.lastSeenAt;
+    current.provenance = provenanceForAlert(current.provenance.generatedAt, current.evidence);
   }
   return [...merged.values()].sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
 }
@@ -514,6 +582,19 @@ function inferConfidence(input: { text: string; source?: SourceRecord; sourceFam
   if (Number.isFinite(trustScore) && trustScore > 0) confidence += Math.round(trustScore * 12);
   if (/\b(sample|rumor|unverified)\b/i.test(input.text)) confidence -= 8;
   return Math.max(1, Math.min(99, confidence));
+}
+
+function confidenceReasoningFor(input: { text: string; source?: SourceRecord; sourceFamily: DwmSourceFamily; artifactType: DwmArtifactType; confidence: number }): string[] {
+  const reasons = [`Watchlist term matched captured ${sourceFamilyLabels[input.sourceFamily].toLowerCase()} text or metadata.`];
+  if (input.sourceFamily === "telegram_public") reasons.push("Public Telegram source family adds confidence for broker-room and public-channel monitoring.");
+  if (input.sourceFamily === "darkweb_metadata") reasons.push("Dark web metadata source family is handled metadata-only and requires analyst confirmation before customer routing.");
+  if (input.artifactType === "session_or_token_hint" || input.artifactType === "nhi_exposure_hint") reasons.push("Credential, session, token, API key, or IAM wording raises identity-response urgency.");
+  if (input.artifactType === "infostealer_hint" || input.artifactType === "ransomware_claim") reasons.push(`${input.artifactType.replaceAll("_", " ")} wording raises severity.`);
+  const trustScore = Number((input.source as any)?.trustScore ?? 0);
+  if (Number.isFinite(trustScore) && trustScore > 0) reasons.push(`Source trust score contributed ${Math.round(trustScore * 12)} confidence points.`);
+  if (/\b(sample|rumor|unverified)\b/i.test(input.text)) reasons.push("Unverified or rumor wording reduces confidence.");
+  reasons.push(`Final confidence ${input.confidence}/99.`);
+  return reasons;
 }
 
 function inferActor(capture: RawCapture, text: string): string | undefined {
@@ -582,6 +663,23 @@ function deliveryFor(term: DwmWatchTerm, artifactType: DwmArtifactType, sourceFa
     recommendedRoute,
     payloadHash: hashContent(seed),
     dedupeKey: stableId("dwm_dedupe", `${term.value}:${artifactType}:${sourceFamily}`)
+  };
+}
+
+function alertDedupeSeed(term: DwmWatchTerm, artifactType: DwmArtifactType, sourceFamily: DwmSourceFamily, actor: string | undefined): string {
+  return `${term.value.toLowerCase()}:${artifactType}:${sourceFamily}:${actor?.toLowerCase() ?? "unknown_actor"}`;
+}
+
+function provenanceForAlert(generatedAt: string, evidence: DwmEvidenceRef[]): DwmAlert["provenance"] {
+  return {
+    generatedAt,
+    matchBasis: "watchlist_capture_text",
+    matchedEvidenceIds: uniqueStrings(evidence.map((item) => item.id)),
+    sourceFamilies: uniqueStrings(evidence.map((item) => item.sourceFamily)) as DwmSourceFamily[],
+    captureIds: uniqueStrings(evidence.map((item) => item.provenance.captureId)),
+    sourceIds: uniqueStrings(evidence.map((item) => item.sourceId)),
+    extractorVersions: uniqueStrings(evidence.map((item) => item.provenance.collector ?? "").filter(Boolean)),
+    metadataOnly: evidence.every((item) => item.provenance.metadataOnly || item.redactionState === "metadata_only")
   };
 }
 

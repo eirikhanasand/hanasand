@@ -88,11 +88,18 @@ describe("dwm product snapshot", () => {
     expect(snapshot.readiness.decision).toBe("production_ready_with_live_sources");
     expect(snapshot.alerts).toHaveLength(2);
     expect(snapshot.alerts[0].severity).toBe("critical");
+    expect(snapshot.alerts[0].dedupeKey).toMatch(/^dwm_dedupe_/);
+    expect(snapshot.alerts[0].confidenceReasoning.join(" ")).toContain("Watchlist term matched");
+    expect(snapshot.alerts[0].provenance.matchBasis).toBe("watchlist_capture_text");
+    expect(snapshot.alerts[0].recommendedRoute).toBe("identity_response");
     expect(snapshot.alerts[0].webhookDelivery.recommendedRoute).toBe("identity_response");
     expect(snapshot.sourceInventory.counts.catalogTelegramPublic).toBeGreaterThanOrEqual(100);
     expect(snapshot.sourceInventory.reportingHooks.sourceInventoryRoute).toBe("/v1/dwm/source-inventory");
     expect(snapshot.alerts.some((alert) => alert.sourceFamily === "darkweb_metadata")).toBe(true);
-    expect(snapshot.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata")?.evidence[0].redactionState).toBe("metadata_only");
+    const darkwebAlert = snapshot.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata");
+    expect(darkwebAlert?.evidence[0].redactionState).toBe("metadata_only");
+    expect(darkwebAlert?.provenance.metadataOnly).toBe(true);
+    expect(darkwebAlert?.evidence[0].provenance.metadataOnly).toBe(true);
     expect(snapshot.actorOverviews.find((actor) => actor.actor === "Akira")).toMatchObject({
       watchState: "metadata_only",
       sourceCount: 1,
