@@ -27,14 +27,18 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
 
   const generatedAt = nowIso();
   const tenantId = String(body.tenantId ?? request.headers.get("x-tenant-id") ?? "default");
+  const webhookUrl = normalizeWebhookUrl(body.webhookUrl);
+  if (body.webhookUrl && !webhookUrl) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." } }, 400);
+  const id = body.id ?? stableId("dwm_watchlist", `${tenantId}:${terms.map((term) => term.value).join("|")}`);
+  const existing = (options.store as any).getDwmWatchlist?.(id);
   const watchlist: DwmWatchlist = {
-    id: body.id ?? stableId("dwm_watchlist", `${tenantId}:${terms.map((term) => term.value).join("|")}`),
+    id,
     tenantId,
     name: String(body.name ?? "Company exposure watchlist"),
     terms,
-    webhookUrl: body.webhookUrl ? String(body.webhookUrl) : undefined,
+    webhookUrl,
     status: body.status === "paused" ? "paused" : "active",
-    createdAt: generatedAt,
+    createdAt: existing?.createdAt ?? generatedAt,
     updatedAt: generatedAt
   };
   (options.store as any).saveDwmWatchlist(watchlist);
@@ -47,8 +51,16 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions): Response {
   return json({ alerts: tenantId ? alerts.filter((row: any) => row.tenantId === tenantId) : alerts });
 }
 
+export function getDwmAlertDetail(url: URL, options: ApiServerOptions, alertId: string | undefined): Response {
+  const alert = findDwmAlert(options, alertId);
+  if (!alert) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
+  const tenantId = url.searchParams.get("tenantId") ?? undefined;
+  if (tenantId && alert.tenantId !== tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
+  return json(buildDwmAlertDetail(alert, options));
+}
+
 export async function updateDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
-  const existing = ((options.store as any).getDwmAlert?.(alertId ?? "") ?? ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.id === alertId));
+  const existing = findDwmAlert(options, alertId);
   if (!existing) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
 
   const body = await readJson<any>(request);
@@ -81,6 +93,31 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
   return json({ alert, event });
 }
 
+export async function replayDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
+  const existing = findDwmAlert(options, alertId);
+  if (!existing) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
+  const body = await readJson<any>(request);
+  const generatedAt = nowIso();
+  const event = {
+    id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:replay:${existing.workflowEvents?.length ?? 0}`),
+    at: generatedAt,
+    actor: String(body.actor ?? request.headers.get("x-actor-id") ?? "dashboard"),
+    fromReviewState: existing.reviewState,
+    toReviewState: existing.reviewState,
+    fromDeliveryState: existing.deliveryState,
+    toDeliveryState: existing.deliveryState,
+    note: "Evidence replay opened."
+  };
+  const alert = (options.store as any).saveDwmAlert({
+    ...existing,
+    replayCount: Number(existing.replayCount ?? 0) + 1,
+    lastReplayedAt: generatedAt,
+    updatedAt: generatedAt,
+    workflowEvents: [...(existing.workflowEvents ?? []), event]
+  });
+  return json(buildDwmAlertDetail(alert, options));
+}
+
 export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions): Response {
   const tenantId = url.searchParams.get("tenantId") ?? undefined;
   const deliveries = (options.store as any).listDwmWebhookDeliveries?.() ?? [];
@@ -101,14 +138,23 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
     captures: options.store.listCaptures(),
     includeDemoIfEmpty: false
   });
-  const saved = snapshot.alerts.map((alert) => (options.store as any).saveDwmAlert({
-    ...alert,
-    tenantId,
-    watchlistIds: watchlists.map((watchlist: DwmWatchlist) => watchlist.id),
-    deliveryState: "pending_review",
-    workflowEvents: [],
-    savedAt: snapshot.generatedAt
-  }));
+  const saved = snapshot.alerts.map((alert) => {
+    const existing = findDwmAlert(options, alert.id);
+    return (options.store as any).saveDwmAlert({
+      ...alert,
+      tenantId,
+      watchlistIds: watchlists.map((watchlist: DwmWatchlist) => watchlist.id),
+      reviewState: existing?.reviewState ?? alert.reviewState,
+      deliveryState: existing?.deliveryState ?? "pending_review",
+      workflowEvents: existing?.workflowEvents ?? [],
+      workflowNote: existing?.workflowNote,
+      replayCount: existing?.replayCount ?? 0,
+      lastReplayedAt: existing?.lastReplayedAt,
+      deliveredAt: existing?.deliveredAt,
+      savedAt: existing?.savedAt ?? snapshot.generatedAt,
+      updatedAt: snapshot.generatedAt
+    });
+  });
   return json({ rebuiltAt: snapshot.generatedAt, savedAlertCount: saved.length, alerts: saved, readiness: snapshot.readiness });
 }
 
@@ -183,6 +229,62 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
   return json({ deliveredAt: generatedAt, attemptedCount: deliveries.length, deliveries });
 }
 
+export async function testDwmWebhook(request: Request, options: ApiServerOptions): Promise<Response> {
+  const body = await readJson<any>(request);
+  const tenantId = String(body.tenantId ?? request.headers.get("x-tenant-id") ?? "default");
+  const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
+  const watchlist = body.watchlistId ? watchlists.find((row: DwmWatchlist) => row.id === body.watchlistId) : watchlists.find((row: DwmWatchlist) => row.webhookUrl) ?? watchlists[0];
+  const webhookUrl = normalizeWebhookUrl(body.webhookUrl) ?? normalizeWebhookUrl(watchlist?.webhookUrl);
+  if (!webhookUrl) return json({ error: { code: "missing_webhook_url", message: "Save a valid webhook URL before testing delivery." } }, 400);
+
+  const generatedAt = nowIso();
+  const fetcher = typeof options.webhookFetch === "function" ? options.webhookFetch as typeof fetch : fetch;
+  const deliveryId = stableId("dwm_delivery", `${tenantId}:webhook_test:${webhookUrl}:${generatedAt}`);
+  const payload = {
+    eventType: "darkweb.monitoring.test",
+    tenantId,
+    watchlistId: watchlist?.id ?? "ad_hoc_webhook_test",
+    generatedAt,
+    message: "Hanasand dark web monitoring webhook test.",
+    expectedAlertEvent: "darkweb.monitoring.match"
+  };
+  const baseDelivery = {
+    id: deliveryId,
+    tenantId,
+    alertId: "webhook_test",
+    watchlistId: watchlist?.id ?? "ad_hoc_webhook_test",
+    endpointHash: stableId("endpoint", webhookUrl),
+    dedupeKey: deliveryId,
+    attemptedAt: generatedAt,
+    dryRun: body.dryRun === true,
+    payloadHash: stableId("payload", JSON.stringify(payload))
+  };
+
+  if (body.dryRun === true) {
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "dry_run", httpStatus: 0 });
+    return json({ testedAt: generatedAt, ok: true, dryRun: true, delivery });
+  }
+
+  try {
+    const response = await fetcher(webhookUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-hanasand-event": "darkweb.monitoring.test",
+        "x-hanasand-delivery-id": deliveryId,
+        "x-hanasand-dedupe-key": deliveryId
+      },
+      body: JSON.stringify(payload)
+    });
+    const ok = response.status >= 200 && response.status < 300;
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
+    return json({ testedAt: generatedAt, ok, delivery }, ok ? 200 : 502);
+  } catch (error) {
+    const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
+    return json({ testedAt: generatedAt, ok: false, delivery }, 502);
+  }
+}
+
 export function storedWatchlistTerms(options: ApiServerOptions, tenantId: string | undefined): DwmWatchTerm[] {
   return ((options.store as any).listDwmWatchlists?.() ?? [])
     .filter((row: DwmWatchlist) => (!tenantId || row.tenantId === tenantId) && row.status === "active")
@@ -218,4 +320,78 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     })),
     delivery: alert.webhookDelivery
   };
+}
+
+function findDwmAlert(options: ApiServerOptions, alertId: string | undefined) {
+  if (!alertId) return undefined;
+  return (options.store as any).getDwmAlert?.(alertId) ?? ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.id === alertId);
+}
+
+function normalizeWebhookUrl(value: unknown): string | undefined {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function buildDwmAlertDetail(alert: any, options: ApiServerOptions) {
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
+  const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
+  const timeline = [
+    alert.savedAt ? { id: `${alert.id}:saved`, at: alert.savedAt, type: "saved", title: "Alert saved", detail: "Match saved to the customer queue." } : undefined,
+    ...events.map((event: any) => ({
+      id: event.id,
+      at: event.at,
+      type: "workflow_event",
+      title: `${String(event.fromReviewState ?? "unknown").replaceAll("_", " ")} -> ${String(event.toReviewState ?? "unknown").replaceAll("_", " ")}`,
+      detail: event.note ?? `${String(event.fromDeliveryState ?? "unknown").replaceAll("_", " ")} -> ${String(event.toDeliveryState ?? "unknown").replaceAll("_", " ")}`
+    })),
+    ...deliveries.map((delivery: any) => ({
+      id: delivery.id,
+      at: delivery.attemptedAt,
+      type: "delivery",
+      title: `Webhook ${String(delivery.status ?? "attempt").replaceAll("_", " ")}`,
+      detail: delivery.error ?? `HTTP ${delivery.httpStatus ?? 0} · ${delivery.endpointHash}`
+    })),
+    alert.deliveredAt ? { id: `${alert.id}:delivered`, at: alert.deliveredAt, type: "delivered", title: "Delivered", detail: "Webhook accepted by the customer endpoint." } : undefined
+  ].filter(Boolean).sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
+
+  const evidenceReplay = (alert.evidence ?? []).map((item: any) => ({
+    id: item.id,
+    sourceName: item.sourceName,
+    sourceFamily: item.sourceFamily,
+    captureMode: item.captureMode,
+    redactionState: item.redactionState,
+    contentHash: item.contentHash,
+    excerpt: item.excerpt,
+    safeToShow: item.redactionState !== "raw_sensitive",
+    handling: item.redactionState === "metadata_only" ? "Only metadata is retained for this source." : "Public-safe excerpt retained for review."
+  }));
+
+  return {
+    schemaVersion: "dwm.alert_detail.v1",
+    generatedAt: nowIso(),
+    alert,
+    deliveries,
+    timeline,
+    evidenceReplay,
+    sourceExplanations: evidenceReplay.map((item: any) => ({
+      evidenceId: item.id,
+      sourceName: item.sourceName,
+      explanation: `${String(item.sourceFamily).replaceAll("_", " ")} evidence is shown as ${String(item.redactionState).replaceAll("_", " ")} with hash ${item.contentHash}.`
+    })),
+    nextActions: nextActionsForAlert(alert, deliveries)
+  };
+}
+
+function nextActionsForAlert(alert: any, deliveries: any[]) {
+  if (alert.deliveryState === "muted" || alert.reviewState === "false_positive") return ["Keep muted unless new evidence changes the match."];
+  if (alert.deliveryState === "ready_to_send") return ["Send the customer webhook.", "Keep monitoring the matched source and actor."];
+  if (deliveries.some((delivery: any) => delivery.status === "delivered")) return ["Monitor for updates on the same watchlist term.", "Reopen if new evidence changes severity."];
+  return ["Review the evidence.", "Mark ready when the customer should be notified.", "Mute if the match is a false positive."];
 }

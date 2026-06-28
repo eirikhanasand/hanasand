@@ -1,7 +1,7 @@
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
 import { createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
-import { createDwmWatchlist, deliverDwmWebhooks, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, storedWatchlistTerms, updateDwmAlert } from "./dwmWorkflowRoutes.ts";
+import { createDwmWatchlist, deliverDwmWebhooks, getDwmAlertDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert } from "./dwmWorkflowRoutes.ts";
 import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
 import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
@@ -96,9 +96,12 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/dwm/watchlists" && request.method === "GET") return listDwmWatchlists(url, options);
     if (url.pathname === "/v1/dwm/watchlists" && request.method === "POST") return createDwmWatchlist(request, options);
     if (url.pathname === "/v1/dwm/alerts" && request.method === "GET") return listDwmAlerts(url, options);
+    if (/^\/v1\/dwm\/alerts\/[^/]+\/replay$/.test(url.pathname) && request.method === "POST") return replayDwmAlert(request, options, url.pathname.split("/")[4]);
+    if (/^\/v1\/dwm\/alerts\/[^/]+$/.test(url.pathname) && request.method === "GET") return getDwmAlertDetail(url, options, url.pathname.split("/").pop());
     if (/^\/v1\/dwm\/alerts\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateDwmAlert(request, options, url.pathname.split("/").pop());
     if (url.pathname === "/v1/dwm/alerts/rebuild" && request.method === "POST") return rebuildDwmAlerts(request, options);
     if (url.pathname === "/v1/dwm/webhooks/deliver" && request.method === "POST") return deliverDwmWebhooks(request, options);
+    if (url.pathname === "/v1/dwm/webhooks/test" && request.method === "POST") return testDwmWebhook(request, options);
     if (url.pathname === "/v1/dwm/webhooks/deliveries" && request.method === "GET") return listDwmWebhookDeliveries(url, options);
     if (url.pathname === "/v1/dwm/watchlist/normalize") return json({ watchlist: normalizeWatchlist(parseWatchlistParam(url.searchParams.get("terms") ?? "")) });
     if (url.pathname === "/v1/restricted-metadata/status") return json({ status: buildRestrictedMetadataOperationsStatus({ sources: options.store.listSources(), captures: options.store.listCaptures(), query: url.searchParams.get("q") ?? undefined }) });

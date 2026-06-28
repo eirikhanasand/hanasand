@@ -72,8 +72,39 @@ describe("dwm workflow persistence", () => {
       expect(update.alert.workflowNote).toBe("Confirmed customer domain match.");
       expect(update.alert.workflowEvents).toHaveLength(1);
 
+      const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${rebuild.alerts[0].id}?tenantId=tenant_acme`), { store: rehydrated, frontier: new FocusedFrontier() });
+      const detail = await detailResponse.json() as any;
+
+      expect(detailResponse.status).toBe(200);
+      expect(detail.alert.id).toBe(rebuild.alerts[0].id);
+      expect(detail.evidenceReplay[0]).toMatchObject({ sourceName: "Workflow public Telegram", contentHash: "hash-workflow-acme" });
+      expect(detail.timeline.length).toBeGreaterThanOrEqual(2);
+      expect(detail.nextActions).toContain("Send the customer webhook.");
+
+      const replayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${rebuild.alerts[0].id}/replay`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "analyst-1" })
+      }), { store: rehydrated, frontier: new FocusedFrontier() });
+      const replay = await replayResponse.json() as any;
+
+      expect(replayResponse.status).toBe(200);
+      expect(replay.alert.replayCount).toBe(1);
+      expect(replay.alert.workflowEvents).toHaveLength(2);
+
+      const secondRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+        method: "POST",
+        body: JSON.stringify({ tenantId: "tenant_acme" })
+      }), { store: rehydrated, frontier: new FocusedFrontier() });
+      const secondRebuild = await secondRebuildResponse.json() as any;
+
+      expect(secondRebuildResponse.status).toBe(200);
+      expect(secondRebuild.alerts[0].reviewState).toBe("reviewing");
+      expect(secondRebuild.alerts[0].deliveryState).toBe("ready_to_send");
+      expect(secondRebuild.alerts[0].workflowEvents).toHaveLength(2);
+      expect(secondRebuild.alerts[0].replayCount).toBe(1);
+
       const finalStore = new FileBackedScraperStore({ snapshotPath });
-      expect((finalStore as any).listDwmAlerts()[0].workflowEvents).toHaveLength(1);
+      expect((finalStore as any).listDwmAlerts()[0].workflowEvents).toHaveLength(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -179,6 +179,25 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
         }
     }
 
+    async function testWebhook() {
+        setBusyAction('webhook-test')
+        setResult(null)
+
+        try {
+            const test = await postJson('/api/dwm/webhooks/test', {
+                tenantId: 'default',
+                webhookUrl: webhookUrl.trim() || undefined,
+            })
+            if (!test.ok) throw new Error(test.message)
+            setResult({ ok: true, message: 'Webhook test delivered. Future alerts can use this route.' })
+            router.refresh()
+        } catch (error) {
+            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
+        } finally {
+            setBusyAction(null)
+        }
+    }
+
     return (
         <div className='grid gap-4 xl:grid-cols-[1.05fr_0.95fr]'>
             <form onSubmit={saveWatchlist} className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
@@ -220,6 +239,10 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
                 <button type='button' onClick={deliverWebhooks} disabled={busyAction !== null} className='ml-2 mt-3 inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'>
                     {busyAction === 'delivery' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
                     Send webhooks
+                </button>
+                <button type='button' onClick={testWebhook} disabled={busyAction !== null} className='ml-2 mt-3 inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'>
+                    {busyAction === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
+                    Test webhook
                 </button>
             </form>
 

@@ -96,4 +96,43 @@ describe("dwm webhook delivery", () => {
     expect(delivered.deliveries[0].status).toBe("skipped");
     expect(delivered.deliveries[0].error).toContain("No webhook URL");
   });
+
+  test("tests webhook delivery before a real alert exists", async () => {
+    const store = new InMemoryScraperStore();
+    const seen: Array<{ url: string; body: any; headers: Headers }> = [];
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      webhookFetch: async (url: string, init: RequestInit) => {
+        seen.push({ url, body: JSON.parse(String(init.body)), headers: new Headers(init.headers) });
+        return new Response("ok", { status: 204 });
+      }
+    };
+
+    const invalidResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", terms: ["acme.com"], webhookUrl: "ftp://hooks.example.com/dwm" })
+    }), options);
+    expect(invalidResponse.status).toBe(400);
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", terms: ["acme.com"], webhookUrl: "https://hooks.example.com/dwm" })
+    }), options);
+
+    const testResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/test", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme" })
+    }), options);
+    const tested = await testResponse.json() as any;
+
+    expect(testResponse.status).toBe(200);
+    expect(tested.ok).toBe(true);
+    expect(tested.delivery.status).toBe("delivered");
+    expect(tested.delivery.alertId).toBe("webhook_test");
+    expect(seen[0].url).toBe("https://hooks.example.com/dwm");
+    expect(seen[0].body.eventType).toBe("darkweb.monitoring.test");
+    expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.test");
+    expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
+  });
 });

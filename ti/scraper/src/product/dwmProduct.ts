@@ -184,7 +184,7 @@ function nextWorkItemFor(sourceInventory: DwmSourceInventorySnapshot): string {
   if (sourceInventory.counts.netNewCandidates > 0) {
     return "Review remaining source candidates and promote useful ones without enabling payload downloads or private access.";
   }
-  return "Improve customer alert handling: webhook subscriptions, alert replay, false-positive review, and source-level match explanations.";
+  return "Add self-serve webhook subscriptions and testable customer watchlist onboarding so new buyers can get alerts without manual setup.";
 }
 
 export function normalizeWatchlist(values: Array<string | Partial<DwmWatchTerm>>): DwmWatchTerm[] {
