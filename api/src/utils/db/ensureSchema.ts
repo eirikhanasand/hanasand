@@ -573,6 +573,31 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_entity_created ON admin_audit_events(entity_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_request_created ON admin_audit_events(request_id, created_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS admin_access_recovery_approvals (
+            request_id TEXT PRIMARY KEY,
+            organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            invite_id TEXT NOT NULL REFERENCES organization_invites(id) ON DELETE CASCADE,
+            target_user_id TEXT,
+            requested_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            requested_reason TEXT NOT NULL DEFAULT '',
+            request_context TEXT NOT NULL DEFAULT '',
+            approval_required BOOLEAN NOT NULL DEFAULT TRUE,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied', 'not_required')),
+            approved_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            approved_at TIMESTAMPTZ,
+            denied_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            denied_at TIMESTAMPTZ,
+            decision_reason TEXT,
+            outcome TEXT NOT NULL DEFAULT 'success' CHECK (outcome IN ('success', 'denied', 'failed')),
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_org_status ON admin_access_recovery_approvals(organization_id, status, updated_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_invite ON admin_access_recovery_approvals(invite_id)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_access_recovery_requested_by ON admin_access_recovery_approvals(requested_by, created_at DESC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS dwm_webhook_destinations (
             id TEXT PRIMARY KEY,
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

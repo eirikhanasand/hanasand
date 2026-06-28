@@ -53,6 +53,40 @@ type SupportAccessRecoveryBody = InviteInput & {
     approvalRequired?: unknown
 }
 
+type AccessRecoveryDecisionParams = {
+    requestId: string
+}
+
+type SupportAccessRecoveryDecisionBody = {
+    reason?: unknown
+    context?: unknown
+}
+
+type AccessRecoveryApprovalRow = {
+    request_id: string
+    organization_id: string
+    invite_id: string
+    target_user_id?: string | null
+    requested_by: string
+    requested_reason: string
+    request_context: string
+    approval_required: boolean
+    status: 'pending' | 'approved' | 'denied' | 'not_required'
+    approved_by?: string | null
+    approved_at?: string | null
+    denied_by?: string | null
+    denied_at?: string | null
+    decision_reason?: string | null
+    outcome: 'success' | 'denied' | 'failed'
+    expires_at: string
+    created_at: string
+    updated_at: string
+    email?: string
+    role?: string
+    invite_status?: string
+    organization_name?: string
+}
+
 export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
@@ -464,7 +498,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
                       created_at = NOW()
         RETURNING *
     `, [randomUUID(), organization.id, input.emails[0], input.role, actor.id, input.expiresAt])
-    const inviteRow = invite.rows[0] as OrganizationInviteRow
+    let inviteRow = invite.rows[0] as OrganizationInviteRow
     await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
 
     const requestId = supportRequestId(req)
@@ -479,6 +513,61 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
         existingMembership: existingMembership.rows[0],
         requestedApprovalRequired: req.body?.approvalRequired,
     })
+    if (approval.approvalRequired) {
+        const revokedInvite = await run(`
+            UPDATE organization_invites
+            SET status = 'revoked',
+                accepted_at = NULL,
+                accepted_by = NULL
+            WHERE id = $1
+            RETURNING *
+        `, [inviteRow.id])
+        inviteRow = revokedInvite.rows[0] as OrganizationInviteRow
+    }
+    await run(`
+        INSERT INTO admin_access_recovery_approvals (
+            request_id,
+            organization_id,
+            invite_id,
+            target_user_id,
+            requested_by,
+            requested_reason,
+            request_context,
+            approval_required,
+            status,
+            outcome,
+            expires_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'success', $10)
+        ON CONFLICT (request_id)
+        DO UPDATE SET organization_id = EXCLUDED.organization_id,
+                      invite_id = EXCLUDED.invite_id,
+                      target_user_id = EXCLUDED.target_user_id,
+                      requested_by = EXCLUDED.requested_by,
+                      requested_reason = EXCLUDED.requested_reason,
+                      request_context = EXCLUDED.request_context,
+                      approval_required = EXCLUDED.approval_required,
+                      status = EXCLUDED.status,
+                      approved_by = NULL,
+                      approved_at = NULL,
+                      denied_by = NULL,
+                      denied_at = NULL,
+                      decision_reason = NULL,
+                      outcome = EXCLUDED.outcome,
+                      expires_at = EXCLUDED.expires_at,
+                      updated_at = NOW()
+    `, [
+        requestId,
+        organization.id,
+        inviteRow.id,
+        targetUserId || null,
+        actor.id,
+        reason,
+        supportContext,
+        approval.approvalRequired,
+        approval.approvalRequired ? 'pending' : 'not_required',
+        inviteRow.expires_at,
+    ])
     await recordAdminAuditEvent(req, {
         actionType: 'support.organization.access_recovery',
         actorId: actor.id,
@@ -495,6 +584,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
             role: inviteRow.role,
             expiresAt: inviteRow.expires_at,
             inviteId: inviteRow.id,
+            inviteStatus: inviteRow.status,
             targetUserId: targetUserId || null,
             existingMembership: existingMembership.rows[0] || null,
             caseId: text(req.body?.caseId) || null,
@@ -534,10 +624,120 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
                 `Expires: ${inviteRow.expires_at}`,
                 `Request: ${requestId}`,
                 `Approval: ${approval.status}`,
+                approval.approvalRequired ? 'Share status: blocked until approved' : 'Share status: ready',
                 `Reason: ${reason}`,
             ].join('\n'),
         },
     })
+}
+
+export async function postSupportAccessRecoveryApprove(req: FastifyRequest<{ Params: AccessRecoveryDecisionParams, Body: SupportAccessRecoveryDecisionBody }>, res: FastifyReply) {
+    return decideSupportAccessRecovery(req, res, 'approved')
+}
+
+export async function postSupportAccessRecoveryDeny(req: FastifyRequest<{ Params: AccessRecoveryDecisionParams, Body: SupportAccessRecoveryDecisionBody }>, res: FastifyReply) {
+    return decideSupportAccessRecovery(req, res, 'denied')
+}
+
+async function decideSupportAccessRecovery(
+    req: FastifyRequest<{ Params: AccessRecoveryDecisionParams, Body: SupportAccessRecoveryDecisionBody }>,
+    res: FastifyReply,
+    decision: 'approved' | 'denied',
+) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    let reason: string
+    try {
+        reason = requireAuditReason(req.body?.reason, decision === 'approved' ? 'Access recovery approval reason' : 'Access recovery denial reason')
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid access recovery decision reason.' })
+    }
+
+    const current = await loadAccessRecoveryApproval(req.params.requestId)
+    if (!current) {
+        await recordAdminAuditEvent(req, {
+            actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
+            actorId: actor.id,
+            targetType: 'access_recovery',
+            targetId: req.params.requestId,
+            entityId: req.params.requestId,
+            requestId: req.params.requestId,
+            severity: 'notice',
+            outcome: 'failed',
+            reason,
+            context: { error: 'access_recovery_request_not_found' },
+        })
+        return res.status(404).send({ error: 'Access recovery request not found.' })
+    }
+
+    if (!current.approval_required) {
+        await recordAccessRecoveryDecisionAudit(req, actor.id, current, decision, 'failed', reason, { error: 'approval_not_required' })
+        return res.status(409).send({ error: 'This access recovery request does not require approval.', decision: toAccessRecoveryDecision(current) })
+    }
+
+    if (current.requested_by === actor.id) {
+        await recordAccessRecoveryDecisionAudit(req, actor.id, current, decision, 'denied', reason, { error: 'self_approval_denied' })
+        return res.status(403).send({ error: 'Access recovery approval requires a different admin than the requester.', decision: toAccessRecoveryDecision(current) })
+    }
+
+    if (current.status !== 'pending') {
+        await recordAccessRecoveryDecisionAudit(req, actor.id, current, decision, 'failed', reason, { error: 'approval_not_pending', status: current.status })
+        return res.status(409).send({ error: `Access recovery request is already ${current.status}.`, decision: toAccessRecoveryDecision(current) })
+    }
+
+    const updatedApproval = decision === 'approved'
+        ? await run(`
+            UPDATE admin_access_recovery_approvals
+            SET status = 'approved',
+                approved_by = $2,
+                approved_at = NOW(),
+                denied_by = NULL,
+                denied_at = NULL,
+                decision_reason = $3,
+                outcome = 'success',
+                updated_at = NOW()
+            WHERE request_id = $1
+            RETURNING *
+        `, [current.request_id, actor.id, reason])
+        : await run(`
+            UPDATE admin_access_recovery_approvals
+            SET status = 'denied',
+                approved_by = NULL,
+                approved_at = NULL,
+                denied_by = $2,
+                denied_at = NOW(),
+                decision_reason = $3,
+                outcome = 'denied',
+                updated_at = NOW()
+            WHERE request_id = $1
+            RETURNING *
+        `, [current.request_id, actor.id, reason])
+
+    const invite = await run(`
+        UPDATE organization_invites
+        SET status = $2,
+            accepted_at = NULL,
+            accepted_by = NULL
+        WHERE id = $1
+        RETURNING *
+    `, [current.invite_id, decision === 'approved' ? 'pending' : 'revoked'])
+
+    const updated = {
+        ...current,
+        ...(updatedApproval.rows[0] as AccessRecoveryApprovalRow),
+        email: current.email,
+        role: current.role,
+        organization_name: current.organization_name,
+        invite_status: (invite.rows[0] as OrganizationInviteRow | undefined)?.status || current.invite_status,
+    } as AccessRecoveryApprovalRow
+    const detail = toAccessRecoveryDecision(updated)
+    await recordAccessRecoveryDecisionAudit(req, actor.id, updated, decision, decision === 'approved' ? 'success' : 'denied', reason, {
+        decision: detail,
+        supportContext: cleanContext(req.body?.context),
+    })
+
+    return res.send({ decision: detail })
 }
 
 async function requireAdminSupport(req: FastifyRequest, res: FastifyReply) {
@@ -572,6 +772,61 @@ async function loadOrganizationSupportDetail(organizationId: string) {
     `, [organizationId])
 
     return result.rows[0] as OrganizationRow | undefined
+}
+
+async function loadAccessRecoveryApproval(requestId: string) {
+    const result = await run(`
+        SELECT
+            approval.*,
+            invite.email,
+            invite.role,
+            invite.status AS invite_status,
+            organization.name AS organization_name
+        FROM admin_access_recovery_approvals approval
+        JOIN organization_invites invite ON invite.id = approval.invite_id
+        LEFT JOIN organizations organization ON organization.id = approval.organization_id
+        WHERE approval.request_id = $1
+        LIMIT 1
+    `, [requestId])
+    return result.rows[0] as AccessRecoveryApprovalRow | undefined
+}
+
+async function recordAccessRecoveryDecisionAudit(
+    req: FastifyRequest,
+    actorId: string,
+    row: AccessRecoveryApprovalRow,
+    decision: 'approved' | 'denied',
+    outcome: 'success' | 'denied' | 'failed',
+    reason: string,
+    extra: Record<string, unknown> = {},
+) {
+    await recordAdminAuditEvent(req, {
+        actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
+        actorId,
+        targetType: 'invite',
+        targetId: row.invite_id,
+        organizationId: row.organization_id,
+        entityId: row.invite_id,
+        requestId: row.request_id,
+        severity: outcome === 'success' ? 'warning' : 'notice',
+        outcome,
+        reason,
+        context: {
+            schemaVersion: 'support.access_recovery.decision_audit.v1',
+            requestId: row.request_id,
+            inviteId: row.invite_id,
+            inviteStatus: row.invite_status,
+            requestedBy: row.requested_by,
+            approvalRequired: row.approval_required,
+            status: row.status,
+            approvedBy: row.approved_by || null,
+            approvedAt: row.approved_at || null,
+            deniedBy: row.denied_by || null,
+            deniedAt: row.denied_at || null,
+            outcome,
+            ...extra,
+        },
+    })
 }
 
 function toSupportUser(row: Record<string, unknown>) {
@@ -658,6 +913,58 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
     }
 }
 
+function toAccessRecoveryDecision(row: AccessRecoveryApprovalRow) {
+    const displayStatus = row.status === 'pending' ? 'pending_approval' : row.status
+    return {
+        schemaVersion: 'support.access_recovery.approval_decision.v1',
+        requestId: row.request_id,
+        organizationId: row.organization_id,
+        organizationName: row.organization_name || '',
+        inviteId: row.invite_id,
+        targetUserId: row.target_user_id || null,
+        requestedBy: row.requested_by,
+        requestedReason: row.requested_reason,
+        requestContext: row.request_context,
+        approvalRequired: row.approval_required,
+        status: displayStatus,
+        approvedBy: row.approved_by || null,
+        approvedAt: row.approved_at || null,
+        deniedBy: row.denied_by || null,
+        deniedAt: row.denied_at || null,
+        decisionReason: row.decision_reason || null,
+        outcome: row.outcome,
+        expiresAt: row.expires_at,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        invite: {
+            id: row.invite_id,
+            email: row.email || '',
+            role: row.role || '',
+            status: row.invite_status || '',
+            expiresAt: row.expires_at,
+        },
+        audit: {
+            actionType: row.status === 'denied'
+                ? 'support.organization.access_recovery.deny'
+                : 'support.organization.access_recovery.approve',
+            source: 'admin',
+            service: 'hanasand-api',
+            outcome: row.outcome,
+            query: `/api/admin/audit-events?request=${encodeURIComponent(row.request_id)}&source=admin&service=hanasand-api`,
+        },
+        copyText: [
+            `Access recovery ${displayStatus} for ${row.email || row.invite_id}`,
+            `Org: ${row.organization_name || row.organization_id} (${row.organization_id})`,
+            `Invite: ${row.invite_id} (${row.invite_status || 'unknown'})`,
+            `Request: ${row.request_id}`,
+            `Requested by: ${row.requested_by}`,
+            row.approved_by ? `Approved by: ${row.approved_by} at ${row.approved_at}` : '',
+            row.denied_by ? `Denied by: ${row.denied_by} at ${row.denied_at}` : '',
+            row.decision_reason ? `Decision reason: ${row.decision_reason}` : '',
+        ].filter(Boolean).join('\n'),
+    }
+}
+
 function accessRecoveryApprovalMetadata(input: {
     actorId: string
     role: string
@@ -687,6 +994,7 @@ function accessRecoveryApprovalMetadata(input: {
         requestId: input.requestId,
         outcome: input.outcome,
         context: input.context,
+        enforcement: approvalRequired ? 'invite_revoked_until_approved' : 'invite_pending_immediately',
         reason: approvalRequired
             ? 'Admin-role recovery or elevated existing membership requires second review before use.'
             : 'Member recovery does not require second review by default.',
