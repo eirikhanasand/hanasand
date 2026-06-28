@@ -116,6 +116,32 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_target_created ON impersonation_events(target_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_route_recent ON impersonation_events(actor_id, target_id, method, path, created_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS admin_audit_events (
+            id BIGSERIAL PRIMARY KEY,
+            action_type TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'notice', 'warning', 'critical')),
+            actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            target_type TEXT,
+            target_id TEXT,
+            organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+            entity_id TEXT,
+            request_id TEXT,
+            outcome TEXT NOT NULL DEFAULT 'success' CHECK (outcome IN ('success', 'denied', 'failed')),
+            reason TEXT NOT NULL DEFAULT '',
+            context JSONB NOT NULL DEFAULT '{}'::jsonb,
+            ip TEXT NOT NULL DEFAULT '',
+            user_agent TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_created_at ON admin_audit_events(created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_created ON admin_audit_events(organization_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_actor_created ON admin_audit_events(actor_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_target_created ON admin_audit_events(target_type, target_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_action_created ON admin_audit_events(action_type, severity, outcome, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_entity_created ON admin_audit_events(entity_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_request_created ON admin_audit_events(request_id, created_at DESC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS share (
             id TEXT PRIMARY KEY,
             path TEXT NOT NULL DEFAULT '',
@@ -467,6 +493,116 @@ export default async function ensureSchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_notes_owner_updated_at ON notes(owner_id, updated_at DESC, created_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS organizations (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            name TEXT NOT NULL,
+            slug TEXT NOT NULL UNIQUE,
+            created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS organization_members (
+            organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+            status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
+            invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (organization_id, user_id)
+        )
+    `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS organization_invites (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            email TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+            invited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            accepted_at TIMESTAMPTZ,
+            UNIQUE (organization_id, email)
+        )
+    `)
+    await run(`
+        CREATE TABLE IF NOT EXISTS organization_watchlist_items (
+            id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+            organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+            kind TEXT NOT NULL CHECK (kind IN ('company', 'domain', 'vendor')),
+            value TEXT NOT NULL,
+            notes TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            archived_at TIMESTAMPTZ
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_organization_members_user ON organization_members(user_id, status, organization_id)')
+    await run('CREATE INDEX IF NOT EXISTS idx_organization_invites_org_status ON organization_invites(organization_id, status, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_organization_watchlist_org_kind ON organization_watchlist_items(organization_id, kind, value) WHERE archived_at IS NULL')
+    await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_watchlist_unique_active ON organization_watchlist_items(organization_id, kind, lower(value)) WHERE archived_at IS NULL')
+    await run(`
+        CREATE TABLE IF NOT EXISTS dwm_webhook_destinations (
+            id TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            org_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'webhook' CHECK (kind IN ('webhook', 'discord')),
+            endpoint_encrypted TEXT NOT NULL,
+            endpoint_hint TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
+            events TEXT[] NOT NULL DEFAULT ARRAY['dwm.alert.created', 'dwm.alert.replayed']::TEXT[],
+            created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            last_tested_at TIMESTAMPTZ,
+            last_delivery_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_destinations_owner_updated ON dwm_webhook_destinations(owner_id, updated_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_destinations_org_status ON dwm_webhook_destinations(org_id, status, updated_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS dwm_webhook_deliveries (
+            id TEXT PRIMARY KEY,
+            destination_id TEXT REFERENCES dwm_webhook_destinations(id) ON DELETE SET NULL,
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            org_id TEXT NOT NULL,
+            alert_id TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK (event_type IN ('dwm.alert.created', 'dwm.alert.replayed', 'dwm.alert.test')),
+            status TEXT NOT NULL CHECK (status IN ('dry_run', 'delivered', 'failed', 'skipped')),
+            dry_run BOOLEAN NOT NULL DEFAULT TRUE,
+            endpoint_hint TEXT NOT NULL DEFAULT '',
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            response_status INT,
+            response_body TEXT,
+            error TEXT,
+            idempotency_key TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_owner_created ON dwm_webhook_deliveries(owner_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_org_created ON dwm_webhook_deliveries(org_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_destination_created ON dwm_webhook_deliveries(destination_id, created_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS dwm_webhook_audit_events (
+            id TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            org_id TEXT NOT NULL,
+            destination_id TEXT REFERENCES dwm_webhook_destinations(id) ON DELETE SET NULL,
+            delivery_id TEXT REFERENCES dwm_webhook_deliveries(id) ON DELETE SET NULL,
+            action TEXT NOT NULL,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_audit_owner_created ON dwm_webhook_audit_events(owner_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_audit_org_created ON dwm_webhook_audit_events(org_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_audit_destination_created ON dwm_webhook_audit_events(destination_id, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS ai_usage_events (
             id BIGSERIAL PRIMARY KEY,

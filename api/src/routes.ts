@@ -130,6 +130,16 @@ import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUser
 import postTiSearch, { postTiSearchBatch } from './handlers/ti/search.ts'
 import { getTiEnrichment, postTiEnrichmentRun } from './handlers/ti/enrichment.ts'
 import { getTiPipeline, postTiPipelineRun } from './handlers/ti/pipeline.ts'
+import {
+    deleteOrganizationWatchlist,
+    getOrganization,
+    getOrganizationInvites,
+    getOrganizations,
+    getOrganizationWatchlists,
+    postOrganization,
+    postOrganizationInvites,
+    postOrganizationWatchlist,
+} from './handlers/organizations.ts'
 
 /**
  * Defines the routes available in the API.
@@ -233,6 +243,16 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/notes', postNote)
     fastify.put('/notes/:id', putNote)
     fastify.delete('/notes/:id', deleteNote)
+
+    // Organizations
+    fastify.get('/organizations', getOrganizations)
+    fastify.post('/organizations', postOrganization)
+    fastify.get('/organizations/:id/invites', getOrganizationInvites)
+    fastify.post('/organizations/:id/invites', postOrganizationInvites)
+    fastify.get('/organizations/:id/watchlists', getOrganizationWatchlists)
+    fastify.post('/organizations/:id/watchlists', postOrganizationWatchlist)
+    fastify.delete('/organizations/:organizationId/watchlists/:itemId', deleteOrganizationWatchlist)
+    fastify.get('/organizations/:id', getOrganization)
 
     // Share workspaces
     fastify.get('/share/tree/:id', getShareTree)
