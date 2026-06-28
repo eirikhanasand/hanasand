@@ -1,12 +1,18 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { roleCanManageOrganization, type OrganizationRole } from '#utils/organizations.ts'
+import {
+    organizationVisibilityDecision,
+    roleCanManageOrganization,
+    type OrganizationAlertVisibilityPolicy,
+    type OrganizationRole,
+} from '#utils/organizations.ts'
 import {
     archiveDwmWebhookDestination,
     buildDwmWebhookDeliveryEvidence,
     createDwmWebhookDestination,
     deliverDwmAlertNotification,
+    filterDwmWebhookDeliveryEvidenceForVisibility,
     listDwmWebhookAuditEvents,
     listDwmWebhookDeliveries,
     listDwmWebhookDestinations,
@@ -36,6 +42,9 @@ type OrgQuery = {
 
 type Membership = {
     role: OrganizationRole
+    status?: 'active' | 'removed'
+    user_active?: boolean
+    alert_visibility_policy?: OrganizationAlertVisibilityPolicy
 }
 
 export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystring: OrgQuery }>, res: FastifyReply) {
@@ -141,25 +150,57 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
     if (!userId) return
 
     const orgId = orgIdFromQuery(req.query)
-    if (orgId && orgId !== userId && !await loadOrganizationMembership(orgId, userId)) {
-        return res.status(404).send({ error: 'Organization not found.' })
+    const visibility = orgId && orgId !== userId ? await loadOrganizationVisibilityMembership(orgId, userId) : null
+    if (orgId && orgId !== userId) {
+        const decision = organizationVisibilityDecision({
+            role: visibility?.role,
+            status: visibility?.status,
+            userActive: visibility?.user_active,
+            alertVisibilityPolicy: visibility?.alert_visibility_policy,
+        })
+        if (!decision.allowed) {
+            return res.status(decision.reason === 'not_member' ? 404 : 403).send({
+                error: decision.reason === 'not_member' ? 'Organization not found.' : 'Webhook delivery evidence is not visible for this organization membership.',
+                reason: decision.reason,
+                alertVisibilityPolicy: decision.alertVisibilityPolicy,
+                allowedRoles: decision.allowedRoles,
+            })
+        }
     }
 
     const deliveries = await listDwmWebhookDeliveries(userId, orgId || undefined)
     const auditEvents = await listDwmWebhookAuditEvents(userId, orgId || undefined)
+    const evidence = buildDwmWebhookDeliveryEvidence({
+        deliveries,
+        auditEvents,
+        filters: {
+            orgId,
+            destinationId: clean(req.query?.destinationId) || clean(req.query?.destination_id),
+            alertId: clean(req.query?.alertId) || clean(req.query?.alert_id),
+            casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
+            dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
+        },
+    })
+    const visibilityResult = orgId && orgId !== userId
+        ? filterDwmWebhookDeliveryEvidenceForVisibility({
+            evidence,
+            visibility: {
+                role: visibility?.role,
+                status: visibility?.status,
+                userActive: visibility?.user_active,
+                alertVisibilityPolicy: visibility?.alert_visibility_policy,
+            },
+        })
+        : null
     const payload: Record<string, unknown> = {
         deliveries,
-        deliveryEvidence: buildDwmWebhookDeliveryEvidence({
-            deliveries,
-            auditEvents,
-            filters: {
-                orgId,
-                destinationId: clean(req.query?.destinationId) || clean(req.query?.destination_id),
-                alertId: clean(req.query?.alertId) || clean(req.query?.alert_id),
-                casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
-                dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
-            },
-        }),
+        deliveryEvidence: visibilityResult ? visibilityResult.deliveryEvidence : evidence,
+        visibility: visibilityResult?.decision ?? {
+            allowed: true,
+            reason: null,
+            alertVisibilityPolicy: 'members',
+            allowedRoles: ['owner', 'admin', 'member', 'viewer'],
+        },
     }
     if (req.query?.includeAudit === 'true') {
         payload.auditEvents = auditEvents
@@ -245,6 +286,26 @@ async function loadOrganizationMembership(orgId: string, userId: string): Promis
         WHERE organization_id = $1
           AND user_id = $2
           AND status = 'active'
+        LIMIT 1
+    `, [orgId, userId])
+
+    return result.rows[0] as Membership | undefined || null
+}
+
+async function loadOrganizationVisibilityMembership(orgId: string, userId: string): Promise<Membership | null> {
+    const result = await run(`
+        SELECT
+            om.role,
+            om.status,
+            u.active AS user_active,
+            o.alert_visibility_policy
+        FROM organizations o
+        LEFT JOIN organization_members om
+          ON om.organization_id = o.id
+         AND om.user_id = $2
+        LEFT JOIN users u
+          ON u.id = $2
+        WHERE o.id = $1
         LIMIT 1
     `, [orgId, userId])
 

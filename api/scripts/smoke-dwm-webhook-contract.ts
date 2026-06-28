@@ -2,6 +2,7 @@ import {
     buildDwmAlertDeliveryPayload,
     buildDwmAlertWebhookDispatchPlan,
     buildDwmWebhookDeliveryEvidence,
+    filterDwmWebhookDeliveryEvidenceForVisibility,
     normalizeDwmWebhookDestinationInput,
     redactWebhookEndpoint,
 } from '#utils/dwm/webhooks.ts'
@@ -454,6 +455,38 @@ expect(dedupeEvidence.length === 1 && dedupeEvidence[0].requestId === 'delivery_
 expect(idempotencyEvidence.length === 1 && idempotencyEvidence[0].requestId === 'delivery_replay_contract', 'Delivery evidence should filter by idempotency key.', idempotencyEvidence)
 expect(buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { alertId: 'alert_replay_contract', casePath: replayWorkflowAlert.casePath, dedupeKey: 'dwm_dedupe_replay_contract' } }).length === 1, 'Delivery evidence should combine alert, case path, and dedupe filters.')
 
+const visibilityAllowedMember = filterDwmWebhookDeliveryEvidenceForVisibility({
+    evidence: orgEvidence,
+    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const visibilityWrongOrg = filterDwmWebhookDeliveryEvidenceForVisibility({
+    evidence: orgEvidence,
+    visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
+})
+const visibilityRemoved = filterDwmWebhookDeliveryEvidenceForVisibility({
+    evidence: orgEvidence,
+    visibility: { role: 'admin', status: 'removed', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const visibilityDeactivated = filterDwmWebhookDeliveryEvidenceForVisibility({
+    evidence: orgEvidence,
+    visibility: { role: 'owner', status: 'active', userActive: false, alertVisibilityPolicy: 'members' },
+})
+const visibilityAdminPolicyMember = filterDwmWebhookDeliveryEvidenceForVisibility({
+    evidence: orgEvidence,
+    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'admins' },
+})
+const visibilityAdminPolicyAdmin = filterDwmWebhookDeliveryEvidenceForVisibility({
+    evidence: orgEvidence,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'admins' },
+})
+
+expect(visibilityAllowedMember.decision.allowed === true && visibilityAllowedMember.deliveryEvidence.length === orgEvidence.length, 'Members policy should allow active members to read evidence.', visibilityAllowedMember)
+expect(visibilityWrongOrg.decision.allowed === false && visibilityWrongOrg.decision.reason === 'not_member' && visibilityWrongOrg.deliveryEvidence.length === 0, 'Visibility should deny wrong-org/nonmember evidence reads.', visibilityWrongOrg)
+expect(visibilityRemoved.decision.allowed === false && visibilityRemoved.decision.reason === 'member_removed' && visibilityRemoved.deliveryEvidence.length === 0, 'Visibility should deny removed members.', visibilityRemoved)
+expect(visibilityDeactivated.decision.allowed === false && visibilityDeactivated.decision.reason === 'member_deactivated' && visibilityDeactivated.deliveryEvidence.length === 0, 'Visibility should deny deactivated members.', visibilityDeactivated)
+expect(visibilityAdminPolicyMember.decision.allowed === false && visibilityAdminPolicyMember.decision.reason === 'role_not_allowed' && visibilityAdminPolicyMember.deliveryEvidence.length === 0, 'Admin-only policy should deny member evidence reads.', visibilityAdminPolicyMember)
+expect(visibilityAdminPolicyAdmin.decision.allowed === true && visibilityAdminPolicyAdmin.deliveryEvidence.length === orgEvidence.length, 'Admin-only policy should allow admins.', visibilityAdminPolicyAdmin)
+
 console.log(JSON.stringify({
     ok: true,
     checked: [
@@ -472,6 +505,9 @@ console.log(JSON.stringify({
         'delivery evidence secret redaction',
         'delivery evidence wrong-org filtering',
         'delivery evidence case/dedupe/idempotency filters',
+        'delivery evidence org visibility allowed/denied',
+        'delivery evidence removed/deactivated denial',
+        'delivery evidence admin-only policy',
         'delivery evidence replay/live/dry-run distinction',
         'secret-free payload',
     ],

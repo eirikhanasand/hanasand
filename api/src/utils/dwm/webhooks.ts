@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import run from '#db'
+import { organizationVisibilityDecision, type OrganizationVisibilityDecisionInput } from '#utils/organizations.ts'
 
 export type DwmWebhookKind = 'webhook' | 'discord'
 export type DwmWebhookStatus = 'active' | 'paused' | 'archived'
@@ -123,6 +124,8 @@ export type DwmWebhookDeliveryEvidenceFilters = {
     casePath?: unknown
     dedupeKey?: unknown
 }
+
+export type DwmWebhookEvidenceVisibilityInput = OrganizationVisibilityDecisionInput
 
 type NormalizedDestinationInput = {
     orgId: string
@@ -529,6 +532,20 @@ export function buildDwmWebhookDeliveryEvidence({
             if (normalizedFilters.dedupeKey && evidence.dedupeKey !== normalizedFilters.dedupeKey && evidence.idempotencyKey !== normalizedFilters.dedupeKey) return false
             return true
         })
+}
+
+export function filterDwmWebhookDeliveryEvidenceForVisibility({
+    evidence,
+    visibility,
+}: {
+    evidence: ReturnType<typeof buildDwmWebhookDeliveryEvidence>
+    visibility: DwmWebhookEvidenceVisibilityInput
+}) {
+    const decision = organizationVisibilityDecision(visibility)
+    return {
+        decision,
+        deliveryEvidence: decision.allowed ? evidence : [],
+    }
 }
 
 export async function testDwmWebhookDestination(ownerId: string, id: string, input: DwmAlertNotificationInput = {}) {

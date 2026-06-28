@@ -6,6 +6,7 @@ import {
     buildDwmWebhookDeliveryEvidence,
     createDwmWebhookDestination,
     deliverDwmAlertNotification,
+    filterDwmWebhookDeliveryEvidenceForVisibility,
     listDwmWebhookAuditEvents,
     listDwmWebhookDeliveries,
     listDwmWebhookDestinations,
@@ -179,6 +180,36 @@ async function main() {
     expect(byCasePath.some(item => item.requestId === replayEvidence?.requestId), 'Case path evidence filter should include replay attempt.', byCasePath)
     expect(byDedupe.length === 1 && byDedupe[0].requestId === replayEvidence?.requestId, 'Dedupe evidence filter should isolate replay attempt.', byDedupe)
     expect(byIdempotency.length === 1 && byIdempotency[0].requestId === replayEvidence?.requestId, 'Idempotency evidence filter should isolate replay attempt.', byIdempotency)
+    const visibleToMember = filterDwmWebhookDeliveryEvidenceForVisibility({
+        evidence: deliveryEvidence,
+        visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+    })
+    const hiddenFromWrongOrg = filterDwmWebhookDeliveryEvidenceForVisibility({
+        evidence: deliveryEvidence,
+        visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
+    })
+    const hiddenFromRemoved = filterDwmWebhookDeliveryEvidenceForVisibility({
+        evidence: deliveryEvidence,
+        visibility: { role: 'admin', status: 'removed', userActive: true, alertVisibilityPolicy: 'members' },
+    })
+    const hiddenFromDeactivated = filterDwmWebhookDeliveryEvidenceForVisibility({
+        evidence: deliveryEvidence,
+        visibility: { role: 'owner', status: 'active', userActive: false, alertVisibilityPolicy: 'members' },
+    })
+    const hiddenFromMemberByAdminPolicy = filterDwmWebhookDeliveryEvidenceForVisibility({
+        evidence: deliveryEvidence,
+        visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'admins' },
+    })
+    const visibleToAdminByAdminPolicy = filterDwmWebhookDeliveryEvidenceForVisibility({
+        evidence: deliveryEvidence,
+        visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'admins' },
+    })
+    expect(visibleToMember.deliveryEvidence.length === deliveryEvidence.length, 'Members visibility policy should allow active members to read evidence.', visibleToMember)
+    expect(hiddenFromWrongOrg.decision.reason === 'not_member' && hiddenFromWrongOrg.deliveryEvidence.length === 0, 'Visibility should deny nonmembers/wrong org.', hiddenFromWrongOrg)
+    expect(hiddenFromRemoved.decision.reason === 'member_removed' && hiddenFromRemoved.deliveryEvidence.length === 0, 'Visibility should deny removed members.', hiddenFromRemoved)
+    expect(hiddenFromDeactivated.decision.reason === 'member_deactivated' && hiddenFromDeactivated.deliveryEvidence.length === 0, 'Visibility should deny deactivated members.', hiddenFromDeactivated)
+    expect(hiddenFromMemberByAdminPolicy.decision.reason === 'role_not_allowed' && hiddenFromMemberByAdminPolicy.deliveryEvidence.length === 0, 'Admin-only visibility policy should deny members.', hiddenFromMemberByAdminPolicy)
+    expect(visibleToAdminByAdminPolicy.decision.allowed === true && visibleToAdminByAdminPolicy.deliveryEvidence.length === deliveryEvidence.length, 'Admin-only visibility policy should allow admins.', visibleToAdminByAdminPolicy)
 
     const audit = await run(`
         SELECT action, metadata
@@ -207,6 +238,7 @@ async function main() {
             'delivery hashes and attemptedAt',
             'delivery evidence filters',
             'delivery evidence redaction',
+            'delivery evidence visibility policy',
             'delivery evidence replay/live/dry-run states',
             'watchlist/route/case context',
             'org-shared destination list',
