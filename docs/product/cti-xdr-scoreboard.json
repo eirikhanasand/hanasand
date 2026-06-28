@@ -1,9 +1,13 @@
 {
   "updatedAt": "2026-06-28",
-  "latestCommit": "ba9e3afb",
+  "latestCommit": "f70187be",
   "sourceDoc": "docs/product/cti-xdr-gap-map.md",
   "purpose": "Compact implementation scoreboard for the CTI/DWM/XDR product lanes. This is for the 10-minute coordinator loop; it should reduce management overhead and keep workers from shipping dashboard-only slices.",
   "recentConfirmedCommits": [
+    "f70187be",
+    "bfe5ccc4",
+    "42858be6",
+    "fc113cdf",
     "ba9e3afb",
     "f1c126c7",
     "e66067d8",
@@ -12,10 +16,7 @@
     "8de8f65f",
     "7802723a",
     "72dae520",
-    "a6e71eb0",
-    "1de10da7",
-    "c9c3b28d",
-    "f44b0214"
+    "a6e71eb0"
   ],
   "fullyImplementedWorkflow": false,
   "workflowBlockers": [
@@ -23,6 +24,15 @@
     "strictEndToEndWorkflowNotYetComplete",
     "productProgressKpiFeedMissing",
     "cleanDeployProofMissing"
+  ],
+  "strictOnePassVerificationPreconditions": [
+    "cleanWorkingTreeOrDocumentedBaseline",
+    "orgScopedBuyerSession",
+    "realSourceCollectionRun",
+    "realAlertGeneratedWithEvidence",
+    "alertLinkedToCaseAndDelivery",
+    "productProgressKpiFeed",
+    "focusedSmokeAndLiveProbe"
   ],
   "absentExpectedCommits": [
     {
@@ -35,9 +45,9 @@
       "id": "ORG",
       "pillar": "Orgs",
       "ownerThread": "Org/API lane",
-      "currentStatus": "Landed backend, dashboard readiness, role hardening, org settings policies, member lifecycle guardrails, and downstream visibility contract; org/dashboard files remain dirty.",
-      "lastCommitOrHandoff": "bb3f8c9a watchlists to DWM alert contracts; 4aaf8398 dashboard org readiness; 83fc8d94 role RBAC; 16777192/2bc9cbd6 org settings policies; 220d0bd0 member lifecycle guardrails; 48c5ac50 organization downstream visibility contract; 75771f62 cleanup.",
-      "nextCodeSlice": "Finish active-org console flow, org settings/member lifecycle UI, then probe create/list/select plus DWM/TI tenant propagation from a logged-in buyer session.",
+      "currentStatus": "Landed backend, dashboard readiness, role hardening, org settings policies, member lifecycle guardrails, downstream visibility contract, and dashboard org operating layer; org/dashboard files remain dirty.",
+      "lastCommitOrHandoff": "bb3f8c9a watchlists to DWM alert contracts; 4aaf8398 dashboard org readiness; 83fc8d94 role RBAC; 16777192/2bc9cbd6 org settings policies; 220d0bd0 member lifecycle guardrails; 48c5ac50 organization downstream visibility contract; bfe5ccc4 dashboard org operating layer; 75771f62 cleanup.",
+      "nextCodeSlice": "Finish active-org console flow, org settings/member lifecycle UI, org operating layer probe, then prove DWM/TI tenant propagation from a logged-in buyer session.",
       "measurableKpi": ["organizations.orgCount", "organizations.activeOrgCount"],
       "blocker": "Current org/dashboard dirty work must land before proving routes use org context instead of default."
     },
@@ -75,9 +85,9 @@
       "id": "TELE",
       "pillar": "Telegram sources",
       "ownerThread": "Source-ops lane",
-      "currentStatus": "Source promotion, source pack intake/review, source pack registry, and source collection handoff are landed; active Telegram count still needs product-progress proof.",
-      "lastCommitOrHandoff": "f16e8a0e control room; 723bbdbb source lifecycle metadata; 25041615 queued collection trigger; 9f749981 collection handoff; 8fe54813 source pack intake; 0b3e0d7a source pack review workflow; 7802723a source pack registry.",
-      "nextCodeSlice": "Expose enabled/failing Telegram sources, pack registry/review state, collection queued/running/succeeded state, last successful check, next scheduled check, and parser status in product-progress output.",
+      "currentStatus": "Source promotion, source pack intake/review, source pack registry, source family coverage health, and source collection handoff are landed; active Telegram count still needs product-progress proof.",
+      "lastCommitOrHandoff": "f16e8a0e control room; 723bbdbb source lifecycle metadata; 25041615 queued collection trigger; 9f749981 collection handoff; 8fe54813 source pack intake; 0b3e0d7a source pack review workflow; 7802723a source pack registry; fc113cdf source family coverage health.",
+      "nextCodeSlice": "Expose enabled/failing Telegram sources, family coverage health, pack registry/review state, collection queued/running/succeeded state, last successful check, next scheduled check, and parser status in product-progress output.",
       "measurableKpi": ["sources.activeTelegramSourceCount", "collection.capturesCollected10m"],
       "blocker": "Need live runtime proof inside freshness window; TI Worker 2/source pages remain active dirty work."
     },
@@ -85,9 +95,9 @@
       "id": "ONION",
       "pillar": "Darkweb/onion sources",
       "ownerThread": "Source-ops/restricted-metadata lane",
-      "currentStatus": "Source candidate lifecycle, source pack intake/review/registry, and collection handoff are landed; production-safe active onion/darkweb counts are still not proven.",
-      "lastCommitOrHandoff": "ec4289dc source request lifecycle; 723bbdbb source lifecycle metadata; 8fe54813 source pack intake; 0b3e0d7a source pack review workflow; 7802723a source pack registry; 9f749981 DWM source collection handoff.",
-      "nextCodeSlice": "Add metadata-only approval queue plus active/failing onion source counts, pack registry/review state, last check, collection handoff state, screenshots where safe, and blocked-reason fields.",
+      "currentStatus": "Source candidate lifecycle, source pack intake/review/registry, family coverage health, and collection handoff are landed; production-safe active onion/darkweb counts are still not proven.",
+      "lastCommitOrHandoff": "ec4289dc source request lifecycle; 723bbdbb source lifecycle metadata; 8fe54813 source pack intake; 0b3e0d7a source pack review workflow; 7802723a source pack registry; fc113cdf source family coverage health; 9f749981 DWM source collection handoff.",
+      "nextCodeSlice": "Add metadata-only approval queue plus active/failing onion source counts, family coverage health, pack registry/review state, last check, collection handoff state, screenshots where safe, and blocked-reason fields.",
       "measurableKpi": ["sources.activeDarkWebMetadataSourceCount", "sources.sourceCandidatesQueued"],
       "blocker": "Must keep unsafe payloads, raw onion URLs, and credentials out of buyer/admin surfaces while proving live collection."
     },
@@ -95,8 +105,8 @@
       "id": "ALERTS",
       "pillar": "Real alerts",
       "ownerThread": "DWM alert lane",
-      "currentStatus": "Repository rebuild path, alert-to-case bridge, searchable timelines, delivery inspection, and portable case evidence export are landed; live capture-to-saved-alert proof remains.",
-      "lastCommitOrHandoff": "720414f2 alert provenance; 3f55b12e repository adapter; 6ef17a6e rebuild proof; 7de4c70d alert-to-case bridge; 570539c3 timelines; de91801c delivery inspection; f44b0214 portable analyst case evidence export.",
+      "currentStatus": "Repository rebuild path, alert-to-case bridge, org visibility on DWM alert workflow, searchable timelines, delivery inspection, and portable case evidence export are landed; live capture-to-saved-alert proof remains.",
+      "lastCommitOrHandoff": "720414f2 alert provenance; 3f55b12e repository adapter; 6ef17a6e rebuild proof; 7de4c70d alert-to-case bridge; f70187be org visibility on DWM alert workflow; 570539c3 timelines; de91801c delivery inspection; f44b0214 portable analyst case evidence export.",
       "nextCodeSlice": "Prove real watchlist + real capture creates saved alert with evidence ID, source ID, dedupe key, match reason, searchable timeline, portable evidence export, case link, and demoAlertsVisible=0.",
       "measurableKpi": ["alerts.realAlertsGenerated10m", "alerts.alertsWithEvidence", "alerts.demoAlertsVisible"],
       "blocker": "Need automated capture-to-alert smoke that fails if only demo data appears."
@@ -105,8 +115,8 @@
       "id": "DELIVERY",
       "pillar": "Webhook/Discord deliveries",
       "ownerThread": "Delivery lane",
-      "currentStatus": "Webhook dispatch, replay contract, delivery evidence contract, org visibility on webhook evidence, delivery inspection, smoke evidence filters, and empty-state cleanup are landed; buyer delivery history still needs clean proof.",
-      "lastCommitOrHandoff": "e92dc23f webhook dispatch; 71b1a6b3 replay contract; 14ae5dc9 webhook delivery evidence contract; 8de8f65f org visibility on DWM webhook evidence; 8b1c8fea shortened DWM empty state label; de91801c delivery inspection; c9c3b28d hardened webhook smoke evidence filters.",
+      "currentStatus": "Webhook dispatch, destination contracts, replay contract, delivery evidence contract, org visibility on webhook evidence, delivery inspection, smoke evidence filters, and empty-state cleanup are landed; buyer delivery history still needs clean proof.",
+      "lastCommitOrHandoff": "e92dc23f webhook dispatch; 42858be6 webhook destination contracts; 71b1a6b3 replay contract; 14ae5dc9 webhook delivery evidence contract; 8de8f65f org visibility on DWM webhook evidence; 8b1c8fea shortened DWM empty state label; de91801c delivery inspection; c9c3b28d hardened webhook smoke evidence filters.",
       "nextCodeSlice": "Put delivery controls on the DWM page: endpoint/Discord destination, redacted secret status, test send, payload preview, replay, org-visible delivery evidence, last deliveries, retry failed, and dispatch result.",
       "measurableKpi": ["delivery.webhookDeliveries10m", "delivery.discordDeliveries10m", "delivery.webhookFailures10m"],
       "blocker": "Need buyer-visible delivery history and retry proof; DWM webhook utility file remains dirty."
@@ -145,8 +155,8 @@
       "id": "DEPLOY",
       "pillar": "Deploy/live status",
       "ownerThread": "Ops lane",
-      "currentStatus": "Partial: latest confirmed currentness reaches ba9e3afb organization bulk invite readiness contract; no single product-progress record ties deploy health to CTI/DWM KPIs.",
-      "lastCommitOrHandoff": "03d29b7c coordinator scoreboard; 7aeaddb5 scan script; c285de78/d4fa7185 currentness checks; latest visible product HEAD ba9e3afb; f1c126c7 org visibility policy on analyst cases; e66067d8 GeoJSON public TI map; 8de8f65f webhook evidence org visibility; 7802723a source pack registry.",
+      "currentStatus": "Partial: latest confirmed currentness reaches f70187be org visibility on DWM alert workflow; no single product-progress record ties deploy health to CTI/DWM KPIs.",
+      "lastCommitOrHandoff": "03d29b7c coordinator scoreboard; 7aeaddb5 scan script; c285de78/d4fa7185 currentness checks; latest visible product HEAD f70187be; bfe5ccc4 dashboard org operating layer; 42858be6 webhook destination contracts; fc113cdf source family coverage health.",
       "nextCodeSlice": "Emit /api/product-progress or scraper SLO record every 10 minutes with commit, frontend/API/scraper health, and every KPI group in this table.",
       "measurableKpi": ["deployment.frontendCommit", "deployment.frontendHealthy", "deployment.apiHealthy", "deployment.scraperHealthy"],
       "blocker": "Multiple active dirty lanes must land before clean deploy proof; strict end-to-end workflow is not yet complete."
@@ -179,8 +189,9 @@
       "No buyer path depends on demo-only, default-tenant, or manually curated data."
     ],
     "deployGate": [
-      "activeDirtyLanes=dashboard,public-ti,ti-worker-2,dwm-webhook",
-      "strictEndToEndWorkflow=not-complete"
+      "activeDirtyLanes=dwm-product-real-alert,frontend-portal-ti-pages,org-helpdesk,public-ti,dwm-webhook",
+      "strictEndToEndWorkflow=not-complete",
+      "strictOnePassVerification=not-run"
     ]
   }
 }
