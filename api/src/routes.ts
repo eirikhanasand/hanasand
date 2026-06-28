@@ -134,9 +134,11 @@ import {
     deleteOrganizationWatchlist,
     getOrganization,
     getOrganizationInvites,
+    getOrganizationMembers,
     getOrganizations,
     getOrganizationWatchlists,
     postOrganization,
+    postOrganizationInviteAccept,
     postOrganizationInvites,
     postOrganizationWatchlist,
 } from './handlers/organizations.ts'
@@ -247,8 +249,10 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     // Organizations
     fastify.get('/organizations', getOrganizations)
     fastify.post('/organizations', postOrganization)
+    fastify.post('/organizations/invites/:inviteId/accept', postOrganizationInviteAccept)
     fastify.get('/organizations/:id/invites', getOrganizationInvites)
     fastify.post('/organizations/:id/invites', postOrganizationInvites)
+    fastify.get('/organizations/:id/members', getOrganizationMembers)
     fastify.get('/organizations/:id/watchlists', getOrganizationWatchlists)
     fastify.post('/organizations/:id/watchlists', postOrganizationWatchlist)
     fastify.delete('/organizations/:organizationId/watchlists/:itemId', deleteOrganizationWatchlist)
