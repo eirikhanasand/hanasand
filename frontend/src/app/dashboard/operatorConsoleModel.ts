@@ -21,6 +21,8 @@ export type DwmWatchlistSummary = {
 export type DwmOrganizationState = {
     organizations: DwmOrganizationSummary[]
     selectedOrganization?: DwmOrganizationSummary
+    members: DwmOrganizationMember[]
+    pendingInvites: DwmOrganizationInvite[]
     webhooks: DwmOrganizationWebhookDestination[]
 }
 
@@ -30,9 +32,35 @@ export type DwmOrganizationSummary = {
     name: string
     slug: string
     status: 'active' | 'suspended'
+    alertVisibilityPolicy?: 'members' | 'admins' | 'owners'
     createdAt: string
     updatedAt: string
     createdBy?: string
+}
+
+export type DwmOrganizationMember = {
+    id: string
+    organizationId: string
+    email: string
+    userId?: string
+    role: 'owner' | 'admin' | 'analyst' | 'viewer' | string
+    status: 'active' | 'invited' | 'removed' | string
+    invitedAt?: string
+    acceptedAt?: string
+    createdAt: string
+    updatedAt: string
+}
+
+export type DwmOrganizationInvite = {
+    id: string
+    organizationId: string
+    email: string
+    role: 'owner' | 'admin' | 'analyst' | 'viewer' | string
+    status: 'pending' | 'accepted' | 'revoked' | 'expired' | string
+    invitedBy?: string
+    invitedAt: string
+    expiresAt: string
+    updatedAt: string
 }
 
 export type DwmOrganizationWebhookDestination = {
@@ -76,6 +104,65 @@ export type DwmDeliveryItem = {
     deliveryKind?: 'discord' | 'generic'
     httpStatus?: number
     error?: string
+}
+
+export function buildOrgOperatingContext(input: {
+    backendConfigured: boolean
+    scope: OperatorScope
+    watchlists: DwmWatchlistSummary[]
+    organizationState: DwmOrganizationState
+}) {
+    const organization = input.organizationState.selectedOrganization
+    const activeMembers = input.organizationState.members.filter(item => item.status === 'active')
+    const pendingInvites = input.organizationState.pendingInvites.filter(item => item.status === 'pending')
+    const activeWatchlists = input.watchlists.filter(item => item.status === 'active')
+    const activeWebhooks = input.organizationState.webhooks.filter(item => item.status === 'active')
+    const termCount = activeWatchlists.reduce((sum, item) => sum + (item.terms || []).length, 0)
+    const blockedReasons = [
+        !input.backendConfigured ? 'TI_SCRAPER_API_BASE is not configured; org/team/watchlist state cannot be loaded.' : '',
+        !organization ? 'No selected organization returned from GET /api/organizations.' : '',
+        organization && !activeMembers.length ? `No active members returned from /api/organizations/${organization.id}/members.` : '',
+        organization && !activeWatchlists.length ? 'No active shared DWM watchlist returned for this organization scope.' : '',
+        organization && !activeWebhooks.length ? 'No active organization webhook destination returned.' : '',
+    ].filter(Boolean)
+
+    return {
+        scope: input.scope,
+        organization,
+        members: input.organizationState.members,
+        pendingInvites,
+        watchlists: input.watchlists,
+        webhookDestinations: input.organizationState.webhooks,
+        readiness: {
+            activeMemberCount: activeMembers.length,
+            pendingInviteCount: pendingInvites.length,
+            activeWatchlistCount: activeWatchlists.length,
+            termCount,
+            activeWebhookCount: activeWebhooks.length,
+            alertVisibilityPolicy: organization?.alertVisibilityPolicy || 'members',
+            blockedReasons,
+        },
+        links: organization ? [
+            { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' },
+            { href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Webhooks API' },
+            { href: '/api/dwm/watchlists', label: 'Watchlists API' },
+            { href: '/dashboard/dwm', label: 'DWM setup' },
+        ] : [
+            { href: '/api/organizations', label: 'Organizations API' },
+            { href: '/dashboard/dwm', label: 'DWM setup' },
+        ],
+        createWatchlistAction: input.backendConfigured && organization ? {
+            id: 'create_shared_watchlist_term',
+            label: 'Create shared term',
+            method: 'POST' as const,
+            href: '/api/dwm/watchlists',
+            body: {
+                ...actionScope(input.scope),
+                name: organization ? `${organization.name} shared exposure watchlist` : 'Shared exposure watchlist',
+                webhookDestinationId: activeWebhooks[0]?.id,
+            },
+        } : undefined,
+    }
 }
 
 export function buildReadinessCases(input: {

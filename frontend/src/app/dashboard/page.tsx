@@ -7,7 +7,7 @@ import { DashboardPage } from '@/components/dashboard/ui'
 import { demoDwmProductSnapshot, type DwmAlert, type DwmSeverity } from '@/utils/dwm/product'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
-import { buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
+import { buildOrgOperatingContext, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +57,12 @@ export default async function Page({
         liveAlertCount: liveAlerts.length,
         renderedAlertCount: alerts.length,
     })
+    const orgContext = buildOrgOperatingContext({
+        backendConfigured: Boolean(process.env.TI_SCRAPER_API_BASE),
+        scope,
+        watchlists,
+        organizationState,
+    })
     const cases = buildWorkbenchCases(overview, alerts, readinessCases, liveAlerts.length > 0, scope, deliveries)
     const displayName = impersonatingName || impersonatingId || name
     const firstName = displayName.split(/\s+/)[0] || displayName
@@ -77,7 +83,7 @@ export default async function Page({
                 persistentCount={cases.filter(item => item.persistent).length}
             />
 
-            <AnalystWorkbenchClient initialCases={cases} chrome='compact' />
+            <AnalystWorkbenchClient initialCases={cases} chrome='compact' orgContext={orgContext} />
         </DashboardPage>
     )
 }
@@ -196,28 +202,34 @@ function applyScope(target: URL, scope: OperatorScope) {
 
 async function loadDwmOrganizationState(): Promise<DwmOrganizationState> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return { organizations: [], webhooks: [] }
+    if (!base) return { organizations: [], members: [], pendingInvites: [], webhooks: [] }
 
     try {
         const orgTarget = new URL('/v1/organizations', base)
         const orgResponse = await fetch(orgTarget, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!orgResponse.ok) return { organizations: [], webhooks: [] }
+        if (!orgResponse.ok) return { organizations: [], members: [], pendingInvites: [], webhooks: [] }
         const orgPayload = await orgResponse.json() as { organizations?: DwmOrganizationSummary[] }
         const organizations = (orgPayload.organizations || []).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         const selectedOrganization = organizations.find(item => item.status === 'active') || organizations[0]
-        if (!selectedOrganization) return { organizations, webhooks: [] }
+        if (!selectedOrganization) return { organizations, members: [], pendingInvites: [], webhooks: [] }
 
         const webhookTarget = new URL(`/v1/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`, base)
-        const webhookResponse = await fetch(webhookTarget, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!webhookResponse.ok) return { organizations, selectedOrganization, webhooks: [] }
-        const webhookPayload = await webhookResponse.json() as { destinations?: DwmOrganizationWebhookDestination[] }
+        const membersTarget = new URL(`/v1/organizations/${encodeURIComponent(selectedOrganization.id)}/members`, base)
+        const [webhookResponse, membersResponse] = await Promise.all([
+            fetch(webhookTarget, { cache: 'no-store', signal: AbortSignal.timeout(2500) }),
+            fetch(membersTarget, { cache: 'no-store', signal: AbortSignal.timeout(2500) }),
+        ])
+        const webhookPayload = webhookResponse.ok ? await webhookResponse.json() as { destinations?: DwmOrganizationWebhookDestination[] } : { destinations: [] }
+        const memberPayload = membersResponse.ok ? await membersResponse.json() as { members?: DwmOrganizationMember[], pendingInvites?: DwmOrganizationInvite[] } : { members: [], pendingInvites: [] }
         return {
             organizations,
             selectedOrganization,
+            members: (memberPayload.members || []).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+            pendingInvites: (memberPayload.pendingInvites || []).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
             webhooks: (webhookPayload.destinations || []).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
         }
     } catch {
-        return { organizations: [], webhooks: [] }
+        return { organizations: [], members: [], pendingInvites: [], webhooks: [] }
     }
 }
 

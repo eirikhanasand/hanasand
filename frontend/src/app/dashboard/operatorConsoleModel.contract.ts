@@ -1,5 +1,5 @@
-import { buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
-import type { WorkbenchAction, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence } from './ti/workbench/workbenchClient'
+import { buildOrgOperatingContext, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
+import type { WorkbenchAction, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchOrgContext } from './ti/workbench/workbenchClient'
 
 const organizationState = {
     organizations: [{
@@ -8,6 +8,7 @@ const organizationState = {
         name: 'Acme Security',
         slug: 'acme-security',
         status: 'active',
+        alertVisibilityPolicy: 'admins',
         createdAt: '2026-06-28T10:00:00.000Z',
         updatedAt: '2026-06-28T10:05:00.000Z',
     }],
@@ -17,9 +18,39 @@ const organizationState = {
         name: 'Acme Security',
         slug: 'acme-security',
         status: 'active',
+        alertVisibilityPolicy: 'admins',
         createdAt: '2026-06-28T10:00:00.000Z',
         updatedAt: '2026-06-28T10:05:00.000Z',
     },
+    members: [{
+        id: 'mem_owner',
+        organizationId: 'org_acme',
+        email: 'owner@acme.example',
+        role: 'owner',
+        status: 'active',
+        acceptedAt: '2026-06-28T10:01:00.000Z',
+        createdAt: '2026-06-28T10:01:00.000Z',
+        updatedAt: '2026-06-28T10:01:00.000Z',
+    }, {
+        id: 'mem_viewer',
+        organizationId: 'org_acme',
+        email: 'viewer@acme.example',
+        role: 'viewer',
+        status: 'active',
+        acceptedAt: '2026-06-28T10:02:00.000Z',
+        createdAt: '2026-06-28T10:02:00.000Z',
+        updatedAt: '2026-06-28T10:02:00.000Z',
+    }],
+    pendingInvites: [{
+        id: 'invite_analyst',
+        organizationId: 'org_acme',
+        email: 'analyst@acme.example',
+        role: 'analyst',
+        status: 'pending',
+        invitedAt: '2026-06-28T10:03:00.000Z',
+        expiresAt: '2026-07-12T10:03:00.000Z',
+        updatedAt: '2026-06-28T10:03:00.000Z',
+    }],
     webhooks: [{
         id: 'wh_discord_soc',
         organizationId: 'org_acme',
@@ -82,6 +113,18 @@ const cases = buildReadinessCases({
     organizationState,
     liveAlertCount: 1,
     renderedAlertCount: 1,
+})
+const orgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+})
+const blockedOrgContext = buildOrgOperatingContext({
+    backendConfigured: false,
+    scope: { tenantId: 'default' },
+    watchlists: [],
+    organizationState: { organizations: [], members: [], pendingInvites: [], webhooks: [] },
 })
 
 const _contract: WorkbenchCase[] = cases
@@ -160,10 +203,29 @@ const blockedFallbackAlert = {
     missingDependency: 'This is a fallback alert. It cannot PATCH /api/cases/:id until live DWM alerts return a backed case ID.',
 } satisfies WorkbenchCase
 
+const visibleCaseDetail = {
+    generatedAt: '2026-06-28T10:13:00.000Z',
+    access: {
+        memberId: 'mem_owner',
+        role: 'owner',
+        readOnly: false,
+        visibilityDecision: {
+            allowed: true,
+            reason: null,
+            alertVisibilityPolicy: 'admins',
+            allowedRoles: ['owner', 'admin'],
+        },
+    },
+}
+
 void _contract
 void _requiresWorkflowPath
 void _requiresBackedActions
+void (orgContext satisfies WorkbenchOrgContext)
+void (orgContext.createWatchlistAction satisfies WorkbenchAction | undefined)
+void (blockedOrgContext.readiness.blockedReasons satisfies string[])
 void (selectedLiveAlert.actions satisfies WorkbenchAction[])
 void (selectedLiveAlert.deliveryEvidence satisfies WorkbenchDeliveryEvidence[])
 void (liveCaseMutationPayloads satisfies WorkbenchCaseMutationPayload[])
 void (blockedFallbackAlert.missingDependency satisfies string)
+void (visibleCaseDetail.access.visibilityDecision.allowedRoles satisfies string[])

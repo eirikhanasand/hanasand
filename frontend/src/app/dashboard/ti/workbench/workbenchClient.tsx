@@ -68,6 +68,34 @@ export type WorkbenchDeliveryEvidence = {
     error?: string
 }
 
+export type WorkbenchOrgContext = {
+    scope: { tenantId: string, organizationId?: string }
+    organization?: {
+        id: string
+        tenantId: string
+        name: string
+        slug: string
+        status: string
+        alertVisibilityPolicy?: 'members' | 'admins' | 'owners'
+        updatedAt: string
+    }
+    members: Array<{ id: string, organizationId: string, email: string, role: string, status: string, userId?: string, updatedAt: string }>
+    pendingInvites: Array<{ id: string, organizationId: string, email: string, role: string, status: string, expiresAt: string, updatedAt: string }>
+    watchlists: Array<{ id: string, tenantId: string, organizationId?: string, name: string, terms: Array<{ value: string, kind?: string }>, webhookDestinationId?: string, status: string, updatedAt: string }>
+    webhookDestinations: Array<{ id: string, organizationId: string, name: string, kind: string, status: string, lastTestStatus?: string, updatedAt: string }>
+    readiness: {
+        activeMemberCount: number
+        pendingInviteCount: number
+        activeWatchlistCount: number
+        termCount: number
+        activeWebhookCount: number
+        alertVisibilityPolicy: 'members' | 'admins' | 'owners'
+        blockedReasons: string[]
+    }
+    links: Array<{ href: string, label: string }>
+    createWatchlistAction?: WorkbenchAction
+}
+
 export type WorkbenchCase = {
     id: string
     kind: 'dwm_alert' | 'ti_domain' | 'source_capture' | 'org_readiness' | 'watchlist_readiness' | 'webhook_readiness' | 'source_readiness' | 'alert_readiness'
@@ -101,7 +129,7 @@ export type WorkbenchCase = {
 
 type QueueFilter = 'all' | 'critical' | 'high' | 'persistent' | 'evidence'
 
-export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }: { initialCases: WorkbenchCase[], chrome?: 'full' | 'compact' }) {
+export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', orgContext }: { initialCases: WorkbenchCase[], chrome?: 'full' | 'compact', orgContext?: WorkbenchOrgContext }) {
     const router = useRouter()
     const compact = chrome === 'compact'
     const [selectedId, setSelectedId] = useState(initialCases[0]?.id ?? '')
@@ -260,6 +288,33 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
         })
     }
 
+    async function createSharedWatchlistTerm(item: WorkbenchCase) {
+        const term = suggestedWatchTerm(item)
+        if (!term) {
+            setMessage({ ok: false, text: 'No selected case term is available to create a shared watchlist entry.' })
+            return
+        }
+        if (!orgContext?.createWatchlistAction) {
+            setMessage({ ok: false, text: orgContext?.readiness.blockedReasons[0] || 'POST /api/dwm/watchlists is not available because the org/watchlist backend is not configured.' })
+            return
+        }
+        await runPersistentAction(`watchlist:${item.id}`, async () => {
+            const response = await fetch(orgContext.createWatchlistAction?.href || '/api/dwm/watchlists', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    ...(orgContext.createWatchlistAction?.body || {}),
+                    name: orgContext.organization ? `${orgContext.organization.name} shared exposure watchlist` : 'Shared exposure watchlist',
+                    terms: [{ value: term, kind: inferTermKind(term) }],
+                    status: 'active',
+                }),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            return payload.watchlist?.id ? `Shared watchlist ${payload.watchlist.id} now covers ${term}.` : `Shared watchlist term ${term} saved.`
+        })
+    }
+
     async function runPersistentAction(key: string, action: () => Promise<string>) {
         if (busyAction) return
         setBusyAction(key)
@@ -368,25 +423,26 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
 
                     <aside className='border-t border-[#e8edf5] bg-[#fbfcfe] xl:border-l xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
+                            <OrgOperatingPanel
+                                orgContext={orgContext}
+                                selected={selected}
+                                caseDetail={selectedCaseDetail}
+                                busyAction={busyAction}
+                                onCreateSharedWatchlistTerm={() => selected && createSharedWatchlistTerm(selected)}
+                            />
+
                             <section className='rounded-lg border border-[#e0e5ed] bg-white'>
                                 <div className='border-b border-[#eef1f5] px-4 py-3'>
-                                    <h3 className='text-sm font-semibold text-[#171a21]'>Queue posture</h3>
-                                    <p className='mt-0.5 text-xs text-[#667085]'>Operational load by workflow queue.</p>
+                                    <h3 className='text-sm font-semibold text-[#171a21]'>Queue and links</h3>
+                                    <p className='mt-0.5 text-xs text-[#667085]'>Current workload plus backed routes for the selected item.</p>
                                 </div>
-                                <div className='grid gap-2 p-3'>
+                                <div className='grid gap-2 border-b border-[#eef1f5] p-3'>
                                     {queues.map(queue => (
                                         <div key={queue.name} className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
                                             <span className='font-semibold text-[#171a21]'>{queue.name}</span>
                                             <span className='text-[#667085]'>{queue.count}</span>
                                         </div>
                                     ))}
-                                </div>
-                            </section>
-
-                            <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-                                <div className='border-b border-[#eef1f5] px-4 py-3'>
-                                    <h3 className='text-sm font-semibold text-[#171a21]'>Analyst controls</h3>
-                                    <p className='mt-0.5 text-xs text-[#667085]'>Fast links to the systems behind this case.</p>
                                 </div>
                                 <div className='grid gap-2 p-3'>
                                     {selected?.relatedLinks.map(link => (
@@ -401,6 +457,102 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
                     </aside>
                 </div>
             </div>
+        </div>
+    )
+}
+
+function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, onCreateSharedWatchlistTerm }: {
+    orgContext?: WorkbenchOrgContext
+    selected?: WorkbenchCase
+    caseDetail?: CaseDetailState
+    busyAction: string | null
+    onCreateSharedWatchlistTerm: () => void | Promise<void>
+}) {
+    const term = selected ? suggestedWatchTerm(selected) : ''
+    const termCoverage = term ? watchlistCoverage(orgContext, term) : undefined
+    const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
+    const visibility = access?.visibilityDecision
+    const blockedReason = !orgContext
+        ? 'Org operating context is not loaded into the root console.'
+        : orgContext.readiness.blockedReasons[0]
+    const canCreateTerm = Boolean(orgContext?.createWatchlistAction && term && !termCoverage?.covered)
+
+    return (
+        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
+            <div className='border-b border-[#eef1f5] px-4 py-3'>
+                <h3 className='text-sm font-semibold text-[#171a21]'>Org and shared watchlist</h3>
+                <p className='mt-0.5 text-xs text-[#667085]'>Team scope, visibility policy, shared terms, and selected-item watchlist action.</p>
+            </div>
+            <div className='grid gap-3 p-3'>
+                <div className='grid gap-2 text-xs'>
+                    <OperatorRow label='Org' value={orgContext?.organization ? `${orgContext.organization.name} · ${orgContext.organization.id}` : 'missing'} tone={orgContext?.organization ? 'ready' : 'blocked'} />
+                    <OperatorRow label='Members' value={`${orgContext?.readiness.activeMemberCount ?? 0} active · ${orgContext?.readiness.pendingInviteCount ?? 0} pending`} tone={orgContext?.readiness.activeMemberCount ? 'ready' : 'blocked'} />
+                    <OperatorRow label='Watchlists' value={`${orgContext?.readiness.activeWatchlistCount ?? 0} active · ${orgContext?.readiness.termCount ?? 0} terms`} tone={orgContext?.readiness.activeWatchlistCount ? 'ready' : 'needs_action'} />
+                    <OperatorRow label='Visibility' value={visibility ? `${visibility.alertVisibilityPolicy} · ${visibility.allowed ? 'visible' : visibility.reason || 'blocked'}` : `${orgContext?.readiness.alertVisibilityPolicy || 'members'} policy`} tone={visibility?.allowed === false ? 'blocked' : 'ready'} />
+                    <OperatorRow label='Case role' value={access?.role ? `${access.role}${access.readOnly ? ' · read only' : ' · can mutate'}` : 'no case access response'} tone={access ? access.readOnly ? 'needs_action' : 'ready' : 'needs_action'} />
+                </div>
+
+                {blockedReason && (
+                    <InspectionNotice tone='blocked' title='Rollout blocker' body={blockedReason} />
+                )}
+
+                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                        <div>
+                            <p className='text-xs font-semibold uppercase text-[#667085]'>Selected term</p>
+                            <p className='mt-1 break-all text-sm font-semibold text-[#171a21]'>{term || 'none'}</p>
+                        </div>
+                        <span className={workflowStatusClass(termCoverage?.covered ? 'ready' : canCreateTerm ? 'needs_action' : 'blocked')}>
+                            {termCoverage?.covered ? 'covered' : canCreateTerm ? 'ready' : 'blocked'}
+                        </span>
+                    </div>
+                    <p className='mt-2 text-xs leading-5 text-[#596170]'>
+                        {termCoverage?.covered
+                            ? `${term} is already in ${termCoverage.watchlistName}.`
+                            : canCreateTerm
+                                ? 'POST /api/dwm/watchlists will create an active shared watchlist scoped to this organization or tenant.'
+                                : term ? 'Cannot create the shared term until the backed org/watchlist API context is available.' : 'Select a case with a matched term or evidence artifact before creating a shared watchlist entry.'}
+                    </p>
+                    <button
+                        type='button'
+                        disabled={!canCreateTerm || Boolean(busyAction)}
+                        title={!canCreateTerm ? blockedReason || 'Term is already covered or unavailable.' : undefined}
+                        onClick={onCreateSharedWatchlistTerm}
+                        className='mt-3 inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                    >
+                        {busyAction === `watchlist:${selected?.id}` ? 'Saving...' : 'Create shared term'}
+                    </button>
+                </div>
+
+                {visibility?.allowed === false && (
+                    <InspectionNotice
+                        tone='blocked'
+                        title='Case visibility blocked'
+                        body={`Policy ${visibility.alertVisibilityPolicy} allows ${visibility.allowedRoles.join(', ')}. Current member is blocked because ${visibility.reason || 'access is denied'}.`}
+                    />
+                )}
+
+                <div className='grid gap-2'>
+                    {orgContext?.links.map(link => (
+                        <Link key={link.href} href={link.href} className='inline-flex h-8 items-center justify-between gap-2 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                            {link.label}
+                            <ExternalLink className='h-3.5 w-3.5' />
+                        </Link>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+function OperatorRow({ label: rowLabel, value, tone }: { label: string, value: string, tone: WorkbenchWorkflowStep['status'] }) {
+    return (
+        <div className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2'>
+            <span className='font-semibold text-[#171a21]'>{rowLabel}</span>
+            <span className='flex min-w-0 items-center justify-end gap-2 text-right text-[#667085]'>
+                <span className='truncate'>{value}</span>
+                <span className={workflowStatusClass(tone)}>{label(tone)}</span>
+            </span>
         </div>
     )
 }
@@ -452,7 +604,8 @@ function BackedInspection({ item, caseDetail, compact }: { item: WorkbenchCase, 
                                 <div className='flex flex-wrap items-center gap-2'>
                                     <span className='text-sm font-semibold text-[#171a21]'>{caseDetail.detail.case?.id || 'case'}</span>
                                     <span className={workflowStatusClass(caseDetail.detail.case?.status === 'closed' ? 'blocked' : 'ready')}>{label(caseDetail.detail.case?.status || 'unknown')}</span>
-                                    {caseDetail.detail.access?.mode && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{caseDetail.detail.access.mode}</span>}
+                                    {caseDetail.detail.access?.role && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{caseDetail.detail.access.role}</span>}
+                                    {caseDetail.detail.access?.visibilityDecision && <span className={workflowStatusClass(caseDetail.detail.access.visibilityDecision.allowed ? 'ready' : 'blocked')}>{caseDetail.detail.access.visibilityDecision.alertVisibilityPolicy}</span>}
                                 </div>
                                 <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{caseDetail.detail.case?.summary || 'No case summary returned.'}</p>
                                 <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
@@ -460,6 +613,7 @@ function BackedInspection({ item, caseDetail, compact }: { item: WorkbenchCase, 
                                     <p><span className='font-semibold text-[#475467]'>Alert:</span> {caseDetail.detail.case?.alertId || caseDetail.detail.alert?.id || 'none'}</p>
                                     <p><span className='font-semibold text-[#475467]'>Delivery:</span> {caseDetail.detail.deliveryContext?.deliveryCount ?? 0} attempt(s)</p>
                                     <p><span className='font-semibold text-[#475467]'>Updated:</span> {relativeTime(caseDetail.detail.case?.updatedAt || caseDetail.detail.generatedAt)}</p>
+                                    <p><span className='font-semibold text-[#475467]'>Mutate:</span> {caseDetail.detail.access?.readOnly ? 'blocked by role' : 'allowed'}</p>
                                 </div>
                             </div>
                             <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
@@ -987,7 +1141,15 @@ type CaseDetailPayload = {
     schemaVersion?: string
     generatedAt: string
     error?: { message?: string }
-    access?: { mode?: string, role?: string, canMutate?: boolean }
+    organization?: { id?: string, name?: string, alertVisibilityPolicy?: 'members' | 'admins' | 'owners' }
+    access?: {
+        mode?: string
+        memberId?: string
+        role?: string
+        readOnly?: boolean
+        canMutate?: boolean
+        visibilityDecision?: CaseVisibilityDecision
+    }
     case?: {
         id: string
         alertId?: string
@@ -1016,8 +1178,28 @@ type CaseDetailPayload = {
     deliveries?: CaseDelivery[]
     evidence?: CaseEvidence[]
     timeline?: CaseTimelineItem[]
+    watchlists?: CaseWatchlist[]
     nextActions?: string[]
     nextAllowedActions?: CaseAllowedAction[]
+}
+
+type CaseVisibilityDecision = {
+    allowed: boolean
+    reason: string | null
+    alertVisibilityPolicy: 'members' | 'admins' | 'owners'
+    allowedRoles: string[]
+}
+
+type CaseWatchlist = {
+    id: string
+    organizationId?: string
+    tenantId: string
+    name: string
+    status: string
+    webhookDestinationId?: string
+    hasWebhookUrl?: boolean
+    matchedTerms?: Array<{ value?: string, kind?: string }>
+    termCount?: number
 }
 
 type CaseAllowedAction = {
@@ -1074,6 +1256,7 @@ async function readJson(response: Response) {
             delivery?: { id?: string, status?: string }
             deliveries?: Array<{ id?: string, status?: string }>
             case?: { id?: string, status?: string }
+            watchlist?: { id?: string, status?: string }
         }
     } catch {
         return {}
@@ -1101,6 +1284,28 @@ function caseMutationResultMessage(action: WorkbenchCaseMutationAction, payload:
     if (action === 'reopen') return `${caseId} reopened.`
     if (action === 'false_positive') return `${caseId} marked false positive.`
     return `${caseId}${status}.`
+}
+
+function suggestedWatchTerm(item: WorkbenchCase) {
+    return [item.matchedTerm, item.company, item.evidence[0]?.metadata?.find(meta => meta.label.toLowerCase().includes('domain'))?.value]
+        .map(value => String(value || '').trim())
+        .find(value => value && value.toLowerCase() !== 'none') || ''
+}
+
+function inferTermKind(value: string) {
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value)) return 'domain'
+    if (value.includes('@')) return 'email'
+    return 'company'
+}
+
+function watchlistCoverage(orgContext: WorkbenchOrgContext | undefined, term: string) {
+    const normalized = term.trim().toLowerCase()
+    if (!normalized) return undefined
+    for (const watchlist of orgContext?.watchlists || []) {
+        const match = (watchlist.terms || []).find(candidate => String(candidate.value || '').trim().toLowerCase() === normalized)
+        if (match) return { covered: true, watchlistId: watchlist.id, watchlistName: watchlist.name }
+    }
+    return { covered: false }
 }
 
 function mapDwmDecision(status: string, currentStatus: string) {
