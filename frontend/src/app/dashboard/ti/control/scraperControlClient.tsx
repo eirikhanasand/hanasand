@@ -292,7 +292,7 @@ export default function TiScraperControlClient() {
                                                 <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'>{selected.kind.replaceAll('_', ' ')}</span>
                                                 <span className='rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#475467]'>{selectedDecision?.status || selected.status}</span>
                                             </div>
-                                            <h2 className='mt-3 break-words text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
+                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
                                             <p className='mt-2 text-sm leading-6 text-[#596170]'>{selected.subtitle}</p>
                                         </div>
                                         <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 text-xs text-[#667085]'>
@@ -823,7 +823,7 @@ function Info({ label, value }: { label: string; value: string }) {
     return (
         <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
             <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 break-words text-sm font-semibold text-[#171a21]'>{value || 'unknown'}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21]'>{value || 'unknown'}</p>
         </div>
     )
 }
@@ -861,7 +861,7 @@ function ActionButton({ children, icon, busy, compact, onClick }: { children: Re
             className={`inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white text-center text-sm font-semibold leading-tight text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#2a3d5c] ${compact ? 'min-h-8 px-2 py-1.5 text-xs' : 'min-h-10 px-3 py-2'}`}
         >
             <span className='shrink-0'>{busy ? <RefreshCcw className='h-4 w-4 animate-spin' /> : icon}</span>
-            <span className='min-w-0 break-words'>{children}</span>
+            <span className='min-w-0 wrap-break-word'>{children}</span>
         </button>
     )
 }
