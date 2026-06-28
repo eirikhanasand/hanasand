@@ -1,4 +1,4 @@
-export type OrganizationRole = 'owner' | 'admin' | 'member'
+export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer'
 export type WatchlistKind = 'company' | 'domain' | 'vendor'
 
 export type OrganizationInput = {
@@ -112,8 +112,8 @@ export type OrganizationDwmAlertReference = {
 }
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const organizationRoles = new Set<OrganizationRole>(['owner', 'admin', 'member'])
-const inviteRoles = new Set<OrganizationRole>(['admin', 'member'])
+const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin', 'member'])
+const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor'])
 
 export function normalizeOrganizationInput(body: OrganizationInput | undefined) {
@@ -185,7 +185,7 @@ export function roleCanManageOrganization(role: OrganizationRole | undefined) {
 }
 
 export function roleCanWriteWatchlist(role: OrganizationRole | undefined) {
-    return organizationRoles.has(role as OrganizationRole)
+    return watchlistWriteRoles.has(role as OrganizationRole)
 }
 
 export function toOrganization(row: OrganizationRow) {
@@ -300,7 +300,7 @@ export function buildOrganizationDwmAlertReference(
 function normalizeInviteRole(value: unknown): OrganizationRole {
     const role = cleanText(value).toLowerCase() || 'member'
     if (!inviteRoles.has(role as OrganizationRole)) {
-        throw new Error('Invite role must be admin or member.')
+        throw new Error('Invite role must be admin, member, or viewer.')
     }
 
     return role as OrganizationRole

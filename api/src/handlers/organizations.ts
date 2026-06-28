@@ -182,7 +182,7 @@ export async function getOrganizationMembers(req: FastifyRequest<{ Params: Organ
         WHERE om.organization_id = $1
           AND om.status = 'active'
         ORDER BY
-            CASE om.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
+            CASE om.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,
             om.joined_at ASC,
             om.user_id ASC
     `, [req.params.id])
@@ -266,6 +266,8 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
             ON CONFLICT (organization_id, user_id)
             DO UPDATE SET role = CASE
                                 WHEN organization_members.role = 'owner' THEN 'owner'
+                                WHEN organization_members.role = 'admin' AND EXCLUDED.role IN ('member', 'viewer') THEN 'admin'
+                                WHEN organization_members.role = 'member' AND EXCLUDED.role = 'viewer' THEN 'member'
                                 ELSE EXCLUDED.role
                               END,
                           status = 'active',
@@ -430,7 +432,7 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Organization membership is required to update watchlists.' })
+        return res.status(403).send({ error: 'Only organization owners, admins, and members can update watchlists.' })
     }
 
     let input
@@ -487,7 +489,7 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Organization membership is required to update watchlists.' })
+        return res.status(403).send({ error: 'Only organization owners, admins, and members can update watchlists.' })
     }
 
     const result = await run(`

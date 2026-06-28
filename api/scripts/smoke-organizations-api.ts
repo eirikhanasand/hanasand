@@ -6,12 +6,18 @@ type Row = Record<string, any>
 
 const users = new Map<string, Row>([
     ['org_smoke_owner', { id: 'org_smoke_owner', name: 'Org Smoke Owner', avatar: '' }],
+    ['org_smoke_admin', { id: 'org_smoke_admin', name: 'Org Smoke Admin', avatar: '' }],
     ['org_smoke_member', { id: 'org_smoke_member', name: 'Org Smoke Member', avatar: '' }],
+    ['org_smoke_viewer', { id: 'org_smoke_viewer', name: 'Org Smoke Viewer', avatar: '' }],
+    ['org_smoke_expired', { id: 'org_smoke_expired', name: 'Org Smoke Expired', avatar: '' }],
     ['org_smoke_outsider', { id: 'org_smoke_outsider', name: 'Org Smoke Outsider', avatar: '' }],
 ])
 const tokens = new Map([
     ['owner-token', 'org_smoke_owner'],
+    ['admin-token', 'org_smoke_admin'],
     ['member-token', 'org_smoke_member'],
+    ['viewer-token', 'org_smoke_viewer'],
+    ['expired-token', 'org_smoke_expired'],
     ['outsider-token', 'org_smoke_outsider'],
 ])
 const organizations = new Map<string, Row>()
@@ -84,6 +90,13 @@ assert.equal(accepted.invite.expiresAt, invite.expiresAt)
 assert.equal(accepted.membership.userId, 'org_smoke_member')
 assert.equal(accepted.membership.role, 'member')
 
+const reusedInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/invites/${invite.id}/accept`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(reusedInviteResponse.statusCode, 404, reusedInviteResponse.body)
+
 const pendingInvitesResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/invites`,
@@ -92,16 +105,99 @@ const pendingInvitesResponse = await app.inject({
 assert.equal(pendingInvitesResponse.statusCode, 200, pendingInvitesResponse.body)
 assert.deepEqual(parseBody(pendingInvitesResponse.body).invites, [])
 
+const memberInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+    payload: { email: 'blocked-by-member@example.test', role: 'member' },
+})
+assert.equal(memberInviteResponse.statusCode, 403, memberInviteResponse.body)
+
+const adminInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { email: 'admin@example.test', role: 'admin' },
+})
+assert.equal(adminInviteResponse.statusCode, 201, adminInviteResponse.body)
+const adminInvite = parseBody(adminInviteResponse.body).invites[0]
+
+const adminAcceptResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/invites/${adminInvite.id}/accept`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(adminAcceptResponse.statusCode, 200, adminAcceptResponse.body)
+assert.equal(parseBody(adminAcceptResponse.body).membership.role, 'admin')
+
+const viewerInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { email: 'viewer@example.test', role: 'viewer' },
+})
+assert.equal(viewerInviteResponse.statusCode, 201, viewerInviteResponse.body)
+const viewerInvite = parseBody(viewerInviteResponse.body).invites[0]
+assert.equal(viewerInvite.role, 'viewer')
+
+for (const [userId, token] of [['org_smoke_owner', 'owner-token'], ['org_smoke_admin', 'admin-token']] as const) {
+    const pendingForManager = await app.inject({
+        method: 'GET',
+        url: `/api/organizations/${organization.id}/invites`,
+        headers: authHeaders(userId, token),
+    })
+    assert.equal(pendingForManager.statusCode, 200, pendingForManager.body)
+    assert.deepEqual(parseBody(pendingForManager.body).invites.map((pendingInvite: Row) => pendingInvite.id), [viewerInvite.id])
+}
+
+const viewerAcceptResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/invites/${viewerInvite.id}/accept`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(viewerAcceptResponse.statusCode, 200, viewerAcceptResponse.body)
+assert.equal(parseBody(viewerAcceptResponse.body).membership.role, 'viewer')
+
+const viewerInviteBlockedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+    payload: { email: 'blocked-by-viewer@example.test', role: 'member' },
+})
+assert.equal(viewerInviteBlockedResponse.statusCode, 403, viewerInviteBlockedResponse.body)
+
+const expiredInvite = nowRow({
+    id: 'expired-invite',
+    organization_id: organization.id,
+    email: 'expired@example.test',
+    role: 'member',
+    invited_by: 'org_smoke_owner',
+    status: 'pending',
+    accepted_at: null,
+    accepted_by: null,
+    expires_at: new Date(Date.now() - 60_000).toISOString(),
+})
+invites.set(expiredInvite.id, expiredInvite)
+const expiredAcceptResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/invites/${expiredInvite.id}/accept`,
+    headers: authHeaders('org_smoke_expired', 'expired-token'),
+})
+assert.equal(expiredAcceptResponse.statusCode, 404, expiredAcceptResponse.body)
+
 const membersResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/members`,
     headers: authHeaders('org_smoke_owner', 'owner-token'),
 })
 assert.equal(membersResponse.statusCode, 200, membersResponse.body)
+const memberships = parseBody(membersResponse.body).members
 assert.deepEqual(
-    parseBody(membersResponse.body).members.map((member: Row) => member.userId).sort(),
-    ['org_smoke_member', 'org_smoke_owner'].sort()
+    memberships.map((member: Row) => member.userId).sort(),
+    ['org_smoke_admin', 'org_smoke_member', 'org_smoke_owner', 'org_smoke_viewer'].sort()
 )
+assert.equal(memberships.find((member: Row) => member.userId === 'org_smoke_admin').role, 'admin')
+assert.equal(memberships.find((member: Row) => member.userId === 'org_smoke_viewer').role, 'viewer')
 
 const ownerWatchlistResponse = await app.inject({
     method: 'POST',
@@ -110,6 +206,7 @@ const ownerWatchlistResponse = await app.inject({
     payload: { kind: 'domain', value: 'https://www.acme-shared.example/login', notes: 'Customer domain' },
 })
 assert.equal(ownerWatchlistResponse.statusCode, 201, ownerWatchlistResponse.body)
+const ownerWatchlistItem = parseBody(ownerWatchlistResponse.body).watchlistItem
 
 const memberWatchlistResponse = await app.inject({
     method: 'GET',
@@ -122,6 +219,29 @@ assert.equal(memberWatchlist.length, 1)
 assert.ok(memberWatchlist[0].id)
 assert.equal(memberWatchlist[0].organizationId, organization.id)
 assert.equal(memberWatchlist[0].value, 'acme-shared.example')
+
+const viewerWatchlistResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(viewerWatchlistResponse.statusCode, 200, viewerWatchlistResponse.body)
+assert.equal(parseBody(viewerWatchlistResponse.body).watchlistItems.length, 1)
+
+const viewerAddsWatchlistResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+    payload: { kind: 'company', value: 'Viewer Blocked Holdings' },
+})
+assert.equal(viewerAddsWatchlistResponse.statusCode, 403, viewerAddsWatchlistResponse.body)
+
+const viewerArchiveWatchlistResponse = await app.inject({
+    method: 'DELETE',
+    url: `/api/organizations/${organization.id}/watchlists/${ownerWatchlistItem.id}`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(viewerArchiveWatchlistResponse.statusCode, 403, viewerArchiveWatchlistResponse.body)
 
 const memberAddsVendorResponse = await app.inject({
     method: 'POST',
@@ -170,6 +290,14 @@ assert.match(domainReference.alert.casePath, /watchlistItemId=/)
 assert.match(domainReference.alert.dedupeKey, /org:/)
 assert.deepEqual(domainReference.watchlist.terms, ['acme-shared.example'])
 
+const viewerReadinessResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-readiness`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(viewerReadinessResponse.statusCode, 200, viewerReadinessResponse.body)
+assert.equal(parseBody(viewerReadinessResponse.body).alertReadiness.watchlistItemCount, 2)
+
 const outsiderResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/watchlists`,
@@ -185,9 +313,11 @@ assert.equal(outsiderReadinessResponse.statusCode, 404, outsiderReadinessRespons
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upserted'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
 
 await app.close()
-console.log('Organization API smoke passed for invite acceptance, membership, shared watchlists, and outsider isolation.')
+console.log('Organization API smoke passed for role RBAC, invite lifecycle, shared watchlists, alert readiness, and outsider isolation.')
 
 function authHeaders(userId: string, token: string) {
     return {
@@ -253,7 +383,7 @@ async function fakeRun(query: string, params: any[] = []) {
         const member = nowRow({
             organization_id: invite.organization_id,
             user_id: userId,
-            role: invite.role,
+            role: nextRole(members.get(memberKey(invite.organization_id, userId))?.role, invite.role),
             status: 'active',
             invited_by: invite.invited_by,
             joined_at: acceptedAt,
@@ -352,6 +482,11 @@ function rows(resultRows: Row[]) {
 
 function memberKey(organizationId: string, userId: string) {
     return `${organizationId}:${userId}`
+}
+
+function nextRole(existingRole: string | undefined, invitedRole: string) {
+    const rank: Record<string, number> = { owner: 4, admin: 3, member: 2, viewer: 1 }
+    return existingRole && rank[existingRole] > rank[invitedRole] ? existingRole : invitedRole
 }
 
 function iso() {

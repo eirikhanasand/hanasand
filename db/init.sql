@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS organizations (
 CREATE TABLE IF NOT EXISTS organization_members (
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member', 'viewer')),
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'removed')),
     invited_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS organization_invites (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'viewer')),
     invited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
