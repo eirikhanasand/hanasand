@@ -699,28 +699,47 @@ function normalizeFilter(value: unknown): string | undefined {
 type CaseAccessResult = {
   member?: OrganizationMember;
   readOnly: boolean;
+  visibilityDecision: CaseVisibilityDecision;
   error?: Response;
 };
 
-function authorizeCaseAccess(input: { options: ApiServerOptions; scope: { organizationId?: string }; request?: Request; url?: URL; body?: any; mode: CaseAccessMode }): CaseAccessResult {
-  const members = activeOrganizationMembers(input.options, input.scope.organizationId);
-  if (!input.scope.organizationId || !members.length) return { readOnly: false };
+type CaseVisibilityPolicy = "members" | "admins" | "owners";
+type CaseVisibilityDenyReason = "not_member" | "member_removed" | "member_deactivated" | "role_not_allowed";
+type CaseVisibilityDecision = {
+  allowed: boolean;
+  reason: CaseVisibilityDenyReason | null;
+  alertVisibilityPolicy: CaseVisibilityPolicy;
+  allowedRoles: string[];
+};
+
+function authorizeCaseAccess(input: { options: ApiServerOptions; scope: { organizationId?: string; organization?: unknown }; request?: Request; url?: URL; body?: any; mode: CaseAccessMode }): CaseAccessResult {
+  const visibilityPolicy = organizationAlertVisibilityPolicy(input.scope.organization);
+  const allowedRoles = allowedCaseVisibilityRoles(visibilityPolicy);
+  const openDecision: CaseVisibilityDecision = { allowed: true, reason: null, alertVisibilityPolicy: visibilityPolicy, allowedRoles };
+  const members = organizationMembers(input.options, input.scope.organizationId);
+  if (!input.scope.organizationId || !members.length) return { readOnly: false, visibilityDecision: openDecision };
 
   const identity = requestIdentity(input.request, input.body, input.url);
   if (!identity.length) {
-    return { readOnly: true, error: json({ error: { code: "organization_member_required", message: "Case access requires an active organization member identity." } }, 403) };
+    const visibilityDecision: CaseVisibilityDecision = { allowed: false, reason: "not_member", alertVisibilityPolicy: visibilityPolicy, allowedRoles };
+    return { readOnly: true, visibilityDecision, error: caseVisibilityError(visibilityDecision, "Case access requires an active organization member identity.") };
   }
 
   const member = members.find((row) => identityMatchesMember(identity, row));
   if (!member) {
-    return { readOnly: true, error: json({ error: { code: "organization_member_required", message: "Case access is limited to active organization members." } }, 403) };
+    const visibilityDecision: CaseVisibilityDecision = { allowed: false, reason: "not_member", alertVisibilityPolicy: visibilityPolicy, allowedRoles };
+    return { readOnly: true, visibilityDecision, error: caseVisibilityError(visibilityDecision, "Case access is limited to active organization members.") };
   }
 
+  const visibilityDecision = caseVisibilityDecision(member, visibilityPolicy);
+  if (!visibilityDecision.allowed) {
+    return { member, readOnly: true, visibilityDecision, error: caseVisibilityError(visibilityDecision, "Case evidence is not visible for this organization membership.") };
+  }
   const readOnly = member.role === "viewer";
   if (input.mode === "mutate" && readOnly) {
-    return { member, readOnly, error: json({ error: { code: "case_read_only_member", message: "Viewer members can read cases but cannot assign, close, suppress, or escalate them." } }, 403) };
+    return { member, readOnly, visibilityDecision, error: json({ error: { code: "case_read_only_member", message: "Viewer members can read cases but cannot assign, close, suppress, or escalate them." }, visibilityDecision }, 403) };
   }
-  return { member, readOnly };
+  return { member, readOnly, visibilityDecision };
 }
 
 function validateAssignedOwner(options: ApiServerOptions, organizationId: string | undefined, assignedOwner: string | undefined): Response | undefined {
@@ -739,8 +758,14 @@ function validateAssignedOwner(options: ApiServerOptions, organizationId: string
 
 function activeOrganizationMembers(options: ApiServerOptions, organizationId: string | undefined): OrganizationMember[] {
   if (!organizationId) return [];
-  return ((options.store as any).listOrganizationMembers?.() ?? [])
+  return organizationMembers(options, organizationId)
     .filter((row: OrganizationMember) => row.organizationId === organizationId && row.status === "active");
+}
+
+function organizationMembers(options: ApiServerOptions, organizationId: string | undefined): OrganizationMember[] {
+  if (!organizationId) return [];
+  return ((options.store as any).listOrganizationMembers?.() ?? [])
+    .filter((row: OrganizationMember) => row.organizationId === organizationId);
 }
 
 function requestIdentity(request: Request | undefined, body?: any, url?: URL): string[] {
@@ -772,8 +797,51 @@ function caseAccessSummary(access?: CaseAccessResult) {
   return access?.member ? {
     memberId: access.member.id,
     role: access.member.role,
-    readOnly: access.readOnly
+    readOnly: access.readOnly,
+    visibilityDecision: access.visibilityDecision
   } : undefined;
+}
+
+function caseVisibilityDecision(member: OrganizationMember, alertVisibilityPolicy: CaseVisibilityPolicy): CaseVisibilityDecision {
+  const allowedRoles = allowedCaseVisibilityRoles(alertVisibilityPolicy);
+  if ((member as any).userActive === false || (member as any).active === false || (member as any).deactivatedAt || (member as any).deactivated_at) {
+    return { allowed: false, reason: "member_deactivated", alertVisibilityPolicy, allowedRoles };
+  }
+  if (member.status !== "active") {
+    return { allowed: false, reason: member.status === "removed" ? "member_removed" : "member_deactivated", alertVisibilityPolicy, allowedRoles };
+  }
+  const role = normalizeVisibilityRole(member.role);
+  if (!allowedRoles.includes(role)) {
+    return { allowed: false, reason: "role_not_allowed", alertVisibilityPolicy, allowedRoles };
+  }
+  return { allowed: true, reason: null, alertVisibilityPolicy, allowedRoles };
+}
+
+function caseVisibilityError(decision: CaseVisibilityDecision, message: string): Response {
+  return json({
+    error: {
+      code: "organization_visibility_denied",
+      message,
+      reason: decision.reason
+    },
+    visibilityDecision: decision
+  }, 403);
+}
+
+function organizationAlertVisibilityPolicy(organization: unknown): CaseVisibilityPolicy {
+  const value = String((organization as any)?.alertVisibilityPolicy ?? (organization as any)?.alert_visibility_policy ?? "members");
+  return value === "admins" || value === "owners" ? value : "members";
+}
+
+function allowedCaseVisibilityRoles(policy: CaseVisibilityPolicy): string[] {
+  if (policy === "owners") return ["owner"];
+  if (policy === "admins") return ["owner", "admin"];
+  return ["owner", "admin", "analyst", "member", "viewer"];
+}
+
+function normalizeVisibilityRole(role: unknown): string {
+  const value = String(role ?? "").trim().toLowerCase();
+  return value === "member" ? "analyst" : value;
 }
 
 function nextActionsForCase(caseRecord: AnalystCase, alert: any, deliveries: any[]) {

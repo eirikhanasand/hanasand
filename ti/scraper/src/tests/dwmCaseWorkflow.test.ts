@@ -60,6 +60,17 @@ describe("dwm case workflow", () => {
       }), options);
       const otherOrgPayload = await otherOrgResponse.json() as any;
       const otherOrganizationId = otherOrgPayload.organization.id;
+      const restrictedOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        body: JSON.stringify({ name: "Restricted Visibility Team", ownerEmail: "owner@restricted.example" })
+      }), options);
+      const restrictedOrgPayload = await restrictedOrgResponse.json() as any;
+      const restrictedOrganizationId = restrictedOrgPayload.organization.id;
+      (store as any).saveOrganization({
+        ...restrictedOrgPayload.organization,
+        alertVisibilityPolicy: "admins",
+        alert_visibility_policy: "admins"
+      });
       (store as any).saveCase({
         id: "case_globex_leak_guard",
         tenantId: otherOrganizationId,
@@ -76,16 +87,47 @@ describe("dwm case workflow", () => {
         workflowEvents: [],
         lastDecision: "Seeded for org isolation test."
       });
+      (store as any).saveCase({
+        id: "case_restricted_admin_only",
+        tenantId: restrictedOrganizationId,
+        organizationId: restrictedOrganizationId,
+        sourceType: "manual",
+        sourceId: "manual_restricted",
+        title: "Restricted admin only case",
+        summary: "Only owner and admin members should see this filtered/exportable case.",
+        priority: "high",
+        status: "open",
+        assignedOwner: "admin@restricted.example",
+        createdAt: "2026-06-28T13:03:00.000Z",
+        updatedAt: "2026-06-28T13:03:00.000Z",
+        workflowEvents: [],
+        lastDecision: "Seeded for visibility policy test."
+      });
       const memberCreatedAt = "2026-06-28T13:01:00.000Z";
       for (const member of [
         { id: "member_case_analyst_1", email: "analyst-1@acme.com", userId: "analyst-1", role: "analyst" },
         { id: "member_case_analyst_2", email: "analyst-2@acme.com", userId: "analyst-2", role: "analyst" },
         { id: "member_case_ir_lead", email: "ir-lead@acme.com", userId: "ir-lead", role: "admin" },
-        { id: "member_case_viewer", email: "viewer@acme.com", userId: "viewer-1", role: "viewer" }
+        { id: "member_case_viewer", email: "viewer@acme.com", userId: "viewer-1", role: "viewer" },
+        { id: "member_case_removed", email: "removed@acme.com", userId: "removed-1", role: "analyst", status: "removed" },
+        { id: "member_case_deactivated", email: "deactivated@acme.com", userId: "deactivated-1", role: "analyst", userActive: false }
       ]) {
         (store as any).saveOrganizationMember({
           ...member,
           organizationId,
+          status: (member as any).status ?? "active",
+          acceptedAt: memberCreatedAt,
+          createdAt: memberCreatedAt,
+          updatedAt: memberCreatedAt
+        });
+      }
+      for (const member of [
+        { id: "member_restricted_admin", email: "admin@restricted.example", userId: "restricted-admin", role: "admin" },
+        { id: "member_restricted_viewer", email: "viewer@restricted.example", userId: "restricted-viewer", role: "viewer" }
+      ]) {
+        (store as any).saveOrganizationMember({
+          ...member,
+          organizationId: restrictedOrganizationId,
           status: "active",
           acceptedAt: memberCreatedAt,
           createdAt: memberCreatedAt,
@@ -148,7 +190,16 @@ describe("dwm case workflow", () => {
       }), options);
       const viewerDetail = await viewerDetailResponse.json() as any;
       expect(viewerDetailResponse.status).toBe(200);
-      expect(viewerDetail.access).toMatchObject({ role: "viewer", readOnly: true });
+      expect(viewerDetail.access).toMatchObject({
+        role: "viewer",
+        readOnly: true,
+        visibilityDecision: {
+          allowed: true,
+          reason: null,
+          alertVisibilityPolicy: "members",
+          allowedRoles: expect.arrayContaining(["viewer", "analyst"])
+        }
+      });
 
       const viewerMutationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}`, {
         method: "PATCH",
@@ -163,6 +214,38 @@ describe("dwm case workflow", () => {
         headers: { "x-user-email": "outsider@example.com" }
       }), options);
       expect(outsiderDetailResponse.status).toBe(403);
+      expect((await outsiderDetailResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "not_member" });
+
+      const removedDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "removed@acme.com" }
+      }), options);
+      expect(removedDetailResponse.status).toBe(403);
+      expect((await removedDetailResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "member_removed" });
+
+      const deactivatedDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "deactivated@acme.com" }
+      }), options);
+      expect(deactivatedDetailResponse.status).toBe(403);
+      expect((await deactivatedDetailResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "member_deactivated" });
+
+      const restrictedViewerListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${restrictedOrganizationId}&q=Restricted`, {
+        headers: { "x-user-email": "viewer@restricted.example" }
+      }), options);
+      expect(restrictedViewerListResponse.status).toBe(403);
+      expect((await restrictedViewerListResponse.json() as any).visibilityDecision).toMatchObject({
+        allowed: false,
+        reason: "role_not_allowed",
+        alertVisibilityPolicy: "admins",
+        allowedRoles: ["owner", "admin"]
+      });
+
+      const restrictedAdminListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${restrictedOrganizationId}&q=Restricted`, {
+        headers: { "x-user-email": "admin@restricted.example" }
+      }), options);
+      const restrictedAdminList = await restrictedAdminListResponse.json() as any;
+      expect(restrictedAdminListResponse.status).toBe(200);
+      expect(restrictedAdminList.items).toHaveLength(1);
+      expect(restrictedAdminList.items[0].caseId).toBe("case_restricted_admin_only");
 
       const deliveryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
         method: "POST",
@@ -346,7 +429,11 @@ describe("dwm case workflow", () => {
       expect(viewerExportResponse.status).toBe(200);
       expect(viewerExport).toMatchObject({
         schemaVersion: "analyst.case_export.v1",
-        access: { role: "viewer", readOnly: true },
+        access: {
+          role: "viewer",
+          readOnly: true,
+          visibilityDecision: { allowed: true, reason: null, alertVisibilityPolicy: "members" }
+        },
         summary: {
           caseId: closed.case.id,
           alertId: alert.id,
@@ -405,6 +492,25 @@ describe("dwm case workflow", () => {
         headers: { "x-user-email": "outsider@example.com" }
       }), options);
       expect(outsiderExportResponse.status).toBe(403);
+      expect((await outsiderExportResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "not_member" });
+
+      const removedExportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}/export?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "removed@acme.com" }
+      }), options);
+      expect(removedExportResponse.status).toBe(403);
+      expect((await removedExportResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "member_removed" });
+
+      const deactivatedExportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}/export?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "deactivated@acme.com" }
+      }), options);
+      expect(deactivatedExportResponse.status).toBe(403);
+      expect((await deactivatedExportResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "member_deactivated" });
+
+      const restrictedViewerExportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/case_restricted_admin_only/export?organizationId=${restrictedOrganizationId}`, {
+        headers: { "x-user-email": "viewer@restricted.example" }
+      }), options);
+      expect(restrictedViewerExportResponse.status).toBe(403);
+      expect((await restrictedViewerExportResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "role_not_allowed" });
 
       const reopenResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}`, {
         method: "PATCH",
@@ -444,7 +550,7 @@ describe("dwm case workflow", () => {
       expect(suppressed.alert.deliveryState).toBe("muted");
 
       const rehydrated = new FileBackedScraperStore({ snapshotPath });
-      expect((rehydrated as any).listCases()).toHaveLength(2);
+      expect((rehydrated as any).listCases()).toHaveLength(3);
       expect((rehydrated as any).getCase(closed.case.id).status).toBe("suppressed");
       expect((rehydrated as any).getCase(closed.case.id).workflowEvents).toHaveLength(5);
       expect((rehydrated as any).getDwmAlert(alert.id).caseId).toBe(closed.case.id);
