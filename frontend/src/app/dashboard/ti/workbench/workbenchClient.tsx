@@ -1188,7 +1188,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                     <p className='mt-1 text-xs leading-5 text-[#596170]'>
                         {orgContext?.readiness.fullChainReady
                             ? 'Org, watchlist, sources, dashboard alert, and delivery evidence are loaded.'
-                            : `Not complete: ${(orgContext?.readiness.fullChainBlockedBy || ['live dashboard proof missing']).join('; ')}.`}
+                            : `Not complete: ${(orgContext?.readiness.fullChainBlockedBy || ['dashboard alert evidence missing']).join('; ')}.`}
                     </p>
                 </div>
                 <span className={workflowStatusClass(orgContext?.readiness.fullChainReady ? 'ready' : 'blocked')}>
@@ -1199,13 +1199,13 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                 {items.map(item => {
                     const tone = productReadinessTone(item.status)
                     const content = (
-                        <div className='flex items-start justify-between gap-3 rounded-lg border border-[#eef1f5] bg-white px-3 py-2 text-left transition hover:border-[#cfd8e6]'>
+                        <div className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-white px-3 py-2 text-left transition hover:border-[#b9c7da] dark:border-[#2d3a52] dark:bg-[#111827] dark:hover:border-[#3b4b68]'>
                             <div className='min-w-0'>
-                                <p className='truncate text-xs font-semibold text-[#171a21]'>{item.label}</p>
-                                <p className='mt-0.5 line-clamp-2 text-[11px] leading-4 text-[#667085]'>{item.detail}</p>
-                                <p className='mt-1 truncate text-[10px] font-semibold uppercase text-[#98a2b3]'>{item.source}</p>
+                                <p className='truncate text-xs font-semibold text-[#171a21] dark:text-[#d8deea]'>{item.label}</p>
+                                <p className='mt-0.5 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.detail}</p>
+                                <p className='mt-1 break-all text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>{item.source}</p>
                             </div>
-                            <span className={workflowStatusClass(tone)}>{label(item.status)}</span>
+                            <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(item.status)}</span>
                         </div>
                     )
                     return item.href ? <Link key={item.id} href={item.href}>{content}</Link> : <div key={item.id}>{content}</div>
@@ -1253,11 +1253,11 @@ function OperatorReadinessRows({ orgContext, selected, caseDetail }: { orgContex
 
 function OperatorRow({ label: rowLabel, value, tone }: { label: string, value: string, tone: WorkbenchWorkflowStep['status'] }) {
     return (
-        <div className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2'>
-            <span className='font-semibold text-[#171a21]'>{rowLabel}</span>
-            <span className='flex min-w-0 items-center justify-end gap-2 text-right text-[#667085]'>
-                <span className='truncate'>{value}</span>
-                <span className={workflowStatusClass(tone)}>{label(tone)}</span>
+        <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 py-2 dark:border-[#2d3a52] dark:bg-[#111827]'>
+            <span className='font-semibold text-[#171a21] dark:text-[#d8deea]'>{rowLabel}</span>
+            <span className='flex min-w-0 flex-wrap items-center justify-end gap-2 text-right text-[#667085] dark:text-[#aab6ca]'>
+                <span className='min-w-0 break-all'>{value}</span>
+                <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(tone)}</span>
             </span>
         </div>
     )
@@ -2246,9 +2246,9 @@ function severityClass(severity: string) {
 }
 
 function workflowStatusClass(status: WorkbenchWorkflowStep['status']) {
-    if (status === 'ready') return 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-[11px] font-semibold text-[#147a3b]'
-    if (status === 'blocked') return 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]'
-    return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'
+    if (status === 'ready') return 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-[11px] font-semibold text-[#147a3b] dark:bg-[#163323] dark:text-[#9ee2b2]'
+    if (status === 'blocked') return 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-[11px] font-semibold text-[#b45309] dark:bg-[#3a2b16] dark:text-[#f4c77a]'
+    return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3] dark:bg-[#17233a] dark:text-[#9db8ff]'
 }
 
 function label(value: string) {

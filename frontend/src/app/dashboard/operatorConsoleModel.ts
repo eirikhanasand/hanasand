@@ -377,6 +377,7 @@ export function buildOrgOperatingContext(input: {
             latestRunAt: input.operations.latestRun?.updatedAt,
         } : undefined,
         liveAlertCount: input.liveAlertCount ?? 0,
+        liveAlertIds: [...liveAlertIds],
         dashboardAlertDelivery,
         latestDelivery,
     })
@@ -465,6 +466,7 @@ function buildProductReadiness(input: {
         latestRunAt?: string
     }
     liveAlertCount: number
+    liveAlertIds: string[]
     dashboardAlertDelivery?: DwmDeliveryItem
     latestDelivery?: DwmDeliveryItem
 }): WorkbenchProductReadinessItem[] {
@@ -516,7 +518,7 @@ function buildProductReadiness(input: {
             label: 'Dashboard alert',
             status: alertStatus,
             detail: input.liveAlertCount
-                ? `${input.liveAlertCount} backend alert${input.liveAlertCount === 1 ? '' : 's'} surfaced in the dashboard queue.`
+                ? `${input.liveAlertCount} backend alert${input.liveAlertCount === 1 ? '' : 's'} surfaced in the dashboard queue${input.liveAlertIds.length ? `: ${input.liveAlertIds.slice(0, 3).join(', ')}` : ''}.`
                 : 'No backend DWM alert is surfaced in the dashboard queue; fallback rows do not count.',
             source: 'GET /api/dwm/alerts as active org member',
             href: '/dashboard/ti/workbench',
@@ -531,6 +533,14 @@ function buildProductReadiness(input: {
             source: 'GET /api/dwm/webhooks/deliveries',
             href: '/dashboard/automations?setup=dwm',
             checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.latestDelivery?.attemptedAt,
+        },
+        {
+            id: 'source_inventory_probe',
+            label: 'Source inventory proof',
+            status: 'unavailable',
+            detail: 'Source pack and inventory proof is available inside the scraper network, but the dashboard has no safe operator proxy yet.',
+            source: 'Missing /api/dwm/source-packs proxy',
+            href: '/dashboard/ti/sources',
         },
         {
             id: 'public_ti_provenance',
@@ -861,7 +871,7 @@ export function buildReadinessCases(input: {
                 : input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} loaded from backend.` : `${input.renderedAlertCount} fallback alert${input.renderedAlertCount === 1 ? '' : 's'} rendered so the workflow is inspectable, but real alert generation has not been verified.`,
             recommendedAction: alertVisibilityBlocked
                 ? 'Open the dashboard as an active organization member or fix the org membership/session identity before treating the alert queue as empty.'
-                : input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and stop relying on fallback cases for sales demos.',
+                : input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and do not rely on fallback cases for customer reviews.',
             evidence: [{
                 id: 'ev_alert_generation',
                 sourceName: 'DWM alerts API',

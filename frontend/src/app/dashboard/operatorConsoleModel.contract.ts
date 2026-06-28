@@ -195,6 +195,16 @@ const blockedDeliveryOrgContext = buildOrgOperatingContext({
     liveAlertCount: 1,
     liveAlertIds: ['alert_without_delivery'],
 })
+const blockedAlertOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 0,
+    liveAlertIds: [],
+})
 const blockedOrgContext = buildOrgOperatingContext({
     backendConfigured: false,
     scope: { tenantId: 'default' },
@@ -559,6 +569,10 @@ void (orgContext.readiness.fullChainReady satisfies boolean)
 void (orgContext.readiness.productReadiness[0]?.status satisfies string | undefined)
 void (blockedDeliveryOrgContext.readiness.fullChainReady satisfies boolean)
 void (blockedDeliveryOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void (blockedAlertOrgContext.readiness.fullChainReady satisfies boolean)
+void (blockedAlertOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void (blockedAlertOrgContext.readiness.productReadiness.find(item => item.id === 'dashboard_alert')?.status satisfies string | undefined)
+void (orgContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.status satisfies string | undefined)
 void (blockedOrgContext.readiness.blockedReasons satisfies string[])
 void (publicTiDecode.ok satisfies boolean)
 void (malformedPublicTiDecode.ok satisfies boolean)
