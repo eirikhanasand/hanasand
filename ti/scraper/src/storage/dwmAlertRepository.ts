@@ -140,12 +140,17 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     const generationCandidate = findGenerationCandidate(generationPlan, alert);
     const existing = findExistingAlert(input.store, alert);
     const alertId = existing?.id ?? alert.id;
-    const workflowContext = buildDwmAlertWorkflowContext({
+    const generatedWorkflowContext = buildDwmAlertWorkflowContext({
       alert: { ...alert, id: alertId },
       tenantId: input.tenantId,
       organizationId: input.organizationId ?? existing?.organizationId,
       generationCandidate
     });
+    const workflowContext = {
+      ...generatedWorkflowContext,
+      caseId: existing?.caseId,
+      casePath: existing?.casePath ?? generatedWorkflowContext.casePath
+    };
     return input.store.saveDwmAlert({
       ...alert,
       id: alertId,
@@ -157,7 +162,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
       caseIdCandidate: workflowContext.caseIdCandidate,
       caseId: existing?.caseId,
-      casePath: workflowContext.casePath,
+      casePath: existing?.casePath ?? workflowContext.casePath,
       workflowStatus: existing?.workflowStatus ?? (alert as any).workflowStatus ?? "new",
       reviewState: existing?.reviewState ?? alert.reviewState,
       deliveryState: existing?.deliveryState ?? "pending_review",

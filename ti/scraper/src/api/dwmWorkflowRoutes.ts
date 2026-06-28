@@ -1,5 +1,6 @@
 import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
+import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
 import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
@@ -150,7 +151,8 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
     visibilityDecision: access.visibilityDecision,
     alerts: alerts
       .filter((row: any) => row.tenantId === tenantId)
-      .map((alert: any) => ({ ...alert, workflowSummary: buildDwmAlertWorkflowSummary(alert) }))
+      .filter((alert: any) => alertMatchesDwmAlertFilters(alert, url))
+      .map((alert: any) => buildDwmAlertListItem(alert, options))
   });
 }
 
@@ -182,6 +184,8 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
   const deliveryState = workflowTransition.deliveryState;
   const assignedOwner = body.assignedOwner === undefined && body.owner === undefined ? existing.assignedOwner : normalizeOwner(body.assignedOwner ?? body.owner);
   const severityOverride = body.severityOverride === undefined && body.severity === undefined ? existing.severityOverride : normalizeSeverityOverride(body.severityOverride ?? body.severity);
+  const caseId = body.caseId === undefined ? existing.caseId : normalizeCaseValue(body.caseId);
+  const casePath = body.casePath === undefined ? existing.casePath : normalizeCaseValue(body.casePath);
   if ((body.severityOverride !== undefined || body.severity !== undefined) && severityOverride === undefined) {
     return json({ error: { code: "invalid_severity_override", message: "Severity override must be critical, high, medium, low, or null." } }, 400);
   }
@@ -206,6 +210,10 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
     toOwner: assignedOwner,
     fromSeverityOverride: existing.severityOverride,
     toSeverityOverride: severityOverride,
+    fromCaseId: existing.caseId,
+    toCaseId: caseId,
+    fromCasePath: existing.casePath,
+    toCasePath: casePath,
     note,
     rationale
   };
@@ -216,6 +224,8 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
     deliveryState,
     assignedOwner,
     severityOverride,
+    caseId,
+    casePath,
     workflowNote: note ?? existing.workflowNote,
     workflowRationale: rationale ?? existing.workflowRationale,
     suppressedAt: workflowTransition.workflowStatus === "suppressed" ? existing.suppressedAt ?? generatedAt : existing.suppressedAt,
@@ -224,7 +234,7 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
     updatedAt: generatedAt,
     workflowEvents: [...(existing.workflowEvents ?? []), event]
   });
-  return json({ visibilityDecision: access.visibilityDecision, alert: { ...alert, workflowSummary: buildDwmAlertWorkflowSummary(alert) }, event });
+  return json({ visibilityDecision: access.visibilityDecision, alert: buildDwmAlertListItem(alert, options), event });
 }
 
 export async function replayDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
@@ -763,6 +773,11 @@ function normalizeOwner(value: unknown): string | undefined {
   return owner || undefined;
 }
 
+function normalizeCaseValue(value: unknown): string | undefined {
+  const normalized = String(value ?? "").trim().slice(0, 240);
+  return normalized || undefined;
+}
+
 function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: DwmWorkflowAccessResult) {
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
   const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
@@ -806,8 +821,13 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     schemaVersion: "dwm.alert_detail.v1",
     generatedAt: nowIso(),
     visibilityDecision: access?.visibilityDecision,
-    alert,
+    alert: buildDwmAlertListItem(alert, options, deliveries),
     workflowSummary: buildDwmAlertWorkflowSummary(alert),
+    caseHandoff: buildDwmAlertCaseHandoff(alert),
+    nextBestAction: buildDwmAlertNextBestAction(alert, deliveries),
+    deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, deliveries),
+    evidenceFreshness: buildDwmAlertEvidenceFreshness(alert),
+    provenanceFreshness: buildDwmAlertProvenanceFreshness(alert),
     deliveries,
     timeline,
     evidenceReplay,
@@ -820,11 +840,194 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
   };
 }
 
+function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries?: any[]) {
+  const alertDeliveries = deliveries ?? ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
+  const workflowSummary = buildDwmAlertWorkflowSummary(alert);
+  return {
+    ...alert,
+    workflowSummary,
+    caseHandoff: buildDwmAlertCaseHandoff(alert),
+    nextBestAction: buildDwmAlertNextBestAction(alert, alertDeliveries),
+    deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, alertDeliveries),
+    evidenceFreshness: buildDwmAlertEvidenceFreshness(alert),
+    provenanceFreshness: buildDwmAlertProvenanceFreshness(alert)
+  };
+}
+
 function nextActionsForAlert(alert: any, deliveries: any[]) {
   if (alert.deliveryState === "muted" || alert.reviewState === "false_positive") return ["Keep muted unless new evidence changes the match."];
   if (alert.deliveryState === "ready_to_send") return ["Send the customer webhook.", "Keep monitoring the matched source and actor."];
   if (deliveries.some((delivery: any) => delivery.status === "delivered")) return ["Monitor for updates on the same watchlist term.", "Reopen if new evidence changes severity."];
   return ["Review the evidence.", "Mark ready when the customer should be notified.", "Mute if the match is a false positive."];
+}
+
+function buildDwmAlertNextBestAction(alert: any, deliveries: any[]) {
+  const actions = nextActionsForAlert(alert, deliveries);
+  const status = String(alert.workflowStatus ?? "new");
+  const hasDelivered = deliveries.some((delivery: any) => delivery.status === "delivered");
+  const canDeliver = alert.deliveryState === "ready_to_send" && !hasDelivered;
+  return {
+    schemaVersion: "dwm.alert_next_best_action.v1",
+    action: status === "closed"
+      ? "monitor_closed"
+      : status === "suppressed"
+        ? "monitor_suppressed"
+        : canDeliver
+          ? "send_webhook"
+          : status === "new"
+            ? "triage_alert"
+            : status === "triaged" || status === "reopened"
+              ? "investigate_or_route"
+              : "continue_review",
+    label: actions[0] ?? "Review the alert.",
+    reason: alert.workflowRationale ?? alert.workflowNote ?? alert.recommendedAction,
+    requiresRationale: status === "new" || status === "triaged" || status === "investigating" || status === "reopened",
+    route: alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
+    casePath: alert.casePath ?? alert.workflowContext?.casePath,
+    webhookReady: buildDwmAlertDeliveryReadiness(alert, deliveries).ready
+  };
+}
+
+function buildDwmAlertCaseHandoff(alert: any) {
+  try {
+    return buildAlertCaseHandoff({
+      alert,
+      tenantId: alert.tenantId,
+      organizationId: alert.organizationId,
+      createdAt: alert.updatedAt ?? alert.savedAt ?? alert.lastSeenAt
+    });
+  } catch (caught) {
+    return {
+      schemaVersion: "hanasand.analyst_handoff_error.v1",
+      kind: "alert_case_handoff",
+      error: caught instanceof Error ? caught.message : String(caught),
+      alertId: alert.id
+    };
+  }
+}
+
+function buildDwmAlertDeliveryReadiness(alert: any, deliveries: any[]) {
+  const webhookDestinationIds = alert.webhookContext?.webhookDestinationIds ?? alert.workflowContext?.webhookDestinationIds ?? [];
+  const captureIds = alert.webhookContext?.captureIds ?? alert.workflowContext?.captureIds ?? alert.provenance?.captureIds ?? [];
+  const lastDelivery = [...deliveries].sort((a: any, b: any) => String(a.attemptedAt ?? "").localeCompare(String(b.attemptedAt ?? ""))).at(-1);
+  const hasRoute = Boolean(alert.workflowContext?.hasWebhookRoute || webhookDestinationIds.length);
+  const suppressed = alert.workflowStatus === "suppressed" || alert.deliveryState === "muted";
+  const closed = alert.workflowStatus === "closed";
+  const ready = !suppressed && !closed && hasRoute && captureIds.length > 0 && (alert.evidence ?? []).length > 0;
+  return {
+    schemaVersion: "dwm.alert_delivery_readiness.v1",
+    ready,
+    state: ready ? "ready" : closed ? "closed" : suppressed ? "suppressed" : hasRoute ? "needs_evidence_review" : "missing_route",
+    deliveryState: alert.deliveryState,
+    recommendedRoute: alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
+    webhookDestinationIds,
+    captureIds,
+    evidenceCount: alert.workflowContext?.evidenceCount ?? alert.webhookContext?.evidenceCount ?? (alert.evidence ?? []).length,
+    hasWebhookRoute: hasRoute,
+    dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
+    lastDeliveryStatus: lastDelivery?.status,
+    lastDeliveryAt: lastDelivery?.attemptedAt,
+    blocker: ready ? null : closed ? "alert_closed" : suppressed ? "alert_suppressed" : hasRoute ? "review_required" : "missing_webhook_route"
+  };
+}
+
+function buildDwmAlertEvidenceFreshness(alert: any) {
+  const observed = (alert.evidence ?? [])
+    .map((item: any) => item.observedAt ?? item.firstSeenAt ?? item.provenance?.observedAt)
+    .filter(Boolean)
+    .map(String)
+    .sort();
+  const captureIds = alert.workflowContext?.captureIds ?? alert.webhookContext?.captureIds ?? alert.provenance?.captureIds ?? [];
+  return {
+    schemaVersion: "dwm.alert_evidence_freshness.v1",
+    firstSeenAt: alert.firstSeenAt ?? observed[0],
+    lastSeenAt: alert.lastSeenAt ?? observed.at(-1),
+    newestEvidenceAt: observed.at(-1) ?? alert.lastSeenAt,
+    oldestEvidenceAt: observed[0] ?? alert.firstSeenAt,
+    evidenceCount: alert.workflowContext?.evidenceCount ?? alert.webhookContext?.evidenceCount ?? (alert.evidence ?? []).length,
+    sourceCount: alert.sourceCount ?? uniqueSourceCount(alert),
+    sourceFamily: alert.sourceFamily,
+    captureIds,
+    contentHashes: uniqueAlertStrings((alert.evidence ?? []).map((item: any) => item.contentHash).filter(Boolean))
+  };
+}
+
+function buildDwmAlertProvenanceFreshness(alert: any) {
+  return {
+    schemaVersion: "dwm.alert_provenance_freshness.v1",
+    matchBasis: alert.provenance?.matchBasis,
+    captureIds: alert.provenance?.captureIds ?? alert.workflowContext?.captureIds ?? [],
+    sourceIds: alert.provenance?.sourceIds ?? uniqueAlertStrings((alert.evidence ?? []).map((item: any) => item.provenance?.sourceId ?? item.sourceId).filter(Boolean)),
+    firstSeenAt: alert.firstSeenAt,
+    lastSeenAt: alert.lastSeenAt,
+    generatedFromWatchlists: alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [],
+    dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey
+  };
+}
+
+function uniqueSourceCount(alert: any) {
+  return uniqueAlertStrings((alert.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId ?? item.sourceName).filter(Boolean)).length;
+}
+
+function alertMatchesDwmAlertFilters(alert: any, url: URL) {
+  if (!matchesParam(url, ["status", "workflowStatus"], alert.workflowStatus ?? "new")) return false;
+  if (!matchesParam(url, ["reviewState"], alert.reviewState)) return false;
+  if (!matchesParam(url, ["deliveryState"], alert.deliveryState)) return false;
+  if (!matchesParam(url, ["assignee", "assignedOwner", "owner"], alert.assignedOwner ?? "unassigned")) return false;
+  if (!matchesParam(url, ["severity"], alert.severityOverride ?? alert.severity)) return false;
+  if (!matchesParam(url, ["severityOverride"], alert.severityOverride ?? "none")) return false;
+  if (!matchesParam(url, ["sourceFamily"], alert.sourceFamily)) return false;
+  if (!matchesParam(url, ["recommendedRoute", "route"], alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute)) return false;
+  if (!matchesAnyParam(url, ["watchlistId"], alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [])) return false;
+  if (!matchesAnyParam(url, ["watchlistItemId"], alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [])) return false;
+  if (!matchesAnyParam(url, ["captureId"], alert.workflowContext?.captureIds ?? alert.webhookContext?.captureIds ?? alert.provenance?.captureIds ?? [])) return false;
+  if (!matchesParam(url, ["caseId"], alert.caseId ?? alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate)) return false;
+  const query = String(url.searchParams.get("q") ?? url.searchParams.get("term") ?? "").trim().toLowerCase();
+  if (query) {
+    const haystack = [
+      alert.company,
+      alert.actor,
+      alert.claimSummary,
+      alert.matchedTerm?.value,
+      alert.dedupeKey,
+      alert.caseId,
+      alert.caseIdCandidate,
+      ...(alert.workflowContext?.captureIds ?? [])
+    ].filter(Boolean).join(" ").toLowerCase();
+    if (!haystack.includes(query)) return false;
+  }
+  return true;
+}
+
+function matchesParam(url: URL, keys: string[], value: unknown) {
+  const raw = firstSearchParam(url, keys);
+  if (!raw) return true;
+  const allowed = splitFilterValues(raw);
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return allowed.includes(normalized);
+}
+
+function matchesAnyParam(url: URL, keys: string[], values: unknown[]) {
+  const raw = firstSearchParam(url, keys);
+  if (!raw) return true;
+  const allowed = splitFilterValues(raw);
+  return values.map((value) => String(value ?? "").trim().toLowerCase()).some((value) => allowed.includes(value));
+}
+
+function firstSearchParam(url: URL, keys: string[]) {
+  for (const key of keys) {
+    const value = url.searchParams.get(key);
+    if (value !== null && value !== "") return value;
+  }
+  return undefined;
+}
+
+function splitFilterValues(value: string) {
+  return value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+}
+
+function uniqueAlertStrings(values: string[]) {
+  return [...new Set(values)];
 }
 
 function buildDwmAlertWorkflowSummary(alert: any) {

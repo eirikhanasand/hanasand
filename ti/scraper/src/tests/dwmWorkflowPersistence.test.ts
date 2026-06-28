@@ -200,11 +200,39 @@ describe("dwm workflow persistence", () => {
     const triageResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
       method: "PATCH",
       headers: { "x-user-email": "owner@workflow.example" },
-      body: JSON.stringify({ organizationId, status: "triaged", assignedOwner: "owner-workflow", severityOverride: "critical", note: "Triage accepted.", rationale: "Live capture matches owned domain." })
+      body: JSON.stringify({
+        organizationId,
+        status: "triaged",
+        assignedOwner: "owner-workflow",
+        severityOverride: "critical",
+        caseId: "case_workflow_live",
+        casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
+        note: "Triage accepted.",
+        rationale: "Live capture matches owned domain."
+      })
     }), options);
     const triage = await triageResponse.json() as any;
     expect(triageResponse.status).toBe(200);
-    expect(triage.alert.workflowSummary).toMatchObject({ status: "triaged", assignedOwner: "owner-workflow", severityOverride: "critical", eventCount: 1 });
+    expect(triage.alert.workflowSummary).toMatchObject({ status: "triaged", assignedOwner: "owner-workflow", severityOverride: "critical", caseId: "case_workflow_live", eventCount: 1 });
+    expect(triage.alert.caseHandoff.payload.body).toMatchObject({
+      organizationId,
+      alertId: alert.id,
+      caseIdCandidate: alert.caseIdCandidate,
+      casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
+      captureIds: ["cap_workflow_acme"]
+    });
+    expect(triage.alert.nextBestAction).toMatchObject({ action: "investigate_or_route", route: "identity_response" });
+    expect(triage.alert.deliveryReadiness).toMatchObject({ ready: false, state: "missing_route", evidenceCount: 1 });
+    expect(triage.alert.evidenceFreshness).toMatchObject({ newestEvidenceAt: "2026-06-27T21:02:00.000Z", evidenceCount: 1, captureIds: ["cap_workflow_acme"] });
+    expect(triage.alert.provenanceFreshness).toMatchObject({ matchBasis: "watchlist_capture_text", captureIds: ["cap_workflow_acme"], dedupeKey: alert.dedupeKey });
+
+    const filteredTriageResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}&status=triaged&assignee=owner-workflow&severity=critical&sourceFamily=telegram_public&q=acme.com`, {
+      headers: { "x-user-email": "owner@workflow.example" }
+    }), options);
+    const filteredTriage = await filteredTriageResponse.json() as any;
+    expect(filteredTriageResponse.status).toBe(200);
+    expect(filteredTriage.alerts).toHaveLength(1);
+    expect(filteredTriage.alerts[0].workflowSummary).toMatchObject({ status: "triaged", assignedOwner: "owner-workflow", caseId: "case_workflow_live" });
 
     const missingRationaleResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
       method: "PATCH",
@@ -222,6 +250,14 @@ describe("dwm workflow persistence", () => {
     expect(suppressedResponse.status).toBe(200);
     expect(suppressed.alert).toMatchObject({ workflowStatus: "suppressed", reviewState: "false_positive", deliveryState: "muted" });
     expect(suppressed.alert.suppressedAt).toBeTruthy();
+    expect(suppressed.alert.nextBestAction).toMatchObject({ action: "monitor_suppressed" });
+
+    const listSuppressedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}&status=suppressed&caseId=case_workflow_live`, {
+      headers: { "x-user-email": "owner@workflow.example" }
+    }), options);
+    const listSuppressed = await listSuppressedResponse.json() as any;
+    expect(listSuppressed.alerts).toHaveLength(1);
+    expect(listSuppressed.alerts[0].workflowSummary).toMatchObject({ status: "suppressed", caseId: "case_workflow_live" });
 
     const closedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
       method: "PATCH",
@@ -233,12 +269,13 @@ describe("dwm workflow persistence", () => {
     expect(closed.alert.workflowSummary).toMatchObject({ status: "closed", eventCount: 3 });
     expect(closed.alert.closedAt).toBeTruthy();
 
-    const listClosedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
+    const listClosedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}&status=closed&watchlistId=${alert.watchlistIds[0]}&captureId=cap_workflow_acme`, {
       headers: { "x-user-email": "owner@workflow.example" }
     }), options);
     const listClosed = await listClosedResponse.json() as any;
     expect(listClosed.alerts).toHaveLength(1);
     expect(listClosed.alerts[0].workflowSummary).toMatchObject({ status: "closed", eventCount: 3 });
+    expect(listClosed.alerts[0].deliveryReadiness).toMatchObject({ ready: false, state: "closed" });
 
     const reopenedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
       method: "PATCH",
@@ -262,6 +299,8 @@ describe("dwm workflow persistence", () => {
       workflowStatus: "reopened",
       assignedOwner: "owner-workflow",
       severityOverride: "critical",
+      caseId: "case_workflow_live",
+      casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
       workflowRationale: "No customer action required after review."
     });
     expect(preserved.workflowEvents).toHaveLength(4);
@@ -274,9 +313,21 @@ describe("dwm workflow persistence", () => {
     const detail = await detailResponse.json() as any;
     expect(detail.workflowSummary).toMatchObject({
       status: "reopened",
-      casePath: expect.stringContaining(`/v1/cases/${alert.caseIdCandidate}`),
+      caseId: "case_workflow_live",
+      casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
       eventCount: 4,
       evidenceCount: 1
     });
+    expect(detail.caseHandoff.payload.body).toMatchObject({
+      organizationId,
+      alertId: alert.id,
+      caseIdCandidate: alert.caseIdCandidate,
+      casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
+      watchlistItemIds: expect.arrayContaining([expect.stringContaining("acme.com")])
+    });
+    expect(detail.nextBestAction).toMatchObject({ action: "investigate_or_route" });
+    expect(detail.deliveryReadiness).toMatchObject({ ready: false, blocker: "missing_webhook_route" });
+    expect(detail.evidenceFreshness).toMatchObject({ evidenceCount: 1, newestEvidenceAt: "2026-06-27T21:02:00.000Z" });
+    expect(detail.provenanceFreshness).toMatchObject({ matchBasis: "watchlist_capture_text", captureIds: ["cap_workflow_acme"] });
   });
 });
