@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { CheckCircle2, Clock3, ExternalLink, FileText, Filter, Fingerprint, ListChecks, MessageSquareText, Search, ShieldAlert, UserRound } from 'lucide-react'
 
@@ -51,151 +52,231 @@ export type WorkbenchCase = {
 type QueueFilter = 'all' | 'critical' | 'high' | 'persistent' | 'evidence'
 
 export default function AnalystWorkbenchClient({ initialCases }: { initialCases: WorkbenchCase[] }) {
+    const router = useRouter()
     const [selectedId, setSelectedId] = useState(initialCases[0]?.id ?? '')
     const [filter, setFilter] = useState<QueueFilter>('all')
     const [query, setQuery] = useState('')
     const [notes, setNotes] = useState<Record<string, string>>({})
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
+    const [busyAction, setBusyAction] = useState<string | null>(null)
+    const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const cases = useMemo(() => filterCases(initialCases, filter, query), [initialCases, filter, query])
     const selected = initialCases.find(item => item.id === selectedId) ?? cases[0] ?? initialCases[0]
     const queues = queueSummary(initialCases)
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
 
-    return (
-        <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
-            <div className='border-b border-[#e8edf5] bg-[#171a21] px-5 py-4 text-white'>
-                <div className='flex flex-wrap items-start justify-between gap-4'>
-                    <div>
-                        <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>XDR-style analyst work</p>
-                        <h2 className='mt-1 text-xl font-semibold'>Threat operations queue</h2>
-                        <p className='mt-1 max-w-3xl text-sm leading-6 text-[#d8deea]'>Investigate DWM alerts, domain correlations, and safe source captures from one queue instead of jumping across dashboard tiles.</p>
-                    </div>
-                    <div className='grid grid-cols-3 gap-2 text-right'>
-                        <Metric label='Cases' value={String(initialCases.length)} />
-                        <Metric label='Persistent' value={String(initialCases.filter(item => item.persistent).length)} />
-                        <Metric label='Critical' value={String(initialCases.filter(item => item.severity === 'critical').length)} />
-                    </div>
-                </div>
-            </div>
+    async function applyDecision(item: WorkbenchCase, decision: LocalDecision) {
+        const nextDecision = {
+            ...(localDecisions[item.id] ?? {}),
+            ...decision,
+            decidedAt: new Date().toISOString(),
+        }
 
-            <div className='grid min-h-[720px] xl:grid-cols-[340px_minmax(0,1fr)_330px]'>
-                <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
-                    <div className='grid gap-3 border-b border-[#e8edf5] p-4'>
-                        <label className='relative block'>
-                            <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]' />
-                            <input
-                                value={query}
-                                onChange={event => setQuery(event.target.value)}
-                                placeholder='Search cases, actors, domains'
-                                className='h-10 w-full rounded-lg border border-[#d8dee9] bg-white pl-9 pr-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
-                            />
-                        </label>
-                        <div className='flex flex-wrap gap-2'>
-                            {(['all', 'critical', 'high', 'persistent', 'evidence'] as QueueFilter[]).map(item => (
-                                <button
-                                    key={item}
-                                    type='button'
-                                    onClick={() => setFilter(item)}
-                                    className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${filter === item ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#d8dee9] bg-white text-[#475467] hover:bg-[#f2f5f9]'}`}
-                                >
-                                    {item === 'all' ? <Filter className='h-3.5 w-3.5' /> : null}
-                                    {label(item)}
-                                </button>
-                            ))}
+        const decisionStatus = decision.status
+        if (item.kind !== 'dwm_alert' || !decisionStatus) {
+            setLocalDecisions(current => ({ ...current, [item.id]: nextDecision }))
+            return
+        }
+
+        await runPersistentAction(`decision:${item.id}`, async () => {
+            const mapped = mapDwmDecision(decisionStatus, item.status)
+            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(item.id)}`, {
+                method: 'PATCH',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    reviewState: mapped.reviewState,
+                    deliveryState: mapped.deliveryState,
+                    note: decision.reason || 'Updated from the analyst workbench.',
+                    actor: 'dashboard',
+                }),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            setLocalDecisions(current => ({ ...current, [item.id]: nextDecision }))
+            return `${label(decisionStatus)} saved to the DWM workflow.`
+        })
+    }
+
+    async function replayDwmAlert(item: WorkbenchCase) {
+        await runPersistentAction(`replay:${item.id}`, async () => {
+            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(item.id)}/replay`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ actor: 'dashboard' }),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            return 'Evidence replay recorded in the DWM workflow.'
+        })
+    }
+
+    async function sendDwmAlert(item: WorkbenchCase) {
+        await runPersistentAction(`send:${item.id}`, async () => {
+            const response = await fetch('/api/dwm/webhooks/deliver', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ tenantId: 'default', alertId: item.id, limit: 1 }),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            return payload.attemptedCount ? 'Webhook delivery attempted.' : 'No webhook delivery was attempted.'
+        })
+    }
+
+    async function runPersistentAction(key: string, action: () => Promise<string>) {
+        setBusyAction(key)
+        setMessage(null)
+        try {
+            const text = await action()
+            setMessage({ ok: true, text })
+            router.refresh()
+        } catch (error) {
+            setMessage({ ok: false, text: error instanceof Error ? error.message : String(error) })
+        } finally {
+            setBusyAction(null)
+        }
+    }
+
+    return (
+        <div className='grid gap-3'>
+            {message && (
+                <p className={`rounded-lg border px-3 py-2 text-sm ${message.ok ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
+                    {message.text}
+                </p>
+            )}
+
+            <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
+                <div className='border-b border-[#e8edf5] bg-[#171a21] px-5 py-4 text-white'>
+                    <div className='flex flex-wrap items-start justify-between gap-4'>
+                        <div>
+                            <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>XDR-style analyst work</p>
+                            <h2 className='mt-1 text-xl font-semibold'>Threat operations queue</h2>
+                            <p className='mt-1 max-w-3xl text-sm leading-6 text-[#d8deea]'>Investigate DWM alerts, domain correlations, and safe source captures from one queue instead of jumping across dashboard tiles.</p>
+                        </div>
+                        <div className='grid grid-cols-3 gap-2 text-right'>
+                            <Metric label='Cases' value={String(initialCases.length)} />
+                            <Metric label='Persistent' value={String(initialCases.filter(item => item.persistent).length)} />
+                            <Metric label='Critical' value={String(initialCases.filter(item => item.severity === 'critical').length)} />
                         </div>
                     </div>
-                    <div className='max-h-[620px] overflow-auto p-2'>
-                        {cases.map(item => (
-                            <button
-                                key={item.id}
-                                type='button'
-                                onClick={() => setSelectedId(item.id)}
-                                className={`w-full rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
-                            >
-                                <div className='flex items-center justify-between gap-2'>
-                                    <span className='truncate text-sm font-semibold text-[#171a21]'>{item.title}</span>
-                                    <span className={severityClass(item.severity)}>{item.severity}</span>
-                                </div>
-                                <p className='mt-1 truncate text-xs text-[#667085]'>{item.queue} · {item.owner}</p>
-                                <p className='mt-2 line-clamp-2 text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
-                                <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#667085]'>
-                                    <span className='rounded-full bg-white px-2 py-0.5'>{label(item.status)}</span>
-                                    <span>{item.confidence}%</span>
-                                    <span>{relativeTime(item.updatedAt)}</span>
-                                </div>
-                            </button>
-                        ))}
-                        {!cases.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-white p-4 text-sm text-[#596170]'>No cases match this filter.</p>}
-                    </div>
-                </aside>
+                </div>
 
-                <main className='min-w-0'>
-                    {selected ? (
-                        <CaseDetail
-                            item={selected}
-                            decision={selectedDecision}
-                            note={notes[selected.id] ?? ''}
-                            onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
-                            onDecision={(decision) => {
-                                setLocalDecisions(current => ({
-                                    ...current,
-                                    [selected.id]: {
-                                        ...(current[selected.id] ?? {}),
-                                        ...decision,
-                                        decidedAt: new Date().toISOString(),
-                                    },
-                                }))
-                            }}
-                        />
-                    ) : (
-                        <div className='p-5 text-sm text-[#596170]'>No analyst cases are available yet.</div>
-                    )}
-                </main>
-
-                <aside className='border-t border-[#e8edf5] bg-[#fbfcfe] xl:border-l xl:border-t-0'>
-                    <div className='grid gap-4 p-4'>
-                        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-                            <div className='border-b border-[#eef1f5] px-4 py-3'>
-                                <h3 className='text-sm font-semibold text-[#171a21]'>Queue posture</h3>
-                                <p className='mt-0.5 text-xs text-[#667085]'>Operational load by workflow queue.</p>
+                <div className='grid min-h-[720px] xl:grid-cols-[340px_minmax(0,1fr)_330px]'>
+                    <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
+                        <div className='grid gap-3 border-b border-[#e8edf5] p-4'>
+                            <label className='relative block'>
+                                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]' />
+                                <input
+                                    value={query}
+                                    onChange={event => setQuery(event.target.value)}
+                                    placeholder='Search cases, actors, domains'
+                                    className='h-10 w-full rounded-lg border border-[#d8dee9] bg-white pl-9 pr-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                                />
+                            </label>
+                            <div className='flex flex-wrap gap-2'>
+                                {(['all', 'critical', 'high', 'persistent', 'evidence'] as QueueFilter[]).map(item => (
+                                    <button
+                                        key={item}
+                                        type='button'
+                                        onClick={() => setFilter(item)}
+                                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${filter === item ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#d8dee9] bg-white text-[#475467] hover:bg-[#f2f5f9]'}`}
+                                    >
+                                        {item === 'all' ? <Filter className='h-3.5 w-3.5' /> : null}
+                                        {label(item)}
+                                    </button>
+                                ))}
                             </div>
-                            <div className='grid gap-2 p-3'>
-                                {queues.map(queue => (
-                                    <div key={queue.name} className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
-                                        <span className='font-semibold text-[#171a21]'>{queue.name}</span>
-                                        <span className='text-[#667085]'>{queue.count}</span>
+                        </div>
+                        <div className='max-h-[620px] overflow-auto p-2'>
+                            {cases.map(item => (
+                                <button
+                                    key={item.id}
+                                    type='button'
+                                    onClick={() => setSelectedId(item.id)}
+                                    className={`w-full rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
+                                >
+                                    <div className='flex items-center justify-between gap-2'>
+                                        <span className='truncate text-sm font-semibold text-[#171a21]'>{item.title}</span>
+                                        <span className={severityClass(item.severity)}>{item.severity}</span>
                                     </div>
-                                ))}
-                            </div>
-                        </section>
+                                    <p className='mt-1 truncate text-xs text-[#667085]'>{item.queue} · {item.owner}</p>
+                                    <p className='mt-2 line-clamp-2 text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
+                                    <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#667085]'>
+                                        <span className='rounded-full bg-white px-2 py-0.5'>{label(item.status)}</span>
+                                        <span>{item.confidence}%</span>
+                                        <span>{relativeTime(item.updatedAt)}</span>
+                                    </div>
+                                </button>
+                            ))}
+                            {!cases.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-white p-4 text-sm text-[#596170]'>No cases match this filter.</p>}
+                        </div>
+                    </aside>
 
-                        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-                            <div className='border-b border-[#eef1f5] px-4 py-3'>
-                                <h3 className='text-sm font-semibold text-[#171a21]'>Analyst controls</h3>
-                                <p className='mt-0.5 text-xs text-[#667085]'>Fast links to the systems behind this case.</p>
-                            </div>
-                            <div className='grid gap-2 p-3'>
-                                {selected?.relatedLinks.map(link => (
-                                    <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                                        {link.label}
-                                        <ExternalLink className='h-3.5 w-3.5' />
-                                    </Link>
-                                ))}
-                            </div>
-                        </section>
-                    </div>
-                </aside>
+                    <main className='min-w-0'>
+                        {selected ? (
+                            <CaseDetail
+                                item={selected}
+                                decision={selectedDecision}
+                                note={notes[selected.id] ?? ''}
+                                busyAction={busyAction}
+                                onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
+                                onDecision={(decision) => applyDecision(selected, decision)}
+                                onReplay={() => replayDwmAlert(selected)}
+                                onSend={() => sendDwmAlert(selected)}
+                            />
+                        ) : (
+                            <div className='p-5 text-sm text-[#596170]'>No analyst cases are available yet.</div>
+                        )}
+                    </main>
+
+                    <aside className='border-t border-[#e8edf5] bg-[#fbfcfe] xl:border-l xl:border-t-0'>
+                        <div className='grid gap-4 p-4'>
+                            <section className='rounded-lg border border-[#e0e5ed] bg-white'>
+                                <div className='border-b border-[#eef1f5] px-4 py-3'>
+                                    <h3 className='text-sm font-semibold text-[#171a21]'>Queue posture</h3>
+                                    <p className='mt-0.5 text-xs text-[#667085]'>Operational load by workflow queue.</p>
+                                </div>
+                                <div className='grid gap-2 p-3'>
+                                    {queues.map(queue => (
+                                        <div key={queue.name} className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
+                                            <span className='font-semibold text-[#171a21]'>{queue.name}</span>
+                                            <span className='text-[#667085]'>{queue.count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            <section className='rounded-lg border border-[#e0e5ed] bg-white'>
+                                <div className='border-b border-[#eef1f5] px-4 py-3'>
+                                    <h3 className='text-sm font-semibold text-[#171a21]'>Analyst controls</h3>
+                                    <p className='mt-0.5 text-xs text-[#667085]'>Fast links to the systems behind this case.</p>
+                                </div>
+                                <div className='grid gap-2 p-3'>
+                                    {selected?.relatedLinks.map(link => (
+                                        <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                            {link.label}
+                                            <ExternalLink className='h-3.5 w-3.5' />
+                                        </Link>
+                                    ))}
+                                </div>
+                            </section>
+                        </div>
+                    </aside>
+                </div>
             </div>
         </div>
     )
 }
 
-function CaseDetail({ item, decision, note, onNoteChange, onDecision }: {
+function CaseDetail({ item, decision, note, busyAction, onNoteChange, onDecision, onReplay, onSend }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
+    busyAction: string | null
     onNoteChange: (value: string) => void
-    onDecision: (decision: LocalDecision) => void
+    onDecision: (decision: LocalDecision) => void | Promise<void>
+    onReplay: () => void | Promise<void>
+    onSend: () => void | Promise<void>
 }) {
     const effectiveStatus = decision?.status ?? item.status
     const effectiveOwner = decision?.owner ?? item.owner
@@ -257,6 +338,12 @@ function CaseDetail({ item, decision, note, onNoteChange, onDecision }: {
                 <div className='flex flex-wrap gap-2 lg:justify-end'>
                     <DecisionButton onClick={() => onDecision({ status: 'reviewing', reason: note || 'Review started.' })}>Review</DecisionButton>
                     <DecisionButton onClick={() => onDecision({ status: 'escalated', reason: note || 'Escalated for customer or incident response.' })}>Escalate</DecisionButton>
+                    {item.kind === 'dwm_alert' && (
+                        <>
+                            <DecisionButton busy={busyAction === `replay:${item.id}`} onClick={onReplay}>Replay</DecisionButton>
+                            <DecisionButton busy={busyAction === `send:${item.id}`} onClick={onSend}>Send</DecisionButton>
+                        </>
+                    )}
                     <DecisionButton onClick={() => onDecision({ status: 'suppressed', reason: note || 'Suppressed as low-value or false positive.' })}>Suppress</DecisionButton>
                     <DecisionButton onClick={() => onDecision({ status: effectiveStatus === 'closed' ? 'needs_review' : 'closed', reason: note || (effectiveStatus === 'closed' ? 'Reopened for review.' : 'Closed in analyst workbench.') })}>
                         {effectiveStatus === 'closed' ? 'Reopen' : 'Close'}
@@ -364,12 +451,28 @@ type LocalDecision = {
     decidedAt?: string
 }
 
-function DecisionButton({ onClick, children }: { onClick: () => void, children: string }) {
+function DecisionButton({ busy = false, onClick, children }: { busy?: boolean, onClick: () => void | Promise<void>, children: string }) {
     return (
-        <button type='button' onClick={onClick} className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+        <button type='button' onClick={onClick} disabled={busy} className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'>
             {children}
         </button>
     )
+}
+
+async function readJson(response: Response) {
+    try {
+        return await response.json() as { error?: { message?: string }, attemptedCount?: number }
+    } catch {
+        return {}
+    }
+}
+
+function mapDwmDecision(status: string, currentStatus: string) {
+    if (status === 'reviewing') return { reviewState: 'reviewing', deliveryState: 'pending_review' }
+    if (status === 'escalated') return { reviewState: 'route_to_customer', deliveryState: 'ready_to_send' }
+    if (status === 'suppressed') return { reviewState: 'false_positive', deliveryState: 'muted' }
+    if (status === 'closed') return { reviewState: 'resolved', deliveryState: currentStatus === 'delivered' ? 'delivered' : 'muted' }
+    return { reviewState: 'needs_review', deliveryState: 'pending_review' }
 }
 
 function BriefStat({ icon, label: statLabel, value }: { icon: React.ReactNode, label: string, value: string }) {
