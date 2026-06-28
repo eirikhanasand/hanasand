@@ -2,6 +2,7 @@ import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir } from "./api
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
 const source: SourceRecord = {
@@ -41,6 +42,13 @@ const followupCapture: RawCapture = {
   sensitive: false,
   body: "Follow-up public Telegram post repeats acme.com Okta session cookie and AWS IAM key claims.",
   metadata: { adapter: "telegram_public", channel: "workflow_public", messageId: 43 }
+} as RawCapture;
+
+const duplicateCapture: RawCapture = {
+  ...capture,
+  id: "cap_workflow_acme_duplicate",
+  url: "https://t.me/workflow_public/42?mirror=1",
+  collectedAt: "2026-06-27T21:09:00.000Z"
 } as RawCapture;
 
 describe("dwm workflow persistence", () => {
@@ -136,5 +144,139 @@ describe("dwm workflow persistence", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("keeps org alert workflow transitions immutable and visible across duplicate rebuilds", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source);
+    store.saveCapture(capture);
+    const options = { store, frontier: new FocusedFrontier() };
+
+    const orgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+      method: "POST",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ name: "Workflow Alert Org", ownerEmail: "owner@workflow.example", ownerUserId: "owner-workflow" })
+    }), options);
+    const orgPayload = await orgResponse.json() as any;
+    const organizationId = orgPayload.organization.id;
+    (store as any).saveOrganizationMember({
+      id: "viewer-workflow",
+      organizationId,
+      email: "viewer@workflow.example",
+      userId: "viewer-workflow",
+      role: "viewer",
+      status: "active",
+      createdAt: "2026-06-27T21:00:00.000Z",
+      updatedAt: "2026-06-27T21:00:00.000Z"
+    });
+
+    const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId, name: "Workflow org watch", terms: [{ id: "watch_item_workflow_acme", value: "acme.com", kind: "domain" }] })
+    }), options);
+    expect(watchlistResponse.status).toBe(201);
+
+    const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId })
+    }), options);
+    const rebuild = await rebuildResponse.json() as any;
+    const alert = rebuild.alerts[0];
+
+    expect(rebuild.savedAlertCount).toBe(1);
+    expect(alert.organizationId).toBe(organizationId);
+    expect(alert.workflowContext.watchlistItemIds[0]).toContain("acme.com");
+
+    const viewerMutationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "viewer@workflow.example" },
+      body: JSON.stringify({ organizationId, status: "triaged", note: "Viewer cannot mutate." })
+    }), options);
+    expect(viewerMutationResponse.status).toBe(403);
+    expect((store as any).getDwmAlert(alert.id).workflowEvents ?? []).toHaveLength(0);
+
+    const triageResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId, status: "triaged", assignedOwner: "owner-workflow", severityOverride: "critical", note: "Triage accepted.", rationale: "Live capture matches owned domain." })
+    }), options);
+    const triage = await triageResponse.json() as any;
+    expect(triageResponse.status).toBe(200);
+    expect(triage.alert.workflowSummary).toMatchObject({ status: "triaged", assignedOwner: "owner-workflow", severityOverride: "critical", eventCount: 1 });
+
+    const missingRationaleResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId, status: "suppressed" })
+    }), options);
+    expect(missingRationaleResponse.status).toBe(400);
+
+    const suppressedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId, status: "suppressed", rationale: "Duplicate of known customer notification." })
+    }), options);
+    const suppressed = await suppressedResponse.json() as any;
+    expect(suppressedResponse.status).toBe(200);
+    expect(suppressed.alert).toMatchObject({ workflowStatus: "suppressed", reviewState: "false_positive", deliveryState: "muted" });
+    expect(suppressed.alert.suppressedAt).toBeTruthy();
+
+    const closedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId, status: "closed", rationale: "No customer action required after review." })
+    }), options);
+    const closed = await closedResponse.json() as any;
+    expect(closedResponse.status).toBe(200);
+    expect(closed.alert.workflowSummary).toMatchObject({ status: "closed", eventCount: 3 });
+    expect(closed.alert.closedAt).toBeTruthy();
+
+    const listClosedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
+      headers: { "x-user-email": "owner@workflow.example" }
+    }), options);
+    const listClosed = await listClosedResponse.json() as any;
+    expect(listClosed.alerts).toHaveLength(1);
+    expect(listClosed.alerts[0].workflowSummary).toMatchObject({ status: "closed", eventCount: 3 });
+
+    const reopenedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId, action: "reopen", note: "New duplicate replay should not wipe state." })
+    }), options);
+    const reopened = await reopenedResponse.json() as any;
+    expect(reopenedResponse.status).toBe(200);
+    expect(reopened.alert.workflowSummary).toMatchObject({ status: "reopened", eventCount: 4 });
+
+    store.saveCapture(duplicateCapture);
+    const duplicateRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId })
+    }), options);
+    const duplicateRebuild = await duplicateRebuildResponse.json() as any;
+    const preserved = duplicateRebuild.alerts.find((row: any) => row.id === alert.id);
+
+    expect(preserved).toMatchObject({
+      workflowStatus: "reopened",
+      assignedOwner: "owner-workflow",
+      severityOverride: "critical",
+      workflowRationale: "No customer action required after review."
+    });
+    expect(preserved.workflowEvents).toHaveLength(4);
+    expect(preserved.evidence).toHaveLength(1);
+    expect(preserved.provenance.captureIds).toEqual(["cap_workflow_acme"]);
+
+    const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}?organizationId=${organizationId}`, {
+      headers: { "x-user-email": "owner@workflow.example" }
+    }), options);
+    const detail = await detailResponse.json() as any;
+    expect(detail.workflowSummary).toMatchObject({
+      status: "reopened",
+      casePath: expect.stringContaining(`/v1/cases/${alert.caseIdCandidate}`),
+      eventCount: 4,
+      evidenceCount: 1
+    });
   });
 });

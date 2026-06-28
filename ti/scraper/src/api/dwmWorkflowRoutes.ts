@@ -145,7 +145,13 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
-  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, alerts: alerts.filter((row: any) => row.tenantId === tenantId) });
+  return json({
+    organization: scope.organization,
+    visibilityDecision: access.visibilityDecision,
+    alerts: alerts
+      .filter((row: any) => row.tenantId === tenantId)
+      .map((alert: any) => ({ ...alert, workflowSummary: buildDwmAlertWorkflowSummary(alert) }))
+  });
 }
 
 export function getDwmAlertDetail(url: URL, options: ApiServerOptions, alertId: string | undefined, request?: Request): Response {
@@ -170,36 +176,55 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
   if (access.error) return access.error;
   if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
   const generatedAt = nowIso();
-  const allowedReviewStates = new Set(["needs_review", "validate_identity", "route_to_customer", "watching", "false_positive_candidate", "reviewing", "resolved", "false_positive"]);
-  const allowedDeliveryStates = new Set(["pending_review", "ready_to_send", "sent", "delivered", "failed", "muted"]);
-  const reviewState = body.reviewState === undefined ? existing.reviewState : String(body.reviewState);
-  const deliveryState = body.deliveryState === undefined ? existing.deliveryState : String(body.deliveryState);
+  const workflowTransition = resolveAlertWorkflowTransition(existing, body);
+  if (workflowTransition.error) return workflowTransition.error;
+  const reviewState = workflowTransition.reviewState;
+  const deliveryState = workflowTransition.deliveryState;
   const assignedOwner = body.assignedOwner === undefined && body.owner === undefined ? existing.assignedOwner : normalizeOwner(body.assignedOwner ?? body.owner);
-  if (!allowedReviewStates.has(reviewState)) return json({ error: { code: "invalid_review_state", message: "Unsupported DWM alert review state." } }, 400);
-  if (!allowedDeliveryStates.has(deliveryState)) return json({ error: { code: "invalid_delivery_state", message: "Unsupported DWM alert delivery state." } }, 400);
+  const severityOverride = body.severityOverride === undefined && body.severity === undefined ? existing.severityOverride : normalizeSeverityOverride(body.severityOverride ?? body.severity);
+  if ((body.severityOverride !== undefined || body.severity !== undefined) && severityOverride === undefined) {
+    return json({ error: { code: "invalid_severity_override", message: "Severity override must be critical, high, medium, low, or null." } }, 400);
+  }
+  const note = normalizeWorkflowText(body.note);
+  const rationale = normalizeWorkflowText(body.rationale ?? body.reason);
+  if (requiresWorkflowRationale(workflowTransition.workflowStatus, existing.workflowStatus) && !rationale && !note) {
+    return json({ error: { code: "missing_workflow_rationale", message: "Suppressed and closed alert transitions require a note or rationale." } }, 400);
+  }
 
   const event = {
-    id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:${reviewState}:${deliveryState}:${assignedOwner ?? ""}:${body.note ?? ""}`),
+    id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:${existing.workflowEvents?.length ?? 0}:${workflowTransition.workflowStatus}:${assignedOwner ?? ""}:${severityOverride ?? ""}:${note ?? ""}:${rationale ?? ""}`),
     at: generatedAt,
     actor: String(body.actor ?? request.headers.get("x-actor-id") ?? "dashboard"),
+    eventType: workflowTransition.workflowStatus === existing.workflowStatus && note ? "workflow.note" : "workflow.transition",
+    fromWorkflowStatus: existing.workflowStatus ?? "new",
+    toWorkflowStatus: workflowTransition.workflowStatus,
     fromReviewState: existing.reviewState,
     toReviewState: reviewState,
     fromDeliveryState: existing.deliveryState,
     toDeliveryState: deliveryState,
     fromOwner: existing.assignedOwner,
     toOwner: assignedOwner,
-    note: body.note ? String(body.note).slice(0, 500) : undefined
+    fromSeverityOverride: existing.severityOverride,
+    toSeverityOverride: severityOverride,
+    note,
+    rationale
   };
   const alert = (options.store as any).saveDwmAlert({
     ...existing,
+    workflowStatus: workflowTransition.workflowStatus,
     reviewState,
     deliveryState,
     assignedOwner,
-    workflowNote: body.note ? String(body.note).slice(0, 500) : existing.workflowNote,
+    severityOverride,
+    workflowNote: note ?? existing.workflowNote,
+    workflowRationale: rationale ?? existing.workflowRationale,
+    suppressedAt: workflowTransition.workflowStatus === "suppressed" ? existing.suppressedAt ?? generatedAt : existing.suppressedAt,
+    closedAt: workflowTransition.workflowStatus === "closed" ? existing.closedAt ?? generatedAt : existing.closedAt,
+    reopenedAt: workflowTransition.workflowStatus === "reopened" ? generatedAt : existing.reopenedAt,
     updatedAt: generatedAt,
     workflowEvents: [...(existing.workflowEvents ?? []), event]
   });
-  return json({ visibilityDecision: access.visibilityDecision, alert, event });
+  return json({ visibilityDecision: access.visibilityDecision, alert: { ...alert, workflowSummary: buildDwmAlertWorkflowSummary(alert) }, event });
 }
 
 export async function replayDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
@@ -455,6 +480,10 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     matchContext: alert.matchContext,
     evidenceSummary: alert.evidenceSummary,
     routingContext: alert.routingContext,
+    workflowStatus: alert.workflowStatus ?? "new",
+    workflowSummary: buildDwmAlertWorkflowSummary(alert),
+    assignedOwner: alert.assignedOwner,
+    severityOverride: alert.severityOverride,
     reviewState: alert.reviewState,
     recommendedAction: alert.recommendedAction,
     recommendedRoute: alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
@@ -482,6 +511,8 @@ function selectWebhookDestination(options: ApiServerOptions, orgDestinations: We
 type DwmWorkflowAccessMode = "read" | "mutate";
 type DwmVisibilityPolicy = "members" | "admins" | "owners";
 type DwmVisibilityDenyReason = "not_member" | "member_removed" | "member_deactivated" | "role_not_allowed";
+type DwmAlertWorkflowStatus = "new" | "triaged" | "investigating" | "suppressed" | "closed" | "reopened";
+type DwmAlertSeverity = "critical" | "high" | "medium" | "low";
 type DwmVisibilityDecision = {
   allowed: boolean;
   reason: DwmVisibilityDenyReason | null;
@@ -494,6 +525,65 @@ type DwmWorkflowAccessResult = {
   visibilityDecision: DwmVisibilityDecision;
   error?: Response;
 };
+
+const allowedWorkflowStatuses = new Set<DwmAlertWorkflowStatus>(["new", "triaged", "investigating", "suppressed", "closed", "reopened"]);
+const allowedReviewStates = new Set(["needs_review", "validate_identity", "route_to_customer", "watching", "false_positive_candidate", "reviewing", "resolved", "false_positive"]);
+const allowedDeliveryStates = new Set(["pending_review", "ready_to_send", "sent", "delivered", "failed", "muted"]);
+
+function resolveAlertWorkflowTransition(existing: any, body: any): { workflowStatus: DwmAlertWorkflowStatus; reviewState: string; deliveryState: string; error?: Response } {
+  const requested = body.workflowStatus ?? body.status ?? statusForAction(body.action);
+  const workflowStatus = normalizeWorkflowStatus(requested, existing.workflowStatus ?? "new");
+  if (!workflowStatus) return { workflowStatus: "new", reviewState: existing.reviewState, deliveryState: existing.deliveryState, error: json({ error: { code: "invalid_workflow_status", message: "Workflow status must be new, triaged, investigating, suppressed, closed, or reopened." } }, 400) };
+  const defaults = defaultsForWorkflowStatus(workflowStatus, existing);
+  const reviewState = body.reviewState === undefined ? defaults.reviewState : String(body.reviewState);
+  const deliveryState = body.deliveryState === undefined ? defaults.deliveryState : String(body.deliveryState);
+  if (!allowedReviewStates.has(reviewState)) return { workflowStatus, reviewState, deliveryState, error: json({ error: { code: "invalid_review_state", message: "Unsupported DWM alert review state." } }, 400) };
+  if (!allowedDeliveryStates.has(deliveryState)) return { workflowStatus, reviewState, deliveryState, error: json({ error: { code: "invalid_delivery_state", message: "Unsupported DWM alert delivery state." } }, 400) };
+  return { workflowStatus, reviewState, deliveryState };
+}
+
+function statusForAction(action: unknown): string | undefined {
+  const normalized = String(action ?? "").trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (normalized === "triage" || normalized === "triaged") return "triaged";
+  if (normalized === "investigate" || normalized === "investigating" || normalized === "assign") return "investigating";
+  if (normalized === "suppress" || normalized === "suppressed") return "suppressed";
+  if (normalized === "close" || normalized === "closed" || normalized === "resolve") return "closed";
+  if (normalized === "reopen" || normalized === "reopened") return "reopened";
+  if (normalized === "note") return undefined;
+  return normalized;
+}
+
+function normalizeWorkflowStatus(value: unknown, fallback: DwmAlertWorkflowStatus): DwmAlertWorkflowStatus | undefined {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return fallback;
+  return allowedWorkflowStatuses.has(normalized as DwmAlertWorkflowStatus) ? normalized as DwmAlertWorkflowStatus : undefined;
+}
+
+function defaultsForWorkflowStatus(status: DwmAlertWorkflowStatus, existing: any): { reviewState: string; deliveryState: string } {
+  if (status === "new") return { reviewState: existing.reviewState ?? "needs_review", deliveryState: existing.deliveryState ?? "pending_review" };
+  if (status === "triaged") return { reviewState: "reviewing", deliveryState: existing.deliveryState ?? "pending_review" };
+  if (status === "investigating") return { reviewState: "validate_identity", deliveryState: existing.deliveryState ?? "pending_review" };
+  if (status === "suppressed") return { reviewState: "false_positive", deliveryState: "muted" };
+  if (status === "closed") return { reviewState: "resolved", deliveryState: existing.deliveryState === "delivered" ? "delivered" : "muted" };
+  return { reviewState: "reviewing", deliveryState: existing.deliveryState === "muted" ? "pending_review" : existing.deliveryState ?? "pending_review" };
+}
+
+function normalizeSeverityOverride(value: unknown): DwmAlertSeverity | null | undefined {
+  if (value === null || value === "" || value === false) return null;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return undefined;
+  return ["critical", "high", "medium", "low"].includes(normalized) ? normalized as DwmAlertSeverity : undefined;
+}
+
+function normalizeWorkflowText(value: unknown): string | undefined {
+  const text = String(value ?? "").trim().slice(0, 500);
+  return text || undefined;
+}
+
+function requiresWorkflowRationale(next: DwmAlertWorkflowStatus, previous: unknown): boolean {
+  return (next === "suppressed" || next === "closed") && next !== previous;
+}
 
 function resolveDwmAlertScope(input: { alert: any; body?: any; url?: URL; request?: Request }, options: ApiServerOptions) {
   const body = {
@@ -717,6 +807,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     generatedAt: nowIso(),
     visibilityDecision: access?.visibilityDecision,
     alert,
+    workflowSummary: buildDwmAlertWorkflowSummary(alert),
     deliveries,
     timeline,
     evidenceReplay,
@@ -734,4 +825,40 @@ function nextActionsForAlert(alert: any, deliveries: any[]) {
   if (alert.deliveryState === "ready_to_send") return ["Send the customer webhook.", "Keep monitoring the matched source and actor."];
   if (deliveries.some((delivery: any) => delivery.status === "delivered")) return ["Monitor for updates on the same watchlist term.", "Reopen if new evidence changes severity."];
   return ["Review the evidence.", "Mark ready when the customer should be notified.", "Mute if the match is a false positive."];
+}
+
+function buildDwmAlertWorkflowSummary(alert: any) {
+  const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
+  const lastEvent = events.at(-1);
+  const status = String(alert.workflowStatus ?? "new");
+  const effectiveSeverity = String(alert.severityOverride ?? alert.severity ?? "medium");
+  return {
+    schemaVersion: "dwm.alert_workflow_summary.v1",
+    status,
+    reviewState: alert.reviewState,
+    deliveryState: alert.deliveryState,
+    assignedOwner: alert.assignedOwner,
+    severity: alert.severity,
+    severityOverride: alert.severityOverride ?? null,
+    effectiveSeverity,
+    workflowNote: alert.workflowNote,
+    workflowRationale: alert.workflowRationale,
+    eventCount: events.length,
+    lastEventAt: lastEvent?.at,
+    lastEventType: lastEvent?.eventType,
+    lastActor: lastEvent?.actor,
+    caseId: alert.caseId,
+    caseIdCandidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate,
+    casePath: alert.casePath ?? alert.workflowContext?.casePath,
+    replayCount: Number(alert.replayCount ?? 0),
+    deliveredAt: alert.deliveredAt,
+    suppressedAt: alert.suppressedAt,
+    closedAt: alert.closedAt,
+    reopenedAt: alert.reopenedAt,
+    dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
+    evidenceCount: alert.workflowContext?.evidenceCount ?? (alert.evidence ?? []).length,
+    sourceFamily: alert.sourceFamily,
+    watchlistIds: alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [],
+    watchlistItemIds: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? []
+  };
 }

@@ -379,12 +379,22 @@ describe("dwm case workflow", () => {
       const analystAlertUpdateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
         method: "PATCH",
         headers: { "x-actor-id": "analyst-1" },
-        body: JSON.stringify({ organizationId, reviewState: "reviewing", note: "Analyst confirmed alert evidence is relevant." })
+        body: JSON.stringify({ organizationId, status: "triaged", assignedOwner: "analyst-1", severityOverride: "high", note: "Analyst confirmed alert evidence is relevant.", rationale: "Owned-domain evidence is relevant to the customer." })
       }), options);
       const analystAlertUpdate = await analystAlertUpdateResponse.json() as any;
       expect(analystAlertUpdateResponse.status).toBe(200);
       expect(analystAlertUpdate.visibilityDecision).toMatchObject({ allowed: true, reason: null });
       expect(analystAlertUpdate.alert.reviewState).toBe("reviewing");
+      expect(analystAlertUpdate.alert.workflowStatus).toBe("triaged");
+      expect(analystAlertUpdate.alert.assignedOwner).toBe("analyst-1");
+      expect(analystAlertUpdate.alert.severityOverride).toBe("high");
+      expect(analystAlertUpdate.alert.workflowSummary).toMatchObject({
+        status: "triaged",
+        assignedOwner: "analyst-1",
+        severityOverride: "high",
+        eventCount: 1,
+        casePath: expect.stringContaining(`/v1/cases/${alert.caseIdCandidate}`)
+      });
 
       const createCaseResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases", {
         method: "POST",
