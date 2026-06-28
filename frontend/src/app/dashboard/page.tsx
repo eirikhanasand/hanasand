@@ -79,6 +79,7 @@ export default async function Page({
         operations,
         deliveries,
         liveAlertCount: liveAlerts.length,
+        liveAlertIds: liveAlerts.map(alert => alert.id),
     })
     const handoffCases = buildPublicTiHandoffCase({
         decode: publicTiHandoff,

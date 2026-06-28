@@ -1,5 +1,5 @@
 import type { PublicTiHandoffDecodeResult } from '@/utils/ti/actorWorkbench'
-import type { WorkbenchAction, WorkbenchCase, WorkbenchEvidence, WorkbenchHandoffAction, WorkbenchPublicTiHandoff, WorkbenchTimelineItem, WorkbenchWorkflowStep } from './ti/workbench/workbenchClient'
+import type { WorkbenchAction, WorkbenchCase, WorkbenchEvidence, WorkbenchHandoffAction, WorkbenchProductReadinessItem, WorkbenchPublicTiHandoff, WorkbenchTimelineItem, WorkbenchWorkflowStep } from './ti/workbench/workbenchClient'
 
 export type OperatorScope = {
     tenantId: string
@@ -342,6 +342,7 @@ export function buildOrgOperatingContext(input: {
     operations?: DwmOperationsSnapshot | null
     deliveries?: DwmDeliveryItem[]
     liveAlertCount?: number
+    liveAlertIds?: string[]
 }) {
     const organization = input.organizationState.selectedOrganization
     const activeMembers = input.organizationState.members.filter(item => item.status === 'active')
@@ -350,6 +351,8 @@ export function buildOrgOperatingContext(input: {
     const activeWebhooks = input.organizationState.webhooks.filter(item => item.status === 'active')
     const termCount = activeWatchlists.reduce((sum, item) => sum + (item.terms || []).length, 0)
     const latestDelivery = (input.deliveries || [])[0]
+    const liveAlertIds = new Set(input.liveAlertIds || [])
+    const dashboardAlertDelivery = (input.deliveries || []).find(item => liveAlertIds.has(item.alertId) && item.status !== 'failed' && item.status !== 'skipped')
     const blockedReasons = [
         !input.backendConfigured ? 'TI_SCRAPER_API_BASE is not configured; org/team/watchlist state cannot be loaded.' : '',
         !organization ? 'No selected organization returned from GET /api/organizations.' : '',
@@ -357,6 +360,30 @@ export function buildOrgOperatingContext(input: {
         organization && !activeWatchlists.length ? 'No active shared DWM watchlist returned for this organization scope.' : '',
         organization && !activeWebhooks.length ? 'No active organization webhook destination returned.' : '',
     ].filter(Boolean)
+    const productReadiness = buildProductReadiness({
+        backendConfigured: input.backendConfigured,
+        organization,
+        activeMemberCount: activeMembers.length,
+        pendingInviteCount: pendingInvites.length,
+        activeWatchlistCount: activeWatchlists.length,
+        termCount,
+        activeWebhookCount: activeWebhooks.length,
+        sourceCoverage: input.operations ? {
+            sourceCount: input.operations.counts.sourceCount,
+            activeSourceCount: input.operations.counts.activeSourceCount,
+            captureCount: input.operations.counts.captureCount,
+            watchlistMatchCount: input.operations.counts.watchlistMatchCount,
+            latestRunStatus: input.operations.latestRun?.status,
+            latestRunAt: input.operations.latestRun?.updatedAt,
+        } : undefined,
+        liveAlertCount: input.liveAlertCount ?? 0,
+        dashboardAlertDelivery,
+        latestDelivery,
+    })
+    const fullChainBlockedBy = productReadiness
+        .filter(item => item.status !== 'ready' && ['org_members', 'shared_watchlists', 'source_coverage', 'dashboard_alert', 'webhook_delivery'].includes(item.id))
+        .map(item => `${item.label}: ${item.detail}`)
+    const fullChainReady = fullChainBlockedBy.length === 0
 
     return {
         scope: input.scope,
@@ -394,6 +421,9 @@ export function buildOrgOperatingContext(input: {
                 httpStatus: latestDelivery.httpStatus,
                 error: latestDelivery.error,
             } : undefined,
+            fullChainReady,
+            fullChainBlockedBy,
+            productReadiness,
         },
         links: organization ? [
             { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' },
@@ -416,6 +446,117 @@ export function buildOrgOperatingContext(input: {
             },
         } : undefined,
     }
+}
+
+function buildProductReadiness(input: {
+    backendConfigured: boolean
+    organization?: DwmOrganizationSummary
+    activeMemberCount: number
+    pendingInviteCount: number
+    activeWatchlistCount: number
+    termCount: number
+    activeWebhookCount: number
+    sourceCoverage?: {
+        sourceCount: number
+        activeSourceCount: number
+        captureCount: number
+        watchlistMatchCount: number
+        latestRunStatus?: string
+        latestRunAt?: string
+    }
+    liveAlertCount: number
+    dashboardAlertDelivery?: DwmDeliveryItem
+    latestDelivery?: DwmDeliveryItem
+}): WorkbenchProductReadinessItem[] {
+    const organizationStatus: WorkbenchProductReadinessItem['status'] = !input.backendConfigured
+        ? 'unavailable'
+        : input.organization && input.activeMemberCount ? 'ready' : 'blocked'
+    const watchlistStatus: WorkbenchProductReadinessItem['status'] = input.activeWatchlistCount && input.termCount ? 'ready' : 'needs_action'
+    const sourceStatus: WorkbenchProductReadinessItem['status'] = !input.sourceCoverage
+        ? 'unavailable'
+        : input.sourceCoverage.activeSourceCount > 0 ? 'ready' : 'blocked'
+    const alertStatus: WorkbenchProductReadinessItem['status'] = input.liveAlertCount > 0 ? 'ready' : input.activeWatchlistCount && input.sourceCoverage?.activeSourceCount ? 'needs_action' : 'blocked'
+    const deliveryStatus: WorkbenchProductReadinessItem['status'] = input.dashboardAlertDelivery
+        ? 'ready'
+        : input.activeWebhookCount ? 'needs_action' : 'blocked'
+
+    return [
+        {
+            id: 'org_members',
+            label: 'Org and members',
+            status: organizationStatus,
+            detail: input.organization
+                ? `${input.organization.name}; ${input.activeMemberCount} active member${input.activeMemberCount === 1 ? '' : 's'}, ${input.pendingInviteCount} pending invite${input.pendingInviteCount === 1 ? '' : 's'}.`
+                : input.backendConfigured ? 'No selected organization was returned by the organization API.' : 'TI scraper backend is not configured for organization state.',
+            source: 'GET /api/organizations + /api/organizations/:id/members',
+            href: input.organization ? `/api/organizations/${encodeURIComponent(input.organization.id)}/members` : '/dashboard',
+            checkedAt: input.organization?.updatedAt,
+        },
+        {
+            id: 'shared_watchlists',
+            label: 'Shared watchlists',
+            status: watchlistStatus,
+            detail: `${input.activeWatchlistCount} active watchlist${input.activeWatchlistCount === 1 ? '' : 's'} with ${input.termCount} term${input.termCount === 1 ? '' : 's'}.`,
+            source: 'GET/POST /api/dwm/watchlists',
+            href: '/dashboard/dwm',
+        },
+        {
+            id: 'source_coverage',
+            label: 'Source coverage',
+            status: sourceStatus,
+            detail: input.sourceCoverage
+                ? `${input.sourceCoverage.activeSourceCount}/${input.sourceCoverage.sourceCount} active sources; ${input.sourceCoverage.captureCount} captures; latest run ${input.sourceCoverage.latestRunStatus || 'not returned'}.`
+                : 'The dashboard did not receive /api/dwm/operations source coverage.',
+            source: 'GET /api/dwm/operations',
+            href: '/dashboard/ti/sources',
+            checkedAt: input.sourceCoverage?.latestRunAt,
+        },
+        {
+            id: 'dashboard_alert',
+            label: 'Dashboard alert',
+            status: alertStatus,
+            detail: input.liveAlertCount
+                ? `${input.liveAlertCount} backend alert${input.liveAlertCount === 1 ? '' : 's'} surfaced in the dashboard queue.`
+                : 'No backend DWM alert is surfaced in the dashboard queue; fallback rows do not count.',
+            source: 'GET /api/dwm/alerts as active org member',
+            href: '/dashboard/ti/workbench',
+        },
+        {
+            id: 'webhook_delivery',
+            label: 'Webhook delivery',
+            status: deliveryStatus,
+            detail: input.dashboardAlertDelivery
+                ? `${input.dashboardAlertDelivery.status} delivery ${input.dashboardAlertDelivery.id} for surfaced alert ${input.dashboardAlertDelivery.alertId}.`
+                : input.latestDelivery ? `Latest delivery ${input.latestDelivery.id} is for ${input.latestDelivery.alertId}, but not for a dashboard-surfaced alert.` : 'No delivery row is tied to a dashboard-surfaced alert.',
+            source: 'GET /api/dwm/webhooks/deliveries',
+            href: '/dashboard/automations?setup=dwm',
+            checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.latestDelivery?.attemptedAt,
+        },
+        {
+            id: 'public_ti_provenance',
+            label: 'Public TI provenance',
+            status: 'needs_action',
+            detail: 'Public TI handoff payloads are validated per selected artifact; no global provenance API is loaded here.',
+            source: 'Public TI handoff contract',
+            href: '/ti/apt29',
+        },
+        {
+            id: 'helpdesk_audit',
+            label: 'Helpdesk and audit',
+            status: 'unavailable',
+            detail: 'Support/audit routes exist, but this dashboard does not fetch a helpdesk readiness snapshot yet.',
+            source: 'Missing dashboard readiness API',
+            href: '/dashboard/system/impersonation',
+        },
+        {
+            id: 'deploy_probe',
+            label: 'Deploy and live probes',
+            status: 'unavailable',
+            detail: 'Deploy/probe recency is tracked in integration handoffs; no product-progress API is loaded by this dashboard.',
+            source: 'Missing /api/product-progress contract',
+            href: '/status',
+        },
+    ]
 }
 
 function publicTiHandoffCase(input: {

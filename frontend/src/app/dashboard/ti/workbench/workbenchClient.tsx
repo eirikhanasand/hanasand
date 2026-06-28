@@ -155,6 +155,16 @@ export type WorkbenchReadinessEvidenceState = {
     sourceCount?: number
 }
 
+export type WorkbenchProductReadinessItem = {
+    id: string
+    label: string
+    status: 'ready' | 'needs_action' | 'blocked' | 'unavailable'
+    detail: string
+    source: string
+    href?: string
+    checkedAt?: string
+}
+
 export type WorkbenchOrgContext = {
     scope: { tenantId: string, organizationId?: string }
     organization?: {
@@ -188,6 +198,9 @@ export type WorkbenchOrgContext = {
             latestRunAt?: string
         }
         latestDelivery?: WorkbenchDeliveryEvidence
+        fullChainReady: boolean
+        fullChainBlockedBy: string[]
+        productReadiness: WorkbenchProductReadinessItem[]
     }
     links: Array<{ href: string, label: string }>
     createWatchlistAction?: WorkbenchAction
@@ -728,6 +741,8 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, invit
                     <OperatorRow label='Case role' value={access?.role ? `${access.role}${access.readOnly ? ' · read only' : ' · can mutate'}` : 'no case access response'} tone={access ? access.readOnly ? 'needs_action' : 'ready' : 'needs_action'} />
                 </div>
 
+                <ProductReadinessPanel orgContext={orgContext} />
+
                 {blockedReason && (
                     <InspectionNotice tone='blocked' title='Blocked' body={blockedReason} />
                 )}
@@ -1147,6 +1162,63 @@ function handoffEnvelope(handoff: WorkbenchPublicTiHandoff) {
         query: handoff.query,
         generatedAt: handoff.generatedAt,
     }
+}
+
+function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContext }) {
+    const items = orgContext?.readiness.productReadiness || []
+    if (!items.length) {
+        return (
+            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div>
+                        <p className='text-xs font-semibold uppercase text-[#667085]'>Product readiness</p>
+                        <p className='mt-1 text-xs leading-5 text-[#596170]'>The dashboard has no readiness contract loaded yet.</p>
+                    </div>
+                    <span className={workflowStatusClass('blocked')}>blocked</span>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Product readiness</p>
+                    <p className='mt-1 text-xs leading-5 text-[#596170]'>
+                        {orgContext?.readiness.fullChainReady
+                            ? 'Org, watchlist, sources, dashboard alert, and delivery evidence are loaded.'
+                            : `Not complete: ${(orgContext?.readiness.fullChainBlockedBy || ['live dashboard proof missing']).join('; ')}.`}
+                    </p>
+                </div>
+                <span className={workflowStatusClass(orgContext?.readiness.fullChainReady ? 'ready' : 'blocked')}>
+                    {orgContext?.readiness.fullChainReady ? 'ready' : 'blocked'}
+                </span>
+            </div>
+            <div className='mt-3 grid gap-2'>
+                {items.map(item => {
+                    const tone = productReadinessTone(item.status)
+                    const content = (
+                        <div className='flex items-start justify-between gap-3 rounded-lg border border-[#eef1f5] bg-white px-3 py-2 text-left transition hover:border-[#cfd8e6]'>
+                            <div className='min-w-0'>
+                                <p className='truncate text-xs font-semibold text-[#171a21]'>{item.label}</p>
+                                <p className='mt-0.5 line-clamp-2 text-[11px] leading-4 text-[#667085]'>{item.detail}</p>
+                                <p className='mt-1 truncate text-[10px] font-semibold uppercase text-[#98a2b3]'>{item.source}</p>
+                            </div>
+                            <span className={workflowStatusClass(tone)}>{label(item.status)}</span>
+                        </div>
+                    )
+                    return item.href ? <Link key={item.id} href={item.href}>{content}</Link> : <div key={item.id}>{content}</div>
+                })}
+            </div>
+        </div>
+    )
+}
+
+function productReadinessTone(status: WorkbenchProductReadinessItem['status']): WorkbenchWorkflowStep['status'] {
+    if (status === 'ready') return 'ready'
+    if (status === 'needs_action') return 'needs_action'
+    return 'blocked'
 }
 
 function OperatorReadinessRows({ orgContext, selected, caseDetail }: { orgContext?: WorkbenchOrgContext, selected?: WorkbenchCase, caseDetail?: CaseDetailState }) {

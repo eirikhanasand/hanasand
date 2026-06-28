@@ -183,6 +183,17 @@ const orgContext = buildOrgOperatingContext({
     operations,
     deliveries,
     liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+})
+const blockedDeliveryOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_without_delivery'],
 })
 const blockedOrgContext = buildOrgOperatingContext({
     backendConfigured: false,
@@ -544,6 +555,10 @@ void (orgContext satisfies WorkbenchOrgContext)
 void (orgContext.createWatchlistAction satisfies WorkbenchAction | undefined)
 void (orgContext.readiness.sourceCoverage?.activeSourceCount satisfies number | undefined)
 void (orgContext.readiness.latestDelivery satisfies WorkbenchDeliveryEvidence | undefined)
+void (orgContext.readiness.fullChainReady satisfies boolean)
+void (orgContext.readiness.productReadiness[0]?.status satisfies string | undefined)
+void (blockedDeliveryOrgContext.readiness.fullChainReady satisfies boolean)
+void (blockedDeliveryOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void (blockedOrgContext.readiness.blockedReasons satisfies string[])
 void (publicTiDecode.ok satisfies boolean)
 void (malformedPublicTiDecode.ok satisfies boolean)
