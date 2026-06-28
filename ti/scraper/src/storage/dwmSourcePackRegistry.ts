@@ -1,3 +1,5 @@
+import type { CollectionTask, SourceRecord } from "../types.ts";
+
 export type DwmSourcePackFamily = "telegram" | "darkweb_onion" | "darkweb_metadata" | "actor_page" | "public_advisory" | "clear_web";
 
 export type DwmSourcePackCandidateRecord = {
@@ -258,6 +260,59 @@ export type DwmSourcePackWorkerReadinessCounters = {
   collectionReadyRows: number;
   byFamily: Record<DwmSourcePackFamily, { active: number; collectionReady: number; retryScheduled: number; failed: number; blocked: number }>;
   safeRejectedRows: number;
+};
+
+export type DwmSourcePackSourceRecordUpsertReceipt = {
+  status: "inserted" | "duplicate" | "blocked";
+  sourceId: string;
+  candidateId: string;
+  source?: SourceRecord;
+  reason?: string;
+};
+
+export type DwmSourcePackSourceRecordPersistenceResult = {
+  receipts: DwmSourcePackSourceRecordUpsertReceipt[];
+  sources: SourceRecord[];
+  summary: {
+    insertedCount: number;
+    duplicateCount: number;
+    blockedCount: number;
+    sourceRecordCount: number;
+    collectionEligibleCount: number;
+  };
+  safeOutput: Record<string, boolean>;
+};
+
+export type DwmSourcePackSourceStore = {
+  saveSource(source: SourceRecord): SourceRecord;
+  getSource?(id: string): SourceRecord | undefined;
+  listSources?(): SourceRecord[];
+};
+
+export type DwmSourcePackCollectionQueueReceipt = {
+  status: "queued" | "duplicate" | "blocked";
+  taskId: string;
+  sourceId: string;
+  candidateId: string;
+  task?: CollectionTask;
+  reason?: string;
+};
+
+export type DwmSourcePackCollectionQueueResult = {
+  receipts: DwmSourcePackCollectionQueueReceipt[];
+  tasks: CollectionTask[];
+  summary: {
+    queuedCount: number;
+    duplicateCount: number;
+    blockedCount: number;
+    taskCount: number;
+  };
+  safeOutput: Record<string, boolean>;
+};
+
+export type DwmSourcePackFrontierQueue = {
+  enqueueTask(task: CollectionTask): unknown;
+  snapshot?(): Array<{ id?: string; task?: { id?: string } }>;
 };
 
 export type DwmSourcePackActivationResult = {
@@ -1169,6 +1224,179 @@ export function sourcePackWorkerReadinessCounters(
   };
 }
 
+export function sourceRecordFromDwmSourcePackActiveRow(
+  row: DwmSourcePackActiveSourceRow,
+  options: { tenantId?: string; generatedAt?: string; approvedBy?: string } = {}
+): SourceRecord {
+  assertSafeActiveSourceRow(row);
+  const generatedAt = options.generatedAt ?? row.activatedAt;
+  const metadataOnly = isRestrictedFamily(row.family);
+  return {
+    id: row.sourceId,
+    tenantId: options.tenantId,
+    name: sourceNameForActiveRow(row),
+    type: sourceTypeForActiveRow(row),
+    url: safeSourceUrlForActiveRow(row),
+    accessMethod: metadataOnly ? "approved_proxy" : row.family === "telegram" ? "official_api" : "public_http",
+    status: "active",
+    risk: metadataOnly ? "restricted" : row.family === "telegram" ? "medium" : "low",
+    trustScore: clamp01(row.validationScore),
+    language: "unknown",
+    crawlFrequencySeconds: sourceCrawlFrequencyForActiveRow(row),
+    legalNotes: metadataOnly
+      ? "Metadata-only source-pack activation. Raw payload download, credential access, and private interaction remain disabled."
+      : "Source-pack activation validated for bounded public collection. No private access or credential use.",
+    approvedAt: generatedAt,
+    approvedBy: options.approvedBy ?? "source-pack-worker",
+    governance: {
+      approvalRequired: true,
+      approvalState: "approved",
+      metadataOnly,
+      approvedAt: generatedAt,
+      approvedBy: options.approvedBy ?? "source-pack-worker",
+      policyVersion: "source-pack-worker:v1",
+      riskJustification: metadataOnly ? "restricted source metadata-only onboarding" : "validated source-pack onboarding"
+    },
+    health: {
+      status: "not_collected",
+      lastCheckedAt: generatedAt,
+      errorRate: 0,
+      consecutiveFailures: 0,
+      parserStatus: row.parserStatus
+    },
+    scoring: {
+      reliability: clamp01(row.validationScore),
+      freshness: 0.5,
+      relevance: clamp01(row.validationScore),
+      uniqueness: 0.5,
+      parseability: row.parserStatus.includes("ready") ? 0.9 : 0.5,
+      policyRiskPenalty: metadataOnly ? 0.4 : 0,
+      operatorBoost: 0
+    },
+    crawlState: {
+      nextEligibleAt: row.retry.retryAfter,
+      retryCount: row.retry.attempt
+    },
+    tags: [row.family, row.packId, row.requestId],
+    metadata: {
+      sourcePack: {
+        packId: row.packId,
+        requestId: row.requestId,
+        candidateId: row.candidateId,
+        validationJobKey: row.validationJobKey,
+        validationScore: row.validationScore,
+        activationState: row.activationState,
+        parserStatus: row.parserStatus,
+        targetHash: row.targetHash,
+        targetPreview: row.targetPreview,
+        targetRawStored: false,
+        collectionMode: collectionModeForActiveSource(row),
+        alertGradeEvidenceEligible: row.alertGradeEvidenceEligible
+      },
+      policyBoundary: row.policyBoundary,
+      sourceFamily: row.family
+    },
+    lifecycle: [{
+      at: generatedAt,
+      from: "candidate",
+      to: "active",
+      reason: "source-pack validation promoted candidate to durable source record",
+      actorId: options.approvedBy ?? "source-pack-worker"
+    }],
+    createdAt: generatedAt,
+    updatedAt: generatedAt
+  } as SourceRecord;
+}
+
+export function persistDwmSourcePackSourceRecords(
+  store: DwmSourcePackSourceStore,
+  activeRows: DwmSourcePackActiveSourceRow[],
+  options: { tenantId?: string; generatedAt?: string; approvedBy?: string } = {}
+): DwmSourcePackSourceRecordPersistenceResult {
+  const receipts: DwmSourcePackSourceRecordUpsertReceipt[] = [];
+  const sources: SourceRecord[] = [];
+  for (const row of activeRows) {
+    try {
+      const source = sourceRecordFromDwmSourcePackActiveRow(row, options);
+      const existing = store.getSource?.(source.id) ?? store.listSources?.().find((item) => item.id === source.id);
+      if (existing) {
+        receipts.push({ status: "duplicate", sourceId: source.id, candidateId: row.candidateId, source: existing });
+        sources.push(existing);
+        continue;
+      }
+      const saved = store.saveSource(source);
+      receipts.push({ status: "inserted", sourceId: source.id, candidateId: row.candidateId, source: saved });
+      sources.push(saved);
+    } catch (error) {
+      receipts.push({
+        status: "blocked",
+        sourceId: row.sourceId,
+        candidateId: row.candidateId,
+        reason: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  return {
+    receipts,
+    sources,
+    summary: {
+      insertedCount: receipts.filter((receipt) => receipt.status === "inserted").length,
+      duplicateCount: receipts.filter((receipt) => receipt.status === "duplicate").length,
+      blockedCount: receipts.filter((receipt) => receipt.status === "blocked").length,
+      sourceRecordCount: store.listSources?.().length ?? sources.length,
+      collectionEligibleCount: sources.filter((source) => source.metadata?.sourcePack?.alertGradeEvidenceEligible === true).length
+    },
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
+export function enqueueDwmSourcePackCollectionTasks(
+  frontier: DwmSourcePackFrontierQueue,
+  jobs: DwmSourcePackCollectionJobHandoff[],
+  sources: SourceRecord[],
+  options: { tenantId?: string; maxBytes?: number } = {}
+): DwmSourcePackCollectionQueueResult {
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const existingTaskIds = new Set((frontier.snapshot?.() ?? []).map((item) => item.task?.id ?? item.id).filter((id): id is string => Boolean(id)));
+  const receipts: DwmSourcePackCollectionQueueReceipt[] = [];
+  const tasks: CollectionTask[] = [];
+  for (const job of jobs) {
+    const source = sourceById.get(job.sourceId);
+    if (!source) {
+      receipts.push({ status: "blocked", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId, reason: "source record missing" });
+      continue;
+    }
+    if (job.targetRawStored !== false) {
+      receipts.push({ status: "blocked", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId, reason: "raw target storage is not allowed" });
+      continue;
+    }
+    if (isRestrictedFamily(job.family) && source.governance?.metadataOnly !== true) {
+      receipts.push({ status: "blocked", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId, reason: "restricted source requires metadata-only governance" });
+      continue;
+    }
+    if (existingTaskIds.has(job.id)) {
+      receipts.push({ status: "duplicate", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId });
+      continue;
+    }
+    const task = collectionTaskFromSourcePackJob(job, source, options);
+    frontier.enqueueTask(task);
+    existingTaskIds.add(job.id);
+    receipts.push({ status: "queued", taskId: job.id, sourceId: job.sourceId, candidateId: job.candidateId, task });
+    tasks.push(task);
+  }
+  return {
+    receipts,
+    tasks,
+    summary: {
+      queuedCount: receipts.filter((receipt) => receipt.status === "queued").length,
+      duplicateCount: receipts.filter((receipt) => receipt.status === "duplicate").length,
+      blockedCount: receipts.filter((receipt) => receipt.status === "blocked").length,
+      taskCount: frontier.snapshot?.().length ?? tasks.length
+    },
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
 export function buildDwmSourcePackRegistrySql() {
   return {
     createPacksTable: `
@@ -1324,6 +1552,77 @@ function collectionModeForActiveSource(row: DwmSourcePackActiveSourceRow): DwmSo
   if (row.family === "telegram") return "bounded_public_preview";
   if (isRestrictedFamily(row.family)) return "metadata_only";
   return "parser_readiness";
+}
+
+function collectionTaskFromSourcePackJob(
+  job: DwmSourcePackCollectionJobHandoff,
+  source: SourceRecord,
+  options: { tenantId?: string; maxBytes?: number }
+): CollectionTask {
+  return {
+    id: job.id,
+    tenantId: source.tenantId ?? options.tenantId,
+    sourceId: job.sourceId,
+    sourceType: source.type,
+    targetUrl: source.url,
+    queuedAt: job.queuedAt,
+    availableAt: job.retry.retryAfter,
+    priority: clamp01(job.validationScore),
+    reason: `source-pack ${job.collectionMode} validation handoff`,
+    retryCount: job.retry.attempt,
+    maxRetries: job.retry.maxAttempts,
+    maxBytes: options.maxBytes ?? (job.collectionMode === "metadata_only" ? 128_000 : 512_000),
+    fairnessKey: `${source.tenantId ?? options.tenantId ?? "global"}:${job.family}:source-pack`,
+    intelRequestId: job.requestId,
+    crawlBudgetKey: `${source.tenantId ?? options.tenantId ?? "global"}:source-pack:${job.family}`,
+    planning: {
+      budgetClass: job.collectionMode === "bounded_public_preview" ? "interactive_live_search" : "background_source_growth",
+      decision: "selected",
+      selectedFor: "source_growth",
+      reason: `validated ${job.family} source-pack candidate`,
+      sourcePack: {
+        packId: job.packId,
+        requestId: job.requestId,
+        candidateId: job.candidateId,
+        validationJobKey: job.validationJobKey,
+        parserStatus: job.parserStatus,
+        validationScore: job.validationScore,
+        collectionMode: job.collectionMode,
+        targetHash: job.targetHash,
+        targetRawStored: false
+      },
+      safetyEnvelope: {
+        allowPublicChannel: job.collectionMode === "bounded_public_preview",
+        allowRestrictedMetadata: job.collectionMode === "metadata_only",
+        metadataOnlyRestricted: job.collectionMode === "metadata_only",
+        forbiddenOperations: ["credential_bypass", "private_community_access", "payload_download", "captcha_solving"]
+      }
+    }
+  } as CollectionTask;
+}
+
+function sourceNameForActiveRow(row: DwmSourcePackActiveSourceRow): string {
+  return `${row.family} source-pack candidate ${row.candidateId}`;
+}
+
+function sourceTypeForActiveRow(row: DwmSourcePackActiveSourceRow): string {
+  if (row.family === "telegram") return "telegram_public";
+  if (row.family === "darkweb_onion" || row.family === "darkweb_metadata") return "tor_metadata";
+  if (row.family === "public_advisory") return "api";
+  if (row.family === "actor_page" || row.family === "clear_web") return "static_web";
+  return row.sourceType;
+}
+
+function safeSourceUrlForActiveRow(row: DwmSourcePackActiveSourceRow): string {
+  if (row.family === "telegram" && row.targetPreview.startsWith("https://t.me/")) return row.targetPreview;
+  if (row.family === "telegram" && row.targetPreview.startsWith("@")) return `https://t.me/${row.targetPreview.slice(1)}`;
+  return `source-pack://${row.family}/${encodeURIComponent(row.targetHash)}`;
+}
+
+function sourceCrawlFrequencyForActiveRow(row: DwmSourcePackActiveSourceRow): number {
+  if (row.family === "telegram") return 300;
+  if (isRestrictedFamily(row.family)) return 1800;
+  return 3600;
 }
 
 function countRowsByFamily(rows: DwmSourcePackActiveSourceRow[]): Partial<Record<DwmSourcePackFamily, number>> {

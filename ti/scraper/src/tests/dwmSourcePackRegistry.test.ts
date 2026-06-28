@@ -4,11 +4,13 @@ import {
   buildDwmSourcePackCollectionJobHandoff,
   buildDwmSourcePackPersistenceShape,
   buildDwmSourcePackWorkerIntegrationShape,
+  enqueueDwmSourcePackCollectionTasks,
   DwmSourcePackPostgresAdapter,
   InMemoryDwmSourcePackActiveSourceAdapter,
   InMemoryDwmSourcePackRegistryAdapter,
   InMemoryDwmSourcePackValidationQueueAdapter,
   enqueueDwmSourcePackValidationJobs,
+  persistDwmSourcePackSourceRecords,
   persistDwmSourcePackActiveSources,
   planDwmSourcePackBulkImport,
   planDwmSourcePackValidationBatch,
@@ -23,6 +25,8 @@ import {
   type DwmSourcePackRecord,
   type DwmSourcePackSqlDriver
 } from "../storage/dwmSourcePackRegistry.ts";
+import type { CollectionTask, SourceRecord } from "../types.ts";
+import { sourceRecordToPostgresRows } from "../storage/sourceRegistryPostgres.ts";
 
 describe("dwm source pack registry adapter", () => {
   test("persists packs across adapter restarts and supports family search", () => {
@@ -476,6 +480,136 @@ describe("dwm source pack registry adapter", () => {
     expect(JSON.stringify(activation)).not.toContain("rawPayload");
   });
 
+  test("persists validated candidates as durable source records and queues collection jobs idempotently", () => {
+    const store = new FakeSourceStore();
+    const frontier = new FakeFrontierQueue();
+    const queue = new InMemoryDwmSourcePackValidationQueueAdapter();
+    const sourcePack = pack({
+      id: "pack_durable_growth",
+      requestId: "req_durable_growth",
+      candidates: [
+        candidate({
+          id: "cand_durable_tg",
+          declaredFamily: "telegram",
+          targetRef: { hash: "hash_durable_tg", preview: "https://t.me/durable_public", family: "telegram", rawStored: false }
+        }),
+        candidate({
+          id: "cand_durable_dark",
+          declaredFamily: "darkweb_metadata",
+          policyBoundary: { metadataOnly: true, noPrivateAccess: true, noPayloadDownload: true }
+        }),
+        candidate({
+          id: "cand_durable_blocked",
+          declaredFamily: "darkweb_onion",
+          policyBoundary: { metadataOnly: false, noPrivateAccess: true }
+        }),
+        candidate({ id: "cand_durable_retry", declaredFamily: "public_advisory" })
+      ]
+    });
+    const plan = planDwmSourcePackValidationBatch([sourcePack], {
+      chunkSize: 4,
+      maxAttempts: 4,
+      backoffSeconds: 120,
+      generatedAt: "2026-06-28T13:00:00.000Z"
+    });
+    const receipt = enqueueDwmSourcePackValidationJobs(queue, [sourcePack], plan, { generatedAt: "2026-06-28T13:00:00.000Z" }).receipts[0];
+    const run = runDwmSourcePackValidationJob(receipt.record.job, sourcePack, durableGrowthValidator, {
+      generatedAt: "2026-06-28T13:01:00.000Z"
+    });
+    queue.transition(receipt.jobKey, run.job.status, { job: run.job, updatedAt: "2026-06-28T13:01:00.000Z" });
+    const activation = applyDwmSourcePackValidationResults(sourcePack, queue.get(receipt.jobKey)!, run.results, {
+      generatedAt: "2026-06-28T13:02:00.000Z",
+      actor: "source-pack-worker"
+    });
+    const sourceWrite = persistDwmSourcePackSourceRecords(store, activation.activeSources, {
+      tenantId: "tenant_growth",
+      generatedAt: "2026-06-28T13:03:00.000Z",
+      approvedBy: "source-growth-worker"
+    });
+    const duplicateWrite = persistDwmSourcePackSourceRecords(store, activation.activeSources, {
+      tenantId: "tenant_growth",
+      generatedAt: "2026-06-28T13:04:00.000Z",
+      approvedBy: "source-growth-worker"
+    });
+    const handoff = buildDwmSourcePackCollectionJobHandoff(activation.activeSources, { generatedAt: "2026-06-28T13:05:00.000Z" });
+    const queued = enqueueDwmSourcePackCollectionTasks(frontier, handoff.jobs, store.listSources(), { tenantId: "tenant_growth" });
+    const queuedAgain = enqueueDwmSourcePackCollectionTasks(frontier, handoff.jobs, store.listSources(), { tenantId: "tenant_growth" });
+
+    expect(activation.summary).toEqual({
+      activeSourceCount: 2,
+      blockedCandidateCount: 2,
+      retryScheduledCount: 1,
+      failedCount: 1,
+      disabledCount: 0
+    });
+    expect(activation.blockedCandidates).toEqual(expect.arrayContaining([
+      { candidateId: "cand_durable_blocked", state: "failed", reason: "Restricted source candidate requires metadataOnly policy boundary before activation" },
+      { candidateId: "cand_durable_retry", state: "retry_scheduled", reason: "fixture retry" }
+    ]));
+    expect(sourceWrite.summary).toEqual({
+      insertedCount: 2,
+      duplicateCount: 0,
+      blockedCount: 0,
+      sourceRecordCount: 2,
+      collectionEligibleCount: 2
+    });
+    expect(duplicateWrite.summary).toMatchObject({ insertedCount: 0, duplicateCount: 2, sourceRecordCount: 2 });
+    expect(store.listSources()).toMatchObject([
+      {
+        id: "src_cand_durable_tg",
+        tenantId: "tenant_growth",
+        type: "telegram_public",
+        url: "https://t.me/durable_public",
+        status: "active",
+        governance: { metadataOnly: false, approvalState: "approved" },
+        metadata: { sourcePack: { packId: "pack_durable_growth", validationScore: 0.93, targetRawStored: false } }
+      },
+      {
+        id: "src_cand_durable_dark",
+        tenantId: "tenant_growth",
+        type: "tor_metadata",
+        url: "source-pack://darkweb_metadata/hash_cand_durable_dark",
+        status: "active",
+        governance: { metadataOnly: true, approvalState: "approved" },
+        metadata: { sourcePack: { collectionMode: "metadata_only", targetRawStored: false } }
+      }
+    ]);
+    const darkRows = sourceRecordToPostgresRows(store.getSource("src_cand_durable_dark")!);
+    expect(darkRows.sources[0]).toMatchObject({
+      id: "src_cand_durable_dark",
+      type: "tor_metadata",
+      status: "active",
+      metadata: { sourcePack: { packId: "pack_durable_growth", targetRawStored: false } }
+    });
+    expect(darkRows.source_governance[0]).toMatchObject({
+      source_id: "src_cand_durable_dark",
+      approval_state: "approved",
+      metadata_only: true
+    });
+    expect(queued.summary).toEqual({ queuedCount: 2, duplicateCount: 0, blockedCount: 0, taskCount: 2 });
+    expect(queuedAgain.summary).toEqual({ queuedCount: 0, duplicateCount: 2, blockedCount: 0, taskCount: 2 });
+    expect(frontier.snapshot().map((item) => item.task)).toMatchObject([
+      {
+        sourceId: "src_cand_durable_tg",
+        sourceType: "telegram_public",
+        targetUrl: "https://t.me/durable_public",
+        retryCount: 0,
+        maxRetries: 4,
+        planning: { safetyEnvelope: { allowPublicChannel: true, metadataOnlyRestricted: false } }
+      },
+      {
+        sourceId: "src_cand_durable_dark",
+        sourceType: "tor_metadata",
+        targetUrl: "source-pack://darkweb_metadata/hash_cand_durable_dark",
+        retryCount: 0,
+        maxRetries: 4,
+        planning: { safetyEnvelope: { allowRestrictedMetadata: true, metadataOnlyRestricted: true } }
+      }
+    ]);
+    expect(JSON.stringify({ sourceWrite, queued })).not.toContain("rawPayload");
+    expect(JSON.stringify({ sourceWrite, queued })).not.toContain("password");
+  });
+
   test("turns thousands-scale validated candidates into capped durable active rows and collection job handoffs", () => {
     const queue = new InMemoryDwmSourcePackValidationQueueAdapter();
     const activeSources = new InMemoryDwmSourcePackActiveSourceAdapter();
@@ -653,6 +787,36 @@ class FakeSourcePackSqlDriver implements DwmSourcePackSqlDriver {
   }
 }
 
+class FakeSourceStore {
+  readonly sources = new Map<string, SourceRecord>();
+
+  saveSource(source: SourceRecord): SourceRecord {
+    this.sources.set(source.id, source);
+    return source;
+  }
+
+  getSource(id: string): SourceRecord | undefined {
+    return this.sources.get(id);
+  }
+
+  listSources(): SourceRecord[] {
+    return [...this.sources.values()];
+  }
+}
+
+class FakeFrontierQueue {
+  readonly tasks = new Map<string, CollectionTask>();
+
+  enqueueTask(task: CollectionTask): CollectionTask {
+    this.tasks.set(task.id, task);
+    return task;
+  }
+
+  snapshot(): Array<{ id: string; task: CollectionTask }> {
+    return [...this.tasks.values()].map((task) => ({ id: task.id, task }));
+  }
+}
+
 function fakeValidator(candidate: DwmSourcePackCandidateRecord): DwmSourceCandidateValidationResult {
   if (candidate.declaredFamily === "telegram") {
     return { candidateId: candidate.id, state: "active", parserStatus: "telegram_public_parser_ready" };
@@ -672,6 +836,22 @@ function fakeValidator(candidate: DwmSourcePackCandidateRecord): DwmSourceCandid
     };
   }
   return { candidateId: candidate.id, state: "disabled", parserStatus: "clear_web_parser_disabled" };
+}
+
+function durableGrowthValidator(candidate: DwmSourcePackCandidateRecord): DwmSourceCandidateValidationResult {
+  if (candidate.id === "cand_durable_tg") {
+    return { candidateId: candidate.id, state: "active", parserStatus: "telegram_public_parser_ready", validationScore: 0.93 };
+  }
+  if (candidate.id === "cand_durable_dark" || candidate.id === "cand_durable_blocked") {
+    return { candidateId: candidate.id, state: "active", parserStatus: "metadata_parser_ready", validationScore: 0.87 };
+  }
+  return {
+    candidateId: candidate.id,
+    state: "retry_scheduled",
+    parserStatus: "parser_retry_scheduled",
+    validationScore: 0.41,
+    failure: { code: "parser_timeout", message: "fixture retry" }
+  };
 }
 
 function scaleValidator(candidate: DwmSourcePackCandidateRecord): DwmSourceCandidateValidationResult {
