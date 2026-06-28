@@ -34,11 +34,12 @@ export default async function Page({
     }
 
     const overview = getTiAdminOverview()
-    const [liveAlerts, watchlists, operations, deliveries] = await Promise.all([
+    const [liveAlerts, watchlists, operations, deliveries, organizationState] = await Promise.all([
         loadDwmAlerts(),
         loadDwmWatchlists(),
         loadDwmOperations(),
         loadDwmDeliveries(),
+        loadDwmOrganizationState(),
     ])
     const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
     const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
@@ -47,6 +48,7 @@ export default async function Page({
         watchlists,
         operations,
         deliveries,
+        organizationState,
         liveAlertCount: liveAlerts.length,
         renderedAlertCount: alerts.length,
     })
@@ -67,7 +69,7 @@ export default async function Page({
                 firstName={firstName}
                 caseCount={cases.length}
                 highPriorityCount={highPriorityCount}
-                persistentCount={alerts.length}
+                persistentCount={cases.filter(item => item.persistent).length}
             />
 
             <AnalystWorkbenchClient initialCases={cases} chrome='compact' />
@@ -86,7 +88,7 @@ function OperatorTopBar({ firstName, caseCount, highPriorityCount, persistentCou
                 <div className='flex flex-wrap items-center gap-2'>
                     <CompactStat label='Cases' value={String(caseCount)} />
                     <CompactStat label='High' value={String(highPriorityCount)} tone='warn' />
-                    <CompactStat label='DWM API routes' value={String(persistentCount)} tone='good' />
+                    <CompactStat label='API-backed' value={String(persistentCount)} tone='good' />
                     <span className='rounded-lg border border-[#d8dee9] bg-[#fbfcfe] px-2.5 py-1.5 text-xs font-semibold text-[#596170]'>TI owner/notes session-local</span>
                     <Link href='/dashboard/dwm' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
                         <Radar className='h-4 w-4' />
@@ -179,6 +181,33 @@ async function loadDwmDeliveries(): Promise<DwmDeliveryItem[]> {
     }
 }
 
+async function loadDwmOrganizationState(): Promise<DwmOrganizationState> {
+    const base = process.env.TI_SCRAPER_API_BASE
+    if (!base) return { organizations: [], webhooks: [] }
+
+    try {
+        const orgTarget = new URL('/v1/organizations', base)
+        const orgResponse = await fetch(orgTarget, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        if (!orgResponse.ok) return { organizations: [], webhooks: [] }
+        const orgPayload = await orgResponse.json() as { organizations?: DwmOrganizationSummary[] }
+        const organizations = (orgPayload.organizations || []).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        const selectedOrganization = organizations.find(item => item.status === 'active') || organizations[0]
+        if (!selectedOrganization) return { organizations, webhooks: [] }
+
+        const webhookTarget = new URL(`/v1/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`, base)
+        const webhookResponse = await fetch(webhookTarget, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        if (!webhookResponse.ok) return { organizations, selectedOrganization, webhooks: [] }
+        const webhookPayload = await webhookResponse.json() as { destinations?: DwmOrganizationWebhookDestination[] }
+        return {
+            organizations,
+            selectedOrganization,
+            webhooks: (webhookPayload.destinations || []).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+        }
+    } catch {
+        return { organizations: [], webhooks: [] }
+    }
+}
+
 function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[], readinessCases: WorkbenchCase[]): WorkbenchCase[] {
     const alertCases = alerts.map(alertToCase)
     const domainCases = overview.domains.map(domain => domainToCase(domain, overview.captures))
@@ -193,45 +222,52 @@ function buildReadinessCases(input: {
     watchlists: DwmWatchlistSummary[]
     operations: DwmOperationsSnapshot | null
     deliveries: DwmDeliveryItem[]
+    organizationState: DwmOrganizationState
     liveAlertCount: number
     renderedAlertCount: number
 }): WorkbenchCase[] {
     const now = new Date().toISOString()
+    const organization = input.organizationState.selectedOrganization
+    const orgWebhooks = input.organizationState.webhooks.filter(item => item.status === 'active')
     const activeWatchlists = input.watchlists.filter(item => item.status === 'active')
     const watchlistTerms = activeWatchlists.flatMap(item => item.terms || [])
     const webhookWatchlists = activeWatchlists.filter(item => item.webhookUrl)
+    const hasWebhookDestination = Boolean(orgWebhooks.length || webhookWatchlists.length)
     const activeSources = input.operations?.counts.activeSourceCount ?? 0
     const sourceCount = input.operations?.counts.sourceCount ?? 0
     const latestDelivery = input.deliveries[0]
     const deliveryFailures = input.deliveries.filter(item => item.status === 'failed' || item.status === 'skipped').length
+    const orgWebhookFailures = orgWebhooks.filter(item => item.lastTestStatus === 'failed').length
 
     return [
         readinessCase({
             id: 'readiness_org_contract',
             kind: 'org_readiness',
             queue: 'Product readiness',
-            title: 'Organization contract not wired',
-            severity: 'high',
-            status: 'blocked_contract',
-            priority: 390,
-            confidence: 100,
-            subtitle: 'The dashboard has tenant IDs, but no real organization membership, create, join, or shared ownership route is exposed in this frontend/API slice.',
-            recommendedAction: 'Do not claim team or org-level shared watchlists until an organization membership contract exists. Backend foundation should add org create/join/list membership and attach DWM watchlists to org ownership.',
+            title: organization ? `${organization.name} organization active` : 'Create organization context',
+            severity: organization ? 'medium' : 'high',
+            status: organization ? 'org_active' : input.backendConfigured ? 'missing_organization' : 'backend_unconfigured',
+            priority: organization ? 285 : 390,
+            confidence: input.backendConfigured ? 94 : 64,
+            subtitle: organization
+                ? `${input.organizationState.organizations.length} organization${input.organizationState.organizations.length === 1 ? '' : 's'} loaded from the scraper org contract. Active tenant: ${organization.tenantId}.`
+                : input.backendConfigured ? 'The backed organization API is available, but no organization was returned for this workspace.' : 'TI scraper backend is not configured, so organization membership cannot be loaded.',
+            recommendedAction: organization ? 'Use the active organization as the owner for shared watchlists and webhook destinations; keep DWM tenant scope aligned to the organization tenant ID.' : 'Create or join an organization through the backed org API before selling shared ownership, shared watchlists, or team routing.',
             evidence: [{
-                id: 'ev_org_contract_missing',
-                sourceName: 'Frontend route audit',
-                sourceFamily: 'product contract',
-                captureMode: 'code path',
+                id: 'ev_org_contract',
+                sourceName: 'Organizations API',
+                sourceFamily: 'organization contract',
+                captureMode: 'api snapshot',
                 redactionState: 'customer safe',
-                contentHash: 'org-api-not-found',
-                excerpt: 'Search found tenantId usage and DWM default tenant routing, but no organization create/join/list API for the dashboard surface.',
-                observedAt: now,
-                provenance: 'frontend/src/app/api + frontend/src/app/dashboard',
-                confidence: 100,
+                contentHash: organization?.id || '/api/organizations',
+                excerpt: organization ? `${organization.name} (${organization.slug}) is ${organization.status}; tenantId=${organization.tenantId}.` : 'GET/POST /api/organizations proxies the scraper organization contract; no org record is loaded yet.',
+                observedAt: organization?.updatedAt || now,
+                provenance: 'GET /api/organizations -> /v1/organizations',
+                confidence: input.backendConfigured ? 94 : 64,
             }],
-            timeline: [{ id: 'org_contract_audit', at: now, title: 'Readiness audit', body: 'Organization entry point withheld because no backed route/API exists in this slice.' }],
-            nextTasks: ['Define org membership API contract.', 'Attach watchlists and webhook destinations to org ownership.', 'Expose create/join only after the route exists.'],
-            relatedLinks: [{ href: '/dashboard/dwm', label: 'Use default DWM tenant for now' }],
+            timeline: [{ id: 'org_contract_audit', at: organization?.updatedAt || now, title: organization ? 'Organization loaded' : 'Organization required', body: organization ? 'Organization state came from the backed scraper API.' : 'Create or join an organization before claiming shared team ownership.' }],
+            nextTasks: organization ? ['Review members and pending invites.', 'Attach DWM watchlists to organization ownership.', 'Keep webhook destinations scoped to the organization.'] : ['POST /api/organizations with name and ownerEmail.', 'Invite analysts through /api/organizations/:id/invites.', 'Create an org webhook destination before customer routing.'],
+            relatedLinks: organization ? [{ href: '/api/organizations', label: 'Organizations API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' }] : [{ href: '/api/organizations', label: 'Create organization API' }],
         }),
         readinessCase({
             id: 'readiness_watchlist',
@@ -243,9 +279,9 @@ function buildReadinessCases(input: {
             priority: activeWatchlists.length ? 260 : 380,
             confidence: input.backendConfigured ? 92 : 65,
             subtitle: activeWatchlists.length
-                ? `${activeWatchlists.length} active watchlist${activeWatchlists.length === 1 ? '' : 's'} with ${watchlistTerms.length} total term${watchlistTerms.length === 1 ? '' : 's'} ready for alert rebuilds.`
+                ? `${activeWatchlists.length} active watchlist${activeWatchlists.length === 1 ? '' : 's'} with ${watchlistTerms.length} total term${watchlistTerms.length === 1 ? '' : 's'} ready for alert rebuilds${organization ? ` under ${organization.name} tenant alignment` : ''}.`
                 : input.backendConfigured ? 'No active DWM watchlist returned for tenant default.' : 'TI scraper backend is not configured, so watchlist state cannot be loaded.',
-            recommendedAction: activeWatchlists.length ? 'Review term coverage, then run alert rebuild after source coverage changes.' : 'Create a DWM watchlist with company, domain, vendor, brand, VIP, or product terms, then rebuild alerts.',
+            recommendedAction: activeWatchlists.length ? 'Review term coverage, keep ownership aligned to the active organization, then run alert rebuild after source coverage changes.' : 'Create a DWM watchlist with company, domain, vendor, brand, VIP, or product terms, then rebuild alerts.',
             evidence: [{
                 id: 'ev_watchlist_route',
                 sourceName: 'DWM watchlists API',
@@ -266,30 +302,32 @@ function buildReadinessCases(input: {
             id: 'readiness_webhook',
             kind: 'webhook_readiness',
             queue: 'Webhook delivery',
-            title: webhookWatchlists.length ? 'Webhook destination configured' : 'Configure webhook destination',
-            severity: webhookWatchlists.length && !deliveryFailures ? 'medium' : 'high',
-            status: webhookWatchlists.length ? 'destination_ready' : 'missing_webhook',
-            priority: webhookWatchlists.length && !deliveryFailures ? 250 : 370,
+            title: orgWebhooks.length ? 'Organization webhook destination active' : webhookWatchlists.length ? 'Watchlist webhook destination configured' : 'Configure webhook destination',
+            severity: hasWebhookDestination && !deliveryFailures && !orgWebhookFailures ? 'medium' : 'high',
+            status: hasWebhookDestination ? 'destination_ready' : 'missing_webhook',
+            priority: hasWebhookDestination && !deliveryFailures && !orgWebhookFailures ? 250 : 370,
             confidence: input.backendConfigured ? 90 : 64,
-            subtitle: webhookWatchlists.length
-                ? `${webhookWatchlists.length} active watchlist destination${webhookWatchlists.length === 1 ? '' : 's'} configured. Latest delivery: ${latestDelivery ? latestDelivery.status : 'none attempted'}.`
-                : 'No active watchlist has a webhook URL. Discord can be used through a normal HTTPS webhook URL, but there is no Discord-specific app contract here.',
-            recommendedAction: webhookWatchlists.length ? 'Test the destination, then send ready alerts and watch failures.' : 'Save a valid HTTPS webhook URL on a watchlist, test delivery, then send ready alerts.',
+            subtitle: orgWebhooks.length
+                ? `${orgWebhooks.length} active org webhook destination${orgWebhooks.length === 1 ? '' : 's'} configured for ${organization?.name || 'the selected organization'}. Latest DWM delivery: ${latestDelivery ? latestDelivery.status : 'none attempted'}.`
+                : webhookWatchlists.length
+                    ? `${webhookWatchlists.length} active watchlist destination${webhookWatchlists.length === 1 ? '' : 's'} configured. Latest delivery: ${latestDelivery ? latestDelivery.status : 'none attempted'}.`
+                    : 'No active organization or watchlist webhook destination is configured. Discord is backed as an organization webhook kind and generic HTTPS webhooks remain supported.',
+            recommendedAction: hasWebhookDestination ? 'Test the destination, then send ready alerts and watch delivery failures.' : 'Create an organization webhook destination or save a valid HTTPS webhook URL on a watchlist before sending alerts.',
             evidence: [{
                 id: 'ev_webhook_delivery',
-                sourceName: 'DWM webhook delivery API',
+                sourceName: orgWebhooks.length ? 'Organization webhook API' : 'DWM webhook delivery API',
                 sourceFamily: 'workflow route',
                 captureMode: 'api contract',
                 redactionState: 'customer safe',
-                contentHash: latestDelivery?.payloadHash || '/api/dwm/webhooks/test',
-                excerpt: latestDelivery ? `${latestDelivery.status} delivery to ${latestDelivery.endpointHash} at ${latestDelivery.attemptedAt}.` : 'POST /api/dwm/webhooks/test and /api/dwm/webhooks/deliver exist; delivery fails honestly when webhookUrl is missing.',
-                observedAt: latestDelivery?.attemptedAt || now,
-                provenance: 'GET /api/dwm/webhooks/deliveries',
+                contentHash: orgWebhooks[0]?.id || latestDelivery?.payloadHash || '/api/organizations/:id/webhooks',
+                excerpt: orgWebhooks.length ? orgWebhooks.map(item => `${item.name} (${item.kind}) ${item.status}${item.lastTestStatus ? `, last test ${item.lastTestStatus}` : ''}`).join(' | ') : latestDelivery ? `${latestDelivery.status} delivery to ${latestDelivery.endpointHash} at ${latestDelivery.attemptedAt}.` : 'POST /api/organizations/:id/webhooks and POST /api/dwm/webhooks/test exist; delivery fails honestly when no destination is configured.',
+                observedAt: orgWebhooks[0]?.updatedAt || latestDelivery?.attemptedAt || now,
+                provenance: orgWebhooks.length ? 'GET /api/organizations/:id/webhooks -> /v1/organizations/:id/webhooks' : 'GET /api/dwm/webhooks/deliveries',
                 confidence: input.backendConfigured ? 90 : 64,
             }],
-            timeline: [{ id: 'webhook_readiness_at', at: latestDelivery?.attemptedAt || now, title: latestDelivery ? 'Latest webhook attempt' : 'Webhook destination required', body: latestDelivery ? `${latestDelivery.status}${latestDelivery.error ? `: ${latestDelivery.error}` : ''}` : 'No delivery destination is configured for the active watchlist.' }],
-            nextTasks: ['Save a HTTPS webhook URL on the watchlist.', 'Run webhook test.', 'Send queued alerts and inspect delivery failures.'],
-            relatedLinks: [{ href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery setup' }],
+            timeline: [{ id: 'webhook_readiness_at', at: orgWebhooks[0]?.lastTestedAt || latestDelivery?.attemptedAt || now, title: hasWebhookDestination ? 'Webhook destination loaded' : 'Webhook destination required', body: orgWebhooks[0]?.lastTestStatus ? `${orgWebhooks[0].name} last test ${orgWebhooks[0].lastTestStatus}.` : latestDelivery ? `${latestDelivery.status}${latestDelivery.error ? `: ${latestDelivery.error}` : ''}` : 'No delivery destination is configured for organization or watchlist routing.' }],
+            nextTasks: hasWebhookDestination ? ['Run a webhook test.', 'Send queued alerts.', 'Inspect delivery failures and retry only after route validation.'] : ['Create a Discord or generic organization webhook destination.', 'Run webhook test.', 'Send queued alerts and inspect delivery failures.'],
+            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks API' }, { href: '/dashboard/dwm', label: 'Configure watchlist webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery setup' }] : [{ href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery setup' }],
         }),
         readinessCase({
             id: 'readiness_source_coverage',
@@ -376,7 +414,7 @@ function readinessCase(input: {
         status: input.status,
         priority: input.priority,
         confidence: input.confidence,
-        owner: input.kind === 'org_readiness' ? 'backend-foundation' : 'operator',
+        owner: input.kind === 'org_readiness' && input.status !== 'org_active' ? 'backend-foundation' : 'operator',
         createdAt: updatedAt,
         updatedAt,
         company: 'Hanasand DWM',
@@ -601,6 +639,37 @@ type DwmWatchlistSummary = {
     status: 'active' | 'paused'
     createdAt: string
     updatedAt: string
+}
+
+type DwmOrganizationState = {
+    organizations: DwmOrganizationSummary[]
+    selectedOrganization?: DwmOrganizationSummary
+    webhooks: DwmOrganizationWebhookDestination[]
+}
+
+type DwmOrganizationSummary = {
+    id: string
+    tenantId: string
+    name: string
+    slug: string
+    status: 'active' | 'suspended'
+    createdAt: string
+    updatedAt: string
+    createdBy?: string
+}
+
+type DwmOrganizationWebhookDestination = {
+    id: string
+    organizationId: string
+    tenantId: string
+    name: string
+    kind: 'discord' | 'generic'
+    status: 'active' | 'paused'
+    createdAt: string
+    updatedAt: string
+    createdBy?: string
+    lastTestedAt?: string
+    lastTestStatus?: 'delivered' | 'failed' | 'dry_run'
 }
 
 type DwmOperationsSnapshot = {
