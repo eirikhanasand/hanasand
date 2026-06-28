@@ -40,6 +40,18 @@ type UserParams = {
     id: string
 }
 
+type SupportInspectionQuery = {
+    org?: string
+    orgId?: string
+    user?: string
+    userId?: string
+    email?: string
+    request?: string
+    requestId?: string
+    outcome?: string
+    limit?: string
+}
+
 type SupportInviteBody = InviteInput & {
     reason?: unknown
     context?: unknown
@@ -102,6 +114,16 @@ type AccessRecoveryApprovalRow = {
     invite_status?: string
     organization_name?: string
     audit_events?: unknown
+}
+
+type SupportOrganizationAvailability = {
+    organizationId: string
+    ownerCount: number
+    activeOwnerCount: number
+    adminCount: number
+    activeAdminCount: number
+    hasAvailableOwner: boolean
+    hasAvailableAdmin: boolean
 }
 
 export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply) {
@@ -402,6 +424,108 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         memberships: memberships.rows.map(toSupportMembership),
         pendingInvites: invites.rows.map(toSupportInvite),
         recentAuditEvents: audit.rows,
+    })
+}
+
+export async function getSupportInspection(req: FastifyRequest<{ Querystring: SupportInspectionQuery }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    const query = req.query as SupportInspectionQuery
+    const org = text(query.org || query.orgId)
+    const user = text(query.user || query.userId)
+    const email = text(query.email).toLowerCase()
+    const request = text(query.request || query.requestId)
+    const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
+    const parsedLimit = Number(query.limit || 50)
+    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100) : 50
+
+    if (!org && !user && !email && !request) {
+        return res.status(400).send({ error: 'Add org, user, email, or request to inspect support state.' })
+    }
+
+    const [organizations, users, memberships, invites, approvals, audit] = await Promise.all([
+        loadInspectionOrganizations({ org, user, email, request, limit }),
+        loadInspectionUsers({ user, request, limit }),
+        loadInspectionMemberships({ org, user, request, limit }),
+        loadInspectionInvites({ org, email, request, limit }),
+        loadInspectionApprovals({ org, user, email, request, outcome, limit }),
+        loadInspectionAuditEvents({ org, user, email, request, outcome, limit }),
+    ])
+
+    const organizationIds = Array.from(new Set([
+        ...organizations.map(row => String(row.id)),
+        ...memberships.map(row => String(row.organization_id)),
+        ...invites.map(row => String(row.organization_id)),
+        ...approvals.map(row => String(row.organization_id)),
+        ...audit.map(row => String((row as Record<string, unknown>).organization_id || '')).filter(Boolean),
+    ]))
+    const availability = organizationIds.length ? await loadOrganizationAvailability(organizationIds) : []
+    const availabilityByOrg = new Map(availability.map(item => [item.organizationId, item]))
+    const timeline = audit.map(toSupportAuditTimelineEvent)
+    const approvalDetails = approvals.map(row => toAccessRecoveryDecision(row as AccessRecoveryApprovalRow))
+    const recoveryEligibility = buildRecoveryEligibility({
+        email,
+        user,
+        organizationIds,
+        memberships,
+        users,
+        availabilityByOrg,
+        invites,
+    })
+
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.inspect',
+        actorId: actor.id,
+        targetType: user ? 'user' : email ? 'invite' : org ? 'organization' : 'request',
+        targetId: user || email || org || request,
+        organizationId: organizationIds[0] || null,
+        entityId: request || user || email || org || null,
+        requestId: supportRequestId(req),
+        severity: 'info',
+        outcome: 'success',
+        context: {
+            schemaVersion: 'support.inspection.v1',
+            filters: { org, user, email, request, outcome, limit },
+            organizationCount: organizations.length,
+            membershipCount: memberships.length,
+            pendingInviteCount: invites.filter(row => row.status === 'pending').length,
+            approvalCount: approvals.length,
+            auditEventIds: timeline.map(event => event.id),
+        },
+    })
+
+    return res.send({
+        inspection: {
+            schemaVersion: 'support.inspection.v1',
+            generatedAt: new Date().toISOString(),
+            filters: { org, user, email, request, outcome, limit },
+            organizations: organizations.map(row => ({
+                ...toOrganization(row as OrganizationRow),
+                adminAvailability: availabilityByOrg.get(String(row.id)) || null,
+            })),
+            users: users.map(toSupportUser),
+            memberships: memberships.map(toSupportMemberDetail),
+            invites: invites.map(toSupportInvite),
+            pendingInvites: invites.filter(row => row.status === 'pending').map(toSupportInvite),
+            approvalRequests: approvalDetails,
+            recoveryEligibility,
+            auditEventIds: timeline.map(event => event.id),
+            auditTimeline: timeline,
+            controlledActions: {
+                inviteAssist: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/invites`),
+                accessRecovery: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/access-recovery`),
+                approvalSearch: `/api/admin/support/access-recovery${request ? `?request=${encodeURIComponent(request)}` : ''}`,
+            },
+            copyText: [
+                `Support inspection org=${org || '*'} user=${user || '*'} email=${email || '*'} request=${request || '*'}`,
+                `Organizations: ${organizations.length}`,
+                `Memberships: ${memberships.length}`,
+                `Pending invites: ${invites.filter(row => row.status === 'pending').length}`,
+                `Approvals: ${approvalDetails.length}`,
+                `Audit events: ${timeline.map(event => event.id).join(', ') || 'none'}`,
+            ].join('\n'),
+        },
     })
 }
 
@@ -869,6 +993,311 @@ async function loadOrganizationSupportDetail(organizationId: string) {
     return result.rows[0] as OrganizationRow | undefined
 }
 
+async function loadInspectionOrganizations(input: { org: string, user: string, email: string, request: string, limit: number }) {
+    const where: string[] = []
+    const values: Array<string | number> = []
+    const add = (value: string | number) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    if (input.org) {
+        const placeholder = add(`%${input.org}%`)
+        where.push('(o.id ILIKE ' + placeholder + ' OR o.name ILIKE ' + placeholder + ' OR o.slug ILIKE ' + placeholder + ')')
+    }
+    if (input.user) {
+        where.push(`EXISTS (
+            SELECT 1 FROM organization_members om
+            WHERE om.organization_id = o.id
+              AND om.user_id ILIKE ${add(`%${input.user}%`)}
+        )`)
+    }
+    if (input.email) {
+        where.push(`EXISTS (
+            SELECT 1 FROM organization_invites invite
+            WHERE invite.organization_id = o.id
+              AND lower(invite.email) = lower(${add(input.email)})
+        )`)
+    }
+    if (input.request) {
+        const placeholder = add(`%${input.request}%`)
+        where.push(`(
+            EXISTS (SELECT 1 FROM admin_access_recovery_approvals approval WHERE approval.organization_id = o.id AND approval.request_id ILIKE ${placeholder})
+            OR EXISTS (SELECT 1 FROM admin_audit_events event WHERE event.organization_id = o.id AND event.request_id ILIKE ${placeholder})
+        )`)
+    }
+    if (!where.length) return []
+
+    const result = await run(`
+        SELECT
+            o.*,
+            COUNT(DISTINCT active_members.user_id)::int AS member_count,
+            COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count
+        FROM organizations o
+        LEFT JOIN organization_members active_members
+          ON active_members.organization_id = o.id
+         AND active_members.status = 'active'
+        LEFT JOIN organization_invites pending_invites
+          ON pending_invites.organization_id = o.id
+         AND pending_invites.status = 'pending'
+        WHERE ${where.join('\n           OR ')}
+        GROUP BY o.id
+        ORDER BY o.updated_at DESC
+        LIMIT ${add(input.limit)}
+    `, values)
+    return result.rows as Record<string, unknown>[]
+}
+
+async function loadInspectionUsers(input: { user: string, request: string, limit: number }) {
+    const where: string[] = []
+    const values: Array<string | number> = []
+    const add = (value: string | number) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    if (input.user) {
+        const placeholder = add(`%${input.user}%`)
+        where.push('(users.id ILIKE ' + placeholder + ' OR users.name ILIKE ' + placeholder + ')')
+    }
+    if (input.request) {
+        const placeholder = add(`%${input.request}%`)
+        where.push(`(
+            EXISTS (
+                SELECT 1 FROM admin_access_recovery_approvals approval
+                WHERE approval.request_id ILIKE ${placeholder}
+                  AND users.id IN (approval.requested_by, approval.target_user_id, approval.approved_by, approval.denied_by)
+            )
+            OR EXISTS (
+                SELECT 1 FROM admin_audit_events event
+                WHERE event.request_id ILIKE ${placeholder}
+                  AND users.id IN (event.actor_id, event.target_id)
+            )
+        )`)
+    }
+    if (!where.length) return []
+
+    const result = await run(`
+        SELECT id, name, avatar, active, reserved, deactivated_at, deactivated_by, deletion_requested_at, deletion_scheduled_at
+        FROM users
+        WHERE ${where.join('\n           OR ')}
+        ORDER BY name ASC
+        LIMIT ${add(input.limit)}
+    `, values)
+    return result.rows as Record<string, unknown>[]
+}
+
+async function loadInspectionMemberships(input: { org: string, user: string, request: string, limit: number }) {
+    const where: string[] = []
+    const values: Array<string | number> = []
+    const add = (value: string | number) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    if (input.org) {
+        const placeholder = add(`%${input.org}%`)
+        where.push('(om.organization_id ILIKE ' + placeholder + ' OR organizations.name ILIKE ' + placeholder + ' OR organizations.slug ILIKE ' + placeholder + ')')
+    }
+    if (input.user) where.push(`om.user_id ILIKE ${add(`%${input.user}%`)}`)
+    if (input.request) {
+        const placeholder = add(`%${input.request}%`)
+        where.push(`EXISTS (
+            SELECT 1 FROM admin_access_recovery_approvals approval
+            WHERE approval.request_id ILIKE ${placeholder}
+              AND approval.organization_id = om.organization_id
+              AND (approval.target_user_id = om.user_id OR approval.requested_by = om.user_id)
+        )`)
+    }
+    if (!where.length) return []
+
+    const result = await run(`
+        SELECT
+            om.organization_id,
+            organizations.name AS organization_name,
+            organizations.slug AS organization_slug,
+            om.user_id,
+            users.name,
+            users.avatar,
+            users.active,
+            users.deactivated_at,
+            users.deletion_scheduled_at,
+            om.role,
+            om.status,
+            om.invited_by,
+            om.joined_at,
+            om.created_at
+        FROM organization_members om
+        JOIN users ON users.id = om.user_id
+        JOIN organizations ON organizations.id = om.organization_id
+        WHERE ${where.join('\n           AND ')}
+        ORDER BY organizations.name ASC, users.name ASC
+        LIMIT ${add(input.limit)}
+    `, values)
+    return result.rows as Record<string, unknown>[]
+}
+
+async function loadInspectionInvites(input: { org: string, email: string, request: string, limit: number }) {
+    const where: string[] = []
+    const values: Array<string | number> = []
+    const add = (value: string | number) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    if (input.org) {
+        const placeholder = add(`%${input.org}%`)
+        where.push('(organization_invites.organization_id ILIKE ' + placeholder + ' OR organizations.name ILIKE ' + placeholder + ' OR organizations.slug ILIKE ' + placeholder + ')')
+    }
+    if (input.email) where.push(`lower(organization_invites.email) = lower(${add(input.email)})`)
+    if (input.request) {
+        const placeholder = add(`%${input.request}%`)
+        where.push(`EXISTS (
+            SELECT 1 FROM admin_access_recovery_approvals approval
+            WHERE approval.request_id ILIKE ${placeholder}
+              AND approval.invite_id = organization_invites.id
+        )`)
+    }
+    if (!where.length) return []
+
+    const result = await run(`
+        SELECT organization_invites.*, organizations.name AS organization_name, organizations.slug AS organization_slug
+        FROM organization_invites
+        JOIN organizations ON organizations.id = organization_invites.organization_id
+        WHERE ${where.join('\n           AND ')}
+        ORDER BY organization_invites.status ASC, organization_invites.created_at DESC
+        LIMIT ${add(input.limit)}
+    `, values)
+    return result.rows as Record<string, unknown>[]
+}
+
+async function loadInspectionApprovals(input: { org: string, user: string, email: string, request: string, outcome: string, limit: number }) {
+    const where: string[] = []
+    const values: Array<string | number> = []
+    const add = (value: string | number) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    if (input.org) {
+        const placeholder = add(`%${input.org}%`)
+        where.push('(approval.organization_id ILIKE ' + placeholder + ' OR organization.name ILIKE ' + placeholder + ' OR organization.slug ILIKE ' + placeholder + ')')
+    }
+    if (input.user) {
+        const placeholder = add(`%${input.user}%`)
+        where.push('(approval.target_user_id ILIKE ' + placeholder + ' OR approval.requested_by ILIKE ' + placeholder + ' OR approval.approved_by ILIKE ' + placeholder + ' OR approval.denied_by ILIKE ' + placeholder + ')')
+    }
+    if (input.email) where.push(`lower(invite.email) = lower(${add(input.email)})`)
+    if (input.request) where.push(`approval.request_id ILIKE ${add(`%${input.request}%`)}`)
+    if (input.outcome) where.push(`approval.outcome = ${add(input.outcome)}`)
+    if (!where.length) return []
+
+    const result = await run(`
+        SELECT
+            approval.*,
+            invite.email,
+            invite.role,
+            invite.status AS invite_status,
+            organization.name AS organization_name,
+            COALESCE((
+                SELECT jsonb_agg(jsonb_build_object(
+                    'id', event.id,
+                    'actionType', event.action_type,
+                    'outcome', event.outcome,
+                    'severity', event.severity,
+                    'createdAt', event.created_at
+                ) ORDER BY event.created_at ASC)
+                FROM admin_audit_events event
+                WHERE event.request_id = approval.request_id
+                  AND event.action_type ILIKE 'support.organization.access_recovery%'
+            ), '[]'::jsonb) AS audit_events
+        FROM admin_access_recovery_approvals approval
+        JOIN organization_invites invite ON invite.id = approval.invite_id
+        LEFT JOIN organizations organization ON organization.id = approval.organization_id
+        WHERE ${where.join('\n           AND ')}
+        ORDER BY approval.updated_at DESC, approval.created_at DESC
+        LIMIT ${add(input.limit)}
+    `, values)
+    return result.rows as AccessRecoveryApprovalRow[]
+}
+
+async function loadInspectionAuditEvents(input: { org: string, user: string, email: string, request: string, outcome: string, limit: number }) {
+    const where: string[] = []
+    const values: Array<string | number> = []
+    const add = (value: string | number) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    if (input.org) {
+        const placeholder = add(`%${input.org}%`)
+        where.push('(event.organization_id ILIKE ' + placeholder + ' OR organization.name ILIKE ' + placeholder + ' OR organization.slug ILIKE ' + placeholder + ')')
+    }
+    if (input.user) {
+        const placeholder = add(`%${input.user}%`)
+        where.push('(event.actor_id ILIKE ' + placeholder + ' OR event.target_id ILIKE ' + placeholder + ' OR event.entity_id ILIKE ' + placeholder + ')')
+    }
+    if (input.email) {
+        const placeholder = add(`%${input.email}%`)
+        where.push('(event.target_id ILIKE ' + placeholder + ' OR event.context->>\'email\' ILIKE ' + placeholder + ')')
+    }
+    if (input.request) where.push(`event.request_id ILIKE ${add(`%${input.request}%`)}`)
+    if (input.outcome) where.push(`event.outcome = ${add(input.outcome)}`)
+    if (!where.length) return []
+
+    const result = await run(`
+        SELECT
+            event.id,
+            event.action_type,
+            event.severity,
+            event.source,
+            event.service,
+            event.actor_id,
+            actor.name AS actor_name,
+            event.target_type,
+            event.target_id,
+            target_user.name AS target_name,
+            event.organization_id,
+            organization.name AS organization_name,
+            event.entity_id,
+            event.request_id,
+            event.outcome,
+            event.reason,
+            event.context,
+            event.created_at
+        FROM admin_audit_events event
+        LEFT JOIN users actor ON actor.id = event.actor_id
+        LEFT JOIN users target_user ON target_user.id = event.target_id
+        LEFT JOIN organizations organization ON organization.id = event.organization_id
+        WHERE ${where.join('\n           AND ')}
+        ORDER BY event.created_at DESC
+        LIMIT ${add(input.limit)}
+    `, values)
+    return result.rows as Record<string, unknown>[]
+}
+
+async function loadOrganizationAvailability(organizationIds: string[]) {
+    const result = await run(`
+        SELECT
+            om.organization_id,
+            COUNT(*) FILTER (WHERE om.role = 'owner' AND om.status = 'active')::int AS owner_count,
+            COUNT(*) FILTER (WHERE om.role = 'owner' AND om.status = 'active' AND users.active)::int AS active_owner_count,
+            COUNT(*) FILTER (WHERE om.role IN ('owner', 'admin') AND om.status = 'active')::int AS admin_count,
+            COUNT(*) FILTER (WHERE om.role IN ('owner', 'admin') AND om.status = 'active' AND users.active)::int AS active_admin_count
+        FROM organization_members om
+        JOIN users ON users.id = om.user_id
+        WHERE om.organization_id = ANY($1::text[])
+        GROUP BY om.organization_id
+    `, [organizationIds])
+    return result.rows.map((row: Record<string, unknown>) => {
+        const activeOwnerCount = Number(row.active_owner_count || 0)
+        const activeAdminCount = Number(row.active_admin_count || 0)
+        return {
+            organizationId: String(row.organization_id),
+            ownerCount: Number(row.owner_count || 0),
+            activeOwnerCount,
+            adminCount: Number(row.admin_count || 0),
+            activeAdminCount,
+            hasAvailableOwner: activeOwnerCount > 0,
+            hasAvailableAdmin: activeAdminCount > 0,
+        }
+    }) as SupportOrganizationAvailability[]
+}
+
 async function loadAccessRecoveryApproval(requestId: string) {
     const result = await run(`
         SELECT
@@ -955,6 +1384,17 @@ function toSupportMember(row: Record<string, unknown>) {
     }
 }
 
+function toSupportMemberDetail(row: Record<string, unknown>) {
+    return {
+        ...toSupportMember(row),
+        organizationName: row.organization_name,
+        organizationSlug: row.organization_slug,
+        removed: row.status === 'removed',
+        deactivated: row.active === false || Boolean(row.deactivated_at),
+        deletionScheduled: Boolean(row.deletion_scheduled_at),
+    }
+}
+
 function toSupportMembership(row: Record<string, unknown>) {
     return {
         organizationId: row.organization_id,
@@ -966,6 +1406,50 @@ function toSupportMembership(row: Record<string, unknown>) {
         joinedAt: row.joined_at,
         createdAt: row.created_at,
     }
+}
+
+function buildRecoveryEligibility(input: {
+    email: string
+    user: string
+    organizationIds: string[]
+    memberships: Record<string, unknown>[]
+    users: Record<string, unknown>[]
+    availabilityByOrg: Map<string, SupportOrganizationAvailability>
+    invites: Record<string, unknown>[]
+}) {
+    return input.organizationIds.map((organizationId) => {
+        const availability = input.availabilityByOrg.get(organizationId) || {
+            organizationId,
+            ownerCount: 0,
+            activeOwnerCount: 0,
+            adminCount: 0,
+            activeAdminCount: 0,
+            hasAvailableOwner: false,
+            hasAvailableAdmin: false,
+        }
+        const membership = input.memberships.find(row => row.organization_id === organizationId && (!input.user || row.user_id === input.user))
+        const user = input.users.find(row => row.id === input.user)
+        const invites = input.invites.filter(row => row.organization_id === organizationId)
+        const reasons = [
+            availability.hasAvailableAdmin ? 'available_admin_present' : 'no_available_admin',
+            membership?.status === 'removed' ? 'member_removed' : '',
+            user && user.active === false ? 'user_deactivated' : '',
+            invites.some(row => row.status === 'pending') ? 'pending_invite_exists' : '',
+            input.email || input.user ? '' : 'missing_target_email_or_user',
+        ].filter(Boolean)
+        return {
+            schemaVersion: 'support.access_recovery.eligibility.v1',
+            organizationId,
+            targetEmail: input.email || null,
+            targetUserId: input.user || null,
+            canCreateControlledInvite: Boolean(input.email && organizationId),
+            noSilentMembershipMutation: true,
+            requiresApproval: true,
+            recommended: !availability.hasAvailableAdmin || membership?.status === 'removed' || user?.active === false,
+            reasons,
+            adminAvailability: availability,
+        }
+    })
 }
 
 function toSupportInvite(row: Record<string, unknown>) {
@@ -984,8 +1468,42 @@ function toSupportInvite(row: Record<string, unknown>) {
     }
 }
 
+function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
+    const event = row as Record<string, any>
+    const context = event.context && typeof event.context === 'object' ? event.context : {}
+    const beforeAfter = auditBeforeAfter(context)
+    return {
+        id: Number(event.id),
+        actor: {
+            id: event.actor_id,
+            name: event.actor_name || null,
+        },
+        target: {
+            type: event.target_type || null,
+            id: event.target_id || null,
+            name: event.target_name || null,
+        },
+        entityType: event.target_type || 'admin_audit_event',
+        entityId: event.entity_id || event.target_id || event.organization_id || null,
+        organizationId: event.organization_id || null,
+        organizationName: event.organization_name || null,
+        action: event.action_type,
+        outcome: event.outcome,
+        severity: event.severity,
+        requestId: event.request_id || null,
+        reason: event.reason || '',
+        before: beforeAfter.before,
+        after: beforeAfter.after,
+        context,
+        createdAt: event.created_at,
+        copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} entity=${event.entity_id || event.target_id || ''} request=${event.request_id || ''}`,
+    }
+}
+
 function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
     const event = row as Record<string, any>
+    const context = event.context || {}
+    const beforeAfter = auditBeforeAfter(context)
     return {
         ...event,
         detail: {
@@ -1002,10 +1520,29 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             entityId: event.entity_id,
             requestId: event.request_id,
             reason: event.reason,
-            context: event.context || {},
+            before: beforeAfter.before,
+            after: beforeAfter.after,
+            context,
             copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
         },
     }
+}
+
+function auditBeforeAfter(context: Record<string, unknown>) {
+    const before = context.before || context.previous || pickPrefixedContext(context, 'previous')
+    const after = context.after || context.next || pickPrefixedContext(context, 'new')
+    return {
+        before: isPlainObject(before) && Object.keys(before).length ? before : null,
+        after: isPlainObject(after) && Object.keys(after).length ? after : null,
+    }
+}
+
+function pickPrefixedContext(context: Record<string, unknown>, prefix: string) {
+    return Object.fromEntries(Object.entries(context).filter(([key]) => key.toLowerCase().startsWith(prefix)))
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
 function toAccessRecoveryDecision(row: AccessRecoveryApprovalRow) {

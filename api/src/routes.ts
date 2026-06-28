@@ -129,6 +129,7 @@ import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, st
 import {
     getAdminAuditEvents,
     getSupportAccessRecoveryApprovals,
+    getSupportInspection,
     getSupportOrganization,
     getSupportUser,
     postSupportAccessRecovery,
@@ -156,6 +157,7 @@ import {
     postOrganizationOwnershipTransfer,
     postOrganizationWatchlist,
     putOrganizationSettings,
+    putOrganizationWatchlist,
 } from './handlers/organizations.ts'
 import {
     deleteDwmWebhookDestination,
@@ -203,6 +205,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.delete('/impersonation', stopImpersonation)
     fastify.get('/impersonation/events', getImpersonationEvents)
     fastify.get('/admin/audit-events', getAdminAuditEvents)
+    fastify.get('/admin/support/inspect', getSupportInspection)
     fastify.get('/admin/support/users/:id', getSupportUser)
     fastify.get('/admin/support/organizations/:id', getSupportOrganization)
     fastify.get('/admin/support/access-recovery', getSupportAccessRecoveryApprovals)
@@ -301,6 +304,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/organizations/:id/alert-readiness', getOrganizationAlertReadiness)
     fastify.get('/organizations/:id/watchlists', getOrganizationWatchlists)
     fastify.post('/organizations/:id/watchlists', postOrganizationWatchlist)
+    fastify.put('/organizations/:organizationId/watchlists/:itemId', putOrganizationWatchlist)
     fastify.delete('/organizations/:organizationId/watchlists/:itemId', deleteOrganizationWatchlist)
     fastify.get('/organizations/:id', getOrganization)
 

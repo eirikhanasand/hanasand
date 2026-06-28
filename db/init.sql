@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS organization_invites (
 CREATE TABLE IF NOT EXISTS organization_watchlist_items (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK (kind IN ('company', 'domain', 'vendor')),
+    kind TEXT NOT NULL CHECK (kind IN ('company', 'domain', 'vendor', 'actor', 'keyword')),
     value TEXT NOT NULL,
     notes TEXT NOT NULL DEFAULT '',
     created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

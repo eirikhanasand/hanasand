@@ -48,7 +48,7 @@ function printChecklist() {
         'One-command live check:',
         'RUN_ADMIN_SUPPORT_LIVE_SMOKE=1 API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} DB_PASSWORD=... bun scripts/smoke-admin-access-recovery-live.mjs',
         '',
-        'The live check creates two temporary admins and one temporary org, verifies pending recovery revokes the invite, approval re-enables it, denial keeps it revoked, approval search filters work by request/status/outcome/requester/approver, and audit ids are returned.',
+        'The live check creates two temporary admins and one temporary org, verifies support inspection by org/email/request, pending recovery revokes the invite, approval re-enables it, denial keeps it revoked, approval search filters work by request/status/outcome/requester/approver, and audit ids are returned.',
         'Set KEEP_ADMIN_SUPPORT_SMOKE_DATA=1 to keep the seeded records for manual inspection.',
     ].join('\n'))
 }
@@ -166,6 +166,17 @@ async function searchApproval(params, expectedCount = 1) {
     return result.body.approvals
 }
 
+async function inspectSupportState(params) {
+    const query = new URLSearchParams(params)
+    const result = await request(`/admin/support/inspect?${query}`, {
+        headers: authHeaders(adminTwoId, adminTwoToken),
+    })
+    expect(result.response.status === 200, 'Support inspection failed.', result.body)
+    expect((result.body?.inspection?.auditEventIds || []).length > 0, 'Support inspection should include audit event ids.', result.body)
+    expect((result.body?.inspection?.recoveryEligibility || []).length > 0, 'Support inspection should include recovery eligibility.', result.body)
+    return result.body.inspection
+}
+
 async function decide(requestId, action, expectedStatus) {
     const result = await request(`/admin/support/access-recovery/${encodeURIComponent(requestId)}/${action}`, {
         method: 'POST',
@@ -191,6 +202,9 @@ async function main() {
     await verifyUnauthorizedSearchIsBlocked()
 
     const approveRecovery = await createRecovery(approveRequestId, `support-${suffix}-approve@example.test`)
+    const inspection = await inspectSupportState({ org: orgId, email: approveRecovery.invite.email, request: approveRequestId, outcome: 'success' })
+    expect(inspection.pendingInvites.length === 0, 'Pending high-risk inspection should not expose a shareable invite before approval.', inspection)
+    expect(inspection.invites[0]?.status === 'revoked', 'Inspection should show the high-risk invite as revoked until approved.', inspection)
     let approvals = await searchApproval({ request: approveRequestId, status: 'pending_approval', outcome: 'success' })
     expect(approvals[0].invite.status === 'revoked', 'Pending approval search should show revoked invite.', approvals[0])
     expect((approvals[0].auditEventIds || []).length > 0, 'Pending approval search should include audit event ids.', approvals[0])

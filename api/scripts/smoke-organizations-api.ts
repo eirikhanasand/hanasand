@@ -56,6 +56,7 @@ app.put('/api/organizations/:id/settings', handlers.putOrganizationSettings)
 app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertReadiness)
 app.get('/api/organizations/:id/watchlists', handlers.getOrganizationWatchlists)
 app.post('/api/organizations/:id/watchlists', handlers.postOrganizationWatchlist)
+app.put('/api/organizations/:organizationId/watchlists/:itemId', handlers.putOrganizationWatchlist)
 app.delete('/api/organizations/:organizationId/watchlists/:itemId', handlers.deleteOrganizationWatchlist)
 app.get('/api/organizations/:id', handlers.getOrganization)
 
@@ -361,10 +362,11 @@ const ownerWatchlistResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/watchlists`,
     headers: authHeaders('org_smoke_owner', 'owner-token'),
-    payload: { kind: 'domain', value: 'https://www.acme-shared.example/login', notes: 'Customer domain' },
+    payload: { kind: 'domain', value: 'https://www.acme-shared.example/login', notes: 'Customer domain', requestId: 'smoke-domain-watchlist' },
 })
 assert.equal(ownerWatchlistResponse.statusCode, 201, ownerWatchlistResponse.body)
 const ownerWatchlistItem = parseBody(ownerWatchlistResponse.body).watchlistItem
+assert.equal(parseBody(ownerWatchlistResponse.body).operation.requestId, 'smoke-domain-watchlist')
 
 const memberWatchlistResponse = await app.inject({
     method: 'GET',
@@ -377,6 +379,15 @@ assert.equal(memberWatchlist.length, 1)
 assert.ok(memberWatchlist[0].id)
 assert.equal(memberWatchlist[0].organizationId, organization.id)
 assert.equal(memberWatchlist[0].value, 'acme-shared.example')
+assert.equal(memberWatchlist[0].tenantId, organization.id)
+assert.equal(memberWatchlist[0].ownerOrganizationId, organization.id)
+assert.equal(memberWatchlist[0].termFamily, 'domain')
+const memberWatchlistContract = parseBody(memberWatchlistResponse.body).sharedWatchlistContract
+assert.equal(memberWatchlistContract.schemaVersion, 'organization.shared_watchlist_contract.v1')
+assert.equal(memberWatchlistContract.organizationId, organization.id)
+assert.equal(memberWatchlistContract.tenantId, organization.id)
+assert.deepEqual(memberWatchlistContract.termFamilies, ['domain'])
+assert.equal(memberWatchlistContract.canGenerateAlerts, true)
 
 const viewerWatchlistResponse = await app.inject({
     method: 'GET',
@@ -385,6 +396,21 @@ const viewerWatchlistResponse = await app.inject({
 })
 assert.equal(viewerWatchlistResponse.statusCode, 200, viewerWatchlistResponse.body)
 assert.equal(parseBody(viewerWatchlistResponse.body).watchlistItems.length, 1)
+
+members.set(memberKey(organization.id, 'org_smoke_deactivated'), nowRow({
+    organization_id: organization.id,
+    user_id: 'org_smoke_deactivated',
+    role: 'member',
+    status: 'active',
+    invited_by: 'org_smoke_admin',
+    joined_at: iso(),
+}))
+const deactivatedMemberWatchlistResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_deactivated', 'deactivated-token'),
+})
+assert.equal(deactivatedMemberWatchlistResponse.statusCode, 404, deactivatedMemberWatchlistResponse.body)
 
 const viewerAddsWatchlistResponse = await app.inject({
     method: 'POST',
@@ -401,6 +427,52 @@ const viewerArchiveWatchlistResponse = await app.inject({
 })
 assert.equal(viewerArchiveWatchlistResponse.statusCode, 403, viewerArchiveWatchlistResponse.body)
 
+const ownerAddsCompanyResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { kind: 'company', value: 'Acme Shared Holdings', request_id: 'smoke-company-watchlist' },
+})
+assert.equal(ownerAddsCompanyResponse.statusCode, 201, ownerAddsCompanyResponse.body)
+
+const adminAddsActorResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { kind: 'actor', value: 'Scattered Spider', notes: 'Actor alias', requestId: 'smoke-actor-watchlist' },
+})
+assert.equal(adminAddsActorResponse.statusCode, 201, adminAddsActorResponse.body)
+const actorWatchlistItem = parseBody(adminAddsActorResponse.body).watchlistItem
+assert.equal(actorWatchlistItem.value, 'scattered spider')
+
+const actorFilterResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists?kind=actor`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(actorFilterResponse.statusCode, 200, actorFilterResponse.body)
+assert.deepEqual(parseBody(actorFilterResponse.body).watchlistItems.map((item: Row) => item.value), ['scattered spider'])
+
+const memberAddsKeywordResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+    payload: { kind: 'keyword', value: 'Credential Reset', notes: 'Phishing wording', requestId: 'smoke-keyword-watchlist' },
+})
+assert.equal(memberAddsKeywordResponse.statusCode, 201, memberAddsKeywordResponse.body)
+const keywordWatchlistItem = parseBody(memberAddsKeywordResponse.body).watchlistItem
+assert.equal(keywordWatchlistItem.value, 'credential reset')
+
+const memberUpdatesKeywordResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/watchlists/${keywordWatchlistItem.id}`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+    payload: { kind: 'keyword', value: 'Credential Reset Lures', notes: 'Updated wording', requestId: 'smoke-keyword-update' },
+})
+assert.equal(memberUpdatesKeywordResponse.statusCode, 200, memberUpdatesKeywordResponse.body)
+assert.equal(parseBody(memberUpdatesKeywordResponse.body).watchlistItem.value, 'credential reset lures')
+assert.equal(parseBody(memberUpdatesKeywordResponse.body).operation.action, 'updated')
+
 const memberAddsVendorResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/watchlists`,
@@ -409,16 +481,17 @@ const memberAddsVendorResponse = await app.inject({
 })
 assert.equal(memberAddsVendorResponse.statusCode, 201, memberAddsVendorResponse.body)
 
-const ownerSeesBothResponse = await app.inject({
+const ownerSeesAllResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/watchlists`,
     headers: authHeaders('org_smoke_owner', 'owner-token'),
 })
-assert.equal(ownerSeesBothResponse.statusCode, 200, ownerSeesBothResponse.body)
+assert.equal(ownerSeesAllResponse.statusCode, 200, ownerSeesAllResponse.body)
 assert.deepEqual(
-    parseBody(ownerSeesBothResponse.body).watchlistItems.map((item: Row) => item.value).sort(),
-    ['Acme Payroll Vendor', 'acme-shared.example'].sort()
+    parseBody(ownerSeesAllResponse.body).watchlistItems.map((item: Row) => item.value).sort(),
+    ['Acme Payroll Vendor', 'Acme Shared Holdings', 'acme-shared.example', 'credential reset lures', 'scattered spider'].sort()
 )
+assert.deepEqual(parseBody(ownerSeesAllResponse.body).sharedWatchlistContract.termFamilies, ['actor', 'company', 'domain', 'keyword', 'vendor'])
 
 const readinessResponse = await app.inject({
     method: 'GET',
@@ -438,7 +511,7 @@ assert.deepEqual(readiness.allowedViewerRoles, ['owner', 'admin'])
 assert.equal(readiness.removedMemberDenialReason, 'member_removed')
 assert.equal(readiness.deactivatedMemberDenialReason, 'member_deactivated')
 assert.equal(readiness.pendingInviteCount, 11)
-assert.equal(readiness.sharedWatchlistCount, 2)
+assert.equal(readiness.sharedWatchlistCount, 5)
 assert.equal(readiness.readinessStatus, 'ready')
 assert.equal(readiness.ready, true)
 assert.equal(readiness.teamOnboardingReadiness.schemaVersion, 'organization.team_onboarding_readiness.v1')
@@ -446,10 +519,18 @@ assert.equal(readiness.teamOnboardingReadiness.targetMemberCount, 10)
 assert.equal(readiness.teamOnboardingReadiness.activeMemberCount, 4)
 assert.equal(readiness.teamOnboardingReadiness.pendingInviteCount, 11)
 assert.equal(readiness.teamOnboardingReadiness.acceptedOrInvitedCount, 15)
-assert.equal(readiness.teamOnboardingReadiness.sharedWatchlistCount, 2)
+assert.equal(readiness.teamOnboardingReadiness.sharedWatchlistCount, 5)
 assert.equal(readiness.teamOnboardingReadiness.canSupportTenMemberSharedWatchlistRollout, true)
 assert.deepEqual(readiness.teamOnboardingReadiness.blockedReasons, [])
-assert.equal(readiness.generatedAlertReferences.length, 2)
+assert.equal(readiness.alertGenerationBridge.schemaVersion, 'organization.watchlist_alert_generation.v1')
+assert.equal(readiness.alertGenerationBridge.organizationId, organization.id)
+assert.equal(readiness.alertGenerationBridge.tenantId, organization.id)
+assert.deepEqual(readiness.alertGenerationBridge.allowedViewerRoles, ['owner', 'admin'])
+assert.deepEqual(readiness.alertGenerationBridge.termFamilies, ['actor', 'company', 'domain', 'keyword', 'vendor'])
+assert.equal(readiness.alertGenerationBridge.activeWatchlistTerms.length, 5)
+assert.equal(readiness.alertGenerationBridge.canGenerateAlerts, true)
+assert.deepEqual(readiness.alertGenerationBridge.blockedReasons, [])
+assert.equal(readiness.generatedAlertReferences.length, 5)
 const domainReference = readiness.generatedAlertReferences.find((reference: Row) => reference.matchedTerm.value === 'acme-shared.example')
 assert.ok(domainReference)
 assert.equal(domainReference.organizationId, organization.id)
@@ -470,7 +551,7 @@ assert.deepEqual(domainReference.alert.allowedViewerRoles, ['owner', 'admin'])
 assert.equal(domainReference.alert.removedMemberDenialReason, 'member_removed')
 assert.equal(domainReference.alert.deactivatedMemberDenialReason, 'member_deactivated')
 assert.equal(domainReference.alert.pendingInviteCount, 11)
-assert.equal(domainReference.alert.sharedWatchlistCount, 2)
+assert.equal(domainReference.alert.sharedWatchlistCount, 5)
 assert.equal(domainReference.alert.readinessStatus, 'ready')
 assert.equal(domainReference.webhookContract.orgId, organization.id)
 assert.equal(domainReference.webhookContract.watchlistId, domainReference.watchlistItemId)
@@ -482,6 +563,9 @@ assert.equal(domainReference.organization.alertVisibilityPolicy, 'admins')
 assert.deepEqual(domainReference.organization.allowedViewerRoles, ['owner', 'admin'])
 assert.match(domainReference.alert.casePath, /watchlistItemId=/)
 assert.match(domainReference.alert.dedupeKey, /org:/)
+assert.equal(domainReference.watchlist.termFamily, 'domain')
+assert.equal(domainReference.matchedTerm.termFamily, 'domain')
+assert.equal(domainReference.alert.matchedTerm.termFamily, 'domain')
 assert.deepEqual(domainReference.watchlist.terms, ['acme-shared.example'])
 
 const viewerReadinessResponse = await app.inject({
@@ -490,7 +574,16 @@ const viewerReadinessResponse = await app.inject({
     headers: authHeaders('org_smoke_viewer', 'viewer-token'),
 })
 assert.equal(viewerReadinessResponse.statusCode, 200, viewerReadinessResponse.body)
-assert.equal(parseBody(viewerReadinessResponse.body).alertReadiness.watchlistItemCount, 2)
+assert.equal(parseBody(viewerReadinessResponse.body).alertReadiness.watchlistItemCount, 5)
+
+const ownerDisablesActorResponse = await app.inject({
+    method: 'DELETE',
+    url: `/api/organizations/${organization.id}/watchlists/${actorWatchlistItem.id}?requestId=smoke-disable-actor`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(ownerDisablesActorResponse.statusCode, 200, ownerDisablesActorResponse.body)
+assert.equal(parseBody(ownerDisablesActorResponse.body).operation.action, 'disabled')
+assert.equal(parseBody(ownerDisablesActorResponse.body).operation.requestId, 'smoke-disable-actor')
 
 const memberRemoveViewerResponse = await app.inject({
     method: 'DELETE',
@@ -599,6 +692,8 @@ assert.equal(outsiderReadinessResponse.statusCode, 404, outsiderReadinessRespons
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upserted'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_updated' && log.metadata.requestId === 'smoke-keyword-update'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archived' && log.metadata.requestId === 'smoke-disable-actor'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated' && log.metadata.fields.includes('defaultWebhookPolicy')))
@@ -644,7 +739,9 @@ async function fakeRun(query: string, params: any[] = []) {
     if (compact.includes('FROM organizations o JOIN organization_members om')) {
         const [organizationId, userId] = params.length === 1 ? [undefined, params[0]] : params
         const activeMemberships = [...members.values()].filter(member => member.status === 'active')
-        const scoped = activeMemberships.filter(member => member.user_id === userId && (!organizationId || member.organization_id === organizationId))
+        const scoped = activeMemberships.filter(member => member.user_id === userId
+            && users.get(member.user_id)?.active !== false
+            && (!organizationId || member.organization_id === organizationId))
         return rows(scoped.map(member => organizationSummary(member.organization_id, member.role)))
     }
 
@@ -793,6 +890,15 @@ async function fakeRun(query: string, params: any[] = []) {
         return rows([updated])
     }
 
+    if (compact.startsWith('UPDATE organization_watchlist_items SET kind')) {
+        const [id, organizationId, kind, value, notes] = params
+        const existing = watchlists.get(id)
+        if (!existing || existing.organization_id !== organizationId || existing.archived_at) return rows([])
+        const updated = { ...existing, kind, value, notes, updated_at: iso() }
+        watchlists.set(id, updated)
+        return rows([updated])
+    }
+
     if (compact.startsWith('INSERT INTO organization_watchlist_items')) {
         const [id, organizationId, kind, value, notes, createdBy] = params
         const item = nowRow({ id, organization_id: organizationId, kind, value, notes, created_by: createdBy, archived_at: null })
@@ -825,7 +931,7 @@ async function fakeRun(query: string, params: any[] = []) {
 
 function organizationSummary(organizationId: string, role: string) {
     const org = organizations.get(organizationId)
-    const activeMembers = [...members.values()].filter(member => member.organization_id === organizationId && member.status === 'active')
+    const activeMembers = [...members.values()].filter(member => member.organization_id === organizationId && member.status === 'active' && users.get(member.user_id)?.active !== false)
     const activeOwners = activeMembers.filter(member => member.role === 'owner')
     const pendingInvites = [...invites.values()].filter(invite => invite.organization_id === organizationId && invite.status === 'pending' && Date.parse(invite.expires_at) > Date.now())
     const sharedWatchlists = [...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at)
