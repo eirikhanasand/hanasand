@@ -36,6 +36,26 @@ UI changes must be visually checked, not guessed. Verify text contrast, overflow
 ## Coordination
 Respect existing dirty work. Read `git status --short` before edits and keep that as the baseline. Do not revert user or other-agent changes. If a touched file contains unrelated changes, isolate your patch carefully and say so.
 
+## Required Task Flow
+For every future prompt, especially product/UI work, use this operating loop:
+
+1. Start by recording `git status --short` as the BASELINE.
+2. Write 3-7 acceptance criteria from the user's request before or while orienting.
+3. Identify the affected routes, files, and product surfaces.
+4. Implement until all acceptance criteria pass, including adjacent obvious gaps in the same surface.
+5. Add or adjust focused tests where the behavior can regress.
+6. Verify UI work in a browser/rendered surface when feasible.
+7. End with focused checks, an isolated commit, and push/deploy/probe when production-impacting or expected by the thread.
+
+The final handoff for implementation work must include these lines:
+
+- `BASELINE dirty files:`
+- `FINAL dirty files:`
+- `Commit:`
+- `Checks:`
+- `Live probes:`
+- `Remaining blockers:`
+
 Every agent must clean up after itself:
 
 - Start by recording the dirty-worktree baseline.

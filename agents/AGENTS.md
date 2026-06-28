@@ -5,6 +5,8 @@ Make Hanasand production-ready without wasting user time, tokens, or server reso
 
 ## Token-Saving Workflow
 - Start with `git status --short` and targeted `rg`, not whole-repo reading.
+- For every implementation prompt, write 3-7 acceptance criteria, identify affected routes/files/surfaces, implement the complete presentable slice, verify with focused checks and browser proof for UI, then commit only the isolated intended diff.
+- Final implementation handoffs must include: `BASELINE dirty files:`, `FINAL dirty files:`, `Commit:`, `Checks:`, `Live probes:`, and `Remaining blockers:`.
 - After code edits, run type checks and the focused scripts below instead of manually reviewing every touched file.
 - For logs, use the database-backed API/UI:
   - API: `GET /api/logs?level=error`

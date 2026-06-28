@@ -86,7 +86,7 @@ export default function StatusDashboard({ trafficSummary, serviceStatus }: Dashb
                             <span className='text-xs font-semibold uppercase'>Overall health</span>
                             <span className='rounded-md bg-white/70 px-2 py-1 text-xs font-semibold'>{currentStatus.overall.toUpperCase()}</span>
                         </div>
-                        <div className='text-2xl font-semibold'>{visibleChecks.length} public check{visibleChecks.length === 1 ? '' : 's'}</div>
+                        <div className='text-2xl font-semibold'>{statusHeadline(currentStatus.overall)}</div>
                         <p className='text-sm leading-6'>
                             Checked {relativeTime(latestCheckedAt(currentStatus), now)}.
                         </p>
@@ -193,6 +193,12 @@ function latestCheckedAt(status: ServiceStatus) {
         .filter(Boolean)
         .sort((left, right) => Date.parse(right) - Date.parse(left))[0]
     return newestCheck || status.generated_at
+}
+
+function statusHeadline(status: ServiceStatus['overall']) {
+    if (status === 'up') return 'All systems operational'
+    if (status === 'degraded') return 'Some services are slower than usual'
+    return 'Service interruption'
 }
 
 function SummaryCard({ icon, label, title, body }: { icon: React.ReactNode, label: string, title: string, body: string }) {
