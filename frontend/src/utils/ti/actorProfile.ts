@@ -166,10 +166,10 @@ function operatorOriginDetail(result: TiSearchResponse) {
 
 function targetCountryDetail(result: TiSearchResponse, country: string) {
     const victims = victimObservationsFor(result).filter(item => item.country === country).map(item => item.victim)
-    if (victims.length) return `Named examples: ${victims.slice(0, 3).join(', ')}.`
+    if (victims.length) return `Returned observations: ${victims.slice(0, 3).join(', ')}. Open the victim table for sector, timeframe, incident, and source basis.`
     const activities = result.recentActivity.filter(item => item.countries?.some(countryValue => countryFromValue(countryValue)?.label === country))
     if (activities.length) return activities[0]?.title ?? 'Country-level targeting mentioned in recent activity.'
-    return 'Country-level target marker from reported activity; broad regions and alliance buckets are excluded.'
+    return 'Country-level observation from reported activity; broad regions and alliance buckets are excluded.'
 }
 
 function apt29VictimObservations(): VictimObservation[] {

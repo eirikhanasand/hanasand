@@ -2,9 +2,9 @@
 
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, victimObservationsFor } from '@/utils/ti/actorProfile'
-import { Activity, BellRing, Building2, Database, ExternalLink, Globe2, HelpCircle, Radar, Search, ShieldCheck, Target, Waypoints } from 'lucide-react'
+import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
@@ -114,23 +114,23 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
 
     return (
         <div className='mx-auto grid w-full max-w-7xl gap-6'>
-            <form onSubmit={submit} className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm md:p-5'>
+            <form onSubmit={submit} className={`grid gap-3 rounded-lg border border-[#dfe5ee] bg-white shadow-sm ${visible ? 'p-2 md:p-3' : 'p-4 md:p-5'}`}>
                 <div className='flex flex-col gap-3 md:flex-row md:items-end'>
                     <label className='grid flex-1 gap-2'>
-                        <span className='text-xs font-semibold uppercase text-[#3056d3]'>Threat intelligence search</span>
+                        <span className={`text-xs font-semibold uppercase text-[#3056d3] ${visible ? 'sr-only' : ''}`}>Threat intelligence search</span>
                         <input
                             ref={inputRef}
                             name='q'
                             value={query}
                             onChange={(event) => handleQueryChange(event.target.value)}
                             placeholder='Company, actor, domain, CVE, supplier...'
-                            className='h-12 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+                            className={`${visible ? 'h-10' : 'h-12'} rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]`}
                         />
                     </label>
                     <button
                         type='submit'
                         aria-busy={busy}
-                        className='inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#98a2b3]'
+                        className={`${visible ? 'h-10' : 'h-12'} inline-flex items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#98a2b3]`}
                     >
                         <Search className='h-4 w-4' />
                         {busy ? 'Searching' : 'Search'}
@@ -151,57 +151,223 @@ function Results({ result }: { result: TiSearchResponse }) {
     const sources = result.sources.length ? result.sources : defaultSourceLinks()
     const alertItems = alertItemsFor(result)
     const victimObservations = victimObservationsFor(result)
+    const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById), [result, victimObservations, sourceUrlById])
+    const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
+    const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
+    const [notes, setNotes] = useState<Record<string, string>>({})
+    const selected = workItems.find(item => item.id === selectedId) ?? workItems[0]
+    const selectedDecision = selected ? localDecisions[selected.id] : undefined
+    const selectedNote = selected ? notes[selected.id] ?? '' : ''
+    const sessionEvents = Object.entries(localDecisions).map(([id, decision]) => {
+        const item = workItems.find(entry => entry.id === id)
+        return {
+            id: `${id}-${decision.decidedAt}`,
+            at: decision.decidedAt ?? result.generatedAt,
+            label: `${decisionLabel(decision.status)}${item ? `: ${item.title}` : ''}`,
+            detail: decision.reason || 'No rationale recorded.',
+        }
+    })
+    const queueCounts = queueCountsFor(workItems, localDecisions)
     const profileStats = [
         { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(result.sources.length) },
         { icon: <Activity className='h-3.5 w-3.5' />, label: 'Updated', value: formatDate(result.generatedAt || result.lastSeen) },
-        { icon: <Database className='h-3.5 w-3.5' />, label: 'Activity', value: activityCountLabel(result.recentActivity.length) },
-        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Monitoring', value: result.status === 'ready' || result.status === 'partial' ? 'Active' : 'Watching' },
+        { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Queue', value: `${queueCounts.open} open` },
+        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Mode', value: result.status === 'ready' || result.status === 'partial' ? 'Live' : 'Watching' },
     ]
+
+    function applyDecision(status: LocalDecision['status']) {
+        if (!selected) return
+        const reason = selectedNote.trim() || defaultDecisionReason(status)
+        setLocalDecisions(current => ({
+            ...current,
+            [selected.id]: {
+                status,
+                reason,
+                decidedAt: new Date().toISOString(),
+            },
+        }))
+    }
+
     return (
         <div className='grid gap-6'>
-            <section className='grid gap-5 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.95fr)]'>
-                <div className='grid gap-3'>
-                    <div className='flex flex-wrap items-center gap-2'>
-                        <h1 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>{humanizeSlug(result.query)}</h1>
-                        {result.status ? (
-                            <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-medium uppercase text-[#3056d3]'>
-                                {humanResultStatus(result.status)}
-                            </span>
-                        ) : null}
+            <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
+                <div className='grid gap-3 border-b border-[#e8edf5] bg-white p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+                    <div className='min-w-0'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <h1 className='wrap-break-word text-2xl font-semibold text-[#171a21] md:text-3xl'>{humanizeSlug(result.query)}</h1>
+                            {result.status ? (
+                                <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold uppercase text-[#3056d3]'>
+                                    {humanResultStatus(result.status)}
+                                </span>
+                            ) : null}
+                        </div>
+                        <p className='mt-1 line-clamp-2 max-w-5xl text-sm leading-6 text-[#596170]'>{result.summary}</p>
+                        <div className='mt-2 flex flex-wrap gap-2'>
+                            {result.aliases.map(alias => (
+                                <span key={alias} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{alias}</span>
+                            ))}
+                            {!result.aliases.length ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>No aliases returned</span> : null}
+                        </div>
+                    </div>
+                    <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[34rem]'>
                         {profileStats.map(item => (
                             <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                         ))}
                     </div>
-                    <p className='max-w-4xl text-sm leading-6 text-[#596170]'>{result.summary}</p>
-                    <div className='flex flex-wrap gap-2'>
-                        {result.aliases.map(alias => (
-                            <span key={alias} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{alias}</span>
-                        ))}
-                    </div>
                 </div>
-                <ThreatActorMap result={result} />
+
+                <div className='grid min-h-[44rem] lg:grid-cols-[320px_minmax(0,1fr)_340px]'>
+                    <aside data-ti-queue='true' className='order-2 border-b border-[#e8edf5] bg-[#fbfcfe] lg:order-none lg:border-b-0 lg:border-r'>
+                        <div className='border-b border-[#e8edf5] p-4'>
+                            <div className='flex items-center justify-between gap-3'>
+                                <div>
+                                    <h2 className='text-sm font-semibold text-[#171a21]'>Priority Queue</h2>
+                                    <p className='mt-1 text-xs text-[#667085]'>Session-local triage; API result data is live.</p>
+                                </div>
+                                <span className='rounded-lg bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{workItems.length}</span>
+                            </div>
+                            <div className='mt-3 grid grid-cols-3 gap-2 text-center text-xs'>
+                                <QueueMetric label='Open' value={queueCounts.open} />
+                                <QueueMetric label='High' value={queueCounts.high} />
+                                <QueueMetric label='Closed' value={queueCounts.closed} />
+                            </div>
+                        </div>
+                        <div className='max-h-[40rem] overflow-y-auto p-2'>
+                            {workItems.map(item => {
+                                const decision = localDecisions[item.id]
+                                const active = selected?.id === item.id
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type='button'
+                                        onClick={() => setSelectedId(item.id)}
+                                        className={`grid w-full gap-2 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-transparent bg-transparent hover:border-[#d8dee9] hover:bg-white'}`}
+                                    >
+                                        <div className='flex items-center justify-between gap-2'>
+                                            <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
+                                            <span className='text-[11px] text-[#667085]'>{decision ? decisionLabel(decision.status) : item.status}</span>
+                                        </div>
+                                        <span className='text-sm font-semibold leading-5 text-[#171a21]'>{item.title}</span>
+                                        <span className='line-clamp-2 text-xs leading-5 text-[#667085]'>{item.subtitle}</span>
+                                        <span className='flex flex-wrap gap-2 text-[11px] text-[#667085]'>
+                                            <span>{item.timestamp}</span>
+                                            <span>{Math.round(item.confidence * 100)}% confidence</span>
+                                        </span>
+                                    </button>
+                                )
+                            })}
+                            {!workItems.length ? <p className='rounded-lg border border-dashed border-[#d8dee9] bg-white p-4 text-sm text-[#667085]'>No analyst work items returned yet.</p> : null}
+                        </div>
+                    </aside>
+
+                    <main className='order-1 min-w-0 p-4 lg:order-none'>
+                        {selected ? (
+                            <div className='grid gap-4'>
+                                <section data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
+                                    <div className='flex flex-wrap items-start justify-between gap-3'>
+                                        <div className='min-w-0'>
+                                            <div className='flex flex-wrap items-center gap-2'>
+                                                <span className={`rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
+                                                <span className='rounded-md bg-[#f2f4f7] px-2 py-1 text-xs font-semibold text-[#475467]'>{kindLabel(selected.kind)}</span>
+                                                <span className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{selectedDecision ? decisionLabel(selectedDecision.status) : selected.status}</span>
+                                            </div>
+                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
+                                            <p className='mt-2 text-sm leading-6 text-[#596170]'>{selected.detail}</p>
+                                        </div>
+                                        {selected.href ? (
+                                            <a href={selected.href} target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                                                <ExternalLink className='h-3.5 w-3.5' />
+                                                Source
+                                            </a>
+                                        ) : null}
+                                    </div>
+
+                                    <div className='mt-4 grid gap-3 md:grid-cols-4'>
+                                        <EvidenceMetric label='First seen' value={selected.timestamp} />
+                                        <EvidenceMetric label='Source' value={selected.source} />
+                                        <EvidenceMetric label='Confidence' value={`${Math.round(selected.confidence * 100)}%`} />
+                                        <EvidenceMetric label='Provenance' value={selected.provenance} />
+                                    </div>
+
+                                    <div className='mt-4 grid gap-3 md:grid-cols-2'>
+                                        <EvidencePanel title='Evidence'>
+                                            {selected.evidence.map(line => <li key={line}>{line}</li>)}
+                                        </EvidencePanel>
+                                        <EvidencePanel title='Recommended Analyst Action'>
+                                            {selected.nextActions.map(line => <li key={line}>{line}</li>)}
+                                        </EvidencePanel>
+                                    </div>
+                                </section>
+
+                                <section className='grid gap-4 xl:grid-cols-[1fr_1fr]'>
+                                    <Panel title='Reported Victims and Targets' description='Country-level observations with the victim, sector, timeframe, incident, and source basis visible immediately.' icon={<Target className='h-4 w-4' />}>
+                                        {victimObservations.length ? victimObservations.map(item => (
+                                            <VictimObservationRow key={`${item.victim}-${item.timeframe}`} item={item} />
+                                        )) : <EmptyLine text='No country-level victim or target observations returned yet.' />}
+                                    </Panel>
+
+                                    <Panel title='Observed Tradecraft' description='Reported tactics, techniques, and procedures, usually mapped to ATT&CK where available.' icon={<Waypoints className='h-4 w-4' />}>
+                                        {result.ttps.length ? result.ttps.map(item => (
+                                            <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
+                                                <div className='flex flex-wrap items-center gap-2'>
+                                                    <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
+                                                    {item.attackId ? <TechniqueBadge attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} /> : null}
+                                                </div>
+                                                <p className='text-xs text-[#667085]'>{item.tactic} · {Math.round(item.confidence * 100)}% confidence</p>
+                                                <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                            </div>
+                                        )) : <EmptyLine text='No tradecraft returned yet.' />}
+                                    </Panel>
+                                </section>
+
+                                <ThreatActorMap result={result} />
+                            </div>
+                        ) : (
+                            <div className='grid min-h-96 place-items-center rounded-lg border border-dashed border-[#d8dee9] bg-white p-8 text-center text-sm text-[#667085]'>Search is still building an analyst queue.</div>
+                        )}
+                    </main>
+
+                    <aside className='order-3 grid content-start gap-4 border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:border-l lg:border-t-0'>
+                        <div data-ti-actions='true'>
+                            <ActionPanel
+                                note={selectedNote}
+                                decision={selectedDecision}
+                                onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
+                                onDecision={applyDecision}
+                            />
+                        </div>
+
+                        <Panel title='Timeline' description='API evidence timestamps plus analyst decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
+                            <div className='grid gap-3'>
+                                {[...timelineFor(result, selected), ...sessionEvents].slice(0, 8).map(event => (
+                                    <div key={event.id} className='border-l-2 border-[#d8dee9] pl-3'>
+                                        <p className='text-xs font-semibold text-[#171a21]'>{event.label}</p>
+                                        <p className='mt-1 text-[11px] text-[#667085]'>{formatDate(event.at)}</p>
+                                        <p className='mt-1 text-xs leading-5 text-[#596170]'>{event.detail}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </Panel>
+
+                        <Panel title='Collection Tasks' description='What the collection layer has checked or should check next for this profile.' icon={<Database className='h-4 w-4' />}>
+                            <div className='grid gap-2'>
+                                {(result.analystLoop?.nextSteps ?? defaultNextStepsFor(result)).map(step => (
+                                    <div key={`${step.state}-${step.label}`} className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                                        <div className='flex items-center justify-between gap-2'>
+                                            <p className='text-xs font-semibold text-[#171a21]'>{step.label}</p>
+                                            <span className={rowToneClass(step.tone)}>{formatLabel(step.state)}</span>
+                                        </div>
+                                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{step.detail}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </Panel>
+                    </aside>
+                </div>
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Recent Activity' description='New or updated reporting connected to this actor, company, domain, CVE, or search term. Stable profile facts stay cached; this section is the part that changes most often.' icon={<Radar className='h-4 w-4' />}>
-                    {result.recentActivity.length ? result.recentActivity.map(item => {
-                        const href = item.url || item.sourceIds.map(id => sourceUrlById.get(id)).find(Boolean)
-                        return (
-                            <EvidenceBox key={`${item.date}-${item.title}`} href={href}>
-                                <div className='flex items-center justify-between gap-3'>
-                                    <h2 className='text-sm font-semibold text-[#171a21]'>{item.title}</h2>
-                                    <span className='text-xs text-[#667085]'>{item.date}</span>
-                                </div>
-                                <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
-                                <p className='inline-flex items-center gap-1 text-xs text-[#667085]'>
-                                    {activitySourceLabel(item.sourceIds.length)}
-                                    {href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}
-                                </p>
-                            </EvidenceBox>
-                        )}) : <EmptyLine text={result.status === 'searching' ? 'Searching' : 'No activity returned yet.'} />}
-                </Panel>
-
-                <Panel title='Company Exposure' description='Company exposure means a company, domain, vendor, brand, product, or portfolio name appears in actor claims, leak posts, advisories, or monitored pages. This is the section buyers use to decide whether someone needs to review or respond.' icon={<Building2 className='h-4 w-4' />}>
+                <Panel title='Company Exposure' description='Company, domain, vendor, brand, product, or portfolio matches from actor claims, leak posts, advisories, or monitored pages.' icon={<Building2 className='h-4 w-4' />}>
                     {alertItems.length ? alertItems.map(item => (
                         <div key={item.title} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                             <div className='flex items-center justify-between gap-3'>
@@ -211,37 +377,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
                         </div>
                     )) : <EmptyLine text='No company, domain, vendor, or product matches returned yet.' />}
-                </Panel>
-            </section>
-
-            <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Reported Victims and Targets' description='Named victim or target examples connected to this profile. These are country-level rows, not broad continents or alliance buckets.' icon={<Target className='h-4 w-4' />}>
-                    {victimObservations.length ? victimObservations.map(item => (
-                        <div key={`${item.victim}-${item.timeframe}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
-                            <div className='flex flex-wrap items-center justify-between gap-2'>
-                                <h2 className='text-sm font-semibold text-[#171a21]'>{item.victim}</h2>
-                                <span className='rounded-md bg-[#fff1f0] px-2 py-1 text-xs font-semibold text-[#b42318]'>{item.country}</span>
-                            </div>
-                            <p className='text-xs text-[#667085]'>{item.sector} · {item.timeframe}</p>
-                            <p className='text-sm leading-6 text-[#596170]'>{item.incident}</p>
-                            <p className='text-xs text-[#667085]'>Source basis: {item.source}</p>
-                        </div>
-                    )) : <EmptyLine text='No named victim or target observations returned yet.' />}
-                </Panel>
-            </section>
-
-            <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Observed Tradecraft' description='Reported tactics, techniques, and procedures, usually mapped to ATT&CK where available. This helps defenders understand how the actor tends to operate.' icon={<Waypoints className='h-4 w-4' />}>
-                    {result.ttps.map(item => (
-                        <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
-                            <div className='flex flex-wrap items-center gap-2'>
-                                <h2 className='text-sm font-semibold text-[#171a21]'>{item.name}</h2>
-                                {item.attackId ? <TechniqueBadge attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} /> : null}
-                            </div>
-                            <p className='text-xs text-[#667085]'>{item.tactic}</p>
-                            <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
-                        </div>
-                    ))}
                 </Panel>
 
                 <Panel title='Monitoring Coverage' description='The data families checked for this result, such as actor profiles, victim claims, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
@@ -263,6 +398,316 @@ function Results({ result }: { result: TiSearchResponse }) {
             </section>
         </div>
     )
+}
+
+type AnalystWorkItem = {
+    id: string
+    kind: 'activity' | 'exposure' | 'victim' | 'tradecraft' | 'collection'
+    severity: 'critical' | 'high' | 'medium' | 'low'
+    status: string
+    title: string
+    subtitle: string
+    detail: string
+    timestamp: string
+    source: string
+    provenance: string
+    confidence: number
+    href?: string
+    evidence: string[]
+    nextActions: string[]
+}
+
+type LocalDecision = {
+    status: 'reviewing' | 'assigned' | 'escalated' | 'suppressed' | 'closed' | 'reopened'
+    reason: string
+    decidedAt: string
+}
+
+function analystWorkItemsFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sourceUrlById: Map<string, string | undefined>): AnalystWorkItem[] {
+    const activityItems: AnalystWorkItem[] = result.recentActivity.map((item, index) => {
+        const href = item.url || item.sourceIds.map(id => sourceUrlById.get(id)).find(Boolean)
+        const exposure = item.victimName || item.claimType === 'victim_claim' || /victim|leak|claim|stolen|exfiltrat|credential/i.test(`${item.title} ${item.detail}`)
+        return {
+            id: `activity-${index}-${item.date}-${item.title}`.toLowerCase(),
+            kind: exposure ? 'exposure' : 'activity',
+            severity: exposure ? 'high' : item.confidence >= 0.75 ? 'medium' : 'low',
+            status: exposure ? 'needs review' : 'monitor',
+            title: item.victimName || item.title,
+            subtitle: item.impact || item.detail,
+            detail: item.detail,
+            timestamp: item.firstReportedAt || item.date || result.generatedAt,
+            source: activitySourceLabel(item.sourceIds.length),
+            provenance: item.publisherCount ? `${item.publisherCount} publisher${item.publisherCount === 1 ? '' : 's'}` : 'API activity result',
+            confidence: item.confidence,
+            href,
+            evidence: [
+                item.title,
+                item.impact || item.detail,
+                item.affectedSectors?.length ? `Affected sectors: ${item.affectedSectors.join(', ')}` : 'Affected sector not stated.',
+                item.countries?.length ? `Countries: ${item.countries.join(', ')}` : 'Country not stated.',
+            ],
+            nextActions: exposure
+                ? ['Review the source context before customer alerting.', 'Check whether the victim/domain is in a watched portfolio.', 'Escalate if the claim is fresh, corroborated, or customer-relevant.']
+                : ['Review for relevance to the selected actor or company.', 'Open the source when available.', 'Close if it is duplicate background reporting.'],
+        }
+    })
+
+    const victimItems: AnalystWorkItem[] = victimObservations.map((item, index) => ({
+        id: `victim-${index}-${item.victim}`.toLowerCase(),
+        kind: 'victim',
+        severity: /microsoft|solarwinds|federal|government|diplomatic/i.test(`${item.victim} ${item.sector}`) ? 'high' : 'medium',
+        status: 'profile evidence',
+        title: item.victim,
+        subtitle: `${item.country} · ${item.sector}`,
+        detail: item.incident,
+        timestamp: item.timeframe,
+        source: item.source,
+        provenance: 'Country-level actor profile evidence',
+        confidence: 0.76,
+        evidence: [
+            `Country: ${item.country}`,
+            `Sector: ${item.sector}`,
+            `Timeframe: ${item.timeframe}`,
+            item.incident,
+        ],
+        nextActions: ['Use as actor profile context, not as a current alert by itself.', 'Corroborate with source links before notifying a customer.', 'Keep broad regions and alliance buckets out of the country map.'],
+    }))
+
+    const tradecraftItems: AnalystWorkItem[] = result.ttps.slice(0, 4).map((item, index) => ({
+        id: `ttp-${index}-${item.attackId || item.name}`.toLowerCase(),
+        kind: 'tradecraft',
+        severity: item.confidence >= 0.8 ? 'medium' : 'low',
+        status: 'detection context',
+        title: item.attackId ? `${item.attackId} ${item.name}` : item.name,
+        subtitle: item.tactic,
+        detail: item.detail,
+        timestamp: result.lastSeen || result.generatedAt,
+        source: 'Actor profile',
+        provenance: item.attackId ? 'MITRE ATT&CK mapped profile field' : 'Profile tradecraft field',
+        confidence: item.confidence,
+        evidence: [item.tactic, item.detail],
+        nextActions: ['Map to defensive detections or hunting queries.', 'Prioritize techniques that match current exposure or recent activity.', 'Close if this is generic background for the current shift.'],
+    }))
+
+    const reviewItems: AnalystWorkItem[] = result.analystLoop?.metadataReviewInbox.map((item, index) => ({
+        id: `review-${item.id || index}`.toLowerCase(),
+        kind: 'exposure',
+        severity: item.allowedActions.includes('notify_company') ? 'critical' : 'high',
+        status: item.status.replaceAll('_', ' '),
+        title: item.company || item.victim || 'Exposure mention',
+        subtitle: [item.affectedAccounts, item.datasetSize, item.claimedDate].filter(Boolean).join(' · ') || 'Metadata review item',
+        detail: item.actorStatement || 'Review the captured metadata before taking action.',
+        timestamp: item.claimedDate || result.generatedAt,
+        source: item.sourceHash ? `source hash ${item.sourceHash}` : 'Metadata review inbox',
+        provenance: item.provenance || 'Restricted metadata queue',
+        confidence: item.confidence,
+        evidence: [
+            item.affectedAccounts ? `Affected accounts: ${item.affectedAccounts}` : 'Affected accounts not stated.',
+            item.accountSubjects ? `Account subjects: ${item.accountSubjects}` : 'Account subjects not stated.',
+            item.datasetSize ? `Dataset size: ${item.datasetSize}` : 'Dataset size not stated.',
+            item.actorStatement ? `Actor statement: ${item.actorStatement}` : 'Actor statement not returned.',
+        ],
+        nextActions: item.allowedActions.map(action => formatLabel(action)),
+    })) ?? []
+
+    const items = [...reviewItems, ...activityItems, ...victimItems, ...tradecraftItems]
+    if (items.length) return items.sort((a, b) => severityWeight(b.severity) - severityWeight(a.severity) || b.confidence - a.confidence)
+
+    return [{
+        id: 'collection-searching',
+        kind: 'collection',
+        severity: result.status === 'searching' || result.status === 'queued' ? 'medium' : 'low',
+        status: humanResultStatus(result.status),
+        title: result.status === 'searching' ? 'Collection running' : 'No actionable rows returned',
+        subtitle: result.analystLoop?.headline || result.summary,
+        detail: result.analystLoop?.runStatusClarity.summary || 'The collection layer has not returned analyst-reviewable rows for this query yet.',
+        timestamp: result.generatedAt,
+        source: 'TI search API',
+        provenance: result.mode,
+        confidence: result.confidence,
+        evidence: result.notes.length ? result.notes : ['No evidence rows returned yet.'],
+        nextActions: ['Leave this query open while polling continues.', 'Try an alias, domain, company name, CVE, or supplier term.', 'Open the customer console for persisted queue work.'],
+    }]
+}
+
+function ActionPanel({ note, decision, onNoteChange, onDecision }: {
+    note: string
+    decision?: LocalDecision
+    onNoteChange: (value: string) => void
+    onDecision: (status: LocalDecision['status']) => void
+}) {
+    return (
+        <Panel title='Analyst Actions' description='Actions on this public page are session-local. Persisted assignment, delivery, and audit logging live in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
+            <div className='grid gap-3'>
+                {decision ? (
+                    <div className='rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3 text-xs leading-5 text-[#147a3b]'>
+                        {decisionLabel(decision.status)} recorded at {formatDate(decision.decidedAt)}. Rationale: {decision.reason}
+                    </div>
+                ) : (
+                    <div className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 text-xs leading-5 text-[#667085]'>
+                        No local decision recorded yet.
+                    </div>
+                )}
+                <textarea
+                    value={note}
+                    onChange={event => onNoteChange(event.target.value)}
+                    placeholder='Decision rationale, owner, or next evidence to collect...'
+                    className='min-h-24 resize-y rounded-lg border border-[#d8dee9] bg-white p-3 text-sm leading-6 text-[#171a21] outline-none transition placeholder:text-[#98a2b3] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+                />
+                <div className='grid grid-cols-2 gap-2'>
+                    <ActionButton icon={<Eye className='h-3.5 w-3.5' />} onClick={() => onDecision('reviewing')}>Review</ActionButton>
+                    <ActionButton icon={<UserPlus className='h-3.5 w-3.5' />} onClick={() => onDecision('assigned')}>Assign</ActionButton>
+                    <ActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={() => onDecision('escalated')}>Escalate</ActionButton>
+                    <ActionButton icon={<ShieldAlert className='h-3.5 w-3.5' />} onClick={() => onDecision('suppressed')}>Suppress</ActionButton>
+                    <ActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={() => onDecision('closed')}>Close</ActionButton>
+                    <ActionButton icon={<XCircle className='h-3.5 w-3.5' />} onClick={() => onDecision('reopened')}>Reopen</ActionButton>
+                </div>
+            </div>
+        </Panel>
+    )
+}
+
+function ActionButton({ icon, children, onClick }: { icon: React.ReactNode; children: string; onClick: () => void }) {
+    return (
+        <button type='button' onClick={onClick} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+            {icon}
+            {children}
+        </button>
+    )
+}
+
+function EvidencePanel({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
+            <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
+            <ul className='mt-2 grid list-disc gap-1 pl-4 text-sm leading-6 text-[#596170]'>
+                {children}
+            </ul>
+        </div>
+    )
+}
+
+function EvidenceMetric({ label, value }: { label: string; value: string }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
+            <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21]'>{value || 'Not stated'}</p>
+        </div>
+    )
+}
+
+function QueueMetric({ label, value }: { label: string; value: number }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-white p-2'>
+            <p className='text-base font-semibold text-[#171a21]'>{value}</p>
+            <p className='text-[11px] text-[#667085]'>{label}</p>
+        </div>
+    )
+}
+
+function VictimObservationRow({ item }: { item: ReturnType<typeof victimObservationsFor>[number] }) {
+    return (
+        <div className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <h2 className='text-sm font-semibold text-[#171a21]'>{item.victim}</h2>
+                <span className='rounded-md bg-[#fff1f0] px-2 py-1 text-xs font-semibold text-[#b42318]'>{item.country}</span>
+            </div>
+            <p className='text-xs text-[#667085]'>{item.sector} · {item.timeframe}</p>
+            <p className='text-sm leading-6 text-[#596170]'>{item.incident}</p>
+            <p className='text-xs text-[#667085]'>Source basis: {item.source}</p>
+        </div>
+    )
+}
+
+function timelineFor(result: TiSearchResponse, selected?: AnalystWorkItem) {
+    const events = [
+        {
+            id: 'generated',
+            at: result.generatedAt,
+            label: 'Profile generated',
+            detail: `${humanResultStatus(result.status)} result from ${result.mode}.`,
+        },
+        ...(selected ? [{
+            id: `selected-${selected.id}`,
+            at: selected.timestamp,
+            label: 'Selected evidence',
+            detail: selected.subtitle,
+        }] : []),
+        ...result.recentActivity.slice(0, 4).map((item, index) => ({
+            id: `activity-${index}`,
+            at: item.firstReportedAt || item.date || result.generatedAt,
+            label: item.title,
+            detail: item.detail,
+        })),
+    ]
+    return events
+}
+
+function defaultNextStepsFor(result: TiSearchResponse): NonNullable<TiSearchResponse['analystLoop']>['nextSteps'] {
+    if (result.status === 'searching' || result.status === 'queued') {
+        return [{
+            state: 'queued',
+            label: 'Live collection in progress',
+            detail: 'The page will poll for new evidence. Keep the result open or search an alias while the run continues.',
+            tone: 'watch',
+        }]
+    }
+    return [{
+        state: 'ready',
+        label: 'Review queue built',
+        detail: 'Use the selected work item, evidence, notes, and decision actions to triage this result.',
+        tone: 'ok',
+    }]
+}
+
+function queueCountsFor(items: AnalystWorkItem[], decisions: Record<string, LocalDecision>) {
+    return items.reduce((counts, item) => {
+        const decision = decisions[item.id]
+        if (decision?.status === 'closed' || decision?.status === 'suppressed') counts.closed += 1
+        else counts.open += 1
+        if (item.severity === 'critical' || item.severity === 'high') counts.high += 1
+        return counts
+    }, { open: 0, high: 0, closed: 0 })
+}
+
+function severityClass(severity: AnalystWorkItem['severity']) {
+    if (severity === 'critical') return 'bg-[#fee4e2] text-[#b42318]'
+    if (severity === 'high') return 'bg-[#fff1f0] text-[#c2410c]'
+    if (severity === 'medium') return 'bg-[#fff4d6] text-[#8a5a00]'
+    return 'bg-[#e9f8ef] text-[#147a3b]'
+}
+
+function severityWeight(severity: AnalystWorkItem['severity']) {
+    if (severity === 'critical') return 4
+    if (severity === 'high') return 3
+    if (severity === 'medium') return 2
+    return 1
+}
+
+function kindLabel(kind: AnalystWorkItem['kind']) {
+    if (kind === 'exposure') return 'Exposure'
+    if (kind === 'victim') return 'Victim context'
+    if (kind === 'tradecraft') return 'Tradecraft'
+    if (kind === 'collection') return 'Collection'
+    return 'Activity'
+}
+
+function decisionLabel(status: LocalDecision['status']) {
+    if (status === 'reviewing') return 'Reviewing'
+    if (status === 'assigned') return 'Assigned'
+    if (status === 'escalated') return 'Escalated'
+    if (status === 'suppressed') return 'Suppressed'
+    if (status === 'reopened') return 'Reopened'
+    return 'Closed'
+}
+
+function defaultDecisionReason(status: LocalDecision['status']) {
+    if (status === 'reviewing') return 'Review started in the public TI workspace.'
+    if (status === 'assigned') return 'Assigned locally for follow-up.'
+    if (status === 'escalated') return 'Escalated for customer or incident-response review.'
+    if (status === 'suppressed') return 'Suppressed as low-value, duplicate, or false positive.'
+    if (status === 'reopened') return 'Reopened for another look.'
+    return 'Closed in the local TI workspace.'
 }
 
 function EvidenceBox({ href, children }: { href?: string; children: React.ReactNode }) {
@@ -516,12 +961,12 @@ function techniqueDescription(attackId: string, name: string, tactic: string, de
     return descriptions[attackId] ?? `${name}: ${detail || `Reported under the ${tactic} tactic.`}`
 }
 
-function ProfileStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNode; label: string; value: string; dark?: boolean }) {
     return (
-        <span className='inline-flex items-center gap-1.5 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2.5 py-1 text-xs text-[#667085]'>
-            <span className='text-[#3056d3]'>{icon}</span>
+        <span className={`inline-flex min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs ${dark ? 'border-white/10 bg-white/10 text-[#d8deea]' : 'border-[#dfe5ee] bg-[#f8fafc] text-[#667085]'}`}>
+            <span className={dark ? 'text-[#b8c5ff]' : 'text-[#3056d3]'}>{icon}</span>
             <span>{label}</span>
-            <span className='font-semibold text-[#171a21]'>{value}</span>
+            <span className={`truncate font-semibold ${dark ? 'text-white' : 'text-[#171a21]'}`}>{value}</span>
         </span>
     )
 }
@@ -534,7 +979,7 @@ function ThreatActorMap({ result }: { result: TiSearchResponse }) {
             <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3'>
                 <div>
                     <h2 className='text-sm font-semibold text-[#171a21]'>Country-Level Actor Map</h2>
-                    <p className='mt-0.5 text-xs text-[#667085]'>Purple marks reported operator origin. Red marks reported victim or target countries.</p>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Purple marks reported operator origin. Red marks countries with returned victim or targeting observations.</p>
                 </div>
                 <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3]'>{hasPoints ? `${geo.points.length} countries` : 'Country data pending'}</span>
             </div>
@@ -544,12 +989,25 @@ function ThreatActorMap({ result }: { result: TiSearchResponse }) {
                     <WorldMapBase />
                     {geo.points.map(point => {
                         const color = point.role === 'operator' ? '#7c3aed' : '#d92d20'
+                        const label = mapLabelPosition(point.code)
                         return (
                             <g key={`${point.role}-${point.code}`}>
                                 <circle cx={point.x} cy={point.y} r='10' fill={color} opacity='0.12' />
                                 <circle cx={point.x} cy={point.y} r='5.5' fill={color} opacity='0.94' />
                                 <circle cx={point.x} cy={point.y} r='2' fill='#ffffff' />
-                                <text x={point.x + 9} y={point.y - 7} fill='#171a21' fontSize='10' fontWeight='700'>{point.label}</text>
+                                <text
+                                    x={point.x + label.dx}
+                                    y={point.y + label.dy}
+                                    textAnchor={label.anchor}
+                                    fill='#171a21'
+                                    stroke='#ffffff'
+                                    strokeWidth='3'
+                                    paintOrder='stroke'
+                                    fontSize='10'
+                                    fontWeight='700'
+                                >
+                                    {point.label}
+                                </text>
                             </g>
                         )
                     })}
@@ -582,7 +1040,7 @@ function ThreatActorMap({ result }: { result: TiSearchResponse }) {
                             <div key={`${point.role}-row-${point.code}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
                                 <div className='flex items-center justify-between gap-3'>
                                     <span className='font-semibold text-[#171a21]'>{point.label}</span>
-                                    <span className={point.role === 'operator' ? 'text-[#7c3aed]' : 'text-[#b42318]'}>{point.role === 'operator' ? 'operator origin' : `${point.count} target signal${point.count === 1 ? '' : 's'}`}</span>
+                                    <span className={point.role === 'operator' ? 'text-[#7c3aed]' : 'text-[#b42318]'}>{point.role === 'operator' ? 'operator origin' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
                                 </div>
                                 <p className='mt-1 leading-5 text-[#667085]'>{point.detail}</p>
                             </div>
@@ -627,6 +1085,18 @@ const countryShapes = [
     { code: 'AU', d: 'M500 229 L548 222 L575 246 L558 271 L510 266 Z' },
 ]
 
+function mapLabelPosition(code: string): { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' } {
+    const offsets: Record<string, { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' }> = {
+        GB: { dx: 0, dy: -17, anchor: 'middle' },
+        DE: { dx: 12, dy: 15, anchor: 'start' },
+        RU: { dx: 13, dy: -7, anchor: 'start' },
+        US: { dx: 12, dy: -8, anchor: 'start' },
+        FR: { dx: -12, dy: 16, anchor: 'end' },
+        NL: { dx: -12, dy: -10, anchor: 'end' },
+    }
+    return offsets[code] ?? { dx: 9, dy: -7, anchor: 'start' }
+}
+
 function EmptyLine({ text }: { text: string }) {
     return <p className='py-3 text-sm text-[#667085]'>{text}</p>
 }
@@ -662,11 +1132,6 @@ function sourceStatusLabel(value: string) {
 function sourceCountLabel(count: number) {
     if (count <= 0) return 'No sources'
     return `${Math.min(count, 5)} shown${count > 5 ? ` of ${count}` : ''}`
-}
-
-function activityCountLabel(count: number) {
-    if (count <= 0) return 'None yet'
-    return `${count} item${count === 1 ? '' : 's'}`
 }
 
 function activitySourceLabel(count: number) {
