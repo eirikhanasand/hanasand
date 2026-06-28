@@ -7,7 +7,7 @@ import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/acti
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
-import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
+import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
@@ -703,6 +703,43 @@ function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
 
 function ActionabilityPanel({ actionability, query }: { actionability: TiActionabilityModel; query: string }) {
     const casePath = actionability.relatedCases[0]?.path || actionability.relatedAlerts[0]?.casePath
+    const payloadRows = [
+        {
+            id: 'watchlist',
+            label: 'Watchlist',
+            payload: actionability.exportPayloads.watchlist,
+            route: actionability.exportPayloads.watchlist.backedRoute,
+            detail: `${actionability.watchlist.payloads.length} term${actionability.watchlist.payloads.length === 1 ? '' : 's'} shaped for ${actionability.watchlist.endpoint}`,
+        },
+        {
+            id: 'alertRebuild',
+            label: 'Alert rebuild',
+            payload: actionability.exportPayloads.alertRebuild,
+            route: actionability.exportPayloads.alertRebuild.backedRoute,
+            detail: actionability.exportPayloads.alertRebuild.blocked ? 'Requires org watchlist context before rebuild' : `POST ${actionability.handoffs.alertRebuildEndpoint}`,
+        },
+        {
+            id: 'case',
+            label: 'Case',
+            payload: actionability.exportPayloads.case,
+            route: actionability.exportPayloads.case.backedRoute,
+            detail: actionability.exportPayloads.case.blocked ? actionability.handoffs.caseBlockers.join('; ') : `POST ${actionability.handoffs.caseEndpoint}`,
+        },
+        {
+            id: 'enrichment',
+            label: 'Enrichment queue',
+            payload: actionability.exportPayloads.enrichment,
+            route: actionability.exportPayloads.enrichment.backedRoute,
+            detail: `${actionability.enrichmentGaps.length + actionability.sourceClusters.length} source/capture work item${actionability.enrichmentGaps.length + actionability.sourceClusters.length === 1 ? '' : 's'}`,
+        },
+        {
+            id: 'blockers',
+            label: 'Blocked dependencies',
+            payload: actionability.exportPayloads.blockers,
+            detail: actionability.exportPayloads.blockers.missing.length ? actionability.exportPayloads.blockers.missing.join('; ') : 'No missing org, alert, or case dependency returned',
+        },
+    ]
+
     return (
         <Panel title='Actor Actions' description='Backed alert, watchlist, case, source, and enrichment handoff state for this actor/query result.' icon={<ShieldCheck className='h-4 w-4' />}>
             <div className='grid gap-3'>
@@ -730,6 +767,15 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                         )) : <span className='text-xs text-[#667085]'>No backed watchlist payload yet</span>}
                     </div>
                     {actionability.watchlist.blockers.length ? <BlockerList blockers={actionability.watchlist.blockers} /> : null}
+                </div>
+
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Copy handoff payloads</p>
+                    <div className='mt-2 grid gap-2'>
+                        {payloadRows.map(row => (
+                            <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.payload.blocked} />
+                        ))}
+                    </div>
                 </div>
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
@@ -786,7 +832,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 {!casePath && actionability.handoffs.casePayload ? (
                     <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
                         <p className='text-xs font-semibold uppercase text-[#667085]'>Case handoff payload</p>
-                        <p className='mt-2 font-mono text-[11px] leading-5 text-[#596170]'>{JSON.stringify(actionability.handoffs.casePayload)}</p>
+                        <p className='mt-2 font-mono text-[11px] leading-5 text-[#596170]'>{JSON.stringify(actionability.exportPayloads.case.body)}</p>
                     </div>
                 ) : null}
 
@@ -801,6 +847,56 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
             </div>
         </Panel>
+    )
+}
+
+function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: string; detail: string; payload: unknown; route?: string; blocked: boolean }) {
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2'>
+            <div className='flex flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <div className='flex items-center gap-2'>
+                        <p className='text-xs font-semibold text-[#171a21]'>{label}</p>
+                        <span className={blocked ? 'rounded-md bg-[#fff4d6] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b]'}>
+                            {blocked ? 'blocked' : 'ready'}
+                        </span>
+                    </div>
+                    <p className='mt-1 text-xs leading-5 text-[#596170]'>{detail}</p>
+                </div>
+                <div className='flex shrink-0 items-center gap-1.5'>
+                    {route ? (
+                        <a href={route} className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                            <ExternalLink className='h-3.5 w-3.5' />
+                            Open
+                        </a>
+                    ) : null}
+                    <CopyPayloadButton label={label} payload={payload} />
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function CopyPayloadButton({ label, payload }: { label: string; payload: unknown }) {
+    const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+    async function copyPayload() {
+        const text = JSON.stringify(payload, null, 2)
+        try {
+            await navigator.clipboard.writeText(text)
+            setState('copied')
+            window.setTimeout(() => setState('idle'), 1800)
+        } catch {
+            setState('failed')
+            window.setTimeout(() => setState('idle'), 2200)
+        }
+    }
+
+    return (
+        <button type='button' onClick={copyPayload} className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]' aria-label={`Copy ${label} handoff payload`}>
+            {state === 'copied' ? <CheckCircle2 className='h-3.5 w-3.5 text-[#147a3b]' /> : <Copy className='h-3.5 w-3.5' />}
+            {state === 'copied' ? 'Copied' : state === 'failed' ? 'Unavailable' : 'Copy'}
+        </button>
     )
 }
 

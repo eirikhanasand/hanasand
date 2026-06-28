@@ -96,6 +96,13 @@ assert(actionability.geographyHandoffs.some(item => item.code === 'US' && item.w
 assert(actionability.geographyHandoffs.some(item => item.code === 'RU' && item.role === 'operator' && !item.watchlistTerm), 'Operator-origin geography should remain attribution/enrichment context, not an alert term.')
 assert(actionability.sourceClusters.some(item => item.watchlistTerm?.value === 'microsoft.com'), 'Source provenance should map source domains to watchlist action rows.')
 assert(actionability.sourceClusters.some(item => /Attach capture ID/i.test(item.enrichmentTask)), 'Source provenance without capture IDs should create enrichment work.')
+assert(actionability.exportPayloads.watchlist.schemaVersion === 'ti.public_actor.watchlist_handoff.v1', 'Watchlist handoff should be export-ready.')
+assert(Array.isArray(actionability.exportPayloads.watchlist.body.terms), 'Watchlist handoff should carry terms for the product flow.')
+assert(actionability.exportPayloads.watchlist.blocked, 'APT29 watchlist handoff should be blocked until org context is present.')
+assert(actionability.exportPayloads.alertRebuild.endpoint === '/v1/dwm/alerts/rebuild', 'Alert rebuild handoff should target the backed alert rebuild route.')
+assert(Array.isArray(actionability.exportPayloads.case.body.requiredBeforePost), 'Case handoff should expose dependencies before POST.')
+assert(actionability.exportPayloads.enrichment.schemaVersion === 'ti.public_actor.enrichment_queue.v1', 'Enrichment queue handoff should be shaped for source/capture work.')
+assert(JSON.stringify(actionability.exportPayloads.enrichment.body).includes('capture'), 'Enrichment handoff should include capture/source work.')
 
 const backed = buildTiActionability({
     ...fixture,
@@ -140,6 +147,8 @@ const backed = buildTiActionability({
 assert(backed.shouldAlert, 'Backed alert/case fixture should be alertable.')
 assert(backed.relatedCases[0]?.id === 'case_1', 'Backed actionability should preserve related case IDs.')
 assert(backed.handoffs.casePayload?.alertId === 'dwm_alert_1', 'Backed actionability should produce a case handoff payload.')
+assert(backed.exportPayloads.case.body.alertId === 'dwm_alert_1', 'Backed case export should carry the DWM alert ID.')
+assert(!backed.exportPayloads.case.blocked, 'Backed case export should be open when case payload has no blockers.')
 
 const quietFixture: TiSearchResponse = {
     ...fixture,
@@ -169,11 +178,15 @@ assert(!quiet.shouldAlert, 'Quiet actor should not be alertable.')
 assert(quiet.relatedAlerts.length === 0 && quiet.relatedCases.length === 0, 'Quiet actor should honestly show no current alert or case.')
 assert(quiet.watchlist.state === 'missing_terms', 'Quiet actor should expose missing watchlist terms.')
 assert(quiet.watchlist.blockers.some(item => /Authenticated organization ID/i.test(item)), 'Quiet actor should explain missing org/auth context for watchlist actions.')
+assert(quiet.exportPayloads.blockers.body.orgRequired === true, 'No-org actor path should export org-required blockers.')
+assert(quiet.exportPayloads.watchlist.missing.some(item => /Authenticated organization ID/i.test(item)), 'No-org watchlist export should carry precise blocked dependency.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')
 assert(containsToyThreatIntelCopy('country-level target marker'), 'Copy guard should catch internal map marker language.')
 assert(containsToyThreatIntelCopy('continent bucket'), 'Copy guard should catch internal geography bucket language.')
+assert(containsToyThreatIntelCopy('prompt'), 'Copy guard should catch prompt language.')
+assert(containsToyThreatIntelCopy('internal rationale'), 'Copy guard should catch internal rationale language.')
 assert(!containsToyThreatIntelCopy(JSON.stringify(profile)), 'Shaped actor intelligence should not contain toy TI copy.')
 
 console.log('[ti-actor-intelligence] actor intelligence shaping and copy guardrails passed')

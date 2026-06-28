@@ -20,6 +20,13 @@ export type TiActionabilityModel = {
     enrichmentGaps: NonNullable<TiActionabilityContract['enrichmentGaps']>
     geographyHandoffs: GeographyHandoff[]
     sourceClusters: SourceCluster[]
+    exportPayloads: {
+        watchlist: TiHandoffExportPayload
+        alertRebuild: TiHandoffExportPayload
+        case: TiHandoffExportPayload
+        enrichment: TiHandoffExportPayload
+        blockers: TiHandoffExportPayload
+    }
     handoffs: {
         watchlistEndpoint: string
         alertRebuildEndpoint: string
@@ -55,6 +62,20 @@ export type SourceCluster = {
     enrichmentTask: string
 }
 
+export type TiHandoffExportPayload = {
+    schemaVersion: 'ti.public_actor.watchlist_handoff.v1' | 'ti.public_actor.alert_rebuild_handoff.v1' | 'ti.public_actor.case_handoff.v1' | 'ti.public_actor.enrichment_queue.v1' | 'ti.public_actor.blockers.v1'
+    query: string
+    generatedAt: string
+    route: 'watchlist' | 'alert_rebuild' | 'case' | 'enrichment_queue' | 'blocked_dependencies'
+    method?: 'POST'
+    endpoint?: string
+    backedRoute?: string
+    blocked: boolean
+    missing: string[]
+    body: Record<string, unknown>
+    provenance: Array<{ sourceName: string; provenance: string; captureId?: string; confidence?: number }>
+}
+
 export function buildTiActionability(result: TiSearchResponse, actor: TiActorIntelligenceProfile, victimObservations: VictimObservation[]): TiActionabilityModel {
     const contract = result.actionability
     const candidates = normalizeCandidates(contract?.watchlistCandidates, result, actor, victimObservations)
@@ -74,15 +95,34 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
     const watchlistEndpoint = contract?.handoffs?.watchlist?.endpoint ?? '/api/organizations/:id/watchlists'
     const alertRebuildEndpoint = contract?.handoffs?.alertRebuild?.endpoint ?? '/v1/dwm/alerts/rebuild'
     const caseEndpoint = contract?.handoffs?.caseCreate?.endpoint ?? '/v1/cases'
+    const watchlistBlockers = contract?.handoffs?.watchlist?.missing ?? (matches.length ? [] : ['Authenticated organization ID and member/admin watchlist permission'])
     const casePayload = contract?.handoffs?.caseCreate?.payload ?? (firstAlert ? {
         alertId: firstAlert.id,
         title: firstAlert.title,
         priority: firstAlert.severity,
         note: `Opened from public TI result ${result.query}.`,
     } : undefined)
-    const caseBlockers = contract?.handoffs?.caseCreate?.missing ?? (casePayload ? [] : ['DWM alert ID from /v1/dwm/alerts or /v1/dwm/alerts/rebuild'])
+    const caseDependencyBlockers = contract?.handoffs?.caseCreate?.missing ?? (casePayload ? [] : ['DWM alert ID from /v1/dwm/alerts or /v1/dwm/alerts/rebuild'])
+    const caseBlockers = uniqueBy([...caseDependencyBlockers, ...(!matches.length ? watchlistBlockers : [])].map(value => ({ value })), item => item.value).map(item => item.value)
     const alertDisposition = contract?.alertDisposition ?? dispositionFor({ candidates, matches, relatedAlerts, relatedCases, sourceProvenance, enrichmentGaps })
     const shouldAlert = contract?.shouldAlert ?? (alertDisposition === 'ready_for_alert_review' || alertDisposition === 'case_ready')
+    const exportPayloads = buildExportPayloads({
+        result,
+        actor,
+        watchlistEndpoint,
+        alertRebuildEndpoint,
+        caseEndpoint,
+        watchlistPayloads,
+        watchlistBlockers,
+        casePayload,
+        caseBlockers,
+        relatedAlerts,
+        relatedCases,
+        sourceProvenance,
+        enrichmentGaps,
+        geographyHandoffs,
+        sourceClusters,
+    })
 
     return {
         alertDisposition,
@@ -94,7 +134,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
             matches,
             endpoint: watchlistEndpoint,
             payloads: watchlistPayloads,
-            blockers: contract?.handoffs?.watchlist?.missing ?? (matches.length ? [] : ['Authenticated organization ID and member/admin watchlist permission']),
+            blockers: watchlistBlockers,
         },
         relatedAlerts,
         relatedCases,
@@ -102,12 +142,189 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         enrichmentGaps,
         geographyHandoffs,
         sourceClusters,
+        exportPayloads,
         handoffs: {
             watchlistEndpoint,
             alertRebuildEndpoint,
             caseEndpoint,
             casePayload,
             caseBlockers,
+        },
+    }
+}
+
+function buildExportPayloads(input: {
+    result: TiSearchResponse
+    actor: TiActorIntelligenceProfile
+    watchlistEndpoint: string
+    alertRebuildEndpoint: string
+    caseEndpoint: string
+    watchlistPayloads: Array<{ kind: WatchlistCandidate['kind']; value: string; notes: string }>
+    watchlistBlockers: string[]
+    casePayload?: { alertId: string; title?: string; priority?: string; note?: string }
+    caseBlockers: string[]
+    relatedAlerts: NonNullable<TiActionabilityContract['relatedAlerts']>
+    relatedCases: NonNullable<TiActionabilityContract['relatedCases']>
+    sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
+    enrichmentGaps: NonNullable<TiActionabilityContract['enrichmentGaps']>
+    geographyHandoffs: GeographyHandoff[]
+    sourceClusters: SourceCluster[]
+}): TiActionabilityModel['exportPayloads'] {
+    const provenance = input.sourceProvenance.map(source => ({
+        sourceName: source.sourceName,
+        provenance: source.provenance,
+        captureId: source.captureId,
+        confidence: source.confidence,
+    }))
+    const watchTerms = input.watchlistPayloads.map(payload => ({
+        kind: payload.kind,
+        value: payload.value,
+        notes: payload.notes,
+    }))
+    const relatedAlertContext = input.relatedAlerts.map(alert => ({
+        id: alert.id,
+        title: alert.title,
+        status: alert.status,
+        severity: alert.severity,
+        caseIdCandidate: alert.caseIdCandidate,
+        casePath: alert.casePath,
+        source: alert.source,
+    }))
+    const relatedCaseContext = input.relatedCases.map(item => ({
+        id: item.id,
+        title: item.title,
+        status: item.status,
+        priority: item.priority,
+        path: item.path,
+    }))
+    const enrichmentTasks = uniqueBy([
+        ...input.enrichmentGaps.map(gap => ({
+            id: gap.id,
+            title: gap.title,
+            severity: gap.severity,
+            detail: gap.detail,
+            dependency: gap.dependency,
+        })),
+        ...input.sourceClusters.map(source => ({
+            id: `source:${source.sourceName}:${source.captureId || source.provenance}`,
+            title: source.captureId ? 'Attach replayable capture as case evidence' : 'Attach capture ID or source hash',
+            severity: source.captureId ? 'low' as const : 'high' as const,
+            detail: source.enrichmentTask,
+            dependency: source.captureId ? input.caseEndpoint : 'sourceProvenance[].captureId or source hash',
+        })),
+        ...input.geographyHandoffs.filter(item => !item.watchlistTerm).map(item => ({
+            id: `geo:${item.role}:${item.code}`,
+            title: `${item.country} ${item.role === 'operator' ? 'attribution' : 'targeting'} review`,
+            severity: item.role === 'operator' ? 'low' as const : 'medium' as const,
+            detail: item.enrichmentTask,
+            dependency: item.role === 'operator' ? 'actor attribution source provenance' : 'country-specific victim/source evidence',
+        })),
+    ], task => task.id).slice(0, 12)
+    const caseBody = input.casePayload ?? {
+        sourceType: 'ti_actor',
+        sourceId: input.result.query,
+        title: `${input.result.query} actor/query review`,
+        priority: relatedAlertContext[0]?.severity ?? 'medium',
+        summary: input.result.summary,
+        relatedAlertIds: relatedAlertContext.map(alert => alert.id),
+        watchTerms,
+        provenance,
+    }
+
+    return {
+        watchlist: {
+            schemaVersion: 'ti.public_actor.watchlist_handoff.v1',
+            query: input.result.query,
+            generatedAt: input.result.generatedAt,
+            route: 'watchlist',
+            method: 'POST',
+            endpoint: input.watchlistEndpoint,
+            backedRoute: '/dashboard/dwm',
+            blocked: input.watchlistBlockers.length > 0,
+            missing: input.watchlistBlockers,
+            body: {
+                name: `${input.result.query} watchlist`,
+                terms: watchTerms,
+                actorContext: {
+                    query: input.result.query,
+                    aliases: input.result.aliases,
+                    actorClass: input.actor.actorClass,
+                    attribution: input.actor.attribution,
+                    confidence: input.actor.confidence,
+                },
+                provenance,
+            },
+            provenance,
+        },
+        alertRebuild: {
+            schemaVersion: 'ti.public_actor.alert_rebuild_handoff.v1',
+            query: input.result.query,
+            generatedAt: input.result.generatedAt,
+            route: 'alert_rebuild',
+            method: 'POST',
+            endpoint: input.alertRebuildEndpoint,
+            backedRoute: '/dashboard/dwm',
+            blocked: input.watchlistBlockers.length > 0 || !input.watchlistPayloads.length,
+            missing: [
+                ...input.watchlistBlockers,
+                ...(!input.watchlistPayloads.length ? ['At least one organization watchlist term'] : []),
+            ],
+            body: {
+                query: input.result.query,
+                watchTerms,
+                captureIds: input.sourceClusters.map(source => source.captureId).filter(Boolean),
+                provenance,
+            },
+            provenance,
+        },
+        case: {
+            schemaVersion: 'ti.public_actor.case_handoff.v1',
+            query: input.result.query,
+            generatedAt: input.result.generatedAt,
+            route: 'case',
+            method: 'POST',
+            endpoint: input.caseEndpoint,
+            backedRoute: relatedCaseContext[0]?.path ?? relatedAlertContext[0]?.casePath,
+            blocked: input.caseBlockers.length > 0,
+            missing: input.caseBlockers,
+            body: {
+                ...caseBody,
+                relatedAlerts: relatedAlertContext,
+                relatedCases: relatedCaseContext,
+                requiredBeforePost: input.caseBlockers,
+            },
+            provenance,
+        },
+        enrichment: {
+            schemaVersion: 'ti.public_actor.enrichment_queue.v1',
+            query: input.result.query,
+            generatedAt: input.result.generatedAt,
+            route: 'enrichment_queue',
+            backedRoute: '/dashboard/ti/enrichment',
+            blocked: enrichmentTasks.length === 0,
+            missing: enrichmentTasks.length ? [] : ['No enrichment tasks returned for this actor/query result'],
+            body: {
+                query: input.result.query,
+                tasks: enrichmentTasks,
+                geography: input.geographyHandoffs,
+                sources: input.sourceClusters,
+            },
+            provenance,
+        },
+        blockers: {
+            schemaVersion: 'ti.public_actor.blockers.v1',
+            query: input.result.query,
+            generatedAt: input.result.generatedAt,
+            route: 'blocked_dependencies',
+            blocked: input.watchlistBlockers.length > 0 || input.caseBlockers.length > 0,
+            missing: uniqueBy([...input.watchlistBlockers, ...input.caseBlockers].map(value => ({ value })), item => item.value).map(item => item.value),
+            body: {
+                watchlist: input.watchlistBlockers,
+                case: input.caseBlockers,
+                alertRebuild: input.watchlistBlockers.length ? ['Create or select organization watchlist before alert rebuild'] : [],
+                orgRequired: input.watchlistBlockers.some(item => /organization|org/i.test(item)),
+            },
+            provenance,
         },
     }
 }
