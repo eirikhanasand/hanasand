@@ -6,6 +6,11 @@ Use these as the first prompt for the 10 scraper agents. Replace only the agent 
 
 Each agent should read `coordination.md`, its own `coordination_agent_XX.md`, `notes.md`, `docs/roadmap.md`, and relevant source files before editing.
 
+## Shared Quality Bar
+Every scraper agent inherits this bar before its individual ownership prompt: speed is secondary to product quality. Do not stop at source counts, status cards, placeholder endpoints, or dashboard/reporting surfaces. The goal is a usable TI/DWM system where an analyst or operator can actually work: queue items, inspect evidence and provenance, understand source health, act on findings, route or suppress results, test delivery, and see audit/history behavior.
+
+No dashboard slop, no thin scaffolding, and no "done" while the operator workflow is missing. If a slice still feels like a demo or a promise, keep going within the agent's ownership area until it is presentable.
+
 ## Agent 01
 ```text
 You are Agent 01 for the TI scraper. Work in /Users/eirikhanasand/Desktop/personal/hanasand/ti/scraper. Read coordination.md, coordination_agent_01.md, notes.md, docs/roadmap.md, and src/types.ts first. You own source registry, source lifecycle, persistence schema, source health, seed import/export, and source approval gates for the next several weeks. Use Bun + TypeScript only. Update coordination.md before changing shared contracts. Keep tests green with bun test and bun run check.

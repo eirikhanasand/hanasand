@@ -3,6 +3,10 @@
 ## Default Bar
 Hanasand work should feel finished, integrated, and product-grade. Do not treat user requests as tiny literal patches when the surrounding product behavior clearly needs more. Expand the ask into the adjacent obvious work that a user would reasonably expect, then ship that complete slice.
 
+The goal is quality, not speed. It is acceptable for a prompt to take many steps when that is what it takes to make the product good. Do not optimize for the fastest plausible stopping point. Optimize for the point where the user can open the product and feel that the workflow actually works.
+
+The recurring failure mode to avoid is "dashboard slop": cards, counters, charts, text walls, thin status pages, and placeholder promises that describe a future product instead of letting someone do the job now. If a product request can be interpreted as either a reporting view or an application workflow, build the workflow unless the user explicitly asked only for reporting.
+
 When the user points at one visible flaw, inspect the whole affected surface for the same class of flaw. If one button background is wrong, check the neighboring buttons. If one label is unclear, check nearby labels, empty states, tooltips, and generated copy. If one page has contrast issues, verify both themes and responsive layouts.
 
 ## Definition Of Done
@@ -26,6 +30,8 @@ For every request, ask:
 3. What evidence would prove this works in the actual app, not just in code?
 4. What can be improved within the same scope without creating a risky redesign?
 5. Is this only a dashboard/report when the product actually needs an operator workflow?
+6. If I stop here, will the user still need to push ten more times for the feature to feel usable?
+7. What would a competitor product let the user do here, and what would make this feel better?
 
 Do that work unless it would be unsafe, destructive, or clearly outside the product direction.
 
@@ -33,13 +39,29 @@ Do that work unless it would be unsafe, destructive, or clearly outside the prod
 Threat intelligence, DWM, XDR, SOC, monitoring, status, and incident-response work must be treated as operator portals by default. The minimum useful slice is not a card grid. It must include:
 
 - A prioritized queue of actionable items.
-- A selected-item detail panel with evidence, timestamps, source, confidence/reasoning, and blast-radius context.
+- A selected-item detail panel with evidence, timestamps, source, objective confidence/reasoning, provenance, and blast-radius context.
 - Analyst actions such as review, escalate, assign, mute/false-positive, replay evidence, send/test delivery, and close when the backing API supports them.
-- A visible timeline/audit trail or clear note that persistence is not wired yet.
+- Notes or decision rationale, persisted when the backing API supports it and clearly session-local when it does not.
+- A visible timeline/audit trail.
 - Source/task sidebars that show what collection or enrichment should happen next.
+- Real API/data wiring where available.
 - Empty states that help the analyst create the first case or run the first collection, not marketing copy.
 
 If a worker creates only overview metrics, chart cards, or promise text for these domains, the task has underdelivered.
+
+## Application Workflow Bar
+Most Hanasand product asks should result in a usable application surface, not a decorative page. A presentable slice usually includes:
+
+- A real primary workspace where the target user performs the job.
+- Clear objects the user can select, inspect, edit, route, or act on.
+- State transitions that make the workflow move forward.
+- Context panels that expose evidence, history, ownership, and next steps.
+- Action feedback, empty states, and failure states.
+- Persistence/API wiring when available, and honest session-local behavior when persistence is not yet built.
+
+Do not stop at scaffolding, static mocks, "coming soon" copy, or generic dashboard summaries. If the implementation still feels like a demo, keep going within the same product slice.
+
+Do not stop at 5 percent of the ask. If the obvious next 20 percent is inside the same product slice and is what makes the feature usable, do it before handing off.
 
 ## Product Language
 Avoid vague AI/product filler such as "signals", "confidence" without evidence, "powered by", "seamless", or brand-as-analyst phrasing. Prefer plain explanations that say what data was used, what happened, why it matters, and what the user can inspect next.
@@ -56,10 +78,13 @@ For every future prompt, especially product/UI work, use this operating loop:
 1. Start by recording `git status --short` as the BASELINE.
 2. Write 3-7 acceptance criteria from the user's request before or while orienting.
 3. Identify the affected routes, files, and product surfaces.
-4. Implement until all acceptance criteria pass, including adjacent obvious gaps in the same surface.
-5. Add or adjust focused tests where the behavior can regress.
-6. Verify UI work in a browser/rendered surface when feasible.
-7. End with focused checks, an isolated commit, and push/deploy/probe when production-impacting or expected by the thread.
+4. Implement until all acceptance criteria pass, including adjacent obvious gaps in the same surface and the root product gap behind the literal example.
+5. Include loading, empty, error, mobile, desktop, hover/focus, and light/dark states where relevant.
+6. Add or adjust focused tests where the behavior can regress.
+7. Verify UI work in a browser/rendered surface when feasible.
+8. End with focused checks, an isolated commit, and push/deploy/probe when production-impacting or expected by the thread.
+
+Do not say a task is done because scaffolding exists. The user must be able to do meaningful work in the product. If the result still feels like dashboard cards instead of a usable application, continue.
 
 The final handoff for implementation work must include these lines:
 

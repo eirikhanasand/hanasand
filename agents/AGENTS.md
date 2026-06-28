@@ -3,9 +3,17 @@
 ## Goal
 Make Hanasand production-ready without wasting user time, tokens, or server resources. Prefer small automated checks over broad manual rereads. Do not tail server logs for minutes. Use the API audit, monitor, status, and filtered logs surfaces first.
 
+Quality beats speed. Do not rush to the smallest plausible patch when the user is asking for a presentable product. It is acceptable for one prompt to take many steps if that is what turns a thin implementation into a usable application.
+
+Avoid dashboard slop. If the request is about a product workflow, do not stop at cards, counters, charts, status pages, or text promises. Build the workspace where the user can actually do the job: select objects, inspect detail, act, save state, recover from errors, and see what happens next.
+
+For SOC, TI, DWM, XDR, monitoring, source operations, incident response, and analyst work, default to an operator portal: prioritized queue, detail/evidence panel, timestamps, source/provenance, objective confidence/reasoning, assignment/notes, route/replay/test/send/close actions where supported, timeline/audit behavior, and honest persistence semantics. Use real API/data wiring where available; if persistence is missing, make the local/session behavior clear and still useful.
+
 ## Token-Saving Workflow
 - Start with `git status --short` and targeted `rg`, not whole-repo reading.
 - For every implementation prompt, write 3-7 acceptance criteria, identify affected routes/files/surfaces, implement the complete presentable slice, verify with focused checks and browser proof for UI, then commit only the isolated intended diff.
+- Acceptance criteria must include the real user workflow, not only the visible screen components. Ask what a strong competitor would let the user do here and what would make the slice feel genuinely better.
+- Do not stop at 5 percent of the ask. Keep going on the obvious next 20 percent inside the same scope when that is what makes the workflow usable.
 - Final implementation handoffs must include: `BASELINE dirty files:`, `FINAL dirty files:`, `Commit:`, `Checks:`, `Live probes:`, and `Remaining blockers:`.
 - After code edits, run type checks and the focused scripts below instead of manually reviewing every touched file.
 - For logs, use the database-backed API/UI:
