@@ -157,7 +157,6 @@ import {
     postOrganizationOwnershipTransfer,
     postOrganizationWatchlist,
     putOrganizationSettings,
-    putOrganizationWatchlist,
 } from './handlers/organizations.ts'
 import {
     deleteDwmWebhookDestination,
@@ -304,7 +303,6 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/organizations/:id/alert-readiness', getOrganizationAlertReadiness)
     fastify.get('/organizations/:id/watchlists', getOrganizationWatchlists)
     fastify.post('/organizations/:id/watchlists', postOrganizationWatchlist)
-    fastify.put('/organizations/:organizationId/watchlists/:itemId', putOrganizationWatchlist)
     fastify.delete('/organizations/:organizationId/watchlists/:itemId', deleteOrganizationWatchlist)
     fastify.get('/organizations/:id', getOrganization)
 

@@ -528,7 +528,7 @@ export default async function ensureSchema() {
         CREATE TABLE IF NOT EXISTS organization_watchlist_items (
             id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
             organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-            kind TEXT NOT NULL CHECK (kind IN ('company', 'domain', 'vendor', 'actor', 'keyword')),
+            kind TEXT NOT NULL CHECK (kind IN ('company', 'domain', 'vendor')),
             value TEXT NOT NULL,
             notes TEXT NOT NULL DEFAULT '',
             created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -537,8 +537,6 @@ export default async function ensureSchema() {
             archived_at TIMESTAMPTZ
         )
     `)
-    await run('ALTER TABLE organization_watchlist_items DROP CONSTRAINT IF EXISTS organization_watchlist_items_kind_check')
-    await run('ALTER TABLE organization_watchlist_items ADD CONSTRAINT organization_watchlist_items_kind_check CHECK (kind IN (\'company\', \'domain\', \'vendor\', \'actor\', \'keyword\'))')
     await run('CREATE INDEX IF NOT EXISTS idx_organization_members_user ON organization_members(user_id, status, organization_id)')
     await run('CREATE INDEX IF NOT EXISTS idx_organization_invites_org_status ON organization_invites(organization_id, status, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_organization_watchlist_org_kind ON organization_watchlist_items(organization_id, kind, value) WHERE archived_at IS NULL')
