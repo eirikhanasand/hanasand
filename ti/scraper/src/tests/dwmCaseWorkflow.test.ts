@@ -54,6 +54,22 @@ describe("dwm case workflow", () => {
       }), options);
       const orgPayload = await orgResponse.json() as any;
       const organizationId = orgPayload.organization.id;
+      const memberCreatedAt = "2026-06-28T13:01:00.000Z";
+      for (const member of [
+        { id: "member_case_analyst_1", email: "analyst-1@acme.com", userId: "analyst-1", role: "analyst" },
+        { id: "member_case_analyst_2", email: "analyst-2@acme.com", userId: "analyst-2", role: "analyst" },
+        { id: "member_case_ir_lead", email: "ir-lead@acme.com", userId: "ir-lead", role: "admin" },
+        { id: "member_case_viewer", email: "viewer@acme.com", userId: "viewer-1", role: "viewer" }
+      ]) {
+        (store as any).saveOrganizationMember({
+          ...member,
+          organizationId,
+          status: "active",
+          acceptedAt: memberCreatedAt,
+          createdAt: memberCreatedAt,
+          updatedAt: memberCreatedAt
+        });
+      }
 
       const webhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/webhooks`, {
         method: "POST",
@@ -96,6 +112,36 @@ describe("dwm case workflow", () => {
       expect((store as any).getDwmAlert(alert.id).caseId).toBe(createCasePayload.case.id);
       expect((store as any).getDwmAlert(alert.id).casePath).toContain(`/v1/cases/${createCasePayload.case.id}`);
 
+      const invalidOwnerResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}`, {
+        method: "PATCH",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({ organizationId, action: "note", assignedOwner: "viewer-1", note: "Viewer should not own mutable response work." })
+      }), options);
+      expect(invalidOwnerResponse.status).toBe(400);
+      expect((await invalidOwnerResponse.json() as any).error.code).toBe("invalid_case_owner_role");
+      expect((store as any).getCase(createCasePayload.case.id).assignedOwner).toBe("analyst-1");
+
+      const viewerDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
+      const viewerDetail = await viewerDetailResponse.json() as any;
+      expect(viewerDetailResponse.status).toBe(200);
+      expect(viewerDetail.access).toMatchObject({ role: "viewer", readOnly: true });
+
+      const viewerMutationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}`, {
+        method: "PATCH",
+        headers: { "x-user-email": "viewer@acme.com" },
+        body: JSON.stringify({ organizationId, action: "close", note: "Viewer can observe but cannot close this case." })
+      }), options);
+      expect(viewerMutationResponse.status).toBe(403);
+      expect((await viewerMutationResponse.json() as any).error.code).toBe("case_read_only_member");
+      expect((store as any).getCase(createCasePayload.case.id).status).toBe("open");
+
+      const outsiderDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "outsider@example.com" }
+      }), options);
+      expect(outsiderDetailResponse.status).toBe(403);
+
       const deliveryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
         method: "POST",
         body: JSON.stringify({ organizationId, alertId: alert.id })
@@ -130,6 +176,7 @@ describe("dwm case workflow", () => {
 
       const missingCloseRationale = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}`, {
         method: "PATCH",
+        headers: { "x-actor-id": "analyst-2" },
         body: JSON.stringify({ organizationId, action: "close" })
       }), options);
       expect(missingCloseRationale.status).toBe(400);
@@ -160,12 +207,18 @@ describe("dwm case workflow", () => {
       expect(rebuildAfterClose.alerts[0].workflowEvents.length).toBeGreaterThanOrEqual(3);
       expect((store as any).listCases()[0].workflowEvents).toHaveLength(3);
 
-      const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${organizationId}`), options);
+      const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
       const listPayload = await listResponse.json() as any;
+      expect(listPayload.access).toMatchObject({ role: "viewer", readOnly: true });
       expect(listPayload.cases).toHaveLength(1);
 
-      const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}?organizationId=${organizationId}`), options);
+      const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
       const detail = await detailResponse.json() as any;
+      expect(detail.access).toMatchObject({ role: "viewer", readOnly: true });
       expect(detail.case.workflowEvents).toHaveLength(3);
       expect(detail.evidence[0]).toMatchObject({ sourceId: source.id, contentHash: "hash-case-acme" });
       expect(detail.alertContext).toMatchObject({
@@ -202,9 +255,18 @@ describe("dwm case workflow", () => {
 
       const missingSuppressRationale = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}`, {
         method: "PATCH",
+        headers: { "x-actor-id": "analyst-1" },
         body: JSON.stringify({ organizationId, action: "suppress" })
       }), options);
       expect(missingSuppressRationale.status).toBe(400);
+
+      const outsiderUpdateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}`, {
+        method: "PATCH",
+        headers: { "x-user-email": "outsider@example.com" },
+        body: JSON.stringify({ organizationId, action: "suppress", note: "Outsider should not mutate org cases." })
+      }), options);
+      expect(outsiderUpdateResponse.status).toBe(403);
+      expect((store as any).getCase(closed.case.id).status).toBe("open");
 
       const suppressResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}`, {
         method: "PATCH",

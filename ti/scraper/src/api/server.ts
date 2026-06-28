@@ -36,9 +36,9 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "GET") return listWebhookDestinations(url, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "POST") return createWebhookDestination(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/test$/.test(url.pathname) && request.method === "POST") return testOrganizationWebhook(request, options, url.pathname.split("/")[3]);
-    if (url.pathname === "/v1/cases" && request.method === "GET") return listCases(url, options);
+    if (url.pathname === "/v1/cases" && request.method === "GET") return listCases(url, options, request);
     if (url.pathname === "/v1/cases" && request.method === "POST") return createCase(request, options);
-    if (/^\/v1\/cases\/[^/]+$/.test(url.pathname) && request.method === "GET") return getCaseDetail(url, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/cases\/[^/]+$/.test(url.pathname) && request.method === "GET") return getCaseDetail(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/cases\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateCase(request, options, url.pathname.split("/")[3]);
     if (url.pathname === "/v1/sources" && request.method === "GET") return json({ sources: page(options.store.listSources(), url) });
     if (url.pathname === "/v1/sources" && request.method === "POST") return createSource(request, options);

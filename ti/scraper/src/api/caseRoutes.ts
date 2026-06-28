@@ -1,10 +1,12 @@
 import { nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
 import { resolveOrganizationScope } from "./organizationRoutes.ts";
+import type { OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
 type CaseStatus = "open" | "escalated" | "suppressed" | "false_positive" | "closed";
 type CasePriority = "critical" | "high" | "medium" | "low";
+type CaseAccessMode = "read" | "mutate";
 
 type AnalystCaseEvent = {
   id: string;
@@ -38,21 +40,25 @@ type AnalystCase = {
   deliveryState?: string;
 };
 
-export function listCases(url: URL, options: ApiServerOptions): Response {
-  const scope = resolveOrganizationScope({ url }, options);
+export function listCases(url: URL, options: ApiServerOptions, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
   const requestedStatus = url.searchParams.get("status");
   const cases = ((options.store as any).listCases?.() ?? [])
     .filter((row: AnalystCase) => row.tenantId === scope.tenantId)
     .filter((row: AnalystCase) => !requestedStatus || row.status === requestedStatus)
     .sort((a: AnalystCase, b: AnalystCase) => sortCaseQueue(a, b));
-  return json({ organization: scope.organization, cases });
+  return json({ organization: scope.organization, access: caseAccessSummary(access), cases });
 }
 
 export async function createCase(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<any>(request);
   const scope = resolveOrganizationScope({ body, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
   const generatedAt = nowIso();
   const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? "case-api");
   const alertId = String(body.alertId ?? body.sourceId ?? "").trim();
@@ -63,9 +69,11 @@ export async function createCase(request: Request, options: ApiServerOptions): P
 
   const id = String(body.id ?? stableId("case", `${scope.tenantId}:${alert.id}`));
   const existing = (options.store as any).getCase?.(id) ?? findCaseByAlert(options, scope.tenantId, alert.id);
-  if (existing && body.reopen !== true) return json({ organization: scope.organization, case: existing, alert }, 200);
+  if (existing && body.reopen !== true) return json({ organization: scope.organization, access: caseAccessSummary(access), case: existing, alert }, 200);
 
   const assignedOwner = normalizeOwner(body.assignedOwner ?? body.owner);
+  const ownerValidation = validateAssignedOwner(options, scope.organizationId, assignedOwner);
+  if (ownerValidation) return ownerValidation;
   const note = normalizeNote(body.note ?? "Case opened from DWM alert.");
   const event = caseEvent({
     caseId: id,
@@ -98,15 +106,17 @@ export async function createCase(request: Request, options: ApiServerOptions): P
   };
   const saved = (options.store as any).saveCase(caseRecord);
   syncAlertForCase(options, alert, saved, event);
-  return json({ organization: scope.organization, case: saved, alert }, existing ? 200 : 201);
+  return json({ organization: scope.organization, access: caseAccessSummary(access), case: saved, alert }, existing ? 200 : 201);
 }
 
-export function getCaseDetail(url: URL, options: ApiServerOptions, caseId: string | undefined): Response {
-  const scope = resolveOrganizationScope({ url }, options);
+export function getCaseDetail(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
   const caseRecord = findCase(options, caseId);
   if (!caseRecord || caseRecord.tenantId !== scope.tenantId) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
-  return json(buildCaseDetail(caseRecord, options, scope.organization));
+  return json(buildCaseDetail(caseRecord, options, scope.organization, access));
 }
 
 export async function updateCase(request: Request, options: ApiServerOptions, caseId: string | undefined): Promise<Response> {
@@ -115,6 +125,8 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   const body = await readJson<any>(request);
   const scope = resolveOrganizationScope({ body, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
   if (existing.tenantId !== scope.tenantId) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
 
   const generatedAt = nowIso();
@@ -126,6 +138,8 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
     return json({ error: { code: "missing_decision_rationale", message: "Closing, suppressing, or marking false positive requires an analyst note." } }, 400);
   }
   const assignedOwner = body.assignedOwner === undefined && body.owner === undefined ? existing.assignedOwner : normalizeOwner(body.assignedOwner ?? body.owner);
+  const ownerValidation = validateAssignedOwner(options, scope.organizationId, assignedOwner);
+  if (ownerValidation) return ownerValidation;
   const event = caseEvent({
     caseId: existing.id,
     generatedAt,
@@ -149,10 +163,10 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   const saved = (options.store as any).saveCase(caseRecord);
   const alert = findDwmAlert(options, existing.alertId);
   if (alert) syncAlertForCase(options, alert, saved, event);
-  return json({ organization: scope.organization, case: saved, event, alert: alert ? findDwmAlert(options, alert.id) : undefined });
+  return json({ organization: scope.organization, access: caseAccessSummary(access), case: saved, event, alert: alert ? findDwmAlert(options, alert.id) : undefined });
 }
 
-function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown) {
+function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access?: CaseAccessResult) {
   const alert = findDwmAlert(options, caseRecord.alertId);
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
   const watchlists = caseWatchlists(options, alert, caseRecord);
@@ -178,6 +192,7 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     schemaVersion: "analyst.case_detail.v1",
     generatedAt: nowIso(),
     organization,
+    access: caseAccessSummary(access),
     case: caseRecord,
     alert,
     alertContext: alert ? {
@@ -257,6 +272,86 @@ function caseWatchlists(options: ApiServerOptions, alert: any, caseRecord: Analy
       matchedTerms: (watchlist.terms ?? []).filter((term: any) => String(term.value ?? "").toLowerCase() === String(alert?.matchedTerm?.value ?? "").toLowerCase()),
       termCount: (watchlist.terms ?? []).length
     }));
+}
+
+type CaseAccessResult = {
+  member?: OrganizationMember;
+  readOnly: boolean;
+  error?: Response;
+};
+
+function authorizeCaseAccess(input: { options: ApiServerOptions; scope: { organizationId?: string }; request?: Request; url?: URL; body?: any; mode: CaseAccessMode }): CaseAccessResult {
+  const members = activeOrganizationMembers(input.options, input.scope.organizationId);
+  if (!input.scope.organizationId || !members.length) return { readOnly: false };
+
+  const identity = requestIdentity(input.request, input.body, input.url);
+  if (!identity.length) {
+    return { readOnly: true, error: json({ error: { code: "organization_member_required", message: "Case access requires an active organization member identity." } }, 403) };
+  }
+
+  const member = members.find((row) => identityMatchesMember(identity, row));
+  if (!member) {
+    return { readOnly: true, error: json({ error: { code: "organization_member_required", message: "Case access is limited to active organization members." } }, 403) };
+  }
+
+  const readOnly = member.role === "viewer";
+  if (input.mode === "mutate" && readOnly) {
+    return { member, readOnly, error: json({ error: { code: "case_read_only_member", message: "Viewer members can read cases but cannot assign, close, suppress, or escalate them." } }, 403) };
+  }
+  return { member, readOnly };
+}
+
+function validateAssignedOwner(options: ApiServerOptions, organizationId: string | undefined, assignedOwner: string | undefined): Response | undefined {
+  if (!organizationId || !assignedOwner) return undefined;
+  const members = activeOrganizationMembers(options, organizationId);
+  if (!members.length) return undefined;
+  const owner = members.find((member) => identityMatchesMember([assignedOwner], member));
+  if (!owner) {
+    return json({ error: { code: "invalid_case_owner", message: "Assigned owner must be an active member of this organization." } }, 400);
+  }
+  if (owner.role === "viewer") {
+    return json({ error: { code: "invalid_case_owner_role", message: "Viewer members cannot own mutable analyst cases." } }, 400);
+  }
+  return undefined;
+}
+
+function activeOrganizationMembers(options: ApiServerOptions, organizationId: string | undefined): OrganizationMember[] {
+  if (!organizationId) return [];
+  return ((options.store as any).listOrganizationMembers?.() ?? [])
+    .filter((row: OrganizationMember) => row.organizationId === organizationId && row.status === "active");
+}
+
+function requestIdentity(request: Request | undefined, body?: any, url?: URL): string[] {
+  return [
+    request?.headers.get("x-user-email"),
+    request?.headers.get("x-user-id"),
+    request?.headers.get("x-actor-id"),
+    body?.userEmail,
+    body?.userId,
+    body?.actorEmail,
+    body?.actor,
+    url?.searchParams.get("userEmail"),
+    url?.searchParams.get("userId"),
+    url?.searchParams.get("actor")
+  ].map(normalizeIdentity).filter(Boolean) as string[];
+}
+
+function identityMatchesMember(identity: string[], member: OrganizationMember): boolean {
+  const candidates = [member.id, member.email, member.userId].map(normalizeIdentity).filter(Boolean);
+  return candidates.some((candidate) => identity.includes(candidate as string));
+}
+
+function normalizeIdentity(value: unknown): string | undefined {
+  const identity = String(value ?? "").trim().toLowerCase();
+  return identity || undefined;
+}
+
+function caseAccessSummary(access?: CaseAccessResult) {
+  return access?.member ? {
+    memberId: access.member.id,
+    role: access.member.role,
+    readOnly: access.readOnly
+  } : undefined;
 }
 
 function nextActionsForCase(caseRecord: AnalystCase, alert: any, deliveries: any[]) {
