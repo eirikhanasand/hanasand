@@ -66,6 +66,7 @@ function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[]): Wor
 }
 
 function alertToCase(alert: DwmAlert): WorkbenchCase {
+    const workflowAlert = alert as DwmAlert & { assignedOwner?: string }
     const severity = normalizeSeverity(alert.severity)
     const timeline: WorkbenchTimelineItem[] = [
         {
@@ -92,7 +93,7 @@ function alertToCase(alert: DwmAlert): WorkbenchCase {
         status: alert.reviewState || 'needs_review',
         priority: severityPriority(severity) + alert.confidence,
         confidence: alert.confidence,
-        owner: 'unassigned',
+        owner: workflowAlert.assignedOwner || 'unassigned',
         createdAt: alert.firstSeenAt,
         updatedAt: alert.firstSeenAt,
         company: alert.company,

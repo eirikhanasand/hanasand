@@ -9,6 +9,7 @@ import { DwmWorkflowActions } from './dwm-workflow-actions'
 type PortalAlert = DwmAlert & {
     deliveryState?: string
     workflowNote?: string
+    assignedOwner?: string
     replayCount?: number
     lastReplayedAt?: string
     savedAt?: string
@@ -22,6 +23,8 @@ type PortalAlert = DwmAlert & {
         toReviewState?: string
         fromDeliveryState?: string
         toDeliveryState?: string
+        fromOwner?: string
+        toOwner?: string
     }>
 }
 
@@ -99,12 +102,12 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: P
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliveries.some(delivery => delivery.alertId === 'webhook_test' && (delivery.status === 'dry_run' || delivery.status === 'delivered')) ? 'Tested' : 'Not tested'
 
-    async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string) {
+    async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) {
         await runAction(`update:${alertId}`, async () => {
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alertId)}`, {
                 method: 'PATCH',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ reviewState, deliveryState, note, actor: 'dashboard' }),
+                body: JSON.stringify({ reviewState, deliveryState, note, assignedOwner, actor: 'dashboard' }),
             })
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -260,13 +263,14 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
     localState?: LocalCaseState
     busyAction: string | null
     onLocalStateChange: (patch: LocalCaseState) => void
-    onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string) => Promise<void>
+    onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) => Promise<void>
     onReplay: (alertId: string) => Promise<void>
     onSend: (alertId: string) => Promise<void>
 }) {
     const timeline = buildTimeline(alert, deliveries)
     const analystNote = localState?.note ?? ''
-    const assignee = localState?.assignee ?? 'Unassigned'
+    const assignee = localState?.assignee ?? alert.assignedOwner ?? 'Unassigned'
+    const persistedOwner = assignee === 'Unassigned' ? undefined : assignee
     return (
         <div className='grid gap-5 p-5'>
             <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -281,13 +285,13 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                     <p className='mt-1 text-sm text-[#596170]'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {stateLabel(alert.sourceFamily)} · {stateLabel(alert.artifactType)}</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.')}>Review</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.')}>Escalate</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
                     <CaseButton busy={busyAction === `replay:${alert.id}`} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
                     <CaseButton busy={busyAction === `send:${alert.id}`} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.')}>Suppress</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.')}>Close</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.')}>Reopen</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
                 </div>
             </div>
 
@@ -303,7 +307,7 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                         placeholder='Assign analyst'
                         className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
                     />
-                    <span className='text-[11px] text-[#667085]'>Stored in this browser until owner persistence is added.</span>
+                    <span className='text-[11px] text-[#667085]'>Saved to the shared DWM case when you save the note or decision.</span>
                 </label>
                 <label className='grid gap-2'>
                     <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
@@ -320,7 +324,7 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                 <CaseButton
                     busy={busyAction === `update:${alert.id}`}
                     icon='ready'
-                    onClick={() => onUpdate(alert.id, alert.reviewState, alert.deliveryState || 'pending_review', analystNote.trim() || 'Analyst rationale saved.')}
+                    onClick={() => onUpdate(alert.id, alert.reviewState, alert.deliveryState || 'pending_review', analystNote.trim() || 'Analyst rationale saved.', persistedOwner)}
                 >
                     Save note
                 </CaseButton>
@@ -613,7 +617,10 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[]) {
             id: event.id,
             at: event.at,
             title: `${stateLabel(event.fromReviewState || 'queued')} to ${stateLabel(event.toReviewState || 'updated')}`,
-            detail: event.note || `${stateLabel(event.fromDeliveryState || 'pending')} to ${stateLabel(event.toDeliveryState || 'pending')}`,
+            detail: [
+                event.note || `${stateLabel(event.fromDeliveryState || 'pending')} to ${stateLabel(event.toDeliveryState || 'pending')}`,
+                event.toOwner ? `Owner: ${event.toOwner}` : undefined,
+            ].filter(Boolean).join(' · '),
         })),
         ...deliveries.map(delivery => ({
             id: delivery.id,

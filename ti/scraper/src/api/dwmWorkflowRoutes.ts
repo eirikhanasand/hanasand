@@ -1,14 +1,17 @@
 import { buildDwmProductSnapshot, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
+import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
 type DwmWatchlist = {
   id: string;
   tenantId: string;
+  organizationId?: string;
   name: string;
   terms: DwmWatchTerm[];
   webhookUrl?: string;
+  webhookDestinationId?: string;
   status: "active" | "paused";
   createdAt: string;
   updatedAt: string;
@@ -69,23 +72,27 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
   const allowedDeliveryStates = new Set(["pending_review", "ready_to_send", "sent", "delivered", "failed", "muted"]);
   const reviewState = body.reviewState === undefined ? existing.reviewState : String(body.reviewState);
   const deliveryState = body.deliveryState === undefined ? existing.deliveryState : String(body.deliveryState);
+  const assignedOwner = body.assignedOwner === undefined && body.owner === undefined ? existing.assignedOwner : normalizeOwner(body.assignedOwner ?? body.owner);
   if (!allowedReviewStates.has(reviewState)) return json({ error: { code: "invalid_review_state", message: "Unsupported DWM alert review state." } }, 400);
   if (!allowedDeliveryStates.has(deliveryState)) return json({ error: { code: "invalid_delivery_state", message: "Unsupported DWM alert delivery state." } }, 400);
 
   const event = {
-    id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:${reviewState}:${deliveryState}:${body.note ?? ""}`),
+    id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:${reviewState}:${deliveryState}:${assignedOwner ?? ""}:${body.note ?? ""}`),
     at: generatedAt,
     actor: String(body.actor ?? request.headers.get("x-actor-id") ?? "dashboard"),
     fromReviewState: existing.reviewState,
     toReviewState: reviewState,
     fromDeliveryState: existing.deliveryState,
     toDeliveryState: deliveryState,
+    fromOwner: existing.assignedOwner,
+    toOwner: assignedOwner,
     note: body.note ? String(body.note).slice(0, 500) : undefined
   };
   const alert = (options.store as any).saveDwmAlert({
     ...existing,
     reviewState,
     deliveryState,
+    assignedOwner,
     workflowNote: body.note ? String(body.note).slice(0, 500) : existing.workflowNote,
     updatedAt: generatedAt,
     workflowEvents: [...(existing.workflowEvents ?? []), event]
@@ -139,15 +146,17 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
     includeDemoIfEmpty: false
   });
   const saved = snapshot.alerts.map((alert) => {
-    const existing = findDwmAlert(options, alert.id);
+    const existing = findDwmAlert(options, alert.id) ?? findDwmAlertByDedupeKey(options, alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey);
     return (options.store as any).saveDwmAlert({
       ...alert,
+      id: existing?.id ?? alert.id,
       tenantId,
       watchlistIds: watchlists.map((watchlist: DwmWatchlist) => watchlist.id),
       reviewState: existing?.reviewState ?? alert.reviewState,
       deliveryState: existing?.deliveryState ?? "pending_review",
       workflowEvents: existing?.workflowEvents ?? [],
       workflowNote: existing?.workflowNote,
+      assignedOwner: existing?.assignedOwner,
       replayCount: existing?.replayCount ?? 0,
       lastReplayedAt: existing?.lastReplayedAt,
       deliveredAt: existing?.deliveredAt,
@@ -300,6 +309,9 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     generatedAt,
     severity: alert.severity,
     confidence: alert.confidence,
+    confidenceReasoning: alert.confidenceReasoning ?? [],
+    provenance: alert.provenance,
+    dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
     company: alert.company,
     matchedTerm: alert.matchedTerm?.value,
     actor: alert.actor,
@@ -310,13 +322,16 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     claimSummary: alert.claimSummary,
     reviewState: alert.reviewState,
     recommendedAction: alert.recommendedAction,
+    recommendedRoute: alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
     evidence: (alert.evidence ?? []).map((item: any) => ({
       id: item.id,
       sourceName: item.sourceName,
       sourceFamily: item.sourceFamily,
+      observedAt: item.observedAt ?? item.firstSeenAt,
       captureMode: item.captureMode,
       redactionState: item.redactionState,
-      contentHash: item.contentHash
+      contentHash: item.contentHash,
+      provenance: item.provenance
     })),
     delivery: alert.webhookDelivery
   };
@@ -325,6 +340,11 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
 function findDwmAlert(options: ApiServerOptions, alertId: string | undefined) {
   if (!alertId) return undefined;
   return (options.store as any).getDwmAlert?.(alertId) ?? ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.id === alertId);
+}
+
+function findDwmAlertByDedupeKey(options: ApiServerOptions, dedupeKey: string | undefined) {
+  if (!dedupeKey) return undefined;
+  return ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.dedupeKey === dedupeKey || row.webhookDelivery?.dedupeKey === dedupeKey);
 }
 
 function normalizeWebhookUrl(value: unknown): string | undefined {
@@ -339,6 +359,11 @@ function normalizeWebhookUrl(value: unknown): string | undefined {
   }
 }
 
+function normalizeOwner(value: unknown): string | undefined {
+  const owner = String(value ?? "").trim().slice(0, 120);
+  return owner || undefined;
+}
+
 function buildDwmAlertDetail(alert: any, options: ApiServerOptions) {
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
   const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
@@ -349,7 +374,10 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions) {
       at: event.at,
       type: "workflow_event",
       title: `${String(event.fromReviewState ?? "unknown").replaceAll("_", " ")} -> ${String(event.toReviewState ?? "unknown").replaceAll("_", " ")}`,
-      detail: event.note ?? `${String(event.fromDeliveryState ?? "unknown").replaceAll("_", " ")} -> ${String(event.toDeliveryState ?? "unknown").replaceAll("_", " ")}`
+      detail: [
+        event.note ?? `${String(event.fromDeliveryState ?? "unknown").replaceAll("_", " ")} -> ${String(event.toDeliveryState ?? "unknown").replaceAll("_", " ")}`,
+        event.toOwner ? `Owner: ${event.toOwner}` : undefined
+      ].filter(Boolean).join(" · ")
     })),
     ...deliveries.map((delivery: any) => ({
       id: delivery.id,
@@ -365,10 +393,12 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions) {
     id: item.id,
     sourceName: item.sourceName,
     sourceFamily: item.sourceFamily,
+    observedAt: item.observedAt ?? item.firstSeenAt,
     captureMode: item.captureMode,
     redactionState: item.redactionState,
     contentHash: item.contentHash,
     excerpt: item.excerpt,
+    provenance: item.provenance,
     safeToShow: item.redactionState !== "raw_sensitive",
     handling: item.redactionState === "metadata_only" ? "Only metadata is retained for this source." : "Public-safe excerpt retained for review."
   }));
@@ -383,7 +413,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions) {
     sourceExplanations: evidenceReplay.map((item: any) => ({
       evidenceId: item.id,
       sourceName: item.sourceName,
-      explanation: `${String(item.sourceFamily).replaceAll("_", " ")} evidence is shown as ${String(item.redactionState).replaceAll("_", " ")} with hash ${item.contentHash}.`
+      explanation: `${String(item.sourceFamily).replaceAll("_", " ")} evidence is shown as ${String(item.redactionState).replaceAll("_", " ")} with hash ${item.contentHash}; capture ${item.provenance?.captureId ?? item.id} was observed at ${item.observedAt}.`
     })),
     nextActions: nextActionsForAlert(alert, deliveries)
   };
