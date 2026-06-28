@@ -33,6 +33,7 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
   override saveOrganizationMember(member: any): any { return this.saved(() => super.saveOrganizationMember(member)); }
   override saveOrganizationInvite(invite: any): any { return this.saved(() => super.saveOrganizationInvite(invite)); }
   override saveWebhookDestination(destination: any): any { return this.saved(() => super.saveWebhookDestination(destination)); }
+  override saveCase(caseRecord: any): any { return this.saved(() => super.saveCase(caseRecord)); }
   override saveDwmWatchlist(watchlist: any): any { return this.saved(() => super.saveDwmWatchlist(watchlist)); }
   override saveDwmAlert(alert: any): any { return this.saved(() => super.saveDwmAlert(alert)); }
   override saveDwmWebhookDelivery(delivery: any): any { return this.saved(() => super.saveDwmWebhookDelivery(delivery)); }
@@ -50,7 +51,7 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
     for (const [key, save] of Object.entries(extraSaves)) for (const row of snapshot[key] ?? []) save(this, row);
   }
   private persist(): void { if (!this.hydrating) { this.dirty = false; writeFileSync(this.snapshotPath, JSON.stringify(this.snapshot(), null, 2)); } }
-  private snapshot(): FileBackedScraperSnapshot { return { schemaVersion: "ti.file_backed_scraper_store.v1", savedAt: new Date().toISOString(), sources: this.listSources(), captures: this.listCaptures(), incidents: this.listIncidents(), plans: this.listPlans(), runs: this.listRuns(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas(), replayJobs: this.listReplayJobs(), analystMetadataReviewTasks: this.listAnalystMetadataReviewTasks(), analystSourceActivationPackets: this.listAnalystSourceActivationPackets(), analystVictimNotificationPackets: this.listAnalystVictimNotificationPackets(), analystClaimLedgerEntries: this.listAnalystClaimLedgerEntries(), analystLoopSnapshots: this.listAnalystLoopSnapshots(), organizations: this.listOrganizations(), organizationMembers: this.listOrganizationMembers(), organizationInvites: this.listOrganizationInvites(), webhookDestinations: this.listWebhookDestinations(), dwmWatchlists: this.listDwmWatchlists(), dwmAlerts: this.listDwmAlerts(), dwmWebhookDeliveries: this.listDwmWebhookDeliveries() }; }
+  private snapshot(): FileBackedScraperSnapshot { return { schemaVersion: "ti.file_backed_scraper_store.v1", savedAt: new Date().toISOString(), sources: this.listSources(), captures: this.listCaptures(), incidents: this.listIncidents(), plans: this.listPlans(), runs: this.listRuns(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas(), replayJobs: this.listReplayJobs(), analystMetadataReviewTasks: this.listAnalystMetadataReviewTasks(), analystSourceActivationPackets: this.listAnalystSourceActivationPackets(), analystVictimNotificationPackets: this.listAnalystVictimNotificationPackets(), analystClaimLedgerEntries: this.listAnalystClaimLedgerEntries(), analystLoopSnapshots: this.listAnalystLoopSnapshots(), organizations: this.listOrganizations(), organizationMembers: this.listOrganizationMembers(), organizationInvites: this.listOrganizationInvites(), webhookDestinations: this.listWebhookDestinations(), cases: this.listCases(), dwmWatchlists: this.listDwmWatchlists(), dwmAlerts: this.listDwmAlerts(), dwmWebhookDeliveries: this.listDwmWebhookDeliveries() }; }
 }
 
 const extraSaves: Record<string, (store: FileBackedScraperStore, row: any) => void> = {
@@ -64,6 +65,7 @@ const extraSaves: Record<string, (store: FileBackedScraperStore, row: any) => vo
   organizationMembers: (s, r) => InMemoryScraperStore.prototype.saveOrganizationMember.call(s, r),
   organizationInvites: (s, r) => InMemoryScraperStore.prototype.saveOrganizationInvite.call(s, r),
   webhookDestinations: (s, r) => InMemoryScraperStore.prototype.saveWebhookDestination.call(s, r),
+  cases: (s, r) => InMemoryScraperStore.prototype.saveCase.call(s, r),
   dwmWatchlists: (s, r) => InMemoryScraperStore.prototype.saveDwmWatchlist.call(s, r),
   dwmAlerts: (s, r) => InMemoryScraperStore.prototype.saveDwmAlert.call(s, r),
   dwmWebhookDeliveries: (s, r) => InMemoryScraperStore.prototype.saveDwmWebhookDelivery.call(s, r)
