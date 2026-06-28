@@ -520,12 +520,12 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
     const confidence = Math.round(actor.confidence * 100)
     const artifactByLookup = new Map(artifacts.map(artifact => [`${artifact.kind}:${artifact.label.toLowerCase()}`, artifact]))
     return (
-        <section data-ti-actor-dossier='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
+        <section data-ti-actor-dossier='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#3056d3]'>Actor Intelligence Dossier</p>
-                    <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21]'>{actor.actorClass}</h2>
-                    <p className='mt-2 text-sm leading-6 text-[#596170]'>{actor.attribution}</p>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Actor Profile</p>
+                    <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21] dark:text-[#eef4ff]'>{actor.actorClass}</h2>
+                    <p className='mt-2 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{actor.attribution}</p>
                 </div>
                 <div className='grid min-w-52 grid-cols-2 gap-2 text-center text-xs md:grid-cols-4'>
                     <EvidenceMetric label='First seen' value={actor.firstSeen} />
@@ -557,19 +557,19 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
 
 function StructuredProvenancePanel({ rows }: { rows: TiActorIntelligenceProfile['provenanceRows'] }) {
     return (
-        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>Source provenance</p>
+        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source provenance</p>
             <div className='mt-2 grid gap-2'>
                 {rows.length ? rows.slice(0, 6).map(row => (
-                    <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-[#eef1f5] bg-white p-2'>
+                    <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                         <div className='flex flex-wrap items-center justify-between gap-2'>
-                            <p className='text-xs font-semibold text-[#171a21]'>{row.sourceName}</p>
-                            <span className='text-[11px] text-[#667085]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : `${Math.round((row.confidence ?? 0) * 100)}%`}</span>
+                            <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
+                            <span className='shrink-0 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : `${Math.round((row.confidence ?? 0) * 100)}%`}</span>
                         </div>
-                        <p className='mt-1 truncate font-mono text-[11px] text-[#667085]'>{row.provenance}</p>
-                        <p className='mt-1 text-xs leading-5 text-[#596170]'>{row.shownBecause}</p>
+                        <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.provenance}</p>
+                        <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.shownBecause}</p>
                     </div>
-                )) : <p className='text-sm text-[#667085]'>No structured provenance rows returned.</p>}
+                )) : <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>No structured provenance rows returned.</p>}
             </div>
         </div>
     )
@@ -584,13 +584,13 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
     onSelectArtifact?: (artifactId: string) => void
 }) {
     return (
-        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{title}</p>
             <div className='mt-2 flex flex-wrap gap-1.5'>
                 {values.length ? values.slice(0, 8).map(value => {
                     const artifact = artifactKind ? artifactByLookup?.get(`${artifactKind}:${value.toLowerCase()}`) : undefined
                     if (!artifact || !onSelectArtifact) {
-                        return <span key={value} className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-xs font-semibold text-[#344054]'>{value}</span>
+                        return <span key={value} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-xs font-semibold text-[#344054] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{value}</span>
                     }
                     const active = artifact.id === selectedArtifactId
                     return (
@@ -598,12 +598,12 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
                             key={value}
                             type='button'
                             onClick={() => onSelectArtifact(artifact.id)}
-                            className={`rounded-md border px-2 py-1 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#dfe5ee] bg-white text-[#344054] hover:border-[#b8c5ff] hover:bg-[#f8fafc]'}`}
+                            className={`max-w-full wrap-break-word rounded-md border px-2 py-1 text-left text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#9ab3ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#344054] hover:border-[#b8c5ff] hover:bg-[#f8fafc] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:border-[#4a68a8] dark:hover:bg-[#172131]'}`}
                         >
                             {value}
                         </button>
                     )
-                }) : <span className='text-xs text-[#667085]'>Not returned</span>}
+                }) : <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Not returned</span>}
             </div>
         </div>
     )
@@ -663,10 +663,10 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
 function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifact; handoffs: ActorArtifactHandoffs }) {
     const bridge = handoffs.authBridge
     const payloadRows = [
-        { id: 'watchlist', label: 'Copy watchlist contract', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
-        { id: 'alert', label: 'Copy alert rebuild contract', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : `Ready for ${handoffs.alertRebuild.endpoint}` },
-        { id: 'case', label: 'Copy case contract', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : `Ready for ${handoffs.case.endpoint}` },
-        { id: 'enrichment', label: 'Copy enrichment contract', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
+        { id: 'watchlist', label: 'Watchlist package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
+        { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : `Ready for ${handoffs.alertRebuild.endpoint}` },
+        { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : `Ready for ${handoffs.case.endpoint}` },
+        { id: 'enrichment', label: 'Enrichment item', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
     ]
 
     return (
@@ -699,10 +699,10 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     </EvidencePanel>
                 </div>
                 <div className='grid content-start gap-2'>
-                    <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                        <p className='text-xs font-semibold uppercase text-[#667085]'>Authenticated bridge</p>
-                        <p className='mt-2 text-xs leading-5 text-[#596170]'>
-                            Public TI exports this selected artifact into dashboard links and payloads. The public page does not save watchlists, rebuild alerts, create cases, or enqueue enrichment.
+                    <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Console handoff</p>
+                        <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            This view prepares links and payloads for organization-scoped review. Saving watchlists, rebuilding alerts, creating cases, and queueing enrichment require console access.
                         </p>
                         <div className='mt-2 flex flex-wrap gap-1.5'>
                             <span className={bridge.orgRequired ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'}>
@@ -724,7 +724,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     {payloadRows.map(row => (
                         <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.blocked} />
                     ))}
-                    <CopyPayloadButton label='authenticated bridge bundle' payload={bridge} />
+                    <CopyPayloadButton label='console handoff bundle' payload={bridge} />
                 </div>
             </div>
         </section>
@@ -956,36 +956,36 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
     ]
 
     return (
-        <Panel title='Actor Actions' description='Backed alert, watchlist, case, source, and enrichment handoff state for this actor/query result.' icon={<ShieldCheck className='h-4 w-4' />}>
+        <Panel title='Workflow' description='Org watchlist, alert, case, source, and enrichment readiness from returned model fields.' icon={<ShieldCheck className='h-4 w-4' />}>
             <div className='grid gap-3'>
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex items-center justify-between gap-2'>
-                        <p className='text-xs font-semibold uppercase text-[#667085]'>Alert decision</p>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Alert decision</p>
                         <span className={actionability.shouldAlert ? 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'rounded-lg bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]'}>
                             {formatLabel(actionability.alertDisposition)}
                         </span>
                     </div>
-                    <p className='mt-2 text-xs leading-5 text-[#596170]'>{actionability.rationale}</p>
+                    <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{actionability.rationale}</p>
                 </div>
 
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex items-center justify-between gap-2'>
-                        <p className='text-xs font-semibold uppercase text-[#667085]'>Watchlist handoff</p>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist readiness</p>
                         <span className={actionability.watchlist.state === 'backed_matches' ? 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'rounded-lg bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'}>
                             {formatLabel(actionability.watchlistRelevance.state)}
                         </span>
                     </div>
-                    <p className='mt-2 font-mono text-[11px] text-[#667085]'>POST {actionability.watchlistRelevance.endpoint}</p>
+                    <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>POST {actionability.watchlistRelevance.endpoint}</p>
                     <div className='mt-2 flex flex-wrap gap-1.5'>
                         {actionability.watchlistRelevance.terms.length ? actionability.watchlistRelevance.terms.slice(0, 6).map(payload => (
-                            <span key={`${payload.kind}-${payload.value}`} className={payload.matched ? 'rounded-md bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]' : 'rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'}>{payload.kind}: {payload.value}</span>
-                        )) : <span className='text-xs text-[#667085]'>No backed watchlist payload yet</span>}
+                            <span key={`${payload.kind}-${payload.value}`} className={payload.matched ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]' : 'max-w-full wrap-break-word rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'}>{payload.kind}: {payload.value}</span>
+                        )) : <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No watchlist payload returned</span>}
                     </div>
                     {actionability.watchlistRelevance.blockers.length ? <BlockerList blockers={actionability.watchlistRelevance.blockers} /> : null}
                 </div>
 
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Copy handoff payloads</p>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Console packages</p>
                     <div className='mt-2 grid gap-2'>
                         {payloadRows.map(row => (
                             <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.payload.blocked} />
@@ -993,67 +993,67 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                     </div>
                 </div>
 
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Geography to action</p>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Geography routing</p>
                     <div className='mt-2 grid gap-2'>
                         {actionability.geographyHandoffs.slice(0, 4).map(item => (
-                            <div key={`${item.role}-${item.code}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2'>
+                            <div key={`${item.role}-${item.code}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                                 <div className='flex items-center justify-between gap-2'>
-                                    <p className='text-xs font-semibold text-[#171a21]'>{item.country}</p>
-                                    <span className='text-[11px] text-[#667085]'>{item.role === 'operator' ? 'attribution' : `${item.observationCount} observation${item.observationCount === 1 ? '' : 's'}`}</span>
+                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.country}</p>
+                                    <span className='shrink-0 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.role === 'operator' ? 'attribution' : `${item.observationCount} observation${item.observationCount === 1 ? '' : 's'}`}</span>
                                 </div>
-                                <p className='mt-1 text-xs leading-5 text-[#596170]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
-                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-[#667085]'>No country-level action rows returned.</p> : null}
+                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No country-level routing rows returned.</p> : null}
                     </div>
                 </div>
 
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Provenance to action</p>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source routing</p>
                     <div className='mt-2 grid gap-2'>
                         {actionability.sourceClusters.slice(0, 4).map(item => (
-                            <div key={`${item.sourceName}-${item.provenance}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2'>
+                            <div key={`${item.sourceName}-${item.provenance}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                                 <div className='flex items-center justify-between gap-2'>
-                                    <p className='truncate text-xs font-semibold text-[#171a21]'>{item.sourceName}</p>
-                                    <span className={item.captureId ? 'text-[11px] text-[#147a3b]' : 'text-[11px] text-[#8a5a00]'}>{item.captureId ? 'capture attached' : 'capture needed'}</span>
+                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.sourceName}</p>
+                                    <span className={item.captureId ? 'shrink-0 text-[11px] text-[#147a3b]' : 'shrink-0 text-[11px] text-[#8a5a00]'}>{item.captureId ? 'capture attached' : 'capture needed'}</span>
                                 </div>
-                                <p className='mt-1 truncate font-mono text-[11px] text-[#667085]'>{item.provenance}</p>
-                                <p className='mt-1 text-xs leading-5 text-[#596170]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
+                                <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.provenance}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
-                        {!actionability.sourceClusters.length ? <p className='text-xs text-[#667085]'>No source provenance rows returned.</p> : null}
+                        {!actionability.sourceClusters.length ? <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No source provenance rows returned.</p> : null}
                     </div>
                 </div>
 
                 <div className='grid gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                    <Link href='/dashboard/dwm' className='inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                         <ExternalLink className='h-3.5 w-3.5' />
                         Open DWM workbench
                     </Link>
                     {casePath ? (
-                        <a href={casePath} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                        <a href={casePath} className='inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                             <ExternalLink className='h-3.5 w-3.5' />
                             Open related case
                         </a>
                     ) : (
-                        <button type='button' disabled title={actionability.handoffs.caseBlockers.join('; ')} className='inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-3 text-xs font-semibold text-[#98a2b3]'>
+                        <button type='button' disabled title={actionability.handoffs.caseBlockers.join('; ')} className='inline-flex min-h-9 cursor-not-allowed items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-3 py-2 text-xs font-semibold text-[#98a2b3] dark:border-[#314057] dark:bg-[#172131] dark:text-[#77869a]'>
                             <ClipboardList className='h-3.5 w-3.5' />
-                            Create backed case
+                            Create case
                         </button>
                     )}
                 </div>
 
                 {!casePath && actionability.handoffs.casePayload ? (
-                    <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                        <p className='text-xs font-semibold uppercase text-[#667085]'>Case handoff payload</p>
-                        <p className='mt-2 font-mono text-[11px] leading-5 text-[#596170]'>{JSON.stringify(actionability.exportPayloads.case.body)}</p>
+                    <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case payload</p>
+                        <p className='mt-2 break-all font-mono text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{JSON.stringify(actionability.exportPayloads.case.body)}</p>
                     </div>
                 ) : null}
 
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Related backed objects</p>
-                    <p className='mt-2 text-xs leading-5 text-[#596170]'>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Related records</p>
+                    <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {actionability.relatedAlerts.length} alert{actionability.relatedAlerts.length === 1 ? '' : 's'} · {actionability.relatedCases.length} case{actionability.relatedCases.length === 1 ? '' : 's'} · {actionability.sourceProvenance.length} provenance row{actionability.sourceProvenance.length === 1 ? '' : 's'}
                     </p>
                     {!actionability.relatedAlerts.length && !actionability.relatedCases.length ? (
@@ -1067,20 +1067,20 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
 
 function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: string; detail: string; payload: unknown; route?: string; blocked: boolean }) {
     return (
-        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2'>
+        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
                     <div className='flex items-center gap-2'>
-                        <p className='text-xs font-semibold text-[#171a21]'>{label}</p>
+                        <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{label}</p>
                         <span className={blocked ? 'rounded-md bg-[#fff4d6] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b]'}>
                             {blocked ? 'blocked' : 'ready'}
                         </span>
                     </div>
-                    <p className='mt-1 text-xs leading-5 text-[#596170]'>{detail}</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{detail}</p>
                 </div>
                 <div className='flex shrink-0 items-center gap-1.5'>
                     {route ? (
-                        <a href={route} className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                        <a href={route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                             <ExternalLink className='h-3.5 w-3.5' />
                             Open
                         </a>
@@ -1108,7 +1108,7 @@ function CopyPayloadButton({ label, payload }: { label: string; payload: unknown
     }
 
     return (
-        <button type='button' onClick={copyPayload} className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]' aria-label={`Copy ${label} handoff payload`}>
+        <button type='button' onClick={copyPayload} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]' aria-label={`Copy ${label} payload`}>
             {state === 'copied' ? <CheckCircle2 className='h-3.5 w-3.5 text-[#147a3b]' /> : <Copy className='h-3.5 w-3.5' />}
             {state === 'copied' ? 'Copied' : state === 'failed' ? 'Unavailable' : 'Copy'}
         </button>
@@ -1117,7 +1117,7 @@ function CopyPayloadButton({ label, payload }: { label: string; payload: unknown
 
 function BlockerList({ blockers }: { blockers: string[] }) {
     return (
-        <div className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3'>
+        <div className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 dark:border-[#5a4316] dark:bg-[#231b0c]'>
             <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Missing dependency</p>
             <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00]'>
                 {blockers.map(item => <li key={item}>{item}</li>)}
@@ -1128,15 +1128,15 @@ function BlockerList({ blockers }: { blockers: string[] }) {
 
 function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     return (
-        <Panel title='Source and Enrichment Tasks' description='Collection and API work needed for this actor/query to feed stronger alerts.' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Enrichment Queue' description='Source and API work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
             <div className='grid gap-2'>
                 {tasks.map(task => (
-                    <div key={task.title} className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <div key={task.title} className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                         <div className='flex items-center justify-between gap-2'>
-                            <p className='text-xs font-semibold text-[#171a21]'>{task.title}</p>
-                            <span className={taskStatusClass(task.status)}>{taskStatusLabel(task.status)}</span>
+                            <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{task.title}</p>
+                            <span className={`${taskStatusClass(task.status)} shrink-0 whitespace-nowrap`}>{taskStatusLabel(task.status)}</span>
                         </div>
-                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{task.detail}</p>
+                        <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{task.detail}</p>
                     </div>
                 ))}
             </div>
@@ -1183,7 +1183,7 @@ function ActionPanel({ note, decision, onNoteChange, onDecision }: {
 
 function ActionButton({ icon, children, onClick }: { icon: React.ReactNode; children: string; onClick: () => void }) {
     return (
-        <button type='button' onClick={onClick} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+        <button type='button' onClick={onClick} className='inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
             {icon}
             {children}
         </button>
@@ -1192,9 +1192,9 @@ function ActionButton({ icon, children, onClick }: { icon: React.ReactNode; chil
 
 function EvidencePanel({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
-            <ul className='mt-2 grid list-disc gap-1 pl-4 text-sm leading-6 text-[#596170]'>
+        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{title}</p>
+            <ul className='mt-2 grid list-disc gap-1 pl-4 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>
                 {children}
             </ul>
         </div>
@@ -1203,9 +1203,9 @@ function EvidencePanel({ title, children }: { title: string; children: React.Rea
 
 function EvidenceMetric({ label, value }: { label: string; value: string }) {
     return (
-        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21]'>{value || 'Not stated'}</p>
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{label}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{value || 'Not stated'}</p>
         </div>
     )
 }
@@ -1613,9 +1613,9 @@ function formatDate(value: string) {
 
 function Panel({ title, description, icon, children }: { title: string; description?: string; icon: React.ReactNode; children: React.ReactNode }) {
     return (
-        <section className='border border-[#dfe5ee] bg-white p-4'>
-            <div className='mb-2 flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                <span className='text-[#3056d3]'>{icon}</span>
+        <section className='border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
+            <div className='mb-2 flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>
+                <span className='text-[#3056d3] dark:text-[#9ab3ff]'>{icon}</span>
                 <span>{title}</span>
                 {description ? <InfoTip label={description} /> : null}
             </div>

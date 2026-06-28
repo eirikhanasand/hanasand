@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { buildActorIntelligence, containsToyThreatIntelCopy } from '../src/utils/ti/actorIntelligence'
 import { actorGeoProfile } from '../src/utils/ti/actorProfile'
 import { buildTiActionability } from '../src/utils/ti/actionability'
@@ -110,6 +111,21 @@ const profile = buildActorIntelligence(fixture, victims)
 const actionability = buildTiActionability(fixture, profile, victims)
 const artifacts = buildActorArtifacts(fixture, profile, victims, actionability)
 const geo = actorGeoProfile(fixture)
+const pageClientSource = readFileSync(new URL('../src/app/ti/pageClient.tsx', import.meta.url), 'utf8')
+const bannedUiCopy = [
+    'how this feeds',
+    'control room',
+    'target signal',
+    'signal language',
+    'named examples',
+    'authenticated bridge',
+    'copy handoff payloads',
+    'geography to action',
+    'provenance to action',
+    'related backed objects',
+    'backed objects',
+    'contract',
+]
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
 assert(profile.malwareTools.includes('SUNBURST'), 'APT29 should include SUNBURST tooling context.')
@@ -274,6 +290,14 @@ assert(quiet.createAlertHandoff.blocked, 'Unknown actor should block alert hando
 assert(quiet.caseHandoff.blocked, 'Unknown actor should block case handoff.')
 assert(quietArtifacts.length === 0, 'Sparse actor path should not invent selectable artifacts.')
 assert(nextActorArtifactId(quietArtifacts, undefined, 'next') === '', 'Keyboard helper should stay empty for sparse actor artifacts.')
+for (const phrase of bannedUiCopy) {
+    assert(!pageClientSource.toLowerCase().includes(phrase), `Public TI page should not render prompt-shaped/internal copy: ${phrase}.`)
+}
+assert(pageClientSource.includes('Console handoff'), 'Public TI page should use professional console handoff language.')
+assert(pageClientSource.includes('Console packages'), 'Public TI page should label copied workflow payloads as console packages.')
+assert(pageClientSource.includes('whitespace-nowrap'), 'Public TI action buttons should prevent stacked action text.')
+assert(pageClientSource.includes('break-all font-mono'), 'Public TI source/provenance rows should wrap long technical values.')
+assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')
