@@ -147,14 +147,83 @@ describe("dwm case workflow", () => {
       }), options);
       const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
         method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
         body: JSON.stringify({ organizationId })
       }), options);
       const rebuildPayload = await rebuildResponse.json() as any;
       const alert = rebuildPayload.alerts[0];
+      expect(rebuildPayload.visibilityDecision).toMatchObject({ allowed: true, reason: null });
       expect(alert.caseIdCandidate).toMatch(/^case_/);
       expect(alert.casePath).toContain(`/v1/cases/${alert.caseIdCandidate}`);
       expect(alert.workflowContext.caseIdCandidate).toBe(alert.caseIdCandidate);
       expect(alert.webhookContext.caseIdCandidate).toBe(alert.caseIdCandidate);
+
+      const viewerAlertListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
+      const viewerAlertList = await viewerAlertListResponse.json() as any;
+      expect(viewerAlertListResponse.status).toBe(200);
+      expect(viewerAlertList.visibilityDecision).toMatchObject({ allowed: true, reason: null, alertVisibilityPolicy: "members" });
+      expect(viewerAlertList.alerts).toHaveLength(1);
+
+      const viewerAlertDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
+      const viewerAlertDetail = await viewerAlertDetailResponse.json() as any;
+      expect(viewerAlertDetailResponse.status).toBe(200);
+      expect(viewerAlertDetail.visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect(viewerAlertDetail.alert.id).toBe(alert.id);
+
+      const viewerAlertMutationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+        method: "PATCH",
+        headers: { "x-user-email": "viewer@acme.com" },
+        body: JSON.stringify({ organizationId, reviewState: "reviewing", note: "Viewer must not mutate alert workflow." })
+      }), options);
+      expect(viewerAlertMutationResponse.status).toBe(403);
+      expect((await viewerAlertMutationResponse.json() as any).visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect((store as any).getDwmAlert(alert.id).reviewState).not.toBe("reviewing");
+
+      const viewerReplayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
+        method: "POST",
+        headers: { "x-user-email": "viewer@acme.com" },
+        body: JSON.stringify({ organizationId })
+      }), options);
+      expect(viewerReplayResponse.status).toBe(403);
+      expect((store as any).getDwmAlert(alert.id).replayCount ?? 0).toBe(0);
+
+      const removedAlertDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "removed@acme.com" }
+      }), options);
+      expect(removedAlertDetailResponse.status).toBe(403);
+      expect((await removedAlertDetailResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "member_removed" });
+
+      const deactivatedAlertDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "deactivated@acme.com" }
+      }), options);
+      expect(deactivatedAlertDetailResponse.status).toBe(403);
+      expect((await deactivatedAlertDetailResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "member_deactivated" });
+
+      const outsiderAlertListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "outsider@example.com" }
+      }), options);
+      expect(outsiderAlertListResponse.status).toBe(403);
+      expect((await outsiderAlertListResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "not_member" });
+
+      const restrictedViewerAlertListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${restrictedOrganizationId}`, {
+        headers: { "x-user-email": "viewer@restricted.example" }
+      }), options);
+      expect(restrictedViewerAlertListResponse.status).toBe(403);
+      expect((await restrictedViewerAlertListResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "role_not_allowed", alertVisibilityPolicy: "admins" });
+
+      const analystAlertUpdateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+        method: "PATCH",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({ organizationId, reviewState: "reviewing", note: "Analyst confirmed alert evidence is relevant." })
+      }), options);
+      const analystAlertUpdate = await analystAlertUpdateResponse.json() as any;
+      expect(analystAlertUpdateResponse.status).toBe(200);
+      expect(analystAlertUpdate.visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect(analystAlertUpdate.alert.reviewState).toBe("reviewing");
 
       const createCaseResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases", {
         method: "POST",
@@ -247,8 +316,18 @@ describe("dwm case workflow", () => {
       expect(restrictedAdminList.items).toHaveLength(1);
       expect(restrictedAdminList.items[0].caseId).toBe("case_restricted_admin_only");
 
+      const viewerDeliveryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+        method: "POST",
+        headers: { "x-user-email": "viewer@acme.com" },
+        body: JSON.stringify({ organizationId, alertId: alert.id })
+      }), options);
+      expect(viewerDeliveryResponse.status).toBe(403);
+      expect((await viewerDeliveryResponse.json() as any).visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect((store as any).listDwmWebhookDeliveries()).toHaveLength(0);
+
       const deliveryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
         method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
         body: JSON.stringify({ organizationId, alertId: alert.id })
       }), options);
       const deliveryPayload = await deliveryResponse.json() as any;
@@ -300,6 +379,7 @@ describe("dwm case workflow", () => {
 
       const rebuildAfterCloseResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
         method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
         body: JSON.stringify({ organizationId })
       }), options);
       const rebuildAfterClose = await rebuildAfterCloseResponse.json() as any;

@@ -3,6 +3,7 @@ import { rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
 import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
+import type { OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
 type DwmWatchlist = {
@@ -60,21 +61,25 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
   return json({ organization: scope.organization, watchlist }, 201);
 }
 
-export function listDwmAlerts(url: URL, options: ApiServerOptions): Response {
-  const scope = resolveOrganizationScope({ url }, options);
+export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
-  return json({ organization: scope.organization, alerts: alerts.filter((row: any) => row.tenantId === tenantId) });
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, alerts: alerts.filter((row: any) => row.tenantId === tenantId) });
 }
 
-export function getDwmAlertDetail(url: URL, options: ApiServerOptions, alertId: string | undefined): Response {
+export function getDwmAlertDetail(url: URL, options: ApiServerOptions, alertId: string | undefined, request?: Request): Response {
   const alert = findDwmAlert(options, alertId);
   if (!alert) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
-  const scope = resolveOrganizationScope({ url }, options);
+  const scope = resolveDwmAlertScope({ alert, url, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
   if (alert.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
-  return json(buildDwmAlertDetail(alert, options));
+  return json(buildDwmAlertDetail(alert, options, access));
 }
 
 export async function updateDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
@@ -82,6 +87,11 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
   if (!existing) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
 
   const body = await readJson<any>(request);
+  const scope = resolveDwmAlertScope({ alert: existing, body, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
+  if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
   const generatedAt = nowIso();
   const allowedReviewStates = new Set(["needs_review", "validate_identity", "route_to_customer", "watching", "false_positive_candidate", "reviewing", "resolved", "false_positive"]);
   const allowedDeliveryStates = new Set(["pending_review", "ready_to_send", "sent", "delivered", "failed", "muted"]);
@@ -112,13 +122,18 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
     updatedAt: generatedAt,
     workflowEvents: [...(existing.workflowEvents ?? []), event]
   });
-  return json({ alert, event });
+  return json({ visibilityDecision: access.visibilityDecision, alert, event });
 }
 
 export async function replayDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
   const existing = findDwmAlert(options, alertId);
   if (!existing) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
   const body = await readJson<any>(request);
+  const scope = resolveDwmAlertScope({ alert: existing, body, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
+  if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
   const generatedAt = nowIso();
   const event = {
     id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:replay:${existing.workflowEvents?.length ?? 0}`),
@@ -137,34 +152,40 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
     updatedAt: generatedAt,
     workflowEvents: [...(existing.workflowEvents ?? []), event]
   });
-  return json(buildDwmAlertDetail(alert, options));
+  return json(buildDwmAlertDetail(alert, options, access));
 }
 
-export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions): Response {
-  const scope = resolveOrganizationScope({ url }, options);
+export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const deliveries = (options.store as any).listDwmWebhookDeliveries?.() ?? [];
-  return json({ organization: scope.organization, deliveries: deliveries.filter((row: any) => row.tenantId === tenantId) });
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, deliveries: deliveries.filter((row: any) => row.tenantId === tenantId) });
 }
 
 export async function rebuildDwmAlerts(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<any>(request);
   const scope = resolveOrganizationScope({ body, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const terms = watchlists.flatMap((watchlist: DwmWatchlist) => watchlist.terms);
   if (!terms.length) return json({ error: { code: "missing_watchlist", message: "Create an active DWM watchlist before rebuilding alerts." } }, 400);
 
   const rebuilt = rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId });
-  return json({ organization: scope.organization, ...rebuilt });
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, ...rebuilt });
 }
 
 export async function deliverDwmWebhooks(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<any>(request);
   const scope = resolveOrganizationScope({ body, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const dryRun = body.dryRun === true;
   const fetcher = typeof options.webhookFetch === "function" ? options.webhookFetch as typeof fetch : fetch;
@@ -237,13 +258,15 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     }
   }
 
-  return json({ organization: scope.organization, deliveredAt: generatedAt, attemptedCount: deliveries.length, deliveries });
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, deliveredAt: generatedAt, attemptedCount: deliveries.length, deliveries });
 }
 
 export async function testDwmWebhook(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<any>(request);
   const scope = resolveOrganizationScope({ body, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const watchlist = body.watchlistId ? watchlists.find((row: DwmWatchlist) => row.id === body.watchlistId) : watchlists.find((row: DwmWatchlist) => row.webhookUrl) ?? watchlists[0];
@@ -283,7 +306,7 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
 
   if (body.dryRun === true) {
     const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "dry_run", httpStatus: 0 });
-    return json({ testedAt: generatedAt, ok: true, dryRun: true, delivery });
+    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok: true, dryRun: true, delivery });
   }
 
   try {
@@ -294,10 +317,10 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
     });
     const ok = response.status >= 200 && response.status < 300;
     const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
-    return json({ testedAt: generatedAt, ok, delivery }, ok ? 200 : 502);
+    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok, delivery }, ok ? 200 : 502);
   } catch (error) {
     const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
-    return json({ testedAt: generatedAt, ok: false, delivery }, 502);
+    return json({ visibilityDecision: access.visibilityDecision, testedAt: generatedAt, ok: false, delivery }, 502);
   }
 }
 
@@ -363,6 +386,135 @@ function selectWebhookDestination(options: ApiServerOptions, orgDestinations: We
   return orgDestinations[0];
 }
 
+type DwmWorkflowAccessMode = "read" | "mutate";
+type DwmVisibilityPolicy = "members" | "admins" | "owners";
+type DwmVisibilityDenyReason = "not_member" | "member_removed" | "member_deactivated" | "role_not_allowed";
+type DwmVisibilityDecision = {
+  allowed: boolean;
+  reason: DwmVisibilityDenyReason | null;
+  alertVisibilityPolicy: DwmVisibilityPolicy;
+  allowedRoles: string[];
+};
+type DwmWorkflowAccessResult = {
+  member?: OrganizationMember;
+  readOnly: boolean;
+  visibilityDecision: DwmVisibilityDecision;
+  error?: Response;
+};
+
+function resolveDwmAlertScope(input: { alert: any; body?: any; url?: URL; request?: Request }, options: ApiServerOptions) {
+  const body = {
+    ...(input.body ?? {}),
+    organizationId: input.body?.organizationId ?? input.body?.orgId ?? input.alert?.organizationId,
+    tenantId: input.body?.tenantId ?? input.alert?.tenantId
+  };
+  return resolveOrganizationScope({ body, url: input.url, request: input.request }, options);
+}
+
+function authorizeDwmWorkflowAccess(input: { options: ApiServerOptions; scope: { organizationId?: string; organization?: unknown }; request?: Request; url?: URL; body?: any; mode: DwmWorkflowAccessMode }): DwmWorkflowAccessResult {
+  const visibilityPolicy = organizationAlertVisibilityPolicy(input.scope.organization);
+  const allowedRoles = allowedDwmVisibilityRoles(visibilityPolicy);
+  const openDecision: DwmVisibilityDecision = { allowed: true, reason: null, alertVisibilityPolicy: visibilityPolicy, allowedRoles };
+  const members = organizationMembers(input.options, input.scope.organizationId);
+  if (!input.scope.organizationId || !members.length) return { readOnly: false, visibilityDecision: openDecision };
+
+  const identity = requestIdentity(input.request, input.body, input.url);
+  if (!identity.length) {
+    const visibilityDecision: DwmVisibilityDecision = { allowed: false, reason: "not_member", alertVisibilityPolicy: visibilityPolicy, allowedRoles };
+    return { readOnly: true, visibilityDecision, error: dwmVisibilityError(visibilityDecision, "DWM alert access requires an active organization member identity.") };
+  }
+
+  const member = members.find((row) => identityMatchesMember(identity, row));
+  if (!member) {
+    const visibilityDecision: DwmVisibilityDecision = { allowed: false, reason: "not_member", alertVisibilityPolicy: visibilityPolicy, allowedRoles };
+    return { readOnly: true, visibilityDecision, error: dwmVisibilityError(visibilityDecision, "DWM alert access is limited to active organization members.") };
+  }
+
+  const visibilityDecision = dwmVisibilityDecision(member, visibilityPolicy);
+  if (!visibilityDecision.allowed) {
+    return { member, readOnly: true, visibilityDecision, error: dwmVisibilityError(visibilityDecision, "DWM alert evidence is not visible for this organization membership.") };
+  }
+
+  const readOnly = member.role === "viewer";
+  if (input.mode === "mutate" && readOnly) {
+    return { member, readOnly, visibilityDecision, error: json({ error: { code: "dwm_read_only_member", message: "Viewer members can read DWM alerts but cannot mutate workflow state, replay evidence, or deliver webhooks." }, visibilityDecision }, 403) };
+  }
+  return { member, readOnly, visibilityDecision };
+}
+
+function organizationMembers(options: ApiServerOptions, organizationId: string | undefined): OrganizationMember[] {
+  if (!organizationId) return [];
+  return ((options.store as any).listOrganizationMembers?.() ?? [])
+    .filter((row: OrganizationMember) => row.organizationId === organizationId);
+}
+
+function requestIdentity(request: Request | undefined, body?: any, url?: URL): string[] {
+  return [
+    request?.headers.get("x-user-email"),
+    request?.headers.get("x-user-id"),
+    request?.headers.get("x-actor-id"),
+    body?.userEmail,
+    body?.userId,
+    body?.actorEmail,
+    body?.actor,
+    url?.searchParams.get("userEmail"),
+    url?.searchParams.get("userId"),
+    url?.searchParams.get("actor")
+  ].map(normalizeIdentity).filter(Boolean) as string[];
+}
+
+function identityMatchesMember(identity: string[], member: OrganizationMember): boolean {
+  const candidates = [member.id, member.email, member.userId].map(normalizeIdentity).filter(Boolean);
+  return candidates.some((candidate) => identity.includes(candidate as string));
+}
+
+function normalizeIdentity(value: unknown): string | undefined {
+  const identity = String(value ?? "").trim().toLowerCase();
+  return identity || undefined;
+}
+
+function dwmVisibilityDecision(member: OrganizationMember, alertVisibilityPolicy: DwmVisibilityPolicy): DwmVisibilityDecision {
+  const allowedRoles = allowedDwmVisibilityRoles(alertVisibilityPolicy);
+  if ((member as any).userActive === false || (member as any).active === false || (member as any).deactivatedAt || (member as any).deactivated_at) {
+    return { allowed: false, reason: "member_deactivated", alertVisibilityPolicy, allowedRoles };
+  }
+  if (member.status !== "active") {
+    return { allowed: false, reason: member.status === "removed" ? "member_removed" : "member_deactivated", alertVisibilityPolicy, allowedRoles };
+  }
+  const role = normalizeVisibilityRole(member.role);
+  if (!allowedRoles.includes(role)) {
+    return { allowed: false, reason: "role_not_allowed", alertVisibilityPolicy, allowedRoles };
+  }
+  return { allowed: true, reason: null, alertVisibilityPolicy, allowedRoles };
+}
+
+function dwmVisibilityError(decision: DwmVisibilityDecision, message: string): Response {
+  return json({
+    error: {
+      code: "organization_visibility_denied",
+      message,
+      reason: decision.reason
+    },
+    visibilityDecision: decision
+  }, 403);
+}
+
+function organizationAlertVisibilityPolicy(organization: unknown): DwmVisibilityPolicy {
+  const value = String((organization as any)?.alertVisibilityPolicy ?? (organization as any)?.alert_visibility_policy ?? "members");
+  return value === "admins" || value === "owners" ? value : "members";
+}
+
+function allowedDwmVisibilityRoles(policy: DwmVisibilityPolicy): string[] {
+  if (policy === "owners") return ["owner"];
+  if (policy === "admins") return ["owner", "admin"];
+  return ["owner", "admin", "analyst", "member", "viewer"];
+}
+
+function normalizeVisibilityRole(role: unknown): string {
+  const value = String(role ?? "").trim().toLowerCase();
+  return value === "member" ? "analyst" : value;
+}
+
 function findDwmAlert(options: ApiServerOptions, alertId: string | undefined) {
   if (!alertId) return undefined;
   return (options.store as any).getDwmAlert?.(alertId) ?? ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.id === alertId);
@@ -390,7 +542,7 @@ function normalizeOwner(value: unknown): string | undefined {
   return owner || undefined;
 }
 
-function buildDwmAlertDetail(alert: any, options: ApiServerOptions) {
+function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: DwmWorkflowAccessResult) {
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
   const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
   const timeline = [
@@ -432,6 +584,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions) {
   return {
     schemaVersion: "dwm.alert_detail.v1",
     generatedAt: nowIso(),
+    visibilityDecision: access?.visibilityDecision,
     alert,
     deliveries,
     timeline,
