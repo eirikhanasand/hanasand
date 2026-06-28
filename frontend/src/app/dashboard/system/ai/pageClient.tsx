@@ -264,7 +264,7 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
             </div>
 
             <ReliabilityPanel reliability={economics.reliability} />
-            <CommercialReadinessPanel readiness={economics.commercialReadiness} />
+            <ServiceGatePanel readiness={economics.commercialReadiness} />
 
             <div className='grid gap-4 xl:grid-cols-[1.35fr_0.9fr]'>
                 <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
@@ -453,7 +453,7 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
     )
 }
 
-function CommercialReadinessPanel({ readiness }: { readiness: AIEconomics['commercialReadiness'] }) {
+function ServiceGatePanel({ readiness }: { readiness: AIEconomics['commercialReadiness'] }) {
     const tone = readiness.overallState === 'commercially_ready'
         ? 'bg-emerald-400/8 text-emerald-100/80 outline-emerald-300/15'
         : readiness.overallState === 'on_track'
@@ -464,8 +464,8 @@ function CommercialReadinessPanel({ readiness }: { readiness: AIEconomics['comme
         <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Commercial readiness</p>
-                    <h3 className='mt-1 text-lg font-semibold text-bright/90'>Priority order toward a paid service</h3>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Service gates</p>
+                    <h3 className='mt-1 text-lg font-semibold text-bright/90'>Launch blockers and next actions</h3>
                     <p className='mt-2 max-w-3xl text-sm leading-6 text-bright/52'>{readiness.conclusion}</p>
                 </div>
                 <div className={`rounded-lg px-3 py-2 text-sm font-semibold outline ${tone}`}>

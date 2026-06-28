@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { Activity, BellRing, Braces, Building2, Radar, Search, ShieldAlert, Webhook } from 'lucide-react'
+import { Activity, BellRing, Braces, Building2, Radar, Search, ShieldAlert } from 'lucide-react'
 import { getMonitoringOverview } from '@/utils/monitoring/data'
 import getStatus from '@/utils/status/getStatus'
 import { toPublicServiceStatus } from '@/utils/status/publicStatus'
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
     title: 'Monitoring Overview',
-    description: 'Overview of monitoring activity, threat search shortcuts, webhook alert setup, API access, and platform status.',
+    description: 'Monitoring command surface for threat search, DWM cases, delivery routes, sources, and service health.',
 }
 
 export default async function Page() {
@@ -38,7 +38,7 @@ export default async function Page() {
         <DashboardPage>
             <DashboardHeader
                 title='Monitoring overview'
-                description='Search threats, prepare webhook alerts, and move from a company name to a usable monitoring flow quickly.'
+                description='Queues, routes, source checks, delivery state, and service health.'
                 eyebrow='Console'
             />
 
@@ -50,24 +50,29 @@ export default async function Page() {
             </div>
 
             <div className='grid gap-4 xl:grid-cols-[1.3fr_0.9fr]'>
-                <DashboardPanel className='p-5'>
-                    <div className='flex items-center justify-between'>
-                        <h2 className='text-lg font-semibold text-[#171a21]'>Current focus</h2>
+                <DashboardPanel className='overflow-hidden p-0'>
+                    <div className='flex items-center justify-between border-b border-[#e8edf5] bg-[#f8fafc] px-4 py-3'>
+                        <div>
+                            <h2 className='text-base font-semibold text-[#171a21]'>Command surface</h2>
+                            <p className='mt-1 text-sm text-[#596170]'>Open the queue that needs work.</p>
+                        </div>
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${overview.scanRunning ? 'bg-[#eef3ff] text-[#3056d3]' : 'bg-[#e9f8ef] text-[#147a3b]'}`}>
-                            {overview.scanRunning ? 'Monitoring active' : 'Ready'}
+                            {overview.scanRunning ? 'monitoring active' : 'standing by'}
                         </span>
                     </div>
-                    <div className='mt-4 grid gap-3 md:grid-cols-3'>
-                        <ActionLink href='/ti' title='Threat search' body='Search companies, actors, vendors, domains, and claims.' icon={<Search className='h-4 w-4' />} />
-                        <ActionLink href='/dashboard/dwm' title='Webhook alerts' body='Preview the alert payload and delivery format.' icon={<Webhook className='h-4 w-4' />} />
-                        <ActionLink href='/dashboard/automations' title='Alert delivery' body='Prepare recurring checks and review delivery history in one place.' icon={<BellRing className='h-4 w-4' />} />
-                        <ActionLink href='/dashboard/dwm' title='Dark web monitoring' body='See what the product tracks and how a buyer uses the API.' icon={<Building2 className='h-4 w-4' />} />
-                        <ActionLink href='/developers' title='API access' body='Connect monitoring data to a workflow, SIEM, CRM, or ticket queue.' icon={<Braces className='h-4 w-4' />} />
-                        <ActionLink href='/dashboard/load-testing' title='Load testing' body='Run permitted endpoint checks and review result links.' />
-                        {canManageSystem && <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' body='Docker image exposure, severity mix, and package detail.' />}
-                        {canManageSystem && <ActionLink href='/dashboard/traffic' title='Traffic' body='Live ingress, hotspots, request flow, and recent records.' />}
-                        <ActionLink href='/status' title='Platform status' body='Service checks, latency, uptime, and current API state.' />
-                        {canManageSystem && <ActionLink href='/dashboard/backup' title='Backup' body='Critical state locations, restore order, and resilience notes.' />}
+                    <div className='grid gap-0 divide-y divide-[#eef1f5] md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-3'>
+                        <ActionLink href='/dashboard' title='Analyst queue' state='work cases' metric='cases' icon={<Radar className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/dwm' title='DWM console' state='review alerts' metric='watchlist + evidence' icon={<Building2 className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/automations' title='Delivery routes' state='check delivery' metric='webhook state' icon={<BellRing className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/ti/sources' title='Source inventory' state='health + cadence' metric='source coverage' icon={<Search className='h-4 w-4' />} />
+                        <ActionLink href='/dashboard/ti/runs' title='Collection runs' state='captures' metric='run state' />
+                        <ActionLink href='/dashboard/ti/activity' title='TI activity' state='review stream' metric='actor changes' />
+                        <ActionLink href='/dashboard/load-testing' title='Load tests' state='permitted checks' metric='result links' />
+                        <ActionLink href='/developers' title='API access' state='integration' metric='docs + keys' icon={<Braces className='h-4 w-4' />} />
+                        <ActionLink href='/status' title='Service health' state='latency' metric='public checks' />
+                        {canManageSystem && <ActionLink href='/dashboard/vulnerabilities' title='Vulnerabilities' state='image exposure' metric='severity mix' />}
+                        {canManageSystem && <ActionLink href='/dashboard/traffic' title='Traffic' state='ingress' metric='hotspots' />}
+                        {canManageSystem && <ActionLink href='/dashboard/backup' title='Backup' state='restore state' metric='critical paths' />}
                     </div>
                 </DashboardPanel>
 
@@ -117,12 +122,23 @@ function formatNumber(value: number) {
     return new Intl.NumberFormat('en-US').format(value)
 }
 
-function ActionLink({ href, title, body, icon }: { href: string, title: string, body: string, icon?: React.ReactNode }) {
+function ActionLink({ href, title, state, metric, icon }: { href: string, title: string, state: string, metric: string, icon?: React.ReactNode }) {
     return (
-        <Link href={href} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 transition hover:border-[#b8c5ff] hover:bg-[#f4f7ff]'>
-            {icon ? <div className='mb-3 text-[#3056d3]'>{icon}</div> : null}
-            <div className='font-semibold text-[#171a21]'>{title}</div>
-            <div className='mt-2 text-sm leading-6 text-[#596170]'>{body}</div>
+        <Link href={href} className='grid min-h-32 content-between bg-white p-4 transition hover:bg-[#f4f7ff]'>
+            <div className='flex items-center justify-between gap-3'>
+                <div className='font-semibold text-[#171a21]'>{title}</div>
+                {icon ? <div className='text-[#3056d3]'>{icon}</div> : null}
+            </div>
+            <div className='mt-4 grid grid-cols-2 gap-2 text-xs'>
+                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-2 py-1'>
+                    <p className='text-[9px] font-semibold uppercase text-[#8c95a5]'>state</p>
+                    <p className='mt-0.5 font-semibold text-[#344054]'>{state}</p>
+                </div>
+                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-2 py-1'>
+                    <p className='text-[9px] font-semibold uppercase text-[#8c95a5]'>metric</p>
+                    <p className='mt-0.5 font-semibold text-[#344054]'>{metric}</p>
+                </div>
+            </div>
         </Link>
     )
 }

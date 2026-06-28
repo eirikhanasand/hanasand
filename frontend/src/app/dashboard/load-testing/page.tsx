@@ -1,15 +1,15 @@
 import Link from 'next/link'
-import { Activity, BarChart3, CheckCircle2, Flame, Gauge, Zap } from 'lucide-react'
+import { Activity, BarChart3, Flame, Gauge, Zap } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { ReactNode } from 'react'
 
 export const dynamic = 'force-dynamic'
 
 const tiers = [
-    { name: 'Free', price: '$0', detail: '5 permitted endpoint checks for evaluation.', runs: '5 tries', cta: 'Start free checks', href: '/test' },
-    { name: 'Starter', price: '$19/mo', detail: 'Simple recurring checks for small websites and APIs.', runs: '50 checks / month', cta: 'Enable Starter', href: '/dashboard/subscription' },
-    { name: 'Team', price: '$79/mo', detail: 'More checks, result history, and monitoring workflows.', runs: '500 checks / month', cta: 'Enable Team', href: '/dashboard/subscription' },
-    { name: 'Volume', price: '$249/mo', detail: 'Higher volume testing for launches and customer-facing APIs.', runs: '5,000 checks / month', cta: 'Talk to sales', href: '/contact?intent=load-testing' },
+    { name: 'Free', price: '$0', runs: '5', cadence: 'manual', retention: 'latest result', cta: 'Start check', href: '/test' },
+    { name: 'Starter', price: '$19/mo', runs: '50', cadence: 'manual + scheduled', retention: '30 days', cta: 'Enable', href: '/dashboard/subscription' },
+    { name: 'Team', price: '$79/mo', runs: '500', cadence: 'scheduled', retention: '90 days', cta: 'Enable', href: '/dashboard/subscription' },
+    { name: 'Volume', price: '$249/mo', runs: '5,000', cadence: 'scheduled', retention: '180 days', cta: 'Contact', href: '/contact?intent=load-testing' },
 ]
 
 export default function LoadTestingPage() {
@@ -17,8 +17,8 @@ export default function LoadTestingPage() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Load testing'
-                title='Permitted endpoint checks and launch readiness'
-                description='Run lightweight checks against URLs you control, keep result links, and upgrade when the free five tries are not enough.'
+                title='Endpoint check queue'
+                description='Permitted targets, quota, result links, and release checks.'
                 actions={(
                     <Link href='/test' className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
                         <Flame className='h-4 w-4' />
@@ -28,29 +28,46 @@ export default function LoadTestingPage() {
             />
 
             <div className='grid gap-4 md:grid-cols-3'>
-                <Metric icon={<Zap className='h-4 w-4' />} label='Free allowance' value='5 tries' detail='For logged-out or unsubscribed users.' />
-                <Metric icon={<Gauge className='h-4 w-4' />} label='Use case' value='Launch checks' detail='Measure availability and response behavior before sharing.' />
-                <Metric icon={<BarChart3 className='h-4 w-4' />} label='Output' value='Result links' detail='Shareable reports for customers, teammates, and release notes.' />
+                <Metric icon={<Zap className='h-4 w-4' />} label='Quota' value='5 checks' detail='free workspace allowance' />
+                <Metric icon={<Gauge className='h-4 w-4' />} label='Target scope' value='owned URLs' detail='permit-only checks' />
+                <Metric icon={<BarChart3 className='h-4 w-4' />} label='Evidence' value='result links' detail='latency and response state' />
             </div>
 
-            <div className='grid gap-4 lg:grid-cols-4'>
-                {tiers.map((tier) => (
-                    <DashboardPanel key={tier.name} className='flex min-h-full flex-col p-5'>
-                        <div>
-                            <h2 className='text-lg font-semibold text-[#171a21]'>{tier.name}</h2>
-                            <div className='mt-3 text-3xl font-semibold text-[#171a21]'>{tier.price}</div>
-                            <p className='mt-2 text-sm leading-6 text-[#596170]'>{tier.detail}</p>
-                        </div>
-                        <div className='mt-5 flex flex-1 items-start gap-2 text-sm text-[#344054]'>
-                            <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-[#147a3b]' />
-                            <span>{tier.runs}</span>
-                        </div>
-                        <Link href={tier.href} className='mt-5 inline-flex h-10 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                            {tier.cta}
-                        </Link>
-                    </DashboardPanel>
-                ))}
-            </div>
+            <DashboardPanel className='overflow-hidden p-0'>
+                <div className='border-b border-[#e8edf5] bg-[#f8fafc] px-4 py-3'>
+                    <h2 className='text-base font-semibold text-[#171a21]'>Plan limits</h2>
+                </div>
+                <div className='overflow-x-auto'>
+                    <table className='min-w-full divide-y divide-[#edf0f5] text-sm'>
+                        <thead className='bg-white text-left text-xs font-semibold uppercase text-[#667085]'>
+                            <tr>
+                                <th className='px-4 py-3'>Plan</th>
+                                <th className='px-4 py-3'>Price</th>
+                                <th className='px-4 py-3'>Checks</th>
+                                <th className='px-4 py-3'>Cadence</th>
+                                <th className='px-4 py-3'>Retention</th>
+                                <th className='px-4 py-3 text-right'>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#edf0f5] bg-white'>
+                            {tiers.map((tier) => (
+                                <tr key={tier.name} className='hover:bg-[#fbfcfe]'>
+                                    <td className='px-4 py-4 font-semibold text-[#171a21]'>{tier.name}</td>
+                                    <td className='px-4 py-4 text-[#596170]'>{tier.price}</td>
+                                    <td className='px-4 py-4 font-semibold text-[#3056d3]'>{tier.runs}/mo</td>
+                                    <td className='px-4 py-4 text-[#596170]'>{tier.cadence}</td>
+                                    <td className='px-4 py-4 text-[#596170]'>{tier.retention}</td>
+                                    <td className='px-4 py-4 text-right'>
+                                        <Link href={tier.href} className='inline-flex h-9 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                            {tier.cta}
+                                        </Link>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </DashboardPanel>
         </DashboardPage>
     )
 }

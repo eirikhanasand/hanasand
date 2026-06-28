@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BellRing, CheckCircle2, CreditCard, Gauge, ShieldCheck, Zap } from 'lucide-react'
+import { BellRing, CreditCard, Gauge, ShieldCheck, Zap } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
 import type { ReactNode } from 'react'
 
@@ -9,23 +9,29 @@ const plans = [
     {
         name: 'Monitor',
         price: '$49/mo',
-        detail: 'Company, vendor, and domain monitoring for small teams.',
         href: '/contact?intent=subscribe-monitor',
-        features: ['Dark web monitoring', 'Webhook alerts', 'Threat search', '5 load tests included'],
+        watchTerms: '25',
+        delivery: 'webhook',
+        review: 'standard',
+        loadTests: '5',
     },
     {
         name: 'Response',
         price: '$149/mo',
-        detail: 'More watch terms, faster review, and practical alert delivery.',
         href: '/contact?intent=subscribe-response',
-        features: ['Everything in Monitor', 'More watched terms', 'Priority alert review', '50 load tests included'],
+        watchTerms: '100',
+        delivery: 'webhook + case',
+        review: 'priority',
+        loadTests: '50',
     },
     {
         name: 'Operator',
         price: '$399/mo',
-        detail: 'For teams that want monitoring, API access, and testing volume.',
         href: '/contact?intent=subscribe-operator',
-        features: ['Everything in Response', 'API delivery', 'Actor overview support', '250 load tests included'],
+        watchTerms: '500',
+        delivery: 'API + webhook + case',
+        review: 'priority + actor context',
+        loadTests: '250',
     },
 ]
 
@@ -34,8 +40,8 @@ export default function SubscriptionPage() {
         <DashboardPage>
             <DashboardHeader
                 eyebrow='Subscription'
-                title='Enable product access'
-                description='Manage monitoring and load-testing access from one internal page. Choose a plan, then Hanasand can activate the account and webhook limits.'
+                title='Account access'
+                description='Workspace limits, enabled routes, and plan gates.'
             />
 
             <div className='grid gap-4 lg:grid-cols-[0.8fr_1.2fr]'>
@@ -50,33 +56,48 @@ export default function SubscriptionPage() {
                     <div className='mt-5 grid gap-3'>
                         <AccessRow icon={<BellRing className='h-4 w-4' />} label='Dark web monitoring' value='Preview mode' />
                         <AccessRow icon={<Zap className='h-4 w-4' />} label='Load testing' value='5 free tries' />
-                        <AccessRow icon={<Gauge className='h-4 w-4' />} label='API access' value='Ready after plan enablement' />
+                        <AccessRow icon={<Gauge className='h-4 w-4' />} label='API access' value='Enabled by plan' />
                         <AccessRow icon={<ShieldCheck className='h-4 w-4' />} label='Billing state' value='Not active' />
                     </div>
                 </DashboardPanel>
 
-                <div className='grid gap-4 md:grid-cols-3'>
-                    {plans.map((plan) => (
-                        <DashboardPanel key={plan.name} className='flex min-h-full flex-col p-5'>
-                            <div>
-                                <h2 className='text-lg font-semibold text-[#171a21]'>{plan.name}</h2>
-                                <div className='mt-3 text-3xl font-semibold text-[#171a21]'>{plan.price}</div>
-                                <p className='mt-2 text-sm leading-6 text-[#596170]'>{plan.detail}</p>
-                            </div>
-                            <div className='mt-5 grid flex-1 content-start gap-2'>
-                                {plan.features.map((feature) => (
-                                    <div key={feature} className='flex items-start gap-2 text-sm text-[#344054]'>
-                                        <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-[#147a3b]' />
-                                        <span>{feature}</span>
-                                    </div>
+                <DashboardPanel className='overflow-hidden p-0'>
+                    <div className='border-b border-[#e8edf5] bg-[#f8fafc] px-4 py-3'>
+                        <h2 className='text-base font-semibold text-[#171a21]'>Plan gates</h2>
+                    </div>
+                    <div className='overflow-x-auto'>
+                        <table className='min-w-full divide-y divide-[#edf0f5] text-sm'>
+                            <thead className='bg-white text-left text-xs font-semibold uppercase text-[#667085]'>
+                                <tr>
+                                    <th className='px-4 py-3'>Plan</th>
+                                    <th className='px-4 py-3'>Price</th>
+                                    <th className='px-4 py-3'>Watch terms</th>
+                                    <th className='px-4 py-3'>Delivery</th>
+                                    <th className='px-4 py-3'>Review</th>
+                                    <th className='px-4 py-3'>Checks</th>
+                                    <th className='px-4 py-3 text-right'>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className='divide-y divide-[#edf0f5] bg-white'>
+                                {plans.map((plan) => (
+                                    <tr key={plan.name} className='hover:bg-[#fbfcfe]'>
+                                        <td className='px-4 py-4 font-semibold text-[#171a21]'>{plan.name}</td>
+                                        <td className='px-4 py-4 text-[#596170]'>{plan.price}</td>
+                                        <td className='px-4 py-4 font-semibold text-[#3056d3]'>{plan.watchTerms}</td>
+                                        <td className='px-4 py-4 text-[#596170]'>{plan.delivery}</td>
+                                        <td className='px-4 py-4 text-[#596170]'>{plan.review}</td>
+                                        <td className='px-4 py-4 text-[#596170]'>{plan.loadTests}/mo</td>
+                                        <td className='px-4 py-4 text-right'>
+                                            <Link href={plan.href} className='inline-flex h-9 items-center justify-center rounded-lg bg-[#171a21] px-3 text-xs font-semibold text-white transition hover:bg-[#2b2f39]'>
+                                                Enable
+                                            </Link>
+                                        </td>
+                                    </tr>
                                 ))}
-                            </div>
-                            <Link href={plan.href} className='mt-5 inline-flex h-10 items-center justify-center rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
-                                Enable {plan.name}
-                            </Link>
-                        </DashboardPanel>
-                    ))}
-                </div>
+                            </tbody>
+                        </table>
+                    </div>
+                </DashboardPanel>
             </div>
         </DashboardPage>
     )
