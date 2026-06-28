@@ -4,7 +4,7 @@ import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
-import { buildActorArtifactHandoffs, buildActorArtifacts, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind } from '@/utils/ti/actorWorkbench'
+import { buildActorArtifactHandoffs, buildActorArtifacts, nextActorArtifactId, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind } from '@/utils/ti/actorWorkbench'
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
@@ -302,6 +302,13 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     selectedArtifactId={selectedArtifact?.id}
                                     onSelectArtifact={setSelectedArtifactId}
                                 />
+                                {actorArtifacts.length ? (
+                                    <ArtifactNavigator
+                                        artifacts={actorArtifacts}
+                                        selectedArtifactId={selectedArtifact?.id}
+                                        onSelectArtifact={setSelectedArtifactId}
+                                    />
+                                ) : null}
                                 {selectedArtifact && selectedArtifactHandoffs ? (
                                     <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
                                 ) : null}
@@ -581,12 +588,64 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
     )
 }
 
+function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: { artifacts: ActorArtifact[]; selectedArtifactId?: string; onSelectArtifact: (artifactId: string) => void }) {
+    function move(direction: 'next' | 'previous' | 'first' | 'last') {
+        const next = nextActorArtifactId(artifacts, selectedArtifactId, direction)
+        if (next) onSelectArtifact(next)
+    }
+
+    return (
+        <section
+            data-ti-artifact-nav='true'
+            tabIndex={0}
+            onKeyDown={(event) => {
+                if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    move('next')
+                } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    move('previous')
+                } else if (event.key === 'Home') {
+                    event.preventDefault()
+                    move('first')
+                } else if (event.key === 'End') {
+                    event.preventDefault()
+                    move('last')
+                }
+            }}
+            className='rounded-lg border border-[#dfe5ee] bg-white p-3 focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+        >
+            <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
+                <p className='text-xs font-semibold uppercase text-[#667085]'>Artifact queue</p>
+                <p className='text-[11px] text-[#667085]'>Arrow keys, Home, and End move selection.</p>
+            </div>
+            <div className='flex gap-2 overflow-x-auto pb-1'>
+                {artifacts.map(artifact => {
+                    const active = artifact.id === selectedArtifactId
+                    return (
+                        <button
+                            key={artifact.id}
+                            type='button'
+                            onClick={() => onSelectArtifact(artifact.id)}
+                            className={`shrink-0 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-[#dfe5ee] bg-[#fbfcfe] hover:bg-white'}`}
+                        >
+                            <span className='block text-xs font-semibold text-[#171a21]'>{artifact.label}</span>
+                            <span className='mt-1 block text-[11px] text-[#667085]'>{formatLabel(artifact.kind)} · {artifact.readiness.label}</span>
+                        </button>
+                    )
+                })}
+            </div>
+        </section>
+    )
+}
+
 function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifact; handoffs: ActorArtifactHandoffs }) {
+    const bridge = handoffs.authBridge
     const payloadRows = [
-        { id: 'watchlist', label: 'Copy watchlist candidate', payload: handoffs.watchlist, route: handoffs.watchlist.backedRoute, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
-        { id: 'alert', label: 'Copy alert rebuild instruction', payload: handoffs.alertRebuild, route: handoffs.alertRebuild.backedRoute, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : `Ready for ${handoffs.alertRebuild.endpoint}` },
-        { id: 'case', label: 'Copy case handoff', payload: handoffs.case, route: handoffs.case.backedRoute, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : `Ready for ${handoffs.case.endpoint}` },
-        { id: 'enrichment', label: 'Copy enrichment queue item', payload: handoffs.enrichment, route: handoffs.enrichment.backedRoute, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
+        { id: 'watchlist', label: 'Copy watchlist candidate', payload: handoffs.watchlist, route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
+        { id: 'alert', label: 'Copy alert rebuild instruction', payload: handoffs.alertRebuild, route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : `Ready for ${handoffs.alertRebuild.endpoint}` },
+        { id: 'case', label: 'Copy case handoff', payload: handoffs.case, route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : `Ready for ${handoffs.case.endpoint}` },
+        { id: 'enrichment', label: 'Copy enrichment queue item', payload: handoffs.enrichment, route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
     ]
 
     return (
@@ -597,9 +656,10 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21]'>{artifact.label}</h2>
                     <p className='mt-1 text-sm leading-6 text-[#596170]'>{formatLabel(artifact.kind)} · {artifact.subtitle}</p>
                 </div>
-                <div className='grid min-w-48 grid-cols-2 gap-2 text-center text-xs'>
+                <div className='grid min-w-72 grid-cols-3 gap-2 text-center text-xs'>
                     <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
                     <EvidenceMetric label='Confidence' value={`${Math.round(artifact.confidence * 100)}%`} />
+                    <EvidenceMetric label='Readiness' value={artifact.readiness.label} />
                 </div>
             </div>
             <div className='mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
@@ -618,9 +678,32 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     </EvidencePanel>
                 </div>
                 <div className='grid content-start gap-2'>
+                    <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                        <p className='text-xs font-semibold uppercase text-[#667085]'>Authenticated bridge</p>
+                        <p className='mt-2 text-xs leading-5 text-[#596170]'>
+                            Public TI exports this selected artifact into dashboard links and payloads. The public page does not save watchlists, rebuild alerts, create cases, or enqueue enrichment.
+                        </p>
+                        <div className='mt-2 flex flex-wrap gap-1.5'>
+                            <span className={bridge.orgRequired ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'}>
+                                {bridge.orgRequired ? 'org required' : 'org scoped'}
+                            </span>
+                            <span className={bridge.sourceRequired ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'}>
+                                {bridge.sourceRequired ? 'source required' : 'source attached'}
+                            </span>
+                            <span className={bridge.stale ? 'rounded-md bg-[#fff1f0] px-2 py-1 text-[11px] font-semibold text-[#b42318]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'}>
+                                {bridge.stale ? 'stale' : 'fresh enough'}
+                            </span>
+                        </div>
+                        {bridge.missing.length ? (
+                            <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00]'>
+                                {bridge.missing.slice(0, 4).map(item => <li key={item}>{item}</li>)}
+                            </ul>
+                        ) : null}
+                    </div>
                     {payloadRows.map(row => (
                         <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.blocked} />
                     ))}
+                    <CopyPayloadButton label='authenticated bridge bundle' payload={bridge} />
                 </div>
             </div>
         </section>

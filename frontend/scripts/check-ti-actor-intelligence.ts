@@ -1,6 +1,6 @@
 import { buildActorIntelligence, containsToyThreatIntelCopy } from '../src/utils/ti/actorIntelligence'
 import { buildTiActionability } from '../src/utils/ti/actionability'
-import { buildActorArtifactHandoffs, buildActorArtifacts } from '../src/utils/ti/actorWorkbench'
+import { buildActorArtifactHandoffs, buildActorArtifacts, encodeHandoffPayload, nextActorArtifactId } from '../src/utils/ti/actorWorkbench'
 import type { TiSearchResponse } from '../src/utils/ti/search'
 
 const fixture: TiSearchResponse = {
@@ -114,6 +114,15 @@ const usHandoffs = usArtifact ? buildActorArtifactHandoffs(fixture, usArtifact, 
 assert(usHandoffs?.watchlist.body.selectedArtifact, 'Selected artifact watchlist handoff should carry selectedArtifact context.')
 assert(JSON.stringify(usHandoffs?.case.body).includes('selectedArtifact'), 'Selected artifact case handoff should carry selectedArtifact context.')
 assert(JSON.stringify(usHandoffs?.enrichment.body).includes('United States'), 'Selected artifact enrichment handoff should carry artifact-specific task context.')
+assert(usArtifact?.readiness.state === 'stale', 'APT29 fixture should gate stale artifact evidence instead of claiming alert-ready status.')
+assert(usHandoffs?.authBridge.schemaVersion === 'ti.public_actor.authenticated_bridge.v1', 'Selected artifact should export an authenticated bridge contract.')
+assert(usHandoffs?.authBridge.orgRequired, 'Public artifact handoff should keep organization scope explicit.')
+assert(usHandoffs?.authBridge.stale, 'Authenticated bridge should carry stale evidence state.')
+assert(usHandoffs?.authBridge.links.watchlist.href.includes('/dashboard/dwm?handoff=public-ti'), 'Watchlist bridge should deep-link into the authenticated dashboard.')
+assert(JSON.parse(decodeURIComponent(usHandoffs?.authBridge.links.watchlist.href.split('payload=')[1] || '{}')).artifact.label === 'United States', 'Deep-link payload should decode selected artifact context.')
+assert(JSON.parse(decodeURIComponent(encodeHandoffPayload({ artifactId: 'artifact:test' }))).artifactId === 'artifact:test', 'Handoff payload encoding should round-trip.')
+assert(nextActorArtifactId(artifacts, artifacts[0]?.id, 'next') === artifacts[1]?.id, 'Keyboard helper should move to next artifact.')
+assert(nextActorArtifactId(artifacts, artifacts[0]?.id, 'previous') === artifacts[artifacts.length - 1]?.id, 'Keyboard helper should wrap to previous artifact.')
 
 const backed = buildTiActionability({
     ...fixture,
@@ -193,6 +202,7 @@ assert(quiet.watchlist.blockers.some(item => /Authenticated organization ID/i.te
 assert(quiet.exportPayloads.blockers.body.orgRequired === true, 'No-org actor path should export org-required blockers.')
 assert(quiet.exportPayloads.watchlist.missing.some(item => /Authenticated organization ID/i.test(item)), 'No-org watchlist export should carry precise blocked dependency.')
 assert(quietArtifacts.length === 0, 'Sparse actor path should not invent selectable artifacts.')
+assert(nextActorArtifactId(quietArtifacts, undefined, 'next') === '', 'Keyboard helper should stay empty for sparse actor artifacts.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')
