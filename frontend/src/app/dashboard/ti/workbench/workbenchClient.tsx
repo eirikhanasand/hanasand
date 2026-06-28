@@ -489,8 +489,8 @@ function BriefStat({ icon, label: statLabel, value }: { icon: React.ReactNode, l
 
 function Metric({ label: metricLabel, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-white/15 bg-white/8 px-3 py-2'>
-            <p className='text-[10px] font-semibold uppercase text-[#bdc9e6]'>{metricLabel}</p>
+        <div className='rounded-lg border border-[#3a4252] bg-[#222936] px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase text-[#cbd6ee]'>{metricLabel}</p>
             <p className='mt-1 text-lg font-semibold text-white'>{value}</p>
         </div>
     )
