@@ -16,7 +16,6 @@ import {
     organizationSettingsFromRow,
     organizationVisibilityDecision,
     organizationWatchlistAlertGenerationContract,
-    organizationWatchlistTerms,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
     toInvite,
@@ -158,11 +157,11 @@ export async function postOrganization(req: FastifyRequest<{ Body: OrganizationI
     })
 
     return res.status(201).send({ organization: toOrganization({
-            ...(organization.rows[0] as OrganizationRow),
-            role: 'owner',
-            member_count: 1,
-            owner_count: 1,
-            pending_invite_count: 0,
+        ...(organization.rows[0] as OrganizationRow),
+        role: 'owner',
+        member_count: 1,
+        owner_count: 1,
+        pending_invite_count: 0,
     }) })
 }
 
