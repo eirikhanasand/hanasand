@@ -40,6 +40,8 @@ export type WatchlistInput = {
     kind?: unknown
     value?: unknown
     notes?: unknown
+    requestId?: unknown
+    request_id?: unknown
 }
 
 export type OrganizationRow = {
@@ -97,6 +99,14 @@ export type OrganizationWatchlistRow = {
     archived_at?: string | null
 }
 
+export type OrganizationWatchlistTerm = {
+    watchlistItemId: string
+    kind: WatchlistKind
+    termFamily: WatchlistKind
+    value: string
+    terms: string[]
+}
+
 export type OrganizationDwmAlertReference = {
     schemaVersion: 'organization.dwm_alert_bridge.v1'
     organizationId: string
@@ -106,12 +116,14 @@ export type OrganizationDwmAlertReference = {
     matchedTerm: {
         value: string
         kind: WatchlistKind
+        termFamily: WatchlistKind
     }
     watchlist: {
         id: string
         name: string
         itemId: string
         kind: WatchlistKind
+        termFamily: WatchlistKind
         terms: string[]
     }
     organization: OrganizationBridgeContext
@@ -136,6 +148,7 @@ export type OrganizationDwmAlertReference = {
         matchedTerm: {
             value: string
             kind: WatchlistKind
+            termFamily: WatchlistKind
         }
         watchlist: OrganizationDwmAlertReference['watchlist']
         sourceFamily: 'organization_watchlist'
@@ -298,7 +311,7 @@ export function normalizeOwnershipTransferInput(body: OrganizationOwnershipTrans
 export function normalizeWatchlistInput(body: WatchlistInput | undefined) {
     const kind = cleanText(body?.kind).toLowerCase()
     if (!watchlistKinds.has(kind as WatchlistKind)) {
-        throw new Error('Watchlist kind must be company, domain, or vendor.')
+        throw new Error('Watchlist kind must be company, domain, vendor, actor, or keyword.')
     }
 
     const value = normalizeWatchlistValue(kind as WatchlistKind, body?.value)
@@ -311,10 +324,12 @@ export function normalizeWatchlistInput(body: WatchlistInput | undefined) {
     }
 
     const notes = cleanText(body?.notes)
+    const requestId = normalizeWatchlistRequestId(body?.requestId ?? body?.request_id)
     return {
         kind: kind as WatchlistKind,
         value,
         notes: notes.slice(0, 2000),
+        requestId,
     }
 }
 
@@ -399,8 +414,12 @@ export function toWatchlistItem(row: OrganizationWatchlistRow) {
     return {
         id: row.id,
         organizationId: row.organization_id,
+        tenantId: row.organization_id,
+        ownerOrganizationId: row.organization_id,
         kind: row.kind,
+        termFamily: row.kind,
         value: row.value,
+        terms: [row.value],
         notes: row.notes,
         createdBy: row.created_by,
         createdAt: row.created_at,
@@ -422,11 +441,13 @@ export function buildOrganizationDwmAlertReference(
         name: watchlistName,
         itemId: item.id,
         kind: item.kind,
+        termFamily: item.kind,
         terms: [item.value],
     }
     const matchedTerm = {
         value: item.value,
         kind: item.kind,
+        termFamily: item.kind,
     }
 
     return {
@@ -524,6 +545,16 @@ export function organizationSettingsFromRow(row: Pick<OrganizationRow, 'default_
         retentionDays: Number(row.retention_days ?? 365),
         auditSafeMetadata: row.audit_safe_metadata ?? {},
     }
+}
+
+export function organizationWatchlistTerms(items: OrganizationWatchlistRow[]): OrganizationWatchlistTerm[] {
+    return items.map(item => ({
+        watchlistItemId: item.id,
+        kind: item.kind,
+        termFamily: item.kind,
+        value: item.value,
+        terms: [item.value],
+    }))
 }
 
 export function slugForOrganization(value: string) {
@@ -653,6 +684,12 @@ function normalizeInviteExpiry(value: unknown) {
 }
 
 function normalizeInviteRequestId(value: unknown) {
+    const requestId = cleanText(value)
+    if (!requestId) return undefined
+    return requestId.slice(0, 120)
+}
+
+export function normalizeWatchlistRequestId(value: unknown) {
     const requestId = cleanText(value)
     if (!requestId) return undefined
     return requestId.slice(0, 120)

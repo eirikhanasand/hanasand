@@ -11,7 +11,10 @@ import {
     normalizeOrganizationSettingsInput,
     normalizeOwnershipTransferInput,
     normalizeWatchlistInput,
+    normalizeWatchlistRequestId,
     organizationSettingsFromRow,
+    organizationVisibilityDecision,
+    organizationWatchlistTerms,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
     toInvite,
@@ -49,6 +52,11 @@ type WatchlistParams = {
     itemId: string
 }
 
+type WatchlistMutationBody = WatchlistInput & {
+    requestId?: unknown
+    request_id?: unknown
+}
+
 type BulkInviteResult = {
     email: string
     role: OrganizationRole
@@ -69,8 +77,8 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
         SELECT
             o.*,
             om.role,
-            COUNT(DISTINCT active_members.user_id)::int AS member_count,
-            COUNT(DISTINCT active_owners.user_id)::int AS owner_count,
+            COUNT(DISTINCT active_member_users.id)::int AS member_count,
+            COUNT(DISTINCT active_owner_users.id)::int AS owner_count,
             COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count,
             COUNT(DISTINCT active_watchlist_items.id)::int AS shared_watchlist_count
         FROM organizations o
@@ -78,13 +86,22 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
           ON om.organization_id = o.id
          AND om.user_id = $1
          AND om.status = 'active'
+        JOIN users current_user
+          ON current_user.id = om.user_id
+         AND current_user.active = TRUE
         LEFT JOIN organization_members active_members
           ON active_members.organization_id = o.id
          AND active_members.status = 'active'
+        LEFT JOIN users active_member_users
+          ON active_member_users.id = active_members.user_id
+         AND active_member_users.active = TRUE
         LEFT JOIN organization_members active_owners
           ON active_owners.organization_id = o.id
          AND active_owners.status = 'active'
          AND active_owners.role = 'owner'
+        LEFT JOIN users active_owner_users
+          ON active_owner_users.id = active_owners.user_id
+         AND active_owner_users.active = TRUE
         LEFT JOIN organization_invites pending_invites
           ON pending_invites.organization_id = o.id
          AND pending_invites.status = 'pending'
@@ -689,10 +706,12 @@ export async function getOrganizationWatchlists(req: FastifyRequest<{ Params: Or
           AND ($2::text IS NULL OR kind = $2)
         ORDER BY kind ASC, value ASC
     `, [req.params.id, kind])
+    const watchlistItems = result.rows as OrganizationWatchlistRow[]
 
     return res.send({
         organization: toOrganization(organization),
-        watchlistItems: (result.rows as OrganizationWatchlistRow[]).map(toWatchlistItem),
+        watchlistItems: watchlistItems.map(toWatchlistItem),
+        sharedWatchlistContract: organizationSharedWatchlistContract(organization, watchlistItems),
     })
 }
 
@@ -725,6 +744,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
     }
     const generatedAlertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(bridgeOrganization, item))
     const teamOnboardingReadiness = organizationTeamOnboardingReadiness(bridgeContext)
+    const alertGenerationBridge = organizationAlertGenerationBridge(bridgeContext, watchlistItems)
 
     return res.send({
         organization: toOrganization(organization),
@@ -745,6 +765,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
             readinessStatus: bridgeContext.readinessStatus,
             ready: generatedAlertReferences.length > 0,
             teamOnboardingReadiness,
+            alertGenerationBridge,
             watchlistItemCount: generatedAlertReferences.length,
             generatedAlertReferences,
             downstreamFields: [
@@ -769,6 +790,10 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'sharedWatchlistCount',
                 'readinessStatus',
                 'teamOnboardingReadiness',
+                'alertGenerationBridge',
+                'alertGenerationBridge.activeWatchlistTerms',
+                'alertGenerationBridge.termFamilies',
+                'alertGenerationBridge.blockedReasons',
             ],
         },
     })
@@ -823,15 +848,25 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
     `, [randomUUID(), req.params.id, input.kind, input.value, input.notes, userId])
 
     await touchOrganization(req.params.id)
-    logOrganizationEvent(req, 'organization_watchlist_upserted', req.params.id, userId, {
+    const serviceLogAction = 'organization_watchlist_upserted'
+    logOrganizationEvent(req, serviceLogAction, req.params.id, userId, {
+        requestId: input.requestId,
         watchlistItemId: result.rows[0]?.id,
         kind: input.kind,
         value: input.value,
     })
-    return res.status(201).send({ watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow) })
+    return res.status(201).send({
+        watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
+        operation: organizationWatchlistOperation(organization, {
+            action: existing.rows[0] ? 'updated' : 'created',
+            actorId: userId,
+            requestId: input.requestId,
+            serviceLogAction,
+        }),
+    })
 }
 
-export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: WatchlistParams }>, res: FastifyReply) {
+export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: WatchlistParams, Body: WatchlistInput }>, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
     if (!valid || !userId) {
         return res.status(401).send({ error: 'Unauthorized.' })
@@ -845,6 +880,65 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
     if (!roleCanWriteWatchlist(organization.role)) {
         return res.status(403).send({ error: 'Only organization owners, admins, and members can update watchlists.' })
     }
+
+    let input
+    try {
+        input = normalizeWatchlistInput(req.body)
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid watchlist item.' })
+    }
+
+    const result = await run(`
+        UPDATE organization_watchlist_items
+        SET kind = $3,
+            value = $4,
+            notes = $5,
+            updated_at = NOW()
+        WHERE id = $1
+          AND organization_id = $2
+          AND archived_at IS NULL
+        RETURNING *
+    `, [req.params.itemId, req.params.organizationId, input.kind, input.value, input.notes])
+
+    if (!result.rows.length) {
+        return res.status(404).send({ error: 'Watchlist item not found.' })
+    }
+
+    await touchOrganization(req.params.organizationId)
+    const serviceLogAction = 'organization_watchlist_updated'
+    logOrganizationEvent(req, serviceLogAction, req.params.organizationId, userId, {
+        requestId: input.requestId,
+        watchlistItemId: req.params.itemId,
+        kind: input.kind,
+        value: input.value,
+    })
+    return res.send({
+        watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
+        operation: organizationWatchlistOperation(organization, {
+            action: 'updated',
+            actorId: userId,
+            requestId: input.requestId,
+            serviceLogAction,
+        }),
+    })
+}
+
+export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: WatchlistParams, Body: WatchlistMutationBody, Querystring: { requestId?: string, request_id?: string } }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.organizationId, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    if (!roleCanWriteWatchlist(organization.role)) {
+        return res.status(403).send({ error: 'Only organization owners, admins, and members can update watchlists.' })
+    }
+
+    const requestId = normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id ?? req.query?.requestId ?? req.query?.request_id)
 
     const result = await run(`
         UPDATE organization_watchlist_items
@@ -861,10 +955,20 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
     }
 
     await touchOrganization(req.params.organizationId)
-    logOrganizationEvent(req, 'organization_watchlist_archived', req.params.organizationId, userId, {
+    const serviceLogAction = 'organization_watchlist_archived'
+    logOrganizationEvent(req, serviceLogAction, req.params.organizationId, userId, {
+        requestId,
         watchlistItemId: req.params.itemId,
     })
-    return res.send({ watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow) })
+    return res.send({
+        watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
+        operation: organizationWatchlistOperation(organization, {
+            action: 'disabled',
+            actorId: userId,
+            requestId,
+            serviceLogAction,
+        }),
+    })
 }
 
 async function loadOrganizationForMember(organizationId: string, userId: string) {
@@ -872,8 +976,8 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
         SELECT
             o.*,
             om.role,
-            COUNT(DISTINCT active_members.user_id)::int AS member_count,
-            COUNT(DISTINCT active_owners.user_id)::int AS owner_count,
+            COUNT(DISTINCT active_member_users.id)::int AS member_count,
+            COUNT(DISTINCT active_owner_users.id)::int AS owner_count,
             COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count,
             COUNT(DISTINCT active_watchlist_items.id)::int AS shared_watchlist_count
         FROM organizations o
@@ -881,13 +985,22 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
           ON om.organization_id = o.id
          AND om.user_id = $2
          AND om.status = 'active'
+        JOIN users current_user
+          ON current_user.id = om.user_id
+         AND current_user.active = TRUE
         LEFT JOIN organization_members active_members
           ON active_members.organization_id = o.id
          AND active_members.status = 'active'
+        LEFT JOIN users active_member_users
+          ON active_member_users.id = active_members.user_id
+         AND active_member_users.active = TRUE
         LEFT JOIN organization_members active_owners
           ON active_owners.organization_id = o.id
          AND active_owners.status = 'active'
          AND active_owners.role = 'owner'
+        LEFT JOIN users active_owner_users
+          ON active_owner_users.id = active_owners.user_id
+         AND active_owner_users.active = TRUE
         LEFT JOIN organization_invites pending_invites
           ON pending_invites.organization_id = o.id
          AND pending_invites.status = 'pending'
@@ -1002,7 +1115,7 @@ function normalizeOptionalKind(value: unknown): WatchlistKind | null {
     }
 
     const kind = value.trim().toLowerCase()
-    return ['company', 'domain', 'vendor'].includes(kind) ? kind as WatchlistKind : null
+    return ['company', 'domain', 'vendor', 'actor', 'keyword'].includes(kind) ? kind as WatchlistKind : null
 }
 
 function logOrganizationEvent(req: FastifyRequest, action: string, organizationId: string, actorId: string, metadata: Record<string, unknown>) {
@@ -1057,5 +1170,96 @@ function organizationTeamOnboardingReadiness(organization: ReturnType<typeof bui
         alertVisibilityPolicy: organization.alertVisibilityPolicy,
         canSupportTenMemberSharedWatchlistRollout: blockedReasons.length === 0,
         blockedReasons,
+    }
+}
+
+function organizationSharedWatchlistContract(organization: OrganizationRow, items: OrganizationWatchlistRow[]) {
+    const bridgeContext = buildOrganizationBridgeContext({
+        ...organization,
+        shared_watchlist_count: items.length,
+    })
+    const activeWatchlistTerms = organizationWatchlistTerms(items)
+    const termFamilies = [...new Set(activeWatchlistTerms.map(term => term.termFamily))].sort()
+    const blockedReasons = watchlistAlertGenerationBlockedReasons(bridgeContext, items)
+    return {
+        schemaVersion: 'organization.shared_watchlist_contract.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        ownerOrganizationId: organization.id,
+        visibilityPolicy: bridgeContext.alertVisibilityPolicy,
+        allowedViewerRoles: bridgeContext.allowedViewerRoles,
+        activeWatchlistTerms,
+        termFamilies,
+        blockedReasons,
+        canGenerateAlerts: blockedReasons.length === 0,
+        permissions: {
+            canWrite: roleCanWriteWatchlist(organization.role),
+        },
+    }
+}
+
+function organizationAlertGenerationBridge(
+    organization: ReturnType<typeof buildOrganizationBridgeContext>,
+    items: OrganizationWatchlistRow[]
+) {
+    const activeWatchlistTerms = organizationWatchlistTerms(items)
+    const termFamilies = [...new Set(activeWatchlistTerms.map(term => term.termFamily))].sort()
+    const blockedReasons = watchlistAlertGenerationBlockedReasons(organization, items)
+    return {
+        schemaVersion: 'organization.watchlist_alert_generation.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        ownerOrganizationId: organization.id,
+        visibilityPolicy: organization.alertVisibilityPolicy,
+        allowedViewerRoles: organization.allowedViewerRoles,
+        activeWatchlistTerms,
+        termFamilies,
+        blockedReasons,
+        canGenerateAlerts: blockedReasons.length === 0,
+    }
+}
+
+function watchlistAlertGenerationBlockedReasons(
+    organization: ReturnType<typeof buildOrganizationBridgeContext>,
+    items: OrganizationWatchlistRow[]
+) {
+    const blockedReasons: string[] = []
+    if (!items.length) {
+        blockedReasons.push('needs_shared_watchlist_item')
+    }
+
+    if (!organization.allowedViewerRoles.length) {
+        blockedReasons.push('needs_alert_visibility_roles')
+    }
+
+    return blockedReasons
+}
+
+function organizationWatchlistOperation(
+    organization: OrganizationRow,
+    input: {
+        action: 'created' | 'updated' | 'disabled'
+        actorId: string
+        requestId?: string
+        serviceLogAction: string
+    }
+) {
+    const decision = organizationVisibilityDecision({
+        role: organization.role,
+        status: 'active',
+        userActive: true,
+        alertVisibilityPolicy: organization.alert_visibility_policy,
+    })
+    return {
+        schemaVersion: 'organization.watchlist_operation.v1',
+        action: input.action,
+        organizationId: organization.id,
+        tenantId: organization.id,
+        ownerOrganizationId: organization.id,
+        actorId: input.actorId,
+        requestId: input.requestId ?? null,
+        visibilityPolicy: decision.alertVisibilityPolicy,
+        allowedViewerRoles: decision.allowedRoles,
+        serviceLogAction: input.serviceLogAction,
     }
 }

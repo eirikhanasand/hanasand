@@ -644,7 +644,9 @@ async function fakeRun(query: string, params: any[] = []) {
     if (compact.includes('FROM organizations o JOIN organization_members om')) {
         const [organizationId, userId] = params.length === 1 ? [undefined, params[0]] : params
         const activeMemberships = [...members.values()].filter(member => member.status === 'active')
-        const scoped = activeMemberships.filter(member => member.user_id === userId && (!organizationId || member.organization_id === organizationId))
+        const scoped = activeMemberships.filter(member => member.user_id === userId
+            && users.get(member.user_id)?.active !== false
+            && (!organizationId || member.organization_id === organizationId))
         return rows(scoped.map(member => organizationSummary(member.organization_id, member.role)))
     }
 
@@ -793,6 +795,15 @@ async function fakeRun(query: string, params: any[] = []) {
         return rows([updated])
     }
 
+    if (compact.startsWith('UPDATE organization_watchlist_items SET kind')) {
+        const [id, organizationId, kind, value, notes] = params
+        const existing = watchlists.get(id)
+        if (!existing || existing.organization_id !== organizationId || existing.archived_at) return rows([])
+        const updated = { ...existing, kind, value, notes, updated_at: iso() }
+        watchlists.set(id, updated)
+        return rows([updated])
+    }
+
     if (compact.startsWith('INSERT INTO organization_watchlist_items')) {
         const [id, organizationId, kind, value, notes, createdBy] = params
         const item = nowRow({ id, organization_id: organizationId, kind, value, notes, created_by: createdBy, archived_at: null })
@@ -825,7 +836,7 @@ async function fakeRun(query: string, params: any[] = []) {
 
 function organizationSummary(organizationId: string, role: string) {
     const org = organizations.get(organizationId)
-    const activeMembers = [...members.values()].filter(member => member.organization_id === organizationId && member.status === 'active')
+    const activeMembers = [...members.values()].filter(member => member.organization_id === organizationId && member.status === 'active' && users.get(member.user_id)?.active !== false)
     const activeOwners = activeMembers.filter(member => member.role === 'owner')
     const pendingInvites = [...invites.values()].filter(invite => invite.organization_id === organizationId && invite.status === 'pending' && Date.parse(invite.expires_at) > Date.now())
     const sharedWatchlists = [...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at)
