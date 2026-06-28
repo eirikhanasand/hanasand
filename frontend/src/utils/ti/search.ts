@@ -64,6 +64,23 @@ export interface TiSearchResponse {
     operationalStatus?: TiOperationalStatus
     analystLoop?: TiAnalystLoop
     collectionStrategy?: TiCollectionStrategy
+    actorIntelligence?: TiActorIntelligenceContract
+}
+
+export interface TiActorIntelligenceContract {
+    actorClass?: string
+    attribution?: string
+    firstSeen?: string
+    lastSeen?: string
+    motivation?: string[]
+    malwareTools?: string[]
+    campaigns?: string[]
+    infrastructure?: string[]
+    targetSectors?: string[]
+    geographies?: string[]
+    confidence?: number
+    confidenceReasoning?: string[]
+    sourceProvenance?: string[]
 }
 
 export interface TiCollectionStrategy {

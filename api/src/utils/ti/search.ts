@@ -24,6 +24,23 @@ export interface TiSearchResponse {
     operationalStatus?: TiOperationalStatus
     analystLoop?: TiAnalystLoop
     collectionStrategy?: TiCollectionStrategy
+    actorIntelligence?: TiActorIntelligenceContract
+}
+
+export interface TiActorIntelligenceContract {
+    actorClass?: string
+    attribution?: string
+    firstSeen?: string
+    lastSeen?: string
+    motivation?: string[]
+    malwareTools?: string[]
+    campaigns?: string[]
+    infrastructure?: string[]
+    targetSectors?: string[]
+    geographies?: string[]
+    confidence?: number
+    confidenceReasoning?: string[]
+    sourceProvenance?: string[]
 }
 
 export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation'
@@ -224,6 +241,7 @@ interface KnownActorContext extends Pick<TiSearchResponse, 'aliases' | 'targets'
     datasets?: TiDataset[]
     sources?: TiSource[]
     notes?: string[]
+    actorIntelligence?: TiActorIntelligenceContract
 }
 
 const tiResponseCache = new Map<string, { expiresAt: number, result: TiSearchResponse }>()
@@ -365,6 +383,7 @@ export async function discoverThreatActorProfile(query: string): Promise<TiSearc
         ttps: mergeTtps(discovered.ttps, seeded.ttps),
         datasets: mergeDatasets(discovered.datasets, seeded.datasets),
         sources: mergeSources(discovered.sources, seeded.sources),
+        actorIntelligence: discovered.actorIntelligence ?? seeded.actorIntelligence,
         notes: uniqueStrings([
             ...seeded.notes,
             ...discovered.notes,
@@ -838,7 +857,8 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             ],
             operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length }),
             analystLoop: buildAnalystLoop({ query, seeded: { recentActivity: activity }, operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length }) }),
-            collectionStrategy: collectionStrategy()
+            collectionStrategy: collectionStrategy(),
+            actorIntelligence: known?.actorIntelligence
         }
     }
 
@@ -861,7 +881,8 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
         notes: known?.notes ?? [],
         operationalStatus,
         analystLoop: buildAnalystLoop({ query, operationalStatus }),
-        collectionStrategy: collectionStrategy()
+        collectionStrategy: collectionStrategy(),
+        actorIntelligence: known?.actorIntelligence
     }
 }
 
@@ -890,7 +911,8 @@ function seededSearch(query: string): TiSearchResponse {
         notes: known?.notes ?? [],
         operationalStatus,
         analystLoop,
-        collectionStrategy: collectionStrategy()
+        collectionStrategy: collectionStrategy(),
+        actorIntelligence: known?.actorIntelligence
     }
 }
 
@@ -1505,7 +1527,46 @@ function knownActorProfile(query: string): KnownActorContext | null {
                     detail: 'Public reporting often describes stealthy infrastructure and use of legitimate-looking services.',
                     confidence: 0.58
                 }
-            ]
+            ],
+            actorIntelligence: {
+                actorClass: 'State-linked espionage actor',
+                attribution: 'Russia-linked SVR/APT29 activity in public government, vendor, and incident reporting',
+                firstSeen: 'Late-2000s public reporting',
+                motivation: [
+                    'Strategic intelligence collection',
+                    'Diplomatic and policy access',
+                    'Cloud and identity compromise',
+                    'Long-running stealthy persistence'
+                ],
+                malwareTools: ['WellMess', 'WellMail', 'SUNBURST', 'TEARDROP', 'Cobalt Strike', 'custom credential and token tooling'],
+                campaigns: [
+                    'SolarWinds Orion supply-chain compromise',
+                    'Microsoft corporate email intrusion',
+                    'HPE cloud email intrusion',
+                    'Diplomatic and policy-sector credential campaigns'
+                ],
+                infrastructure: [
+                    'Cloud identity tenants',
+                    'Compromised email accounts',
+                    'Legitimate-looking web services',
+                    'Supply-chain access paths',
+                    'Residential or leased operational infrastructure'
+                ],
+                targetSectors: ['Government and diplomacy', 'Technology and cloud services', 'NGO, think tank, and research organizations'],
+                geographies: ['Russia', 'United States', 'United Kingdom', 'Germany'],
+                confidence: 0.76,
+                confidenceReasoning: [
+                    'Aliases and attribution are corroborated across government and vendor reporting.',
+                    'Victim observations include named organizations, sectors, timeframes, and source basis.',
+                    'Tradecraft aligns with returned ATT&CK techniques for credential, cloud, email, and command-and-control activity.'
+                ],
+                sourceProvenance: [
+                    'CISA and allied government SVR/APT29 advisories',
+                    'Microsoft Midnight Blizzard disclosures',
+                    'Public SolarWinds and vendor incident reporting',
+                    'MITRE ATT&CK group mappings'
+                ]
+            }
         }, 'APT29', 0.76)
     }
     if (normalized === 'apt42' || normalized.includes('charming kitten') || normalized.includes('mint sandstorm')) {

@@ -32,6 +32,11 @@ const tasks: TestTask[] = [
         command: [bun, 'scripts/check-ai-hooks.mjs'],
     },
     {
+        id: 'ti-actor-intelligence',
+        title: 'TI actor intelligence shaping',
+        command: [bun, 'scripts/check-ti-actor-intelligence.ts'],
+    },
+    {
         id: 'public-archive',
         title: 'Public archive route smoke',
         command: [bun, 'scripts/check-public-archive.mjs'],

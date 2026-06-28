@@ -2,6 +2,7 @@
 
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, victimObservationsFor } from '@/utils/ti/actorProfile'
+import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -145,14 +146,15 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
 }
 
 function Results({ result }: { result: TiSearchResponse }) {
-    const sourceUrlById = new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)]))
+    const sourceUrlById = useMemo(() => new Map(result.sources.map(source => [source.id, source.url || linkFromText(source.provenance)])), [result.sources])
     const collectionSources = result.collectionStrategy?.sourcePosture ?? defaultCollectionSources()
     const datasets = (result.datasets.length ? result.datasets : defaultDatasets()).filter(item => !/planned|rejected|blocked/i.test(item.status))
     const sources = result.sources.length ? result.sources : defaultSourceLinks()
     const alertItems = alertItemsFor(result)
-    const victimObservations = victimObservationsFor(result)
+    const victimObservations = useMemo(() => victimObservationsFor(result), [result])
+    const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
     const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById), [result, victimObservations, sourceUrlById])
-    const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources), [result, victimObservations, sources])
+    const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources, actorIntel), [result, victimObservations, sources, actorIntel])
     const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [notes, setNotes] = useState<Record<string, string>>({})
@@ -160,7 +162,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedNote = selected ? notes[selected.id] ?? '' : ''
     const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
-    const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources)
+    const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel)
     const sessionEvents = Object.entries(localDecisions).map(([id, decision]) => {
         const item = workItems.find(entry => entry.id === id)
         return {
@@ -266,6 +268,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <main className='order-1 min-w-0 p-4 lg:order-none'>
                         {selected ? (
                             <div className='grid gap-4'>
+                                <ActorIntelligenceDossier actor={actorIntel} result={result} />
+
                                 <section data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div className='min-w-0'>
@@ -455,6 +459,57 @@ type EnrichmentTask = {
     detail: string
 }
 
+function ActorIntelligenceDossier({ actor, result }: { actor: TiActorIntelligenceProfile; result: TiSearchResponse }) {
+    const confidence = Math.round(actor.confidence * 100)
+    return (
+        <section data-ti-actor-dossier='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3]'>Actor Intelligence Dossier</p>
+                    <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21]'>{actor.actorClass}</h2>
+                    <p className='mt-2 text-sm leading-6 text-[#596170]'>{actor.attribution}</p>
+                </div>
+                <div className='grid min-w-52 grid-cols-3 gap-2 text-center text-xs'>
+                    <EvidenceMetric label='First seen' value={actor.firstSeen} />
+                    <EvidenceMetric label='Last seen' value={actor.lastSeen || result.lastSeen} />
+                    <EvidenceMetric label='Confidence' value={`${confidence}%`} />
+                </div>
+            </div>
+
+            <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
+                <DossierList title='Motivation' values={actor.motivation} />
+                <DossierList title='Malware and tools' values={actor.malwareTools} />
+                <DossierList title='Campaigns' values={actor.campaigns} />
+                <DossierList title='Target sectors' values={actor.targetSectors} />
+                <DossierList title='Geographies' values={actor.geographies} />
+                <DossierList title='Infrastructure' values={actor.infrastructure} />
+            </div>
+
+            <div className='mt-4 grid gap-3 xl:grid-cols-2'>
+                <EvidencePanel title='Confidence reasoning'>
+                    {actor.confidenceReasoning.map(item => <li key={item}>{item}</li>)}
+                </EvidencePanel>
+                <EvidencePanel title='Source provenance'>
+                    {actor.sourceProvenance.map(item => <li key={item}>{item}</li>)}
+                </EvidencePanel>
+            </div>
+        </section>
+    )
+}
+
+function DossierList({ title, values }: { title: string; values: string[] }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
+            <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
+            <div className='mt-2 flex flex-wrap gap-1.5'>
+                {values.length ? values.slice(0, 8).map(value => (
+                    <span key={value} className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-xs font-semibold text-[#344054]'>{value}</span>
+                )) : <span className='text-xs text-[#667085]'>Not returned</span>}
+            </div>
+        </div>
+    )
+}
+
 function analystWorkItemsFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sourceUrlById: Map<string, string | undefined>): AnalystWorkItem[] {
     const activityItems: AnalystWorkItem[] = result.recentActivity.map((item, index) => {
         const href = item.url || item.sourceIds.map(id => sourceUrlById.get(id)).find(Boolean)
@@ -621,6 +676,12 @@ function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
                     <p className='text-xs font-semibold uppercase text-[#667085]'>Routing</p>
                     <p className='mt-1 text-xs leading-5 text-[#596170]'>{packet.routing}</p>
                 </div>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Watch terms carried forward</p>
+                    <div className='mt-2 flex flex-wrap gap-1.5'>
+                        {packet.watchTerms.map(term => <span key={term} className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{term}</span>)}
+                    </div>
+                </div>
                 {packet.blockedUntil.length ? (
                     <div className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3'>
                         <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Blocked until</p>
@@ -782,7 +843,7 @@ function defaultNextStepsFor(result: TiSearchResponse): NonNullable<TiSearchResp
     }]
 }
 
-function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sources: TiSearchResponse['sources']): WatchlistRelevance {
+function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile): WatchlistRelevance {
     const organizations = unique([
         ...victimObservations.map(item => item.victim),
         ...result.recentActivity.map(item => item.victimName).filter((value): value is string => Boolean(value)),
@@ -805,6 +866,8 @@ function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: Ret
         ...result.aliases,
         ...organizations,
         ...sectors,
+        ...actor.campaigns.slice(0, 4),
+        ...actor.malwareTools.slice(0, 4),
     ].filter(Boolean)).slice(0, 14)
 
     return {
@@ -814,8 +877,8 @@ function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: Ret
         countries,
         domains,
         rationale: organizations.length
-            ? 'Use the actor, aliases, victim organizations, sectors, countries, and source domains as candidate watchlist inputs before creating customer alerts.'
-            : 'Use the actor, aliases, sectors, countries, and source domains as candidate watchlist inputs; no named customer organization match was returned yet.',
+            ? 'Use the actor, aliases, victim organizations, sectors, countries, campaigns, tools, and source domains as candidate watchlist inputs before creating customer alerts.'
+            : 'Use the actor, aliases, sectors, countries, campaigns, tools, and source domains as candidate watchlist inputs; no named customer organization match was returned yet.',
     }
 }
 
@@ -849,12 +912,20 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
     }
 }
 
-function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem | undefined, watchlist: WatchlistRelevance, sources: TiSearchResponse['sources']): EnrichmentTask[] {
+function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem | undefined, watchlist: WatchlistRelevance, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile): EnrichmentTask[] {
     const hasReviewInbox = Boolean(result.analystLoop?.metadataReviewInbox.length)
     const hasSourceUrls = sources.some(source => source.url || linkFromText(source.provenance))
     const hasOrganizations = watchlist.organizations.length > 0
     const hasActivity = result.recentActivity.length > 0
+    const hasActorCore = actor.malwareTools.length > 0 && actor.campaigns.length > 0 && actor.infrastructure.length > 0
     return [
+        {
+            title: 'Complete actor enrichment profile',
+            status: hasActorCore ? 'ready' : 'needs_api',
+            detail: hasActorCore
+                ? `Actor profile includes ${actor.malwareTools.length} tools, ${actor.campaigns.length} campaigns, and ${actor.infrastructure.length} infrastructure patterns for alert enrichment.`
+                : 'Search responses should return malware/tools, campaigns, infrastructure, confidence reasoning, and source provenance so public actor pages are not dependent on frontend fallbacks.',
+        },
         {
             title: 'Persist alert review decision',
             status: 'needs_api',
