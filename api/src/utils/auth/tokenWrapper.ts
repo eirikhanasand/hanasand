@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import crypto from 'crypto'
 import { validateSession } from './session.ts'
 import run from '#db'
+import { recordAdminAuditEvent } from '#utils/adminAudit.ts'
 
 type Valid = {
     valid: boolean
@@ -103,6 +104,16 @@ async function auditImpersonationRequest(req: FastifyRequest, actorId: string, t
         )
     `, [sessionId || null, actorId, targetId, method, path, req.ip, userAgent]).catch(error => {
         req.log.warn({ error, actorId, targetId, method, path }, 'Failed to audit impersonation request')
+    })
+    await recordAdminAuditEvent(req, {
+        actionType: 'impersonation.request',
+        actorId,
+        targetType: 'user',
+        targetId,
+        entityId: sessionId || targetId,
+        severity: 'notice',
+        outcome: 'success',
+        context: { sessionId, method, path },
     })
 }
 

@@ -2,9 +2,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import crypto from 'crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
+import { actorHasAdminSupportAccess, recordAdminAuditEvent, requireAuditReason } from '#utils/adminAudit.ts'
 
-type RoleRow = { id: string, name?: string }
-type StartBody = { target_id?: string, reason?: string }
+type StartBody = { target_id?: string, reason?: string, duration_minutes?: number | string }
 type EventQuery = {
     q?: string
     actor?: string
@@ -17,28 +17,8 @@ type EventQuery = {
     limit?: string
 }
 
-function isAdminRole(role: RoleRow) {
-    const id = role.id.toLowerCase()
-    const name = (role.name || '').toLowerCase()
-    return id === 'administrator'
-        || id === 'system_admin'
-        || id === 'user_admin'
-        || id.includes('admin')
-        || name.includes('admin')
-}
-
 function hashToken(token: string) {
     return crypto.createHash('sha256').update(token).digest('hex')
-}
-
-async function actorHasImpersonationAccess(actorId: string) {
-    const result = await run(`
-        SELECT r.id, r.name
-        FROM roles r
-        JOIN user_roles ur ON ur.role_id = r.id
-        WHERE ur.user_id = $1
-    `, [actorId])
-    return (result.rows as RoleRow[]).some(isAdminRole)
 }
 
 async function getActiveUser(id: string) {
@@ -53,7 +33,7 @@ async function getActiveUser(id: string) {
     return result.rows[0] as { id: string, name: string, avatar?: string | null } | undefined
 }
 
-async function audit(req: FastifyRequest, sessionId: string | null, actorId: string, targetId: string, actionPath: string) {
+async function audit(req: FastifyRequest, sessionId: string | null, actorId: string, targetId: string, actionPath: string, actionType: string, reason?: string, context: Record<string, unknown> = {}) {
     await run(`
         INSERT INTO impersonation_events (session_id, actor_id, target_id, method, path, ip, user_agent)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -68,6 +48,21 @@ async function audit(req: FastifyRequest, sessionId: string | null, actorId: str
     ]).catch(error => {
         req.log.warn({ error, actorId, targetId, actionPath }, 'Failed to audit impersonation lifecycle event')
     })
+    await recordAdminAuditEvent(req, {
+        actionType,
+        actorId,
+        targetType: 'user',
+        targetId,
+        entityId: sessionId || targetId,
+        severity: actionType.endsWith('.start') ? 'warning' : 'notice',
+        outcome: 'success',
+        reason,
+        context: {
+            sessionId,
+            path: actionPath,
+            ...context,
+        },
+    })
 }
 
 export async function startImpersonation(req: FastifyRequest, res: FastifyReply) {
@@ -75,12 +70,21 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
     if (!actor.valid || !actor.id || actor.impersonating) {
         return res.status(401).send({ error: actor.error || 'Unauthorized.' })
     }
-    if (!await actorHasImpersonationAccess(actor.id)) {
+    const body = req.body as StartBody | undefined
+    const targetId = String(body?.target_id || '').trim()
+    if (!await actorHasAdminSupportAccess(actor.id)) {
+        await recordAdminAuditEvent(req, {
+            actionType: 'impersonation.start',
+            actorId: actor.id,
+            targetType: 'user',
+            targetId: targetId || null,
+            severity: 'warning',
+            outcome: 'denied',
+            context: { error: 'missing_admin_role' },
+        })
         return res.status(403).send({ error: 'Only admins can impersonate users.' })
     }
 
-    const body = req.body as StartBody | undefined
-    const targetId = String(body?.target_id || '').trim()
     if (!targetId) {
         return res.status(400).send({ error: 'Missing target user.' })
     }
@@ -93,16 +97,23 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
         return res.status(404).send({ error: 'Impersonated user not found.' })
     }
 
+    let reason: string
+    try {
+        reason = requireAuditReason(body?.reason, 'Impersonation reason')
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid impersonation reason.' })
+    }
+
     const rawToken = `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`
-    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000)
-    const reason = String(body?.reason || '').slice(0, 500)
+    const durationMinutes = normalizeDurationMinutes(body?.duration_minutes)
+    const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000)
     const session = await run(`
         INSERT INTO impersonation_sessions (token_hash, actor_id, target_id, reason, expires_at)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id, created_at, expires_at
     `, [hashToken(rawToken), actor.id, target.id, reason, expiresAt.toISOString()])
     const row = session.rows[0] as { id: string, created_at: string, expires_at: string }
-    await audit(req, row.id, actor.id, target.id, '/api/impersonation/start')
+    await audit(req, row.id, actor.id, target.id, '/api/impersonation/start', 'impersonation.start', reason, { durationMinutes })
 
     return res.send({
         token: rawToken,
@@ -110,6 +121,8 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
             id: row.id,
             actor_id: actor.id,
             target,
+            reason,
+            duration_minutes: durationMinutes,
             created_at: row.created_at,
             expires_at: row.expires_at,
         },
@@ -138,7 +151,7 @@ export async function stopImpersonation(req: FastifyRequest, res: FastifyReply) 
     `, [hashToken(token), actor.authenticatedId])
     const row = result.rows[0] as { id: string, actor_id: string, target_id: string } | undefined
     if (row) {
-        await audit(req, row.id, row.actor_id, row.target_id, '/api/impersonation/stop')
+        await audit(req, row.id, row.actor_id, row.target_id, '/api/impersonation/stop', 'impersonation.stop')
     }
     return res.send({ ok: true })
 }
@@ -148,7 +161,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
     if (!actor.valid || !actor.id || actor.impersonating) {
         return res.status(401).send({ error: actor.error || 'Unauthorized.' })
     }
-    if (!await actorHasImpersonationAccess(actor.id)) {
+    if (!await actorHasAdminSupportAccess(actor.id)) {
         return res.status(403).send({ error: 'Only admins can view impersonation history.' })
     }
 
@@ -229,6 +242,15 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         LIMIT ${add(limit)}
     `, values)
     return res.send({ events: result.rows, filters: { q, actor: actorFilter, target: targetFilter, method: methodFilter, path: pathFilter, session: sessionFilter, from: fromFilter, to: toFilter, limit } })
+}
+
+function normalizeDurationMinutes(value: unknown) {
+    const parsed = typeof value === 'number' ? value : Number(value || 60)
+    if (!Number.isFinite(parsed)) {
+        return 60
+    }
+
+    return Math.min(Math.max(Math.trunc(parsed), 5), 240)
 }
 
 export async function getImpersonationCurrent(req: FastifyRequest, res: FastifyReply) {

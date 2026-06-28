@@ -116,32 +116,6 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_target_created ON impersonation_events(target_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_impersonation_events_route_recent ON impersonation_events(actor_id, target_id, method, path, created_at DESC)')
     await run(`
-        CREATE TABLE IF NOT EXISTS admin_audit_events (
-            id BIGSERIAL PRIMARY KEY,
-            action_type TEXT NOT NULL,
-            severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'notice', 'warning', 'critical')),
-            actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            target_type TEXT,
-            target_id TEXT,
-            organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
-            entity_id TEXT,
-            request_id TEXT,
-            outcome TEXT NOT NULL DEFAULT 'success' CHECK (outcome IN ('success', 'denied', 'failed')),
-            reason TEXT NOT NULL DEFAULT '',
-            context JSONB NOT NULL DEFAULT '{}'::jsonb,
-            ip TEXT NOT NULL DEFAULT '',
-            user_agent TEXT NOT NULL DEFAULT '',
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    `)
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_created_at ON admin_audit_events(created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_created ON admin_audit_events(organization_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_actor_created ON admin_audit_events(actor_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_target_created ON admin_audit_events(target_type, target_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_action_created ON admin_audit_events(action_type, severity, outcome, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_entity_created ON admin_audit_events(entity_id, created_at DESC)')
-    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_request_created ON admin_audit_events(request_id, created_at DESC)')
-    await run(`
         CREATE TABLE IF NOT EXISTS share (
             id TEXT PRIMARY KEY,
             path TEXT NOT NULL DEFAULT '',
@@ -549,6 +523,37 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_organization_invites_org_status ON organization_invites(organization_id, status, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_organization_watchlist_org_kind ON organization_watchlist_items(organization_id, kind, value) WHERE archived_at IS NULL')
     await run('CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_watchlist_unique_active ON organization_watchlist_items(organization_id, kind, lower(value)) WHERE archived_at IS NULL')
+    await run(`
+        CREATE TABLE IF NOT EXISTS admin_audit_events (
+            id BIGSERIAL PRIMARY KEY,
+            action_type TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'notice', 'warning', 'critical')),
+            source TEXT NOT NULL DEFAULT 'admin',
+            service TEXT NOT NULL DEFAULT 'hanasand-api',
+            actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            target_type TEXT,
+            target_id TEXT,
+            organization_id TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+            entity_id TEXT,
+            request_id TEXT,
+            outcome TEXT NOT NULL DEFAULT 'success' CHECK (outcome IN ('success', 'denied', 'failed')),
+            reason TEXT NOT NULL DEFAULT '',
+            context JSONB NOT NULL DEFAULT '{}'::jsonb,
+            ip TEXT NOT NULL DEFAULT '',
+            user_agent TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `)
+    await run('ALTER TABLE admin_audit_events ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT \'admin\'')
+    await run('ALTER TABLE admin_audit_events ADD COLUMN IF NOT EXISTS service TEXT NOT NULL DEFAULT \'hanasand-api\'')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_created_at ON admin_audit_events(created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_source_service_created ON admin_audit_events(source, service, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_created ON admin_audit_events(organization_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_actor_created ON admin_audit_events(actor_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_target_created ON admin_audit_events(target_type, target_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_action_created ON admin_audit_events(action_type, severity, outcome, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_entity_created ON admin_audit_events(entity_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_admin_audit_events_request_created ON admin_audit_events(request_id, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS dwm_webhook_destinations (
             id TEXT PRIMARY KEY,

@@ -435,6 +435,8 @@ CREATE TABLE IF NOT EXISTS admin_audit_events (
     id BIGSERIAL PRIMARY KEY,
     action_type TEXT NOT NULL,
     severity TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info', 'notice', 'warning', 'critical')),
+    source TEXT NOT NULL DEFAULT 'admin',
+    service TEXT NOT NULL DEFAULT 'hanasand-api',
     actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     target_type TEXT,
     target_id TEXT,
@@ -450,6 +452,7 @@ CREATE TABLE IF NOT EXISTS admin_audit_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_admin_audit_events_created_at ON admin_audit_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_audit_events_source_service_created ON admin_audit_events(source, service, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_created ON admin_audit_events(organization_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_events_actor_created ON admin_audit_events(actor_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_audit_events_target_created ON admin_audit_events(target_type, target_id, created_at DESC);

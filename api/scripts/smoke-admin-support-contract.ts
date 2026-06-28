@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { requireAuditReason, cleanAuditReason } from '../src/utils/adminAudit.ts'
+
+assert.equal(cleanAuditReason('  Customer   owner locked out  '), 'Customer owner locked out')
+assert.equal(requireAuditReason('Customer owner locked out'), 'Customer owner locked out')
+assert.throws(() => requireAuditReason('too short'), /at least 10 characters/)
+
+const routes = await readFile(new URL('../src/routes.ts', import.meta.url), 'utf8')
+assert.match(routes, /fastify\.get\('\/admin\/audit-events'/)
+assert.match(routes, /fastify\.get\('\/admin\/support\/users\/:id'/)
+assert.match(routes, /fastify\.get\('\/admin\/support\/organizations\/:id'/)
+assert.match(routes, /fastify\.post\('\/admin\/support\/organizations\/:id\/invites'/)
+
+const ensureSchema = await readFile(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')
+assert.match(ensureSchema, /CREATE TABLE IF NOT EXISTS admin_audit_events/)
+assert.match(ensureSchema, /action_type TEXT NOT NULL/)
+assert.match(ensureSchema, /severity TEXT NOT NULL DEFAULT 'info'/)
+assert.match(ensureSchema, /source TEXT NOT NULL DEFAULT 'admin'/)
+assert.match(ensureSchema, /service TEXT NOT NULL DEFAULT 'hanasand-api'/)
+assert.match(ensureSchema, /organization_id TEXT REFERENCES organizations\(id\)/)
+assert.match(ensureSchema, /request_id TEXT/)
+assert.match(ensureSchema, /outcome TEXT NOT NULL DEFAULT 'success'/)
+assert.match(ensureSchema, /CREATE INDEX IF NOT EXISTS idx_admin_audit_events_org_created/)
+assert.match(ensureSchema, /idx_admin_audit_events_source_service_created/)
+
+const adminSupport = await readFile(new URL('../src/handlers/adminSupport.ts', import.meta.url), 'utf8')
+for (const expected of ['q', 'org', 'actor', 'target', 'action', 'severity', 'source', 'service', 'entity', 'request', 'outcome', 'from', 'to']) {
+    assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing audit filter ${expected}.`)
+}
+assert.match(adminSupport, /support\.organization\.inspect/)
+assert.match(adminSupport, /support\.user\.inspect/)
+assert.match(adminSupport, /support\.organization\.invite_assist/)
+assert.match(adminSupport, /requireAuditReason\(req\.body\?\.reason/)
+assert.match(adminSupport, /Only admins can use support operations/)
+assert.match(adminSupport, /actorHasAdminSupportAccess/)
+assert.match(adminSupport, /pendingInvites/)
+
+const impersonation = await readFile(new URL('../src/handlers/impersonation.ts', import.meta.url), 'utf8')
+assert.match(impersonation, /requireAuditReason\(body\?\.reason/)
+assert.match(impersonation, /normalizeDurationMinutes/)
+assert.match(impersonation, /impersonation\.start/)
+assert.match(impersonation, /durationMinutes/)
+
+const auditPage = await readFile(new URL('../../frontend/src/app/dashboard/system/impersonation/page.tsx', import.meta.url), 'utf8')
+assert.match(auditPage, /\/admin\/audit-events/)
+assert.match(auditPage, /name='org'/)
+assert.match(auditPage, /name='severity'/)
+assert.match(auditPage, /name='source'/)
+assert.match(auditPage, /name='service'/)
+assert.match(auditPage, /name='outcome'/)
+assert.match(auditPage, /name='request'/)
+
+console.log('Admin support and structured audit contract smoke passed.')

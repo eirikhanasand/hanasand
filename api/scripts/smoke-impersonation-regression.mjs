@@ -94,6 +94,7 @@ async function grantAdmin() {
 
 async function cleanup() {
     const ids = [adminId, targetId, inactiveTargetId, nonAdminId]
+    await pool.query('DELETE FROM admin_audit_events WHERE actor_id = ANY($1::text[]) OR target_id = ANY($1::text[])', [ids]).catch(() => {})
     await pool.query('DELETE FROM impersonation_events WHERE actor_id = ANY($1::text[]) OR target_id = ANY($1::text[])', [ids]).catch(() => {})
     await pool.query('DELETE FROM impersonation_sessions WHERE actor_id = ANY($1::text[]) OR target_id = ANY($1::text[])', [ids]).catch(() => {})
     await pool.query('DELETE FROM user_roles WHERE user_id = ANY($1::text[])', [ids]).catch(() => {})
@@ -137,9 +138,17 @@ async function main() {
     const nonAdminStart = await request('/impersonation/start', {
         method: 'POST',
         headers: authHeaders(nonAdminId, nonAdminToken),
-        body: JSON.stringify({ target_id: targetId }),
+        body: JSON.stringify({ target_id: targetId, reason: 'non admin regression attempt' }),
     })
     expect(nonAdminStart.response.status === 403, 'Non-admin start should be rejected.', nonAdminStart.body)
+
+    const missingReason = await request('/impersonation/start', {
+        method: 'POST',
+        headers: authHeaders(adminId, adminToken),
+        body: JSON.stringify({ target_id: targetId }),
+    })
+    expect(missingReason.response.status === 400, 'Admin start should require a reason.', missingReason.body)
+    expect(String(missingReason.body?.error || '').includes('at least 10 characters'), 'Missing reason error should explain requirement.', missingReason.body)
 
     const legacyHeader = await request(`/user/full/${targetId}`, {
         headers: authHeaders(adminId, adminToken, { 'x-impersonate-id': targetId }),
@@ -149,11 +158,13 @@ async function main() {
     const started = await request('/impersonation/start', {
         method: 'POST',
         headers: authHeaders(adminId, adminToken),
-        body: JSON.stringify({ target_id: targetId, reason: 'impersonation regression smoke' }),
+        body: JSON.stringify({ target_id: targetId, reason: 'impersonation regression smoke', duration_minutes: 15 }),
     })
     expect(started.response.status === 200, 'Admin start should succeed.', started.body)
     expect(started.body?.token && started.body.token !== targetId, 'Start should return an opaque token.', started.body)
     expect(started.body?.session?.target?.id === targetId, 'Start should return the target.', started.body)
+    expect(started.body?.session?.reason === 'impersonation regression smoke', 'Start should echo the audited reason.', started.body)
+    expect(started.body?.session?.duration_minutes === 15, 'Start should honor bounded duration.', started.body)
 
     const impersonationToken = started.body.token
     const sessionId = started.body.session.id
@@ -195,6 +206,12 @@ async function main() {
     expect(filtered.body.events.length >= 1 && filtered.body.events.length <= 10, 'Filtered audit fetch should respect filters and limit.', filtered.body.events)
     expect(filtered.body.events.every(event => event.actor_id === adminId && event.target_id === targetId && event.method === 'GET' && event.session_id === sessionId), 'Filtered audit events should match requested filters.', filtered.body.events)
 
+    const adminAudit = await request(`/admin/audit-events?actor=${encodeURIComponent(adminId)}&target=${encodeURIComponent(targetId)}&action=${encodeURIComponent('impersonation')}&severity=warning&entity=${encodeURIComponent(sessionId.slice(0, 8))}&outcome=success&limit=25`, {
+        headers: authHeaders(adminId, adminToken),
+    })
+    expect(adminAudit.response.status === 200 && Array.isArray(adminAudit.body?.events), 'Admin audit feed should be available.', adminAudit.body)
+    expect(adminAudit.body.events.some(event => event.action_type === 'impersonation.start' && event.reason === 'impersonation regression smoke' && event.entity_id === sessionId), 'Admin audit should include structured impersonation start.', adminAudit.body.events)
+
     const stop = await request('/impersonation', {
         method: 'DELETE',
         headers: authHeaders(adminId, adminToken, { 'x-impersonation-token': impersonationToken }),
@@ -217,6 +234,7 @@ async function main() {
         target: targetId,
         checked: [
             'admin-only start',
+            'required reason and scoped duration',
             'missing/inactive/self targets',
             'legacy target header ignored',
             'opaque hashed session storage',
@@ -224,6 +242,7 @@ async function main() {
             'sensitive action guardrail',
             'audit events',
             'audit filters',
+            'structured admin audit feed',
             'stop and revoked-token rejection',
         ],
     }, null, 2))
