@@ -14,6 +14,7 @@ import {
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
     createDwmWebhookDestination,
+    buildDwmWebhookDeliveryReadiness,
     deliverDwmAlertNotification,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     listDwmWebhookAuditEvents,
@@ -66,6 +67,7 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
     return res.send({
         destinations,
         destinationContracts: buildDwmWebhookDestinationContracts({ destinations, deliveries, auditEvents }),
+        deliveryReadiness: buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents }),
     })
 }
 
@@ -241,6 +243,11 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
         deliveries,
         deliveryEvidence: visibilityResult ? visibilityResult.deliveryEvidence : evidence,
         deliveryLedger: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveryLedger,
+        deliveryReadiness: buildDwmWebhookDeliveryReadiness({
+            destinations: await listDwmWebhookDestinations(userId, orgId || undefined),
+            deliveries,
+            auditEvents,
+        }),
         visibility: visibilityResult?.decision ?? {
             allowed: true,
             reason: null,

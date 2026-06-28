@@ -5,6 +5,7 @@ import {
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
+    buildDwmWebhookDeliveryReadiness,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     normalizeDwmWebhookDestinationInput,
@@ -753,6 +754,122 @@ const deliveryPreview = buildDwmWebhookDeliveryPreview({
     attemptedAt: '2026-06-28T12:00:00.000Z',
     createdAt: '2026-06-28T12:00:00.000Z',
 })
+const readiness = buildDwmWebhookDeliveryReadiness({
+    liveDeliveryEnabled: false,
+    destinations: [
+        {
+            id: 'destination_replay_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            name: 'Replay Discord',
+            kind: 'discord',
+            endpointHint: `https://discord.com/api/webhooks/987654321/${secret}`,
+            endpointHash: 'endpoint_replay_hash',
+            status: 'active',
+            events: ['dwm.alert.created', 'dwm.alert.replayed'],
+            createdBy: 'owner_contract',
+            lastTestedAt: '2026-06-28T12:04:00.000Z',
+            lastTestStatus: 'dry_run',
+            lastTestError: null,
+            lastTestHttpStatus: null,
+            lastDeliveryAt: '2026-06-28T12:00:00.000Z',
+            createdAt: '2026-06-28T11:00:00.000Z',
+            updatedAt: '2026-06-28T12:04:00.000Z',
+        },
+        {
+            id: 'destination_live_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            name: 'Retry Discord',
+            kind: 'discord',
+            endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`,
+            endpointHash: 'endpoint_live_hash',
+            status: 'active',
+            events: ['dwm.alert.created', 'dwm.alert.replayed'],
+            createdBy: 'owner_contract',
+            lastTestedAt: '2026-06-28T12:04:00.000Z',
+            lastTestStatus: 'dry_run',
+            lastTestError: null,
+            lastTestHttpStatus: null,
+            lastDeliveryAt: null,
+            createdAt: '2026-06-28T11:00:00.000Z',
+            updatedAt: '2026-06-28T12:06:00.000Z',
+        },
+        {
+            id: 'destination_disabled_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            name: 'Disabled Discord',
+            kind: 'discord',
+            endpointHint: `https://discord.com/api/webhooks/333333333/${secret}`,
+            endpointHash: 'endpoint_disabled_hash',
+            status: 'archived',
+            events: ['dwm.alert.created'],
+            createdBy: 'owner_contract',
+            lastTestedAt: null,
+            lastTestStatus: null,
+            lastTestError: 'Disabled by owner',
+            lastTestHttpStatus: null,
+            lastDeliveryAt: null,
+            createdAt: '2026-06-28T10:00:00.000Z',
+            updatedAt: '2026-06-28T12:05:00.000Z',
+        },
+    ],
+    deliveries: [
+        ...retryLedgerRows,
+        {
+            id: 'delivery_test_contract',
+            destinationId: 'destination_replay_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            alertId: 'webhook_test',
+            eventType: 'dwm.alert.test',
+            status: 'dry_run',
+            dryRun: true,
+            endpointHint: `https://discord.com/api/webhooks/987654321/${secret}`,
+            endpointHash: 'endpoint_replay_hash',
+            payloadHash: 'payload_test_hash',
+            payload: replayPayload,
+            responseStatus: null,
+            responseBody: null,
+            error: null,
+            idempotencyKey: 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test',
+            watchlistId: 'test-watchlist',
+            watchlistName: 'Webhook test watchlist',
+            route: 'test_delivery',
+            casePath: '/dashboard/dwm',
+            attemptedAt: '2026-06-28T12:04:00.000Z',
+            createdAt: '2026-06-28T12:04:00.000Z',
+        },
+    ],
+    auditEvents: [
+        {
+            id: 'audit_delivery_test_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: 'delivery_test_contract',
+            action: 'delivery.tested',
+            metadata: {},
+            createdAt: '2026-06-28T12:04:01.000Z',
+        },
+        {
+            id: 'audit_live_retry_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_live_contract',
+            deliveryId: 'delivery_live_failed_retry_contract',
+            action: 'delivery.failed',
+            metadata: {},
+            createdAt: '2026-06-28T12:06:01.000Z',
+        },
+    ],
+})
+const replayReadiness = readiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
+const retryReadiness = readiness.destinations.find(item => item.destinationId === 'destination_live_contract')
+const disabledReadiness = readiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
 
 expect(destinationContract.type === 'discord' && destinationContract.label === 'Replay Discord', 'Destination contract should expose type and label.', destinationContract)
 expect(destinationContract.enabled === true && destinationContract.status === 'active', 'Destination contract should expose enabled status.', destinationContract)
@@ -767,6 +884,13 @@ expect(deliveryPreview.context.watchlist.id === 'watchlist_item_replay_contract'
 expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.context.alert.evidenceCount === 3, 'Test preview should expose alert severity and evidence count.', deliveryPreview)
 expect(deliveryPreview.context.alert.casePath === replayWorkflowAlert.casePath && deliveryPreview.context.links.casePath === replayWorkflowAlert.casePath, 'Test preview should expose case/deep-link context.', deliveryPreview)
 expect(!JSON.stringify(deliveryPreview).includes(secret), 'Test preview should not leak endpoint secrets.', deliveryPreview)
+expect(readiness.destinationCount === 3 && readiness.activeDestinationCount === 2 && readiness.disabledDestinationCount === 1, 'Readiness should roll up multiple destinations.', readiness)
+expect(readiness.blockers.includes('live_delivery_disabled') && readiness.retryScheduledCount === 1, 'Readiness should expose live-send blockers and retry schedule count.', readiness)
+expect(replayReadiness?.lastTest.requestId === 'delivery_test_contract' && replayReadiness.recentAttempts.some(item => item.deliveryId === 'delivery_test_contract'), 'Readiness should include successful dry-run/test evidence.', replayReadiness)
+expect(retryReadiness?.retryState.retryable === true && retryReadiness.retryState.errorClass === 'upstream_5xx' && retryReadiness.blockers.includes('retry_scheduled'), 'Readiness should expose failed retry state and failure class.', retryReadiness)
+expect(disabledReadiness?.enabled === false && disabledReadiness.blockers.includes('destination_disabled') && disabledReadiness.readiness === 'disabled', 'Readiness should mark disabled destinations as blocked.', disabledReadiness)
+expect(readiness.idempotencyCoverage.covered === true && retryReadiness?.idempotencyCoverage.duplicateKeyCount === 1, 'Readiness should expose idempotency coverage and duplicate attempt groups.', readiness)
+expect(!JSON.stringify(readiness).includes(secret), 'Readiness should not leak endpoint, response, or error secrets.', readiness)
 
 console.log(JSON.stringify({
     ok: true,
@@ -791,8 +915,13 @@ console.log(JSON.stringify({
         'delivery ledger queued/sent/failed/skipped states',
         'delivery ledger retry backoff',
         'delivery ledger attempt counts',
+        'destination readiness rollup',
+        'destination readiness live blockers',
+        'destination readiness retry/failure class',
+        'destination readiness idempotency coverage',
         'delivery evidence secret redaction',
         'delivery ledger secret redaction',
+        'destination readiness secret redaction',
         'delivery evidence wrong-org filtering',
         'delivery evidence case/dedupe/idempotency filters',
         'delivery evidence org visibility allowed/denied',

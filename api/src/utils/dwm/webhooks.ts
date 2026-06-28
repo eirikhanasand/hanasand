@@ -705,7 +705,7 @@ export function buildDwmWebhookDestinationContracts({
         const lastDelivery = destinationDeliveries.find(delivery => delivery.eventType !== 'dwm.alert.test')
         const testAudit = lastTestDelivery ? destinationAudits.find(audit => audit.deliveryId === lastTestDelivery.id) : null
         const deliveryAudit = lastDelivery ? destinationAudits.find(audit => audit.deliveryId === lastDelivery.id) : null
-        const failureReason = destination.lastTestError || lastDelivery?.error || lastTestDelivery?.error || null
+        const failureReason = redactNullableDeliveryText(destination.lastTestError || lastDelivery?.error || lastTestDelivery?.error || null)
 
         return {
             id: destination.id,
@@ -728,7 +728,7 @@ export function buildDwmWebhookDestinationContracts({
                 at: destination.lastTestedAt || lastTestDelivery?.attemptedAt || null,
                 status: destination.lastTestStatus || lastTestDelivery?.status || null,
                 httpStatus: destination.lastTestHttpStatus || lastTestDelivery?.responseStatus || null,
-                failureReason: destination.lastTestError || lastTestDelivery?.error || null,
+                failureReason: redactNullableDeliveryText(destination.lastTestError || lastTestDelivery?.error || null),
                 requestId: lastTestDelivery?.id || null,
                 auditEventId: testAudit?.id || null,
             },
@@ -737,7 +737,7 @@ export function buildDwmWebhookDestinationContracts({
                 status: lastDelivery?.status || null,
                 requestId: lastDelivery?.id || null,
                 auditEventId: deliveryAudit?.id || null,
-                failureReason: lastDelivery?.error || null,
+                failureReason: redactNullableDeliveryText(lastDelivery?.error || null),
             },
             failureReason,
             latestAuditEventId: destinationAudits[0]?.id || null,
@@ -746,6 +746,84 @@ export function buildDwmWebhookDestinationContracts({
             updatedAt: destination.updatedAt,
         }
     })
+}
+
+export function buildDwmWebhookDeliveryReadiness({
+    destinations,
+    deliveries = [],
+    auditEvents = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+}: {
+    destinations: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    liveDeliveryEnabled?: boolean
+}) {
+    const destinationContracts = buildDwmWebhookDestinationContracts({ destinations, deliveries, auditEvents })
+    const deliveryLedger = buildDwmWebhookDeliveryLedger({ deliveries, auditEvents })
+    const attemptsByDestination = new Map<string, typeof deliveryLedger>()
+    for (const attempt of deliveryLedger) {
+        if (!attempt.destinationId) continue
+        const attempts = attemptsByDestination.get(attempt.destinationId) || []
+        attempts.push(attempt)
+        attemptsByDestination.set(attempt.destinationId, attempts)
+    }
+    const destinationReadiness = destinationContracts.map((destination) => {
+        const attempts = (attemptsByDestination.get(destination.id) || [])
+            .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
+        const latestAttempt = attempts[0] || null
+        const blockers = destinationReadinessBlockers({ destination, latestAttempt, liveDeliveryEnabled })
+        const ready = blockers.filter(blocker => blocker !== 'live_delivery_disabled').length === 0
+        const retryState = latestAttempt
+            ? {
+                retryable: latestAttempt.retryable,
+                nextRetryAt: latestAttempt.nextRetryAt,
+                errorClass: latestAttempt.errorClass,
+                reason: latestAttempt.retryReason,
+                attemptCount: latestAttempt.attemptCount,
+            }
+            : { retryable: false, nextRetryAt: null, errorClass: null, reason: 'no_attempts', attemptCount: 0 }
+
+        return {
+            destinationId: destination.id,
+            orgId: destination.orgId,
+            type: destination.type,
+            label: destination.label,
+            status: destination.status,
+            enabled: destination.enabled,
+            ready,
+            readiness: ready ? 'ready' : latestAttempt?.retryable ? 'retrying' : destination.enabled ? 'blocked' : 'disabled',
+            redactedEndpoint: destination.redactedDestination,
+            lastTest: destination.lastTest,
+            lastDelivery: destination.lastDelivery,
+            retryState,
+            failureClass: retryState.errorClass,
+            blockers,
+            idempotencyCoverage: idempotencyCoverage(attempts),
+            recentAttempts: attempts.slice(0, 5),
+            auditEventIds: destination.auditEventIds,
+            latestAuditEventId: destination.latestAuditEventId,
+        }
+    })
+    const blockers = [...new Set(destinationReadiness.flatMap(destination => destination.blockers))]
+    const recentAttempts = [...deliveryLedger]
+        .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
+        .slice(0, 10)
+
+    return {
+        schemaVersion: 'dwm.webhook.readiness.v1',
+        liveDeliveryEnabled,
+        destinationCount: destinationReadiness.length,
+        activeDestinationCount: destinationReadiness.filter(destination => destination.enabled).length,
+        readyDestinationCount: destinationReadiness.filter(destination => destination.ready).length,
+        disabledDestinationCount: destinationReadiness.filter(destination => !destination.enabled).length,
+        retryScheduledCount: destinationReadiness.filter(destination => destination.retryState.retryable).length,
+        failedDestinationCount: destinationReadiness.filter(destination => destination.failureClass && !destination.retryState.retryable).length,
+        blockers,
+        destinations: destinationReadiness,
+        recentAttempts,
+        idempotencyCoverage: idempotencyCoverage(deliveryLedger),
+    }
 }
 
 export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPublic) {
@@ -1624,6 +1702,38 @@ function retryDelayMs(attemptCount: number) {
     return delays[Math.min(Math.max(1, attemptCount), delays.length) - 1]
 }
 
+function destinationReadinessBlockers({
+    destination,
+    latestAttempt,
+    liveDeliveryEnabled,
+}: {
+    destination: ReturnType<typeof buildDwmWebhookDestinationContracts>[number]
+    latestAttempt: ReturnType<typeof buildDwmWebhookDeliveryLedger>[number] | null
+    liveDeliveryEnabled: boolean
+}) {
+    const blockers = []
+    if (!destination.enabled) blockers.push('destination_disabled')
+    if (!destination.lastTest.requestId) blockers.push('test_delivery_missing')
+    if (destination.lastTest.status === 'failed') blockers.push('test_delivery_failed')
+    if (!liveDeliveryEnabled) blockers.push('live_delivery_disabled')
+    if (latestAttempt?.retryable) blockers.push('retry_scheduled')
+    if (latestAttempt?.status === 'failed' && !latestAttempt.retryable) blockers.push('last_delivery_failed')
+    if (latestAttempt?.status === 'skipped' && latestAttempt.errorClass !== 'live_delivery_disabled') blockers.push('last_delivery_skipped')
+    return [...new Set(blockers)]
+}
+
+function idempotencyCoverage(attempts: Array<{ idempotencyKey?: string | null }>) {
+    const keys = attempts.map(attempt => clean(attempt.idempotencyKey)).filter(Boolean)
+    const groups = new Map<string, number>()
+    for (const key of keys) groups.set(key, (groups.get(key) || 0) + 1)
+    return {
+        attemptCount: attempts.length,
+        coveredAttemptCount: keys.length,
+        covered: attempts.length === 0 || keys.length === attempts.length,
+        duplicateKeyCount: [...groups.values()].filter(count => count > 1).length,
+    }
+}
+
 function firstClean(...values: unknown[]) {
     for (const value of values) {
         const candidate = clean(value)
@@ -1696,6 +1806,10 @@ function redactDeliveryEvidenceText(value: string) {
         .replace(/(api\/webhooks\/[^/\s"']+\/)[^/\s"']+/gi, '$1...')
         .replace(/([?&](?:token|secret|password|key|credential)=)[^&\s"']+/gi, '$1[redacted]')
         .replace(/((?:token|secret|password|credential)\s*[:=]\s*)[^,\s"'}]+/gi, '$1[redacted]')
+}
+
+function redactNullableDeliveryText(value: string | null) {
+    return value ? redactDeliveryEvidenceText(value) : null
 }
 
 function clean(value: unknown) {
