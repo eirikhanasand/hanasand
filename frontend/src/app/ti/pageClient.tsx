@@ -1,7 +1,7 @@
 'use client'
 
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
-import { actorGeoProfile, victimObservationsFor } from '@/utils/ti/actorProfile'
+import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
 import { countryCentroids } from '@/utils/monitoring/geo'
@@ -9,7 +9,7 @@ import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WID
 import mapData from '@parent/public/world.json'
 import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
 
 export default function TiPageClient({ initialQuery, initialResult }: { initialQuery: string; initialResult: TiSearchResponse | null }) {
@@ -1527,8 +1527,24 @@ function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; a
     const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
     const [selectedCode, setSelectedCode] = useState(geo.points[0]?.code ?? '')
     const dragRef = useRef<{ x: number, y: number, viewBox: ViewBox } | null>(null)
+    const pointByCode = useMemo(() => new Map(geo.points.map(point => [point.code, point])), [geo.points])
+    const selectedPoint = geo.points.find(point => point.code === selectedCode) ?? geo.points[0]
+    const focusCountry = useCallback((code: string) => {
+        const coords = countryCentroids[code]
+        setSelectedCode(code)
+        if (coords) setViewBox(getCountryFocusView(coords))
+    }, [])
     const mapPaths = useMemo(() => mapData.features.map((feature, index) => {
         let d = ''
+        const code = countryCodeForMapFeature(feature.properties?.name)
+        const point = code ? pointByCode.get(code) : undefined
+        const active = Boolean(point && selectedPoint?.code === point.code)
+        const fillClass = point
+            ? point.role === 'operator'
+                ? active ? 'fill-[#6d28d9]' : 'fill-[#8b5cf6]'
+                : active ? 'fill-[#b42318]' : 'fill-[#f04438]'
+            : 'fill-[#e9eff7]'
+        const strokeClass = point ? 'stroke-white stroke-[0.9]' : 'stroke-[#c9d5e6] stroke-[0.55]'
 
         function drawRing(ring: number[][]) {
             return ring.reduce((path, point, pointIndex) => {
@@ -1553,11 +1569,20 @@ function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; a
             <path
                 key={`${feature.properties?.name || 'country'}-${index}`}
                 d={d}
-                className='fill-[#e9eff7] stroke-[#c9d5e6] stroke-[0.55] transition-colors hover:fill-[#dce7f5]'
+                role={point ? 'button' : undefined}
+                tabIndex={point ? 0 : undefined}
+                aria-label={point ? `${point.label}: ${point.role === 'operator' ? 'reported operator origin' : 'reported victim or target country'}` : undefined}
+                onClick={point ? () => focusCountry(point.code) : undefined}
+                onKeyDown={point ? (event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
+                    focusCountry(point.code)
+                } : undefined}
+                className={`${fillClass} ${strokeClass} transition-colors ${point ? 'cursor-pointer hover:brightness-105 focus:outline-none' : 'hover:fill-[#dce7f5]'}`}
+                opacity={point ? active ? '0.92' : '0.68' : '1'}
             />
         )
-    }), [])
-    const selectedPoint = geo.points.find(point => point.code === selectedCode) ?? geo.points[0]
+    }), [focusCountry, pointByCode, selectedPoint?.code])
 
     useEffect(() => {
         if (!geo.points.length) return
@@ -1565,12 +1590,6 @@ function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; a
             setSelectedCode(geo.points[0]?.code ?? '')
         }
     }, [geo.points, selectedCode])
-
-    function focusCountry(code: string) {
-        const coords = countryCentroids[code]
-        setSelectedCode(code)
-        if (coords) setViewBox(getCountryFocusView(coords))
-    }
 
     return (
         <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#f8fafc]'>
@@ -1589,7 +1608,7 @@ function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; a
                     </span>
                 </div>
                 <div className='absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-lg border border-[#dfe5ee] bg-white/90 p-1 shadow-sm backdrop-blur'>
-                    <MapZoomButton label='-' onClick={() => setViewBox((current) => zoomViewBox(current, 1.18, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
+                    <MapZoomButton label='−' onClick={() => setViewBox((current) => zoomViewBox(current, 1.18, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
                     <MapZoomButton label='Reset' wide onClick={() => setViewBox(INITIAL_VIEWBOX)} />
                     <MapZoomButton label='+' onClick={() => setViewBox((current) => zoomViewBox(current, 0.84, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
                 </div>
@@ -1622,7 +1641,7 @@ function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; a
                     }}
                 >
                     <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} fill='#ffffff' />
-                    <g>{mapPaths}</g>
+                    <g className='opacity-95'>{mapPaths}</g>
                     {geo.flows.map(flow => {
                         const from = countryCentroids[flow.from.code]
                         const to = countryCentroids[flow.to.code]
@@ -1652,10 +1671,10 @@ function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; a
                         const [x, y] = project(coords)
                         const active = selectedPoint?.code === point.code
                         const color = point.role === 'operator' ? '#7c3aed' : '#d92d20'
-                        const radius = point.role === 'operator' ? 7 : 5 + Math.min(6, point.count * 2)
+                        const radius = point.role === 'operator' ? 5 : 4 + Math.min(5, point.count * 1.5)
                         return (
                             <g key={`${point.role}-${point.code}`} onClick={() => focusCountry(point.code)} className='cursor-pointer'>
-                                <circle cx={x} cy={y} r={radius + 10} fill={color} opacity={active ? '0.18' : '0.09'} />
+                                <circle cx={x} cy={y} r={radius + 9} fill={color} opacity={active ? '0.16' : '0.08'} />
                                 <circle cx={x} cy={y} r={radius} fill={color} opacity='0.92' stroke='#ffffff' strokeWidth='1.5' />
                                 <circle cx={x} cy={y} r='2' fill='#ffffff' />
                                 <text
@@ -1700,6 +1719,21 @@ function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; a
             ) : null}
         </div>
     )
+}
+
+function countryCodeForMapFeature(name: string | undefined) {
+    if (!name) return null
+    const normalized = name.trim().toLowerCase()
+    const mapped = mapFeatureNameToCode[normalized]
+    if (mapped) return mapped
+    const country = countryFromValue(normalized)
+    return country?.code ?? null
+}
+
+const mapFeatureNameToCode: Record<string, string> = {
+    england: 'GB',
+    russia: 'RU',
+    usa: 'US',
 }
 
 function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnType<typeof actorGeoProfile>['points'][number]; active: boolean; handoff?: TiActionabilityModel['geographyHandoffs'][number]; onFocus: () => void }) {
