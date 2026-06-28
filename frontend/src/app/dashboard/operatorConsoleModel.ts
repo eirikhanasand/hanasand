@@ -1,4 +1,5 @@
-import type { WorkbenchAction, WorkbenchCase, WorkbenchEvidence, WorkbenchTimelineItem, WorkbenchWorkflowStep } from './ti/workbench/workbenchClient'
+import type { PublicTiHandoffDecodeResult } from '@/utils/ti/actorWorkbench'
+import type { WorkbenchAction, WorkbenchCase, WorkbenchEvidence, WorkbenchHandoffAction, WorkbenchPublicTiHandoff, WorkbenchTimelineItem, WorkbenchWorkflowStep } from './ti/workbench/workbenchClient'
 
 export type OperatorScope = {
     tenantId: string
@@ -106,6 +107,145 @@ export type DwmDeliveryItem = {
     error?: string
 }
 
+export function buildPublicTiHandoffCase(input: {
+    decode: PublicTiHandoffDecodeResult | null
+    scope: OperatorScope
+    organizationState: DwmOrganizationState
+    watchlists: DwmWatchlistSummary[]
+    operations: DwmOperationsSnapshot | null
+    liveAlertCount: number
+}): WorkbenchCase[] {
+    if (!input.decode) return []
+    const now = new Date().toISOString()
+    if (!input.decode.ok) {
+        return [publicTiHandoffCase({
+            handoff: {
+                decodeStatus: 'blocked',
+                decodeError: input.decode.message,
+                missing: input.decode.reasonCodes,
+                blockers: [{ code: input.decode.code, detail: input.decode.message }],
+                sourceRequests: [],
+            },
+            title: 'Public TI handoff blocked',
+            subtitle: input.decode.message,
+            severity: 'high',
+            status: input.decode.code,
+            priority: 520,
+            confidence: 45,
+            updatedAt: now,
+            evidence: [{
+                id: 'ev_public_ti_decode',
+                sourceName: 'Public TI handoff decoder',
+                sourceFamily: 'authenticated bridge',
+                captureMode: 'url payload',
+                redactionState: 'customer safe',
+                contentHash: input.decode.code,
+                excerpt: input.decode.message,
+                observedAt: now,
+                provenance: 'decodePublicTiHandoffPayload',
+                confidence: 45,
+            }],
+            nextTasks: ['Copy the exact handoff payload or return to the public TI artifact and export a fresh authenticated bridge link.', 'Do not mutate org watchlists, cases, alerts, or enrichment until payload validation succeeds.'],
+            relatedLinks: [{ href: '/ti', label: 'Public TI' }],
+        })]
+    }
+
+    const payload = input.decode.payload
+    const organization = input.organizationState.selectedOrganization
+    const orgMissing = payload.orgRequired && !organization
+    const sourceBlocked = payload.sourceRequired && !input.operations
+    const watchTerms = payload.artifact.watchlistTerms || []
+    const watchlistCovered = watchTerms.some(term => input.watchlists.some(watchlist => (watchlist.terms || []).some(candidate => candidate.value.toLowerCase() === term.value.toLowerCase())))
+    const missing = [
+        ...payload.missing,
+        ...(orgMissing ? ['Selected organization context from GET /api/organizations'] : []),
+        ...(sourceBlocked ? ['DWM source state from /api/dwm/operations'] : []),
+    ]
+    const severity: WorkbenchCase['severity'] = orgMissing || sourceBlocked || payload.stale || missing.length ? 'high' : 'medium'
+    const updatedAt = payload.generatedAt || now
+    const selectedMissing = payload.selectedPayload.missing || []
+    const handoff: WorkbenchPublicTiHandoff = {
+        decodeStatus: 'ready',
+        action: input.decode.action as WorkbenchHandoffAction,
+        artifactId: payload.artifactId,
+        query: payload.query,
+        generatedAt: payload.generatedAt,
+        orgRequired: payload.orgRequired,
+        sourceRequired: payload.sourceRequired,
+        stale: payload.stale,
+        missing,
+        blockers: payload.blockers,
+        sourceRequests: payload.sourceRequests,
+        artifact: payload.artifact,
+        selectedPayload: payload.selectedPayload,
+        actionPayloads: payload.actionPayloads,
+    }
+
+    return [publicTiHandoffCase({
+        handoff,
+        title: `Public TI: ${payload.artifact.label || payload.query}`,
+        subtitle: selectedMissing.length ? selectedMissing.join('; ') : `${actionLabel(input.decode.action)} for ${payload.query}.`,
+        severity,
+        status: orgMissing ? 'org_required' : payload.stale ? 'stale_evidence' : selectedMissing.length ? 'blocked_dependencies' : 'ready_for_operator',
+        priority: 540,
+        confidence: typeof payload.artifact.confidence === 'number' ? payload.artifact.confidence : 72,
+        updatedAt,
+        evidence: publicTiEvidence(payload, now),
+        timeline: [
+            { id: 'public_ti_generated', at: payload.generatedAt || now, title: 'Public TI handoff generated', body: `${payload.query} exported ${actionLabel(input.decode.action)}.` },
+            { id: 'public_ti_org_gate', at: now, title: organization ? 'Organization context loaded' : 'Organization context required', body: organization ? `${organization.name} (${organization.id}) is available for explicit mutations.` : 'No selected organization was returned; mutations are blocked until org context exists.' },
+            { id: 'public_ti_alert_state', at: input.operations?.latestRun?.updatedAt || now, title: input.liveAlertCount ? 'Alert generation loaded' : 'Alert generation not proven', body: input.liveAlertCount ? `${input.liveAlertCount} live DWM alert(s) loaded for this scope.` : input.operations ? 'Source state loaded, but no live DWM alerts are loaded yet.' : 'Source state unavailable from /api/dwm/operations.' },
+        ],
+        workflowPath: [
+            {
+                id: 'public_ti_path_org',
+                label: 'Organization',
+                status: organization ? 'ready' : 'blocked',
+                owner: organization ? 'operator' : 'backend-foundation',
+                source: 'GET /api/organizations',
+                entityId: organization?.id,
+                href: organization ? `/api/organizations/${encodeURIComponent(organization.id)}/members` : '/api/organizations',
+                detail: organization ? `Mutations will use ${organization.name}.` : 'Explicit organization context is required before persistence.',
+            },
+            {
+                id: 'public_ti_path_watchlist',
+                label: 'Shared watchlist',
+                status: watchlistCovered ? 'ready' : watchTerms.length ? 'needs_action' : 'blocked',
+                owner: 'operator',
+                source: 'POST /api/dwm/watchlists',
+                entityId: watchTerms.map(term => term.value).join(', ') || undefined,
+                href: '/api/dwm/watchlists',
+                detail: watchlistCovered ? 'Selected artifact term is already covered by a loaded watchlist.' : watchTerms.length ? 'Add selected artifact terms to an organization watchlist.' : 'No watchlist terms came with this artifact.',
+            },
+            {
+                id: 'public_ti_path_alerts',
+                label: 'Alert generation',
+                status: input.operations ? input.liveAlertCount ? 'ready' : 'needs_action' : 'blocked',
+                owner: 'analyst',
+                source: 'GET /api/dwm/operations + POST /api/dwm/alerts/rebuild',
+                href: '/api/dwm/alerts',
+                detail: input.operations ? `${input.operations.counts.activeSourceCount}/${input.operations.counts.sourceCount} active sources; ${input.liveAlertCount} saved alerts.` : 'Source state unavailable.',
+            },
+            {
+                id: 'public_ti_path_source',
+                label: 'Source pack',
+                status: payload.sourceRequired ? 'needs_action' : 'ready',
+                owner: 'source-ops',
+                source: 'public TI sourceRequests',
+                href: '/dashboard/ti/sources',
+                detail: payload.sourceRequests.length ? `${payload.sourceRequests.length} source request(s) require review.` : 'No additional source request was included.',
+            },
+        ],
+        nextTasks: nextPublicTiTasks({ orgMissing, sourceBlocked, stale: payload.stale, watchTerms: watchTerms.length, selectedMissing, action: input.decode.action }),
+        relatedLinks: [
+            { href: '/ti', label: 'Public TI' },
+            { href: '/dashboard/dwm', label: 'DWM console' },
+            { href: '/dashboard/ti/sources', label: 'Source ops' },
+            { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' },
+        ],
+    })]
+}
+
 export function buildOrgOperatingContext(input: {
     backendConfigured: boolean
     scope: OperatorScope
@@ -171,10 +311,10 @@ export function buildOrgOperatingContext(input: {
             { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' },
             { href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Webhooks API' },
             { href: '/api/dwm/watchlists', label: 'Watchlists API' },
-            { href: '/dashboard/dwm', label: 'DWM setup' },
+            { href: '/dashboard/dwm', label: 'DWM console' },
         ] : [
             { href: '/api/organizations', label: 'Organizations API' },
-            { href: '/dashboard/dwm', label: 'DWM setup' },
+            { href: '/dashboard/dwm', label: 'DWM console' },
         ],
         createWatchlistAction: input.backendConfigured && organization ? {
             id: 'create_shared_watchlist_term',
@@ -188,6 +328,107 @@ export function buildOrgOperatingContext(input: {
             },
         } : undefined,
     }
+}
+
+function publicTiHandoffCase(input: {
+    handoff: WorkbenchPublicTiHandoff
+    title: string
+    subtitle: string
+    severity: WorkbenchCase['severity']
+    status: string
+    priority: number
+    confidence: number
+    updatedAt: string
+    evidence: WorkbenchEvidence[]
+    timeline?: WorkbenchTimelineItem[]
+    workflowPath?: WorkbenchWorkflowStep[]
+    nextTasks: string[]
+    relatedLinks: WorkbenchCase['relatedLinks']
+}): WorkbenchCase {
+    const artifact = input.handoff.artifact
+    return {
+        id: `public_ti_${input.handoff.artifactId || input.status}`,
+        kind: 'public_ti_handoff',
+        queue: 'Public TI handoff',
+        title: input.title,
+        subtitle: input.subtitle,
+        severity: input.severity,
+        status: input.status,
+        priority: input.priority,
+        confidence: input.confidence,
+        owner: input.handoff.decodeStatus === 'blocked' ? 'operator' : input.handoff.orgRequired ? 'operator' : 'analyst',
+        createdAt: input.updatedAt,
+        updatedAt: input.updatedAt,
+        company: input.handoff.query || artifact?.label || 'Public TI',
+        matchedTerm: artifact?.watchlistTerms?.[0]?.value || artifact?.label || input.handoff.query || 'public-ti',
+        actor: artifact?.kind || 'public TI artifact',
+        sourceLabel: input.handoff.sourceRequests.length ? `${input.handoff.sourceRequests.length} source request(s)` : 'public TI bridge',
+        recommendedAction: input.handoff.decodeStatus === 'blocked' ? 'Export a valid authenticated public TI bridge payload before mutating operator data.' : 'Resolve org/source blockers, then add watchlist terms, rebuild alerts, open a case, or copy the exact handoff.',
+        routeLabel: actionLabel(input.handoff.action),
+        persistent: false,
+        evidence: input.evidence,
+        timeline: input.timeline || [],
+        nextTasks: input.nextTasks,
+        relatedLinks: input.relatedLinks,
+        workflowPath: input.workflowPath,
+        handoff: input.handoff,
+        missingDependency: input.handoff.missing[0],
+    }
+}
+
+function publicTiEvidence(payload: Extract<PublicTiHandoffDecodeResult, { ok: true }>['payload'], now: string): WorkbenchEvidence[] {
+    const artifactEvidence = (payload.artifact.evidence || []).slice(0, 4).map((excerpt, index) => ({
+        id: `ev_public_ti_artifact_${index}`,
+        sourceName: 'Public TI artifact',
+        sourceFamily: payload.artifact.kind || 'actor artifact',
+        captureMode: 'authenticated handoff',
+        redactionState: 'customer safe',
+        contentHash: `${payload.artifactId}:${index}`,
+        excerpt,
+        observedAt: payload.artifact.freshness || payload.generatedAt || now,
+        provenance: payload.artifact.provenance?.[index] || 'public TI selected artifact',
+        confidence: payload.artifact.confidence,
+    }))
+    const sourceEvidence = payload.sourceRequests.slice(0, 4).map((source, index) => ({
+        id: `ev_public_ti_source_${index}`,
+        sourceName: source.sourceName,
+        sourceFamily: 'source request',
+        captureMode: source.captureId ? 'capture reference' : 'source request',
+        redactionState: 'customer safe',
+        contentHash: source.captureId || source.provenance,
+        excerpt: source.missing.length ? `Missing: ${source.missing.join(', ')}` : source.provenance,
+        observedAt: payload.generatedAt || now,
+        provenance: source.provenance,
+        confidence: source.confidence,
+    }))
+    return [...artifactEvidence, ...sourceEvidence].length ? [...artifactEvidence, ...sourceEvidence] : [{
+        id: 'ev_public_ti_payload',
+        sourceName: 'Public TI handoff',
+        sourceFamily: 'authenticated bridge',
+        captureMode: 'url payload',
+        redactionState: 'customer safe',
+        contentHash: payload.artifactId,
+        excerpt: `${payload.query} exported ${actionLabel(payload.action)}.`,
+        observedAt: payload.generatedAt || now,
+        provenance: 'decodePublicTiHandoffPayload',
+        confidence: 70,
+    }]
+}
+
+function nextPublicTiTasks(input: { orgMissing: boolean, sourceBlocked: boolean, stale: boolean, watchTerms: number, selectedMissing: string[], action: string }) {
+    if (input.orgMissing) return ['Owner: operator. Create or select an organization before mutation.', 'Copy exact public TI handoff if the organization lane is not ready.', 'Return after org context loads and add watchlist or case from the handoff.']
+    if (input.sourceBlocked || input.stale) return ['Owner: source-ops. Attach fresh source/capture provenance before alert generation.', 'Review source health in /dashboard/ti/sources.', 'Copy exact handoff if source pack persistence is unavailable.']
+    if (!input.watchTerms) return ['Owner: analyst. Choose or add a watchlist term for this artifact.', 'Use enrichment before alert rebuild.', 'Copy exact handoff for source-ops if no customer term exists.']
+    if (input.selectedMissing.length) return [`Owner: operator. Resolve: ${input.selectedMissing.join('; ')}.`, 'Then run the selected handoff action.', 'Keep the handoff payload attached as audit context.']
+    return [`Owner: analyst. Run ${actionLabel(input.action)} from the action rail.`, 'Inspect generated alerts/case detail after refresh.', 'Test webhook before customer delivery.']
+}
+
+function actionLabel(action: string | undefined) {
+    if (action === 'create_watchlist') return 'create watchlist'
+    if (action === 'rebuild_alerts') return 'rebuild alerts'
+    if (action === 'open_case') return 'open case'
+    if (action === 'queue_enrichment') return 'queue enrichment'
+    return 'public TI handoff'
 }
 
 export function buildReadinessCases(input: {
@@ -227,7 +468,7 @@ export function buildReadinessCases(input: {
         readinessCase({
             id: 'setup_organization',
             kind: 'org_readiness',
-            queue: 'Organization setup',
+            queue: 'Org access',
             title: organization ? `${organization.name} organization active` : 'Create organization context',
             severity: organization ? 'medium' : 'high',
             status: organization ? 'org_active' : input.backendConfigured ? 'missing_organization' : 'backend_unconfigured',
@@ -256,7 +497,7 @@ export function buildReadinessCases(input: {
             actions: organization ? [] : [{ id: 'create_organization', label: 'Create org API', method: 'GET', href: '/api/organizations' }],
         }),
         readinessCase({
-            id: 'readiness_watchlist',
+            id: 'watchlist_terms',
             kind: 'watchlist_readiness',
             queue: 'Shared watchlists',
             title: activeWatchlists.length ? 'Shared watchlist active' : 'Create shared watchlist',
@@ -280,8 +521,8 @@ export function buildReadinessCases(input: {
                 provenance: 'GET/POST /api/dwm/watchlists',
                 confidence: input.backendConfigured ? 92 : 65,
             }],
-            timeline: [{ id: 'watchlist_readiness_at', at: activeWatchlists[0]?.updatedAt || now, title: activeWatchlists.length ? 'Watchlist loaded' : 'Watchlist required', body: activeWatchlists.length ? 'Watchlist data came from the DWM backend.' : 'Alert rebuild is blocked until watchlist terms exist.' }],
-            nextTasks: activeWatchlists.length ? [`Owner: operator. Watchlist IDs: ${activeWatchlists.map(item => item.id).join(', ')}.`, `Terms: ${watchlistTerms.length}. Rebuild alerts for ${input.scope.organizationId || input.scope.tenantId}.`, 'Open generated DWM alerts as analyst cases before delivery.'] : ['Owner: operator. Open DWM setup and save watchlist terms.', 'Run alert rebuild.', 'Confirm the watchlist has an organization owner.'],
+            timeline: [{ id: 'watchlist_state_at', at: activeWatchlists[0]?.updatedAt || now, title: activeWatchlists.length ? 'Watchlist loaded' : 'Watchlist required', body: activeWatchlists.length ? 'Watchlist data came from the DWM backend.' : 'Alert rebuild is blocked until watchlist terms exist.' }],
+            nextTasks: activeWatchlists.length ? [`Owner: operator. Watchlist IDs: ${activeWatchlists.map(item => item.id).join(', ')}.`, `Terms: ${watchlistTerms.length}. Rebuild alerts for ${input.scope.organizationId || input.scope.tenantId}.`, 'Open generated DWM alerts as analyst cases before delivery.'] : ['Owner: operator. Open DWM console and save watchlist terms.', 'Run alert rebuild.', 'Confirm the watchlist has an organization owner.'],
             relatedLinks: [{ href: '/dashboard/dwm', label: 'Edit watchlist' }, { href: '/api/dwm/watchlists', label: 'Watchlists API' }],
             workflowPath: path,
             actions: activeWatchlists.length ? [{
@@ -293,9 +534,9 @@ export function buildReadinessCases(input: {
             }] : [],
         }),
         readinessCase({
-            id: 'readiness_webhook',
+            id: 'delivery_route',
             kind: 'webhook_readiness',
-            queue: 'Webhook delivery',
+            queue: 'Delivery route',
             title: orgWebhooks.length ? 'Organization webhook destination active' : webhookWatchlists.length ? 'Watchlist webhook destination configured' : 'Configure webhook destination',
             severity: hasWebhookDestination && !deliveryFailures && !orgWebhookFailures ? 'medium' : 'high',
             status: hasWebhookDestination ? 'destination_ready' : 'missing_webhook',
@@ -319,9 +560,9 @@ export function buildReadinessCases(input: {
                 provenance: orgWebhooks.length ? 'GET /api/organizations/:id/webhooks -> /v1/organizations/:id/webhooks' : 'GET /api/dwm/webhooks/deliveries',
                 confidence: input.backendConfigured ? 90 : 64,
             }],
-            timeline: [{ id: 'webhook_readiness_at', at: orgWebhooks[0]?.lastTestedAt || latestDelivery?.attemptedAt || now, title: hasWebhookDestination ? 'Webhook destination loaded' : 'Webhook destination required', body: orgWebhooks[0]?.lastTestStatus ? `${orgWebhooks[0].id} last test ${orgWebhooks[0].lastTestStatus}.` : latestDelivery ? `${latestDelivery.id}: ${latestDelivery.status}${latestDelivery.error ? `: ${latestDelivery.error}` : ''}` : 'No delivery destination is configured for organization or watchlist routing.' }],
+            timeline: [{ id: 'webhook_route_at', at: orgWebhooks[0]?.lastTestedAt || latestDelivery?.attemptedAt || now, title: hasWebhookDestination ? 'Webhook destination loaded' : 'Webhook destination required', body: orgWebhooks[0]?.lastTestStatus ? `${orgWebhooks[0].id} last test ${orgWebhooks[0].lastTestStatus}.` : latestDelivery ? `${latestDelivery.id}: ${latestDelivery.status}${latestDelivery.error ? `: ${latestDelivery.error}` : ''}` : 'No delivery destination is configured for organization or watchlist routing.' }],
             nextTasks: hasWebhookDestination ? [`Owner: operator. Destination IDs: ${orgWebhooks.map(item => item.id).join(', ') || webhookWatchlists.map(item => item.webhookDestinationId || item.id).join(', ')}.`, 'Run a webhook test.', 'Send queued alerts and inspect delivery failures.'] : ['Owner: operator. Create a Discord or generic organization webhook destination.', 'Run webhook test.', 'Send queued alerts and inspect delivery failures.'],
-            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks API' }, { href: '/dashboard/dwm', label: 'Configure watchlist webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery setup' }] : [{ href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery setup' }],
+            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks API' }, { href: '/dashboard/dwm', label: 'Configure watchlist webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' }] : [{ href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' }],
             workflowPath: path,
             deliveryEvidence: input.deliveries.map(delivery => ({
                 id: delivery.id,
@@ -339,7 +580,7 @@ export function buildReadinessCases(input: {
             actions: webhookActions(input.scope, organization, orgWebhooks, hasWebhookDestination),
         }),
         readinessCase({
-            id: 'readiness_source_coverage',
+            id: 'source_coverage',
             kind: 'source_readiness',
             queue: 'Source coverage',
             title: sourceCount ? 'Source coverage loaded' : 'Connect source coverage',
@@ -361,13 +602,13 @@ export function buildReadinessCases(input: {
                 provenance: 'GET /api/dwm/operations',
                 confidence: input.operations ? 88 : 60,
             }],
-            timeline: [{ id: 'source_readiness_at', at: input.operations?.latestRun?.updatedAt || now, title: input.operations?.latestRun ? 'Latest collection run' : 'Source snapshot missing', body: input.operations?.latestRun ? `${input.operations.latestRun.status}: ${input.operations.latestRun.captureCount} captures.` : 'Source coverage cannot be verified without TI scraper backend.' }],
+            timeline: [{ id: 'source_health_at', at: input.operations?.latestRun?.updatedAt || now, title: input.operations?.latestRun ? 'Latest collection run' : 'Source snapshot missing', body: input.operations?.latestRun ? `${input.operations.latestRun.status}: ${input.operations.latestRun.captureCount} captures.` : 'Source coverage cannot be verified without TI scraper backend.' }],
             nextTasks: [`Owner: source-ops. Active sources: ${activeSources}/${sourceCount}.`, 'Approve bounded public Telegram coverage.', 'Approve metadata-only dark web source coverage.'],
             relatedLinks: [{ href: '/dashboard/dwm', label: 'Run collection' }, { href: '/dashboard/ti/sources', label: 'Review TI sources' }],
             workflowPath: path,
         }),
         readinessCase({
-            id: 'readiness_alert_generation',
+            id: 'alert_generation',
             kind: 'alert_readiness',
             queue: 'Alert generation',
             title: input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
@@ -389,7 +630,7 @@ export function buildReadinessCases(input: {
                 provenance: 'GET /api/dwm/alerts + POST /api/dwm/alerts/rebuild',
                 confidence: input.liveAlertCount ? 90 : 58,
             }],
-            timeline: [{ id: 'alert_readiness_at', at: now, title: input.liveAlertCount ? 'Alerts loaded' : 'Alert generation not proven', body: input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
+            timeline: [{ id: 'alert_generation_at', at: now, title: input.liveAlertCount ? 'Alerts loaded' : 'Alert generation not proven', body: input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
             nextTasks: input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
             relatedLinks: [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: '/api/dwm/alerts', label: 'Alerts API' }],
             workflowPath: path,
@@ -441,8 +682,8 @@ function readinessCase(input: {
         updatedAt,
         company: 'Hanasand DWM',
         matchedTerm: input.queue,
-        actor: 'Operations setup',
-        sourceLabel: input.evidence[0]?.sourceName || 'Dashboard setup',
+        actor: 'Operations control',
+        sourceLabel: input.evidence[0]?.sourceName || 'Dashboard control',
         recommendedAction: input.recommendedAction,
         routeLabel: input.queue.toLowerCase(),
         persistent: input.kind !== 'org_readiness',

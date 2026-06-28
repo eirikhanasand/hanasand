@@ -46,6 +46,56 @@ export type WorkbenchAction = {
     disabledReason?: string
 }
 
+export type WorkbenchHandoffAction = 'create_watchlist' | 'rebuild_alerts' | 'open_case' | 'queue_enrichment'
+
+export type WorkbenchHandoffPayload = {
+    schemaVersion?: string
+    query?: string
+    generatedAt?: string
+    route?: string
+    method?: 'POST'
+    endpoint?: string
+    backedRoute?: string
+    blocked?: boolean
+    missing?: string[]
+    body?: Record<string, unknown>
+    provenance?: Array<{ sourceName?: string, provenance?: string, captureId?: string, confidence?: number }>
+}
+
+export type WorkbenchPublicTiHandoff = {
+    decodeStatus: 'ready' | 'blocked'
+    decodeError?: string
+    action?: WorkbenchHandoffAction
+    artifactId?: string
+    query?: string
+    generatedAt?: string
+    orgRequired?: boolean
+    sourceRequired?: boolean
+    stale?: boolean
+    missing: string[]
+    blockers: Array<{ code: string, detail: string }>
+    sourceRequests: Array<{ sourceName: string, provenance: string, captureId?: string, confidence?: number, missing: string[] }>
+    artifact?: {
+        id?: string
+        kind?: string
+        label?: string
+        confidence?: number
+        freshness?: string
+        evidence?: string[]
+        provenance?: string[]
+        watchlistTerms?: Array<{ kind?: string, value?: string, notes?: string }>
+        enrichmentTasks?: string[]
+        readiness?: { state?: string, label?: string, blockers?: string[] }
+    }
+    selectedPayload?: WorkbenchHandoffPayload
+    actionPayloads?: {
+        watchlist?: WorkbenchHandoffPayload
+        alertRebuild?: WorkbenchHandoffPayload
+        case?: WorkbenchHandoffPayload
+        enrichment?: WorkbenchHandoffPayload
+    }
+}
+
 export type WorkbenchCaseMutationAction = 'assign' | 'note' | 'escalate' | 'suppress' | 'close' | 'reopen' | 'false_positive'
 
 export type WorkbenchCaseMutationPayload = {
@@ -145,7 +195,7 @@ export type WorkbenchOrgContext = {
 
 export type WorkbenchCase = {
     id: string
-    kind: 'dwm_alert' | 'ti_domain' | 'source_capture' | 'org_readiness' | 'watchlist_readiness' | 'webhook_readiness' | 'source_readiness' | 'alert_readiness'
+    kind: 'dwm_alert' | 'ti_domain' | 'source_capture' | 'org_readiness' | 'watchlist_readiness' | 'webhook_readiness' | 'source_readiness' | 'alert_readiness' | 'public_ti_handoff'
     queue: string
     title: string
     subtitle: string
@@ -172,6 +222,7 @@ export type WorkbenchCase = {
     caseDetailHref?: string
     deliveryEvidence?: WorkbenchDeliveryEvidence[]
     missingDependency?: string
+    handoff?: WorkbenchPublicTiHandoff
 }
 
 type QueueFilter = 'all' | 'critical' | 'high' | 'persistent' | 'evidence'
@@ -326,6 +377,10 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
 
     async function runWorkbenchAction(item: WorkbenchCase, action: WorkbenchAction, note: string) {
         if (action.method === 'GET') return
+        if (action.disabledReason) {
+            setMessage({ ok: false, text: action.disabledReason })
+            return
+        }
         await runPersistentAction(`action:${item.id}:${action.id}`, async () => {
             const body = {
                 ...(action.body || {}),
@@ -343,6 +398,20 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
             return actionResultMessage(action, payload)
         })
+    }
+
+    async function copyHandoffPayload(item: WorkbenchCase, payload?: unknown) {
+        const target = payload || item.handoff || item.actions?.map(action => action.body).filter(Boolean)
+        if (!target) {
+            setMessage({ ok: false, text: 'No handoff payload is available to copy for the selected item.' })
+            return
+        }
+        try {
+            await navigator.clipboard.writeText(JSON.stringify(target, null, 2))
+            setMessage({ ok: true, text: 'Exact handoff payload copied.', source: 'session_local' })
+        } catch (error) {
+            setMessage({ ok: false, text: error instanceof Error ? error.message : 'Unable to copy handoff payload.' })
+        }
     }
 
     async function runBackedCaseMutation(item: WorkbenchCase, mutation: CaseMutationInput) {
@@ -578,6 +647,14 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 onUpdateWatchlist={upsertWatchlist}
                             />
 
+                            <OperatorActionRail
+                                selected={selected}
+                                orgContext={orgContext}
+                                busyAction={busyAction}
+                                onRunAction={(action) => selected && runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
+                                onCopyPayload={(payload) => selected && copyHandoffPayload(selected, payload)}
+                            />
+
                             <section className='rounded-lg border border-[#e0e5ed] bg-white'>
                                 <div className='border-b border-[#eef1f5] px-4 py-3'>
                                     <h3 className='text-sm font-semibold text-[#171a21]'>Queue and links</h3>
@@ -652,7 +729,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, invit
                 </div>
 
                 {blockedReason && (
-                    <InspectionNotice tone='blocked' title='Rollout blocker' body={blockedReason} />
+                    <InspectionNotice tone='blocked' title='Blocked' body={blockedReason} />
                 )}
 
                 <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
@@ -810,6 +887,266 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, invit
             </div>
         </section>
     )
+}
+
+function OperatorActionRail({ selected, orgContext, busyAction, onRunAction, onCopyPayload }: {
+    selected?: WorkbenchCase
+    orgContext?: WorkbenchOrgContext
+    busyAction: string | null
+    onRunAction: (action: WorkbenchAction) => void | Promise<void>
+    onCopyPayload: (payload?: unknown) => void | Promise<void>
+}) {
+    const rows = actionRailRows(selected, orgContext)
+
+    return (
+        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
+            <div className='border-b border-[#eef1f5] px-4 py-3'>
+                <h3 className='text-sm font-semibold text-[#171a21]'>Operator actions</h3>
+                <p className='mt-0.5 text-xs text-[#667085]'>Selected blocker to concrete route, mutation, or exact handoff copy.</p>
+            </div>
+            <div className='grid gap-2 p-3'>
+                {rows.map(row => (
+                    <div key={row.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='text-xs font-semibold uppercase text-[#667085]'>{row.label}</p>
+                                <p className='mt-1 text-xs leading-5 text-[#596170]'>{row.detail}</p>
+                            </div>
+                            <span className={workflowStatusClass(row.disabledReason ? 'blocked' : row.tone)}>{row.disabledReason ? 'blocked' : label(row.tone)}</span>
+                        </div>
+                        <div className='mt-3 flex flex-wrap gap-2'>
+                            {row.href ? (
+                                <Link href={row.href} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                    Open
+                                    <ExternalLink className='h-3.5 w-3.5' />
+                                </Link>
+                            ) : null}
+                            {row.action ? (
+                                <button
+                                    type='button'
+                                    disabled={Boolean(busyAction) || Boolean(row.disabledReason || row.action.disabledReason)}
+                                    title={row.disabledReason || row.action.disabledReason}
+                                    onClick={() => onRunAction(row.action as WorkbenchAction)}
+                                    className='inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                                >
+                                    {busyAction === `action:${selected?.id}:${row.action.id}` ? 'Running...' : row.action.label}
+                                </button>
+                            ) : null}
+                            {row.copyPayload !== undefined ? (
+                                <button
+                                    type='button'
+                                    disabled={Boolean(busyAction)}
+                                    onClick={() => onCopyPayload(row.copyPayload)}
+                                    className='inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                                >
+                                    Copy handoff
+                                </button>
+                            ) : null}
+                            {!row.href && !row.action && row.copyPayload === undefined && (
+                                <button type='button' disabled title={row.disabledReason} className='inline-flex h-8 cursor-not-allowed items-center rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-2.5 text-xs font-semibold text-[#98a2b3]'>
+                                    Blocked
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </section>
+    )
+}
+
+export type OperatorActionRailRow = {
+    id: string
+    label: string
+    detail: string
+    tone: WorkbenchWorkflowStep['status']
+    href?: string
+    action?: WorkbenchAction
+    copyPayload?: unknown
+    disabledReason?: string
+}
+
+function actionRailRows(selected: WorkbenchCase | undefined, orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
+    if (!selected) return [{
+        id: 'select_case',
+        label: 'Select work',
+        detail: 'Choose a queue item before actions are available.',
+        tone: 'needs_action',
+    }]
+    if (selected.handoff) return handoffActionRailRows(selected, orgContext)
+
+    const rows: OperatorActionRailRow[] = []
+    const sourceCoverage = orgContext?.readiness.sourceCoverage
+    if (selected.caseDetailHref) {
+        rows.push({ id: 'open_case', label: 'Open selected case', detail: selected.caseDetailHref, tone: 'ready', href: selected.caseDetailHref })
+    } else if (selected.kind === 'dwm_alert') {
+        rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'No backed case ID is attached to this alert.', tone: 'blocked' })
+    }
+    const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
+    if (activeWebhook && orgContext?.organization) {
+        rows.push({
+            id: 'test_webhook',
+            label: 'Test webhook',
+            detail: `${activeWebhook.name} (${activeWebhook.id}) via /api/organizations/:id/webhooks/test.`,
+            tone: activeWebhook.lastTestStatus === 'failed' ? 'blocked' : 'ready',
+            action: {
+                id: 'test_org_webhook',
+                label: 'Test',
+                method: 'POST',
+                href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/webhooks/test`,
+                body: { webhookDestinationId: activeWebhook.id, dryRun: true },
+            },
+        })
+    } else {
+        rows.push({ id: 'configure_webhook', label: 'Configure webhook', detail: 'No active organization webhook destination is loaded.', tone: 'needs_action', href: '/dashboard/automations?setup=dwm' })
+    }
+    if (sourceCoverage) {
+        rows.push({
+            id: 'source_health',
+            label: 'Source health',
+            detail: `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources; ${sourceCoverage.watchlistMatchCount} watchlist matches.`,
+            tone: sourceCoverage.activeSourceCount ? 'ready' : 'blocked',
+            href: '/dashboard/ti/sources',
+        })
+    } else {
+        rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Source state unavailable from /api/dwm/operations.', tone: 'blocked', href: '/dashboard/ti/sources' })
+    }
+    const rebuildAction = selected.actions?.find(action => action.id === 'rebuild_alerts')
+    if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'POST /api/dwm/alerts/rebuild for the selected scope.', tone: 'ready', action: rebuildAction })
+    return rows.slice(0, 5)
+}
+
+function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
+    const handoff = selected.handoff as WorkbenchPublicTiHandoff
+    if (handoff.decodeStatus === 'blocked') {
+        return [{
+            id: 'malformed_public_ti_handoff',
+            label: 'Public TI handoff blocked',
+            detail: handoff.decodeError || 'The handoff payload could not be decoded.',
+            tone: 'blocked',
+            copyPayload: handoff,
+        }]
+    }
+
+    const orgMissing = !orgContext?.organization
+    const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
+    const sourceCoverage = orgContext?.readiness.sourceCoverage
+    const rows: OperatorActionRailRow[] = []
+    const watchlistPayload = handoff.actionPayloads?.watchlist || handoff.selectedPayload
+    const watchTerms = handoffTerms(handoff)
+    rows.push({
+        id: 'handoff_watchlist',
+        label: 'Add org watchlist term',
+        detail: watchTerms.length ? watchTerms.map(term => `${term.kind || inferTermKind(term.value)}:${term.value}`).join(', ') : 'No watchlist term was included in the public TI payload.',
+        tone: orgMissing || !watchTerms.length ? 'blocked' : 'ready',
+        action: {
+            id: 'public_ti_create_watchlist',
+            label: 'Add term',
+            method: 'POST',
+            href: '/api/dwm/watchlists',
+            body: {
+                ...scopeBody(orgContext),
+                name: typeof watchlistPayload?.body?.name === 'string' ? watchlistPayload.body.name : `${handoff.query || selected.title} watchlist`,
+                terms: watchTerms,
+                status: 'active',
+                webhookDestinationId: activeWebhook?.id,
+                publicTiHandoff: handoffEnvelope(handoff),
+            },
+            disabledReason: orgMissing ? 'Public TI handoff mutations require a selected organization from GET /api/organizations.' : !watchTerms.length ? 'The public TI payload has no watchlist term.' : undefined,
+        },
+        disabledReason: orgMissing ? 'Select or create an organization before mutating shared watchlists.' : undefined,
+    })
+    rows.push({
+        id: 'handoff_rebuild',
+        label: 'Rebuild alerts',
+        detail: sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources; ${orgContext?.readiness.liveAlertCount ?? 0} saved alerts loaded.` : 'Alert rebuild state unavailable from /api/dwm/operations.',
+        tone: orgMissing || !sourceCoverage || !orgContext?.readiness.activeWatchlistCount ? 'blocked' : 'ready',
+        action: {
+            id: 'public_ti_rebuild_alerts',
+            label: 'Rebuild',
+            method: 'POST',
+            href: '/api/dwm/alerts/rebuild',
+            body: { ...scopeBody(orgContext), publicTiHandoff: handoffEnvelope(handoff), watchTerms },
+            disabledReason: orgMissing
+                ? 'Public TI alert rebuild requires selected organization context.'
+                : !sourceCoverage ? 'Alert rebuild state unavailable from /api/dwm/operations.'
+                    : !orgContext?.readiness.activeWatchlistCount ? 'Create an active organization watchlist before rebuilding alerts.' : undefined,
+        },
+    })
+    const casePayload = handoff.actionPayloads?.case || handoff.selectedPayload
+    rows.push({
+        id: 'handoff_case',
+        label: 'Open selected case',
+        detail: handoff.missing.length ? handoff.missing.join('; ') : 'Create or reopen a backed analyst case from the handoff payload.',
+        tone: orgMissing || casePayload?.blocked ? 'blocked' : 'ready',
+        action: {
+            id: 'public_ti_open_case',
+            label: 'Open case',
+            method: 'POST',
+            href: '/api/cases',
+            body: { ...scopeBody(orgContext), ...(casePayload?.body || {}), sourceType: 'public_ti', sourceId: handoff.artifactId, publicTiHandoff: handoffEnvelope(handoff), reopen: true },
+            disabledReason: orgMissing ? 'Public TI case creation requires selected organization context.' : casePayload?.blocked ? (casePayload.missing || handoff.missing).join('; ') : undefined,
+        },
+        copyPayload: casePayload?.blocked ? handoff : undefined,
+    })
+    rows.push(activeWebhook && orgContext?.organization ? {
+        id: 'handoff_webhook',
+        label: 'Test webhook',
+        detail: `${activeWebhook.name} (${activeWebhook.id}); last test ${activeWebhook.lastTestStatus || 'not returned'}.`,
+        tone: activeWebhook.lastTestStatus === 'failed' ? 'blocked' : 'ready',
+        action: {
+            id: 'public_ti_test_org_webhook',
+            label: 'Test',
+            method: 'POST',
+            href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/webhooks/test`,
+            body: { webhookDestinationId: activeWebhook.id, dryRun: true, publicTiHandoff: handoffEnvelope(handoff) },
+        },
+    } : {
+        id: 'handoff_webhook_blocked',
+        label: 'Configure/test webhook',
+        detail: 'No active organization webhook destination is loaded.',
+        tone: 'needs_action',
+        href: '/dashboard/automations?setup=dwm',
+    })
+    rows.push({
+        id: 'handoff_source',
+        label: handoff.sourceRequired ? 'Request source pack' : 'Source health',
+        detail: sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources. ${handoff.sourceRequests.length} source request(s) in handoff.` : 'Source pack mutation API is not loaded here; copy exact handoff or open source ops.',
+        tone: sourceCoverage?.activeSourceCount ? 'ready' : 'blocked',
+        href: '/dashboard/ti/sources',
+        copyPayload: handoff.sourceRequired || !sourceCoverage ? handoff : undefined,
+    })
+    rows.push({ id: 'handoff_copy', label: 'Exact handoff', detail: `${handoff.action || 'public TI'} payload for ${handoff.artifact?.label || handoff.artifactId || selected.title}.`, tone: 'ready', copyPayload: handoff })
+    return rows
+}
+
+type HandoffTerm = { value: string, kind: string, notes?: string }
+
+function handoffTerms(handoff: WorkbenchPublicTiHandoff): HandoffTerm[] {
+    const fromArtifact = handoff.artifact?.watchlistTerms || []
+    const fromPayload = Array.isArray(handoff.actionPayloads?.watchlist?.body?.terms) ? handoff.actionPayloads?.watchlist?.body?.terms : []
+    return [...fromArtifact, ...fromPayload]
+        .flatMap((term): HandoffTerm[] => {
+            if (!term || typeof term !== 'object') return []
+            const value = 'value' in term ? String(term.value || '').trim() : ''
+            if (!value) return []
+            return [{
+                value,
+                kind: 'kind' in term && typeof term.kind === 'string' ? term.kind : inferTermKind(value),
+                notes: 'notes' in term && typeof term.notes === 'string' ? term.notes : undefined,
+            }]
+        })
+        .filter((term, index, values) => values.findIndex(candidate => candidate.value.toLowerCase() === term.value.toLowerCase()) === index)
+}
+
+function handoffEnvelope(handoff: WorkbenchPublicTiHandoff) {
+    return {
+        source: 'public-ti',
+        action: handoff.action,
+        artifactId: handoff.artifactId,
+        query: handoff.query,
+        generatedAt: handoff.generatedAt,
+    }
 }
 
 function OperatorReadinessRows({ orgContext, selected, caseDetail }: { orgContext?: WorkbenchOrgContext, selected?: WorkbenchCase, caseDetail?: CaseDetailState }) {

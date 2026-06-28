@@ -5,9 +5,10 @@ import type { Metadata } from 'next'
 import { BellRing, Radar } from 'lucide-react'
 import { DashboardPage } from '@/components/dashboard/ui'
 import { demoDwmProductSnapshot, type DwmAlert, type DwmSeverity } from '@/utils/dwm/product'
+import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
-import { buildOrgOperatingContext, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
+import { buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,9 @@ export default async function Page({
     ])
     const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
     const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
+    const publicTiHandoff = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
+        ? decodePublicTiHandoffPayload(firstParam(params?.payload), firstParam(params?.intent))
+        : null
     const readinessCases = buildReadinessCases({
         backendConfigured: Boolean(process.env.TI_SCRAPER_API_BASE),
         scope,
@@ -66,7 +70,15 @@ export default async function Page({
         deliveries,
         liveAlertCount: liveAlerts.length,
     })
-    const cases = buildWorkbenchCases(overview, alerts, readinessCases, liveAlerts.length > 0, scope, deliveries)
+    const handoffCases = buildPublicTiHandoffCase({
+        decode: publicTiHandoff,
+        scope,
+        organizationState,
+        watchlists,
+        operations,
+        liveAlertCount: liveAlerts.length,
+    })
+    const cases = buildWorkbenchCases(overview, alerts, [...handoffCases, ...readinessCases], liveAlerts.length > 0, scope, deliveries)
     const displayName = impersonatingName || impersonatingId || name
     const firstName = displayName.split(/\s+/)[0] || displayName
     const highPriorityCount = cases.filter(item => item.severity === 'critical' || item.severity === 'high').length
@@ -89,6 +101,11 @@ export default async function Page({
             <AnalystWorkbenchClient initialCases={cases} chrome='compact' orgContext={orgContext} />
         </DashboardPage>
     )
+}
+
+function firstParam(value: string | string[] | undefined) {
+    if (Array.isArray(value)) return value[0] || undefined
+    return value
 }
 
 function OperatorTopBar({ firstName, caseCount, highPriorityCount, persistentCount }: { firstName: string, caseCount: number, highPriorityCount: number, persistentCount: number }) {

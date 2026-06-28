@@ -1,5 +1,6 @@
-import { buildOrgOperatingContext, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
-import type { WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
+import { PUBLIC_TI_HANDOFF_ACTIONS, PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_HANDOFF_SOURCE, validatePublicTiHandoffPayload, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
+import { buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
+import type { OperatorActionRailRow, WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchPublicTiHandoff, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
     organizations: [{
@@ -129,6 +130,153 @@ const blockedOrgContext = buildOrgOperatingContext({
     watchlists: [],
     organizationState: { organizations: [], members: [], pendingInvites: [], webhooks: [] },
 })
+const publicTiWatchlistPayload = {
+    schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
+    source: PUBLIC_TI_HANDOFF_SOURCE,
+    action: PUBLIC_TI_HANDOFF_ACTIONS.watchlist,
+    artifactId: 'infrastructure:portal-acme-com',
+    query: 'akira',
+    generatedAt: '2026-06-28T10:20:00.000Z',
+    artifact: {
+        id: 'infrastructure:portal-acme-com',
+        kind: 'infrastructure',
+        label: 'portal.acme.com',
+        confidence: 86,
+        freshness: '2026-06-28T10:19:00.000Z',
+        evidence: ['portal.acme.com appeared in public TI actor context.'],
+        provenance: ['public-ti:actor:akira'],
+        watchlistTerms: [{ kind: 'domain', value: 'portal.acme.com', notes: 'akira: actor infrastructure artifact' }],
+        enrichmentTasks: ['Attach source-level evidence for portal.acme.com before customer routing.'],
+        readiness: { state: 'ready_for_org_handoff', label: 'Ready for org handoff', blockers: [] },
+    },
+    selectedPayload: {
+        schemaVersion: 'ti.public_actor.watchlist_handoff.v1',
+        query: 'akira',
+        generatedAt: '2026-06-28T10:20:00.000Z',
+        route: 'watchlist',
+        method: 'POST',
+        endpoint: '/api/organizations/:id/watchlists',
+        backedRoute: '/dashboard/dwm',
+        blocked: false,
+        missing: [],
+        body: { name: 'akira watchlist', terms: [{ kind: 'domain', value: 'portal.acme.com', notes: 'akira: actor infrastructure artifact' }] },
+        provenance: [{ sourceName: 'Public TI', provenance: 'public-ti:actor:akira', captureId: 'cap_public_ti_akira', confidence: 86 }],
+    },
+    actionPayloads: {
+        watchlist: {
+            schemaVersion: 'ti.public_actor.watchlist_handoff.v1',
+            query: 'akira',
+            generatedAt: '2026-06-28T10:20:00.000Z',
+            route: 'watchlist',
+            method: 'POST',
+            endpoint: '/api/organizations/:id/watchlists',
+            backedRoute: '/dashboard/dwm',
+            blocked: false,
+            missing: [],
+            body: { name: 'akira watchlist', terms: [{ kind: 'domain', value: 'portal.acme.com', notes: 'akira: actor infrastructure artifact' }] },
+            provenance: [{ sourceName: 'Public TI', provenance: 'public-ti:actor:akira', captureId: 'cap_public_ti_akira', confidence: 86 }],
+        },
+        alertRebuild: {
+            schemaVersion: 'ti.public_actor.alert_rebuild_handoff.v1',
+            query: 'akira',
+            generatedAt: '2026-06-28T10:20:00.000Z',
+            route: 'alert_rebuild',
+            method: 'POST',
+            endpoint: '/v1/dwm/alerts/rebuild',
+            backedRoute: '/dashboard/dwm',
+            blocked: false,
+            missing: [],
+            body: { query: 'akira', watchTerms: [{ kind: 'domain', value: 'portal.acme.com', notes: 'akira: actor infrastructure artifact' }] },
+            provenance: [{ sourceName: 'Public TI', provenance: 'public-ti:actor:akira', captureId: 'cap_public_ti_akira', confidence: 86 }],
+        },
+        case: {
+            schemaVersion: 'ti.public_actor.case_handoff.v1',
+            query: 'akira',
+            generatedAt: '2026-06-28T10:20:00.000Z',
+            route: 'case',
+            method: 'POST',
+            endpoint: '/v1/cases',
+            backedRoute: '/dashboard/ti/workbench',
+            blocked: false,
+            missing: [],
+            body: { sourceType: 'ti_actor', sourceId: 'akira', title: 'akira actor/query review', priority: 'medium' },
+            provenance: [{ sourceName: 'Public TI', provenance: 'public-ti:actor:akira', captureId: 'cap_public_ti_akira', confidence: 86 }],
+        },
+        enrichment: {
+            schemaVersion: 'ti.public_actor.enrichment_queue.v1',
+            query: 'akira',
+            generatedAt: '2026-06-28T10:20:00.000Z',
+            route: 'enrichment_queue',
+            backedRoute: '/dashboard/ti/enrichment',
+            blocked: false,
+            missing: [],
+            body: { query: 'akira', tasks: [{ id: 'task_1', title: 'Attach source-level evidence', severity: 'high', detail: 'Attach source-level evidence for portal.acme.com.', dependency: 'sourceProvenance capture id or source URL' }] },
+            provenance: [{ sourceName: 'Public TI', provenance: 'public-ti:actor:akira', captureId: 'cap_public_ti_akira', confidence: 86 }],
+        },
+    },
+    orgRequired: true,
+    sourceRequired: false,
+    stale: false,
+    missing: [],
+    blockers: [{ code: 'org_required', detail: 'Open this payload in an authenticated organization context before creating watchlists, rebuilding alerts, or creating cases.' }],
+    sourceRequests: [{ sourceName: 'Public TI', provenance: 'public-ti:actor:akira', captureId: 'cap_public_ti_akira', confidence: 86, missing: [] }],
+} satisfies PublicTiHandoffPayload
+const stalePublicTiPayload = {
+    ...publicTiWatchlistPayload,
+    artifactId: 'tool:old-loader',
+    generatedAt: '2026-06-28T10:21:00.000Z',
+    stale: true,
+    missing: ['fresh source after 2025-01-01'],
+    artifact: {
+        ...publicTiWatchlistPayload.artifact,
+        id: 'tool:old-loader',
+        kind: 'tool',
+        label: 'Old Loader',
+        freshness: '2025-01-01T00:00:00.000Z',
+        readiness: { state: 'stale', label: 'Stale evidence', blockers: ['fresh source after 2025-01-01'] },
+    },
+    blockers: [{ code: 'stale_evidence', detail: 'Fresh source is required after 2025-01-01 before claiming alert-ready status.' }],
+} satisfies PublicTiHandoffPayload
+const publicTiDecode = validatePublicTiHandoffPayload(publicTiWatchlistPayload)
+const malformedPublicTiDecode = validatePublicTiHandoffPayload({ schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION, source: PUBLIC_TI_HANDOFF_SOURCE, action: 'nope' })
+const stalePublicTiDecode = validatePublicTiHandoffPayload(stalePublicTiPayload)
+const publicTiCases = buildPublicTiHandoffCase({
+    decode: publicTiDecode,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    organizationState,
+    watchlists,
+    operations,
+    liveAlertCount: 1,
+})
+const malformedPublicTiCases = buildPublicTiHandoffCase({
+    decode: malformedPublicTiDecode,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    organizationState,
+    watchlists,
+    operations,
+    liveAlertCount: 1,
+})
+const orgRequiredPublicTiCases = buildPublicTiHandoffCase({
+    decode: publicTiDecode,
+    scope: { tenantId: 'default' },
+    organizationState: { organizations: [], members: [], pendingInvites: [], webhooks: [] },
+    watchlists: [],
+    operations,
+    liveAlertCount: 0,
+})
+const stalePublicTiCases = buildPublicTiHandoffCase({
+    decode: stalePublicTiDecode,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    organizationState,
+    watchlists,
+    operations,
+    liveAlertCount: 1,
+})
+const handoffActionRailStates = [
+    { id: 'handoff_watchlist', label: 'Add org watchlist term', detail: 'domain:portal.acme.com', tone: 'ready', action: { id: 'public_ti_create_watchlist', label: 'Add term', method: 'POST', href: '/api/dwm/watchlists', body: { organizationId: 'org_acme' } } },
+    { id: 'handoff_source', label: 'Request source pack', detail: 'Source pack mutation API is not loaded here; copy exact handoff or open source ops.', tone: 'blocked', href: '/dashboard/ti/sources', copyPayload: publicTiWatchlistPayload },
+    { id: 'handoff_copy', label: 'Exact handoff', detail: 'create watchlist payload for portal.acme.com.', tone: 'ready', copyPayload: publicTiWatchlistPayload },
+] satisfies OperatorActionRailRow[]
 
 const _contract: WorkbenchCase[] = cases
 const _requiresWorkflowPath: NonNullable<WorkbenchCase['workflowPath']> = cases[0]?.workflowPath || []
@@ -332,6 +480,13 @@ void (orgContext.createWatchlistAction satisfies WorkbenchAction | undefined)
 void (orgContext.readiness.sourceCoverage?.activeSourceCount satisfies number | undefined)
 void (orgContext.readiness.latestDelivery satisfies WorkbenchDeliveryEvidence | undefined)
 void (blockedOrgContext.readiness.blockedReasons satisfies string[])
+void (publicTiDecode.ok satisfies boolean)
+void (malformedPublicTiDecode.ok satisfies boolean)
+void (publicTiCases[0]?.handoff satisfies WorkbenchPublicTiHandoff | undefined)
+void (malformedPublicTiCases[0]?.status satisfies string | undefined)
+void (orgRequiredPublicTiCases[0]?.status satisfies string | undefined)
+void (stalePublicTiCases[0]?.handoff?.stale satisfies boolean | undefined)
+void (handoffActionRailStates satisfies OperatorActionRailRow[])
 void (selectedLiveAlert.actions satisfies WorkbenchAction[])
 void (selectedLiveAlert.deliveryEvidence satisfies WorkbenchDeliveryEvidence[])
 void (liveCaseMutationPayloads satisfies WorkbenchCaseMutationPayload[])
