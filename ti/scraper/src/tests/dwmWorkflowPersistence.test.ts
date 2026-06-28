@@ -125,6 +125,8 @@ describe("dwm workflow persistence", () => {
       expect(secondRebuild.alerts[0].workflowEvents).toHaveLength(2);
       expect(secondRebuild.alerts[0].replayCount).toBe(1);
       expect(secondRebuild.alerts[0].sourceCount).toBe(2);
+      expect(secondRebuild.alerts[0].evidenceSummary.evidenceCount).toBe(2);
+      expect(secondRebuild.alerts[0].workflowContext.evidenceCount).toBe(2);
       expect(secondRebuild.alerts[0].evidence.map((item: any) => item.id)).toContain("cap_workflow_acme_followup");
       expect(secondRebuild.alerts[0].provenance.captureIds).toContain("cap_workflow_acme_followup");
       expect(secondRebuild.alerts[0].dedupeKey).toBe(rebuild.alerts[0].dedupeKey);

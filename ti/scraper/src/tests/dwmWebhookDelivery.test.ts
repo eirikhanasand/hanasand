@@ -65,6 +65,25 @@ describe("dwm webhook delivery", () => {
     expect(delivered.deliveries[0].status).toBe("delivered");
     expect(seen[0].url).toBe("https://hooks.example.com/dwm");
     expect(seen[0].body.eventType).toBe("darkweb.monitoring.match");
+    expect(seen[0].body.matchContext).toMatchObject({
+      normalizedTerm: "acme.com",
+      termKind: "domain"
+    });
+    expect(seen[0].body.evidenceSummary).toMatchObject({
+      evidenceCount: 1,
+      sourceFamilyCounts: { telegram_public: 1 },
+      publicSafeCount: 1
+    });
+    expect(seen[0].body.routingContext).toMatchObject({
+      queue: "identity_response",
+      urgency: "immediate",
+      customerVisibleEvidence: "redacted_excerpt"
+    });
+    expect(seen[0].body.evidence[0].provenance).toMatchObject({
+      captureId: "cap_webhook_acme",
+      sourceId: "src_webhook_tg",
+      metadataOnly: false
+    });
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.match");
     expect((store as any).listDwmAlerts()[0].deliveryState).toBe("delivered");
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
