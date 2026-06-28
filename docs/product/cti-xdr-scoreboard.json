@@ -1,0 +1,135 @@
+{
+  "updatedAt": "2026-06-28",
+  "sourceDoc": "docs/product/cti-xdr-gap-map.md",
+  "purpose": "Compact implementation scoreboard for the CTI/DWM/XDR product lanes. This is for the 10-minute coordinator loop; it should reduce management overhead and keep workers from shipping dashboard-only slices.",
+  "rows": [
+    {
+      "id": "ORG",
+      "pillar": "Orgs",
+      "ownerThread": "Org/API lane",
+      "currentStatus": "Partial: auth/users exist; org APIs are actively being wired; buyer onboarding still lacks a crisp active-org console path.",
+      "lastCommitOrHandoff": "b750ac61 org-scoped DWM foundation; current dirty org route/schema work.",
+      "nextCodeSlice": "Add active-org selector/context, org create/list UI, and tenant propagation across TI/DWM routes.",
+      "measurableKpi": ["organizations.orgCount", "organizations.activeOrgCount"],
+      "blocker": "Need production probe proving dashboard routes use org context instead of default."
+    },
+    {
+      "id": "INV",
+      "pillar": "Invites",
+      "ownerThread": "Org/API lane",
+      "currentStatus": "Partial: invite acceptance API exists, but buyer-facing invite/resend/expire UI is not confirmed.",
+      "lastCommitOrHandoff": "e3fc1cfd invite acceptance API.",
+      "nextCodeSlice": "Build invite panel: create invite, copy/send link, accept invite, expire/resend, audit event.",
+      "measurableKpi": ["organizations.usersInvited24h", "organizations.acceptedInvites24h"],
+      "blocker": "Email/support fallback and expiry policy need to be productized."
+    },
+    {
+      "id": "RBAC",
+      "pillar": "Members/RBAC",
+      "ownerThread": "Org/API lane",
+      "currentStatus": "Partial: membership routes exist; role enforcement across TI/DWM/admin actions still needs hard coverage.",
+      "lastCommitOrHandoff": "8a389e7f membership routes; current dirty organization utility work.",
+      "nextCodeSlice": "Add role editor and enforce admin/analyst/viewer checks on watchlists, alerts, cases, support, and source controls.",
+      "measurableKpi": ["organizations.memberCount", "organizations.roleChanges10m"],
+      "blocker": "Missing cross-route authorization test matrix."
+    },
+    {
+      "id": "WATCH",
+      "pillar": "Shared watchlists",
+      "ownerThread": "Org + DWM lane",
+      "currentStatus": "Partial: DWM watchlist API exists; shared team ownership, change history, and routing are not complete.",
+      "lastCommitOrHandoff": "607db9e1 shared watchlist API; b750ac61 org-scoped DWM foundation.",
+      "nextCodeSlice": "Ship org-owned watchlist workspace with term type, owner, pause/resume, test match, last match, webhook route, and audit history.",
+      "measurableKpi": ["watchlists.sharedWatchlistCount", "watchlists.activeWatchlistCount", "watchlists.watchTermsCount"],
+      "blocker": "Needs durable version/audit model before multiple analysts edit the same list."
+    },
+    {
+      "id": "TELE",
+      "pillar": "Telegram sources",
+      "ownerThread": "Source-ops lane",
+      "currentStatus": "Partial: adapters and source pages exist; active Telegram count is not yet an authoritative product KPI.",
+      "lastCommitOrHandoff": "f16e8a0e TI scraper control room.",
+      "nextCodeSlice": "Add source KPI endpoint with enabled/failing Telegram sources, last successful check, next scheduled check, and parser status.",
+      "measurableKpi": ["sources.activeTelegramSourceCount", "collection.capturesCollected10m"],
+      "blocker": "Need live runtime proof inside freshness window."
+    },
+    {
+      "id": "ONION",
+      "pillar": "Darkweb/onion sources",
+      "ownerThread": "Source-ops/restricted-metadata lane",
+      "currentStatus": "Partial: darkweb metadata adapters, policy boundaries, and source request lifecycle work exist; production-safe active counts are not proven.",
+      "lastCommitOrHandoff": "ec4289dc source request lifecycle; f16e8a0e control room.",
+      "nextCodeSlice": "Add metadata-only approval queue with active/failing onion source counts, last check, screenshots where safe, and blocked-reason fields.",
+      "measurableKpi": ["sources.activeDarkWebMetadataSourceCount", "sources.sourceCandidatesQueued"],
+      "blocker": "Must keep unsafe payloads, raw onion URLs, and credentials out of buyer/admin surfaces."
+    },
+    {
+      "id": "ALERTS",
+      "pillar": "Real alerts",
+      "ownerThread": "DWM alert lane",
+      "currentStatus": "Partial: alert provenance/repository work exists; demo fallback must be excluded from sellable buyer paths.",
+      "lastCommitOrHandoff": "720414f2 alert provenance model; 3f55b12e alert repository adapter.",
+      "nextCodeSlice": "Prove real watchlist + real capture creates saved alert with evidence ID, source ID, dedupe key, match reason, and demoAlertsVisible=0.",
+      "measurableKpi": ["alerts.realAlertsGenerated10m", "alerts.alertsWithEvidence", "alerts.demoAlertsVisible"],
+      "blocker": "Need automated capture-to-alert smoke that fails if only demo data appears."
+    },
+    {
+      "id": "DELIVERY",
+      "pillar": "Webhook/Discord deliveries",
+      "ownerThread": "Delivery lane",
+      "currentStatus": "Partial: DWM webhook files/tests are in progress; Discord delivery is operationally useful but not productized enough for buyers.",
+      "lastCommitOrHandoff": "Dirty handoff: api/scripts/smoke-dwm-webhooks.ts, api/src/utils/dwm/.",
+      "nextCodeSlice": "Put delivery controls on the DWM page: endpoint/Discord destination, redacted secret status, test send, payload preview, last deliveries, retry failed.",
+      "measurableKpi": ["delivery.webhookDeliveries10m", "delivery.discordDeliveries10m", "delivery.webhookFailures10m"],
+      "blocker": "Secret-safe config, retry semantics, and buyer-facing failure messages need final checks."
+    },
+    {
+      "id": "CASES",
+      "pillar": "Analyst cases",
+      "ownerThread": "Case/workbench lane",
+      "currentStatus": "Partial: DWM alert workflow and persisted ownership exist; one durable cross-product case object is not finished.",
+      "lastCommitOrHandoff": "20f6563f persisted DWM case ownership; 70bcbb99 readiness workbench.",
+      "nextCodeSlice": "Persist cases over DWM/TI alerts with assign, note, escalate, suppress/false-positive, close/reopen, timeline, and delivery replay.",
+      "measurableKpi": ["cases.openCaseCount", "cases.casesAssigned10m", "cases.casesClosed10m", "cases.casesWithAnalystNotes"],
+      "blocker": "Case schema must unify TI actor activity, DWM alerts, and delivery history."
+    },
+    {
+      "id": "HELP",
+      "pillar": "Helpdesk/impersonation",
+      "ownerThread": "Admin/support lane",
+      "currentStatus": "In progress: impersonation/admin-support files are dirty; no committed buyer-support readiness packet yet.",
+      "lastCommitOrHandoff": "Dirty handoff: api/src/handlers/adminSupport.ts, api/scripts/smoke-admin-support-contract.ts, impersonation route edits.",
+      "nextCodeSlice": "Ship safe support console: find org/user, view subscription/onboarding state, start audited impersonation, and file support actions.",
+      "measurableKpi": ["admin.helpdeskTicketsOpen", "admin.supportActions10m", "admin.impersonationSessions10m"],
+      "blocker": "Needs strict audit trail and scoped auth before production use."
+    },
+    {
+      "id": "AUDIT",
+      "pillar": "Structured audit logs",
+      "ownerThread": "Admin/audit lane",
+      "currentStatus": "In progress: admin audit utility and TI audit pages are dirty; audit events are not yet a stable coordinator KPI.",
+      "lastCommitOrHandoff": "Dirty handoff: api/src/utils/adminAudit.ts, TI audit route edits.",
+      "nextCodeSlice": "Add append/query audit events for org, invite, watchlist, source, alert, case, support, impersonation, and delivery actions.",
+      "measurableKpi": ["admin.auditEvents10m", "admin.auditEventsWithActor"],
+      "blocker": "Need retention policy and event schema stability."
+    },
+    {
+      "id": "DEPLOY",
+      "pillar": "Deploy/live status",
+      "ownerThread": "Ops lane",
+      "currentStatus": "Partial: /status and container health exist; no single product-progress record ties deploy health to CTI/DWM KPIs.",
+      "lastCommitOrHandoff": "03d29b7c coordinator scoreboard; status work from recent thread handoffs.",
+      "nextCodeSlice": "Emit /api/product-progress or scraper SLO record every 10 minutes with commit, frontend/API/scraper health, and every KPI group in this table.",
+      "measurableKpi": ["deployment.frontendCommit", "deployment.frontendHealthy", "deployment.apiHealthy", "deployment.scraperHealthy"],
+      "blocker": "Branch is ahead and multiple active dirty lanes must land before clean deploy proof."
+    }
+  ],
+  "antiDashboardRules": [
+    "Do not ship metric cards unless there is a queue item that can be opened, reviewed, assigned, escalated, suppressed, replayed, or closed.",
+    "Do not show source counts without source health, last/next check, parser status, and a concrete operator action.",
+    "Do not show actor profiles without source links, changed fields, last refresh, next refresh, and a clear reason the profile changed.",
+    "Do not show alerts without evidence IDs, source IDs, timestamps, match reason, dedupe key, and delivery state.",
+    "Do not build webhook settings without test send, payload preview, retry history, and redacted secret handling.",
+    "Do not call a workflow autonomous unless the page exposes latest run time, changed records, next planned work, and failure/backoff state."
+  ]
+}
