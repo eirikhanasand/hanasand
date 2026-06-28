@@ -55,9 +55,11 @@ export default function AnalystWorkbenchClient({ initialCases }: { initialCases:
     const [filter, setFilter] = useState<QueueFilter>('all')
     const [query, setQuery] = useState('')
     const [notes, setNotes] = useState<Record<string, string>>({})
+    const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const cases = useMemo(() => filterCases(initialCases, filter, query), [initialCases, filter, query])
     const selected = initialCases.find(item => item.id === selectedId) ?? cases[0] ?? initialCases[0]
     const queues = queueSummary(initialCases)
+    const selectedDecision = selected ? localDecisions[selected.id] : undefined
 
     return (
         <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
@@ -131,8 +133,19 @@ export default function AnalystWorkbenchClient({ initialCases }: { initialCases:
                     {selected ? (
                         <CaseDetail
                             item={selected}
+                            decision={selectedDecision}
                             note={notes[selected.id] ?? ''}
                             onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
+                            onDecision={(decision) => {
+                                setLocalDecisions(current => ({
+                                    ...current,
+                                    [selected.id]: {
+                                        ...(current[selected.id] ?? {}),
+                                        ...decision,
+                                        decidedAt: new Date().toISOString(),
+                                    },
+                                }))
+                            }}
                         />
                     ) : (
                         <div className='p-5 text-sm text-[#596170]'>No analyst cases are available yet.</div>
@@ -177,7 +190,24 @@ export default function AnalystWorkbenchClient({ initialCases }: { initialCases:
     )
 }
 
-function CaseDetail({ item, note, onNoteChange }: { item: WorkbenchCase, note: string, onNoteChange: (value: string) => void }) {
+function CaseDetail({ item, decision, note, onNoteChange, onDecision }: {
+    item: WorkbenchCase
+    decision?: LocalDecision
+    note: string
+    onNoteChange: (value: string) => void
+    onDecision: (decision: LocalDecision) => void
+}) {
+    const effectiveStatus = decision?.status ?? item.status
+    const effectiveOwner = decision?.owner ?? item.owner
+    const timeline = decision?.status ? [
+        {
+            id: `${item.id}_session_decision`,
+            at: decision.decidedAt || new Date().toISOString(),
+            title: 'Session decision',
+            body: `${label(decision.status)}${decision.owner ? ` by ${decision.owner}` : ''}${decision.reason ? `: ${decision.reason}` : ''}`,
+        },
+        ...item.timeline,
+    ] : item.timeline
     return (
         <div className='grid gap-5 p-5'>
             <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -186,16 +216,53 @@ function CaseDetail({ item, note, onNoteChange }: { item: WorkbenchCase, note: s
                         <span className={severityClass(item.severity)}>{item.severity}</span>
                         <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'>{item.confidence}% confidence</span>
                         <span className='rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#475467]'>{label(item.kind)}</span>
+                        <span className='rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#596170]'>{label(effectiveStatus)}</span>
                         {item.persistent && <span className='rounded-full bg-[#f4fbf7] px-2 py-0.5 text-xs font-semibold text-[#147a3b]'>persistent workflow</span>}
                     </div>
                     <h2 className='mt-3 text-2xl font-semibold tracking-normal text-[#171a21]'>{item.title}</h2>
                     <p className='mt-1 text-sm text-[#596170]'>{item.queue} · {item.routeLabel} · {relativeTime(item.updatedAt)}</p>
                 </div>
                 <div className='grid gap-1 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 text-xs text-[#667085]'>
-                    <span className='font-semibold text-[#171a21]'>{item.owner}</span>
+                    <span className='font-semibold text-[#171a21]'>{effectiveOwner}</span>
                     <span>{item.company || item.matchedTerm}</span>
                 </div>
             </div>
+
+            <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.55fr_1fr_auto] lg:items-end'>
+                <label className='grid gap-2'>
+                    <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                        <UserRound className='h-4 w-4 text-[#3056d3]' />
+                        Owner
+                    </span>
+                    <input
+                        value={effectiveOwner === 'unassigned' ? '' : effectiveOwner}
+                        onChange={event => onDecision({ owner: event.target.value.trim() || 'unassigned' })}
+                        placeholder='Assign analyst'
+                        className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                    />
+                    <span className='text-[11px] text-[#667085]'>Session-local until TI case ownership persistence is wired.</span>
+                </label>
+                <label className='grid gap-2'>
+                    <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                        <MessageSquareText className='h-4 w-4 text-[#3056d3]' />
+                        Decision rationale
+                    </span>
+                    <textarea
+                        value={note}
+                        onChange={event => onNoteChange(event.target.value)}
+                        placeholder='Record validation, customer route, suppression reason, or follow-up owner'
+                        className='min-h-20 resize-y rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                    />
+                </label>
+                <div className='flex flex-wrap gap-2 lg:justify-end'>
+                    <DecisionButton onClick={() => onDecision({ status: 'reviewing', reason: note || 'Review started.' })}>Review</DecisionButton>
+                    <DecisionButton onClick={() => onDecision({ status: 'escalated', reason: note || 'Escalated for customer or incident response.' })}>Escalate</DecisionButton>
+                    <DecisionButton onClick={() => onDecision({ status: 'suppressed', reason: note || 'Suppressed as low-value or false positive.' })}>Suppress</DecisionButton>
+                    <DecisionButton onClick={() => onDecision({ status: effectiveStatus === 'closed' ? 'needs_review' : 'closed', reason: note || (effectiveStatus === 'closed' ? 'Reopened for review.' : 'Closed in analyst workbench.') })}>
+                        {effectiveStatus === 'closed' ? 'Reopen' : 'Close'}
+                    </DecisionButton>
+                </div>
+            </section>
 
             <section className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4'>
                 <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
@@ -261,7 +328,7 @@ function CaseDetail({ item, note, onNoteChange }: { item: WorkbenchCase, note: s
                             <p className='mt-0.5 text-xs text-[#667085]'>Case state and source observations.</p>
                         </div>
                         <div className='grid gap-3 p-4'>
-                            {item.timeline.map(event => (
+                            {timeline.map(event => (
                                 <div key={event.id} className='grid grid-cols-[auto_1fr] gap-3'>
                                     <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#3056d3]' />
                                     <div>
@@ -274,21 +341,34 @@ function CaseDetail({ item, note, onNoteChange }: { item: WorkbenchCase, note: s
                         </div>
                     </div>
 
-                    <label className='rounded-lg border border-[#e0e5ed] bg-white p-4'>
-                        <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                    <div className='rounded-lg border border-[#e0e5ed] bg-white p-4'>
+                        <h3 className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
                             <MessageSquareText className='h-4 w-4 text-[#3056d3]' />
-                            Analyst note
-                        </span>
-                        <textarea
-                            value={note}
-                            onChange={event => onNoteChange(event.target.value)}
-                            placeholder='Decision rationale, customer owner, or follow-up task'
-                            className='mt-3 min-h-28 w-full resize-y rounded-lg border border-[#d8dee9] bg-[#fbfcfe] px-3 py-2 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
-                        />
-                    </label>
+                            Session decision state
+                        </h3>
+                        <p className='mt-2 text-sm leading-6 text-[#596170]'>
+                            {decision?.status ? `${label(decision.status)}${decision.reason ? `: ${decision.reason}` : ''}` : 'No local decision recorded yet.'}
+                        </p>
+                        <p className='mt-2 text-xs leading-5 text-[#667085]'>This general TI workbench records decisions locally for now. DWM alert workflow decisions persist through the DWM API.</p>
+                    </div>
                 </div>
             </section>
         </div>
+    )
+}
+
+type LocalDecision = {
+    status?: string
+    owner?: string
+    reason?: string
+    decidedAt?: string
+}
+
+function DecisionButton({ onClick, children }: { onClick: () => void, children: string }) {
+    return (
+        <button type='button' onClick={onClick} className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+            {children}
+        </button>
     )
 }
 

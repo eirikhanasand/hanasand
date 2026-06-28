@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Clock3, Fingerprint, Loader2, Play, Radar, RotateCcw, Send, ShieldAlert, ShieldCheck, SlidersHorizontal, Webhook, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Send, ShieldAlert, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmProductSnapshot } from '@/utils/dwm/product'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
 
@@ -88,6 +88,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: P
     const [selectedId, setSelectedId] = useState(alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
+    const [localCaseState, setLocalCaseState] = useLocalCaseState()
     const selectedAlert = alerts.find(alert => alert.id === selectedId) ?? alerts[0]
     const selectedDeliveries = selectedAlert ? deliveries.filter(delivery => delivery.alertId === selectedAlert.id) : []
     const queue = useMemo(() => orderAlerts(alerts), [alerts])
@@ -215,7 +216,14 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: P
                             <CaseWorkspace
                                 alert={selectedAlert}
                                 deliveries={selectedDeliveries}
+                                localState={localCaseState[selectedAlert.id]}
                                 busyAction={busyAction}
+                                onLocalStateChange={(patch) => {
+                                    setLocalCaseState(current => ({
+                                        ...current,
+                                        [selectedAlert.id]: { ...(current[selectedAlert.id] ?? {}), ...patch },
+                                    }))
+                                }}
                                 onUpdate={updateAlert}
                                 onReplay={replayAlert}
                                 onSend={sendAlert}
@@ -246,15 +254,19 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: P
     )
 }
 
-function CaseWorkspace({ alert, deliveries, busyAction, onUpdate, onReplay, onSend }: {
+function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalStateChange, onUpdate, onReplay, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
+    localState?: LocalCaseState
     busyAction: string | null
+    onLocalStateChange: (patch: LocalCaseState) => void
     onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string) => Promise<void>
     onReplay: (alertId: string) => Promise<void>
     onSend: (alertId: string) => Promise<void>
 }) {
     const timeline = buildTimeline(alert, deliveries)
+    const analystNote = localState?.note ?? ''
+    const assignee = localState?.assignee ?? 'Unassigned'
     return (
         <div className='grid gap-5 p-5'>
             <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -270,12 +282,49 @@ function CaseWorkspace({ alert, deliveries, busyAction, onUpdate, onReplay, onSe
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.')}>Review</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Ready for customer delivery.')}>Ready</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.')}>Escalate</CaseButton>
                     <CaseButton busy={busyAction === `replay:${alert.id}`} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
                     <CaseButton busy={busyAction === `send:${alert.id}`} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Marked false positive.')}>False</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.')}>Suppress</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.')}>Close</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.')}>Reopen</CaseButton>
                 </div>
             </div>
+
+            <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.55fr_1fr_auto] lg:items-end'>
+                <label className='grid gap-2'>
+                    <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                        <UserRound className='h-4 w-4 text-[#3056d3]' />
+                        Owner
+                    </span>
+                    <input
+                        value={assignee === 'Unassigned' ? '' : assignee}
+                        onChange={event => onLocalStateChange({ assignee: event.target.value.trim() || 'Unassigned' })}
+                        placeholder='Assign analyst'
+                        className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                    />
+                    <span className='text-[11px] text-[#667085]'>Stored in this browser until owner persistence is added.</span>
+                </label>
+                <label className='grid gap-2'>
+                    <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                        <MessageSquareText className='h-4 w-4 text-[#3056d3]' />
+                        Decision rationale
+                    </span>
+                    <textarea
+                        value={analystNote}
+                        onChange={event => onLocalStateChange({ note: event.target.value })}
+                        placeholder='What was validated, who owns follow-up, and why this was escalated, suppressed, or closed'
+                        className='min-h-20 resize-y rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                    />
+                </label>
+                <CaseButton
+                    busy={busyAction === `update:${alert.id}`}
+                    icon='ready'
+                    onClick={() => onUpdate(alert.id, alert.reviewState, alert.deliveryState || 'pending_review', analystNote.trim() || 'Analyst rationale saved.')}
+                >
+                    Save note
+                </CaseButton>
+            </section>
 
             <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4'>
                 <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
@@ -507,6 +556,34 @@ function CaseButton({ busy, icon, onClick, children }: { busy: boolean, icon: 'r
             {children}
         </button>
     )
+}
+
+type LocalCaseState = {
+    assignee?: string
+    note?: string
+}
+
+function useLocalCaseState() {
+    const [state, setState] = useState<Record<string, LocalCaseState>>({})
+
+    useEffect(() => {
+        try {
+            const raw = window.localStorage.getItem('hanasand:dwm-case-state')
+            if (raw) setState(JSON.parse(raw) as Record<string, LocalCaseState>)
+        } catch {
+            setState({})
+        }
+    }, [])
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem('hanasand:dwm-case-state', JSON.stringify(state))
+        } catch {
+            // Local notes are a convenience; workflow actions still persist through the API.
+        }
+    }, [state])
+
+    return [state, setState] as const
 }
 
 function orderAlerts(alerts: PortalAlert[]) {
