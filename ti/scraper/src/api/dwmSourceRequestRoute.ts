@@ -19,6 +19,8 @@ type DwmSourceRequestBody = {
   dryRun?: boolean;
   limit?: number;
   targets?: string[];
+  candidates?: DwmSourcePackCandidate[];
+  sourcePackLabel?: string;
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
   action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed";
@@ -33,9 +35,23 @@ type DwmSourceRequestBody = {
   requestedBy?: string;
 };
 
+type DwmSourcePackCandidate = {
+  target?: string;
+  type?: "telegram_channel" | "restricted_metadata";
+  scope?: string;
+  requestedBy?: string;
+  priority?: "critical" | "high" | "medium";
+  suppress?: boolean;
+  reason?: string;
+};
+
 export async function createDwmSourceRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<DwmSourceRequestBody>(request);
   if (body.action) return handleSourceLifecycleAction(body, options);
+
+  if (Array.isArray(body.candidates) && body.candidates.length > 0) {
+    return json(createSourceCandidatePack(body, options), 201);
+  }
 
   if (Array.isArray(body.seedPackIds) && body.seedPackIds.length > 0) {
     const result = applyDwmSeedCatalog({
@@ -145,6 +161,135 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
         : "Review the public channel, then activate bounded polling."
     }
   }, 201);
+}
+
+function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServerOptions) {
+  const generatedAt = nowIso();
+  const limit = Math.max(1, Math.min(body.limit ?? 100, 100));
+  const accepted: Array<Record<string, unknown>> = [];
+  const rejected: Array<Record<string, unknown>> = [];
+  const duplicates: Array<Record<string, unknown>> = [];
+
+  for (const [index, input] of (body.candidates ?? []).slice(0, limit).entries()) {
+    const target = String(input.target ?? "").trim();
+    const type = input.type ?? body.type ?? "telegram_channel";
+    const requestBody: DwmSourceRequestBody = {
+      ...body,
+      target,
+      type,
+      scope: input.scope ?? body.scope,
+      requestedBy: input.requestedBy ?? body.requestedBy,
+      priority: input.priority ?? body.priority,
+      activate: false
+    };
+    const result = type === "restricted_metadata"
+      ? createRestrictedMetadataSourceFromTarget(target, requestBody, options)
+      : createTelegramSourceFromTarget(target, requestBody, options);
+
+    if (result.kind === "error") {
+      rejected.push({
+        index,
+        target,
+        type,
+        code: result.code,
+        message: result.message,
+        retryHint: type === "telegram_channel" ? "submit a public @handle or https://t.me/<channel> URL" : "submit a metadata-only target without payload, credential, or download intent"
+      });
+      continue;
+    }
+    if (result.kind === "duplicate") {
+      duplicates.push({
+        index,
+        target,
+        type,
+        duplicateOf: result.duplicateOf,
+        nextAction: "Use the existing source or change the source scope; duplicate candidates are not queued."
+      });
+      continue;
+    }
+
+    const source = input.suppress === true
+      ? saveLifecyclePatch(result.source, options, {
+        action: "suppress",
+        actor: input.requestedBy ?? body.requestedBy ?? "source-pack",
+        reason: input.reason ?? "source-pack candidate suppressed during intake",
+        status: "suppressed",
+        healthStatus: "suppressed",
+        parserStatus: "not_scheduled",
+        activationState: "suppressed"
+      })
+      : result.source;
+    accepted.push(sourcePackCandidateItem(source, input.suppress === true ? "suppressed" : "accepted"));
+  }
+
+  return {
+    request: {
+      id: stableId("dwm_candidate_pack_request", `${body.sourcePackLabel ?? "ad-hoc"}:${generatedAt}`),
+      type: "candidate_pack",
+      label: body.sourcePackLabel ?? "Ad hoc source candidate pack",
+      approvalState: "queued",
+      generatedAt,
+      nextAction: "Review accepted public candidates for promotion; restricted metadata candidates require metadata-only approval before collection."
+    },
+    acceptedCandidates: accepted,
+    rejected,
+    duplicates,
+    summary: {
+      evaluatedCount: Math.min(body.candidates?.length ?? 0, limit),
+      acceptedCount: accepted.length,
+      rejectedCount: rejected.length,
+      duplicateCount: duplicates.length,
+      telegramPublicCount: accepted.filter((item) => item.family === "telegram_public").length,
+      restrictedMetadataCount: accepted.filter((item) => item.family === "darkweb_metadata").length,
+      suppressedCount: accepted.filter((item) => item.status === "suppressed").length,
+      queuedForCollectionCount: accepted.filter((item) => (item.operationalNextStep as any)?.collectionTrigger?.queued === true).length
+    },
+    safeOutput: {
+      rawUnsafeRowsStored: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourcePackCandidateItem(source: SourceRecord, intakeStatus: "accepted" | "suppressed") {
+  const candidate = sourceCandidate(source);
+  const collectionTrigger = source.status === "suppressed"
+    ? skippedCollectionTrigger(source, "source_suppressed")
+    : skippedCollectionTrigger(source, isRestrictedMetadataSource(source) ? "metadata_only_approval_required" : "awaiting_operator_promotion");
+  const alertRebuild = skippedAlertRebuild(source, "captures_required_before_alert_rebuild");
+  return {
+    id: candidate.id,
+    sourceId: source.id,
+    family: candidate.family,
+    target: candidate.target,
+    status: source.status === "suppressed" ? "suppressed" : candidate.status,
+    intakeStatus,
+    requestedBy: candidate.requestedBy,
+    provenance: {
+      route: "/v1/dwm/source-requests",
+      sourceCandidateId: candidate.id,
+      sourceId: source.id,
+      sourceType: source.type
+    },
+    policyBoundary: candidate.policyBoundary,
+    validationResult: candidate.validationResult,
+    parser: {
+      status: source.status === "suppressed" ? "not_scheduled" : candidate.parserStatus,
+      mode: isRestrictedMetadataSource(source) ? "restricted_metadata" : "public_channel_handoff"
+    },
+    approvalTicket: candidate.approvalTicket,
+    operationalNextStep: {
+      nextAction: source.status === "suppressed"
+        ? "Candidate suppressed during intake. It will not queue collection."
+        : isRestrictedMetadataSource(source)
+          ? "Open metadata-only approval before any collection worker can run."
+          : "Promote candidate to active source when ready; promotion queues bounded frontier collection.",
+      collectionTrigger,
+      alertRebuild,
+      retryHint: source.status === "suppressed" ? "request a new candidate if scope changes" : undefined
+    }
+  };
 }
 
 function createTelegramSourceFromTarget(target: string, body: DwmSourceRequestBody, options: ApiServerOptions):

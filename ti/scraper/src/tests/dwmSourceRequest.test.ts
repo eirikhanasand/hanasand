@@ -58,6 +58,115 @@ describe("dwm source requests", () => {
     });
   });
 
+  test("accepts mixed source candidate packs with policy validation and no live scraping", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    store.saveDwmWatchlist({
+      id: "watch_pack_apt29",
+      tenantId: "tenant_acme",
+      name: "APT29 source pack",
+      terms: [{ value: "APT29", kind: "company" }],
+      status: "active",
+      createdAt: "2026-05-24T00:00:00.000Z",
+      updatedAt: "2026-05-24T00:00:00.000Z"
+    });
+
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackLabel: "APT29 source-growth pack",
+        tenantId: "tenant_acme",
+        scope: "APT29",
+        requestedBy: "source-growth-worker",
+        candidates: [
+          { target: "@pack_public_cti", type: "telegram_channel" },
+          { target: "metadata://darkweb/apt29/claims", type: "restricted_metadata" },
+          { target: "@pack_public_cti", type: "telegram_channel" },
+          { target: "not-a-public-channel", type: "telegram_channel" },
+          { target: "@pack_suppressed_cti", type: "telegram_channel", suppress: true, reason: "low value duplicate family" }
+        ]
+      })
+    }), { store, frontier });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(201);
+    expect(body.summary).toMatchObject({
+      evaluatedCount: 5,
+      acceptedCount: 3,
+      rejectedCount: 1,
+      duplicateCount: 1,
+      telegramPublicCount: 2,
+      restrictedMetadataCount: 1,
+      suppressedCount: 1,
+      queuedForCollectionCount: 0
+    });
+    expect(body.safeOutput).toMatchObject({
+      rawUnsafeRowsStored: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    });
+
+    const publicCandidate = body.acceptedCandidates.find((candidate: any) => candidate.family === "telegram_public" && candidate.status === "queued");
+    const restrictedCandidate = body.acceptedCandidates.find((candidate: any) => candidate.family === "darkweb_metadata");
+    const suppressedCandidate = body.acceptedCandidates.find((candidate: any) => candidate.status === "suppressed");
+    expect(publicCandidate).toMatchObject({
+      target: "@pack_public_cti",
+      requestedBy: "source-growth-worker",
+      policyBoundary: { noPrivateAccess: true },
+      validationResult: { allowed: true },
+      parser: { mode: "public_channel_handoff" },
+      operationalNextStep: {
+        collectionTrigger: { queued: false, reason: "awaiting_operator_promotion" },
+        alertRebuild: { skipped: true, reason: "captures_required_before_alert_rebuild" }
+      }
+    });
+    expect(restrictedCandidate).toMatchObject({
+      family: "darkweb_metadata",
+      status: "approval_required",
+      policyBoundary: { metadataOnly: true, noDownloads: true },
+      validationResult: { allowed: false, policyGated: true },
+      parser: { mode: "restricted_metadata" },
+      approvalTicket: { status: "open", unsafeScrapingAllowed: false },
+      operationalNextStep: { collectionTrigger: { queued: false, reason: "metadata_only_approval_required" } }
+    });
+    expect(suppressedCandidate).toMatchObject({
+      status: "suppressed",
+      operationalNextStep: {
+        collectionTrigger: { queued: false, reason: "source_suppressed" },
+        retryHint: "request a new candidate if scope changes"
+      }
+    });
+    expect(body.duplicates[0]).toMatchObject({ target: "@pack_public_cti", duplicateOf: publicCandidate.sourceId });
+    expect(body.rejected[0]).toMatchObject({ target: "not-a-public-channel", code: "invalid_target", retryHint: expect.any(String) });
+    expect(store.listSources()).toHaveLength(3);
+    expect(frontier.snapshot()).toHaveLength(0);
+
+    const promoted = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "promote", candidateId: publicCandidate.id, approvedBy: "analyst-pack" })
+    }), { store, frontier });
+    const promotedBody = await promoted.json() as any;
+    expect(promoted.status).toBe(200);
+    expect(promotedBody.collectionTrigger).toMatchObject({ queued: true, candidateId: publicCandidate.id });
+    expect(frontier.snapshot()).toHaveLength(1);
+
+    const observed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "record_capture",
+        candidateId: publicCandidate.id,
+        collectionTaskId: promotedBody.collectionTrigger.jobId,
+        captureText: "APT29 source-pack public Telegram mention observed without live network scraping."
+      })
+    }), { store, frontier });
+    const observedBody = await observed.json() as any;
+    expect(observed.status).toBe(200);
+    expect(observedBody.lifecycle).toMatchObject({ collectionStatus: "capture_observed" });
+    expect(observedBody.alertRebuild).toMatchObject({ status: "completed", alertCount: 1, watchlistIds: ["watch_pack_apt29"] });
+    expect(store.listCaptures()).toHaveLength(1);
+    expect(store.listDwmAlerts()).toHaveLength(1);
+  });
+
   test("persists restricted metadata source candidates instead of dropping them into a queue only", async () => {
     const store = new InMemoryScraperStore();
     const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
