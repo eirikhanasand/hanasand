@@ -8,6 +8,7 @@ import {
     filterDwmWebhookDeliveryEvidenceForVisibility,
     normalizeDwmWebhookDestinationInput,
     redactWebhookEndpoint,
+    type DwmAlertWebhookTriggerOptions,
 } from '#utils/dwm/webhooks.ts'
 
 function expect(condition: unknown, message: string, details?: unknown): asserts condition {
@@ -216,12 +217,27 @@ const replayWorkflowAlert = {
     },
 }
 const replayWorkflowBefore = JSON.stringify(replayWorkflowAlert)
-const replayTriggerInput = buildDwmAlertWebhookNotificationInput(replayWorkflowAlert, {
+const workflowReplayHandoff: {
+    ownerId: string
+    alert: Record<string, unknown>
+    options: DwmAlertWebhookTriggerOptions
+} = {
+    ownerId: 'owner_contract',
+    alert: replayWorkflowAlert,
+    options: {
+        eventType: 'dwm.alert.replayed',
+        dryRun: true,
+        live: false,
+        destinationId: 'destination_replay_contract',
+    },
+}
+const replayTriggerInput = buildDwmAlertWebhookNotificationInput(workflowReplayHandoff.alert, {
     eventType: 'dwm.alert.replayed',
     dryRun: true,
 })
+const targetedReplayTriggerInput = buildDwmAlertWebhookNotificationInput(workflowReplayHandoff.alert, workflowReplayHandoff.options)
 const replayPlan = buildDwmAlertWebhookDispatchPlan({
-    ownerId: 'owner_contract',
+    ownerId: workflowReplayHandoff.ownerId,
     input: replayTriggerInput,
     destinations: [
         {
@@ -256,6 +272,7 @@ expect(replayTriggerInput.watchlistItemId === 'watchlist_item_replay_contract', 
 expect(replayTriggerInput.sourceFamily === 'telegram_public', 'Replay trigger input should map source family.', replayTriggerInput)
 expect(replayTriggerInput.casePath === replayWorkflowAlert.casePath, 'Replay trigger input should map case path.', replayTriggerInput)
 expect(replayTriggerInput.dedupeKey === 'dwm_dedupe_replay_contract', 'Replay trigger input should map dedupe key.', replayTriggerInput)
+expect(targetedReplayTriggerInput.destinationId === 'destination_replay_contract' && targetedReplayTriggerInput.dryRun === true && targetedReplayTriggerInput.live === false, 'Replay handoff should accept destination selection plus dry-run/live mode.', targetedReplayTriggerInput)
 expect(replayPlan.selectedDestinations.length === 1, 'Replay dispatch should select the active org destination.', replayPlan)
 expect(replayPlan.eventType === 'dwm.alert.replayed', 'Replay dispatch should preserve replay event type.', replayPlan)
 expect(replayAlertContext.id === 'alert_replay_contract', 'Replay payload should link to the same alert id.', replayPayload)
@@ -675,6 +692,8 @@ console.log(JSON.stringify({
         'org/watchlist context propagation',
         'route/dedupe/case context',
         'alert replay trigger adapter',
+        'workflow replay handoff type contract',
+        'adapter destination dry-run/live selection',
         'replay alert/dedupe/case linkage',
         'idempotent duplicate replay key',
         'replay workflow immutability',
