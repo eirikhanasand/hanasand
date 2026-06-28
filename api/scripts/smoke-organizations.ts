@@ -8,6 +8,7 @@ import {
     normalizeWatchlistInput,
     buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
+    organizationVisibilityDecision,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
 } from '../src/utils/organizations.ts'
@@ -109,11 +110,16 @@ assert.equal(alertReference.alert.route, 'organization_watchlist')
 assert.equal(alertReference.alert.defaultWebhookPolicy, 'manual_selection')
 assert.equal(alertReference.alert.alertVisibilityPolicy, 'admins')
 assert.equal(alertReference.alert.memberCount, 8)
+assert.equal(alertReference.alert.activeMemberCount, 8)
 assert.equal(alertReference.alert.ownerCount, 1)
+assert.deepEqual(alertReference.alert.allowedViewerRoles, ['owner', 'admin'])
+assert.equal(alertReference.alert.removedMemberDenialReason, 'member_removed')
+assert.equal(alertReference.alert.deactivatedMemberDenialReason, 'member_deactivated')
 assert.equal(alertReference.alert.pendingInviteCount, 2)
 assert.equal(alertReference.alert.sharedWatchlistCount, 1)
 assert.equal(alertReference.alert.readinessStatus, 'ready')
 assert.equal(alertReference.webhookContract.defaultWebhookPolicy, 'manual_selection')
+assert.deepEqual(alertReference.webhookContract.allowedViewerRoles, ['owner', 'admin'])
 assert.match(alertReference.alert.casePath, /organizationId=org_acme/)
 assert.match(alertReference.alert.dedupeKey, /org:org_acme:watchlist:watch_domain_acme/)
 
@@ -132,10 +138,56 @@ assert.deepEqual(buildOrganizationBridgeContext({
     defaultWebhookPolicy: 'active_destinations',
     alertVisibilityPolicy: 'members',
     memberCount: 1,
+    activeMemberCount: 1,
     ownerCount: 1,
+    allowedViewerRoles: ['owner', 'admin', 'member', 'viewer'],
+    removedMemberDenialReason: 'member_removed',
+    deactivatedMemberDenialReason: 'member_deactivated',
     pendingInviteCount: 0,
     sharedWatchlistCount: 0,
     readinessStatus: 'needs_watchlist',
+})
+
+assert.deepEqual(organizationVisibilityDecision({
+    role: 'viewer',
+    status: 'active',
+    alertVisibilityPolicy: 'members',
+}), {
+    allowed: true,
+    reason: null,
+    alertVisibilityPolicy: 'members',
+    allowedRoles: ['owner', 'admin', 'member', 'viewer'],
+})
+assert.deepEqual(organizationVisibilityDecision({
+    role: 'viewer',
+    status: 'active',
+    alertVisibilityPolicy: 'admins',
+}), {
+    allowed: false,
+    reason: 'role_not_allowed',
+    alertVisibilityPolicy: 'admins',
+    allowedRoles: ['owner', 'admin'],
+})
+assert.deepEqual(organizationVisibilityDecision({
+    role: 'member',
+    status: 'removed',
+    alertVisibilityPolicy: 'members',
+}), {
+    allowed: false,
+    reason: 'member_removed',
+    alertVisibilityPolicy: 'members',
+    allowedRoles: ['owner', 'admin', 'member', 'viewer'],
+})
+assert.deepEqual(organizationVisibilityDecision({
+    role: 'member',
+    status: 'active',
+    userActive: false,
+    alertVisibilityPolicy: 'members',
+}), {
+    allowed: false,
+    reason: 'member_deactivated',
+    alertVisibilityPolicy: 'members',
+    allowedRoles: ['owner', 'admin', 'member', 'viewer'],
 })
 
 assert.equal(roleCanManageOrganization('owner'), true)

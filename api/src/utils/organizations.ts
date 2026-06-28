@@ -121,7 +121,11 @@ export type OrganizationDwmAlertReference = {
         defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
         alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
         memberCount: number
+        activeMemberCount: number
         ownerCount: number
+        allowedViewerRoles: OrganizationRole[]
+        removedMemberDenialReason: OrganizationVisibilityDenyReason
+        deactivatedMemberDenialReason: OrganizationVisibilityDenyReason
         pendingInviteCount: number
         sharedWatchlistCount: number
         readinessStatus: OrganizationReadinessStatus
@@ -144,7 +148,11 @@ export type OrganizationDwmAlertReference = {
         defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
         alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
         memberCount: number
+        activeMemberCount: number
         ownerCount: number
+        allowedViewerRoles: OrganizationRole[]
+        removedMemberDenialReason: OrganizationVisibilityDenyReason
+        deactivatedMemberDenialReason: OrganizationVisibilityDenyReason
         pendingInviteCount: number
         sharedWatchlistCount: number
         readinessStatus: OrganizationReadinessStatus
@@ -162,10 +170,30 @@ export type OrganizationBridgeContext = {
     defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
     alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
     memberCount: number
+    activeMemberCount: number
     ownerCount: number
+    allowedViewerRoles: OrganizationRole[]
+    removedMemberDenialReason: OrganizationVisibilityDenyReason
+    deactivatedMemberDenialReason: OrganizationVisibilityDenyReason
     pendingInviteCount: number
     sharedWatchlistCount: number
     readinessStatus: OrganizationReadinessStatus
+}
+
+export type OrganizationVisibilityDenyReason = 'not_member' | 'member_removed' | 'member_deactivated' | 'role_not_allowed'
+
+export type OrganizationVisibilityDecisionInput = {
+    role?: OrganizationRole | null
+    status?: OrganizationMemberRow['status'] | 'inactive' | null
+    userActive?: boolean | null
+    alertVisibilityPolicy?: OrganizationAlertVisibilityPolicy | null
+}
+
+export type OrganizationVisibilityDecision = {
+    allowed: boolean
+    reason: OrganizationVisibilityDenyReason | null
+    alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
+    allowedRoles: OrganizationRole[]
 }
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -294,6 +322,28 @@ export function roleCanWriteWatchlist(role: OrganizationRole | undefined) {
     return watchlistWriteRoles.has(role as OrganizationRole)
 }
 
+export function organizationVisibilityDecision(input: OrganizationVisibilityDecisionInput): OrganizationVisibilityDecision {
+    const alertVisibilityPolicy = input.alertVisibilityPolicy ?? 'members'
+    const allowedRoles = allowedOrganizationVisibilityRoles(alertVisibilityPolicy)
+    if (!input.role || !input.status) {
+        return { allowed: false, reason: 'not_member', alertVisibilityPolicy, allowedRoles }
+    }
+
+    if (input.userActive === false) {
+        return { allowed: false, reason: 'member_deactivated', alertVisibilityPolicy, allowedRoles }
+    }
+
+    if (input.status !== 'active') {
+        return { allowed: false, reason: input.status === 'removed' ? 'member_removed' : 'member_deactivated', alertVisibilityPolicy, allowedRoles }
+    }
+
+    if (!allowedRoles.includes(input.role)) {
+        return { allowed: false, reason: 'role_not_allowed', alertVisibilityPolicy, allowedRoles }
+    }
+
+    return { allowed: true, reason: null, alertVisibilityPolicy, allowedRoles }
+}
+
 export function toOrganization(row: OrganizationRow) {
     const settings = organizationSettingsFromRow(row)
     return {
@@ -393,7 +443,11 @@ export function buildOrganizationDwmAlertReference(
             defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
             alertVisibilityPolicy: bridgeContext.alertVisibilityPolicy,
             memberCount: bridgeContext.memberCount,
+            activeMemberCount: bridgeContext.activeMemberCount,
             ownerCount: bridgeContext.ownerCount,
+            allowedViewerRoles: bridgeContext.allowedViewerRoles,
+            removedMemberDenialReason: bridgeContext.removedMemberDenialReason,
+            deactivatedMemberDenialReason: bridgeContext.deactivatedMemberDenialReason,
             pendingInviteCount: bridgeContext.pendingInviteCount,
             sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
             readinessStatus: bridgeContext.readinessStatus,
@@ -413,7 +467,11 @@ export function buildOrganizationDwmAlertReference(
             defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
             alertVisibilityPolicy: bridgeContext.alertVisibilityPolicy,
             memberCount: bridgeContext.memberCount,
+            activeMemberCount: bridgeContext.activeMemberCount,
             ownerCount: bridgeContext.ownerCount,
+            allowedViewerRoles: bridgeContext.allowedViewerRoles,
+            removedMemberDenialReason: bridgeContext.removedMemberDenialReason,
+            deactivatedMemberDenialReason: bridgeContext.deactivatedMemberDenialReason,
             pendingInviteCount: bridgeContext.pendingInviteCount,
             sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
             readinessStatus: bridgeContext.readinessStatus,
@@ -427,14 +485,28 @@ export function buildOrganizationBridgeContext(
     organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>
 ): OrganizationBridgeContext {
     const sharedWatchlistCount = Number(organization.shared_watchlist_count ?? 0)
+    const alertVisibilityPolicy = organization.alert_visibility_policy ?? 'members'
     return {
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
         defaultWebhookPolicy: organization.default_webhook_policy ?? 'active_destinations',
-        alertVisibilityPolicy: organization.alert_visibility_policy ?? 'members',
+        alertVisibilityPolicy,
         memberCount: Number(organization.member_count ?? 0),
+        activeMemberCount: Number(organization.member_count ?? 0),
         ownerCount: Number(organization.owner_count ?? 0),
+        allowedViewerRoles: allowedOrganizationVisibilityRoles(alertVisibilityPolicy),
+        removedMemberDenialReason: organizationVisibilityDecision({
+            role: 'member',
+            status: 'removed',
+            alertVisibilityPolicy,
+        }).reason ?? 'member_removed',
+        deactivatedMemberDenialReason: organizationVisibilityDecision({
+            role: 'member',
+            status: 'active',
+            userActive: false,
+            alertVisibilityPolicy,
+        }).reason ?? 'member_deactivated',
         pendingInviteCount: Number(organization.pending_invite_count ?? 0),
         sharedWatchlistCount,
         readinessStatus: sharedWatchlistCount > 0 ? 'ready' : 'needs_watchlist',
@@ -461,6 +533,12 @@ function normalizeInviteRole(value: unknown): OrganizationRole {
     }
 
     return role as OrganizationRole
+}
+
+function allowedOrganizationVisibilityRoles(policy: OrganizationAlertVisibilityPolicy): OrganizationRole[] {
+    if (policy === 'owners') return ['owner']
+    if (policy === 'admins') return ['owner', 'admin']
+    return ['owner', 'admin', 'member', 'viewer']
 }
 
 function normalizeSettingsName(value: unknown) {
