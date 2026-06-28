@@ -256,6 +256,18 @@ html.dark:not(.light) header[class*="bg-white/"] {
   border-color: #243044 !important;
 }
 
+.dark .enterprise-theme .source-ops-workbench [class*="border-[#dfe5ee]"],
+.dark .enterprise-theme .source-ops-workbench [class*="border-[#d8dee9]"],
+.dark .enterprise-theme .source-ops-workbench [class*="border-[#e0e5ed]"],
+.dark .enterprise-theme .source-ops-workbench [class*="border-[#e8edf5]"],
+.dark .enterprise-theme .source-ops-workbench [class*="border-[#eef1f5]"] {
+  border-color: #22334d !important;
+}
+
+.dark .enterprise-theme .source-ops-workbench [class*="border-transparent"] {
+  border-color: transparent !important;
+}
+
 .dark .enterprise-theme [class*="text-[#171a21]"],
 .dark .enterprise-theme [class*="text-[#20242c]"],
 .dark .enterprise-theme [class*="text-[#111827]"],

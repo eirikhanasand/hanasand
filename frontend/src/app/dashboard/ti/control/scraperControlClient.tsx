@@ -205,17 +205,17 @@ export default function TiScraperControlClient() {
     }
 
     return (
-        <div className='grid gap-4'>
+        <div className='source-ops-workbench grid gap-4'>
             {error ? <Notice tone='bad' title='Scraper control unavailable' body={error} /> : null}
             {actionResult ? <Notice tone={actionResult.ok ? 'ok' : 'bad'} title={actionResult.ok ? 'Action completed' : 'Action failed'} body={actionSummary(actionResult)} /> : null}
             {!snapshot?.baseConfigured && !loading ? <Notice tone='bad' title='Backend not configured' body='Set TI_SCRAPER_API_BASE for live scraper control. The workbench still labels session-local actions honestly instead of pretending they persisted.' /> : null}
 
             <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
-                <div className='grid border-b border-[#e8edf5] bg-[#171a21] p-4 text-white xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end'>
+                <div className='grid border-b border-[#dfe5ee] bg-[#171a21] p-4 text-white dark:border-[#22334d] xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end'>
                     <div className='min-w-0'>
-                        <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>Live pipeline workbench</p>
-                        <h2 className='mt-1 text-xl font-semibold'>Queue, evidence, source posture, actions, and audit trail.</h2>
-                        <p className='mt-1 max-w-4xl text-sm leading-6 text-[#d8deea]'>The selected item below drives the workday. Compact health context is here only to support triage.</p>
+                        <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>Source operations</p>
+                        <h2 className='mt-1 text-xl font-semibold'>Collection queue and source readiness</h2>
+                        <p className='mt-1 max-w-4xl text-sm leading-6 text-[#d8deea]'>Current runs, source posture, evidence quality, and alert readiness for the selected query.</p>
                     </div>
                     <form onSubmit={submit} className='mt-3 grid gap-2 sm:grid-cols-[minmax(0,22rem)_auto] xl:mt-0'>
                         <label className='relative block'>
@@ -235,8 +235,8 @@ export default function TiScraperControlClient() {
                 </div>
 
                 <div className='grid min-h-[760px] xl:grid-cols-[360px_minmax(0,1fr)_360px]'>
-                    <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
-                        <div className='grid gap-3 border-b border-[#e8edf5] p-4'>
+                    <aside className='border-b border-[#dfe5ee] bg-[#f8fafc] dark:border-[#22334d] xl:border-b-0 xl:border-r'>
+                        <div className='grid gap-3 border-b border-[#dfe5ee] p-4 dark:border-[#22334d]'>
                             <div className='grid grid-cols-4 gap-2 text-center'>
                                 <MiniMetric label='Queue' value={String(queueCount)} />
                                 <MiniMetric label='Tasks' value={String(frontierTasks.length)} />
@@ -292,7 +292,7 @@ export default function TiScraperControlClient() {
                                                 <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'>{selected.kind.replaceAll('_', ' ')}</span>
                                                 <span className='rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#475467]'>{selectedDecision?.status || selected.status}</span>
                                             </div>
-                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
+                                            <h2 className='mt-3 break-words text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
                                             <p className='mt-2 text-sm leading-6 text-[#596170]'>{selected.subtitle}</p>
                                         </div>
                                         <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 text-xs text-[#667085]'>
@@ -306,15 +306,15 @@ export default function TiScraperControlClient() {
                                     </div>
                                 </section>
 
-                                <section className='grid gap-4 lg:grid-cols-[1fr_0.8fr]'>
+                                <section className='grid gap-4 2xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <div className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
                                         <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
                                             <FileSearch className='h-4 w-4 text-[#3056d3]' />
-                                            Evidence, provenance, and public-page impact
+                                            Evidence and provenance
                                         </div>
                                         <div className='mt-3 grid gap-3'>
-                                            <EvidenceLine title='How this feeds /ti/<query>' body={publicImpactFor(selected, snapshot?.query || query)} />
-                                            <EvidenceLine title='Source and task provenance' body={provenanceFor(selected, selectedSource)} />
+                                            <EvidenceLine title='Intelligence output' body={publicImpactFor(selected, snapshot?.query || query)} />
+                                            <EvidenceLine title='Source record' body={provenanceFor(selected, selectedSource)} />
                                             <EvidenceLine title='Quality gate' body={qualitySummary(snapshot)} />
                                             <EvidenceLine title='Policy boundary' body={policySummary(selected, selectedSource, snapshot)} />
                                         </div>
@@ -325,21 +325,21 @@ export default function TiScraperControlClient() {
                                             <SlidersHorizontal className='h-4 w-4 text-[#3056d3]' />
                                             Actions
                                         </div>
-                                        <div className='mt-3 grid gap-2'>
-                                            <ActionButton busy={busyAction === 'run_query'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('run_query')}>Queue live run</ActionButton>
-                                            <ActionButton busy={busyAction === 'source_apply_plan'} icon={<FileSearch className='h-4 w-4' />} onClick={() => runAction('source_apply_plan')}>Dry-run source plan</ActionButton>
-                                            <ActionButton busy={busyAction === 'public_channel_status'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('public_channel_status')}>Check public channels</ActionButton>
-                                            <ActionButton busy={busyAction === 'rebuild_alerts'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild watchlist alerts</ActionButton>
+                                        <div className='mt-3 grid gap-2 sm:grid-cols-2 2xl:grid-cols-1'>
+                                            <ActionButton busy={busyAction === 'run_query'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('run_query')}>Queue run</ActionButton>
+                                            <ActionButton busy={busyAction === 'source_apply_plan'} icon={<FileSearch className='h-4 w-4' />} onClick={() => runAction('source_apply_plan')}>Preview source changes</ActionButton>
+                                            <ActionButton busy={busyAction === 'public_channel_status'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('public_channel_status')}>Check channels</ActionButton>
+                                            <ActionButton busy={busyAction === 'rebuild_alerts'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
                                             <ActionButton icon={<PauseCircle className='h-4 w-4' />} onClick={() => selectedSource && toggleLocalPause(selectedSource.id)}>
-                                                {selectedSource && localControl.sourcePaused[selectedSource.id] ? 'Resume source session' : 'Pause source session'}
+                                                {selectedSource && localControl.sourcePaused[selectedSource.id] ? 'Resume source' : 'Pause source'}
                                             </ActionButton>
                                             <ActionButton icon={<RotateCcw className='h-4 w-4' />} onClick={() => applySessionDecision('retry requested')}>Mark retry</ActionButton>
-                                            <ActionButton icon={<CheckCircle2 className='h-4 w-4' />} onClick={() => applySessionDecision('promoted for review')}>Promote for review</ActionButton>
-                                            <ActionButton icon={<XCircle className='h-4 w-4' />} onClick={() => applySessionDecision('suppressed in session')}>Suppress session</ActionButton>
+                                            <ActionButton icon={<CheckCircle2 className='h-4 w-4' />} onClick={() => applySessionDecision('promoted for review')}>Send to review</ActionButton>
+                                            <ActionButton icon={<XCircle className='h-4 w-4' />} onClick={() => applySessionDecision('suppressed in session')}>Suppress</ActionButton>
                                         </div>
-                                        <div className='mt-3 grid gap-2 text-xs text-[#667085] sm:grid-cols-2'>
-                                            <Info label='Backed actions' value='run, canary, channel check, enrich, source request, watchlist, alert rebuild, source plan' />
-                                            <Info label='Session actions' value='pause, retry, promote, suppress, notes' />
+                                        <div className='mt-3 grid gap-2 text-xs text-[#667085] lg:grid-cols-2 2xl:grid-cols-1'>
+                                            <Info label='API actions' value='run, canary, channel check, enrich, source request, watchlist, alert rebuild, source plan' />
+                                            <Info label='Local actions' value='pause, retry, review, suppress, notes' />
                                         </div>
                                     </div>
                                 </section>
@@ -364,9 +364,9 @@ export default function TiScraperControlClient() {
                         )}
                     </main>
 
-                    <aside className='border-t border-[#e8edf5] bg-[#fbfcfe] p-4 xl:border-l xl:border-t-0'>
+                    <aside className='border-t border-[#dfe5ee] bg-[#fbfcfe] p-4 dark:border-[#22334d] xl:border-l xl:border-t-0'>
                         <div className='grid gap-4'>
-                            <SidePanel title='Operator Note' icon={<UserRound className='h-4 w-4' />}>
+                            <SidePanel title='Analyst note' icon={<UserRound className='h-4 w-4' />}>
                                 <textarea
                                     value={selected ? selectedNote : ''}
                                     onChange={event => selected && updateNote(selected.id, event.target.value)}
@@ -376,7 +376,7 @@ export default function TiScraperControlClient() {
                                 <p>Notes are session-local until TI case ownership persistence is added.</p>
                             </SidePanel>
 
-                            <SidePanel title='Selected Source' icon={<DatabaseZap className='h-4 w-4' />}>
+                            <SidePanel title='Selected source' icon={<DatabaseZap className='h-4 w-4' />}>
                                 {selectedSource ? (
                                     <div className='grid gap-2'>
                                         <Info label='Name' value={selectedSource.name} />
@@ -389,7 +389,7 @@ export default function TiScraperControlClient() {
                                 ) : <p>No source selected.</p>}
                             </SidePanel>
 
-                            <SidePanel title='Source and Alert Growth' icon={<GitBranch className='h-4 w-4' />}>
+                            <SidePanel title='Coverage and alerts' icon={<GitBranch className='h-4 w-4' />}>
                                 <div className='grid grid-cols-2 gap-2'>
                                     <Info label='Candidates' value={String(sourceGrowth.candidates)} />
                                     <Info label='Active Telegram' value={String(sourceGrowth.activeTelegram)} />
@@ -430,7 +430,7 @@ export default function TiScraperControlClient() {
                             <SidePanel title='Audit and History' icon={<History className='h-4 w-4' />}>
                                 <div className='grid gap-3'>
                                     {timeline.map(item => (
-                                        <div key={item.id} className='border-l-2 border-[#d8dee9] pl-3'>
+                                        <div key={item.id} className='border-l-2 border-[#d8dee9] pl-3 dark:border-[#2a3d5c]'>
                                             <p className='text-xs font-semibold text-[#171a21]'>{item.title}</p>
                                             <p className='mt-1 text-[11px] text-[#667085]'>{item.at}</p>
                                             <p className='mt-1 text-xs leading-5 text-[#596170]'>{item.body}</p>
@@ -554,7 +554,7 @@ function workItemsFor(snapshot: ControlSnapshot | null, sources: SourceRow[], ta
             status: 'blocked',
             timestamp: generatedAt,
             evidence: [{ label: 'Missing', value: 'TI_SCRAPER_API_BASE or scraper response' }],
-            nextActions: ['Configure TI_SCRAPER_API_BASE.', 'Verify /v1/health.', 'Reload the control room.'],
+            nextActions: ['Configure TI_SCRAPER_API_BASE.', 'Verify /v1/health.', 'Reload source operations.'],
         })
     }
 
@@ -738,7 +738,7 @@ function publicImpactFor(item: WorkItem, query: string) {
     if (item.kind === 'source') return `This source can expand or degrade ${query} coverage. Changes should go through dry-run apply plans so public actor pages do not inherit noisy or unsafe evidence.`
     if (item.kind === 'policy') return `Restricted metadata can support review state, hashes, timing, actor/victim fields, and safe excerpts, but it should not expose raw leaked data on /ti/${encodeURIComponent(query)}.`
     if (item.kind === 'platform') return 'Endpoint failures can force the public page into searching/partial states even when sources exist.'
-    return `This item affects whether /ti/${encodeURIComponent(query)} can show current, source-backed data instead of generic actor context.`
+    return `This item affects whether /ti/${encodeURIComponent(query)} has current collection evidence, freshness, and provenance.`
 }
 
 function provenanceFor(item: WorkItem, source?: SourceRow) {
@@ -823,7 +823,7 @@ function Info({ label, value }: { label: string; value: string }) {
     return (
         <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
             <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21]'>{value || 'unknown'}</p>
+            <p className='mt-1 break-words text-sm font-semibold text-[#171a21]'>{value || 'unknown'}</p>
         </div>
     )
 }
@@ -858,10 +858,10 @@ function ActionButton({ children, icon, busy, compact, onClick }: { children: Re
             type='button'
             disabled={busy}
             onClick={onClick}
-            className={`inline-flex items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] ${compact ? 'h-8 px-2 text-xs' : 'h-10 px-3'}`}
+            className={`inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white text-center text-sm font-semibold leading-tight text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#2a3d5c] ${compact ? 'min-h-8 px-2 py-1.5 text-xs' : 'min-h-10 px-3 py-2'}`}
         >
-            {busy ? <RefreshCcw className='h-4 w-4 animate-spin' /> : icon}
-            {children}
+            <span className='shrink-0'>{busy ? <RefreshCcw className='h-4 w-4 animate-spin' /> : icon}</span>
+            <span className='min-w-0 break-words'>{children}</span>
         </button>
     )
 }
@@ -896,10 +896,10 @@ function actionSummary(result: ActionResult) {
 }
 
 function defaultDecisionReason(status: string) {
-    if (status.includes('retry')) return 'Retry requested from the control room.'
-    if (status.includes('promoted')) return 'Promoted for analyst review from the control room.'
+    if (status.includes('retry')) return 'Retry requested from source operations.'
+    if (status.includes('promoted')) return 'Promoted for analyst review from source operations.'
     if (status.includes('suppressed')) return 'Suppressed locally pending persistent workflow support.'
-    return 'Updated from the control room.'
+    return 'Updated from source operations.'
 }
 
 function formatTime(value?: string) {

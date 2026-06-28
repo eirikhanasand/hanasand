@@ -82,13 +82,13 @@ export default function DashboardSidebar({
 
     if (isAdmin) {
         tiAdminItems.push(
-            { href: '/dashboard/ti/control', label: 'TI control room', icon: <Radar className='h-4 w-4' /> },
+            { href: '/dashboard/ti/control', label: 'Source operations', icon: <Radar className='h-4 w-4' /> },
             { href: '/dashboard/ti/workbench', label: 'Analyst workbench', icon: <Inbox className='h-4 w-4' /> },
             { href: '/dashboard/ti/activity', label: 'TI activity', icon: <Activity className='h-4 w-4' /> },
             { href: '/dashboard/ti/enrichment', label: 'Actor enrichment', icon: <ListChecks className='h-4 w-4' /> },
             { href: '/dashboard/ti/sources', label: 'TI sources', icon: <DatabaseZap className='h-4 w-4' /> },
             { href: '/dashboard/ti/domains', label: 'TI domains', icon: <Globe2 className='h-4 w-4' /> },
-            { href: '/dashboard/ti/control', label: 'Scraper runs', icon: <PlayCircle className='h-4 w-4' /> },
+            { href: '/dashboard/ti/control', label: 'Collection runs', icon: <PlayCircle className='h-4 w-4' /> },
             { href: '/dashboard/ti/audit', label: 'TI audit log', icon: <ClipboardList className='h-4 w-4' /> },
         )
 
