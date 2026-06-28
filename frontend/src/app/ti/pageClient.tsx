@@ -9,6 +9,7 @@ import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
 import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
@@ -1006,10 +1007,10 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
 
                 <div className='grid gap-2'>
-                    <a href='/dashboard/dwm' className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
                         <ExternalLink className='h-3.5 w-3.5' />
                         Open DWM workbench
-                    </a>
+                    </Link>
                     {casePath ? (
                         <a href={casePath} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
                             <ExternalLink className='h-3.5 w-3.5' />

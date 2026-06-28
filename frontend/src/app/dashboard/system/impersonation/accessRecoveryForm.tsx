@@ -309,7 +309,7 @@ export default function AccessRecoveryForm() {
                 {searchResult?.approvals?.length ? (
                     <div className='grid gap-2 border-t border-white/8 pt-3'>
                         {searchResult.approvals.map(approval => (
-                            <div className='grid gap-2 rounded-lg border border-white/8 bg-white/[0.03] p-3 text-sm text-bright/66' key={approval.requestId}>
+                            <div className='grid gap-2 rounded-lg border border-white/8 bg-white/3 p-3 text-sm text-bright/66' key={approval.requestId}>
                                 <div className='flex flex-wrap gap-2 text-bright/78'>
                                     <span>{approval.status}</span>
                                     <span>{approval.outcome}</span>

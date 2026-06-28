@@ -292,7 +292,7 @@ export default function TiScraperControlClient() {
                                                 <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'>{selected.kind.replaceAll('_', ' ')}</span>
                                                 <span className='rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#475467]'>{selectedDecision?.status || selected.status}</span>
                                             </div>
-                                            <h2 className='mt-3 break-words text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
+                                            <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
                                             <p className='mt-2 text-sm leading-6 text-[#596170]'>{selected.subtitle}</p>
                                         </div>
                                         <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 text-xs text-[#667085]'>
@@ -823,7 +823,7 @@ function Info({ label, value }: { label: string; value: string }) {
     return (
         <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
             <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 break-words text-sm font-semibold text-[#171a21]'>{value || 'unknown'}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21]'>{value || 'unknown'}</p>
         </div>
     )
 }

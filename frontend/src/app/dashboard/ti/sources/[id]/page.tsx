@@ -257,7 +257,7 @@ function DarkStat({ icon, label, value, detail, tone }: { icon: React.ReactNode,
                 ? 'text-[#8ee4ad]'
                 : 'text-[#d8deea]'
     return (
-        <div className='rounded-lg border border-white/10 bg-white/[0.06] p-3'>
+        <div className='rounded-lg border border-white/10 bg-white/6 p-3'>
             <div className='flex items-center gap-2 text-[#bdc9e6]'>
                 {icon}
                 <p className='text-[10px] font-semibold uppercase'>{label}</p>
