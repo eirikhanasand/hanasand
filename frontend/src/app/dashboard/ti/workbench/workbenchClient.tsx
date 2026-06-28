@@ -412,7 +412,7 @@ function EmptyWorkspace() {
                 <h2 className='text-lg font-semibold text-[#171a21]'>No cases in the work queue</h2>
                 <p className='mt-2 text-sm leading-6 text-[#596170]'>Create a DWM watchlist, review source coverage, or run the TI source workflow to produce the first actionable case.</p>
                 <div className='mt-4 flex flex-wrap gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-[#171a21] px-3 text-xs font-semibold text-white transition hover:bg-[#2b2f39]'>Open DWM setup</Link>
+                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-[#171a21] px-3 text-xs font-semibold text-white transition hover:bg-[#2b2f39]'>Open DWM</Link>
                     <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>Review TI sources</Link>
                     <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>Configure delivery</Link>
                 </div>
