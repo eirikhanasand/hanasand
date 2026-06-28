@@ -13,6 +13,9 @@ export type WorkbenchEvidence = {
     redactionState: string
     contentHash: string
     excerpt: string
+    observedAt?: string
+    provenance?: string
+    confidence?: number
     metadata?: Array<{ label: string, value: string }>
 }
 
@@ -51,8 +54,9 @@ export type WorkbenchCase = {
 
 type QueueFilter = 'all' | 'critical' | 'high' | 'persistent' | 'evidence'
 
-export default function AnalystWorkbenchClient({ initialCases }: { initialCases: WorkbenchCase[] }) {
+export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }: { initialCases: WorkbenchCase[], chrome?: 'full' | 'compact' }) {
     const router = useRouter()
+    const compact = chrome === 'compact'
     const [selectedId, setSelectedId] = useState(initialCases[0]?.id ?? '')
     const [filter, setFilter] = useState<QueueFilter>('all')
     const [query, setQuery] = useState('')
@@ -146,22 +150,15 @@ export default function AnalystWorkbenchClient({ initialCases }: { initialCases:
             )}
 
             <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
-                <div className='border-b border-[#e8edf5] bg-[#171a21] px-5 py-4 text-white'>
-                    <div className='flex flex-wrap items-start justify-between gap-4'>
-                        <div>
-                            <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>XDR-style analyst work</p>
-                            <h2 className='mt-1 text-xl font-semibold'>Threat operations queue</h2>
-                            <p className='mt-1 max-w-3xl text-sm leading-6 text-[#d8deea]'>Investigate DWM alerts, domain correlations, and safe source captures from one queue instead of jumping across dashboard tiles.</p>
-                        </div>
-                        <div className='grid grid-cols-3 gap-2 text-right'>
-                            <Metric label='Cases' value={String(initialCases.length)} />
-                            <Metric label='Persistent' value={String(initialCases.filter(item => item.persistent).length)} />
-                            <Metric label='Critical' value={String(initialCases.filter(item => item.severity === 'critical').length)} />
-                        </div>
-                    </div>
+                <div className='flex flex-wrap items-center gap-2 border-b border-[#e8edf5] bg-[#171a21] px-3 py-2 text-xs text-white'>
+                    <StatusPill label='Cases' value={String(initialCases.length)} />
+                    <StatusPill label='Persistent' value={String(initialCases.filter(item => item.persistent).length)} />
+                    <StatusPill label='Critical' value={String(initialCases.filter(item => item.severity === 'critical').length)} />
+                    <StatusPill label='DWM actions' value='API route' tone='good' />
+                    <StatusPill label='TI decisions' value='session-local' tone='warn' />
                 </div>
 
-                <div className='grid min-h-[720px] xl:grid-cols-[340px_minmax(0,1fr)_330px]'>
+                <div className={`grid ${compact ? 'min-h-[calc(100vh-150px)] xl:grid-cols-[350px_minmax(0,1fr)_300px]' : 'min-h-[720px] xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
                     <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
                         <div className='grid gap-3 border-b border-[#e8edf5] p-4'>
                             <label className='relative block'>
@@ -187,7 +184,7 @@ export default function AnalystWorkbenchClient({ initialCases }: { initialCases:
                                 ))}
                             </div>
                         </div>
-                        <div className='max-h-[620px] overflow-auto p-2'>
+                        <div className={`${compact ? 'max-h-[calc(100vh-250px)]' : 'max-h-[620px]'} overflow-auto p-2`}>
                             {cases.map(item => (
                                 <button
                                     key={item.id}
@@ -219,13 +216,14 @@ export default function AnalystWorkbenchClient({ initialCases }: { initialCases:
                                 decision={selectedDecision}
                                 note={notes[selected.id] ?? ''}
                                 busyAction={busyAction}
+                                compact={compact}
                                 onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={(decision) => applyDecision(selected, decision)}
                                 onReplay={() => replayDwmAlert(selected)}
                                 onSend={() => sendDwmAlert(selected)}
                             />
                         ) : (
-                            <div className='p-5 text-sm text-[#596170]'>No analyst cases are available yet.</div>
+                            <EmptyWorkspace />
                         )}
                     </main>
 
@@ -268,11 +266,28 @@ export default function AnalystWorkbenchClient({ initialCases }: { initialCases:
     )
 }
 
-function CaseDetail({ item, decision, note, busyAction, onNoteChange, onDecision, onReplay, onSend }: {
+function EmptyWorkspace() {
+    return (
+        <div className='grid gap-4 p-5'>
+            <div className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-5'>
+                <h2 className='text-lg font-semibold text-[#171a21]'>No cases in the work queue</h2>
+                <p className='mt-2 text-sm leading-6 text-[#596170]'>Create a DWM watchlist, review source coverage, or run the TI source workflow to produce the first actionable case.</p>
+                <div className='mt-4 flex flex-wrap gap-2'>
+                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-[#171a21] px-3 text-xs font-semibold text-white transition hover:bg-[#2b2f39]'>Open DWM setup</Link>
+                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>Review TI sources</Link>
+                    <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>Configure delivery</Link>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function CaseDetail({ item, decision, note, busyAction, compact, onNoteChange, onDecision, onReplay, onSend }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
     busyAction: string | null
+    compact: boolean
     onNoteChange: (value: string) => void
     onDecision: (decision: LocalDecision) => void | Promise<void>
     onReplay: () => void | Promise<void>
@@ -290,7 +305,7 @@ function CaseDetail({ item, decision, note, busyAction, onNoteChange, onDecision
         ...item.timeline,
     ] : item.timeline
     return (
-        <div className='grid gap-5 p-5'>
+        <div className={`${compact ? 'grid gap-4 p-4' : 'grid gap-5 p-5'}`}>
             <div className='flex flex-wrap items-start justify-between gap-4'>
                 <div className='min-w-0'>
                     <div className='flex flex-wrap items-center gap-2'>
@@ -300,7 +315,7 @@ function CaseDetail({ item, decision, note, busyAction, onNoteChange, onDecision
                         <span className='rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#596170]'>{label(effectiveStatus)}</span>
                         {item.persistent && <span className='rounded-full bg-[#f4fbf7] px-2 py-0.5 text-xs font-semibold text-[#147a3b]'>persistent workflow</span>}
                     </div>
-                    <h2 className='mt-3 text-2xl font-semibold tracking-normal text-[#171a21]'>{item.title}</h2>
+                    <h2 className={`${compact ? 'mt-2 text-xl' : 'mt-3 text-2xl'} font-semibold tracking-normal text-[#171a21]`}>{item.title}</h2>
                     <p className='mt-1 text-sm text-[#596170]'>{item.queue} · {item.routeLabel} · {relativeTime(item.updatedAt)}</p>
                 </div>
                 <div className='grid gap-1 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 text-xs text-[#667085]'>
@@ -309,7 +324,7 @@ function CaseDetail({ item, decision, note, busyAction, onNoteChange, onDecision
                 </div>
             </div>
 
-            <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.55fr_1fr_auto] lg:items-end'>
+            <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)_auto] lg:items-end'>
                 <label className='grid gap-2'>
                     <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
                         <UserRound className='h-4 w-4 text-[#3056d3]' />
@@ -351,6 +366,75 @@ function CaseDetail({ item, decision, note, busyAction, onNoteChange, onDecision
                 </div>
             </section>
 
+            <section className='grid gap-4 lg:grid-cols-[1fr_0.78fr]'>
+                <div className='rounded-lg border border-[#e0e5ed] bg-white'>
+                    <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                        <div>
+                            <h3 className='text-sm font-semibold text-[#171a21]'>Evidence</h3>
+                            <p className='mt-0.5 text-xs text-[#667085]'>Source, timestamp, confidence, provenance, safe excerpt, and content hash.</p>
+                        </div>
+                        <ListChecks className='h-4 w-4 text-[#3056d3]' />
+                    </div>
+                    <div className={`grid gap-3 p-4 ${compact ? 'max-h-[310px] overflow-auto' : ''}`}>
+                        {item.evidence.map(evidence => (
+                            <div key={evidence.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <span className='text-sm font-semibold text-[#171a21]'>{evidence.sourceName}</span>
+                                    <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{evidence.redactionState}</span>
+                                    <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{evidence.captureMode}</span>
+                                    <span className='text-[11px] text-[#667085]'>{relativeTime(evidence.observedAt || item.updatedAt)}</span>
+                                </div>
+                                <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{evidence.excerpt}</p>
+                                <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
+                                    <p><span className='font-semibold text-[#475467]'>Confidence:</span> {evidence.confidence ?? item.confidence}%</p>
+                                    <p><span className='font-semibold text-[#475467]'>Provenance:</span> {evidence.provenance || item.routeLabel}</p>
+                                </div>
+                                <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{evidence.contentHash}</p>
+                                {evidence.metadata?.length ? (
+                                    <div className='mt-3 grid gap-1'>
+                                        {evidence.metadata.slice(0, 4).map(meta => (
+                                            <p key={`${evidence.id}-${meta.label}`} className='text-xs text-[#667085]'><span className='font-semibold text-[#475467]'>{meta.label}:</span> {meta.value}</p>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className='grid gap-4'>
+                    <div className='rounded-lg border border-[#e0e5ed] bg-white'>
+                        <div className='border-b border-[#eef1f5] px-4 py-3'>
+                            <h3 className='text-sm font-semibold text-[#171a21]'>Timeline</h3>
+                            <p className='mt-0.5 text-xs text-[#667085]'>Case state and source observations.</p>
+                        </div>
+                        <div className={`grid gap-3 p-4 ${compact ? 'max-h-[220px] overflow-auto' : ''}`}>
+                            {timeline.map(event => (
+                                <div key={event.id} className='grid grid-cols-[auto_1fr] gap-3'>
+                                    <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#3056d3]' />
+                                    <div>
+                                        <p className='text-sm font-semibold text-[#171a21]'>{event.title}</p>
+                                        <p className='mt-1 text-xs leading-5 text-[#667085]'>{event.body}</p>
+                                        <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(event.at)}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className='rounded-lg border border-[#e0e5ed] bg-white p-4'>
+                        <h3 className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                            <MessageSquareText className='h-4 w-4 text-[#3056d3]' />
+                            Session decision state
+                        </h3>
+                        <p className='mt-2 text-sm leading-6 text-[#596170]'>
+                            {decision?.status ? `${label(decision.status)}${decision.reason ? `: ${decision.reason}` : ''}` : 'No local decision recorded yet.'}
+                        </p>
+                        <p className='mt-2 text-xs leading-5 text-[#667085]'>DWM alert decisions persist through the DWM API. General TI ownership and notes are session-local.</p>
+                    </div>
+                </div>
+            </section>
+
             <section className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4'>
                 <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
                     <ShieldAlert className='h-4 w-4 text-[#c2410c]' />
@@ -377,69 +461,6 @@ function CaseDetail({ item, decision, note, busyAction, onNoteChange, onDecision
                 ))}
             </section>
 
-            <section className='grid gap-4 lg:grid-cols-[1fr_0.78fr]'>
-                <div className='rounded-lg border border-[#e0e5ed] bg-white'>
-                    <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
-                        <div>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Evidence</h3>
-                            <p className='mt-0.5 text-xs text-[#667085]'>Safe excerpts, hashes, source labels, and metadata.</p>
-                        </div>
-                        <ListChecks className='h-4 w-4 text-[#3056d3]' />
-                    </div>
-                    <div className='grid gap-3 p-4'>
-                        {item.evidence.map(evidence => (
-                            <div key={evidence.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <span className='text-sm font-semibold text-[#171a21]'>{evidence.sourceName}</span>
-                                    <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{evidence.redactionState}</span>
-                                    <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{evidence.captureMode}</span>
-                                </div>
-                                <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{evidence.excerpt}</p>
-                                <p className='mt-3 break-all font-mono text-[11px] text-[#667085]'>{evidence.contentHash}</p>
-                                {evidence.metadata?.length ? (
-                                    <div className='mt-3 grid gap-1'>
-                                        {evidence.metadata.slice(0, 4).map(meta => (
-                                            <p key={`${evidence.id}-${meta.label}`} className='text-xs text-[#667085]'><span className='font-semibold text-[#475467]'>{meta.label}:</span> {meta.value}</p>
-                                        ))}
-                                    </div>
-                                ) : null}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className='grid gap-4'>
-                    <div className='rounded-lg border border-[#e0e5ed] bg-white'>
-                        <div className='border-b border-[#eef1f5] px-4 py-3'>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Timeline</h3>
-                            <p className='mt-0.5 text-xs text-[#667085]'>Case state and source observations.</p>
-                        </div>
-                        <div className='grid gap-3 p-4'>
-                            {timeline.map(event => (
-                                <div key={event.id} className='grid grid-cols-[auto_1fr] gap-3'>
-                                    <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#3056d3]' />
-                                    <div>
-                                        <p className='text-sm font-semibold text-[#171a21]'>{event.title}</p>
-                                        <p className='mt-1 text-xs leading-5 text-[#667085]'>{event.body}</p>
-                                        <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(event.at)}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className='rounded-lg border border-[#e0e5ed] bg-white p-4'>
-                        <h3 className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                            <MessageSquareText className='h-4 w-4 text-[#3056d3]' />
-                            Session decision state
-                        </h3>
-                        <p className='mt-2 text-sm leading-6 text-[#596170]'>
-                            {decision?.status ? `${label(decision.status)}${decision.reason ? `: ${decision.reason}` : ''}` : 'No local decision recorded yet.'}
-                        </p>
-                        <p className='mt-2 text-xs leading-5 text-[#667085]'>This general TI workbench records decisions locally for now. DWM alert workflow decisions persist through the DWM API.</p>
-                    </div>
-                </div>
-            </section>
         </div>
     )
 }
@@ -487,12 +508,18 @@ function BriefStat({ icon, label: statLabel, value }: { icon: React.ReactNode, l
     )
 }
 
-function Metric({ label: metricLabel, value }: { label: string, value: string }) {
+function StatusPill({ label: statusLabel, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'good' | 'warn' }) {
+    const toneClass = tone === 'good'
+        ? 'border-[#2f7047] bg-[#1f3c2c] text-[#d8f5e0]'
+        : tone === 'warn'
+            ? 'border-[#7a6228] bg-[#3d341e] text-[#f8e7b8]'
+            : 'border-[#3a4252] bg-[#222936] text-[#d8deea]'
+
     return (
-        <div className='rounded-lg border border-[#3a4252] bg-[#222936] px-3 py-2'>
-            <p className='text-[10px] font-semibold uppercase text-[#cbd6ee]'>{metricLabel}</p>
-            <p className='mt-1 text-lg font-semibold text-white'>{value}</p>
-        </div>
+        <span className={`inline-flex min-h-8 items-center gap-2 rounded-md border px-2.5 ${toneClass}`}>
+            <span className='font-semibold uppercase text-[#cbd6ee]'>{statusLabel}</span>
+            <span className='font-semibold text-white'>{value}</span>
+        </span>
     )
 }
 
