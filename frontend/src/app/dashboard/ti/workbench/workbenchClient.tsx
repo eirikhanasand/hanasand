@@ -28,7 +28,7 @@ export type WorkbenchTimelineItem = {
 
 export type WorkbenchCase = {
     id: string
-    kind: 'dwm_alert' | 'ti_domain' | 'source_capture'
+    kind: 'dwm_alert' | 'ti_domain' | 'source_capture' | 'org_readiness' | 'watchlist_readiness' | 'webhook_readiness' | 'source_readiness' | 'alert_readiness'
     queue: string
     title: string
     subtitle: string
@@ -77,27 +77,28 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
         }
 
         const decisionStatus = decision.status
-        if (item.kind !== 'dwm_alert' || !decisionStatus) {
+        if (item.kind !== 'dwm_alert' || (!decisionStatus && !decision.owner)) {
             setLocalDecisions(current => ({ ...current, [item.id]: nextDecision }))
             return
         }
 
         await runPersistentAction(`decision:${item.id}`, async () => {
-            const mapped = mapDwmDecision(decisionStatus, item.status)
+            const mapped: Partial<{ reviewState: string, deliveryState: string }> = decisionStatus ? mapDwmDecision(decisionStatus, item.status) : {}
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(item.id)}`, {
                 method: 'PATCH',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
                     reviewState: mapped.reviewState,
                     deliveryState: mapped.deliveryState,
-                    note: decision.reason || 'Updated from the analyst workbench.',
+                    note: decision.reason || (decision.owner ? `Assigned to ${decision.owner}.` : 'Updated from the analyst workbench.'),
+                    assignedOwner: decision.owner,
                     actor: 'dashboard',
                 }),
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             setLocalDecisions(current => ({ ...current, [item.id]: nextDecision }))
-            return `${label(decisionStatus)} saved to the DWM workflow.`
+            return decisionStatus ? `${label(decisionStatus)} saved to the DWM workflow.` : 'Owner saved to the DWM workflow.'
         })
     }
 
