@@ -136,6 +136,7 @@ import {
     postSupportAccessRecoveryApprove,
     postSupportAccessRecoveryDeny,
     postSupportOrganizationInvite,
+    postSupportOrganizationInviteAction,
 } from './handlers/adminSupport.ts'
 import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUserProjects, getUserShares, postShare, putShare, toggleShareLock } from './handlers/share.ts'
 import postTiSearch, { postTiSearchBatch } from './handlers/ti/search.ts'
@@ -210,6 +211,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/admin/support/organizations/:id', getSupportOrganization)
     fastify.get('/admin/support/access-recovery', getSupportAccessRecoveryApprovals)
     fastify.post('/admin/support/organizations/:id/invites', postSupportOrganizationInvite)
+    fastify.post('/admin/support/organizations/:id/invites/:inviteId/actions', postSupportOrganizationInviteAction)
     fastify.post('/admin/support/organizations/:id/access-recovery', postSupportAccessRecovery)
     fastify.post('/admin/support/access-recovery/:requestId/approve', postSupportAccessRecoveryApprove)
     fastify.post('/admin/support/access-recovery/:requestId/deny', postSupportAccessRecoveryDeny)

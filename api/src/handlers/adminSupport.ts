@@ -48,13 +48,32 @@ type SupportInspectionQuery = {
     email?: string
     request?: string
     requestId?: string
+    entity?: string
+    entityId?: string
+    entityType?: string
+    action?: string
+    severity?: string
     outcome?: string
+    from?: string
+    to?: string
     limit?: string
 }
 
 type SupportInviteBody = InviteInput & {
     reason?: unknown
     context?: unknown
+}
+
+type SupportInviteActionParams = OrganizationParams & {
+    inviteId: string
+}
+
+type SupportInviteActionBody = {
+    action?: unknown
+    reason?: unknown
+    context?: unknown
+    expiresAt?: unknown
+    expires_at?: unknown
 }
 
 type SupportAccessRecoveryBody = InviteInput & {
@@ -436,12 +455,18 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const user = text(query.user || query.userId)
     const email = text(query.email).toLowerCase()
     const request = text(query.request || query.requestId)
+    const entity = text(query.entity || query.entityId)
+    const entityType = text(query.entityType)
+    const action = text(query.action)
+    const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
+    const from = text(query.from)
+    const to = text(query.to)
     const parsedLimit = Number(query.limit || 50)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100) : 50
 
-    if (!org && !user && !email && !request) {
-        return res.status(400).send({ error: 'Add org, user, email, or request to inspect support state.' })
+    if (!org && !user && !email && !request && !entity && !entityType && !action) {
+        return res.status(400).send({ error: 'Add org, user, email, request, entity, entityType, or action to inspect support state.' })
     }
 
     const [organizations, users, memberships, invites, approvals, audit] = await Promise.all([
@@ -450,7 +475,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         loadInspectionMemberships({ org, user, request, limit }),
         loadInspectionInvites({ org, email, request, limit }),
         loadInspectionApprovals({ org, user, email, request, outcome, limit }),
-        loadInspectionAuditEvents({ org, user, email, request, outcome, limit }),
+        loadInspectionAuditEvents({ org, user, email, request, entity, entityType, action, severity, outcome, from, to, limit }),
     ])
 
     const organizationIds = Array.from(new Set([
@@ -486,7 +511,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         outcome: 'success',
         context: {
             schemaVersion: 'support.inspection.v1',
-            filters: { org, user, email, request, outcome, limit },
+            filters: { org, user, email, request, entity, entityType, action, severity, outcome, from, to, limit },
             organizationCount: organizations.length,
             membershipCount: memberships.length,
             pendingInviteCount: invites.filter(row => row.status === 'pending').length,
@@ -499,7 +524,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         inspection: {
             schemaVersion: 'support.inspection.v1',
             generatedAt: new Date().toISOString(),
-            filters: { org, user, email, request, outcome, limit },
+            filters: { org, user, email, request, entity, entityType, action, severity, outcome, from, to, limit },
             organizations: organizations.map(row => ({
                 ...toOrganization(row as OrganizationRow),
                 adminAvailability: availabilityByOrg.get(String(row.id)) || null,
@@ -514,8 +539,16 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
             auditTimeline: timeline,
             controlledActions: {
                 inviteAssist: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/invites`),
+                inviteActions: invites.map(invite => `/api/admin/support/organizations/${encodeURIComponent(String(invite.organization_id))}/invites/${encodeURIComponent(String(invite.id))}/actions`),
                 accessRecovery: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/access-recovery`),
                 approvalSearch: `/api/admin/support/access-recovery${request ? `?request=${encodeURIComponent(request)}` : ''}`,
+                impersonationGuard: {
+                    reasonRequired: true,
+                    durationRequired: true,
+                    scopeRequired: true,
+                    noSilentImpersonation: true,
+                    auditTimeline: `/api/admin/audit-events?action=impersonation${request ? `&request=${encodeURIComponent(request)}` : ''}`,
+                },
             },
             copyText: [
                 `Support inspection org=${org || '*'} user=${user || '*'} email=${email || '*'} request=${request || '*'}`,
@@ -586,6 +619,179 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
     })
 
     return res.status(201).send({ invites: rows.map(toInvite) })
+}
+
+export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ Params: SupportInviteActionParams, Body: SupportInviteActionBody }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    const action = normalizeOption(req.body?.action, ['revoke', 'resend'])
+    let reason: string
+    try {
+        reason = requireAuditReason(req.body?.reason, 'Invite assistance action reason')
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid support invite action reason.' })
+    }
+    if (!action) {
+        return res.status(400).send({ error: 'Invite assistance action must be revoke or resend.' })
+    }
+
+    const organization = await loadOrganizationSupportDetail(req.params.id)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const existing = await run(`
+        SELECT *
+        FROM organization_invites
+        WHERE id = $1
+          AND organization_id = $2
+        LIMIT 1
+    `, [req.params.inviteId, organization.id])
+    const invite = existing.rows[0] as OrganizationInviteRow | undefined
+    if (!invite) {
+        return res.status(404).send({ error: 'Invite not found for organization.' })
+    }
+
+    const requestId = supportRequestId(req)
+    const actionType = action === 'revoke'
+        ? 'support.organization.invite_revoke'
+        : 'support.organization.invite_resend'
+    if (invite.status === 'accepted') {
+        await recordAdminAuditEvent(req, {
+            actionType,
+            actorId: actor.id,
+            targetType: 'invite',
+            targetId: invite.email,
+            organizationId: organization.id,
+            entityId: invite.id,
+            requestId,
+            severity: 'notice',
+            outcome: 'failed',
+            reason,
+            context: {
+                schemaVersion: 'support.invite_action.v1',
+                action,
+                requestId,
+                inviteId: invite.id,
+                email: invite.email,
+                role: invite.role,
+                before: inviteSnapshot(invite),
+                after: inviteSnapshot(invite),
+                noSilentMembershipMutation: true,
+                error: 'accepted_invite_not_mutable_by_support_action',
+                supportContext: cleanContext(req.body?.context),
+            },
+        })
+        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: invite.id })
+        return res.status(409).send({
+            error: 'Accepted invites cannot be revoked or resent by support action; inspect membership state instead.',
+            inviteAction: {
+                schemaVersion: 'support.invite_action.v1',
+                action,
+                requestId,
+                actorId: actor.id,
+                organization: toOrganization(organization),
+                invite: toInvite(invite),
+                before: inviteSnapshot(invite),
+                after: inviteSnapshot(invite),
+                outcome: 'failed',
+                auditEventIds,
+                noSilentMembershipMutation: true,
+            },
+        })
+    }
+
+    let expiresAt = invite.expires_at
+    if (action === 'resend') {
+        try {
+            expiresAt = normalizeInviteInput({
+                email: invite.email,
+                role: invite.role,
+                expiresAt: req.body?.expiresAt ?? req.body?.expires_at ?? invite.expires_at,
+            }).expiresAt
+        } catch (error) {
+            return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid invite resend expiry.' })
+        }
+    }
+
+    const before = inviteSnapshot(invite)
+    const updated = await run(`
+        UPDATE organization_invites
+        SET status = $3,
+            accepted_at = NULL,
+            accepted_by = NULL,
+            expires_at = $4,
+            created_at = CASE WHEN $3 = 'pending' THEN NOW() ELSE created_at END
+        WHERE id = $1
+          AND organization_id = $2
+        RETURNING *
+    `, [invite.id, organization.id, action === 'resend' ? 'pending' : 'revoked', expiresAt])
+    const updatedInvite = updated.rows[0] as OrganizationInviteRow
+    const after = inviteSnapshot(updatedInvite)
+    await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
+
+    await recordAdminAuditEvent(req, {
+        actionType,
+        actorId: actor.id,
+        targetType: 'invite',
+        targetId: updatedInvite.email,
+        organizationId: organization.id,
+        entityId: updatedInvite.id,
+        requestId,
+        severity: action === 'revoke' ? 'warning' : 'notice',
+        outcome: 'success',
+        reason,
+        context: {
+            schemaVersion: 'support.invite_action.v1',
+            action,
+            requestId,
+            inviteId: updatedInvite.id,
+            email: updatedInvite.email,
+            role: updatedInvite.role,
+            before,
+            after,
+            noSilentMembershipMutation: true,
+            mutation: 'invite_row_only',
+            supportContext: cleanContext(req.body?.context),
+        },
+    })
+    const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: updatedInvite.id })
+
+    return res.send({
+        inviteAction: {
+            schemaVersion: 'support.invite_action.v1',
+            action,
+            requestId,
+            actorId: actor.id,
+            organization: toOrganization(organization),
+            invite: toInvite(updatedInvite),
+            before,
+            after,
+            reason,
+            outcome: 'success',
+            auditEventIds,
+            noSilentMembershipMutation: true,
+            audit: {
+                actionType,
+                source: 'admin',
+                service: 'hanasand-api',
+                outcome: 'success',
+                severity: action === 'revoke' ? 'warning' : 'notice',
+                eventIds: auditEventIds,
+                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&entity=${encodeURIComponent(updatedInvite.id)}&outcome=success&source=admin&service=hanasand-api`,
+            },
+            copyText: [
+                `Support invite ${action} for ${updatedInvite.email}`,
+                `Org: ${organization.name} (${organization.id})`,
+                `Invite: ${updatedInvite.id}`,
+                `Status: ${before.status} -> ${after.status}`,
+                `Request: ${requestId}`,
+                `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
+                `Reason: ${reason}`,
+            ].join('\n'),
+        },
+    })
 }
 
 export async function getSupportAccessRecoveryApprovals(req: FastifyRequest<{ Querystring: AccessRecoveryApprovalQuery }>, res: FastifyReply) {
@@ -1216,7 +1422,7 @@ async function loadInspectionApprovals(input: { org: string, user: string, email
     return result.rows as AccessRecoveryApprovalRow[]
 }
 
-async function loadInspectionAuditEvents(input: { org: string, user: string, email: string, request: string, outcome: string, limit: number }) {
+async function loadInspectionAuditEvents(input: { org: string, user: string, email: string, request: string, entity: string, entityType: string, action: string, severity: string, outcome: string, from: string, to: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -1236,7 +1442,16 @@ async function loadInspectionAuditEvents(input: { org: string, user: string, ema
         where.push('(event.target_id ILIKE ' + placeholder + ' OR event.context->>\'email\' ILIKE ' + placeholder + ')')
     }
     if (input.request) where.push(`event.request_id ILIKE ${add(`%${input.request}%`)}`)
+    if (input.entity) {
+        const placeholder = add(`%${input.entity}%`)
+        where.push('(event.entity_id ILIKE ' + placeholder + ' OR event.target_id ILIKE ' + placeholder + ' OR event.context->>\'inviteId\' ILIKE ' + placeholder + ')')
+    }
+    if (input.entityType) where.push(`event.target_type ILIKE ${add(`%${input.entityType}%`)}`)
+    if (input.action) where.push(`event.action_type ILIKE ${add(`%${input.action}%`)}`)
+    if (input.severity) where.push(`event.severity = ${add(input.severity)}`)
     if (input.outcome) where.push(`event.outcome = ${add(input.outcome)}`)
+    if (input.from && !Number.isNaN(Date.parse(input.from))) where.push(`event.created_at >= ${add(new Date(input.from).toISOString())}`)
+    if (input.to && !Number.isNaN(Date.parse(input.to))) where.push(`event.created_at <= ${add(new Date(input.to).toISOString())}`)
     if (!where.length) return []
 
     const result = await run(`
@@ -1268,6 +1483,19 @@ async function loadInspectionAuditEvents(input: { org: string, user: string, ema
         LIMIT ${add(input.limit)}
     `, values)
     return result.rows as Record<string, unknown>[]
+}
+
+async function loadAdminAuditEventIds(input: { requestId: string, actionType: string, entityId: string }) {
+    const result = await run(`
+        SELECT id
+        FROM admin_audit_events
+        WHERE request_id = $1
+          AND action_type = $2
+          AND entity_id = $3
+        ORDER BY created_at DESC, id DESC
+        LIMIT 10
+    `, [input.requestId, input.actionType, input.entityId])
+    return result.rows.map((row: Record<string, unknown>) => Number(row.id)).filter(id => Number.isFinite(id))
 }
 
 async function loadOrganizationAvailability(organizationIds: string[]) {
@@ -1465,6 +1693,19 @@ function toSupportInvite(row: Record<string, unknown>) {
         createdAt: row.created_at,
         expiresAt: row.expires_at,
         acceptedAt: row.accepted_at,
+    }
+}
+
+function inviteSnapshot(row: OrganizationInviteRow) {
+    return {
+        id: row.id,
+        organizationId: row.organization_id,
+        email: row.email,
+        role: row.role,
+        status: row.status,
+        expiresAt: row.expires_at,
+        acceptedAt: row.accepted_at || null,
+        acceptedBy: row.accepted_by || null,
     }
 }
 

@@ -48,7 +48,7 @@ function printChecklist() {
         'One-command live check:',
         'RUN_ADMIN_SUPPORT_LIVE_SMOKE=1 API_BASE=${API_BASE:-http://127.0.0.1:8080/api} DB_HOST=${DB_HOST:-127.0.0.1} DB_PORT=${DB_PORT:-8503} DB_PASSWORD=... bun scripts/smoke-admin-access-recovery-live.mjs',
         '',
-        'The live check creates two temporary admins and one temporary org, verifies support inspection by org/email/request, pending recovery revokes the invite, approval re-enables it, denial keeps it revoked, approval search filters work by request/status/outcome/requester/approver, and audit ids are returned.',
+        'The live check creates two temporary admins and one temporary org, verifies support inspection by org/email/request, pending recovery revokes the invite, approval re-enables it, invite revoke/resend support actions keep membership untouched, denial keeps it revoked, approval/search/timeline filters work by request/status/outcome/requester/approver/entity/action, and audit ids are returned.',
         'Set KEEP_ADMIN_SUPPORT_SMOKE_DATA=1 to keep the seeded records for manual inspection.',
     ].join('\n'))
 }
@@ -177,6 +177,23 @@ async function inspectSupportState(params) {
     return result.body.inspection
 }
 
+async function supportInviteAction(inviteId, action, requestId) {
+    const result = await request(`/admin/support/organizations/${encodeURIComponent(orgId)}/invites/${encodeURIComponent(inviteId)}/actions`, {
+        method: 'POST',
+        headers: authHeaders(adminTwoId, adminTwoToken, { 'x-request-id': requestId }),
+        body: JSON.stringify({
+            action,
+            reason: `Support ${action} invite smoke request ${requestId}`,
+            context: `live-smoke-invite-action ${requestId}`,
+        }),
+    })
+    expect(result.response.status === 200, `Failed to ${action} invite ${inviteId}.`, result.body)
+    expect(result.body?.inviteAction?.requestId === requestId, 'Invite action should return the audit request id.', result.body)
+    expect((result.body?.inviteAction?.auditEventIds || []).length > 0, 'Invite action should return audit event ids.', result.body)
+    expect(result.body?.inviteAction?.noSilentMembershipMutation === true, 'Invite action should declare no silent membership mutation.', result.body)
+    return result.body.inviteAction
+}
+
 async function decide(requestId, action, expectedStatus) {
     const result = await request(`/admin/support/access-recovery/${encodeURIComponent(requestId)}/${action}`, {
         method: 'POST',
@@ -194,6 +211,17 @@ async function decide(requestId, action, expectedStatus) {
 async function verifyUnauthorizedSearchIsBlocked() {
     const result = await request('/admin/support/access-recovery')
     expect([401, 403].includes(result.response.status), 'Unauthenticated approval search should be blocked.', result.body)
+}
+
+async function verifyUnauthorizedInviteActionIsBlocked(inviteId) {
+    const result = await request(`/admin/support/organizations/${encodeURIComponent(orgId)}/invites/${encodeURIComponent(inviteId)}/actions`, {
+        method: 'POST',
+        body: JSON.stringify({
+            action: 'revoke',
+            reason: 'Unauthorized support invite action smoke reason',
+        }),
+    })
+    expect([401, 403].includes(result.response.status), 'Unauthenticated invite support action should be blocked.', result.body)
 }
 
 async function main() {
@@ -214,6 +242,16 @@ async function main() {
     approvals = await searchApproval({ request: approveRequestId, status: 'approved', outcome: 'success', requester: adminOneId, approver: adminTwoId })
     expect(approvals[0].invite.status === 'pending', 'Approved recovery should re-enable invite as pending.', approvals[0])
     expect((approvals[0].auditEventIds || []).length >= 2, 'Approved recovery search should include create and approve audit ids.', approvals[0])
+    await verifyUnauthorizedInviteActionIsBlocked(approveRecovery.invite.id)
+
+    const revokeRequestId = `${approveRequestId}-invite-revoke`
+    const resendRequestId = `${approveRequestId}-invite-resend`
+    const revokedInvite = await supportInviteAction(approveRecovery.invite.id, 'revoke', revokeRequestId)
+    expect(revokedInvite.invite.status === 'revoked', 'Support invite revoke should mark the invite revoked.', revokedInvite)
+    const resentInvite = await supportInviteAction(approveRecovery.invite.id, 'resend', resendRequestId)
+    expect(resentInvite.invite.status === 'pending', 'Support invite resend should re-enable the invite as pending.', resentInvite)
+    const inviteTimeline = await inspectSupportState({ request: resendRequestId, entity: approveRecovery.invite.id, entityType: 'invite', action: 'invite_resend', outcome: 'success' })
+    expect(inviteTimeline.auditTimeline[0]?.action?.includes('invite_resend'), 'Support inspection should filter invite action timeline by request/entity/action/outcome.', inviteTimeline)
 
     const denyRecovery = await createRecovery(denyRequestId, `support-${suffix}-deny@example.test`)
     expect(denyRecovery.invite.status === 'revoked', 'Deny flow should start with revoked invite.', denyRecovery)
@@ -231,6 +269,7 @@ async function main() {
         denyRequestId,
         approveInviteId: approveRecovery.invite.id,
         denyInviteId: denyRecovery.invite.id,
+        inviteActionAudit: `/api/admin/support/inspect?request=${encodeURIComponent(`${approveRequestId}-invite-resend`)}&entity=${encodeURIComponent(approveRecovery.invite.id)}&action=invite_resend&outcome=success`,
         auditSearch: `/api/admin/support/access-recovery?request=${encodeURIComponent(approveRequestId)}&status=approved&outcome=success`,
     }, null, 2))
 }
