@@ -343,6 +343,39 @@ export async function searchThreatIntel(input: TiSearchRequest): Promise<TiSearc
     return result
 }
 
+export async function discoverThreatActorProfile(query: string): Promise<TiSearchResponse> {
+    const normalized = query.trim()
+    if (!normalized) {
+        throw new Error('query is required')
+    }
+
+    const seeded = seededSearch(normalized)
+    const discovered = await liveSearch(normalized).catch(() => seeded)
+    const result: TiSearchResponse = {
+        ...seeded,
+        ...discovered,
+        generatedAt: new Date().toISOString(),
+        status: discovered.status === 'searching' ? seeded.status : discovered.status,
+        summary: discovered.summary === 'Searching' ? seeded.summary : discovered.summary,
+        confidence: Math.max(seeded.confidence, discovered.confidence),
+        lastSeen: latestIso(discovered.lastSeen, seeded.lastSeen),
+        aliases: uniqueStrings([...seeded.aliases, ...discovered.aliases]),
+        recentActivity: mergeActivity(discovered.recentActivity, seeded.recentActivity),
+        targets: mergeTargets(discovered.targets, seeded.targets),
+        ttps: mergeTtps(discovered.ttps, seeded.ttps),
+        datasets: mergeDatasets(discovered.datasets, seeded.datasets),
+        sources: mergeSources(discovered.sources, seeded.sources),
+        notes: uniqueStrings([
+            ...seeded.notes,
+            ...discovered.notes,
+            'Autonomous discovery refresh completed; profile changes are published through the API state ledger.',
+        ]),
+    }
+
+    writeTiResponseCache(normalized.toLowerCase(), result)
+    return result
+}
+
 export async function warmThreatActorProfileCache(batchSize = 5): Promise<TiProfileWarmResult[]> {
     const actors = automaticThreatActorWarmList()
     if (!actors.length) return []
@@ -1817,7 +1850,7 @@ const BASELINE_ACTOR_PROFILES: BaselineActorProfile[] = [
     }
 ]
 
-function automaticThreatActorWarmList() {
+export function automaticThreatActorWarmList() {
     return [
         'apt29',
         'apt42',
@@ -2079,6 +2112,14 @@ function truncateSentence(value: string, maxLength: number) {
     const normalized = value.replace(/\s+/g, ' ').trim()
     if (normalized.length <= maxLength) return normalized
     return `${normalized.slice(0, maxLength - 1).trimEnd()}...`
+}
+
+function latestIso(left: string, right: string) {
+    const leftTime = Date.parse(left)
+    const rightTime = Date.parse(right)
+    if (Number.isNaN(leftTime)) return right
+    if (Number.isNaN(rightTime)) return left
+    return leftTime >= rightTime ? left : right
 }
 
 interface LiveSearchMatch {

@@ -176,6 +176,60 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
     await run(`
+        CREATE TABLE IF NOT EXISTS ti_actor_enrichment_runs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            actor_key TEXT NOT NULL,
+            actor_name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'succeeded', 'failed')),
+            mode TEXT NOT NULL DEFAULT 'autonomous',
+            started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            finished_at TIMESTAMPTZ,
+            changed_fields TEXT[] NOT NULL DEFAULT '{}'::text[],
+            discovered_items INT NOT NULL DEFAULT 0,
+            published_items INT NOT NULL DEFAULT 0,
+            error TEXT,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_ti_actor_enrichment_runs_started ON ti_actor_enrichment_runs(started_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_ti_actor_enrichment_runs_actor_started ON ti_actor_enrichment_runs(actor_key, started_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_ti_actor_enrichment_runs_status ON ti_actor_enrichment_runs(status, started_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS ti_actor_profile_snapshots (
+            actor_key TEXT PRIMARY KEY,
+            actor_name TEXT NOT NULL,
+            profile JSONB NOT NULL,
+            profile_hash TEXT NOT NULL,
+            source_count INT NOT NULL DEFAULT 0,
+            activity_count INT NOT NULL DEFAULT 0,
+            target_count INT NOT NULL DEFAULT 0,
+            ttp_count INT NOT NULL DEFAULT 0,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_run_id UUID REFERENCES ti_actor_enrichment_runs(id) ON DELETE SET NULL
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_ti_actor_profile_snapshots_updated ON ti_actor_profile_snapshots(updated_at DESC)')
+    await run(`
+        CREATE TABLE IF NOT EXISTS ti_actor_discoveries (
+            id TEXT PRIMARY KEY,
+            actor_key TEXT NOT NULL,
+            actor_name TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (kind IN ('activity', 'source', 'target', 'ttp', 'dataset')),
+            title TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            source_url TEXT NOT NULL DEFAULT '',
+            source_name TEXT NOT NULL DEFAULT '',
+            first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            published_at TIMESTAMPTZ,
+            profile_run_id UUID REFERENCES ti_actor_enrichment_runs(id) ON DELETE SET NULL,
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb
+        )
+    `)
+    await run('CREATE INDEX IF NOT EXISTS idx_ti_actor_discoveries_actor_seen ON ti_actor_discoveries(actor_key, last_seen_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_ti_actor_discoveries_published ON ti_actor_discoveries(published_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_ti_actor_discoveries_kind_seen ON ti_actor_discoveries(kind, last_seen_at DESC)')
+    await run(`
         CREATE TABLE IF NOT EXISTS traffic_events (
             id BIGSERIAL PRIMARY KEY,
             domain TEXT NOT NULL DEFAULT '',

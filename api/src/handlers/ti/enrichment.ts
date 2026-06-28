@@ -4,6 +4,7 @@ import {
     recordThreatActorProfileWarmFailure,
     warmThreatActorProfileCache,
 } from '#utils/ti/search.ts'
+import { getThreatIntelPipelineOverview } from '#utils/ti/autonomousPipeline.ts'
 
 interface RunBody {
     batchSize?: number
@@ -11,7 +12,15 @@ interface RunBody {
 
 export async function getTiEnrichment(_req: FastifyRequest, res: FastifyReply) {
     res.header('cache-control', 'no-store, max-age=0')
-    return res.send(getThreatActorEnrichmentOverview())
+    return res.send({
+        ...getThreatActorEnrichmentOverview(),
+        pipeline: await getThreatIntelPipelineOverview().catch(error => ({
+            worker: {
+                state: 'failed',
+                lastError: error instanceof Error ? error.message : String(error),
+            },
+        })),
+    })
 }
 
 export async function postTiEnrichmentRun(req: FastifyRequest<{ Body: RunBody }>, res: FastifyReply) {

@@ -144,13 +144,13 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
                 activate: true,
                 approveMetadataOnly: true,
                 approvedBy: 'dashboard',
-                limit: 24,
+                limit: 68,
                 scope: terms,
             })
             if (!approved.ok) throw new Error(approved.message)
             const summary = approved.summary && typeof approved.summary === 'object' ? approved.summary as Record<string, unknown> : {}
             const count = typeof summary.darkwebMetadataCreated === 'number' ? summary.darkwebMetadataCreated : 0
-            setResult({ ok: true, message: `Approved ${count} dark-web metadata sources. No payload downloads enabled.` })
+            setResult({ ok: true, message: `Approved ${count} dark-web metadata source(s). No payload downloads enabled.` })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -215,7 +215,7 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
                 </button>
                 <button type='button' onClick={approveDarkwebMetadata} disabled={busyAction !== null} className='ml-2 mt-3 inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'>
                     {busyAction === 'darkweb' ? <Loader2 className='h-4 w-4 animate-spin' /> : <ShieldCheck className='h-4 w-4' />}
-                    Approve dark-web metadata
+                    Expand dark-web metadata
                 </button>
                 <button type='button' onClick={deliverWebhooks} disabled={busyAction !== null} className='ml-2 mt-3 inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'>
                     {busyAction === 'delivery' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}

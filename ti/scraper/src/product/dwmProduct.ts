@@ -172,9 +172,19 @@ export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}
         "Alerts are customer-workflow objects, not scraped rows: matched term, confidence, evidence refs, review state, and recommended action.",
         "On-demand customer source requests become approval packets before they become continuous collection."
       ],
-      nextWorkItem: "Apply public Telegram seed packs into canary status, persist alert dedupe keys, and record webhook delivery attempts per tenant."
+      nextWorkItem: nextWorkItemFor(sourceInventory)
     }
   };
+}
+
+function nextWorkItemFor(sourceInventory: DwmSourceInventorySnapshot): string {
+  if (sourceInventory.counts.registeredDarkwebMetadata < sourceInventory.counts.catalogDarkwebMetadata) {
+    return "Approve the remaining dark-web metadata sources, then run metadata-only actor and market refreshes.";
+  }
+  if (sourceInventory.counts.netNewCandidates > 0) {
+    return "Review remaining source candidates and promote useful ones without enabling payload downloads or private access.";
+  }
+  return "Improve customer alert handling: webhook subscriptions, alert replay, false-positive review, and source-level match explanations.";
 }
 
 export function normalizeWatchlist(values: Array<string | Partial<DwmWatchTerm>>): DwmWatchTerm[] {

@@ -129,6 +129,7 @@ import { getImpersonationCurrent, getImpersonationEvents, startImpersonation, st
 import { deleteProject, deleteShare, getProject, getShare, getShareTree, getUserProjects, getUserShares, postShare, putShare, toggleShareLock } from './handlers/share.ts'
 import postTiSearch, { postTiSearchBatch } from './handlers/ti/search.ts'
 import { getTiEnrichment, postTiEnrichmentRun } from './handlers/ti/enrichment.ts'
+import { getTiPipeline, postTiPipelineRun } from './handlers/ti/pipeline.ts'
 
 /**
  * Defines the routes available in the API.
@@ -196,6 +197,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/ti/search/batch', postTiSearchBatch)
     fastify.get('/ti/enrichment', getTiEnrichment)
     fastify.post('/ti/enrichment/run', postTiEnrichmentRun)
+    fastify.get('/ti/pipeline', getTiPipeline)
+    fastify.post('/ti/pipeline/run', postTiPipelineRun)
 
     // Article handlers
     fastify.get('/articles', getArticles)
