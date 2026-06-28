@@ -1,7 +1,7 @@
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
 import { createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
-import { createDwmWatchlist, deliverDwmWebhooks, getDwmAlertDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert } from "./dwmWorkflowRoutes.ts";
+import { createDwmWatchlist, deliverDwmWebhooks, disableDwmWatchlist, getDwmAlertDetail, getDwmWatchlistDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert, updateDwmWatchlist } from "./dwmWorkflowRoutes.ts";
 import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
 import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
@@ -115,8 +115,11 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         }
       });
     }
-    if (url.pathname === "/v1/dwm/watchlists" && request.method === "GET") return listDwmWatchlists(url, options);
+    if (url.pathname === "/v1/dwm/watchlists" && request.method === "GET") return listDwmWatchlists(url, options, request);
     if (url.pathname === "/v1/dwm/watchlists" && request.method === "POST") return createDwmWatchlist(request, options);
+    if (/^\/v1\/dwm\/watchlists\/[^/]+\/disable$/.test(url.pathname) && request.method === "POST") return disableDwmWatchlist(request, options, url.pathname.split("/")[4]);
+    if (/^\/v1\/dwm\/watchlists\/[^/]+$/.test(url.pathname) && request.method === "GET") return getDwmWatchlistDetail(url, options, url.pathname.split("/").pop(), request);
+    if (/^\/v1\/dwm\/watchlists\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateDwmWatchlist(request, options, url.pathname.split("/").pop());
     if (url.pathname === "/v1/dwm/alerts" && request.method === "GET") return listDwmAlerts(url, options, request);
     if (/^\/v1\/dwm\/alerts\/[^/]+\/replay$/.test(url.pathname) && request.method === "POST") return replayDwmAlert(request, options, url.pathname.split("/")[4]);
     if (/^\/v1\/dwm\/alerts\/[^/]+$/.test(url.pathname) && request.method === "GET") return getDwmAlertDetail(url, options, url.pathname.split("/").pop(), request);

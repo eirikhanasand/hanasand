@@ -19,12 +19,20 @@ type DwmWatchlist = {
   updatedAt: string;
 };
 
-export function listDwmWatchlists(url: URL, options: ApiServerOptions): Response {
-  const scope = resolveOrganizationScope({ url }, options);
+export function listDwmWatchlists(url: URL, options: ApiServerOptions, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const watchlists = (options.store as any).listDwmWatchlists?.() ?? [];
-  return json({ organization: scope.organization, watchlists: watchlists.filter((row: DwmWatchlist) => row.tenantId === tenantId) });
+  return json({
+    organization: scope.organization,
+    visibilityDecision: access.visibilityDecision,
+    watchlists: watchlists
+      .filter((row: DwmWatchlist) => row.tenantId === tenantId)
+      .map((watchlist: DwmWatchlist) => buildDwmWatchlistDetail(watchlist, options, access))
+  });
 }
 
 export async function createDwmWatchlist(request: Request, options: ApiServerOptions): Promise<Response> {
@@ -35,6 +43,8 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
   const generatedAt = nowIso();
   const scope = resolveOrganizationScope({ body, request }, options);
   if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const webhookUrl = normalizeWebhookUrl(body.webhookUrl);
   if (body.webhookUrl && !webhookUrl) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." } }, 400);
@@ -45,6 +55,9 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
   }
   const id = body.id ?? stableId("dwm_watchlist", `${tenantId}:${terms.map((term) => term.value).join("|")}`);
   const existing = (options.store as any).getDwmWatchlist?.(id);
+  if (existing && existing.tenantId !== tenantId) {
+    return json({ error: { code: "watchlist_id_conflict", message: "Watchlist id already belongs to another organization scope." }, visibilityDecision: access.visibilityDecision }, 409);
+  }
   const watchlist: DwmWatchlist = {
     id,
     tenantId,
@@ -58,7 +71,71 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
     updatedAt: generatedAt
   };
   (options.store as any).saveDwmWatchlist(watchlist);
-  return json({ organization: scope.organization, watchlist }, 201);
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, watchlist: buildDwmWatchlistDetail(watchlist, options, access) }, 201);
+}
+
+export function getDwmWatchlistDetail(url: URL, options: ApiServerOptions, watchlistId: string | undefined, request?: Request): Response {
+  const watchlist = findDwmWatchlist(options, watchlistId);
+  if (!watchlist) return json({ error: { code: "not_found", message: "DWM watchlist not found." } }, 404);
+  const scope = resolveDwmWatchlistScope({ watchlist, url, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
+  if (watchlist.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM watchlist not found." } }, 404);
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, watchlist: buildDwmWatchlistDetail(watchlist, options, access) });
+}
+
+export async function updateDwmWatchlist(request: Request, options: ApiServerOptions, watchlistId: string | undefined): Promise<Response> {
+  const existing = findDwmWatchlist(options, watchlistId);
+  if (!existing) return json({ error: { code: "not_found", message: "DWM watchlist not found." } }, 404);
+
+  const body = await readJson<any>(request);
+  const scope = resolveDwmWatchlistScope({ watchlist: existing, body, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
+  if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM watchlist not found." } }, 404);
+
+  const terms = body.terms === undefined && body.watchlist === undefined
+    ? existing.terms
+    : normalizeWatchlist(Array.isArray(body.terms) ? body.terms : String(body.terms ?? body.watchlist ?? "").split(/[,\n]/));
+  if (!terms.length) return json({ error: { code: "missing_terms", message: "Add at least one company, domain, vendor, brand, VIP, or product term." }, visibilityDecision: access.visibilityDecision }, 400);
+
+  const webhookUrl = body.webhookUrl === undefined ? existing.webhookUrl : normalizeWebhookUrl(body.webhookUrl);
+  if (body.webhookUrl && !webhookUrl) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." }, visibilityDecision: access.visibilityDecision }, 400);
+  const webhookDestinationId = body.webhookDestinationId === undefined ? existing.webhookDestinationId : (body.webhookDestinationId ? String(body.webhookDestinationId) : undefined);
+  const webhookDestination = webhookDestinationId ? findWebhookDestination(options, webhookDestinationId) : undefined;
+  if (webhookDestinationId && (!webhookDestination || webhookDestination.organizationId !== scope.organizationId)) {
+    return json({ error: { code: "invalid_webhook_destination", message: "Webhook destination must belong to the selected organization." }, visibilityDecision: access.visibilityDecision }, 400);
+  }
+
+  const watchlist: DwmWatchlist = {
+    ...existing,
+    name: body.name === undefined ? existing.name : String(body.name),
+    terms,
+    webhookUrl,
+    webhookDestinationId,
+    status: normalizeWatchlistStatus(body.status, existing.status),
+    updatedAt: nowIso()
+  };
+  (options.store as any).saveDwmWatchlist(watchlist);
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, watchlist: buildDwmWatchlistDetail(watchlist, options, access) });
+}
+
+export async function disableDwmWatchlist(request: Request, options: ApiServerOptions, watchlistId: string | undefined): Promise<Response> {
+  const existing = findDwmWatchlist(options, watchlistId);
+  if (!existing) return json({ error: { code: "not_found", message: "DWM watchlist not found." } }, 404);
+
+  const body = await readJson<any>(request);
+  const scope = resolveDwmWatchlistScope({ watchlist: existing, body, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
+  if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM watchlist not found." } }, 404);
+
+  const watchlist: DwmWatchlist = { ...existing, status: "paused", updatedAt: nowIso() };
+  (options.store as any).saveDwmWatchlist(watchlist);
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, watchlist: buildDwmWatchlistDetail(watchlist, options, access) });
 }
 
 export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Request): Response {
@@ -411,6 +488,15 @@ function resolveDwmAlertScope(input: { alert: any; body?: any; url?: URL; reques
   return resolveOrganizationScope({ body, url: input.url, request: input.request }, options);
 }
 
+function resolveDwmWatchlistScope(input: { watchlist: DwmWatchlist; body?: any; url?: URL; request?: Request }, options: ApiServerOptions) {
+  const body = {
+    ...(input.body ?? {}),
+    organizationId: input.watchlist.organizationId ?? input.body?.organizationId ?? input.body?.orgId,
+    tenantId: input.watchlist.tenantId ?? input.body?.tenantId
+  };
+  return resolveOrganizationScope({ body, url: input.url, request: input.request }, options);
+}
+
 function authorizeDwmWorkflowAccess(input: { options: ApiServerOptions; scope: { organizationId?: string; organization?: unknown }; request?: Request; url?: URL; body?: any; mode: DwmWorkflowAccessMode }): DwmWorkflowAccessResult {
   const visibilityPolicy = organizationAlertVisibilityPolicy(input.scope.organization);
   const allowedRoles = allowedDwmVisibilityRoles(visibilityPolicy);
@@ -520,9 +606,38 @@ function findDwmAlert(options: ApiServerOptions, alertId: string | undefined) {
   return (options.store as any).getDwmAlert?.(alertId) ?? ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.id === alertId);
 }
 
+function findDwmWatchlist(options: ApiServerOptions, watchlistId: string | undefined): DwmWatchlist | undefined {
+  if (!watchlistId) return undefined;
+  return (options.store as any).getDwmWatchlist?.(watchlistId) ?? ((options.store as any).listDwmWatchlists?.() ?? []).find((row: DwmWatchlist) => row.id === watchlistId);
+}
+
 function findDwmAlertByDedupeKey(options: ApiServerOptions, dedupeKey: string | undefined) {
   if (!dedupeKey) return undefined;
   return ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.dedupeKey === dedupeKey || row.webhookDelivery?.dedupeKey === dedupeKey);
+}
+
+function buildDwmWatchlistDetail(watchlist: DwmWatchlist, options: ApiServerOptions, access?: DwmWorkflowAccessResult) {
+  const alerts = ((options.store as any).listDwmAlerts?.() ?? [])
+    .filter((row: any) => row.tenantId === watchlist.tenantId && Array.isArray(row.watchlistIds) && row.watchlistIds.includes(watchlist.id));
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? [])
+    .filter((row: any) => row.tenantId === watchlist.tenantId && (row.watchlistId === watchlist.id || alerts.some((alert: any) => alert.id === row.alertId)));
+  return {
+    ...watchlist,
+    visibilityDecision: access?.visibilityDecision,
+    workflowContext: {
+      alertCount: alerts.length,
+      alertIds: alerts.map((alert: any) => alert.id),
+      caseIds: alerts.map((alert: any) => alert.caseIdCandidate).filter(Boolean),
+      webhookDeliveryIds: deliveries.map((delivery: any) => delivery.id),
+      activeForAlertGeneration: watchlist.status === "active"
+    }
+  };
+}
+
+function normalizeWatchlistStatus(value: unknown, fallback: DwmWatchlist["status"]): DwmWatchlist["status"] {
+  const status = String(value ?? "").trim().toLowerCase();
+  if (!status) return fallback;
+  return status === "disabled" || status === "paused" ? "paused" : "active";
 }
 
 function normalizeWebhookUrl(value: unknown): string | undefined {

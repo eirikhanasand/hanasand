@@ -50,8 +50,8 @@ describe("organization shared DWM workflow", () => {
 
       const orgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
         method: "POST",
-        headers: { "x-actor-id": "owner-1" },
-        body: JSON.stringify({ name: "Acme Security", ownerEmail: "owner@acme.com" })
+        headers: { "x-user-email": "owner@acme.com" },
+        body: JSON.stringify({ name: "Acme Security", ownerEmail: "owner@acme.com", ownerUserId: "owner-1" })
       }), options);
       const orgPayload = await orgResponse.json() as any;
       const organizationId = orgPayload.organization.id;
@@ -64,7 +64,7 @@ describe("organization shared DWM workflow", () => {
       const inviteEmails = Array.from({ length: 10 }, (_, index) => `analyst${index + 1}@acme.com`);
       const inviteResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/invites`, {
         method: "POST",
-        headers: { "x-actor-id": "owner-1" },
+        headers: { "x-user-email": "owner@acme.com" },
         body: JSON.stringify({ emails: inviteEmails, role: "analyst" })
       }), options);
       const invitePayload = await inviteResponse.json() as any;
@@ -86,6 +86,7 @@ describe("organization shared DWM workflow", () => {
 
       const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
         method: "POST",
+        headers: { "x-actor-id": "owner-1" },
         body: JSON.stringify({
           organizationId,
           name: "Shared Acme exposure watchlist",
@@ -102,6 +103,7 @@ describe("organization shared DWM workflow", () => {
 
       const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
         method: "POST",
+        headers: { "x-actor-id": "owner-1" },
         body: JSON.stringify({ organizationId })
       }), options);
       const rebuildPayload = await rebuildResponse.json() as any;
@@ -111,12 +113,15 @@ describe("organization shared DWM workflow", () => {
       expect(rebuildPayload.alerts[0].organizationId).toBe(organizationId);
       expect(rebuildPayload.alerts[0].tenantId).toBe(organizationId);
 
-      const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`), options);
+      const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "owner@acme.com" }
+      }), options);
       const listPayload = await listResponse.json() as any;
       expect(listPayload.alerts).toHaveLength(1);
 
       const deliverResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
         method: "POST",
+        headers: { "x-user-email": "owner@acme.com" },
         body: JSON.stringify({ organizationId })
       }), options);
       const deliverPayload = await deliverResponse.json() as any;

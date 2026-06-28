@@ -141,10 +141,96 @@ describe("dwm case workflow", () => {
       }), options);
       const webhookPayload = await webhookResponse.json() as any;
 
-      await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      const viewerWatchlistCreateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
         method: "POST",
+        headers: { "x-user-email": "viewer@acme.com" },
+        body: JSON.stringify({ organizationId, name: "Viewer watchlist", terms: ["viewer-only.example"], webhookDestinationId: webhookPayload.destination.id })
+      }), options);
+      expect(viewerWatchlistCreateResponse.status).toBe(403);
+      expect((await viewerWatchlistCreateResponse.json() as any).visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect((store as any).listDwmWatchlists()).toHaveLength(0);
+
+      const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+        method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
         body: JSON.stringify({ organizationId, name: "Case watchlist", terms: ["acme.com"], webhookDestinationId: webhookPayload.destination.id })
       }), options);
+      const watchlistPayload = await watchlistResponse.json() as any;
+      expect(watchlistResponse.status).toBe(201);
+      expect(watchlistPayload.visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect(watchlistPayload.watchlist).toMatchObject({
+        organizationId,
+        tenantId: organizationId,
+        name: "Case watchlist",
+        status: "active"
+      });
+      expect(watchlistPayload.watchlist.workflowContext).toMatchObject({ alertCount: 0, activeForAlertGeneration: true });
+      const watchlistId = watchlistPayload.watchlist.id;
+
+      const viewerWatchlistListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
+      const viewerWatchlistList = await viewerWatchlistListResponse.json() as any;
+      expect(viewerWatchlistListResponse.status).toBe(200);
+      expect(viewerWatchlistList.visibilityDecision).toMatchObject({ allowed: true, reason: null, alertVisibilityPolicy: "members" });
+      expect(viewerWatchlistList.watchlists).toHaveLength(1);
+      expect(viewerWatchlistList.watchlists[0].terms[0].value).toBe("acme.com");
+
+      const viewerWatchlistDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists/${watchlistId}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
+      const viewerWatchlistDetail = await viewerWatchlistDetailResponse.json() as any;
+      expect(viewerWatchlistDetailResponse.status).toBe(200);
+      expect(viewerWatchlistDetail.visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect(viewerWatchlistDetail.watchlist.id).toBe(watchlistId);
+
+      const viewerWatchlistUpdateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists/${watchlistId}`, {
+        method: "PATCH",
+        headers: { "x-user-email": "viewer@acme.com" },
+        body: JSON.stringify({ organizationId, terms: ["viewer-mutated.example"] })
+      }), options);
+      expect(viewerWatchlistUpdateResponse.status).toBe(403);
+      expect((await viewerWatchlistUpdateResponse.json() as any).visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect((store as any).getDwmWatchlist(watchlistId).terms[0].value).toBe("acme.com");
+
+      const removedWatchlistDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists/${watchlistId}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "removed@acme.com" }
+      }), options);
+      expect(removedWatchlistDetailResponse.status).toBe(403);
+      const removedWatchlistDetail = await removedWatchlistDetailResponse.json() as any;
+      expect(removedWatchlistDetail.visibilityDecision).toMatchObject({ allowed: false, reason: "member_removed" });
+      expect(removedWatchlistDetail.watchlist).toBeUndefined();
+
+      const deactivatedWatchlistListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "deactivated@acme.com" }
+      }), options);
+      expect(deactivatedWatchlistListResponse.status).toBe(403);
+      const deactivatedWatchlistList = await deactivatedWatchlistListResponse.json() as any;
+      expect(deactivatedWatchlistList.visibilityDecision).toMatchObject({ allowed: false, reason: "member_deactivated" });
+      expect(deactivatedWatchlistList.watchlists).toBeUndefined();
+
+      const outsiderWatchlistListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "outsider@example.com" }
+      }), options);
+      expect(outsiderWatchlistListResponse.status).toBe(403);
+      expect((await outsiderWatchlistListResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "not_member" });
+
+      const restrictedViewerWatchlistListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists?organizationId=${restrictedOrganizationId}`, {
+        headers: { "x-user-email": "viewer@restricted.example" }
+      }), options);
+      expect(restrictedViewerWatchlistListResponse.status).toBe(403);
+      expect((await restrictedViewerWatchlistListResponse.json() as any).visibilityDecision).toMatchObject({ allowed: false, reason: "role_not_allowed", alertVisibilityPolicy: "admins" });
+
+      const analystWatchlistUpdateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists/${watchlistId}`, {
+        method: "PATCH",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({ organizationId, name: "Case watchlist - monitored" })
+      }), options);
+      const analystWatchlistUpdate = await analystWatchlistUpdateResponse.json() as any;
+      expect(analystWatchlistUpdateResponse.status).toBe(200);
+      expect(analystWatchlistUpdate.visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect(analystWatchlistUpdate.watchlist.name).toBe("Case watchlist - monitored");
+
       const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
         method: "POST",
         headers: { "x-actor-id": "analyst-1" },
@@ -157,6 +243,18 @@ describe("dwm case workflow", () => {
       expect(alert.casePath).toContain(`/v1/cases/${alert.caseIdCandidate}`);
       expect(alert.workflowContext.caseIdCandidate).toBe(alert.caseIdCandidate);
       expect(alert.webhookContext.caseIdCandidate).toBe(alert.caseIdCandidate);
+
+      const analystWatchlistDetailAfterRebuildResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists/${watchlistId}?organizationId=${organizationId}`, {
+        headers: { "x-actor-id": "analyst-1" }
+      }), options);
+      const analystWatchlistDetailAfterRebuild = await analystWatchlistDetailAfterRebuildResponse.json() as any;
+      expect(analystWatchlistDetailAfterRebuildResponse.status).toBe(200);
+      expect(analystWatchlistDetailAfterRebuild.watchlist.workflowContext).toMatchObject({
+        alertCount: 1,
+        alertIds: [alert.id],
+        caseIds: [alert.caseIdCandidate],
+        activeForAlertGeneration: true
+      });
 
       const viewerAlertListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
         headers: { "x-user-email": "viewer@acme.com" }
@@ -432,7 +530,7 @@ describe("dwm case workflow", () => {
       expect(detail.alertContext.provenance.captureIds).toContain(capture.id);
       expect(detail.watchlists[0]).toMatchObject({
         organizationId,
-        name: "Case watchlist",
+        name: "Case watchlist - monitored",
         termCount: 1
       });
       expect(detail.watchlists[0].matchedTerms[0].value).toBe("acme.com");
@@ -629,12 +727,35 @@ describe("dwm case workflow", () => {
       expect(suppressed.alert.reviewState).toBe("false_positive_candidate");
       expect(suppressed.alert.deliveryState).toBe("muted");
 
+      const viewerDisableWatchlistResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists/${watchlistId}/disable`, {
+        method: "POST",
+        headers: { "x-user-email": "viewer@acme.com" },
+        body: JSON.stringify({ organizationId })
+      }), options);
+      expect(viewerDisableWatchlistResponse.status).toBe(403);
+      expect((store as any).getDwmWatchlist(watchlistId).status).toBe("active");
+
+      const analystDisableWatchlistResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists/${watchlistId}/disable`, {
+        method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({ organizationId })
+      }), options);
+      const analystDisableWatchlist = await analystDisableWatchlistResponse.json() as any;
+      expect(analystDisableWatchlistResponse.status).toBe(200);
+      expect(analystDisableWatchlist.visibilityDecision).toMatchObject({ allowed: true, reason: null });
+      expect(analystDisableWatchlist.watchlist).toMatchObject({
+        id: watchlistId,
+        status: "paused",
+        workflowContext: { activeForAlertGeneration: false }
+      });
+
       const rehydrated = new FileBackedScraperStore({ snapshotPath });
       expect((rehydrated as any).listCases()).toHaveLength(3);
       expect((rehydrated as any).getCase(closed.case.id).status).toBe("suppressed");
       expect((rehydrated as any).getCase(closed.case.id).workflowEvents).toHaveLength(5);
       expect((rehydrated as any).getDwmAlert(alert.id).caseId).toBe(closed.case.id);
       expect((rehydrated as any).getDwmAlert(alert.id).caseIdCandidate).toBe(closed.case.id);
+      expect((rehydrated as any).getDwmWatchlist(watchlistId).status).toBe("paused");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
