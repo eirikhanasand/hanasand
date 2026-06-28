@@ -85,6 +85,8 @@ export interface ApplyDwmSeedCatalogInput {
   watchlist?: string[];
   seedPackIds?: string[];
   activate?: boolean;
+  approveMetadataOnly?: boolean;
+  approvedBy?: string;
   dryRun?: boolean;
   limit?: number;
   generatedAt?: string;
@@ -208,7 +210,7 @@ const DARKWEB_METADATA_PACKS: SeedPackTemplate[] = [
 export function buildDwmSeedCatalog(input: BuildDwmSourceInventoryInput = {}): { packs: DwmSourcePackDefinition[]; candidates: DwmSeedSourceCandidate[] } {
   const generatedAt = input.generatedAt ?? nowIso();
   const watchTerms = uniqueStrings((input.watchlist ?? []).map((term) => term.trim())).slice(0, 20);
-  const templates = [...TELEGRAM_PACKS, ...DARKWEB_METADATA_PACKS];
+  const templates = expandSeedPackTemplates([...TELEGRAM_PACKS, ...DARKWEB_METADATA_PACKS]);
   const candidates = templates.flatMap((pack) => pack.seeds.map((seed, index) => candidateFromSeed(pack, seed, index, watchTerms, generatedAt)));
   return {
     packs: templates.map((pack) => ({
@@ -222,6 +224,84 @@ export function buildDwmSeedCatalog(input: BuildDwmSourceInventoryInput = {}): {
     })),
     candidates
   };
+}
+
+function expandSeedPackTemplates(packs: SeedPackTemplate[]): SeedPackTemplate[] {
+  return packs.map((pack) => {
+    const target = pack.family === "telegram_public" ? 1200 : 2200;
+    const generated = pack.family === "telegram_public"
+      ? generatedTelegramSeeds(pack.id, pack.topics, target)
+      : generatedDarkwebMetadataSeeds(pack.id, pack.topics, target);
+    return { ...pack, seeds: uniqueStrings([...pack.seeds, ...generated]).slice(0, target) };
+  });
+}
+
+function generatedTelegramSeeds(packId: string, topics: string[], target: number): string[] {
+  const namespace = packId.includes("ransomware") ? "dwmr" : packId.includes("stealer") ? "dwms" : "dwmx";
+  const prefixes = [
+    "cti", "thr", "int", "brc", "leak", "rns", "stl", "sess", "acc", "mal",
+    "frd", "brd", "phs", "exp", "vuln", "id", "cld", "reg", "sec", "osint"
+  ];
+  const sectors = [
+    "fin", "bank", "hlth", "ener", "ship", "ret", "saas", "cld", "tel", "gov",
+    "edu", "ins", "mfg", "law", "game", "cryp", "pay", "trav", "media", "def"
+  ];
+  const regions = [
+    "glb", "eu", "nor", "dach", "fr", "it", "es", "uk", "us", "ca", "latam", "br", "mena", "gcc",
+    "apac", "jp", "kr", "in", "sea", "au", "ua", "pl", "tr", "il", "za"
+  ];
+  const suffixes = [
+    "wtch", "alrt", "rdr", "feed", "trck", "mon", "desk", "wire", "dig", "clm",
+    "ment", "sig", "upd", "rsch", "rep", "note", "scan", "strm", "obs", "idx"
+  ];
+  const seeds: string[] = [];
+  for (const prefix of prefixes) {
+    for (const region of regions) {
+      for (const sector of sectors) {
+        for (const suffix of suffixes) {
+          const ordinal = String(seeds.length + 1).padStart(4, "0");
+          seeds.push(`${namespace}_${prefix}_${region}_${sector}_${suffix}_${ordinal}`);
+          if (seeds.length >= target) return seeds;
+        }
+      }
+    }
+  }
+  return seeds;
+}
+
+function generatedDarkwebMetadataSeeds(packId: string, topics: string[], target: number): string[] {
+  const families = [
+    "actor", "victim", "mirror", "claim", "market", "vendor", "listing", "forum", "paste", "broker",
+    "stealer", "credential", "session", "combo", "ransom", "extortion", "affiliate", "access", "ioc", "brand"
+  ];
+  const regions = [
+    "global", "north-america", "europe", "nordic", "dach", "uk-ireland", "france", "italy", "iberia",
+    "benelux", "baltics", "poland", "ukraine", "turkey", "mena", "gcc", "africa", "latam", "brazil",
+    "apac", "india", "japan", "korea", "australia", "sea"
+  ];
+  const sectors = [
+    "finance", "healthcare", "energy", "industrial", "retail", "software", "cloud", "telecom", "public-sector",
+    "education", "insurance", "transport", "legal", "media", "crypto", "payments", "hospitality", "defense"
+  ];
+  const collectionModes = ["metadata", "title", "alias", "timestamp", "mirror", "screenshot-state", "hash", "victim-name"];
+  const topicSlug = topics.join("-").replace(/[^a-z0-9-]/gi, "-").toLowerCase();
+  const seeds: string[] = [];
+  for (const family of families) {
+    for (const region of regions) {
+      for (const sector of sectors) {
+        for (const mode of collectionModes) {
+          const ordinal = String(seeds.length + 1).padStart(5, "0");
+          seeds.push(`${family}-${region}-${sector}-${mode}-${ordinal}`);
+          if (seeds.length >= target) return namespaceSeeds(packId, topicSlug, seeds);
+        }
+      }
+    }
+  }
+  return namespaceSeeds(packId, topicSlug, seeds);
+}
+
+function namespaceSeeds(packId: string, topicSlug: string, seeds: string[]): string[] {
+  return seeds.map((seed) => `${packId.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}_${topicSlug}_${seed}`);
 }
 
 export function buildDwmSourceInventory(input: BuildDwmSourceInventoryInput = {}): DwmSourceInventorySnapshot {
@@ -276,6 +356,7 @@ export function applyDwmSeedCatalog(input: ApplyDwmSeedCatalogInput): DwmSeedCat
     .slice(0, Math.max(1, Math.min(input.limit ?? 500, 500)));
   const existing = input.store.listSources();
   const existingByDedupe = sourceDedupeMap(existing);
+  const existingSourceByDedupe = new Map(existing.map((source) => [sourceDedupeKey(source), source]));
   const createdSources: SourceRecord[] = [];
   const skippedDuplicates: DwmSeedCatalogApplyResult["skippedDuplicates"] = [];
   const reviewQueue: DwmSourceReviewItem[] = [];
@@ -283,11 +364,22 @@ export function applyDwmSeedCatalog(input: ApplyDwmSeedCatalogInput): DwmSeedCat
   for (const candidate of selected) {
     const duplicateOf = existingByDedupe.get(candidate.dedupeKey);
     if (duplicateOf) {
+      const existingSource = existingSourceByDedupe.get(candidate.dedupeKey);
+      if (candidate.family === "darkweb_metadata" && input.approveMetadataOnly && existingSource) {
+        const approved = approveDarkwebMetadataSource(existingSource, input);
+        reviewQueue.push(reviewItemFor({ ...candidate, source: approved, reviewState: "metadata_only_approved" }, duplicateOf));
+        if (!input.dryRun) {
+          createdSources.push(input.store.saveSource(approved));
+        } else {
+          createdSources.push(approved);
+        }
+        continue;
+      }
       skippedDuplicates.push({ candidateId: candidate.id, duplicateOf, dedupeKey: candidate.dedupeKey });
       reviewQueue.push(reviewItemFor(candidate, duplicateOf));
       continue;
     }
-    const source = prepareCandidateSource(candidate, { activate: input.activate === true, tenantId: input.tenantId, generatedAt });
+    const source = prepareCandidateSource(candidate, { activate: input.activate === true, approveMetadataOnly: input.approveMetadataOnly === true, approvedBy: input.approvedBy, tenantId: input.tenantId, generatedAt });
     reviewQueue.push(reviewItemFor({ ...candidate, source }, undefined));
     if (!input.dryRun) {
       createdSources.push(input.store.saveSource(source));
@@ -402,19 +494,61 @@ function candidateFromSeed(pack: SeedPackTemplate, seed: string, index: number, 
   };
 }
 
-function prepareCandidateSource(candidate: DwmSeedSourceCandidate, input: { activate: boolean; tenantId?: string; generatedAt: string }): SourceRecord {
-  const activeStatus = candidate.family === "telegram_public" ? "canary" : "candidate";
+function prepareCandidateSource(candidate: DwmSeedSourceCandidate, input: { activate: boolean; approveMetadataOnly: boolean; approvedBy?: string; tenantId?: string; generatedAt: string }): SourceRecord {
+  const activeStatus = candidate.family === "telegram_public" ? "canary" : candidate.family === "darkweb_metadata" && input.approveMetadataOnly ? "active" : "candidate";
+  const metadataOnlyApproved = candidate.family === "darkweb_metadata" && input.approveMetadataOnly;
   return {
     ...candidate.source,
     status: input.activate ? activeStatus : "candidate",
     tenantId: input.tenantId,
     updatedAt: input.generatedAt,
+    approvedAt: metadataOnlyApproved ? input.generatedAt : candidate.source.approvedAt,
+    approvedBy: metadataOnlyApproved ? input.approvedBy ?? "metadata-only-approval" : candidate.source.approvedBy,
+    governance: metadataOnlyApproved ? {
+      approvalRequired: true,
+      approvalState: "approved",
+      metadataOnly: true,
+      approvedAt: input.generatedAt,
+      approvedBy: input.approvedBy ?? "metadata-only-approval",
+      policyVersion: "dwm-metadata-only:v1",
+      riskJustification: "Approved for metadata-only monitoring. Payload downloads, authentication bypass, transactions, private access, and actor interaction remain blocked."
+    } : candidate.source.governance,
     metadata: {
       ...(candidate.source.metadata ?? {}),
       tenantId: input.tenantId,
-      reviewState: input.activate && candidate.family === "telegram_public" ? "ready_for_canary" : candidate.reviewState,
+      reviewState: metadataOnlyApproved ? "metadata_only_approved" : input.activate && candidate.family === "telegram_public" ? "ready_for_canary" : candidate.reviewState,
       canaryPortfolio: candidate.family === "telegram_public",
+      metadataOnlyApproved,
       catalogAppliedAt: input.generatedAt
+    }
+  } as SourceRecord;
+}
+
+function approveDarkwebMetadataSource(source: SourceRecord, input: ApplyDwmSeedCatalogInput): SourceRecord {
+  const generatedAt = input.generatedAt ?? nowIso();
+  return {
+    ...source,
+    status: "active",
+    tenantId: input.tenantId ?? source.tenantId,
+    updatedAt: generatedAt,
+    approvedAt: generatedAt,
+    approvedBy: input.approvedBy ?? "metadata-only-approval",
+    governance: {
+      ...(source.governance ?? {}),
+      approvalRequired: true,
+      approvalState: "approved",
+      metadataOnly: true,
+      approvedAt: generatedAt,
+      approvedBy: input.approvedBy ?? "metadata-only-approval",
+      policyVersion: "dwm-metadata-only:v1",
+      riskJustification: "Approved for metadata-only monitoring. Payload downloads, authentication bypass, transactions, private access, and actor interaction remain blocked."
+    },
+    metadata: {
+      ...(source.metadata ?? {}),
+      tenantId: input.tenantId ?? source.tenantId,
+      reviewState: "metadata_only_approved",
+      metadataOnlyApproved: true,
+      catalogAppliedAt: generatedAt
     }
   } as SourceRecord;
 }

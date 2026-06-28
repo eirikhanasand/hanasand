@@ -59,6 +59,21 @@ describe("dwm workflow persistence", () => {
       expect(rebuild.alerts[0].tenantId).toBe("tenant_acme");
       expect(rebuild.alerts[0].deliveryState).toBe("pending_review");
       expect((rehydrated as any).listDwmAlerts()).toHaveLength(1);
+
+      const updateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${rebuild.alerts[0].id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ reviewState: "reviewing", deliveryState: "ready_to_send", note: "Confirmed customer domain match.", actor: "analyst-1" })
+      }), { store: rehydrated, frontier: new FocusedFrontier() });
+      const update = await updateResponse.json() as any;
+
+      expect(updateResponse.status).toBe(200);
+      expect(update.alert.reviewState).toBe("reviewing");
+      expect(update.alert.deliveryState).toBe("ready_to_send");
+      expect(update.alert.workflowNote).toBe("Confirmed customer domain match.");
+      expect(update.alert.workflowEvents).toHaveLength(1);
+
+      const finalStore = new FileBackedScraperStore({ snapshotPath });
+      expect((finalStore as any).listDwmAlerts()[0].workflowEvents).toHaveLength(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

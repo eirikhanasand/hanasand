@@ -47,6 +47,18 @@ export type DwmSourceCoverage = {
     detail: string
 }
 
+export type DwmActorOverview = {
+    actor: string
+    aliases: string[]
+    sourceFamilies: DwmSourceFamily[]
+    sourceCount: number
+    captureCount: number
+    latestSeenAt: string
+    confidence: number
+    watchState: 'active_monitoring' | 'metadata_only' | 'needs_more_sources'
+    summary: string
+}
+
 export type DwmProductSnapshot = {
     schemaVersion: 'dwm.product.v1'
     generatedAt: string
@@ -54,6 +66,7 @@ export type DwmProductSnapshot = {
     watchlist: DwmWatchTerm[]
     alerts: DwmAlert[]
     sourceCoverage: DwmSourceCoverage[]
+    actorOverviews: DwmActorOverview[]
     onDemandQueue: Array<{
         id: string
         target: string
@@ -165,6 +178,10 @@ export function demoDwmProductSnapshot(generatedAt = '2026-06-27T21:20:00.000Z')
             { family: 'actor_page', label: 'Actor pages', sourceCount: 11, activeCount: 9, approvalState: 'active', health: 'partial', detail: 'Ransomware and extortion actor pages normalized into victim, sector, country, and mirror-state fields.' },
             { family: 'public_advisory', label: 'Public advisories', sourceCount: 32, activeCount: 32, approvalState: 'active', health: 'healthy', detail: 'CERT, vendor reports, GitHub advisories, malware infrastructure feeds, and corroborating public reports.' },
             { family: 'clear_web', label: 'Clear-web corroboration', sourceCount: 27, activeCount: 25, approvalState: 'active', health: 'partial', detail: 'Searchable public context used to reduce false positives before customer delivery.' },
+        ],
+        actorOverviews: [
+            { actor: 'Lumma C2', aliases: [], sourceFamilies: ['telegram_public'], sourceCount: 5, captureCount: 5, latestSeenAt: '2026-06-27T21:14:00.000Z', confidence: 91, watchState: 'active_monitoring', summary: 'Lumma C2 is tracked across broker-room and stealer-log public Telegram sources with identity exposure context.' },
+            { actor: 'RansomHouse', aliases: [], sourceFamilies: ['darkweb_metadata'], sourceCount: 3, captureCount: 3, latestSeenAt: '2026-06-27T20:51:00.000Z', confidence: 84, watchState: 'metadata_only', summary: 'RansomHouse is tracked through metadata-only actor-page coverage and vendor-risk claims.' },
         ],
         onDemandQueue: [
             { id: 'req_session_replay_market', target: 't.me/session_replay_market', type: 'telegram_channel', priority: 'high', scope: 'acme.com plus subsidiaries', approvalState: 'queued', nextAction: 'Run public-channel compliance checks and promote approved messages to continuous polling.' },

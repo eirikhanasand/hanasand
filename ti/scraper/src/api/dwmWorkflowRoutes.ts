@@ -47,6 +47,40 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions): Response {
   return json({ alerts: tenantId ? alerts.filter((row: any) => row.tenantId === tenantId) : alerts });
 }
 
+export async function updateDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
+  const existing = ((options.store as any).getDwmAlert?.(alertId ?? "") ?? ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.id === alertId));
+  if (!existing) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
+
+  const body = await readJson<any>(request);
+  const generatedAt = nowIso();
+  const allowedReviewStates = new Set(["needs_review", "validate_identity", "route_to_customer", "watching", "false_positive_candidate", "reviewing", "resolved", "false_positive"]);
+  const allowedDeliveryStates = new Set(["pending_review", "ready_to_send", "sent", "delivered", "failed", "muted"]);
+  const reviewState = body.reviewState === undefined ? existing.reviewState : String(body.reviewState);
+  const deliveryState = body.deliveryState === undefined ? existing.deliveryState : String(body.deliveryState);
+  if (!allowedReviewStates.has(reviewState)) return json({ error: { code: "invalid_review_state", message: "Unsupported DWM alert review state." } }, 400);
+  if (!allowedDeliveryStates.has(deliveryState)) return json({ error: { code: "invalid_delivery_state", message: "Unsupported DWM alert delivery state." } }, 400);
+
+  const event = {
+    id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:${reviewState}:${deliveryState}:${body.note ?? ""}`),
+    at: generatedAt,
+    actor: String(body.actor ?? request.headers.get("x-actor-id") ?? "dashboard"),
+    fromReviewState: existing.reviewState,
+    toReviewState: reviewState,
+    fromDeliveryState: existing.deliveryState,
+    toDeliveryState: deliveryState,
+    note: body.note ? String(body.note).slice(0, 500) : undefined
+  };
+  const alert = (options.store as any).saveDwmAlert({
+    ...existing,
+    reviewState,
+    deliveryState,
+    workflowNote: body.note ? String(body.note).slice(0, 500) : existing.workflowNote,
+    updatedAt: generatedAt,
+    workflowEvents: [...(existing.workflowEvents ?? []), event]
+  });
+  return json({ alert, event });
+}
+
 export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions): Response {
   const tenantId = url.searchParams.get("tenantId") ?? undefined;
   const deliveries = (options.store as any).listDwmWebhookDeliveries?.() ?? [];
@@ -72,6 +106,7 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
     tenantId,
     watchlistIds: watchlists.map((watchlist: DwmWatchlist) => watchlist.id),
     deliveryState: "pending_review",
+    workflowEvents: [],
     savedAt: snapshot.generatedAt
   }));
   return json({ rebuiltAt: snapshot.generatedAt, savedAlertCount: saved.length, alerts: saved, readiness: snapshot.readiness });
@@ -89,7 +124,24 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
 
   for (const alert of alerts.slice(0, Math.max(1, Math.min(Number(body.limit ?? 25), 100)))) {
     const watchlist = watchlists.find((row: DwmWatchlist) => alert.watchlistIds?.includes(row.id)) ?? watchlists[0];
-    if (!watchlist?.webhookUrl) continue;
+    if (!watchlist?.webhookUrl) {
+      const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:missing-webhook:${generatedAt}`);
+      deliveries.push((options.store as any).saveDwmWebhookDelivery({
+        id: deliveryId,
+        tenantId,
+        alertId: alert.id,
+        watchlistId: alert.watchlistIds?.[0] ?? "missing_watchlist",
+        endpointHash: "missing_webhook_url",
+        dedupeKey: alert.webhookDelivery?.dedupeKey ?? deliveryId,
+        attemptedAt: generatedAt,
+        dryRun,
+        payloadHash: "not_sent",
+        status: "skipped",
+        httpStatus: 0,
+        error: "No webhook URL configured for the active watchlist."
+      }));
+      continue;
+    }
     const payload = buildWebhookPayload(alert, watchlist, generatedAt);
     const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${watchlist.id}:${alert.webhookDelivery?.dedupeKey ?? ""}`);
     const baseDelivery = {

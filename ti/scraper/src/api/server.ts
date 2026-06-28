@@ -1,8 +1,9 @@
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
 import { createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
-import { createDwmWatchlist, deliverDwmWebhooks, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, storedWatchlistTerms } from "./dwmWorkflowRoutes.ts";
+import { createDwmWatchlist, deliverDwmWebhooks, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, storedWatchlistTerms, updateDwmAlert } from "./dwmWorkflowRoutes.ts";
 import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
+import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
@@ -59,6 +60,17 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         includeDemoIfEmpty: body.includeDemoIfEmpty !== false
       }));
     }
+    if ((url.pathname === "/v1/dwm/operations" || url.pathname === "/api/dwm/operations") && request.method === "GET") {
+      const tenantId = url.searchParams.get("tenantId") ?? undefined;
+      const explicitWatchlist = parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? url.searchParams.get("q") ?? "");
+      return json(buildDwmOperationsSnapshot({
+        tenantId,
+        watchlist: explicitWatchlist.length ? explicitWatchlist : storedWatchlistTerms(options, tenantId),
+        sources: options.store.listSources(),
+        captures: options.store.listCaptures(),
+        runs: options.store.listRuns()
+      }));
+    }
     if (url.pathname === "/v1/dwm/source-requests" && request.method === "POST") return createDwmSourceRequest(request, options);
     if ((url.pathname === "/v1/dwm/source-inventory" || url.pathname === "/api/dwm/source-inventory") && request.method === "GET") return json(buildDwmSourceInventory({
       tenantId: url.searchParams.get("tenantId") ?? undefined,
@@ -84,6 +96,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/dwm/watchlists" && request.method === "GET") return listDwmWatchlists(url, options);
     if (url.pathname === "/v1/dwm/watchlists" && request.method === "POST") return createDwmWatchlist(request, options);
     if (url.pathname === "/v1/dwm/alerts" && request.method === "GET") return listDwmAlerts(url, options);
+    if (/^\/v1\/dwm\/alerts\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateDwmAlert(request, options, url.pathname.split("/").pop());
     if (url.pathname === "/v1/dwm/alerts/rebuild" && request.method === "POST") return rebuildDwmAlerts(request, options);
     if (url.pathname === "/v1/dwm/webhooks/deliver" && request.method === "POST") return deliverDwmWebhooks(request, options);
     if (url.pathname === "/v1/dwm/webhooks/deliveries" && request.method === "GET") return listDwmWebhookDeliveries(url, options);

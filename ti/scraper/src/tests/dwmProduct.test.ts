@@ -93,6 +93,11 @@ describe("dwm product snapshot", () => {
     expect(snapshot.sourceInventory.reportingHooks.sourceInventoryRoute).toBe("/v1/dwm/source-inventory");
     expect(snapshot.alerts.some((alert) => alert.sourceFamily === "darkweb_metadata")).toBe(true);
     expect(snapshot.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata")?.evidence[0].redactionState).toBe("metadata_only");
+    expect(snapshot.actorOverviews.find((actor) => actor.actor === "Akira")).toMatchObject({
+      watchState: "metadata_only",
+      sourceCount: 1,
+      captureCount: 1
+    });
   });
 
   test("reports missing production blockers instead of hiding behind demo data", () => {
@@ -100,7 +105,22 @@ describe("dwm product snapshot", () => {
     expect(snapshot.readiness.decision).toBe("demo_ready_needs_live_sources");
     expect(snapshot.alerts[0].id).toContain("dwm_alert_demo");
     expect(snapshot.readiness.blockers).toContain("No live public Telegram source is registered for this tenant.");
-    expect(snapshot.readiness.blockers).toContain("No approved metadata-only dark web source is registered for this tenant.");
+    expect(snapshot.readiness.blockers).toContain("No approved metadata-only dark web source is active for this tenant.");
+  });
+
+  test("treats zero matches as ready when watchlist and live sources exist", () => {
+    const snapshot = buildDwmProductSnapshot({
+      watchlist: ["quiet.example"],
+      sources: [telegramSource, darkwebSource],
+      captures: [],
+      generatedAt: "2026-06-27T08:20:00.000Z",
+      includeDemoIfEmpty: false
+    });
+
+    expect(snapshot.readiness.decision).toBe("production_ready_with_live_sources");
+    expect(snapshot.alerts).toHaveLength(0);
+    expect(snapshot.readiness.blockers).toEqual([]);
+    expect(snapshot.sourceCoverage.find((row) => row.family === "actor_page")).toMatchObject({ sourceCount: 1, activeCount: 1 });
   });
 
   test("mounts the DWM product API route", async () => {
@@ -120,5 +140,26 @@ describe("dwm product snapshot", () => {
     expect(body.schemaVersion).toBe("dwm.product.v1");
     expect(body.alerts).toHaveLength(2);
     expect(body.sourceCoverage.find((row: any) => row.family === "telegram_public").activeCount).toBe(1);
+  });
+
+  test("mounts the DWM operations API route with safe recent capture proof", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveSource(darkwebSource);
+    store.saveCapture(telegramCapture);
+    store.saveCapture(darkwebCapture);
+
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/operations?watchlist=quiet.example"), {
+      store,
+      frontier: new FocusedFrontier()
+    });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(body.schemaVersion).toBe("dwm.operations.v1");
+    expect(body.counts.latestCaptureCount).toBe(2);
+    expect(body.zeroAlertExplanation.state).toBe("monitoring_no_matches");
+    expect(body.latestCaptures.some((capture: any) => capture.redactionState === "metadata_only")).toBe(true);
+    expect(JSON.stringify(body)).not.toContain(".onion/acme");
   });
 });

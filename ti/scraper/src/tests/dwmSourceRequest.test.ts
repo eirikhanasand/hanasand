@@ -43,4 +43,25 @@ describe("dwm source requests", () => {
     expect(body.request.approvalState).toBe("queued");
     expect(store.listSources()).toHaveLength(0);
   });
+
+  test("applies dark-web seed packs only when metadata-only approval is explicit", async () => {
+    const store = new InMemoryScraperStore();
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        seedPackIds: ["darkweb-actor-metadata-core"],
+        activate: true,
+        approveMetadataOnly: true,
+        approvedBy: "analyst-1",
+        limit: 4
+      })
+    }), { store, frontier: new FocusedFrontier() });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(201);
+    expect(body.summary.darkwebMetadataCreated).toBe(4);
+    expect(store.listSources()).toHaveLength(4);
+    expect(store.listSources().every((source) => source.status === "active")).toBe(true);
+    expect(store.listSources().every((source) => source.governance?.metadataOnly === true)).toBe(true);
+  });
 });

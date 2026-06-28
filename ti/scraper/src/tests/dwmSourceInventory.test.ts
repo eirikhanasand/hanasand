@@ -12,8 +12,8 @@ describe("dwm source inventory", () => {
     const catalog = buildDwmSeedCatalog({ watchlist: ["acme.com", "Acme Payments"], generatedAt });
 
     expect(catalog.packs.length).toBeGreaterThanOrEqual(5);
-    expect(catalog.candidates.filter((candidate) => candidate.family === "telegram_public").length).toBeGreaterThanOrEqual(100);
-    expect(catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length).toBeGreaterThanOrEqual(60);
+    expect(catalog.candidates.filter((candidate) => candidate.family === "telegram_public").length).toBeGreaterThanOrEqual(3000);
+    expect(catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length).toBeGreaterThanOrEqual(4000);
     expect(catalog.candidates.every((candidate) => candidate.source.metadata.mediaPolicy === "metadata_only_no_download")).toBe(true);
     expect(catalog.candidates.find((candidate) => candidate.family === "darkweb_metadata")?.source.legalNotes).toContain("No credential bypass");
   });
@@ -65,6 +65,38 @@ describe("dwm source inventory", () => {
     expect(second.summary.duplicateCount).toBe(12);
   });
 
+  test("approves dark-web seed packs as metadata-only active sources", () => {
+    const store = new InMemoryScraperStore();
+    const first = applyDwmSeedCatalog({
+      store,
+      seedPackIds: ["darkweb-actor-metadata-core"],
+      activate: true,
+      approveMetadataOnly: true,
+      approvedBy: "analyst-1",
+      limit: 6,
+      generatedAt
+    });
+    const second = applyDwmSeedCatalog({
+      store,
+      seedPackIds: ["darkweb-actor-metadata-core"],
+      activate: true,
+      approveMetadataOnly: true,
+      approvedBy: "analyst-1",
+      limit: 6,
+      generatedAt: "2026-06-27T12:30:00.000Z"
+    });
+
+    expect(first.summary.createdCount).toBe(6);
+    expect(first.summary.darkwebMetadataCreated).toBe(6);
+    expect(first.createdSources.every((source) => source.status === "active")).toBe(true);
+    expect(first.createdSources.every((source) => source.governance?.metadataOnly === true)).toBe(true);
+    expect(first.createdSources.every((source) => source.governance?.approvalState === "approved")).toBe(true);
+    expect(second.summary.createdCount).toBe(6);
+    expect(second.summary.duplicateCount).toBe(0);
+    expect(store.listSources().filter((source) => source.type === "darkweb_metadata")).toHaveLength(6);
+    expect(store.listSources().every((source) => source.metadata?.metadataOnlyApproved === true)).toBe(true);
+  });
+
   test("mounts source pack and source inventory API routes", async () => {
     const store = new InMemoryScraperStore();
     const options = { store, frontier: new FocusedFrontier() };
@@ -83,6 +115,6 @@ describe("dwm source inventory", () => {
     expect(applyBody.summary.createdCount).toBe(10);
     expect(inventoryBody.schemaVersion).toBe("dwm.source_inventory.v1");
     expect(inventoryBody.counts.registeredTelegramPublic).toBe(10);
-    expect(packsBody.counts.telegramPublic).toBeGreaterThanOrEqual(100);
+    expect(packsBody.counts.telegramPublic).toBeGreaterThanOrEqual(3000);
   });
 });

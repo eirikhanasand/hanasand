@@ -12,6 +12,8 @@ type DwmSourceRequestBody = {
   tenantId?: string;
   scope?: string;
   activate?: boolean;
+  approveMetadataOnly?: boolean;
+  approvedBy?: string;
   dryRun?: boolean;
   limit?: number;
   targets?: string[];
@@ -28,6 +30,8 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
       watchlist: body.scope ? body.scope.split(/[,\n]/).map((term) => term.trim()).filter(Boolean) : undefined,
       seedPackIds: body.seedPackIds,
       activate: body.activate,
+      approveMetadataOnly: body.approveMetadataOnly,
+      approvedBy: body.approvedBy,
       dryRun: body.dryRun,
       limit: body.limit
     });

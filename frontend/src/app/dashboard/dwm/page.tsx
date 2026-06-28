@@ -1,18 +1,23 @@
 import Link from 'next/link'
-import { BellRing, Bot, Code2, ExternalLink, Fingerprint, KeyRound, MessageSquareText, Radar, ShieldAlert, ShieldCheck, TicketCheck, Webhook } from 'lucide-react'
+import { Activity, BellRing, Bot, Code2, ExternalLink, Fingerprint, KeyRound, MessageSquareText, Radar, ShieldAlert, ShieldCheck, TicketCheck, Webhook } from 'lucide-react'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
-import { demoDwmProductSnapshot, dwmWebhookPayload, type DwmAlert } from '@/utils/dwm/product'
+import { demoDwmProductSnapshot, dwmWebhookPayload, type DwmProductSnapshot } from '@/utils/dwm/product'
+import { DwmAlertInbox } from './dwm-alert-inbox'
+import { DwmWorkflowActions } from './dwm-workflow-actions'
 import type { ReactNode } from 'react'
 
 export const dynamic = 'force-dynamic'
 
-export default function DashboardDwmPage() {
-    const snapshot = demoDwmProductSnapshot()
-    const primaryAlert = snapshot.alerts[0]
-    const criticalCount = snapshot.alerts.filter(alert => alert.severity === 'critical').length
+export default async function DashboardDwmPage() {
+    const [snapshot, operations, savedAlerts, deliveries] = await Promise.all([loadDwmSnapshot(), loadDwmOperations(), loadDwmAlerts(), loadDwmDeliveries()])
+    const alerts = savedAlerts.length ? savedAlerts : snapshot.alerts
+    const primaryAlert = alerts[0]
+    const criticalCount = alerts.filter(alert => alert.severity === 'critical').length
     const activeSourceCount = snapshot.sourceCoverage.reduce((sum, source) => sum + source.activeCount, 0)
-    const telegramSourceCount = snapshot.sourceCoverage.find(source => source.family === 'telegram_public')?.activeCount || 0
-    const darkwebSourceCount = snapshot.sourceCoverage.find(source => source.family === 'darkweb_metadata')?.activeCount || 0
+    const telegramCoverage = snapshot.sourceCoverage.find(source => source.family === 'telegram_public')
+    const darkwebCoverage = snapshot.sourceCoverage.find(source => source.family === 'darkweb_metadata')
+    const telegramSourceCount = telegramCoverage?.activeCount || 0
+    const darkwebSourceCount = darkwebCoverage?.activeCount || 0
 
     return (
         <DashboardPage>
@@ -35,8 +40,8 @@ export default function DashboardDwmPage() {
 
             <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
                 <Stat title='Telegram sources' value={String(telegramSourceCount)} detail='active public-channel sources' icon={<MessageSquareText className='h-4 w-4' />} />
-                <Stat title='Dark web sources' value={String(darkwebSourceCount)} detail='metadata-only active sources' icon={<ShieldCheck className='h-4 w-4' />} />
-                <Stat title='Critical alerts' value={String(criticalCount)} detail='ready for customer routing' icon={<TicketCheck className='h-4 w-4' />} />
+                <Stat title='Dark web sources' value={`${darkwebSourceCount}/${darkwebCoverage?.sourceCount || 0}`} detail='active metadata sources' icon={<ShieldCheck className='h-4 w-4' />} />
+                <Stat title='Critical alerts' value={String(criticalCount)} detail='matched to saved watchlists' icon={<TicketCheck className='h-4 w-4' />} />
                 <Stat title='Source graph' value={String(activeSourceCount)} detail='active monitored sources' icon={<Webhook className='h-4 w-4' />} />
             </div>
 
@@ -64,55 +69,140 @@ export default function DashboardDwmPage() {
                 </div>
             </DashboardPanel>
 
+            <DwmWorkflowActions initialTerms={snapshot.watchlist.map(term => term.value)} />
+
+            {operations && (
+                <div className='grid gap-4 xl:grid-cols-[1.05fr_0.95fr]'>
+                    <DashboardPanel className='p-5'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <div>
+                                <h2 className='text-lg font-semibold text-[#171a21]'>Collection proof</h2>
+                                <p className='mt-1 text-sm text-[#596170]'>{operations.zeroAlertExplanation.message}</p>
+                            </div>
+                            <Activity className='h-5 w-5 text-[#3056d3]' />
+                        </div>
+                        <div className='mt-4 grid gap-3 sm:grid-cols-3'>
+                            <MiniStat title='Captures' value={String(operations.counts.captureCount)} />
+                            <MiniStat title='Latest run' value={operations.latestRun ? `${operations.latestRun.captureCount} captures` : 'none'} />
+                            <MiniStat title='Watchlist hits' value={String(operations.counts.watchlistMatchCount)} />
+                        </div>
+                        <div className='mt-4 grid gap-2'>
+                            {operations.latestCaptures.slice(0, 6).map(capture => (
+                                <div key={capture.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                                    <div className='flex flex-wrap items-center gap-2'>
+                                        <span className='font-mono text-xs font-semibold text-[#171a21]'>{capture.sourceName}</span>
+                                        <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{capture.family.replaceAll('_', ' ')}</span>
+                                        <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{capture.redactionState.replaceAll('_', ' ')}</span>
+                                        <span className='text-xs text-[#667085]'>{relativeTimeLabel(capture.collectedAt)}</span>
+                                    </div>
+                                    <p className='mt-2 line-clamp-2 text-sm leading-6 text-[#3d4656]'>{capture.safeExcerpt}</p>
+                                    <p className='mt-2 font-mono text-[11px] text-[#667085]'>{capture.contentHash}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </DashboardPanel>
+
+                    <DashboardPanel className='p-5'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <div>
+                                <h2 className='text-lg font-semibold text-[#171a21]'>Threat actor overviews</h2>
+                                <p className='mt-1 text-sm text-[#596170]'>Actor cards built from live sources, metadata, captures, and matched alerts.</p>
+                            </div>
+                            <Fingerprint className='h-5 w-5 text-[#3056d3]' />
+                        </div>
+                        <div className='mt-4 grid gap-2'>
+                            {snapshot.actorOverviews.length === 0 && (
+                                <div className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-3 text-sm text-[#596170]'>
+                                    No named actors in recent safe metadata yet.
+                                </div>
+                            )}
+                            {snapshot.actorOverviews.slice(0, 6).map(actor => (
+                                <div key={actor.actor} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                                        <div>
+                                            <h3 className='text-sm font-semibold text-[#171a21]'>{actor.actor}</h3>
+                                            <p className='mt-1 text-xs text-[#667085]'>{actor.sourceFamilies.map(family => family.replaceAll('_', ' ')).join(', ')}</p>
+                                        </div>
+                                        <span className='rounded-full bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{actor.confidence}%</span>
+                                    </div>
+                                    <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{actor.summary}</p>
+                                    <div className='mt-3 grid grid-cols-3 gap-2'>
+                                        <MiniStat title='Sources' value={String(actor.sourceCount)} />
+                                        <MiniStat title='Captures' value={String(actor.captureCount)} />
+                                        <MiniStat title='State' value={actor.watchState.replaceAll('_', ' ')} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </DashboardPanel>
+
+                    <DashboardPanel className='p-5'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <div>
+                                <h2 className='text-lg font-semibold text-[#171a21]'>Source health</h2>
+                                <p className='mt-1 text-sm text-[#596170]'>{operations.counts.activeSourceCount}/{operations.counts.sourceCount} sources active.</p>
+                            </div>
+                            <ShieldCheck className='h-5 w-5 text-[#3056d3]' />
+                        </div>
+                        <div className='mt-4 grid gap-2'>
+                            {operations.sourceHealth.slice(0, 10).map(source => (
+                                <div key={source.sourceId} className='grid gap-2 rounded-lg border border-[#e0e5ed] bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-center'>
+                                    <div className='min-w-0'>
+                                        <p className='truncate text-sm font-semibold text-[#171a21]'>{source.sourceName}</p>
+                                        <p className='mt-1 text-xs text-[#667085]'>{source.family.replaceAll('_', ' ')} · {source.approvedMetadataOnly ? 'metadata only' : 'public source'}</p>
+                                    </div>
+                                    <span className='rounded-full bg-[#f4fbf7] px-2 py-1 text-xs font-semibold text-[#147a3b]'>{source.status}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </DashboardPanel>
+                </div>
+            )}
+
             <div className='grid gap-4 xl:grid-cols-[1.15fr_0.85fr]'>
                 <DashboardPanel className='p-5'>
                     <div className='flex items-center justify-between gap-3'>
                         <div>
                             <h2 className='text-lg font-semibold text-[#171a21]'>Live exposure queue</h2>
-                            <p className='mt-1 text-sm text-[#596170]'>Rows are shaped for review, routing, and fast response rather than bulk scraped-result browsing.</p>
+                            <p className='mt-1 text-sm text-[#596170]'>Review, route, and respond to real matches without turning the product into a scraped-row dump.</p>
                         </div>
                         <Radar className='h-5 w-5 text-[#3056d3]' />
                     </div>
-                    <div className='mt-5 grid gap-2'>
-                        {snapshot.alerts.map((alert) => (
-                            <div key={alert.id} className='grid gap-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 md:grid-cols-[1fr_auto] md:items-center'>
-                                <div className='min-w-0'>
-                                    <div className='flex flex-wrap items-center gap-2'>
-                                        <h3 className='font-semibold text-[#171a21]'>{alert.company}</h3>
-                                        {alert.actor && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'>{alert.actor}</span>}
-                                        <span className={severityClass(alert.severity)}>{alert.severity}</span>
-                                        <span className='rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#475467]'>{alert.confidence}% confidence</span>
-                                    </div>
-                                    <p className='mt-1 text-sm text-[#596170]'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {sourceFamilyLabel(alert.sourceFamily)} · {alert.artifactType.replaceAll('_', ' ')}</p>
-                                    <p className='mt-2 line-clamp-2 text-sm leading-6 text-[#3d4656]'>{alert.claimSummary}</p>
-                                    <div className='mt-3 flex flex-wrap gap-2'>
-                                        {alert.evidence.map(item => (
-                                            <span key={item.id} className='rounded-full border border-[#d8dee9] bg-white px-2 py-1 text-[11px] font-semibold text-[#596170]'>
-                                                {item.captureMode} · {item.redactionState} · {item.contentHash}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className='flex flex-col items-start gap-2 text-xs md:items-end'>
-                                    <span className='rounded-full bg-[#f3fbf6] px-2 py-1 font-semibold text-[#147a3b]'>{alert.reviewState.replaceAll('_', ' ')}</span>
-                                    <span className='text-[#667085]'>{relativeTimeLabel(alert.firstSeenAt)}</span>
-                                    <span className='rounded-full bg-[#eef3ff] px-2 py-1 font-semibold text-[#3056d3]'>{alert.webhookDelivery.recommendedRoute.replaceAll('_', ' ')}</span>
-                                </div>
-                            </div>
-                        ))}
+                    <div className='mt-5'>
+                        <DwmAlertInbox alerts={alerts} />
                     </div>
                 </DashboardPanel>
 
                 <DashboardPanel className='p-5'>
                     <div className='flex items-center justify-between gap-3'>
                         <div>
-                            <h2 className='text-lg font-semibold text-[#171a21]'>Webhook payload</h2>
-                            <p className='mt-1 text-sm text-[#596170]'>Small enough for incident routing, detailed enough for action.</p>
+                            <h2 className='text-lg font-semibold text-[#171a21]'>Customer delivery</h2>
+                            <p className='mt-1 text-sm text-[#596170]'>Webhook payload preview and delivery history.</p>
                         </div>
                         <Webhook className='h-5 w-5 text-[#3056d3]' />
                     </div>
                     <div className='mt-4 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3'>
                         <pre className='max-h-96 overflow-auto whitespace-pre-wrap wrap-break-word text-xs leading-5 text-[#344054]'>{JSON.stringify(primaryAlert ? dwmWebhookPayload(primaryAlert) : {}, null, 2)}</pre>
+                    </div>
+                    <div className='mt-4 grid gap-2'>
+                        {deliveries.length === 0 && (
+                            <div className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-3 text-sm text-[#596170]'>
+                                No webhook attempts yet.
+                            </div>
+                        )}
+                        {deliveries.slice(0, 5).map(delivery => (
+                            <div key={delivery.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <span className={delivery.status === 'delivered' ? 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-xs font-semibold text-[#147a3b]' : delivery.status === 'failed' ? 'rounded-full bg-[#fff7f3] px-2 py-0.5 text-xs font-semibold text-[#9a3412]' : 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'}>
+                                        {delivery.status.replaceAll('_', ' ')}
+                                    </span>
+                                    <span className='text-xs text-[#667085]'>{relativeTimeLabel(delivery.attemptedAt)}</span>
+                                    <span className='font-mono text-[11px] text-[#667085]'>{delivery.endpointHash}</span>
+                                </div>
+                                <p className='mt-2 font-mono text-[11px] text-[#596170]'>{delivery.dedupeKey}</p>
+                                {delivery.error && <p className='mt-2 text-xs text-[#9a3412]'>{delivery.error}</p>}
+                            </div>
+                        ))}
                     </div>
                     <div className='mt-4 flex flex-wrap gap-2'>
                         <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
@@ -184,20 +274,74 @@ export default function DashboardDwmPage() {
     )
 }
 
-function severityClass(severity: string) {
-    if (severity === 'critical') return 'rounded-full bg-[#fff0eb] px-2 py-0.5 text-xs font-semibold text-[#c2410c]'
-    if (severity === 'high') return 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-xs font-semibold text-[#b45309]'
-    return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'
+async function loadDwmSnapshot(): Promise<DwmProductSnapshot> {
+    const base = process.env.TI_SCRAPER_API_BASE
+    if (!base) return demoDwmProductSnapshot(new Date().toISOString())
+
+    try {
+        const target = new URL('/v1/dwm/product', base)
+        target.searchParams.set('tenantId', 'default')
+        target.searchParams.set('demo', 'false')
+
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
+        if (!response.ok) return demoDwmProductSnapshot(new Date().toISOString())
+        return await response.json() as DwmProductSnapshot
+    } catch {
+        return demoDwmProductSnapshot(new Date().toISOString())
+    }
+}
+
+async function loadDwmOperations(): Promise<DwmOperationsSnapshot | null> {
+    const base = process.env.TI_SCRAPER_API_BASE
+    if (!base) return null
+
+    try {
+        const target = new URL('/v1/dwm/operations', base)
+        target.searchParams.set('tenantId', 'default')
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        if (!response.ok) return null
+        return await response.json() as DwmOperationsSnapshot
+    } catch {
+        return null
+    }
+}
+
+async function loadDwmAlerts(): Promise<DwmAlertInboxItem[]> {
+    const base = process.env.TI_SCRAPER_API_BASE
+    if (!base) return []
+
+    try {
+        const target = new URL('/v1/dwm/alerts', base)
+        target.searchParams.set('tenantId', 'default')
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        if (!response.ok) return []
+        const payload = await response.json() as { alerts?: DwmAlertInboxItem[] }
+        return payload.alerts || []
+    } catch {
+        return []
+    }
+}
+
+async function loadDwmDeliveries(): Promise<DwmDeliveryItem[]> {
+    const base = process.env.TI_SCRAPER_API_BASE
+    if (!base) return []
+
+    try {
+        const target = new URL('/v1/dwm/webhooks/deliveries', base)
+        target.searchParams.set('tenantId', 'default')
+        const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        if (!response.ok) return []
+        const payload = await response.json() as { deliveries?: DwmDeliveryItem[] }
+        return (payload.deliveries || []).sort((a, b) => b.attemptedAt.localeCompare(a.attemptedAt))
+    } catch {
+        return []
+    }
 }
 
 function readinessLabel(decision: string) {
-    if (decision === 'production_ready_with_live_sources') return 'Production-ready contract'
+    if (decision === 'production_ready_with_live_sources') return 'Ready with live sources'
     if (decision === 'blocked_missing_watchlist') return 'Watchlist required'
-    return 'Preview contract with live-source blockers'
-}
-
-function sourceFamilyLabel(family: DwmAlert['sourceFamily']) {
-    return family.replaceAll('_', ' ')
+    return 'Not ready yet'
 }
 
 function relativeTimeLabel(value: string) {
@@ -222,6 +366,15 @@ function Stat({ title, value, detail, icon }: { title: string, value: string, de
     )
 }
 
+function MiniStat({ title, value }: { title: string, value: string }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+            <p className='text-[10px] font-semibold uppercase text-[#667085]'>{title}</p>
+            <p className='mt-1 text-base font-semibold text-[#171a21]'>{value}</p>
+        </div>
+    )
+}
+
 function ValueCard({ icon, title, body }: { icon: ReactNode, title: string, body: string }) {
     return (
         <DashboardPanel className='p-5'>
@@ -230,4 +383,75 @@ function ValueCard({ icon, title, body }: { icon: ReactNode, title: string, body
             <p className='mt-2 text-sm leading-6 text-[#596170]'>{body}</p>
         </DashboardPanel>
     )
+}
+
+type DwmOperationsSnapshot = {
+    schemaVersion: 'dwm.operations.v1'
+    generatedAt: string
+    tenantId: string
+    watchlistTerms: string[]
+    counts: {
+        sourceCount: number
+        activeSourceCount: number
+        telegramSourceCount: number
+        darkwebMetadataSourceCount: number
+        captureCount: number
+        latestCaptureCount: number
+        watchlistMatchCount: number
+        latestRunStatus?: string
+        latestRunCaptureCount?: number
+    }
+    latestRun?: {
+        id: string
+        status: string
+        updatedAt: string
+        taskCount: number
+        captureCount: number
+        error?: string
+    }
+    latestCaptures: Array<{
+        id: string
+        sourceId: string
+        sourceName: string
+        family: string
+        collectedAt: string
+        storageKind: string
+        redactionState: string
+        contentHash: string
+        safeExcerpt: string
+        matchedWatchTerms: string[]
+    }>
+    sourceHealth: Array<{
+        sourceId: string
+        sourceName: string
+        family: string
+        status: string
+        trustScore?: number
+        lastCollectedAt?: string
+        approvedMetadataOnly: boolean
+    }>
+    zeroAlertExplanation: {
+        state: string
+        message: string
+    }
+}
+
+type DwmAlertInboxItem = DwmProductSnapshot['alerts'][number] & {
+    deliveryState?: string
+    workflowNote?: string
+}
+
+type DwmDeliveryItem = {
+    id: string
+    tenantId: string
+    alertId: string
+    watchlistId: string
+    endpointHash: string
+    dedupeKey: string
+    attemptedAt: string
+    dryRun?: boolean
+    payloadHash: string
+    status: string
+    httpStatus?: number
+    error?: string
 }

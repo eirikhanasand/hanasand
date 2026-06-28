@@ -69,4 +69,31 @@ describe("dwm webhook delivery", () => {
     expect((store as any).listDwmAlerts()[0].deliveryState).toBe("delivered");
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
   });
+
+  test("records skipped delivery when the watchlist has no webhook URL", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source);
+    store.saveCapture(capture);
+    const options = { store, frontier: new FocusedFrontier() };
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", terms: ["acme.com"] })
+    }), options);
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme" })
+    }), options);
+
+    const deliverResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme" })
+    }), options);
+    const delivered = await deliverResponse.json() as any;
+
+    expect(deliverResponse.status).toBe(200);
+    expect(delivered.attemptedCount).toBe(1);
+    expect(delivered.deliveries[0].status).toBe("skipped");
+    expect(delivered.deliveries[0].error).toContain("No webhook URL");
+  });
 });

@@ -59,6 +59,18 @@ export interface DwmSourceCoverage {
   detail: string;
 }
 
+export interface DwmActorOverview {
+  actor: string;
+  aliases: string[];
+  sourceFamilies: DwmSourceFamily[];
+  sourceCount: number;
+  captureCount: number;
+  latestSeenAt: string;
+  confidence: number;
+  watchState: "active_monitoring" | "metadata_only" | "needs_more_sources";
+  summary: string;
+}
+
 export interface DwmOnDemandRequest {
   id: string;
   target: string;
@@ -76,6 +88,7 @@ export interface DwmProductSnapshot {
   watchlist: DwmWatchTerm[];
   alerts: DwmAlert[];
   sourceCoverage: DwmSourceCoverage[];
+  actorOverviews: DwmActorOverview[];
   onDemandQueue: DwmOnDemandRequest[];
   sourceInventory: {
     schemaVersion: DwmSourceInventorySnapshot["schemaVersion"];
@@ -105,7 +118,7 @@ export interface BuildDwmProductSnapshotInput {
 const sourceFamilyLabels: Record<DwmSourceFamily, string> = {
   telegram_public: "Public Telegram",
   darkweb_metadata: "Dark web metadata",
-  actor_page: "Actor pages",
+  actor_page: "Actor-page metadata",
   public_advisory: "Public advisories",
   clear_web: "Clear-web corroboration",
   unknown: "Unknown source"
@@ -121,6 +134,7 @@ export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}
     ? buildDemoAlerts(watchlist, generatedAt)
     : [];
   const sourceCoverage = buildSourceCoverage(sources);
+  const actorOverviews = buildActorOverviews({ sources, captures, alerts: [...alerts, ...demoAlerts], generatedAt });
   const onDemandQueue = buildOnDemandQueue(watchlist, generatedAt);
   const sourceInventory = buildDwmSourceInventory({
     tenantId: input.tenantId,
@@ -130,7 +144,7 @@ export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}
     generatedAt,
     includeCandidates: false
   });
-  const blockers = readinessBlockers(watchlist, sources, alerts);
+  const blockers = readinessBlockers(watchlist, sources);
 
   return {
     schemaVersion: "dwm.product.v1",
@@ -139,6 +153,7 @@ export function buildDwmProductSnapshot(input: BuildDwmProductSnapshotInput = {}
     watchlist,
     alerts: [...alerts, ...demoAlerts],
     sourceCoverage,
+    actorOverviews,
     onDemandQueue,
     sourceInventory: {
       schemaVersion: sourceInventory.schemaVersion,
@@ -170,9 +185,10 @@ export function normalizeWatchlist(values: Array<string | Partial<DwmWatchTerm>>
 export function classifySourceFamily(source: SourceRecord | undefined, capture?: RawCapture): DwmSourceFamily {
   const type = String((source as any)?.type ?? (capture?.metadata as any)?.adapter ?? "").toLowerCase();
   const url = String((source as any)?.url ?? capture?.url ?? "").toLowerCase();
+  const name = String((source as any)?.name ?? "").toLowerCase();
   if (type.includes("telegram") || url.includes("t.me/")) return "telegram_public";
   if (type.includes("tor") || type.includes("i2p") || type.includes("darknet") || type.includes("darkweb") || url.includes(".onion") || url.includes(".i2p")) return "darkweb_metadata";
-  if (type.includes("advisory") || type.includes("cert") || type.includes("cve")) return "public_advisory";
+  if (type.includes("advisory") || type.includes("cert") || type.includes("cve") || name.includes("cert") || name.includes("advisory") || url.includes("advisor")) return "public_advisory";
   if (type.includes("rss") || type.includes("static") || type.includes("dynamic") || url.startsWith("https://")) return "clear_web";
   return "unknown";
 }
@@ -239,7 +255,7 @@ function buildEvidenceRef(capture: RawCapture, source: SourceRecord | undefined,
 function buildSourceCoverage(sources: SourceRecord[]): DwmSourceCoverage[] {
   const families: DwmSourceFamily[] = ["telegram_public", "darkweb_metadata", "actor_page", "public_advisory", "clear_web"];
   return families.map((family) => {
-    const familySources = sources.filter((source) => classifySourceFamily(source) === family);
+    const familySources = sourceCoverageMembers(sources, family);
     const activeCount = familySources.filter((source) => ["active", "canary", "approved"].includes(String((source as any).status ?? "").toLowerCase())).length;
     const sourceCount = familySources.length;
     return {
@@ -252,6 +268,119 @@ function buildSourceCoverage(sources: SourceRecord[]): DwmSourceCoverage[] {
       detail: coverageDetail(family, sourceCount, activeCount)
     };
   });
+}
+
+function sourceCoverageMembers(sources: SourceRecord[], family: DwmSourceFamily): SourceRecord[] {
+  if (family === "actor_page") {
+    const explicit = sources.filter((source) => classifySourceFamily(source) === "actor_page");
+    if (explicit.length) return explicit;
+    return sources.filter((source) => classifySourceFamily(source) === "darkweb_metadata");
+  }
+  if (family === "public_advisory") {
+    const explicit = sources.filter((source) => classifySourceFamily(source) === "public_advisory");
+    if (explicit.length) return explicit;
+    return sources.filter((source) => {
+      const text = `${String((source as any).name ?? "")} ${String((source as any).type ?? "")} ${String((source as any).url ?? "")}`.toLowerCase();
+      return classifySourceFamily(source) === "clear_web" && /\b(cert|advisory|security|threat|intel|research|blog|rss|cve)\b/.test(text);
+    });
+  }
+  return sources.filter((source) => classifySourceFamily(source) === family);
+}
+
+function buildActorOverviews(input: { sources: SourceRecord[]; captures: RawCapture[]; alerts: DwmAlert[]; generatedAt: string }): DwmActorOverview[] {
+  const sourceById = new Map(input.sources.map((source) => [String((source as any).id), source]));
+  const groups = new Map<string, {
+    actor: string;
+    aliases: Set<string>;
+    sourceIds: Set<string>;
+    families: Set<DwmSourceFamily>;
+    captureCount: number;
+    latestSeenAt: string;
+    confidence: number;
+  }>();
+
+  const touch = (actor: string | undefined, seed: {
+    alias?: string;
+    sourceId?: string;
+    family?: DwmSourceFamily;
+    latestSeenAt?: string;
+    confidence?: number;
+    capture?: boolean;
+  }) => {
+    const normalized = actor?.trim();
+    if (!normalized || normalized.toLowerCase() === "unknown") return;
+    const key = normalized.toLowerCase();
+    const current = groups.get(key) ?? {
+      actor: normalized,
+      aliases: new Set<string>(),
+      sourceIds: new Set<string>(),
+      families: new Set<DwmSourceFamily>(),
+      captureCount: 0,
+      latestSeenAt: seed.latestSeenAt ?? input.generatedAt,
+      confidence: 55
+    };
+    if (seed.alias && seed.alias !== normalized) current.aliases.add(seed.alias);
+    if (seed.sourceId) current.sourceIds.add(seed.sourceId);
+    if (seed.family) current.families.add(seed.family);
+    if (seed.capture) current.captureCount += 1;
+    if (seed.latestSeenAt && seed.latestSeenAt > current.latestSeenAt) current.latestSeenAt = seed.latestSeenAt;
+    current.confidence = Math.max(current.confidence, seed.confidence ?? current.confidence);
+    groups.set(key, current);
+  };
+
+  for (const source of input.sources) {
+    touch(inferActorFromSource(source), {
+      sourceId: String((source as any).id ?? ""),
+      family: classifySourceFamily(source),
+      confidence: Number((source as any).trustScore ?? 0) > 0 ? 65 + Math.round(Number((source as any).trustScore) * 20) : 62
+    });
+  }
+
+  for (const capture of input.captures) {
+    const source = sourceById.get(String((capture as any).sourceId));
+    const text = captureText(capture);
+    const family = classifySourceFamily(source, capture);
+    const artifactType = inferArtifactType(text, family);
+    touch(inferActor(capture, text) ?? inferActorFromSource(source), {
+      sourceId: String((capture as any).sourceId ?? ""),
+      family,
+      latestSeenAt: String((capture as any).collectedAt ?? input.generatedAt),
+      confidence: inferConfidence({ text, source, sourceFamily: family, artifactType }),
+      capture: true
+    });
+  }
+
+  for (const alert of input.alerts) {
+    touch(alert.actor, {
+      family: alert.sourceFamily,
+      latestSeenAt: alert.lastSeenAt,
+      confidence: alert.confidence
+    });
+  }
+
+  return [...groups.values()]
+    .map((group): DwmActorOverview => {
+      const sourceFamilies = [...group.families].sort();
+      const watchState = sourceFamilies.includes("darkweb_metadata")
+        ? "metadata_only"
+        : group.sourceIds.size > 1 || group.captureCount > 0
+          ? "active_monitoring"
+          : "needs_more_sources";
+      const familyLabel = sourceFamilies.map((family) => sourceFamilyLabels[family] ?? family).join(", ") || "unknown sources";
+      return {
+        actor: group.actor,
+        aliases: [...group.aliases].slice(0, 4),
+        sourceFamilies,
+        sourceCount: group.sourceIds.size,
+        captureCount: group.captureCount,
+        latestSeenAt: group.latestSeenAt,
+        confidence: Math.min(99, group.confidence + Math.min(8, group.captureCount * 2)),
+        watchState,
+        summary: `${group.actor} is tracked across ${group.sourceIds.size} source(s), ${familyLabel}, with ${group.captureCount} recent capture(s).`
+      };
+    })
+    .sort((a, b) => b.confidence - a.confidence || b.captureCount - a.captureCount || b.latestSeenAt.localeCompare(a.latestSeenAt))
+    .slice(0, 8);
 }
 
 function buildOnDemandQueue(watchlist: DwmWatchTerm[], generatedAt: string): DwmOnDemandRequest[] {
@@ -330,12 +459,12 @@ function mergeDuplicateAlerts(alerts: DwmAlert[]): DwmAlert[] {
   return [...merged.values()].sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.confidence - a.confidence);
 }
 
-function readinessBlockers(watchlist: DwmWatchTerm[], sources: SourceRecord[], alerts: DwmAlert[]): string[] {
+function readinessBlockers(watchlist: DwmWatchTerm[], sources: SourceRecord[]): string[] {
   const blockers: string[] = [];
+  const isLiveSource = (source: SourceRecord) => ["active", "canary", "approved"].includes(String((source as any).status ?? "").toLowerCase());
   if (watchlist.length === 0) blockers.push("Add at least one company, domain, vendor, brand, or product watch term.");
-  if (!sources.some((source) => classifySourceFamily(source) === "telegram_public")) blockers.push("No live public Telegram source is registered for this tenant.");
-  if (!sources.some((source) => classifySourceFamily(source) === "darkweb_metadata")) blockers.push("No approved metadata-only dark web source is registered for this tenant.");
-  if (alerts.length === 0) blockers.push("No persisted evidence-backed alert exists yet; current alert may be a demo preview.");
+  if (!sources.some((source) => classifySourceFamily(source) === "telegram_public" && isLiveSource(source))) blockers.push("No live public Telegram source is registered for this tenant.");
+  if (!sources.some((source) => classifySourceFamily(source) === "darkweb_metadata" && isLiveSource(source))) blockers.push("No approved metadata-only dark web source is active for this tenant.");
   return blockers;
 }
 
@@ -380,9 +509,39 @@ function inferConfidence(input: { text: string; source?: SourceRecord; sourceFam
 function inferActor(capture: RawCapture, text: string): string | undefined {
   const metadata = (capture.metadata ?? {}) as any;
   const named = metadata.actorName ?? metadata.actor ?? metadata.leakSite?.actorName ?? metadata.channel;
-  if (named) return String(named);
+  if (named) return formatActorName(String(named));
   const match = text.match(/\b(Akira|LockBit|BlackCat|RansomHouse|Lumma C2|RedLine|Vidar)\b/i);
-  return match?.[1];
+  return match?.[1] ? formatActorName(match[1]) : undefined;
+}
+
+function inferActorFromSource(source: SourceRecord | undefined): string | undefined {
+  const metadata = ((source as any)?.metadata ?? {}) as any;
+  const named = metadata.actorName ?? metadata.actor ?? metadata.group ?? metadata.threatActor;
+  if (named) return formatActorName(String(named));
+  const text = `${String((source as any)?.name ?? "")} ${String((source as any)?.url ?? "")}`;
+  const match = text.match(/\b(Akira|LockBit|BlackCat|BlackCat\/ALPHV|ALPHV|RansomHouse|Lumma C2|RedLine|Vidar|Scattered Spider|APT29|APT28)\b/i);
+  if (!match) return undefined;
+  return formatActorName(match[1]);
+}
+
+function formatActorName(value: string): string {
+  const normalized = value.trim().replace(/[_-]+/g, " ");
+  const lower = normalized.toLowerCase();
+  const known: Record<string, string> = {
+    akira: "Akira",
+    lockbit: "LockBit",
+    "blackcat": "BlackCat/ALPHV",
+    "blackcat/alphv": "BlackCat/ALPHV",
+    alphv: "BlackCat/ALPHV",
+    ransomhouse: "RansomHouse",
+    "lumma c2": "Lumma C2",
+    redline: "RedLine",
+    vidar: "Vidar",
+    "scattered spider": "Scattered Spider",
+    apt29: "APT29",
+    apt28: "APT28"
+  };
+  return known[lower] ?? normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function recommendedActionFor(artifactType: DwmArtifactType, sourceFamily: DwmSourceFamily, term: DwmWatchTerm): string {
