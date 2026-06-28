@@ -46,6 +46,32 @@ const telegramCapture: RawCapture = {
   metadata: { adapter: "telegram_public", channel: "lumma_broker_room" }
 } as RawCapture;
 
+const telegramFollowupCapture: RawCapture = {
+  id: "cap_telegram_2",
+  sourceId: "src_telegram_lumma",
+  url: "https://t.me/lumma_broker_room/43",
+  collectedAt: "2026-06-27T08:16:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-telegram-followup",
+  sensitive: false,
+  body: "Follow-up public Telegram message repeats acme.com Okta live cookie and AWS IAM admin key exposure.",
+  metadata: { adapter: "telegram_public", channel: "lumma_broker_room" }
+} as RawCapture;
+
+const telegramDuplicateCapture: RawCapture = {
+  id: "cap_telegram_2_duplicate",
+  sourceId: "src_telegram_lumma",
+  url: "https://t.me/lumma_broker_room/43?mirror=1",
+  collectedAt: "2026-06-27T08:18:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-telegram-followup",
+  sensitive: false,
+  body: "Mirrored copy repeats acme.com Okta live cookie and AWS IAM admin key exposure.",
+  metadata: { adapter: "telegram_public", channel: "lumma_broker_room" }
+} as RawCapture;
+
 const darkwebCapture: RawCapture = {
   id: "cap_darkweb_1",
   sourceId: "src_akira_metadata",
@@ -80,7 +106,7 @@ describe("dwm product snapshot", () => {
       tenantId: "tenant_acme",
       watchlist: ["acme.com"],
       sources: [telegramSource, darkwebSource],
-      captures: [telegramCapture, darkwebCapture],
+      captures: [telegramCapture, telegramFollowupCapture, telegramDuplicateCapture, darkwebCapture],
       generatedAt: "2026-06-27T08:20:00.000Z",
       includeDemoIfEmpty: false
     });
@@ -88,6 +114,27 @@ describe("dwm product snapshot", () => {
     expect(snapshot.readiness.decision).toBe("production_ready_with_live_sources");
     expect(snapshot.alerts).toHaveLength(2);
     expect(snapshot.alerts[0].severity).toBe("critical");
+    expect(snapshot.alerts[0].sourceCount).toBe(2);
+    expect(snapshot.alerts[0].evidence).toHaveLength(2);
+    expect(snapshot.alerts[0].evidence.map((item) => item.id)).not.toContain("cap_telegram_2_duplicate");
+    expect(snapshot.alerts[0].evidenceSummary).toMatchObject({
+      evidenceCount: 2,
+      sourceFamilyCounts: { telegram_public: 2 },
+      publicSafeCount: 2,
+      firstObservedAt: "2026-06-27T08:10:00.000Z",
+      lastObservedAt: "2026-06-27T08:18:00.000Z"
+    });
+    expect(snapshot.alerts[0].matchContext).toMatchObject({
+      normalizedTerm: "acme.com",
+      termKind: "domain",
+      matchType: "case_insensitive_substring"
+    });
+    expect(snapshot.alerts[0].matchContext.matchedFieldHints).toContain("body");
+    expect(snapshot.alerts[0].routingContext).toMatchObject({
+      queue: "identity_response",
+      urgency: "immediate",
+      customerVisibleEvidence: "redacted_excerpt"
+    });
     expect(snapshot.alerts[0].dedupeKey).toMatch(/^dwm_dedupe_/);
     expect(snapshot.alerts[0].confidenceReasoning.join(" ")).toContain("Watchlist term matched");
     expect(snapshot.alerts[0].provenance.matchBasis).toBe("watchlist_capture_text");
@@ -98,6 +145,8 @@ describe("dwm product snapshot", () => {
     expect(snapshot.alerts.some((alert) => alert.sourceFamily === "darkweb_metadata")).toBe(true);
     const darkwebAlert = snapshot.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata");
     expect(darkwebAlert?.evidence[0].redactionState).toBe("metadata_only");
+    expect(darkwebAlert?.evidenceSummary.metadataOnlyCount).toBe(1);
+    expect(darkwebAlert?.routingContext.customerVisibleEvidence).toBe("metadata_only");
     expect(darkwebAlert?.provenance.metadataOnly).toBe(true);
     expect(darkwebAlert?.evidence[0].provenance.metadataOnly).toBe(true);
     expect(snapshot.actorOverviews.find((actor) => actor.actor === "Akira")).toMatchObject({

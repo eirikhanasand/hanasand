@@ -18,7 +18,28 @@ export type DwmAlert = {
     sourceFamily: DwmSourceFamily
     sourceCount: number
     firstSeenAt: string
+    lastSeenAt?: string
     claimSummary: string
+    matchContext?: {
+        normalizedTerm: string
+        termKind: DwmWatchTerm['kind']
+        matchType: 'case_insensitive_substring'
+        matchedFieldHints: string[]
+    }
+    evidenceSummary?: {
+        evidenceCount: number
+        sourceFamilyCounts: Record<string, number>
+        metadataOnlyCount: number
+        publicSafeCount: number
+        firstObservedAt: string
+        lastObservedAt: string
+    }
+    routingContext?: {
+        queue: 'identity_response' | 'vendor_risk' | 'incident_response' | 'brand_protection' | 'analyst_review'
+        urgency: 'immediate' | 'same_day' | 'watch'
+        customerVisibleEvidence: 'metadata_only' | 'redacted_excerpt'
+        reason: string
+    }
     reviewState: string
     recommendedAction: string
     evidence: Array<{
@@ -29,6 +50,18 @@ export type DwmAlert = {
         redactionState: 'redacted' | 'metadata_only' | 'public_safe'
         contentHash: string
         excerpt: string
+        firstSeenAt?: string
+        observedAt?: string
+        provenance?: {
+            captureId: string
+            sourceId: string
+            sourceType?: string
+            collector?: string
+            captureMode: 'public_message' | 'metadata_only' | 'public_report' | 'unknown'
+            retentionClass?: string
+            storageKind?: string
+            metadataOnly: boolean
+        }
     }>
     webhookDelivery: {
         recommendedRoute: 'identity_response' | 'vendor_risk' | 'incident_response' | 'brand_protection' | 'analyst_review'
