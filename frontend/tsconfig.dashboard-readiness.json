@@ -5,7 +5,10 @@
     },
     "include": [
         "src/app/api/dwm/**/*.ts",
+        "src/app/api/cases/**/*.ts",
         "src/app/api/organizations/**/*.ts",
+        "src/app/dashboard/operatorConsoleModel.ts",
+        "src/app/dashboard/operatorConsoleModel.contract.ts",
         "src/app/dashboard/page.tsx",
         "src/app/dashboard/ti/workbench/workbenchClient.tsx"
     ]

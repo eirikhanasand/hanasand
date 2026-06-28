@@ -26,6 +26,26 @@ export type WorkbenchTimelineItem = {
     body: string
 }
 
+export type WorkbenchWorkflowStep = {
+    id: string
+    label: string
+    status: 'ready' | 'needs_action' | 'blocked'
+    owner: string
+    source: string
+    detail: string
+    entityId?: string
+    href?: string
+}
+
+export type WorkbenchAction = {
+    id: string
+    label: string
+    method: 'GET' | 'POST'
+    href: string
+    body?: Record<string, unknown>
+    disabledReason?: string
+}
+
 export type WorkbenchCase = {
     id: string
     kind: 'dwm_alert' | 'ti_domain' | 'source_capture' | 'org_readiness' | 'watchlist_readiness' | 'webhook_readiness' | 'source_readiness' | 'alert_readiness'
@@ -50,6 +70,8 @@ export type WorkbenchCase = {
     timeline: WorkbenchTimelineItem[]
     nextTasks: string[]
     relatedLinks: Array<{ href: string, label: string }>
+    workflowPath?: WorkbenchWorkflowStep[]
+    actions?: WorkbenchAction[]
 }
 
 type QueueFilter = 'all' | 'critical' | 'high' | 'persistent' | 'evidence'
@@ -117,14 +139,35 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
 
     async function sendDwmAlert(item: WorkbenchCase) {
         await runPersistentAction(`send:${item.id}`, async () => {
-            const response = await fetch('/api/dwm/webhooks/deliver', {
+            const action = item.actions?.find(candidate => candidate.id === 'send_alert')
+            const response = await fetch(action?.href || '/api/dwm/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ tenantId: 'default', alertId: item.id, limit: 1 }),
+                body: JSON.stringify(action?.body || { tenantId: 'default', alertId: item.id, limit: 1 }),
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             return payload.attemptedCount ? 'Webhook delivery attempted.' : 'No webhook delivery was attempted.'
+        })
+    }
+
+    async function runWorkbenchAction(item: WorkbenchCase, action: WorkbenchAction, note: string) {
+        if (action.method === 'GET') return
+        await runPersistentAction(`action:${item.id}:${action.id}`, async () => {
+            const body = {
+                ...(action.body || {}),
+                note: note || action.body?.note,
+                assignedOwner: localDecisions[item.id]?.owner,
+                actor: 'dashboard',
+            }
+            const response = await fetch(action.href, {
+                method: action.method,
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(body),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            return actionResultMessage(action, payload)
         })
     }
 
@@ -222,6 +265,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
                                 onDecision={(decision) => applyDecision(selected, decision)}
                                 onReplay={() => replayDwmAlert(selected)}
                                 onSend={() => sendDwmAlert(selected)}
+                                onAction={(action) => runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
                             />
                         ) : (
                             <EmptyWorkspace />
@@ -283,7 +327,7 @@ function EmptyWorkspace() {
     )
 }
 
-function CaseDetail({ item, decision, note, busyAction, compact, onNoteChange, onDecision, onReplay, onSend }: {
+function CaseDetail({ item, decision, note, busyAction, compact, onNoteChange, onDecision, onReplay, onSend, onAction }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
@@ -293,6 +337,7 @@ function CaseDetail({ item, decision, note, busyAction, compact, onNoteChange, o
     onDecision: (decision: LocalDecision) => void | Promise<void>
     onReplay: () => void | Promise<void>
     onSend: () => void | Promise<void>
+    onAction: (action: WorkbenchAction) => void | Promise<void>
 }) {
     const effectiveStatus = decision?.status ?? item.status
     const effectiveOwner = decision?.owner ?? item.owner
@@ -366,6 +411,55 @@ function CaseDetail({ item, decision, note, busyAction, compact, onNoteChange, o
                     </DecisionButton>
                 </div>
             </section>
+
+            {(item.workflowPath?.length || item.actions?.length) ? (
+                <section className='rounded-lg border border-[#e0e5ed] bg-white'>
+                    <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                        <div>
+                            <h3 className='text-sm font-semibold text-[#171a21]'>Operator path</h3>
+                            <p className='mt-0.5 text-xs text-[#667085]'>Backed path from organization scope to watchlist, alert/case, and delivery evidence.</p>
+                        </div>
+                        {item.actions?.length ? (
+                            <div className='flex flex-wrap gap-2'>
+                                {item.actions.map(action => action.method === 'GET' ? (
+                                    <Link key={action.id} href={action.href} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                        {action.label}
+                                        <ExternalLink className='h-3.5 w-3.5' />
+                                    </Link>
+                                ) : (
+                                    <DecisionButton key={action.id} busy={busyAction === `action:${item.id}:${action.id}`} onClick={() => onAction(action)}>
+                                        {action.label}
+                                    </DecisionButton>
+                                ))}
+                            </div>
+                        ) : null}
+                    </div>
+                    {item.workflowPath?.length ? (
+                        <div className='grid gap-2 p-3 lg:grid-cols-4'>
+                            {item.workflowPath.map(step => (
+                                <div key={step.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                                    <div className='flex items-center justify-between gap-2'>
+                                        <h4 className='text-sm font-semibold text-[#171a21]'>{step.label}</h4>
+                                        <span className={workflowStatusClass(step.status)}>{label(step.status)}</span>
+                                    </div>
+                                    <p className='mt-2 text-xs leading-5 text-[#596170]'>{step.detail}</p>
+                                    <div className='mt-3 grid gap-1 text-[11px] text-[#667085]'>
+                                        <p><span className='font-semibold text-[#475467]'>Owner:</span> {step.owner}</p>
+                                        {step.entityId && <p className='break-all'><span className='font-semibold text-[#475467]'>ID:</span> {step.entityId}</p>}
+                                        <p className='break-all'><span className='font-semibold text-[#475467]'>Source:</span> {step.source}</p>
+                                    </div>
+                                    {step.href && (
+                                        <Link href={step.href} className='mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                            Open
+                                            <ExternalLink className='h-3.5 w-3.5' />
+                                        </Link>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+                </section>
+            ) : null}
 
             <section className='grid gap-4 lg:grid-cols-[1fr_0.78fr]'>
                 <div className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -483,10 +577,28 @@ function DecisionButton({ busy = false, onClick, children }: { busy?: boolean, o
 
 async function readJson(response: Response) {
     try {
-        return await response.json() as { error?: { message?: string }, attemptedCount?: number }
+        return await response.json() as {
+            error?: { message?: string }
+            attemptedCount?: number
+            savedAlertCount?: number
+            testedAt?: string
+            delivery?: { id?: string, status?: string }
+            deliveries?: Array<{ id?: string, status?: string }>
+            case?: { id?: string, status?: string }
+        }
     } catch {
         return {}
     }
+}
+
+function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnType<typeof readJson>>) {
+    if (payload.case?.id) return `Case ${payload.case.id} is ${payload.case.status || 'open'}.`
+    if (typeof payload.savedAlertCount === 'number') return `Rebuilt ${payload.savedAlertCount} alert${payload.savedAlertCount === 1 ? '' : 's'}.`
+    if (typeof payload.attemptedCount === 'number') return `Webhook delivery attempted for ${payload.attemptedCount} alert${payload.attemptedCount === 1 ? '' : 's'}.`
+    if (payload.delivery?.id) return `Webhook test ${payload.delivery.status || 'recorded'} as ${payload.delivery.id}.`
+    if (payload.deliveries?.[0]?.id) return `Latest delivery ${payload.deliveries[0].id} is ${payload.deliveries[0].status || 'recorded'}.`
+    if (payload.testedAt) return `Webhook test recorded at ${payload.testedAt}.`
+    return `${action.label} completed.`
 }
 
 function mapDwmDecision(status: string, currentStatus: string) {
@@ -547,6 +659,12 @@ function severityClass(severity: string) {
     if (severity === 'high') return 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-xs font-semibold text-[#b45309]'
     if (severity === 'medium') return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'
     return 'rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#596170]'
+}
+
+function workflowStatusClass(status: WorkbenchWorkflowStep['status']) {
+    if (status === 'ready') return 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-[11px] font-semibold text-[#147a3b]'
+    if (status === 'blocked') return 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]'
+    return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'
 }
 
 function label(value: string) {
