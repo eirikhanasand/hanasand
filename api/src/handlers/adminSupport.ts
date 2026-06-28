@@ -6,10 +6,12 @@ import { actorHasAdminSupportAccess, recordAdminAuditEvent, requireAuditReason }
 import {
     buildOrganizationDwmAlertReference,
     normalizeInviteInput,
+    normalizeMemberRoleInput,
     toInvite,
     toOrganization,
     toWatchlistItem,
     type InviteInput,
+    type OrganizationRole,
     type OrganizationInviteRow,
     type OrganizationRow,
     type OrganizationWatchlistRow,
@@ -38,6 +40,10 @@ type OrganizationParams = {
 
 type UserParams = {
     id: string
+}
+
+type OrganizationMemberParams = OrganizationParams & {
+    userId: string
 }
 
 type SupportInspectionQuery = {
@@ -74,6 +80,14 @@ type SupportInviteActionBody = {
     context?: unknown
     expiresAt?: unknown
     expires_at?: unknown
+}
+
+type SupportMemberRoleRecoveryBody = {
+    role?: unknown
+    reason?: unknown
+    context?: unknown
+    requestId?: unknown
+    request_id?: unknown
 }
 
 type SupportAccessRecoveryBody = InviteInput & {
@@ -540,6 +554,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
             controlledActions: {
                 inviteAssist: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/invites`),
                 inviteActions: invites.map(invite => `/api/admin/support/organizations/${encodeURIComponent(String(invite.organization_id))}/invites/${encodeURIComponent(String(invite.id))}/actions`),
+                memberRoleRecovery: memberships.map(member => `/api/admin/support/organizations/${encodeURIComponent(String(member.organization_id))}/members/${encodeURIComponent(String(member.user_id))}/role-recovery`),
                 accessRecovery: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/access-recovery`),
                 approvalSearch: `/api/admin/support/access-recovery${request ? `?request=${encodeURIComponent(request)}` : ''}`,
                 impersonationGuard: {
@@ -786,6 +801,165 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 `Org: ${organization.name} (${organization.id})`,
                 `Invite: ${updatedInvite.id}`,
                 `Status: ${before.status} -> ${after.status}`,
+                `Request: ${requestId}`,
+                `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
+                `Reason: ${reason}`,
+            ].join('\n'),
+        },
+    })
+}
+
+export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequest<{ Params: OrganizationMemberParams, Body: SupportMemberRoleRecoveryBody }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    let reason: string
+    let input: ReturnType<typeof normalizeMemberRoleInput>
+    try {
+        reason = requireAuditReason(req.body?.reason, 'Member role recovery reason')
+        input = normalizeMemberRoleInput({
+            role: req.body?.role,
+            reason,
+            requestId: req.body?.requestId,
+            request_id: req.body?.request_id,
+        })
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid support member role recovery request.' })
+    }
+
+    const organization = await loadOrganizationSupportDetail(req.params.id)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const member = await loadSupportMemberDetail(req.params.id, req.params.userId)
+    if (!member || member.status !== 'active') {
+        return res.status(404).send({ error: 'Active organization member not found.' })
+    }
+
+    const requestId = input.requestId || supportRequestId(req)
+    const actionType = 'support.organization.member_role_recovery'
+    const before = membershipSnapshot(member)
+    const ownerCount = await activeOwnerCount(req.params.id)
+    const permissionError = supportRoleRecoveryPermissionError(String(member.role) as OrganizationRole, input.role, ownerCount)
+    const noOp = member.role === input.role
+    if (permissionError || noOp) {
+        const error = permissionError || 'member_role_already_set'
+        await recordAdminAuditEvent(req, {
+            actionType,
+            actorId: actor.id,
+            targetType: 'member',
+            targetId: req.params.userId,
+            organizationId: organization.id,
+            entityId: req.params.userId,
+            requestId,
+            severity: 'notice',
+            outcome: permissionError ? 'denied' : 'failed',
+            reason,
+            context: {
+                schemaVersion: 'support.member_role_recovery.v1',
+                requestId,
+                targetUserId: req.params.userId,
+                requestedRole: input.role,
+                ownerCount,
+                before,
+                after: before,
+                noSilentMembershipMutation: true,
+                mutation: 'none',
+                error,
+                supportContext: cleanContext(req.body?.context),
+            },
+        })
+        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: req.params.userId })
+        return res.status(permissionError ? 403 : 409).send({
+            error: permissionError || 'Member already has the requested role.',
+            memberRoleRecovery: {
+                schemaVersion: 'support.member_role_recovery.v1',
+                requestId,
+                actorId: actor.id,
+                organization: toOrganization(organization),
+                member: toSupportMemberDetail(member),
+                before,
+                after: before,
+                requestedRole: input.role,
+                outcome: permissionError ? 'denied' : 'failed',
+                auditEventIds,
+                noSilentMembershipMutation: true,
+            },
+        })
+    }
+
+    const updated = await run(`
+        UPDATE organization_members
+        SET role = $3
+        WHERE organization_id = $1
+          AND user_id = $2
+          AND status = 'active'
+        RETURNING *
+    `, [organization.id, req.params.userId, input.role])
+    if (!updated.rows.length) {
+        return res.status(404).send({ error: 'Active organization member not found.' })
+    }
+    await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
+    const updatedMember = {
+        ...member,
+        ...(updated.rows[0] as Record<string, unknown>),
+    }
+    const after = membershipSnapshot(updatedMember)
+
+    await recordAdminAuditEvent(req, {
+        actionType,
+        actorId: actor.id,
+        targetType: 'member',
+        targetId: req.params.userId,
+        organizationId: organization.id,
+        entityId: req.params.userId,
+        requestId,
+        severity: input.role === 'admin' || before.role === 'owner' ? 'warning' : 'notice',
+        outcome: 'success',
+        reason,
+        context: {
+            schemaVersion: 'support.member_role_recovery.v1',
+            requestId,
+            targetUserId: req.params.userId,
+            previousRole: before.role,
+            newRole: after.role,
+            ownerCount,
+            before,
+            after,
+            noSilentMembershipMutation: true,
+            mutation: 'member_role_only',
+            supportContext: cleanContext(req.body?.context),
+        },
+    })
+    const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: req.params.userId })
+
+    return res.send({
+        memberRoleRecovery: {
+            schemaVersion: 'support.member_role_recovery.v1',
+            requestId,
+            actorId: actor.id,
+            organization: toOrganization(organization),
+            member: toSupportMemberDetail(updatedMember),
+            before,
+            after,
+            reason,
+            outcome: 'success',
+            auditEventIds,
+            noSilentMembershipMutation: true,
+            audit: {
+                actionType,
+                source: 'admin',
+                service: 'hanasand-api',
+                outcome: 'success',
+                severity: input.role === 'admin' || before.role === 'owner' ? 'warning' : 'notice',
+                eventIds: auditEventIds,
+                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&entity=${encodeURIComponent(req.params.userId)}&action=member_role_recovery&outcome=success&source=admin&service=hanasand-api`,
+            },
+            copyText: [
+                `Support member role recovery for ${req.params.userId}`,
+                `Org: ${organization.name} (${organization.id})`,
+                `Role: ${before.role} -> ${after.role}`,
                 `Request: ${requestId}`,
                 `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
                 `Reason: ${reason}`,
@@ -1498,6 +1672,51 @@ async function loadAdminAuditEventIds(input: { requestId: string, actionType: st
     return result.rows.map((row: Record<string, unknown>) => Number(row.id)).filter(id => Number.isFinite(id))
 }
 
+async function loadSupportMemberDetail(organizationId: string, userId: string) {
+    const result = await run(`
+        SELECT
+            om.organization_id,
+            organizations.name AS organization_name,
+            organizations.slug AS organization_slug,
+            om.user_id,
+            users.name,
+            users.avatar,
+            users.active,
+            users.deactivated_at,
+            users.deletion_scheduled_at,
+            om.role,
+            om.status,
+            om.invited_by,
+            om.joined_at,
+            om.created_at
+        FROM organization_members om
+        JOIN users ON users.id = om.user_id
+        JOIN organizations ON organizations.id = om.organization_id
+        WHERE om.organization_id = $1
+          AND om.user_id = $2
+        LIMIT 1
+    `, [organizationId, userId])
+    return result.rows[0] as Record<string, unknown> | undefined
+}
+
+async function activeOwnerCount(organizationId: string) {
+    const result = await run(`
+        SELECT COUNT(*)::int AS owner_count
+        FROM organization_members
+        WHERE organization_id = $1
+          AND status = 'active'
+          AND role = 'owner'
+    `, [organizationId])
+    return Number(result.rows[0]?.owner_count ?? 0)
+}
+
+function supportRoleRecoveryPermissionError(currentRole: OrganizationRole, newRole: OrganizationRole, ownerCount: number) {
+    if (newRole === 'owner') return 'Support role recovery cannot grant organization owner.'
+    if (!['owner', 'admin', 'member', 'viewer'].includes(currentRole)) return 'Unsupported current member role.'
+    if (currentRole === 'owner' && ownerCount <= 1) return 'Support role recovery cannot demote the last active owner.'
+    return ''
+}
+
 async function loadOrganizationAvailability(organizationIds: string[]) {
     const result = await run(`
         SELECT
@@ -1620,6 +1839,20 @@ function toSupportMemberDetail(row: Record<string, unknown>) {
         removed: row.status === 'removed',
         deactivated: row.active === false || Boolean(row.deactivated_at),
         deletionScheduled: Boolean(row.deletion_scheduled_at),
+    }
+}
+
+function membershipSnapshot(row: Record<string, unknown>) {
+    return {
+        organizationId: row.organization_id,
+        userId: row.user_id,
+        role: row.role,
+        status: row.status,
+        active: row.active,
+        deactivatedAt: row.deactivated_at || null,
+        invitedBy: row.invited_by || null,
+        joinedAt: row.joined_at || null,
+        createdAt: row.created_at || null,
     }
 }
 

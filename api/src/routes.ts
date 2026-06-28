@@ -135,6 +135,7 @@ import {
     postSupportAccessRecovery,
     postSupportAccessRecoveryApprove,
     postSupportAccessRecoveryDeny,
+    postSupportOrganizationMemberRoleRecovery,
     postSupportOrganizationInvite,
     postSupportOrganizationInviteAction,
 } from './handlers/adminSupport.ts'
@@ -213,6 +214,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/admin/support/access-recovery', getSupportAccessRecoveryApprovals)
     fastify.post('/admin/support/organizations/:id/invites', postSupportOrganizationInvite)
     fastify.post('/admin/support/organizations/:id/invites/:inviteId/actions', postSupportOrganizationInviteAction)
+    fastify.post('/admin/support/organizations/:id/members/:userId/role-recovery', postSupportOrganizationMemberRoleRecovery)
     fastify.post('/admin/support/organizations/:id/access-recovery', postSupportAccessRecovery)
     fastify.post('/admin/support/access-recovery/:requestId/approve', postSupportAccessRecoveryApprove)
     fastify.post('/admin/support/access-recovery/:requestId/deny', postSupportAccessRecoveryDeny)
