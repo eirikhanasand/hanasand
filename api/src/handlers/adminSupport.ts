@@ -50,7 +50,6 @@ type SupportAccessRecoveryBody = InviteInput & {
     reason?: unknown
     context?: unknown
     caseId?: unknown
-    approvalRequired?: unknown
 }
 
 export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply) {
@@ -468,12 +467,6 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
     await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
 
     const requestId = supportRequestId(req)
-    const approval = accessRecoveryApprovalMetadata({
-        actorId: actor.id,
-        role: inviteRow.role,
-        existingMembership: existingMembership.rows[0],
-        requestedApprovalRequired: req.body?.approvalRequired,
-    })
     await recordAdminAuditEvent(req, {
         actionType: 'support.organization.access_recovery',
         actorId: actor.id,
@@ -495,7 +488,6 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
             caseId: text(req.body?.caseId) || null,
             supportContext: cleanContext(req.body?.context),
             mutation: 'controlled_invite_only',
-            approval,
         },
     })
 
@@ -508,12 +500,6 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
             existingMembership: existingMembership.rows[0] || null,
             reason,
             requestId,
-            requestedBy: actor.id,
-            approvalRequired: approval.approvalRequired,
-            approvalStatus: approval.status,
-            approvedBy: approval.approvedBy,
-            approvedAt: approval.approvedAt,
-            approval,
             audit: {
                 actionType: 'support.organization.access_recovery',
                 source: 'admin',
@@ -528,7 +514,6 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
                 `Role: ${inviteRow.role}`,
                 `Expires: ${inviteRow.expires_at}`,
                 `Request: ${requestId}`,
-                `Approval: ${approval.status}`,
                 `Reason: ${reason}`,
             ].join('\n'),
         },
@@ -650,33 +635,6 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             context: event.context || {},
             copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
         },
-    }
-}
-
-function accessRecoveryApprovalMetadata(input: {
-    actorId: string
-    role: string
-    existingMembership: unknown
-    requestedApprovalRequired: unknown
-}) {
-    const existingRole = typeof input.existingMembership === 'object' && input.existingMembership
-        ? String((input.existingMembership as { role?: unknown }).role || '')
-        : ''
-    const approvalRequired = Boolean(input.requestedApprovalRequired)
-        || input.role === 'admin'
-        || existingRole === 'owner'
-        || existingRole === 'admin'
-
-    return {
-        schemaVersion: 'support.access_recovery.approval.v1',
-        requestedBy: input.actorId,
-        approvalRequired,
-        status: approvalRequired ? 'pending_approval' : 'not_required',
-        approvedBy: null as string | null,
-        approvedAt: null as string | null,
-        reason: approvalRequired
-            ? 'Admin-role recovery or elevated existing membership requires second review before use.'
-            : 'Member recovery does not require second review by default.',
     }
 }
 

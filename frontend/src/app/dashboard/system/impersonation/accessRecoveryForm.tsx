@@ -8,20 +8,6 @@ type RecoveryPayload = {
         targetUserId: string | null
         requestId: string
         reason: string
-        requestedBy: string
-        approvalRequired: boolean
-        approvalStatus: string
-        approvedBy: string | null
-        approvedAt: string | null
-        approval?: {
-            schemaVersion: string
-            requestedBy: string
-            approvalRequired: boolean
-            status: string
-            approvedBy: string | null
-            approvedAt: string | null
-            reason: string
-        }
         invite: {
             id: string
             email: string
@@ -58,7 +44,6 @@ export default function AccessRecoveryForm() {
             reason: String(form.get('reason') || '').trim(),
             context: String(form.get('context') || '').trim(),
             caseId: String(form.get('caseId') || '').trim(),
-            approvalRequired: form.get('approvalRequired') === 'on',
         }
 
         setSubmitting(true)
@@ -100,10 +85,6 @@ export default function AccessRecoveryForm() {
                 <input className={inputClass} name='context' placeholder='Context' />
             </div>
             <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
-            <label className='flex items-center gap-2 text-sm text-bright/62'>
-                <input className='h-4 w-4 accent-[#f07d33]' name='approvalRequired' type='checkbox' />
-                Require second review before sharing this recovery invite
-            </label>
             <div className='flex flex-wrap items-center gap-3'>
                 <button className='h-10 rounded-lg bg-[#f07d33] px-4 text-sm font-semibold text-black transition hover:bg-[#ff944d] disabled:cursor-not-allowed disabled:opacity-55' disabled={submitting} type='submit'>
                     {submitting ? 'Generating...' : 'Generate recovery invite'}
@@ -115,11 +96,7 @@ export default function AccessRecoveryForm() {
                     <div className='grid gap-2 text-sm text-bright/72 md:grid-cols-3'>
                         <span>Request {result.recovery.requestId}</span>
                         <span>{result.recovery.invite.email}</span>
-                        <span>{result.recovery.approvalStatus}</span>
-                    </div>
-                    <div className='text-sm text-bright/58'>
-                        {result.recovery.invite.role} until {result.recovery.invite.expiresAt}
-                        {result.recovery.approval?.reason ? ` · ${result.recovery.approval.reason}` : ''}
+                        <span>{result.recovery.invite.role} until {result.recovery.invite.expiresAt}</span>
                     </div>
                     <textarea className={textAreaClass} readOnly value={result.recovery.copyText} />
                     <a className='text-sm font-semibold text-[#f07d33] hover:text-[#ff944d]' href={`/dashboard/system/impersonation?request=${encodeURIComponent(result.recovery.requestId)}&action=${encodeURIComponent(result.recovery.audit.actionType)}&source=admin&service=hanasand-api`}>
