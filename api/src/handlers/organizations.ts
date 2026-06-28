@@ -7,6 +7,7 @@ import {
     buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
     normalizeInviteInput,
+    normalizeMemberRoleInput,
     normalizeOrganizationInput,
     normalizeOrganizationSettingsInput,
     normalizeOwnershipTransferInput,
@@ -14,6 +15,7 @@ import {
     normalizeWatchlistRequestId,
     organizationSettingsFromRow,
     organizationVisibilityDecision,
+    organizationWatchlistAlertGenerationContract,
     organizationWatchlistTerms,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
@@ -26,6 +28,7 @@ import {
     type OrganizationRole,
     type OrganizationRow,
     type InviteInput,
+    type OrganizationMemberRoleInput,
     type OrganizationInput,
     type OrganizationOwnershipTransferInput,
     type OrganizationSettingsInput,
@@ -374,6 +377,82 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
     return res.send({
         organization: updated ? toOrganization(updated) : null,
         member: toMember(removed.rows[0] as OrganizationMemberRow),
+    })
+}
+
+export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: OrganizationMemberParams, Body: OrganizationMemberRoleInput }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const target = await loadOrganizationMembership(req.params.id, req.params.userId)
+    if (!target || target.status !== 'active') {
+        return res.status(404).send({ error: 'Organization member not found.' })
+    }
+
+    let input
+    try {
+        input = normalizeMemberRoleInput(req.body)
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid member role update.' })
+    }
+
+    const permissionError = roleUpdatePermissionError(organization.role, target.role, input.role)
+    if (permissionError) {
+        return res.status(403).send({ error: permissionError })
+    }
+
+    const ownerCount = await activeOwnerCount(req.params.id)
+    if (target.role === 'owner' && input.role !== 'owner' && ownerCount <= 1) {
+        return res.status(409).send({ error: 'Transfer ownership before changing the last owner role.' })
+    }
+
+    const result = await run(`
+        UPDATE organization_members
+        SET role = $3
+        WHERE organization_id = $1
+          AND user_id = $2
+          AND status = 'active'
+        RETURNING *
+    `, [req.params.id, req.params.userId, input.role])
+
+    if (!result.rows.length) {
+        return res.status(404).send({ error: 'Organization member not found.' })
+    }
+
+    await touchOrganization(req.params.id)
+    const serviceLogAction = 'organization_member_role_updated'
+    logOrganizationEvent(req, serviceLogAction, req.params.id, userId, {
+        requestId: input.requestId,
+        targetUserId: req.params.userId,
+        previousRole: target.role,
+        newRole: input.role,
+        actorRole: organization.role,
+        reason: input.reason,
+    })
+
+    const updated = await loadOrganizationForMember(req.params.id, userId)
+    return res.send({
+        organization: updated ? toOrganization(updated) : null,
+        member: toMember(result.rows[0] as OrganizationMemberRow),
+        roleChange: {
+            schemaVersion: 'organization.member_role_change.v1',
+            organizationId: req.params.id,
+            tenantId: req.params.id,
+            actorId: userId,
+            targetUserId: req.params.userId,
+            previousRole: target.role,
+            newRole: input.role,
+            reason: input.reason,
+            requestId: input.requestId ?? null,
+            serviceLogAction,
+        },
     })
 }
 
@@ -1148,6 +1227,13 @@ function removalPermissionError(actorRole: OrganizationRole | undefined, targetR
     return 'Only organization owners and admins can remove members.'
 }
 
+function roleUpdatePermissionError(actorRole: OrganizationRole | undefined, targetRole: OrganizationRole, newRole: OrganizationRole) {
+    if (actorRole === 'owner') return null
+    if (actorRole === 'admin' && (targetRole === 'member' || targetRole === 'viewer') && (newRole === 'member' || newRole === 'viewer')) return null
+    if (actorRole === 'admin') return 'Organization admins can only update members and viewers to member or viewer roles.'
+    return 'Only organization owners and admins can update member roles.'
+}
+
 function organizationTeamOnboardingReadiness(organization: ReturnType<typeof buildOrganizationBridgeContext>) {
     const targetMemberCount = 10
     const acceptedOrInvitedCount = organization.activeMemberCount + organization.pendingInviteCount
@@ -1178,9 +1264,7 @@ function organizationSharedWatchlistContract(organization: OrganizationRow, item
         ...organization,
         shared_watchlist_count: items.length,
     })
-    const activeWatchlistTerms = organizationWatchlistTerms(items)
-    const termFamilies = [...new Set(activeWatchlistTerms.map(term => term.termFamily))].sort()
-    const blockedReasons = watchlistAlertGenerationBlockedReasons(bridgeContext, items)
+    const alertGeneration = organizationWatchlistAlertGenerationContract(organization, items)
     return {
         schemaVersion: 'organization.shared_watchlist_contract.v1',
         organizationId: organization.id,
@@ -1188,10 +1272,10 @@ function organizationSharedWatchlistContract(organization: OrganizationRow, item
         ownerOrganizationId: organization.id,
         visibilityPolicy: bridgeContext.alertVisibilityPolicy,
         allowedViewerRoles: bridgeContext.allowedViewerRoles,
-        activeWatchlistTerms,
-        termFamilies,
-        blockedReasons,
-        canGenerateAlerts: blockedReasons.length === 0,
+        activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
+        termFamilies: alertGeneration.termFamilies,
+        blockedReasons: alertGeneration.blockedReasons,
+        canGenerateAlerts: alertGeneration.canGenerateAlerts,
         permissions: {
             canWrite: roleCanWriteWatchlist(organization.role),
         },
@@ -1202,37 +1286,17 @@ function organizationAlertGenerationBridge(
     organization: ReturnType<typeof buildOrganizationBridgeContext>,
     items: OrganizationWatchlistRow[]
 ) {
-    const activeWatchlistTerms = organizationWatchlistTerms(items)
-    const termFamilies = [...new Set(activeWatchlistTerms.map(term => term.termFamily))].sort()
-    const blockedReasons = watchlistAlertGenerationBlockedReasons(organization, items)
-    return {
-        schemaVersion: 'organization.watchlist_alert_generation.v1',
-        organizationId: organization.id,
-        tenantId: organization.id,
-        ownerOrganizationId: organization.id,
-        visibilityPolicy: organization.alertVisibilityPolicy,
-        allowedViewerRoles: organization.allowedViewerRoles,
-        activeWatchlistTerms,
-        termFamilies,
-        blockedReasons,
-        canGenerateAlerts: blockedReasons.length === 0,
-    }
-}
-
-function watchlistAlertGenerationBlockedReasons(
-    organization: ReturnType<typeof buildOrganizationBridgeContext>,
-    items: OrganizationWatchlistRow[]
-) {
-    const blockedReasons: string[] = []
-    if (!items.length) {
-        blockedReasons.push('needs_shared_watchlist_item')
-    }
-
-    if (!organization.allowedViewerRoles.length) {
-        blockedReasons.push('needs_alert_visibility_roles')
-    }
-
-    return blockedReasons
+    return organizationWatchlistAlertGenerationContract({
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug ?? '',
+        member_count: organization.memberCount,
+        owner_count: organization.ownerCount,
+        pending_invite_count: organization.pendingInviteCount,
+        shared_watchlist_count: organization.sharedWatchlistCount,
+        default_webhook_policy: organization.defaultWebhookPolicy,
+        alert_visibility_policy: organization.alertVisibilityPolicy,
+    }, items)
 }
 
 function organizationWatchlistOperation(

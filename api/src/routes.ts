@@ -157,6 +157,7 @@ import {
     postOrganizationInvites,
     postOrganizationOwnershipTransfer,
     postOrganizationWatchlist,
+    patchOrganizationMemberRole,
     putOrganizationSettings,
     putOrganizationWatchlist,
 } from './handlers/organizations.ts'
@@ -299,6 +300,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/organizations/:id/invites', getOrganizationInvites)
     fastify.post('/organizations/:id/invites', postOrganizationInvites)
     fastify.get('/organizations/:id/members', getOrganizationMembers)
+    fastify.patch('/organizations/:id/members/:userId/role', patchOrganizationMemberRole)
     fastify.delete('/organizations/:id/members/:userId', deleteOrganizationMember)
     fastify.post('/organizations/:id/ownership-transfer', postOrganizationOwnershipTransfer)
     fastify.get('/organizations/:id/settings', getOrganizationSettings)

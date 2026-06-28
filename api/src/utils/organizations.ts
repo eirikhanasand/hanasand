@@ -1,5 +1,5 @@
 export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer'
-export type WatchlistKind = 'company' | 'domain' | 'vendor'
+export type WatchlistKind = 'company' | 'domain' | 'vendor' | 'actor' | 'keyword'
 export type OrganizationDefaultWebhookPolicy = 'active_destinations' | 'manual_selection' | 'disabled'
 export type OrganizationAlertVisibilityPolicy = 'members' | 'admins' | 'owners'
 
@@ -24,6 +24,13 @@ export type OrganizationOwnershipTransferInput = {
     targetUserId?: unknown
     target_user_id?: unknown
     reason?: unknown
+}
+
+export type OrganizationMemberRoleInput = {
+    role?: unknown
+    reason?: unknown
+    requestId?: unknown
+    request_id?: unknown
 }
 
 export type InviteInput = {
@@ -101,10 +108,27 @@ export type OrganizationWatchlistRow = {
 
 export type OrganizationWatchlistTerm = {
     watchlistItemId: string
+    organizationId: string
+    tenantId: string
     kind: WatchlistKind
     termFamily: WatchlistKind
+    family: WatchlistKind
+    term: string
     value: string
     terms: string[]
+}
+
+export type OrganizationWatchlistAlertGenerationContract = {
+    schemaVersion: 'organization.watchlist_alert_generation.v1'
+    organizationId: string
+    tenantId: string
+    ownerOrganizationId: string
+    visibilityPolicy: OrganizationAlertVisibilityPolicy
+    allowedViewerRoles: OrganizationRole[]
+    activeWatchlistTerms: OrganizationWatchlistTerm[]
+    termFamilies: WatchlistKind[]
+    blockedReasons: string[]
+    canGenerateAlerts: boolean
 }
 
 export type OrganizationDwmAlertReference = {
@@ -215,7 +239,8 @@ export type OrganizationVisibilityDecision = {
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin', 'member'])
 const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
-const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor'])
+const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor', 'actor', 'keyword'])
+const memberRoleTargets = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const defaultWebhookPolicies = new Set<OrganizationDefaultWebhookPolicy>(['active_destinations', 'manual_selection', 'disabled'])
 const alertVisibilityPolicies = new Set<OrganizationAlertVisibilityPolicy>(['members', 'admins', 'owners'])
 
@@ -306,6 +331,25 @@ export function normalizeOwnershipTransferInput(body: OrganizationOwnershipTrans
     }
 
     return { targetUserId, reason }
+}
+
+export function normalizeMemberRoleInput(body: OrganizationMemberRoleInput | undefined) {
+    const role = cleanText(body?.role).toLowerCase()
+    if (!memberRoleTargets.has(role as OrganizationRole)) {
+        throw new Error('Member role must be admin, member, or viewer.')
+    }
+
+    const reason = cleanText(body?.reason)
+    if (reason.length < 3) {
+        throw new Error('Member role change reason is required.')
+    }
+
+    if (reason.length > 1000) {
+        throw new Error('Member role change reason must be 1000 characters or fewer.')
+    }
+
+    const requestId = normalizeWatchlistRequestId(body?.requestId ?? body?.request_id)
+    return { role: role as OrganizationRole, reason, requestId }
 }
 
 export function normalizeWatchlistInput(body: WatchlistInput | undefined) {
@@ -550,11 +594,48 @@ export function organizationSettingsFromRow(row: Pick<OrganizationRow, 'default_
 export function organizationWatchlistTerms(items: OrganizationWatchlistRow[]): OrganizationWatchlistTerm[] {
     return items.map(item => ({
         watchlistItemId: item.id,
+        organizationId: item.organization_id,
+        tenantId: item.organization_id,
         kind: item.kind,
         termFamily: item.kind,
+        family: item.kind,
+        term: item.value,
         value: item.value,
         terms: [item.value],
-    }))
+    })).sort((a, b) => `${a.termFamily}:${a.term}`.localeCompare(`${b.termFamily}:${b.term}`))
+}
+
+export function organizationWatchlistAlertGenerationContract(
+    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>,
+    items: OrganizationWatchlistRow[]
+): OrganizationWatchlistAlertGenerationContract {
+    const bridgeContext = buildOrganizationBridgeContext({
+        ...organization,
+        shared_watchlist_count: items.length,
+    })
+    const activeWatchlistTerms = organizationWatchlistTerms(items)
+    const termFamilies = [...new Set(activeWatchlistTerms.map(term => term.termFamily))].sort()
+    const blockedReasons: string[] = []
+    if (!items.length) {
+        blockedReasons.push('needs_shared_watchlist_item')
+    }
+
+    if (!bridgeContext.allowedViewerRoles.length) {
+        blockedReasons.push('needs_alert_visibility_roles')
+    }
+
+    return {
+        schemaVersion: 'organization.watchlist_alert_generation.v1',
+        organizationId: bridgeContext.id,
+        tenantId: bridgeContext.id,
+        ownerOrganizationId: bridgeContext.id,
+        visibilityPolicy: bridgeContext.alertVisibilityPolicy,
+        allowedViewerRoles: bridgeContext.allowedViewerRoles,
+        activeWatchlistTerms,
+        termFamilies,
+        blockedReasons,
+        canGenerateAlerts: blockedReasons.length === 0,
+    }
 }
 
 export function slugForOrganization(value: string) {
@@ -702,6 +783,10 @@ function normalizeWatchlistValue(kind: WatchlistKind, value: unknown) {
             .replace(/^https?:\/\//, '')
             .replace(/^www\./, '')
             .split('/')[0]
+    }
+
+    if (kind === 'actor' || kind === 'keyword') {
+        return cleaned.toLowerCase()
     }
 
     return cleaned
