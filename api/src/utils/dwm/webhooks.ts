@@ -215,6 +215,7 @@ export function toDwmWebhookAuditEvent(row: DwmWebhookAuditRow) {
 
 type DwmWebhookDeliveryPublic = ReturnType<typeof toDwmWebhookDelivery>
 type DwmWebhookAuditPublic = ReturnType<typeof toDwmWebhookAuditEvent>
+type DwmWebhookDestinationPublic = ReturnType<typeof toDwmWebhookDestination>
 
 export function normalizeDwmWebhookDestinationInput(
     input: DwmWebhookDestinationInput,
@@ -548,6 +549,123 @@ export function filterDwmWebhookDeliveryEvidenceForVisibility({
     }
 }
 
+export function buildDwmWebhookDestinationContracts({
+    destinations,
+    deliveries = [],
+    auditEvents = [],
+}: {
+    destinations: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+}) {
+    return destinations.map((destination) => {
+        const destinationDeliveries = deliveries
+            .filter(delivery => delivery.destinationId === destination.id)
+            .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
+        const destinationAudits = auditEvents
+            .filter(audit => audit.destinationId === destination.id)
+            .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        const lastTestDelivery = destinationDeliveries.find(delivery => delivery.eventType === 'dwm.alert.test')
+        const lastDelivery = destinationDeliveries.find(delivery => delivery.eventType !== 'dwm.alert.test')
+        const testAudit = lastTestDelivery ? destinationAudits.find(audit => audit.deliveryId === lastTestDelivery.id) : null
+        const deliveryAudit = lastDelivery ? destinationAudits.find(audit => audit.deliveryId === lastDelivery.id) : null
+        const failureReason = destination.lastTestError || lastDelivery?.error || lastTestDelivery?.error || null
+
+        return {
+            id: destination.id,
+            orgId: destination.orgId,
+            type: destination.kind,
+            kind: destination.kind,
+            label: destination.name,
+            name: destination.name,
+            status: destination.status,
+            enabled: destination.status === 'active',
+            events: destination.events,
+            redactedUrl: redactDeliveryEvidenceText(destination.endpointHint),
+            redactedDestination: {
+                endpointHint: redactDeliveryEvidenceText(destination.endpointHint),
+                endpointHash: destination.endpointHash,
+            },
+            createdBy: destination.createdBy,
+            actorId: destination.createdBy,
+            lastTest: {
+                at: destination.lastTestedAt || lastTestDelivery?.attemptedAt || null,
+                status: destination.lastTestStatus || lastTestDelivery?.status || null,
+                httpStatus: destination.lastTestHttpStatus || lastTestDelivery?.responseStatus || null,
+                failureReason: destination.lastTestError || lastTestDelivery?.error || null,
+                requestId: lastTestDelivery?.id || null,
+                auditEventId: testAudit?.id || null,
+            },
+            lastDelivery: {
+                at: destination.lastDeliveryAt || lastDelivery?.attemptedAt || null,
+                status: lastDelivery?.status || null,
+                requestId: lastDelivery?.id || null,
+                auditEventId: deliveryAudit?.id || null,
+                failureReason: lastDelivery?.error || null,
+            },
+            failureReason,
+            latestAuditEventId: destinationAudits[0]?.id || null,
+            auditEventIds: destinationAudits.map(audit => audit.id),
+            createdAt: destination.createdAt,
+            updatedAt: destination.updatedAt,
+        }
+    })
+}
+
+export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPublic) {
+    const context = extractHanasandPayloadContext(delivery.payload)
+    const payloadAlert = recordOrEmpty(context.alert)
+    const payloadWatchlist = recordOrEmpty(context.watchlist)
+    const payloadDelivery = recordOrEmpty(context.delivery)
+    const embeds = Array.isArray((delivery.payload as Record<string, unknown> | undefined)?.embeds)
+        ? (delivery.payload as Record<string, unknown>).embeds
+        : []
+
+    return {
+        requestId: delivery.id,
+        status: delivery.status,
+        dryRun: delivery.dryRun,
+        live: !delivery.dryRun && delivery.status !== 'skipped',
+        destination: {
+            id: delivery.destinationId,
+            endpointHint: redactDeliveryEvidenceText(delivery.endpointHint),
+            endpointHash: delivery.endpointHash,
+        },
+        payload: delivery.payload,
+        discord: {
+            content: clean((delivery.payload as Record<string, unknown> | undefined)?.content),
+            embeds,
+            allowedMentions: (delivery.payload as Record<string, unknown> | undefined)?.allowed_mentions || null,
+        },
+        context: {
+            org: recordOrEmpty(context.org),
+            watchlist: payloadWatchlist,
+            alert: {
+                id: clean(payloadAlert.id) || delivery.alertId,
+                title: clean(payloadAlert.title),
+                severity: clean(payloadAlert.severity),
+                sourceFamily: clean(payloadAlert.sourceFamily),
+                evidenceCount: parseCount(payloadAlert.evidenceCount),
+                provenance: payloadAlert.provenance || null,
+                dedupeKey: clean(payloadAlert.dedupeKey) || clean(payloadDelivery.dedupeKey) || dedupeFromIdempotencyKey(delivery.idempotencyKey),
+                casePath: clean(payloadAlert.casePath) || clean(payloadDelivery.casePath) || delivery.casePath,
+                caseId: clean(payloadAlert.caseId) || clean(payloadAlert.caseIdCandidate),
+            },
+            delivery: payloadDelivery,
+            links: {
+                casePath: clean(payloadDelivery.casePath) || clean(payloadAlert.casePath) || delivery.casePath,
+            },
+        },
+        response: {
+            httpStatus: delivery.responseStatus,
+            summary: delivery.responseBody ? redactDeliveryEvidenceText(truncate(delivery.responseBody, 500)) : null,
+        },
+        error: delivery.error ? redactDeliveryEvidenceText(truncate(delivery.error, 500)) : null,
+        payloadHash: delivery.payloadHash,
+        idempotencyKey: delivery.idempotencyKey,
+    }
+}
+
 export async function testDwmWebhookDestination(ownerId: string, id: string, input: DwmAlertNotificationInput = {}) {
     const destination = await loadDwmWebhookDestination(ownerId, id)
     if (!destination || destination.status === 'archived') return null
@@ -705,11 +823,14 @@ export function buildDwmAlertDeliveryPayload({
                     { name: 'Organization', value: context.org.name, inline: true },
                     { name: 'Severity', value: normalizedAlert.severity.toUpperCase(), inline: true },
                     { name: 'Company / domain', value: normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value || 'Not provided', inline: true },
+                    watchlist.name || watchlist.terms.length ? { name: 'Watchlist', value: [watchlist.name, watchlist.terms[0]].filter(Boolean).join(' | '), inline: true } : null,
                     { name: 'Source family', value: normalizedAlert.sourceFamily || 'Unknown', inline: true },
                     { name: 'Evidence count', value: String(normalizedAlert.evidenceCount), inline: true },
                     { name: 'Route', value: normalizedAlert.route, inline: true },
                     { name: 'Dedupe key', value: displayDedupeKey, inline: false },
+                    normalizedAlert.caseId ? { name: 'Case ID', value: normalizedAlert.caseId, inline: true } : null,
                     normalizedAlert.casePath ? { name: 'Case', value: normalizedAlert.casePath, inline: false } : null,
+                    normalizedAlert.provenanceSummary ? { name: 'Provenance', value: normalizedAlert.provenanceSummary, inline: false } : null,
                     { name: 'Recommended action', value: normalizedAlert.recommendedAction, inline: false },
                 ].filter(Boolean),
                 footer: {
@@ -1098,9 +1219,12 @@ function normalizeAlert(alert: Record<string, unknown>) {
         deliveryState: clean(alert.deliveryState) || 'pending_review',
         route,
         casePath,
+        caseId: clean(alert.caseId) || clean(alert.caseIdCandidate) || clean((alert.workflowContext as Record<string, unknown> | undefined)?.caseIdCandidate),
         evidence,
         evidenceCount: evidence.length || evidenceCount,
         dedupeKey: clean(alert.dedupeKey) || clean((alert.webhookDelivery as Record<string, unknown> | undefined)?.dedupeKey),
+        provenance: alert.provenance || null,
+        provenanceSummary: provenanceSummary(alert.provenance),
     }
 }
 
@@ -1143,6 +1267,19 @@ function normalizeEvidence(value: unknown) {
                 capturedAt: clean((item as Record<string, unknown>).capturedAt) || clean((item as Record<string, unknown>).at),
             }
             : { label: 'Evidence', detail: truncate(clean(item), 500), source: '', capturedAt: '' })
+}
+
+function provenanceSummary(value: unknown) {
+    if (!value || typeof value !== 'object') return ''
+    const record = value as Record<string, unknown>
+    const captureIds = Array.isArray(record.captureIds) ? record.captureIds.map(clean).filter(Boolean).slice(0, 3) : []
+    const sourceIds = Array.isArray(record.sourceIds) ? record.sourceIds.map(clean).filter(Boolean).slice(0, 3) : []
+    const parts = [
+        captureIds.length ? `captures: ${captureIds.join(', ')}` : '',
+        sourceIds.length ? `sources: ${sourceIds.join(', ')}` : '',
+        clean(record.primaryCaptureId) ? `primary: ${clean(record.primaryCaptureId)}` : '',
+    ].filter(Boolean)
+    return truncate(parts.join(' | '), 500)
 }
 
 function buildTestAlert(destination: DwmWebhookDestinationRow) {

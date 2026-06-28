@@ -3,7 +3,9 @@ import run from '#db'
 import ensureSchema from '#utils/db/ensureSchema.ts'
 import {
     buildDwmAlertDeliveryPayload,
+    buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
+    buildDwmWebhookDestinationContracts,
     createDwmWebhookDestination,
     deliverDwmAlertNotification,
     filterDwmWebhookDeliveryEvidenceForVisibility,
@@ -144,6 +146,25 @@ async function main() {
     expect(refreshedDestination?.lastTestStatus === 'dry_run', 'Destination should persist the latest test result.', refreshedDestination)
 
     const auditEvents = await listDwmWebhookAuditEvents(ownerId, orgId)
+    const destinationContracts = buildDwmWebhookDestinationContracts({
+        destinations: [refreshedDestination].filter(Boolean) as NonNullable<typeof refreshedDestination>[],
+        deliveries,
+        auditEvents,
+    })
+    const destinationContract = destinationContracts[0]
+    const testPreview = buildDwmWebhookDeliveryPreview(testDelivery)
+    expect(destinationContract, 'Destination contract should be built from the refreshed destination.', destinationContracts)
+    expect(destinationContract?.type === 'discord' && destinationContract.label === 'Customer Discord', 'Destination contract should expose customer-facing type and label.', destinationContract)
+    expect(destinationContract.enabled === true && destinationContract.redactedUrl.includes('/api/webhooks/1234567890/...'), 'Destination contract should expose enabled redacted Discord ref.', destinationContract)
+    expect(destinationContract.lastTest.requestId === testDelivery.id && destinationContract.lastTest.auditEventId, 'Destination contract should expose last test request and audit ids.', destinationContract)
+    expect(destinationContract.lastDelivery.requestId === replayDeliveries[0].id && destinationContract.lastDelivery.auditEventId, 'Destination contract should expose last delivery request and audit ids.', destinationContract)
+    expect(!JSON.stringify(destinationContract).includes(endpointSecret), 'Destination contract leaked Discord endpoint secret.', destinationContract)
+    expect(testPreview.discord.embeds.length === 1, 'Dry-run test preview should expose Discord-ready embeds.', testPreview)
+    expect(testPreview.context.org.id === orgId, 'Dry-run test preview should expose org context.', testPreview)
+    expect(testPreview.context.watchlist.id === 'test-watchlist', 'Dry-run test preview should expose watchlist context.', testPreview)
+    expect(testPreview.context.alert.severity === 'medium' && testPreview.context.alert.casePath === '/dashboard/dwm', 'Dry-run test preview should expose alert severity and case path.', testPreview)
+    expect(!JSON.stringify(testPreview).includes(endpointSecret), 'Dry-run test preview leaked Discord endpoint secret.', testPreview)
+
     const deliveryEvidence = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents })
     const replayEvidence = deliveryEvidence.find(item => item.alertId === alert.id && item.eventType === 'dwm.alert.replayed')
     const skippedLiveEvidence = deliveryEvidence.find(item => item.alertId === alert.id && item.status === 'skipped')
@@ -240,6 +261,8 @@ async function main() {
             'delivery evidence redaction',
             'delivery evidence visibility policy',
             'delivery evidence replay/live/dry-run states',
+            'destination contract fields and audit ids',
+            'dry-run Discord preview fields',
             'watchlist/route/case context',
             'org-shared destination list',
             'structured audit events',

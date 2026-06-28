@@ -1,7 +1,9 @@
 import {
     buildDwmAlertDeliveryPayload,
     buildDwmAlertWebhookDispatchPlan,
+    buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
+    buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     normalizeDwmWebhookDestinationInput,
     redactWebhookEndpoint,
@@ -63,6 +65,8 @@ const payload = buildDwmAlertDeliveryPayload({
         dedupeKey: 'dwm_dedupe_acme_contract',
         route: 'customer_discord',
         casePath: '/dashboard/dwm?alert=alert_contract',
+        caseId: 'case_contract',
+        provenance: { captureIds: ['capture_contract'], sourceIds: ['source_contract'], primaryCaptureId: 'capture_contract' },
         watchlist: {
             id: 'watchlist_contract',
             name: 'Acme watchlist',
@@ -79,10 +83,13 @@ expect(serialized.includes('Acme Security'), 'Payload should include company con
 expect(serialized.includes('acme-security.com'), 'Payload should include domain/matched term.', payload)
 expect(serialized.includes('ransomware_leak_site'), 'Payload should include source family.', payload)
 expect(serialized.includes('Evidence count'), 'Payload should include evidence count field.', payload)
+expect(serialized.includes('Acme watchlist') && serialized.includes('acme-security.com'), 'Payload should include watchlist context.', payload)
 expect(serialized.includes('customer_discord'), 'Payload should include route.', payload)
 expect(serialized.includes('dwm_dedupe_acme_contract'), 'Payload should include alert dedupe key.', payload)
 expect(serialized.includes('dwm.alert.replayed:org_contract:destination_contract:dwm_dedupe_acme_contract'), 'Payload should include destination idempotency key.', payload)
+expect(serialized.includes('case_contract'), 'Payload should include case id.', payload)
 expect(serialized.includes('/dashboard/dwm?alert=alert_contract'), 'Payload should include case path.', payload)
+expect(serialized.includes('capture_contract') && serialized.includes('source_contract'), 'Payload should include provenance summary.', payload)
 expect(!serialized.includes(secret), 'Payload should never include webhook secret.', payload)
 
 expect(redactWebhookEndpoint(endpoint) === 'https://discord.com/api/webhooks/987654321/...', 'Redaction helper should hide Discord token.')
@@ -487,6 +494,151 @@ expect(visibilityDeactivated.decision.allowed === false && visibilityDeactivated
 expect(visibilityAdminPolicyMember.decision.allowed === false && visibilityAdminPolicyMember.decision.reason === 'role_not_allowed' && visibilityAdminPolicyMember.deliveryEvidence.length === 0, 'Admin-only policy should deny member evidence reads.', visibilityAdminPolicyMember)
 expect(visibilityAdminPolicyAdmin.decision.allowed === true && visibilityAdminPolicyAdmin.deliveryEvidence.length === orgEvidence.length, 'Admin-only policy should allow admins.', visibilityAdminPolicyAdmin)
 
+const destinationContracts = buildDwmWebhookDestinationContracts({
+    destinations: [
+        {
+            id: 'destination_replay_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            name: 'Replay Discord',
+            kind: 'discord',
+            endpointHint: `https://discord.com/api/webhooks/987654321/${secret}`,
+            endpointHash: 'endpoint_replay_hash',
+            status: 'active',
+            events: ['dwm.alert.created', 'dwm.alert.replayed'],
+            createdBy: 'owner_contract',
+            lastTestedAt: '2026-06-28T12:04:00.000Z',
+            lastTestStatus: 'dry_run',
+            lastTestError: null,
+            lastTestHttpStatus: null,
+            lastDeliveryAt: '2026-06-28T12:00:00.000Z',
+            createdAt: '2026-06-28T11:00:00.000Z',
+            updatedAt: '2026-06-28T12:04:00.000Z',
+        },
+        {
+            id: 'destination_disabled_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            name: 'Disabled Discord',
+            kind: 'discord',
+            endpointHint: 'https://discord.com/api/webhooks/111111111/...',
+            endpointHash: 'endpoint_disabled_hash',
+            status: 'archived',
+            events: ['dwm.alert.created'],
+            createdBy: 'owner_contract',
+            lastTestedAt: null,
+            lastTestStatus: null,
+            lastTestError: 'Disabled by owner',
+            lastTestHttpStatus: null,
+            lastDeliveryAt: null,
+            createdAt: '2026-06-28T10:00:00.000Z',
+            updatedAt: '2026-06-28T12:05:00.000Z',
+        },
+    ],
+    deliveries: [
+        ...evidenceRows,
+        {
+            id: 'delivery_test_contract',
+            destinationId: 'destination_replay_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            alertId: 'webhook_test',
+            eventType: 'dwm.alert.test',
+            status: 'dry_run',
+            dryRun: true,
+            endpointHint: 'https://discord.com/api/webhooks/987654321/...',
+            endpointHash: 'endpoint_replay_hash',
+            payloadHash: 'payload_test_hash',
+            payload: replayPayload,
+            responseStatus: null,
+            responseBody: null,
+            error: null,
+            idempotencyKey: 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test',
+            watchlistId: 'test-watchlist',
+            watchlistName: 'Webhook test watchlist',
+            route: 'test_delivery',
+            casePath: '/dashboard/dwm',
+            attemptedAt: '2026-06-28T12:04:00.000Z',
+            createdAt: '2026-06-28T12:04:00.000Z',
+        },
+    ],
+    auditEvents: [
+        {
+            id: 'audit_destination_created_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: null,
+            action: 'destination.created',
+            metadata: {},
+            createdAt: '2026-06-28T11:00:00.000Z',
+        },
+        {
+            id: 'audit_delivery_test_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: 'delivery_test_contract',
+            action: 'delivery.tested',
+            metadata: {},
+            createdAt: '2026-06-28T12:04:01.000Z',
+        },
+        {
+            id: 'audit_replay_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: 'delivery_replay_contract',
+            action: 'delivery.replayed',
+            metadata: {},
+            createdAt: '2026-06-28T12:00:01.000Z',
+        },
+    ],
+})
+const destinationContract = destinationContracts[0]
+const disabledDestinationContract = destinationContracts[1]
+const deliveryPreview = buildDwmWebhookDeliveryPreview({
+    id: 'delivery_replay_contract',
+    destinationId: 'destination_replay_contract',
+    ownerId: 'owner_contract',
+    orgId: 'org_contract',
+    alertId: 'alert_replay_contract',
+    eventType: 'dwm.alert.replayed',
+    status: 'dry_run',
+    dryRun: true,
+    endpointHint: `https://discord.com/api/webhooks/987654321/${secret}`,
+    endpointHash: 'endpoint_replay_hash',
+    payloadHash: 'payload_replay_hash',
+    payload: replayPayload,
+    responseStatus: null,
+    responseBody: null,
+    error: null,
+    idempotencyKey: 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract',
+    watchlistId: 'watchlist_item_replay_contract',
+    watchlistName: 'Replay contract watchlist',
+    route: 'identity_response',
+    casePath: replayWorkflowAlert.casePath,
+    attemptedAt: '2026-06-28T12:00:00.000Z',
+    createdAt: '2026-06-28T12:00:00.000Z',
+})
+
+expect(destinationContract.type === 'discord' && destinationContract.label === 'Replay Discord', 'Destination contract should expose type and label.', destinationContract)
+expect(destinationContract.enabled === true && destinationContract.status === 'active', 'Destination contract should expose enabled status.', destinationContract)
+expect(disabledDestinationContract.enabled === false && disabledDestinationContract.status === 'archived' && disabledDestinationContract.failureReason === 'Disabled by owner', 'Destination contract should expose disabled status and failure reason.', disabledDestinationContract)
+expect(destinationContract.redactedUrl.includes('/api/webhooks/987654321/') && !JSON.stringify(destinationContract).includes(secret), 'Destination contract should only expose redacted destination refs.', destinationContract)
+expect(destinationContract.lastTest.requestId === 'delivery_test_contract' && destinationContract.lastTest.auditEventId === 'audit_delivery_test_contract', 'Destination contract should expose last test request and audit ids.', destinationContract)
+expect(destinationContract.lastDelivery.requestId === 'delivery_replay_contract' && destinationContract.lastDelivery.auditEventId === 'audit_replay_contract', 'Destination contract should expose last delivery request and audit ids.', destinationContract)
+expect(destinationContract.auditEventIds.includes('audit_destination_created_contract'), 'Destination contract should expose destination audit event ids.', destinationContract)
+expect(deliveryPreview.requestId === 'delivery_replay_contract' && deliveryPreview.discord.embeds.length === 1, 'Test preview should expose Discord-ready payload.', deliveryPreview)
+expect(deliveryPreview.context.org.id === 'org_contract', 'Test preview should expose org context.', deliveryPreview)
+expect(deliveryPreview.context.watchlist.id === 'watchlist_item_replay_contract', 'Test preview should expose watchlist context.', deliveryPreview)
+expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.context.alert.evidenceCount === 1, 'Test preview should expose alert severity and evidence count.', deliveryPreview)
+expect(deliveryPreview.context.alert.casePath === replayWorkflowAlert.casePath && deliveryPreview.context.links.casePath === replayWorkflowAlert.casePath, 'Test preview should expose case/deep-link context.', deliveryPreview)
+expect(!JSON.stringify(deliveryPreview).includes(secret), 'Test preview should not leak endpoint secrets.', deliveryPreview)
+
 console.log(JSON.stringify({
     ok: true,
     checked: [
@@ -508,6 +660,9 @@ console.log(JSON.stringify({
         'delivery evidence org visibility allowed/denied',
         'delivery evidence removed/deactivated denial',
         'delivery evidence admin-only policy',
+        'destination contract create/list/update/disable/test fields',
+        'destination contract audit ids',
+        'dry-run Discord payload preview fields',
         'delivery evidence replay/live/dry-run distinction',
         'secret-free payload',
     ],

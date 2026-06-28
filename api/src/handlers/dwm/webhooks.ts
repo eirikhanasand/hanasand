@@ -9,6 +9,8 @@ import {
 } from '#utils/organizations.ts'
 import {
     archiveDwmWebhookDestination,
+    buildDwmWebhookDeliveryPreview,
+    buildDwmWebhookDestinationContracts,
     buildDwmWebhookDeliveryEvidence,
     createDwmWebhookDestination,
     deliverDwmAlertNotification,
@@ -56,7 +58,14 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
-    return res.send({ destinations: await listDwmWebhookDestinations(userId, orgId || undefined) })
+    const destinations = await listDwmWebhookDestinations(userId, orgId || undefined)
+    const deliveries = await listDwmWebhookDeliveries(userId, orgId || undefined)
+    const auditEvents = await listDwmWebhookAuditEvents(userId, orgId || undefined)
+
+    return res.send({
+        destinations,
+        destinationContracts: buildDwmWebhookDestinationContracts({ destinations, deliveries, auditEvents }),
+    })
 }
 
 export async function postDwmWebhookDestination(req: FastifyRequest<{ Body: DwmWebhookDestinationInput }>, res: FastifyReply) {
@@ -71,7 +80,11 @@ export async function postDwmWebhookDestination(req: FastifyRequest<{ Body: DwmW
 
     try {
         const destination = await createDwmWebhookDestination(userId, { ...req.body, orgId })
-        return res.status(201).send({ destination })
+        const auditEvents = await listDwmWebhookAuditEvents(userId, destination.orgId)
+        return res.status(201).send({
+            destination,
+            destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], auditEvents })[0],
+        })
     } catch (error) {
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid webhook destination.' })
     }
@@ -97,7 +110,12 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
         if (!destination) {
             return res.status(404).send({ error: 'Webhook destination not found.' })
         }
-        return res.send({ destination })
+        const deliveries = await listDwmWebhookDeliveries(userId, destination.orgId)
+        const auditEvents = await listDwmWebhookAuditEvents(userId, destination.orgId)
+        return res.send({
+            destination,
+            destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
+        })
     } catch (error) {
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid webhook destination.' })
     }
@@ -121,7 +139,12 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
     if (!destination) {
         return res.status(404).send({ error: 'Webhook destination not found.' })
     }
-    return res.send({ destination })
+    const deliveries = await listDwmWebhookDeliveries(userId, destination.orgId)
+    const auditEvents = await listDwmWebhookAuditEvents(userId, destination.orgId)
+    return res.send({
+        destination,
+        destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
+    })
 }
 
 export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params: IdParams, Body: DwmAlertNotificationInput }>, res: FastifyReply) {
@@ -142,7 +165,17 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
     if (!delivery) {
         return res.status(404).send({ error: 'Webhook destination not found.' })
     }
-    return res.status(202).send({ delivery })
+    const destinations = await listDwmWebhookDestinations(userId, existing.orgId)
+    const destination = destinations.find(item => item.id === req.params.id)
+    const deliveries = await listDwmWebhookDeliveries(userId, existing.orgId)
+    const auditEvents = await listDwmWebhookAuditEvents(userId, existing.orgId)
+    return res.status(202).send({
+        delivery,
+        preview: buildDwmWebhookDeliveryPreview(delivery),
+        destinationContract: destination
+            ? buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0]
+            : null,
+    })
 }
 
 export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring: OrgQuery }>, res: FastifyReply) {
