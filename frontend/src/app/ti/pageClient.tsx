@@ -1,6 +1,7 @@
 'use client'
 
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
+import { actorGeoProfile, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { Activity, BellRing, Building2, Database, ExternalLink, Globe2, HelpCircle, Radar, Search, ShieldCheck, Target, Waypoints } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useRef, useState } from 'react'
@@ -149,6 +150,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const datasets = (result.datasets.length ? result.datasets : defaultDatasets()).filter(item => !/planned|rejected|blocked/i.test(item.status))
     const sources = result.sources.length ? result.sources : defaultSourceLinks()
     const alertItems = alertItemsFor(result)
+    const victimObservations = victimObservationsFor(result)
     const profileStats = [
         { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(result.sources.length) },
         { icon: <Activity className='h-3.5 w-3.5' />, label: 'Updated', value: formatDate(result.generatedAt || result.lastSeen) },
@@ -213,14 +215,18 @@ function Results({ result }: { result: TiSearchResponse }) {
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Typical Victims' description='Industries and regions the actor is reported to target, plus why that mapping was included. Use this to judge whether the actor is relevant to your organization or customers.' icon={<Target className='h-4 w-4' />}>
-                    {result.targets.length ? result.targets.map(item => (
-                        <div key={item.sector} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
-                            <h2 className='text-sm font-semibold text-[#171a21]'>{item.sector}</h2>
-                            <p className='text-xs text-[#667085]'>{item.regions.join(', ')}</p>
-                            <p className='text-sm leading-6 text-[#596170]'>{item.rationale}</p>
+                <Panel title='Reported Victims and Targets' description='Named victim or target examples connected to this profile. These are country-level rows, not broad continents or alliance buckets.' icon={<Target className='h-4 w-4' />}>
+                    {victimObservations.length ? victimObservations.map(item => (
+                        <div key={`${item.victim}-${item.timeframe}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <h2 className='text-sm font-semibold text-[#171a21]'>{item.victim}</h2>
+                                <span className='rounded-md bg-[#fff1f0] px-2 py-1 text-xs font-semibold text-[#b42318]'>{item.country}</span>
+                            </div>
+                            <p className='text-xs text-[#667085]'>{item.sector} · {item.timeframe}</p>
+                            <p className='text-sm leading-6 text-[#596170]'>{item.incident}</p>
+                            <p className='text-xs text-[#667085]'>Source basis: {item.source}</p>
                         </div>
-                    )) : <EmptyLine text='No typical victim pattern returned yet.' />}
+                    )) : <EmptyLine text='No named victim or target observations returned yet.' />}
                 </Panel>
             </section>
 
@@ -521,56 +527,105 @@ function ProfileStat({ icon, label, value }: { icon: React.ReactNode; label: str
 }
 
 function ThreatActorMap({ result }: { result: TiSearchResponse }) {
-    const regions = actorMapRegions(result)
-    const hasRegions = regions.length > 0
+    const geo = actorGeoProfile(result)
+    const hasPoints = geo.points.length > 0
     return (
         <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#f8fafc]'>
             <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3'>
                 <div>
-                    <h2 className='text-sm font-semibold text-[#171a21]'>Operating Map</h2>
-                    <p className='mt-0.5 text-xs text-[#667085]'>Reported regions and countries connected to this profile.</p>
+                    <h2 className='text-sm font-semibold text-[#171a21]'>Country-Level Actor Map</h2>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Purple marks reported operator origin. Red marks reported victim or target countries.</p>
                 </div>
-                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3]'>{hasRegions ? `${regions.length} mapped` : 'No map yet'}</span>
+                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3]'>{hasPoints ? `${geo.points.length} countries` : 'Country data pending'}</span>
             </div>
-            <div className='relative bg-[radial-gradient(circle_at_50%_35%,rgba(48,86,211,0.14),transparent_42%)] p-3'>
-                <svg viewBox='0 0 640 320' role='img' aria-label={`Operating map for ${humanizeSlug(result.query)}`} className='h-64 w-full'>
+            <div className='relative bg-[#f7f9fc] p-3'>
+                <svg viewBox='0 0 640 320' role='img' aria-label={`Country-level actor map for ${humanizeSlug(result.query)}`} className='h-72 w-full'>
                     <rect width='640' height='320' rx='18' fill='#ffffff' />
-                    <path d='M76 114 C110 80 171 72 218 101 C250 121 251 160 214 180 C172 205 110 189 79 155 C61 136 61 127 76 114Z' fill='#e8edf5' />
-                    <path d='M178 205 C209 191 248 196 270 222 C286 241 278 268 250 282 C221 297 181 281 169 251 C160 230 162 215 178 205Z' fill='#e8edf5' />
-                    <path d='M285 99 C330 68 410 70 464 105 C506 132 516 178 476 207 C431 241 348 235 301 201 C263 174 254 122 285 99Z' fill='#e8edf5' />
-                    <path d='M421 86 C456 65 515 68 553 96 C583 119 578 150 540 162 C504 174 444 162 419 134 C402 115 403 97 421 86Z' fill='#e8edf5' />
-                    <path d='M397 205 C432 190 483 203 506 233 C526 258 511 288 474 295 C435 302 397 278 386 246 C379 226 383 211 397 205Z' fill='#e8edf5' />
-                    <path d='M535 207 C570 192 608 205 620 231 C632 257 603 278 566 269 C534 261 515 225 535 207Z' fill='#e8edf5' />
-                    <path d='M48 259 C187 236 316 233 589 255' fill='none' stroke='#d7deea' strokeDasharray='6 8' strokeWidth='2' />
-                    <path d='M57 71 C220 42 392 43 586 72' fill='none' stroke='#d7deea' strokeDasharray='6 8' strokeWidth='2' />
-                    {regions.map(region => (
-                        <g key={region.label}>
-                            <circle cx={region.x} cy={region.y} r={region.radius + 8} fill='#3056d3' opacity='0.12' />
-                            <circle cx={region.x} cy={region.y} r={region.radius} fill='#3056d3' opacity='0.88' />
-                            <circle cx={region.x} cy={region.y} r='3' fill='#ffffff' />
-                            <text x={region.x + 12} y={region.y + 4} fill='#171a21' fontSize='12' fontWeight='700'>{region.label}</text>
-                        </g>
+                    <WorldMapBase />
+                    {geo.points.map(point => {
+                        const color = point.role === 'operator' ? '#7c3aed' : '#d92d20'
+                        return (
+                            <g key={`${point.role}-${point.code}`}>
+                                <circle cx={point.x} cy={point.y} r='10' fill={color} opacity='0.12' />
+                                <circle cx={point.x} cy={point.y} r='5.5' fill={color} opacity='0.94' />
+                                <circle cx={point.x} cy={point.y} r='2' fill='#ffffff' />
+                                <text x={point.x + 9} y={point.y - 7} fill='#171a21' fontSize='10' fontWeight='700'>{point.label}</text>
+                            </g>
+                        )
+                    })}
+                    {geo.flows.map(flow => (
+                        <path
+                            key={`${flow.from.code}-${flow.to.code}`}
+                            d={`M${flow.from.x} ${flow.from.y} C ${(flow.from.x + flow.to.x) / 2} ${Math.min(flow.from.y, flow.to.y) - 42}, ${(flow.from.x + flow.to.x) / 2} ${Math.min(flow.from.y, flow.to.y) - 42}, ${flow.to.x} ${flow.to.y}`}
+                            fill='none'
+                            stroke='#d92d20'
+                            strokeDasharray='4 5'
+                            strokeWidth='1.4'
+                            opacity='0.36'
+                        />
                     ))}
                 </svg>
-                {!hasRegions ? (
-                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/70 text-center text-sm font-medium text-[#667085]'>
-                        Region mapping will appear when target sectors or country references are available.
+                {!hasPoints ? (
+                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/80 text-center text-sm font-medium text-[#667085]'>
+                        Country mapping will appear when this profile has country-level target or origin observations.
                     </div>
                 ) : null}
             </div>
-            {hasRegions ? (
-                <div className='grid gap-2 border-t border-[#e8edf5] bg-white px-4 py-3 sm:grid-cols-2'>
-                    {regions.slice(0, 4).map(region => (
-                        <div key={region.label} className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
-                            <span className='font-semibold text-[#171a21]'>{region.label}</span>
-                            <span className='text-[#667085]'>{region.count} mention{region.count === 1 ? '' : 's'}</span>
-                        </div>
-                    ))}
+            {hasPoints ? (
+                <div className='grid gap-3 border-t border-[#e8edf5] bg-white px-4 py-3'>
+                    <div className='flex flex-wrap gap-3 text-xs'>
+                        <span className='inline-flex items-center gap-1.5 text-[#667085]'><span className='h-2.5 w-2.5 rounded-full bg-[#7c3aed]' />Reported operator origin</span>
+                        <span className='inline-flex items-center gap-1.5 text-[#667085]'><span className='h-2.5 w-2.5 rounded-full bg-[#d92d20]' />Reported victim or target country</span>
+                    </div>
+                    <div className='grid gap-2 sm:grid-cols-2'>
+                        {geo.points.map(point => (
+                            <div key={`${point.role}-row-${point.code}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
+                                <div className='flex items-center justify-between gap-3'>
+                                    <span className='font-semibold text-[#171a21]'>{point.label}</span>
+                                    <span className={point.role === 'operator' ? 'text-[#7c3aed]' : 'text-[#b42318]'}>{point.role === 'operator' ? 'operator origin' : `${point.count} target signal${point.count === 1 ? '' : 's'}`}</span>
+                                </div>
+                                <p className='mt-1 leading-5 text-[#667085]'>{point.detail}</p>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ) : null}
         </div>
     )
 }
+
+function WorldMapBase() {
+    return (
+        <g>
+            <path d='M105 80 L155 66 L210 75 L240 102 L220 136 L165 151 L113 137 L82 111 Z' fill='#edf2f8' stroke='#d8e0eb' />
+            <path d='M154 154 L197 166 L224 205 L210 257 L178 294 L145 273 L130 228 L139 186 Z' fill='#edf2f8' stroke='#d8e0eb' />
+            <path d='M300 78 L342 62 L391 72 L420 98 L407 126 L357 132 L309 112 Z' fill='#edf2f8' stroke='#d8e0eb' />
+            <path d='M353 132 L400 139 L432 178 L425 228 L394 272 L357 250 L335 198 Z' fill='#edf2f8' stroke='#d8e0eb' />
+            <path d='M407 70 L485 57 L559 86 L597 127 L579 165 L512 174 L464 148 L420 124 Z' fill='#edf2f8' stroke='#d8e0eb' />
+            <path d='M497 181 L548 189 L586 227 L573 269 L527 282 L488 251 Z' fill='#edf2f8' stroke='#d8e0eb' />
+            <path d='M36 160 H604 M320 32 V288 M36 96 H604 M36 224 H604' stroke='#edf2f8' strokeWidth='1' />
+            <path d='M31 48 H609 V292 H31 Z' fill='none' stroke='#edf2f8' />
+            {countryShapes.map(shape => (
+                <path key={shape.code} d={shape.d} fill='#dde6f2' stroke='#c7d2e2' strokeWidth='0.8' />
+            ))}
+        </g>
+    )
+}
+
+const countryShapes = [
+    { code: 'US', d: 'M111 111 L153 98 L186 115 L178 134 L139 139 L109 128 Z' },
+    { code: 'CA', d: 'M92 72 L160 55 L207 72 L181 94 L129 95 L88 86 Z' },
+    { code: 'GB', d: 'M300 84 L312 89 L309 102 L297 98 Z' },
+    { code: 'NO', d: 'M328 61 L340 69 L335 85 L324 78 Z' },
+    { code: 'DE', d: 'M321 101 L334 102 L336 116 L322 119 L315 110 Z' },
+    { code: 'FR', d: 'M305 113 L322 116 L323 130 L311 138 L300 128 Z' },
+    { code: 'RU', d: 'M360 62 L455 51 L552 79 L576 111 L535 129 L456 112 L388 103 Z' },
+    { code: 'UA', d: 'M345 115 L369 116 L376 127 L350 130 Z' },
+    { code: 'CN', d: 'M460 126 L508 122 L532 148 L508 170 L463 158 Z' },
+    { code: 'JP', d: 'M543 126 L552 137 L548 151 L538 141 Z' },
+    { code: 'IN', d: 'M448 151 L474 161 L466 196 L444 181 Z' },
+    { code: 'AU', d: 'M500 229 L548 222 L575 246 L558 271 L510 266 Z' },
+]
 
 function EmptyLine({ text }: { text: string }) {
     return <p className='py-3 text-sm text-[#667085]'>{text}</p>
@@ -591,7 +646,7 @@ function humanResultStatus(value?: string) {
     if (value === 'metadata_review') return 'Review queue'
     if (value === 'needs_source_activation') return 'Connecting sources'
     if (value === 'blocked_unsafe_target') return 'Review required'
-    if (value === 'ready') return 'Ready'
+    if (value === 'ready') return 'Current profile'
     if (value === 'partial') return 'Updating'
     if (value === 'searching' || value === 'queued') return 'Searching'
     return formatLabel(value)
@@ -599,7 +654,7 @@ function humanResultStatus(value?: string) {
 
 function sourceStatusLabel(value: string) {
     if (/metadata/i.test(value)) return 'Monitoring data'
-    if (/available|ready|active/i.test(value)) return 'Active'
+    if (/available|ready|active/i.test(value)) return 'Included'
     if (/context/i.test(value)) return 'Context'
     return 'Included'
 }
@@ -617,62 +672,6 @@ function activityCountLabel(count: number) {
 function activitySourceLabel(count: number) {
     if (count <= 0) return 'Source pending'
     return count === 1 ? '1 source' : `${count} sources`
-}
-
-function actorMapRegions(result: TiSearchResponse) {
-    const counts = new Map<string, number>()
-    const values = [
-        ...result.targets.flatMap(target => target.regions),
-        ...result.recentActivity.flatMap(item => item.countries ?? []),
-    ]
-
-    for (const value of values) {
-        const region = normalizeMapRegion(value)
-        if (!region) continue
-        counts.set(region.label, (counts.get(region.label) ?? 0) + 1)
-    }
-
-    return [...counts.entries()]
-        .map(([label, count]) => {
-            const point = mapPointForRegion(label)
-            return { ...point, label, count, radius: Math.min(14, 6 + count * 2) }
-        })
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-}
-
-function normalizeMapRegion(value: string) {
-    const text = value.trim().toLowerCase()
-    if (!text || /global|multiple|unknown|various/.test(text)) return null
-    if (/asia|apac|pacific|taiwan|china|japan|korea|philippines|vietnam|thailand|singapore|hong kong|india|pakistan|southeast/.test(text)) return { label: 'Asia-Pacific' }
-    if (/middle east|iran|iraq|israel|saudi|uae|qatar|kuwait|turkey|levant/.test(text)) return { label: 'Middle East' }
-    if (/europe|eu|uk|united kingdom|germany|france|italy|spain|netherlands|nordic|norway|sweden|poland|ukraine|russia|belarus/.test(text)) return { label: 'Europe' }
-    if (/north america|united states|usa|u\.s\.|us|canada|mexico/.test(text)) return { label: 'North America' }
-    if (/latin|south america|brazil|argentina|chile|colombia|peru/.test(text)) return { label: 'Latin America' }
-    if (/africa|egypt|nigeria|kenya|south africa|morocco/.test(text)) return { label: 'Africa' }
-    if (/australia|oceania|new zealand/.test(text)) return { label: 'Oceania' }
-    return { label: value.trim().replace(/\s+/g, ' ') }
-}
-
-function mapPointForRegion(label: string) {
-    const points: Record<string, { x: number; y: number }> = {
-        'North America': { x: 150, y: 130 },
-        'Latin America': { x: 225, y: 235 },
-        Europe: { x: 337, y: 117 },
-        Africa: { x: 350, y: 198 },
-        'Middle East': { x: 405, y: 158 },
-        'Asia-Pacific': { x: 496, y: 148 },
-        Oceania: { x: 565, y: 238 },
-    }
-    return points[label] ?? fallbackMapPoint(label)
-}
-
-function fallbackMapPoint(label: string) {
-    let hash = 0
-    for (const char of label) hash = (hash * 31 + char.charCodeAt(0)) % 997
-    return {
-        x: 92 + (hash % 470),
-        y: 94 + ((hash * 7) % 150),
-    }
 }
 
 function updateMetaDescription(content: string) {
