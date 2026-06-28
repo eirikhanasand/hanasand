@@ -27,6 +27,16 @@ const requiredFields = [
   "measurableKpi",
   "blocker",
 ];
+const workflowKpiPrefixes = [
+  "organizations.",
+  "watchlists.",
+  "sources.",
+  "collection.",
+  "alerts.",
+  "delivery.",
+  "cases.",
+  "admin.",
+];
 
 function fail(message) {
   console.error(`scoreboard invalid: ${message}`);
@@ -51,6 +61,14 @@ for (const row of scoreboard.rows) {
   }
   if (!Array.isArray(row.measurableKpi) || row.measurableKpi.length === 0) {
     fail(`${row.id} needs at least one measurableKpi`);
+  }
+  const statusText = `${row.currentStatus} ${row.nextCodeSlice} ${row.blocker}`.toLowerCase();
+  const claimsComplete = /\b(complete|completed|ready)\b/.test(statusText);
+  const hasCustomerWorkflowKpi = row.measurableKpi.some((kpi) =>
+    workflowKpiPrefixes.some((prefix) => kpi.startsWith(prefix)),
+  );
+  if (claimsComplete && !hasCustomerWorkflowKpi) {
+    fail(`${row.id} claims complete/ready without a measurable customer workflow KPI`);
   }
   rowsById.set(row.id, row);
 }
@@ -88,5 +106,11 @@ if (scoreboard.coordinatorInstructions) {
   console.log("circular:");
   for (const item of scoreboard.coordinatorInstructions.countsAsCircularWork || []) {
     console.log(`- ${item}`);
+  }
+  if (Array.isArray(scoreboard.coordinatorInstructions.deployCriteria)) {
+    console.log("deploy:");
+    for (const item of scoreboard.coordinatorInstructions.deployCriteria) {
+      console.log(`* ${item}`);
+    }
   }
 }
