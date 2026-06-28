@@ -3,6 +3,7 @@ import run from '#db'
 import ensureSchema from '#utils/db/ensureSchema.ts'
 import {
     buildDwmAlertDeliveryPayload,
+    buildDwmAlertWebhookNotificationInput,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDestinationContracts,
@@ -60,6 +61,8 @@ async function main() {
 
     const alert = {
         id: `alert_${suffix}`,
+        organizationId: orgId,
+        tenantId: orgId,
         orgName: 'Acme Security',
         company: 'Acme Security',
         severity: 'critical',
@@ -69,7 +72,9 @@ async function main() {
         sourceFamily: 'ransomware_leak_site',
         artifactType: 'victim_claim',
         route: 'customer_discord',
+        dedupeKey: `dwm_dedupe_${suffix}`,
         casePath: `/dashboard/dwm?alert=alert_${suffix}`,
+        caseId: `case_${suffix}`,
         watchlist: {
             id: 'watchlist-acme',
             name: 'Acme customer watchlist',
@@ -78,6 +83,27 @@ async function main() {
         evidence: [
             { label: 'Leak-site claim', detail: 'Claim references Acme Security domain and source archive filenames.', source: 'collector', capturedAt: new Date().toISOString() },
         ],
+        workflowContext: {
+            organizationId: orgId,
+            watchlistItemIds: ['watchlist-acme'],
+            sourceFamily: 'ransomware_leak_site',
+            evidenceCount: 1,
+            dedupeKey: `dwm_dedupe_${suffix}`,
+            recommendedRoute: 'customer_discord',
+            caseIdCandidate: `case_${suffix}`,
+            casePath: `/dashboard/dwm?alert=alert_${suffix}`,
+        },
+        webhookContext: {
+            alertId: `alert_${suffix}`,
+            organizationId: orgId,
+            watchlistItemIds: ['watchlist-acme'],
+            sourceFamily: 'ransomware_leak_site',
+            evidenceCount: 1,
+            dedupeKey: `dwm_dedupe_${suffix}`,
+            recommendedRoute: 'customer_discord',
+            caseIdCandidate: `case_${suffix}`,
+            casePath: `/dashboard/dwm?alert=alert_${suffix}`,
+        },
     }
 
     const previewPayload = buildDwmAlertDeliveryPayload({
@@ -104,20 +130,12 @@ async function main() {
     expect(testDelivery.attemptedAt, 'Test delivery should expose attemptedAt.', testDelivery)
     expect(!JSON.stringify(testDelivery).includes(endpointSecret), 'Test delivery leaked webhook secret.', testDelivery)
 
-    const replayDeliveries = await deliverDwmAlertNotification(ownerId, {
-        organizationId: orgId,
+    const replayInput = buildDwmAlertWebhookNotificationInput(alert, {
         eventType: 'dwm.alert.replayed',
-        alertId: alert.id,
-        watchlistItemId: 'watchlist-acme',
-        watchlistName: 'Acme customer watchlist',
-        dedupeKey: `dwm_dedupe_${suffix}`,
-        route: alert.route,
-        casePath: alert.casePath,
-        evidenceCount: 1,
-        sourceFamily: alert.sourceFamily,
-        alert,
         dryRun: true,
     })
+    const replayDeliveries = await deliverDwmAlertNotification(ownerId, replayInput)
+    expect(replayInput.organizationId === orgId && replayInput.watchlistItemId === 'watchlist-acme', 'Replay adapter should map org and watchlist context for DB verification.', replayInput)
     expect(replayDeliveries.length === 1, 'Replay should deliver to the active org destination.', replayDeliveries)
     expect(replayDeliveries[0].status === 'dry_run', 'Replay delivery should stay dry-run when requested.', replayDeliveries[0])
     expect(replayDeliveries[0].payload && JSON.stringify(replayDeliveries[0].payload).includes('dwm.alert.replayed'), 'Replay payload should include event type.', replayDeliveries[0])
@@ -254,6 +272,7 @@ async function main() {
             'encrypted destination persistence',
             'dry-run test delivery',
             'destination last test result',
+            'replay adapter org/watchlist mapping',
             'replay delivery',
             'live-disabled safety gate',
             'delivery hashes and attemptedAt',
@@ -269,7 +288,9 @@ async function main() {
             'secret redaction',
         ],
         integrationChecklist: [
+            'Command: cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-dwm-webhooks.ts',
             'Postgres reachable at DB_HOST/DB_PORT and migrations can run ensureSchema().',
+            'Local default used by this repo: DB_HOST=127.0.0.1 DB_PORT=8503 when integration Postgres is exposed there.',
             'DWM_WEBHOOK_LIVE_DELIVERY is unset or false for dry-run verification.',
             'Set DWM_WEBHOOK_LIVE_DELIVERY=true only for deliberate live-send Discord tests.',
             'No external network is required for this smoke while live delivery is disabled.',

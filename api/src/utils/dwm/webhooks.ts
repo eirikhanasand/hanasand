@@ -99,6 +99,15 @@ export type DwmAlertNotificationInput = {
     live?: unknown
 }
 
+export type DwmAlertWebhookTriggerOptions = {
+    eventType?: unknown
+    destinationId?: unknown
+    destination_id?: unknown
+    dryRun?: unknown
+    dry_run?: unknown
+    live?: unknown
+}
+
 export type DwmWebhookDispatchDestination = Pick<DwmWebhookDestinationRow,
     'id' | 'org_id' | 'name' | 'kind' | 'status' | 'events'
 >
@@ -718,6 +727,109 @@ export async function deliverDwmAlertNotification(ownerId: string, input: DwmAle
     return deliveries
 }
 
+export function buildDwmAlertWebhookNotificationInput(
+    alert: Record<string, unknown>,
+    options: DwmAlertWebhookTriggerOptions = {}
+): DwmAlertNotificationInput {
+    const workflowContext = recordOrEmpty(alert.workflowContext)
+    const webhookContext = recordOrEmpty(alert.webhookContext)
+    const matchedTerm = normalizeMatchedTerm(alert.matchedTerm || workflowContext.matchedTerm)
+    const watchlistIds = [
+        ...cleanList(alert.watchlistItemIds),
+        ...cleanList(webhookContext.watchlistItemIds),
+        ...cleanList(workflowContext.watchlistItemIds),
+        ...cleanList(alert.watchlistIds),
+        ...cleanList(webhookContext.watchlistIds),
+        ...cleanList(workflowContext.watchlistIds),
+    ]
+    const orgId = firstClean(
+        alert.organizationId,
+        alert.orgId,
+        webhookContext.organizationId,
+        workflowContext.organizationId,
+        alert.tenantId,
+        webhookContext.tenantId,
+        workflowContext.tenantId
+    )
+    const tenantId = firstClean(alert.tenantId, webhookContext.tenantId, workflowContext.tenantId)
+    const watchlistRecord = recordOrEmpty(alert.watchlist)
+    const watchlistId = firstClean(watchlistRecord.id, alert.watchlistItemId, alert.watchlistId, watchlistIds[0])
+    const watchlistName = firstClean(watchlistRecord.name, alert.watchlistName, webhookContext.watchlistName, workflowContext.watchlistName)
+    const watchlistTerms = cleanList(watchlistRecord.terms)
+    const dedupeKey = firstClean(
+        alert.dedupeKey,
+        webhookContext.dedupeKey,
+        workflowContext.dedupeKey,
+        recordOrEmpty(alert.webhookDelivery).dedupeKey,
+        alert.id,
+        webhookContext.alertId
+    )
+    const route = firstClean(
+        alert.route,
+        alert.recommendedRoute,
+        webhookContext.recommendedRoute,
+        workflowContext.recommendedRoute,
+        recordOrEmpty(alert.webhookDelivery).recommendedRoute
+    )
+    const casePath = firstClean(alert.casePath, alert.caseUrl, webhookContext.casePath, workflowContext.casePath)
+    const caseId = firstClean(alert.caseId, alert.caseIdCandidate, webhookContext.caseIdCandidate, workflowContext.caseIdCandidate)
+    const evidenceCount = parseCount(alert.evidenceCount ?? webhookContext.evidenceCount ?? workflowContext.evidenceCount)
+    const sourceFamily = firstClean(alert.sourceFamily, webhookContext.sourceFamily, workflowContext.sourceFamily)
+    const provenance = alert.provenance || webhookContext.provenance || {
+        captureIds: cleanList(webhookContext.captureIds).length ? cleanList(webhookContext.captureIds) : cleanList(workflowContext.captureIds),
+        primaryCaptureId: firstClean(webhookContext.primaryCaptureId, workflowContext.primaryCaptureId),
+    }
+
+    return {
+        orgId,
+        organizationId: orgId,
+        tenantId,
+        destinationId: firstClean(options.destinationId, options.destination_id),
+        eventType: parseEventType(options.eventType, parseEventType(webhookContext.eventType || alert.eventType, 'dwm.alert.created')),
+        alertId: firstClean(alert.id, webhookContext.alertId),
+        watchlistItemId: watchlistId,
+        watchlistId,
+        watchlistName,
+        dedupeKey,
+        route,
+        recommendedRoute: route,
+        casePath,
+        evidenceCount,
+        sourceFamily,
+        dryRun: options.dryRun ?? options.dry_run,
+        live: options.live,
+        alert: {
+            ...alert,
+            id: firstClean(alert.id, webhookContext.alertId),
+            organizationId: orgId,
+            tenantId,
+            watchlist: {
+                ...watchlistRecord,
+                id: watchlistId,
+                name: watchlistName,
+                terms: watchlistTerms.length ? watchlistTerms : [matchedTerm.value].filter(Boolean),
+            },
+            matchedTerm,
+            sourceFamily,
+            evidenceCount,
+            dedupeKey,
+            route,
+            recommendedRoute: route,
+            casePath,
+            caseId,
+            provenance,
+        },
+    }
+}
+
+export async function triggerDwmAlertWebhookNotification(
+    ownerId: string,
+    alert: Record<string, unknown>,
+    options: DwmAlertWebhookTriggerOptions = {}
+) {
+    return deliverDwmAlertNotification(ownerId, buildDwmAlertWebhookNotificationInput(alert, options))
+}
+
 export function buildDwmAlertWebhookDispatchPlan({
     ownerId,
     input,
@@ -826,6 +938,7 @@ export function buildDwmAlertDeliveryPayload({
                     watchlist.name || watchlist.terms.length ? { name: 'Watchlist', value: [watchlist.name, watchlist.terms[0]].filter(Boolean).join(' | '), inline: true } : null,
                     { name: 'Source family', value: normalizedAlert.sourceFamily || 'Unknown', inline: true },
                     { name: 'Evidence count', value: String(normalizedAlert.evidenceCount), inline: true },
+                    normalizedAlert.evidenceSummary ? { name: 'Evidence summary', value: normalizedAlert.evidenceSummary, inline: false } : null,
                     { name: 'Route', value: normalizedAlert.route, inline: true },
                     { name: 'Dedupe key', value: displayDedupeKey, inline: false },
                     normalizedAlert.caseId ? { name: 'Case ID', value: normalizedAlert.caseId, inline: true } : null,
@@ -1222,6 +1335,7 @@ function normalizeAlert(alert: Record<string, unknown>) {
         caseId: clean(alert.caseId) || clean(alert.caseIdCandidate) || clean((alert.workflowContext as Record<string, unknown> | undefined)?.caseIdCandidate),
         evidence,
         evidenceCount: evidence.length || evidenceCount,
+        evidenceSummary: summarizeEvidence(evidence),
         dedupeKey: clean(alert.dedupeKey) || clean((alert.webhookDelivery as Record<string, unknown> | undefined)?.dedupeKey),
         provenance: alert.provenance || null,
         provenanceSummary: provenanceSummary(alert.provenance),
@@ -1267,6 +1381,18 @@ function normalizeEvidence(value: unknown) {
                 capturedAt: clean((item as Record<string, unknown>).capturedAt) || clean((item as Record<string, unknown>).at),
             }
             : { label: 'Evidence', detail: truncate(clean(item), 500), source: '', capturedAt: '' })
+}
+
+function summarizeEvidence(evidence: ReturnType<typeof normalizeEvidence>) {
+    return truncate(evidence
+        .slice(0, 3)
+        .map((item, index) => {
+            const prefix = item.label || `Evidence ${index + 1}`
+            const detail = item.detail || item.source || item.capturedAt
+            return detail ? `${prefix}: ${detail}` : prefix
+        })
+        .filter(Boolean)
+        .join('\n'), 900)
 }
 
 function provenanceSummary(value: unknown) {
@@ -1331,6 +1457,19 @@ function severityEmoji(severity: string) {
 
 function buildIdempotencyKey(eventType: DwmAlertEventType, orgId: string, destinationId: string, alertId: string) {
     return `${eventType}:${orgId}:${destinationId}:${alertId}`
+}
+
+function firstClean(...values: unknown[]) {
+    for (const value of values) {
+        const candidate = clean(value)
+        if (candidate) return candidate
+    }
+    return ''
+}
+
+function cleanList(value: unknown) {
+    if (!Array.isArray(value)) return []
+    return value.map(clean).filter(Boolean)
 }
 
 function hashValue(scope: string, value: string) {

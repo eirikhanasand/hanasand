@@ -1,5 +1,6 @@
 import {
     buildDwmAlertDeliveryPayload,
+    buildDwmAlertWebhookNotificationInput,
     buildDwmAlertWebhookDispatchPlan,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
@@ -181,6 +182,8 @@ const replayWorkflowAlert = {
     evidenceCount: 3,
     evidence: [
         { label: 'Public channel match', detail: 'Public channel message matched acme-security.com.' },
+        { label: 'Credential paste', detail: 'Paste metadata included an Acme user identity.' },
+        { label: 'Case enrichment', detail: 'Source capture linked the domain to the same campaign.' },
     ],
     dedupeKey: 'dwm_dedupe_replay_contract',
     route: 'identity_response',
@@ -213,13 +216,13 @@ const replayWorkflowAlert = {
     },
 }
 const replayWorkflowBefore = JSON.stringify(replayWorkflowAlert)
+const replayTriggerInput = buildDwmAlertWebhookNotificationInput(replayWorkflowAlert, {
+    eventType: 'dwm.alert.replayed',
+    dryRun: true,
+})
 const replayPlan = buildDwmAlertWebhookDispatchPlan({
     ownerId: 'owner_contract',
-    input: {
-        organizationId: 'org_contract',
-        eventType: 'dwm.alert.replayed',
-        alert: replayWorkflowAlert,
-    },
+    input: replayTriggerInput,
     destinations: [
         {
             id: 'destination_replay_contract',
@@ -248,6 +251,11 @@ const replayDeliveryContext = replayContext.delivery as Record<string, unknown>
 const replayWatchlistContext = replayContext.watchlist as Record<string, unknown>
 const replaySerialized = JSON.stringify(replayPayload)
 
+expect(replayTriggerInput.organizationId === 'org_contract', 'Replay trigger input should map organization id from webhook context.', replayTriggerInput)
+expect(replayTriggerInput.watchlistItemId === 'watchlist_item_replay_contract', 'Replay trigger input should map watchlist item id from workflow context.', replayTriggerInput)
+expect(replayTriggerInput.sourceFamily === 'telegram_public', 'Replay trigger input should map source family.', replayTriggerInput)
+expect(replayTriggerInput.casePath === replayWorkflowAlert.casePath, 'Replay trigger input should map case path.', replayTriggerInput)
+expect(replayTriggerInput.dedupeKey === 'dwm_dedupe_replay_contract', 'Replay trigger input should map dedupe key.', replayTriggerInput)
 expect(replayPlan.selectedDestinations.length === 1, 'Replay dispatch should select the active org destination.', replayPlan)
 expect(replayPlan.eventType === 'dwm.alert.replayed', 'Replay dispatch should preserve replay event type.', replayPlan)
 expect(replayAlertContext.id === 'alert_replay_contract', 'Replay payload should link to the same alert id.', replayPayload)
@@ -257,7 +265,22 @@ expect(replayDeliveryContext.casePath === replayWorkflowAlert.casePath, 'Replay 
 expect(replayAlertContext.deliveryState === 'ready_to_send', 'Replay payload should preserve alert delivery state.', replayPayload)
 expect(replayWatchlistContext.id === 'watchlist_item_replay_contract', 'Replay payload should preserve watchlist context.', replayPayload)
 expect(replaySerialized.includes('dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract'), 'Replay payload should use event-scoped idempotency for the same dedupe key.', replayPayload)
+expect(replaySerialized.includes('Evidence summary') && replaySerialized.includes('Credential paste'), 'Replay payload should include multi-evidence summary fields.', replayPayload)
 expect(JSON.stringify(replayWorkflowAlert) === replayWorkflowBefore, 'Replay dispatch/payload builders should not mutate alert workflow state.', replayWorkflowAlert)
+
+const duplicateReplayPayload = buildDwmAlertDeliveryPayload({
+    destination: {
+        id: replayPlan.selectedDestinations[0].id,
+        kind: 'discord',
+        name: replayPlan.selectedDestinations[0].name,
+        org_id: replayPlan.orgId,
+    },
+    eventType: replayPlan.eventType,
+    deliveryId: 'delivery_replay_duplicate_contract',
+    alert: replayPlan.alert,
+}) as Record<string, unknown>
+const duplicateReplayContext = duplicateReplayPayload._hanasand as Record<string, unknown>
+expect(duplicateReplayContext.idempotencyKey === replayContext.idempotencyKey, 'Duplicate replay payloads should keep the same alert/dedupe idempotency key.', duplicateReplayPayload)
 
 const evidenceAttempts = buildDwmWebhookDeliveryEvidence({
     deliveries: [
@@ -635,7 +658,7 @@ expect(destinationContract.auditEventIds.includes('audit_destination_created_con
 expect(deliveryPreview.requestId === 'delivery_replay_contract' && deliveryPreview.discord.embeds.length === 1, 'Test preview should expose Discord-ready payload.', deliveryPreview)
 expect(deliveryPreview.context.org.id === 'org_contract', 'Test preview should expose org context.', deliveryPreview)
 expect(deliveryPreview.context.watchlist.id === 'watchlist_item_replay_contract', 'Test preview should expose watchlist context.', deliveryPreview)
-expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.context.alert.evidenceCount === 1, 'Test preview should expose alert severity and evidence count.', deliveryPreview)
+expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.context.alert.evidenceCount === 3, 'Test preview should expose alert severity and evidence count.', deliveryPreview)
 expect(deliveryPreview.context.alert.casePath === replayWorkflowAlert.casePath && deliveryPreview.context.links.casePath === replayWorkflowAlert.casePath, 'Test preview should expose case/deep-link context.', deliveryPreview)
 expect(!JSON.stringify(deliveryPreview).includes(secret), 'Test preview should not leak endpoint secrets.', deliveryPreview)
 
@@ -651,8 +674,11 @@ console.log(JSON.stringify({
         'disabled destination skip',
         'org/watchlist context propagation',
         'route/dedupe/case context',
+        'alert replay trigger adapter',
         'replay alert/dedupe/case linkage',
+        'idempotent duplicate replay key',
         'replay workflow immutability',
+        'multi-evidence Discord summary',
         'delivery evidence shaping',
         'delivery evidence secret redaction',
         'delivery evidence wrong-org filtering',
