@@ -1,4 +1,5 @@
-import { buildDwmProductSnapshot, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
 import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
@@ -156,34 +157,8 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
   const terms = watchlists.flatMap((watchlist: DwmWatchlist) => watchlist.terms);
   if (!terms.length) return json({ error: { code: "missing_watchlist", message: "Create an active DWM watchlist before rebuilding alerts." } }, 400);
 
-  const snapshot = buildDwmProductSnapshot({
-    tenantId,
-    watchlist: terms,
-    sources: options.store.listSources(),
-    captures: options.store.listCaptures(),
-    includeDemoIfEmpty: false
-  });
-  const saved = snapshot.alerts.map((alert) => {
-    const existing = findDwmAlert(options, alert.id) ?? findDwmAlertByDedupeKey(options, alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey);
-    return (options.store as any).saveDwmAlert({
-      ...alert,
-      id: existing?.id ?? alert.id,
-      tenantId,
-      organizationId: scope.organizationId,
-      watchlistIds: watchlists.map((watchlist: DwmWatchlist) => watchlist.id),
-      reviewState: existing?.reviewState ?? alert.reviewState,
-      deliveryState: existing?.deliveryState ?? "pending_review",
-      workflowEvents: existing?.workflowEvents ?? [],
-      workflowNote: existing?.workflowNote,
-      assignedOwner: existing?.assignedOwner,
-      replayCount: existing?.replayCount ?? 0,
-      lastReplayedAt: existing?.lastReplayedAt,
-      deliveredAt: existing?.deliveredAt,
-      savedAt: existing?.savedAt ?? snapshot.generatedAt,
-      updatedAt: snapshot.generatedAt
-    });
-  });
-  return json({ organization: scope.organization, rebuiltAt: snapshot.generatedAt, savedAlertCount: saved.length, alerts: saved, readiness: snapshot.readiness });
+  const rebuilt = rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId });
+  return json({ organization: scope.organization, ...rebuilt });
 }
 
 export async function deliverDwmWebhooks(request: Request, options: ApiServerOptions): Promise<Response> {
@@ -346,6 +321,12 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     confidenceReasoning: alert.confidenceReasoning ?? [],
     provenance: alert.provenance,
     dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
+    caseIdCandidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate,
+    caseId: alert.caseId,
+    casePath: alert.casePath ?? alert.workflowContext?.casePath,
+    watchlistItemIds: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [],
+    captureIds: alert.workflowContext?.captureIds ?? alert.provenance?.captureIds ?? [],
+    evidenceCount: alert.workflowContext?.evidenceCount ?? (alert.evidence ?? []).length,
     company: alert.company,
     matchedTerm: alert.matchedTerm?.value,
     actor: alert.actor,
@@ -353,7 +334,11 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     sourceFamily: alert.sourceFamily,
     sourceCount: alert.sourceCount,
     firstSeenAt: alert.firstSeenAt,
+    lastSeenAt: alert.lastSeenAt,
     claimSummary: alert.claimSummary,
+    matchContext: alert.matchContext,
+    evidenceSummary: alert.evidenceSummary,
+    routingContext: alert.routingContext,
     reviewState: alert.reviewState,
     recommendedAction: alert.recommendedAction,
     recommendedRoute: alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
