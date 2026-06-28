@@ -1,6 +1,17 @@
 import { buildActorIntelligence, containsToyThreatIntelCopy } from '../src/utils/ti/actorIntelligence'
 import { buildTiActionability } from '../src/utils/ti/actionability'
-import { buildActorArtifactHandoffs, buildActorArtifacts, encodeHandoffPayload, nextActorArtifactId } from '../src/utils/ti/actorWorkbench'
+import {
+    PUBLIC_TI_HANDOFF_ACTIONS,
+    PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS,
+    PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
+    buildActorArtifactHandoffs,
+    buildActorArtifacts,
+    decodePublicTiHandoffFromUrl,
+    decodePublicTiHandoffPayload,
+    encodeHandoffPayload,
+    nextActorArtifactId,
+    validatePublicTiHandoffPayload,
+} from '../src/utils/ti/actorWorkbench'
 import type { TiSearchResponse } from '../src/utils/ti/search'
 
 const fixture: TiSearchResponse = {
@@ -119,7 +130,34 @@ assert(usHandoffs?.authBridge.schemaVersion === 'ti.public_actor.authenticated_b
 assert(usHandoffs?.authBridge.orgRequired, 'Public artifact handoff should keep organization scope explicit.')
 assert(usHandoffs?.authBridge.stale, 'Authenticated bridge should carry stale evidence state.')
 assert(usHandoffs?.authBridge.links.watchlist.href.includes('/dashboard/dwm?handoff=public-ti'), 'Watchlist bridge should deep-link into the authenticated dashboard.')
-assert(JSON.parse(decodeURIComponent(usHandoffs?.authBridge.links.watchlist.href.split('payload=')[1] || '{}')).artifact.label === 'United States', 'Deep-link payload should decode selected artifact context.')
+assert(usHandoffs?.authBridge.links.watchlist.intent === PUBLIC_TI_HANDOFF_ACTIONS.watchlist, 'Watchlist bridge should use a stable action name.')
+assert(usHandoffs?.authBridge.payload.schemaVersion === PUBLIC_TI_HANDOFF_SCHEMA_VERSION, 'Default bridge payload should carry the exported schema version.')
+assert(usHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case].selectedPayload.route === 'case', 'Case bridge payload should select the case export payload.')
+const decodedWatchlist = usHandoffs ? decodePublicTiHandoffFromUrl(usHandoffs.authBridge.links.watchlist.href) : null
+assert(decodedWatchlist?.ok, 'Watchlist deep-link payload should decode through the exported contract parser.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.artifact.label === 'United States', 'Deep-link payload should decode selected artifact context.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist, 'Decoded watchlist payload should preserve the action.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.orgRequired, 'Decoded APT29 payload should keep org-required blocker state.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequired, 'Decoded APT29 payload should keep source-required blocker state.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.stale, 'Decoded APT29 payload should keep stale-evidence blocker state.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.blockers.some(blocker => blocker.code === 'stale_evidence'), 'Decoded APT29 payload should carry stable blocker codes.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.missing.includes('captureId or source request ID')), 'Decoded APT29 payload should expose missing capture/source request IDs.')
+assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('selectedPayload'), 'Dashboard consumer contract should document selectedPayload.')
+assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests'), 'Dashboard consumer contract should document sourceRequests.')
+const legacyDecoded = usHandoffs ? decodePublicTiHandoffPayload(encodeHandoffPayload({
+    artifact: usHandoffs.authBridge.payload.artifact,
+    watchlist: usHandoffs.watchlist,
+    alertRebuild: usHandoffs.alertRebuild,
+    case: usHandoffs.case,
+    enrichment: usHandoffs.enrichment,
+}), 'watchlist') : null
+assert(legacyDecoded?.ok && legacyDecoded.payload.action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist, 'Legacy bridge payloads should migrate to the stable watchlist action.')
+const missingPayload = decodePublicTiHandoffPayload(null)
+assert(!missingPayload.ok && missingPayload.code === 'missing_payload', 'Decoder should return missing_payload for absent payloads.')
+const malformedPayload = decodePublicTiHandoffPayload('%7Bbad', 'watchlist')
+assert(!malformedPayload.ok && malformedPayload.code === 'malformed_json', 'Decoder should return malformed_json for bad JSON.')
+assert(validatePublicTiHandoffPayload({ schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION, action: 'unknown', query: 'apt29', artifact: {} }).ok === false, 'Validator should reject unsupported actions.')
+assert(validatePublicTiHandoffPayload({ schemaVersion: 'ti.public_actor.authenticated_bridge.v0', action: PUBLIC_TI_HANDOFF_ACTIONS.watchlist }).ok === false, 'Validator should reject unsupported schema versions.')
 assert(JSON.parse(decodeURIComponent(encodeHandoffPayload({ artifactId: 'artifact:test' }))).artifactId === 'artifact:test', 'Handoff payload encoding should round-trip.')
 assert(nextActorArtifactId(artifacts, artifacts[0]?.id, 'next') === artifacts[1]?.id, 'Keyboard helper should move to next artifact.')
 assert(nextActorArtifactId(artifacts, artifacts[0]?.id, 'previous') === artifacts[artifacts.length - 1]?.id, 'Keyboard helper should wrap to previous artifact.')

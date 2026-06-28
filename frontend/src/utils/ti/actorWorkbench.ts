@@ -3,7 +3,57 @@ import { countryFromValue, type VictimObservation } from './actorProfile'
 import type { TiActorIntelligenceProfile } from './actorIntelligence'
 import type { TiSearchResponse } from './search'
 
+export const PUBLIC_TI_HANDOFF_SCHEMA_VERSION = 'ti.public_actor.authenticated_bridge.v1' as const
+export const PUBLIC_TI_HANDOFF_SOURCE = 'public-ti' as const
+export const PUBLIC_TI_HANDOFF_QUERY_PARAM = 'payload' as const
+export const PUBLIC_TI_HANDOFF_INTENT_PARAM = 'intent' as const
+
+export const PUBLIC_TI_HANDOFF_ACTIONS = {
+    watchlist: 'create_watchlist',
+    alertRebuild: 'rebuild_alerts',
+    case: 'open_case',
+    enrichment: 'queue_enrichment',
+} as const
+
+export const PUBLIC_TI_HANDOFF_ROUTES = {
+    watchlist: '/dashboard/dwm',
+    alertRebuild: '/dashboard/dwm',
+    case: '/dashboard/ti/workbench',
+    enrichment: '/dashboard/ti/enrichment',
+} as const
+
+export const PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS = [
+    'schemaVersion',
+    'source',
+    'action',
+    'query',
+    'artifactId',
+    'artifact',
+    'selectedPayload',
+    'actionPayloads',
+    'orgRequired',
+    'sourceRequired',
+    'stale',
+    'missing',
+    'blockers',
+    'sourceRequests',
+] as const
+
 export type ActorArtifactKind = 'country' | 'tool' | 'campaign' | 'infrastructure' | 'technique'
+export type PublicTiHandoffAction = typeof PUBLIC_TI_HANDOFF_ACTIONS[keyof typeof PUBLIC_TI_HANDOFF_ACTIONS]
+export type PublicTiHandoffDecodeFailureCode =
+    | 'missing_payload'
+    | 'malformed_json'
+    | 'unsupported_schema'
+    | 'missing_action'
+    | 'invalid_action'
+    | 'missing_query'
+    | 'missing_artifact'
+    | 'invalid_payload'
+
+export type PublicTiHandoffDecodeResult =
+    | { ok: true; payload: PublicTiHandoffPayload; action: PublicTiHandoffAction; reasonCodes: [] }
+    | { ok: false; code: PublicTiHandoffDecodeFailureCode; message: string; reasonCodes: PublicTiHandoffDecodeFailureCode[] }
 
 export type ActorArtifactReadiness = {
     state: 'ready_for_org_handoff' | 'context_only' | 'needs_source' | 'stale' | 'needs_watchlist_term'
@@ -25,22 +75,42 @@ export type ActorArtifact = {
     readiness: ActorArtifactReadiness
 }
 
+export type PublicTiHandoffArtifact = Pick<ActorArtifact, 'id' | 'kind' | 'label' | 'confidence' | 'freshness' | 'evidence' | 'provenance' | 'watchlistTerms' | 'enrichmentTasks' | 'readiness'>
+
+export type PublicTiHandoffPayload = {
+    schemaVersion: typeof PUBLIC_TI_HANDOFF_SCHEMA_VERSION
+    source: typeof PUBLIC_TI_HANDOFF_SOURCE
+    action: PublicTiHandoffAction
+    artifactId: string
+    query: string
+    generatedAt: string
+    artifact: PublicTiHandoffArtifact
+    selectedPayload: TiHandoffExportPayload
+    actionPayloads: {
+        watchlist: TiHandoffExportPayload
+        alertRebuild: TiHandoffExportPayload
+        case: TiHandoffExportPayload
+        enrichment: TiHandoffExportPayload
+    }
+    orgRequired: boolean
+    sourceRequired: boolean
+    stale: boolean
+    missing: string[]
+    blockers: Array<{ code: 'org_required' | 'source_required' | 'stale_evidence' | 'missing_watchlist_term'; detail: string }>
+    sourceRequests: Array<{ sourceName: string; provenance: string; captureId?: string; confidence?: number; missing: string[] }>
+}
+
 export type AuthenticatedArtifactBridge = {
-    schemaVersion: 'ti.public_actor.authenticated_bridge.v1'
+    schemaVersion: typeof PUBLIC_TI_HANDOFF_SCHEMA_VERSION
     artifactId: string
     query: string
     orgRequired: boolean
     sourceRequired: boolean
     stale: boolean
     missing: string[]
-    links: Record<'watchlist' | 'alertRebuild' | 'case' | 'enrichment', { label: string; href: string; intent: string }>
-    payload: {
-        artifact: Pick<ActorArtifact, 'id' | 'kind' | 'label' | 'confidence' | 'freshness' | 'evidence' | 'provenance' | 'watchlistTerms' | 'enrichmentTasks' | 'readiness'>
-        watchlist: TiHandoffExportPayload
-        alertRebuild: TiHandoffExportPayload
-        case: TiHandoffExportPayload
-        enrichment: TiHandoffExportPayload
-    }
+    links: Record<'watchlist' | 'alertRebuild' | 'case' | 'enrichment', { label: string; href: string; intent: PublicTiHandoffAction }>
+    payload: PublicTiHandoffPayload
+    payloads: Record<PublicTiHandoffAction, PublicTiHandoffPayload>
 }
 
 export type ActorArtifactHandoffs = {
@@ -258,6 +328,38 @@ export function encodeHandoffPayload(payload: unknown) {
     return encodeURIComponent(JSON.stringify(payload))
 }
 
+export function decodePublicTiHandoffFromUrl(value: string | URL | URLSearchParams): PublicTiHandoffDecodeResult {
+    if (value instanceof URL) {
+        return decodePublicTiHandoffPayload(value.searchParams.get(PUBLIC_TI_HANDOFF_QUERY_PARAM), value.searchParams.get(PUBLIC_TI_HANDOFF_INTENT_PARAM))
+    }
+    if (value instanceof URLSearchParams) {
+        return decodePublicTiHandoffPayload(value.get(PUBLIC_TI_HANDOFF_QUERY_PARAM), value.get(PUBLIC_TI_HANDOFF_INTENT_PARAM))
+    }
+    try {
+        const url = new URL(value, 'https://hanasand.com')
+        return decodePublicTiHandoffFromUrl(url)
+    } catch {
+        return decodePublicTiHandoffPayload(value, undefined)
+    }
+}
+
+export function decodePublicTiHandoffPayload(encoded: string | null | undefined, intent?: string | null): PublicTiHandoffDecodeResult {
+    if (!encoded) return failure('missing_payload', 'No public TI handoff payload was provided.')
+    const decoded = decodeMaybeURIComponent(encoded)
+    if (decoded === null) return failure('malformed_json', 'The public TI handoff payload is not valid URL-encoded JSON.')
+    try {
+        return validatePublicTiHandoffPayload(JSON.parse(decoded), intent)
+    } catch {
+        return failure('malformed_json', 'The public TI handoff payload is not valid JSON.')
+    }
+}
+
+export function validatePublicTiHandoffPayload(value: unknown, intent?: string | null): PublicTiHandoffDecodeResult {
+    const normalized = normalizePublicTiHandoffPayload(value, intent)
+    if (!normalized.ok) return normalized
+    return { ok: true, payload: normalized.payload, action: normalized.payload.action, reasonCodes: [] }
+}
+
 function buildAuthenticatedBridge(
     result: TiSearchResponse,
     artifact: ActorArtifact,
@@ -280,37 +382,220 @@ function buildAuthenticatedBridge(
         ...payloads.watchlist.missing,
         ...payloads.case.missing,
     ])
-    const bridgePayload = {
-        artifact: compactArtifact,
+    const orgRequired = missing.some(item => /organization|org|member|admin/i.test(item))
+    const sourceRequired = missing.some(item => /source|provenance|capture|url/i.test(item))
+    const stale = artifact.readiness.state === 'stale'
+    const actionPayloads: Record<PublicTiHandoffAction, PublicTiHandoffPayload> = {
+        [PUBLIC_TI_HANDOFF_ACTIONS.watchlist]: buildPublicTiHandoffPayload(result, compactArtifact, payloads, PUBLIC_TI_HANDOFF_ACTIONS.watchlist, { orgRequired, sourceRequired, stale, missing }),
+        [PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild]: buildPublicTiHandoffPayload(result, compactArtifact, payloads, PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild, { orgRequired, sourceRequired, stale, missing }),
+        [PUBLIC_TI_HANDOFF_ACTIONS.case]: buildPublicTiHandoffPayload(result, compactArtifact, payloads, PUBLIC_TI_HANDOFF_ACTIONS.case, { orgRequired, sourceRequired, stale, missing }),
+        [PUBLIC_TI_HANDOFF_ACTIONS.enrichment]: buildPublicTiHandoffPayload(result, compactArtifact, payloads, PUBLIC_TI_HANDOFF_ACTIONS.enrichment, { orgRequired, sourceRequired, stale, missing }),
+    }
+    return {
+        schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
+        artifactId: artifact.id,
+        query: result.query,
+        orgRequired,
+        sourceRequired,
+        stale,
+        missing,
+        links: {
+            watchlist: dashboardLink(PUBLIC_TI_HANDOFF_ROUTES.watchlist, PUBLIC_TI_HANDOFF_ACTIONS.watchlist, actionPayloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist]),
+            alertRebuild: dashboardLink(PUBLIC_TI_HANDOFF_ROUTES.alertRebuild, PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild, actionPayloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild]),
+            case: dashboardLink(PUBLIC_TI_HANDOFF_ROUTES.case, PUBLIC_TI_HANDOFF_ACTIONS.case, actionPayloads[PUBLIC_TI_HANDOFF_ACTIONS.case]),
+            enrichment: dashboardLink(PUBLIC_TI_HANDOFF_ROUTES.enrichment, PUBLIC_TI_HANDOFF_ACTIONS.enrichment, actionPayloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment]),
+        },
+        payload: actionPayloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist],
+        payloads: actionPayloads,
+    }
+}
+
+function dashboardLink(path: string, intent: PublicTiHandoffAction, payload: PublicTiHandoffPayload) {
+    return {
+        label: labelForHandoffAction(intent),
+        href: `${path}?handoff=public-ti&intent=${encodeURIComponent(intent)}&payload=${encodeHandoffPayload(payload)}`,
+        intent,
+    }
+}
+
+function buildPublicTiHandoffPayload(
+    result: TiSearchResponse,
+    artifact: PublicTiHandoffArtifact,
+    payloads: Pick<ActorArtifactHandoffs, 'watchlist' | 'alertRebuild' | 'case' | 'enrichment'>,
+    action: PublicTiHandoffAction,
+    bridgeState: Pick<AuthenticatedArtifactBridge, 'orgRequired' | 'sourceRequired' | 'stale' | 'missing'>
+): PublicTiHandoffPayload {
+    const actionPayloads = {
         watchlist: payloads.watchlist,
         alertRebuild: payloads.alertRebuild,
         case: payloads.case,
         enrichment: payloads.enrichment,
     }
     return {
-        schemaVersion: 'ti.public_actor.authenticated_bridge.v1',
+        schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
+        source: PUBLIC_TI_HANDOFF_SOURCE,
+        action,
         artifactId: artifact.id,
         query: result.query,
-        orgRequired: missing.some(item => /organization|org|member|admin/i.test(item)),
-        sourceRequired: missing.some(item => /source|provenance|capture|url/i.test(item)),
-        stale: artifact.readiness.state === 'stale',
-        missing,
-        links: {
-            watchlist: dashboardLink('/dashboard/dwm', 'watchlist', bridgePayload),
-            alertRebuild: dashboardLink('/dashboard/dwm', 'alert_rebuild', bridgePayload),
-            case: dashboardLink('/dashboard/ti/workbench', 'case', bridgePayload),
-            enrichment: dashboardLink('/dashboard/ti/enrichment', 'enrichment', bridgePayload),
-        },
-        payload: bridgePayload,
+        generatedAt: result.generatedAt,
+        artifact,
+        selectedPayload: selectedPayloadForAction(action, actionPayloads),
+        actionPayloads,
+        orgRequired: bridgeState.orgRequired,
+        sourceRequired: bridgeState.sourceRequired,
+        stale: bridgeState.stale,
+        missing: bridgeState.missing,
+        blockers: blockersForBridge(artifact, bridgeState),
+        sourceRequests: sourceRequestsFor(actionPayloads),
     }
 }
 
-function dashboardLink(path: string, intent: string, payload: unknown) {
-    return {
-        label: intent.split('_').map(part => part[0]?.toUpperCase() + part.slice(1)).join(' '),
-        href: `${path}?handoff=public-ti&intent=${encodeURIComponent(intent)}&payload=${encodeHandoffPayload(payload)}`,
-        intent,
+function normalizePublicTiHandoffPayload(value: unknown, intent?: string | null): PublicTiHandoffDecodeResult {
+    if (!isRecord(value)) return failure('invalid_payload', 'The public TI handoff payload must be a JSON object.')
+    if (!value.schemaVersion) return normalizeLegacyPublicTiHandoffPayload(value, intent)
+    if (value.schemaVersion !== PUBLIC_TI_HANDOFF_SCHEMA_VERSION) return failure('unsupported_schema', `Unsupported public TI handoff schema: ${String(value.schemaVersion)}.`)
+    const action = normalizeHandoffAction(typeof value.action === 'string' ? value.action : intent)
+    if (!action) return failure(value.action || intent ? 'invalid_action' : 'missing_action', 'The public TI handoff action is missing or unsupported.')
+    const query = typeof value.query === 'string' ? value.query.trim() : ''
+    if (!query) return failure('missing_query', 'The public TI handoff payload is missing query.')
+    if (!isRecord(value.artifact)) return failure('missing_artifact', 'The public TI handoff payload is missing selected artifact context.')
+    if (!isRecord(value.selectedPayload) || !isRecord(value.actionPayloads)) return failure('invalid_payload', 'The public TI handoff payload is missing selectedPayload or actionPayloads.')
+    const artifactId = typeof value.artifactId === 'string' && value.artifactId.trim()
+        ? value.artifactId
+        : typeof value.artifact.id === 'string' ? value.artifact.id : ''
+    if (!artifactId) return failure('missing_artifact', 'The public TI handoff payload is missing artifactId.')
+    const normalized: PublicTiHandoffPayload = {
+        schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
+        source: PUBLIC_TI_HANDOFF_SOURCE,
+        action,
+        artifactId,
+        query,
+        generatedAt: typeof value.generatedAt === 'string' ? value.generatedAt : '',
+        artifact: value.artifact as PublicTiHandoffArtifact,
+        selectedPayload: value.selectedPayload as TiHandoffExportPayload,
+        actionPayloads: value.actionPayloads as PublicTiHandoffPayload['actionPayloads'],
+        orgRequired: Boolean(value.orgRequired),
+        sourceRequired: Boolean(value.sourceRequired),
+        stale: Boolean(value.stale),
+        missing: Array.isArray(value.missing) ? value.missing.filter((item): item is string => typeof item === 'string') : [],
+        blockers: Array.isArray(value.blockers) ? value.blockers as PublicTiHandoffPayload['blockers'] : [],
+        sourceRequests: Array.isArray(value.sourceRequests) ? value.sourceRequests as PublicTiHandoffPayload['sourceRequests'] : [],
     }
+    return { ok: true, payload: normalized, action, reasonCodes: [] }
+}
+
+function normalizeLegacyPublicTiHandoffPayload(value: Record<string, unknown>, intent?: string | null): PublicTiHandoffDecodeResult {
+    const action = normalizeHandoffAction(intent)
+    if (!action) return failure(intent ? 'invalid_action' : 'missing_action', 'Legacy public TI handoff payloads require a supported intent.')
+    if (!isRecord(value.artifact)) return failure('missing_artifact', 'Legacy public TI handoff payload is missing artifact.')
+    const actionPayloads = {
+        watchlist: value.watchlist,
+        alertRebuild: value.alertRebuild,
+        case: value.case,
+        enrichment: value.enrichment,
+    }
+    if (!isRecord(actionPayloads.watchlist) || !isRecord(actionPayloads.alertRebuild) || !isRecord(actionPayloads.case) || !isRecord(actionPayloads.enrichment)) {
+        return failure('invalid_payload', 'Legacy public TI handoff payload is missing one or more action payloads.')
+    }
+    const selectedPayload = selectedPayloadForAction(action, actionPayloads as PublicTiHandoffPayload['actionPayloads'])
+    const artifact = value.artifact as PublicTiHandoffArtifact
+    const missing = unique([
+        ...readStringArray(actionPayloads.watchlist.missing),
+        ...readStringArray(actionPayloads.alertRebuild.missing),
+        ...readStringArray(actionPayloads.case.missing),
+        ...readStringArray(actionPayloads.enrichment.missing),
+        ...readStringArray(isRecord(artifact.readiness) ? artifact.readiness.blockers : undefined),
+    ])
+    const query = readPayloadQuery(actionPayloads as PublicTiHandoffPayload['actionPayloads'])
+    if (!query) return failure('missing_query', 'Legacy public TI handoff payload is missing query.')
+    const bridgeState = {
+        orgRequired: missing.some(item => /organization|org|member|admin/i.test(item)),
+        sourceRequired: missing.some(item => /source|provenance|capture|url/i.test(item)),
+        stale: isRecord(artifact.readiness) && artifact.readiness.state === 'stale',
+        missing,
+    }
+    const payload: PublicTiHandoffPayload = {
+        schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
+        source: PUBLIC_TI_HANDOFF_SOURCE,
+        action,
+        artifactId: artifact.id,
+        query,
+        generatedAt: typeof selectedPayload.generatedAt === 'string' ? selectedPayload.generatedAt : '',
+        artifact,
+        selectedPayload,
+        actionPayloads: actionPayloads as PublicTiHandoffPayload['actionPayloads'],
+        ...bridgeState,
+        blockers: blockersForBridge(artifact, bridgeState),
+        sourceRequests: sourceRequestsFor(actionPayloads as PublicTiHandoffPayload['actionPayloads']),
+    }
+    return { ok: true, payload, action, reasonCodes: [] }
+}
+
+function selectedPayloadForAction(action: PublicTiHandoffAction, payloads: PublicTiHandoffPayload['actionPayloads']) {
+    if (action === PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild) return payloads.alertRebuild
+    if (action === PUBLIC_TI_HANDOFF_ACTIONS.case) return payloads.case
+    if (action === PUBLIC_TI_HANDOFF_ACTIONS.enrichment) return payloads.enrichment
+    return payloads.watchlist
+}
+
+function blockersForBridge(artifact: PublicTiHandoffArtifact, bridgeState: Pick<AuthenticatedArtifactBridge, 'orgRequired' | 'sourceRequired' | 'stale' | 'missing'>): PublicTiHandoffPayload['blockers'] {
+    return [
+        ...(bridgeState.orgRequired ? [{ code: 'org_required' as const, detail: 'Open this payload in an authenticated organization context before creating watchlists, rebuilding alerts, or creating cases.' }] : []),
+        ...(bridgeState.sourceRequired ? [{ code: 'source_required' as const, detail: 'Attach source provenance, capture ID, source URL, or request ID before using this artifact as alert or case evidence.' }] : []),
+        ...(bridgeState.stale ? [{ code: 'stale_evidence' as const, detail: `Fresh source is required after ${formatDate(artifact.freshness)} before claiming alert-ready status.` }] : []),
+        ...(!artifact.watchlistTerms.length && artifact.kind !== 'technique' ? [{ code: 'missing_watchlist_term' as const, detail: 'Add or select an organization watchlist term before alert rebuild.' }] : []),
+    ]
+}
+
+function sourceRequestsFor(payloads: PublicTiHandoffPayload['actionPayloads']): PublicTiHandoffPayload['sourceRequests'] {
+    return uniqueBy(Object.values(payloads).flatMap(payload => payload.provenance).map(source => ({
+        sourceName: source.sourceName,
+        provenance: source.provenance,
+        captureId: source.captureId,
+        confidence: source.confidence,
+        missing: source.captureId ? [] : ['captureId or source request ID'],
+    })), source => `${source.sourceName}:${source.provenance}:${source.captureId ?? ''}`)
+}
+
+function labelForHandoffAction(action: PublicTiHandoffAction) {
+    if (action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist) return 'Create Watchlist'
+    if (action === PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild) return 'Rebuild Alerts'
+    if (action === PUBLIC_TI_HANDOFF_ACTIONS.case) return 'Open Case'
+    return 'Queue Enrichment'
+}
+
+function normalizeHandoffAction(value: string | null | undefined): PublicTiHandoffAction | null {
+    if (value === PUBLIC_TI_HANDOFF_ACTIONS.watchlist || value === 'watchlist') return PUBLIC_TI_HANDOFF_ACTIONS.watchlist
+    if (value === PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild || value === 'alert_rebuild') return PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild
+    if (value === PUBLIC_TI_HANDOFF_ACTIONS.case || value === 'case') return PUBLIC_TI_HANDOFF_ACTIONS.case
+    if (value === PUBLIC_TI_HANDOFF_ACTIONS.enrichment || value === 'enrichment') return PUBLIC_TI_HANDOFF_ACTIONS.enrichment
+    return null
+}
+
+function decodeMaybeURIComponent(value: string) {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return value.trim().startsWith('{') ? value : null
+    }
+}
+
+function failure(code: PublicTiHandoffDecodeFailureCode, message: string): PublicTiHandoffDecodeResult {
+    return { ok: false, code, message, reasonCodes: [code] }
+}
+
+function readPayloadQuery(payloads: PublicTiHandoffPayload['actionPayloads']) {
+    return [payloads.watchlist, payloads.alertRebuild, payloads.case, payloads.enrichment]
+        .map(payload => payload.query)
+        .find(query => typeof query === 'string' && query.trim()) ?? ''
+}
+
+function readStringArray(value: unknown) {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function artifactFromActorList(input: {

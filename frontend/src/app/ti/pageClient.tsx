@@ -4,7 +4,7 @@ import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, countryFromValue, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
-import { buildActorArtifactHandoffs, buildActorArtifacts, nextActorArtifactId, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind } from '@/utils/ti/actorWorkbench'
+import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifacts, nextActorArtifactId, type ActorArtifact, type ActorArtifactHandoffs, type ActorArtifactKind } from '@/utils/ti/actorWorkbench'
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
@@ -642,10 +642,10 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
 function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifact; handoffs: ActorArtifactHandoffs }) {
     const bridge = handoffs.authBridge
     const payloadRows = [
-        { id: 'watchlist', label: 'Copy watchlist candidate', payload: handoffs.watchlist, route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
-        { id: 'alert', label: 'Copy alert rebuild instruction', payload: handoffs.alertRebuild, route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : `Ready for ${handoffs.alertRebuild.endpoint}` },
-        { id: 'case', label: 'Copy case handoff', payload: handoffs.case, route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : `Ready for ${handoffs.case.endpoint}` },
-        { id: 'enrichment', label: 'Copy enrichment queue item', payload: handoffs.enrichment, route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
+        { id: 'watchlist', label: 'Copy watchlist contract', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
+        { id: 'alert', label: 'Copy alert rebuild contract', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : `Ready for ${handoffs.alertRebuild.endpoint}` },
+        { id: 'case', label: 'Copy case contract', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : `Ready for ${handoffs.case.endpoint}` },
+        { id: 'enrichment', label: 'Copy enrichment contract', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
     ]
 
     return (
