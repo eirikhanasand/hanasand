@@ -21,11 +21,15 @@ type DwmSourceRequestBody = {
   targets?: string[];
   candidates?: DwmSourcePackCandidate[];
   sourcePackLabel?: string;
+  sourcePackId?: string;
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
-  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed";
+  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review";
+  packAction?: "approve" | "promote" | "reject" | "retry" | "suppress";
   sourceId?: string;
   candidateId?: string;
+  sourceIds?: string[];
+  candidateIds?: string[];
   collectionTaskId?: string;
   captureText?: string;
   captureUrl?: string;
@@ -166,6 +170,8 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
 function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServerOptions) {
   const generatedAt = nowIso();
   const limit = Math.max(1, Math.min(body.limit ?? 100, 100));
+  const sourcePackId = body.sourcePackId ?? stableId("dwm_source_pack", `${body.tenantId ?? "global"}:${body.sourcePackLabel ?? "ad-hoc"}:${generatedAt}`);
+  const sourcePackLabel = body.sourcePackLabel ?? "Ad hoc source candidate pack";
   const accepted: Array<Record<string, unknown>> = [];
   const rejected: Array<Record<string, unknown>> = [];
   const duplicates: Array<Record<string, unknown>> = [];
@@ -188,6 +194,8 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
 
     if (result.kind === "error") {
       rejected.push({
+        sourcePackId,
+        sourcePackLabel,
         index,
         target,
         type,
@@ -199,6 +207,8 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
     }
     if (result.kind === "duplicate") {
       duplicates.push({
+        sourcePackId,
+        sourcePackLabel,
         index,
         target,
         type,
@@ -208,8 +218,14 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
       continue;
     }
 
+    const packedSource = saveSourcePackMetadata(result.source, options, {
+      sourcePackId,
+      sourcePackLabel,
+      packIndex: index,
+      packRequestedAt: generatedAt
+    });
     const source = input.suppress === true
-      ? saveLifecyclePatch(result.source, options, {
+      ? saveLifecyclePatch(packedSource, options, {
         action: "suppress",
         actor: input.requestedBy ?? body.requestedBy ?? "source-pack",
         reason: input.reason ?? "source-pack candidate suppressed during intake",
@@ -218,15 +234,24 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
         parserStatus: "not_scheduled",
         activationState: "suppressed"
       })
-      : result.source;
+      : packedSource;
     accepted.push(sourcePackCandidateItem(source, input.suppress === true ? "suppressed" : "accepted"));
   }
 
+  const packStatus = sourcePackRollup({
+    sourcePackId,
+    sourcePackLabel,
+    sources: sourcesForPack(sourcePackId, options),
+    rejected,
+    duplicates
+  });
+
   return {
     request: {
-      id: stableId("dwm_candidate_pack_request", `${body.sourcePackLabel ?? "ad-hoc"}:${generatedAt}`),
+      id: stableId("dwm_candidate_pack_request", `${sourcePackId}:${generatedAt}`),
       type: "candidate_pack",
-      label: body.sourcePackLabel ?? "Ad hoc source candidate pack",
+      sourcePackId,
+      label: sourcePackLabel,
       approvalState: "queued",
       generatedAt,
       nextAction: "Review accepted public candidates for promotion; restricted metadata candidates require metadata-only approval before collection."
@@ -244,6 +269,7 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
       suppressedCount: accepted.filter((item) => item.status === "suppressed").length,
       queuedForCollectionCount: accepted.filter((item) => (item.operationalNextStep as any)?.collectionTrigger?.queued === true).length
     },
+    packStatus,
     safeOutput: {
       rawUnsafeRowsStored: false,
       liveNetworkScrapeStarted: false,
@@ -260,6 +286,8 @@ function sourcePackCandidateItem(source: SourceRecord, intakeStatus: "accepted" 
   const alertRebuild = skippedAlertRebuild(source, "captures_required_before_alert_rebuild");
   return {
     id: candidate.id,
+    sourcePackId: candidate.sourcePackId,
+    sourcePackLabel: candidate.sourcePackLabel,
     sourceId: source.id,
     family: candidate.family,
     target: candidate.target,
@@ -288,6 +316,317 @@ function sourcePackCandidateItem(source: SourceRecord, intakeStatus: "accepted" 
       collectionTrigger,
       alertRebuild,
       retryHint: source.status === "suppressed" ? "request a new candidate if scope changes" : undefined
+    }
+  };
+}
+
+function saveSourcePackMetadata(source: SourceRecord, options: ApiServerOptions, input: {
+  sourcePackId: string;
+  sourcePackLabel: string;
+  packIndex: number;
+  packRequestedAt: string;
+}): SourceRecord {
+  const candidate = sourceCandidate(source);
+  return options.store.saveSource({
+    ...source,
+    metadata: {
+      ...(source.metadata ?? {}),
+      sourcePackId: input.sourcePackId,
+      sourcePackLabel: input.sourcePackLabel,
+      sourcePackIndex: input.packIndex,
+      sourcePackRequestedAt: input.packRequestedAt,
+      sourceCandidate: {
+        ...candidate,
+        sourcePackId: input.sourcePackId,
+        sourcePackLabel: input.sourcePackLabel,
+        sourcePackIndex: input.packIndex,
+        sourcePackRequestedAt: input.packRequestedAt
+      }
+    }
+  } as SourceRecord);
+}
+
+function handleSourcePackReview(body: DwmSourceRequestBody, options: ApiServerOptions): Response {
+  const packAction = body.packAction ?? "approve";
+  const sources = lookupSourcePackReviewSources(body, options);
+  if (!sources.length) {
+    return json({
+      error: {
+        code: "source_pack_candidates_not_found",
+        message: "Provide sourcePackId, sourceId/sourceIds, or candidateId/candidateIds for pack review."
+      },
+      packStatus: sourcePackStatusResponse(body, options)
+    }, 404);
+  }
+
+  const reviewedAt = nowIso();
+  const actor = body.decidedBy ?? body.approvedBy ?? body.requestedBy ?? "operator";
+  const results = sources.map((source) => applySourcePackReviewAction(source, body, options, { packAction, actor, reviewedAt }));
+  const sourcePackId = String(body.sourcePackId ?? sourceCandidate(sources[0]).sourcePackId ?? "").trim();
+  const sourcePackLabel = String(sourceCandidate(sources[0]).sourcePackLabel ?? (sourcePackId || "source pack"));
+  return json({
+    action: "pack_review",
+    packAction,
+    sourcePackId: sourcePackId || undefined,
+    sourcePackLabel,
+    reviewedAt,
+    actor,
+    reason: body.reason,
+    results,
+    packStatus: sourcePackRollup({
+      sourcePackId: sourcePackId || undefined,
+      sourcePackLabel,
+      sources: sourcePackId ? sourcesForPack(sourcePackId, options) : results.map((item) => item.source).filter(Boolean) as SourceRecord[]
+    }),
+    safeOutput: {
+      rawUnsafeRowsStored: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  }, 200);
+}
+
+function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceRequestBody, options: ApiServerOptions, input: {
+  packAction: NonNullable<DwmSourceRequestBody["packAction"]>;
+  actor: string;
+  reviewedAt: string;
+}) {
+  if (input.packAction === "approve" || input.packAction === "promote") {
+    if (isRestrictedMetadataSource(source) && body.approveMetadataOnly !== true) {
+      return sourcePackReviewResult(source, "approval_blocked", {
+        reviewedAt: input.reviewedAt,
+        actor: input.actor,
+        reason: body.reason ?? "metadata-only approval required before restricted source activation",
+        collectionTrigger: skippedCollectionTrigger(source, "metadata_only_approval_required"),
+        alertRebuild: skippedAlertRebuild(source, "metadata_only_approval_required"),
+        error: {
+          code: "metadata_only_approval_required",
+          message: "Restricted metadata pack candidates require approveMetadataOnly=true before activation."
+        }
+      });
+    }
+    const activated = saveLifecyclePatch(source, options, {
+      action: "promote",
+      actor: input.actor,
+      reason: body.reason ?? (isRestrictedMetadataSource(source) ? "source-pack metadata-only approval" : "source-pack public source approved"),
+      status: "active",
+      healthStatus: "ready",
+      parserStatus: parserStatusForSource(source),
+      activationState: isRestrictedMetadataSource(source) ? "metadata_only_approved" : "active_canary",
+      approveMetadataOnly: isRestrictedMetadataSource(source)
+    });
+    const operations = persistOperationalNextStep(activated, options, "pack_review");
+    return sourcePackReviewResult(operations.source, "approved", {
+      reviewedAt: input.reviewedAt,
+      actor: input.actor,
+      reason: body.reason,
+      collectionTrigger: operations.collectionTrigger,
+      alertRebuild: operations.alertRebuild
+    });
+  }
+
+  if (input.packAction === "reject") {
+    const rejected = saveLifecyclePatch(source, options, {
+      action: "reject",
+      actor: input.actor,
+      reason: body.reason ?? "source-pack candidate rejected",
+      status: "rejected",
+      healthStatus: "blocked",
+      parserStatus: "not_scheduled",
+      activationState: "rejected"
+    });
+    return sourcePackReviewResult(rejected, "rejected", { reviewedAt: input.reviewedAt, actor: input.actor, reason: body.reason });
+  }
+
+  if (input.packAction === "suppress") {
+    const suppressed = saveLifecyclePatch(source, options, {
+      action: "suppress",
+      actor: input.actor,
+      reason: body.reason ?? "source-pack candidate suppressed",
+      status: "suppressed",
+      healthStatus: "suppressed",
+      parserStatus: "not_scheduled",
+      activationState: "suppressed"
+    });
+    return sourcePackReviewResult(suppressed, "suppressed", { reviewedAt: input.reviewedAt, actor: input.actor, reason: body.reason });
+  }
+
+  const retried = saveLifecyclePatch(source, options, {
+    action: "retry",
+    actor: input.actor,
+    reason: body.reason ?? "operator requested source-pack retry",
+    status: source.status,
+    healthStatus: "retry_scheduled",
+    parserStatus: parserStatusForSource(source),
+    activationState: activationStateForSource(source)
+  });
+  const failed = recordCollectionFailure(retried, {
+    ...body,
+    collectionTaskId: body.collectionTaskId ?? String(retried.metadata?.sourceCandidate?.collectionTrigger?.taskId ?? retried.metadata?.sourceCandidate?.collectionTrigger?.jobId ?? ""),
+    errorCode: body.errorCode ?? "pack_retry_requested",
+    reason: body.reason ?? "operator requested source-pack retry"
+  }, options);
+  return sourcePackReviewResult(failed.source, "retry_scheduled", {
+    reviewedAt: input.reviewedAt,
+    actor: input.actor,
+    reason: body.reason,
+    collectionTrigger: failed.collectionTrigger,
+    alertRebuild: failed.alertRebuild
+  });
+}
+
+function sourcePackReviewResult(source: SourceRecord | undefined, reviewStatus: string, input: {
+  reviewedAt: string;
+  actor: string;
+  reason?: string;
+  collectionTrigger?: Record<string, unknown>;
+  alertRebuild?: Record<string, unknown>;
+  error?: Record<string, unknown>;
+}) {
+  if (!source) return { reviewStatus, error: input.error };
+  const candidate = sourceCandidate(source);
+  return {
+    reviewStatus,
+    reviewedAt: input.reviewedAt,
+    actor: input.actor,
+    reason: input.reason,
+    source,
+    candidate,
+    health: sourceHealthStatus(source),
+    parser: sourceParserStatus(source),
+    lifecycle: sourceLifecycle(source),
+    policy: sourcePolicyPosture(source),
+    collectionTrigger: input.collectionTrigger ?? candidate.collectionTrigger ?? skippedCollectionTrigger(source, reviewStatus),
+    alertRebuild: input.alertRebuild ?? candidate.alertRebuild ?? skippedAlertRebuild(source, "captures_required_before_alert_rebuild"),
+    nextAction: nextSourceAction(source),
+    error: input.error
+  };
+}
+
+function sourcePackStatusResponse(body: DwmSourceRequestBody, options: ApiServerOptions) {
+  const sources = lookupSourcePackReviewSources(body, options);
+  const sourcePackId = String(body.sourcePackId ?? (sources[0] ? sourceCandidate(sources[0]).sourcePackId : "") ?? "").trim();
+  const sourcePackLabel = String((sources[0] ? sourceCandidate(sources[0]).sourcePackLabel : undefined) ?? (sourcePackId || "source pack"));
+  return {
+    action: "pack_status",
+    sourcePackId: sourcePackId || undefined,
+    sourcePackLabel,
+    candidates: sources.map((source) => sourcePackStatusItem(source)),
+    packStatus: sourcePackRollup({ sourcePackId: sourcePackId || undefined, sourcePackLabel, sources }),
+    safeOutput: {
+      rawUnsafeRowsStored: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourcePackStatusItem(source: SourceRecord) {
+  const candidate = sourceCandidate(source);
+  return {
+    id: candidate.id,
+    sourcePackId: candidate.sourcePackId,
+    sourcePackLabel: candidate.sourcePackLabel,
+    sourceId: source.id,
+    family: candidate.family,
+    target: candidate.target,
+    status: candidate.status,
+    health: sourceHealthStatus(source),
+    parser: sourceParserStatus(source),
+    lifecycle: sourceLifecycle(source),
+    policyBoundary: candidate.policyBoundary,
+    collectionTrigger: candidate.collectionTrigger ?? skippedCollectionTrigger(source, "not_queued"),
+    alertRebuild: candidate.alertRebuild ?? skippedAlertRebuild(source, "captures_required_before_alert_rebuild"),
+    lastCollectionOutcome: candidate.lastCollectionOutcome,
+    operationalNextStep: nextSourceAction(source)
+  };
+}
+
+function lookupSourcePackReviewSources(body: DwmSourceRequestBody, options: ApiServerOptions): SourceRecord[] {
+  const sourcePackId = String(body.sourcePackId ?? "").trim();
+  const sourceIds = new Set([body.sourceId, ...(body.sourceIds ?? [])].filter(Boolean).map(String));
+  const candidateIds = new Set([body.candidateId, ...(body.candidateIds ?? [])].filter(Boolean).map(String));
+  return options.store.listSources().filter((source) => {
+    const candidate = sourceCandidate(source);
+    return (sourcePackId && candidate.sourcePackId === sourcePackId)
+      || sourceIds.has(source.id)
+      || candidateIds.has(candidate.id);
+  });
+}
+
+function sourcesForPack(sourcePackId: string, options: ApiServerOptions): SourceRecord[] {
+  return options.store.listSources().filter((source) => sourceCandidate(source).sourcePackId === sourcePackId);
+}
+
+function sourcePackRollup(input: {
+  sourcePackId?: string;
+  sourcePackLabel?: string;
+  sources: SourceRecord[];
+  rejected?: Array<Record<string, unknown>>;
+  duplicates?: Array<Record<string, unknown>>;
+}) {
+  const candidates = input.sources.map((source) => ({ source, candidate: sourceCandidate(source) }));
+  const queuedJobIds = candidates
+    .map(({ candidate }) => candidate.collectionTrigger?.jobId ?? candidate.collectionTrigger?.taskId)
+    .filter(Boolean);
+  const lastCaptureOutcomes = candidates
+    .map(({ candidate }) => candidate.lastCollectionOutcome)
+    .filter(Boolean);
+  const retryBackoff = candidates
+    .filter(({ candidate }) => candidate.lastCollectionOutcome?.retryAfter)
+    .map(({ candidate, source }) => ({
+      candidateId: candidate.id,
+      sourceId: source.id,
+      retryAfter: candidate.lastCollectionOutcome.retryAfter,
+      backoffSeconds: candidate.lastCollectionOutcome.backoffSeconds,
+      errorCode: candidate.lastCollectionOutcome.errorCode
+    }));
+  const alertRebuild = candidates
+    .map(({ candidate }) => candidate.alertRebuild)
+    .filter(Boolean);
+  const byStatus = candidates.reduce<Record<string, number>>((acc, { candidate }) => {
+    const status = String(candidate.status ?? "unknown");
+    acc[status] = (acc[status] ?? 0) + 1;
+    return acc;
+  }, {});
+  const byFamily = candidates.reduce<Record<string, number>>((acc, { candidate }) => {
+    const family = String(candidate.family ?? "unknown");
+    acc[family] = (acc[family] ?? 0) + 1;
+    return acc;
+  }, {});
+  const policyBoundaries = candidates.map(({ candidate }) => ({
+    candidateId: candidate.id,
+    family: candidate.family,
+    policyBoundary: candidate.policyBoundary
+  }));
+  return {
+    sourcePackId: input.sourcePackId,
+    sourcePackLabel: input.sourcePackLabel,
+    persistedCandidateCount: candidates.length,
+    acceptedCount: candidates.filter(({ source }) => !["rejected", "suppressed"].includes(String(source.status))).length,
+    activeCount: candidates.filter(({ source }) => source.status === "active").length,
+    approvalRequiredCount: candidates.filter(({ candidate }) => candidate.status === "approval_required").length,
+    rejectedCount: candidates.filter(({ source }) => source.status === "rejected").length + (input.rejected?.length ?? 0),
+    duplicateCount: input.duplicates?.length ?? 0,
+    suppressedCount: candidates.filter(({ source }) => source.status === "suppressed").length,
+    queuedJobIds,
+    queuedForCollectionCount: queuedJobIds.length,
+    capturesObservedCount: candidates.filter(({ candidate }) => candidate.lastCollectionOutcome?.status === "capture_observed").length,
+    alertRebuild: {
+      completedCount: alertRebuild.filter((item) => item.status === "completed").length,
+      failedCount: alertRebuild.filter((item) => item.status === "failed").length,
+      skippedCount: alertRebuild.filter((item) => item.skipped === true || item.status === "skipped").length,
+      items: alertRebuild
+    },
+    lastCaptureOutcomes,
+    retryBackoff,
+    byStatus,
+    byFamily,
+    policyBoundaries,
+    safeOutput: {
+      rawUnsafeRowsStored: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
     }
   };
 }
@@ -358,6 +697,9 @@ function telegramSourceFromRequest(input: { target: string; channel: string; bod
 }
 
 function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiServerOptions): Response {
+  if (body.action === "pack_status") return json(sourcePackStatusResponse(body, options), 200);
+  if (body.action === "pack_review") return handleSourcePackReview(body, options);
+
   const sourceId = String(body.sourceId ?? "").trim();
   const candidateId = String(body.candidateId ?? "").trim();
   const source = lookupLifecycleSource({ sourceId, candidateId }, options);
@@ -711,6 +1053,10 @@ function sourceCandidate(source: SourceRecord) {
   const generatedAt = source.createdAt ?? nowIso();
   return {
     id: existing.id ?? stableId("dwm_source_candidate", `${source.tenantId ?? source.metadata?.tenantId ?? "global"}:${source.type}:${source.url}`),
+    sourcePackId: existing.sourcePackId ?? source.metadata?.sourcePackId,
+    sourcePackLabel: existing.sourcePackLabel ?? source.metadata?.sourcePackLabel,
+    sourcePackIndex: existing.sourcePackIndex ?? source.metadata?.sourcePackIndex,
+    sourcePackRequestedAt: existing.sourcePackRequestedAt ?? source.metadata?.sourcePackRequestedAt,
     sourceId: source.id,
     family: sourceFamily(source),
     target: existing.target ?? source.url,

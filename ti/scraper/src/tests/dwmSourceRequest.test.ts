@@ -74,6 +74,7 @@ describe("dwm source requests", () => {
     const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
       body: JSON.stringify({
+        sourcePackId: "pack_apt29_growth",
         sourcePackLabel: "APT29 source-growth pack",
         tenantId: "tenant_acme",
         scope: "APT29",
@@ -83,7 +84,9 @@ describe("dwm source requests", () => {
           { target: "metadata://darkweb/apt29/claims", type: "restricted_metadata" },
           { target: "@pack_public_cti", type: "telegram_channel" },
           { target: "not-a-public-channel", type: "telegram_channel" },
-          { target: "@pack_suppressed_cti", type: "telegram_channel", suppress: true, reason: "low value duplicate family" }
+          { target: "@pack_suppressed_cti", type: "telegram_channel", suppress: true, reason: "low value duplicate family" },
+          { target: "@pack_retry_cti", type: "telegram_channel" },
+          { target: "@pack_review_suppress_cti", type: "telegram_channel" }
         ]
       })
     }), { store, frontier });
@@ -91,11 +94,11 @@ describe("dwm source requests", () => {
 
     expect(response.status).toBe(201);
     expect(body.summary).toMatchObject({
-      evaluatedCount: 5,
-      acceptedCount: 3,
+      evaluatedCount: 7,
+      acceptedCount: 5,
       rejectedCount: 1,
       duplicateCount: 1,
-      telegramPublicCount: 2,
+      telegramPublicCount: 4,
       restrictedMetadataCount: 1,
       suppressedCount: 1,
       queuedForCollectionCount: 0
@@ -105,11 +108,24 @@ describe("dwm source requests", () => {
       liveNetworkScrapeStarted: false,
       restrictedPayloadDownloadAllowed: false
     });
+    expect(body.request).toMatchObject({ sourcePackId: "pack_apt29_growth", label: "APT29 source-growth pack" });
+    expect(body.packStatus).toMatchObject({
+      sourcePackId: "pack_apt29_growth",
+      persistedCandidateCount: 5,
+      rejectedCount: 1,
+      duplicateCount: 1,
+      suppressedCount: 1,
+      queuedForCollectionCount: 0,
+      safeOutput: { rawUnsafeRowsStored: false }
+    });
 
     const publicCandidate = body.acceptedCandidates.find((candidate: any) => candidate.family === "telegram_public" && candidate.status === "queued");
     const restrictedCandidate = body.acceptedCandidates.find((candidate: any) => candidate.family === "darkweb_metadata");
     const suppressedCandidate = body.acceptedCandidates.find((candidate: any) => candidate.status === "suppressed");
+    const retryCandidate = body.acceptedCandidates.find((candidate: any) => candidate.target === "@pack_retry_cti");
+    const reviewSuppressCandidate = body.acceptedCandidates.find((candidate: any) => candidate.target === "@pack_review_suppress_cti");
     expect(publicCandidate).toMatchObject({
+      sourcePackId: "pack_apt29_growth",
       target: "@pack_public_cti",
       requestedBy: "source-growth-worker",
       policyBoundary: { noPrivateAccess: true },
@@ -138,16 +154,30 @@ describe("dwm source requests", () => {
     });
     expect(body.duplicates[0]).toMatchObject({ target: "@pack_public_cti", duplicateOf: publicCandidate.sourceId });
     expect(body.rejected[0]).toMatchObject({ target: "not-a-public-channel", code: "invalid_target", retryHint: expect.any(String) });
-    expect(store.listSources()).toHaveLength(3);
+    expect(store.listSources()).toHaveLength(5);
     expect(frontier.snapshot()).toHaveLength(0);
 
     const promoted = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
-      body: JSON.stringify({ action: "promote", candidateId: publicCandidate.id, approvedBy: "analyst-pack" })
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "approve",
+        candidateIds: [publicCandidate.id],
+        approvedBy: "analyst-pack",
+        reason: "approved for bounded source-pack collection"
+      })
     }), { store, frontier });
     const promotedBody = await promoted.json() as any;
     expect(promoted.status).toBe(200);
-    expect(promotedBody.collectionTrigger).toMatchObject({ queued: true, candidateId: publicCandidate.id });
+    expect(promotedBody.results[0]).toMatchObject({
+      reviewStatus: "approved",
+      candidate: { id: publicCandidate.id, sourcePackId: "pack_apt29_growth", status: "active" },
+      collectionTrigger: { queued: true, candidateId: publicCandidate.id }
+    });
+    expect(promotedBody.packStatus).toMatchObject({
+      queuedForCollectionCount: 1,
+      queuedJobIds: [promotedBody.results[0].collectionTrigger.jobId]
+    });
     expect(frontier.snapshot()).toHaveLength(1);
 
     const observed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
@@ -155,7 +185,7 @@ describe("dwm source requests", () => {
       body: JSON.stringify({
         action: "record_capture",
         candidateId: publicCandidate.id,
-        collectionTaskId: promotedBody.collectionTrigger.jobId,
+        collectionTaskId: promotedBody.results[0].collectionTrigger.jobId,
         captureText: "APT29 source-pack public Telegram mention observed without live network scraping."
       })
     }), { store, frontier });
@@ -165,6 +195,89 @@ describe("dwm source requests", () => {
     expect(observedBody.alertRebuild).toMatchObject({ status: "completed", alertCount: 1, watchlistIds: ["watch_pack_apt29"] });
     expect(store.listCaptures()).toHaveLength(1);
     expect(store.listDwmAlerts()).toHaveLength(1);
+
+    const rejected = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "reject",
+        candidateIds: [restrictedCandidate.id],
+        decidedBy: "analyst-pack",
+        reason: "metadata-only source not needed for this pack"
+      })
+    }), { store, frontier });
+    const rejectedBody = await rejected.json() as any;
+    expect(rejected.status).toBe(200);
+    expect(rejectedBody.results[0]).toMatchObject({
+      reviewStatus: "rejected",
+      candidate: { id: restrictedCandidate.id, status: "rejected" },
+      collectionTrigger: { queued: false, unsafeJobQueued: false }
+    });
+
+    const suppressed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "suppress",
+        candidateIds: [reviewSuppressCandidate.id],
+        decidedBy: "analyst-pack",
+        reason: "suppressed after source-pack review"
+      })
+    }), { store, frontier });
+    const suppressedBody = await suppressed.json() as any;
+    expect(suppressed.status).toBe(200);
+    expect(suppressedBody.results[0]).toMatchObject({
+      reviewStatus: "suppressed",
+      candidate: { id: reviewSuppressCandidate.id, status: "suppressed" },
+      collectionTrigger: { queued: false, unsafeJobQueued: false }
+    });
+
+    const retried = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "retry",
+        candidateIds: [retryCandidate.id],
+        decidedBy: "analyst-pack",
+        errorCode: "parser_timeout",
+        reason: "source-pack parser fixture timed out"
+      })
+    }), { store, frontier });
+    const retriedBody = await retried.json() as any;
+    expect(retried.status).toBe(200);
+    expect(retriedBody.results[0]).toMatchObject({
+      reviewStatus: "retry_scheduled",
+      candidate: { id: retryCandidate.id },
+      health: { status: "collection_failed", lastError: "parser_timeout" },
+      parser: { status: "parser_retry_scheduled", retryAfter: expect.any(String) }
+    });
+
+    const status = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_status", sourcePackId: "pack_apt29_growth" })
+    }), { store, frontier });
+    const statusBody = await status.json() as any;
+    expect(status.status).toBe(200);
+    expect(statusBody.packStatus).toMatchObject({
+      sourcePackId: "pack_apt29_growth",
+      persistedCandidateCount: 5,
+      activeCount: 1,
+      suppressedCount: 2,
+      rejectedCount: 1,
+      capturesObservedCount: 1,
+      alertRebuild: { completedCount: 1 },
+      safeOutput: { liveNetworkScrapeStarted: false }
+    });
+    expect(statusBody.packStatus.retryBackoff[0]).toMatchObject({
+      candidateId: retryCandidate.id,
+      errorCode: "parser_timeout",
+      backoffSeconds: 30
+    });
+    expect(statusBody.candidates.find((candidate: any) => candidate.id === publicCandidate.id)).toMatchObject({
+      lifecycle: { collectionStatus: "capture_observed" },
+      alertRebuild: { status: "completed", alertCount: 1 }
+    });
+    expect(frontier.snapshot()).toHaveLength(1);
   });
 
   test("persists restricted metadata source candidates instead of dropping them into a queue only", async () => {
