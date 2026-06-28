@@ -4,9 +4,11 @@ import {
     buildDwmAlertWebhookDispatchPlan,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
+    buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     normalizeDwmWebhookDestinationInput,
+    planDwmWebhookDeliveryRetry,
     redactWebhookEndpoint,
     type DwmAlertWebhookTriggerOptions,
 } from '#utils/dwm/webhooks.ts'
@@ -485,6 +487,86 @@ const destinationEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: eviden
 const casePathEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { casePath: replayWorkflowAlert.casePath } })
 const dedupeEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { dedupeKey: 'dwm_dedupe_replay_contract' } })
 const idempotencyEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { dedupeKey: replayEvidence?.idempotencyKey } })
+const retryLedgerRows = [
+    ...evidenceRows,
+    {
+        id: 'delivery_live_failed_retry_contract',
+        destinationId: 'destination_live_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        alertId: 'alert_live_contract',
+        eventType: 'dwm.alert.created' as const,
+        status: 'failed' as const,
+        dryRun: false,
+        endpointHint: `https://discord.com/api/webhooks/987654321/${secret}`,
+        endpointHash: 'endpoint_live_hash',
+        payloadHash: 'payload_live_retry_hash',
+        payload: {},
+        responseStatus: 503,
+        responseBody: `retry failed with token=${secret}`,
+        error: `upstream unavailable token=${secret}`,
+        idempotencyKey: 'dwm.alert.created:org_contract:destination_live_contract:dwm_dedupe_live_contract',
+        watchlistId: 'watchlist_item_live_contract',
+        watchlistName: 'Live watchlist',
+        route: 'customer_webhook',
+        casePath: '/v1/cases/case_live_contract?alertId=alert_live_contract&dedupeKey=dwm_dedupe_live_contract',
+        attemptedAt: '2026-06-28T12:06:00.000Z',
+        createdAt: '2026-06-28T12:06:00.000Z',
+    },
+    {
+        id: 'delivery_live_sent_contract',
+        destinationId: 'destination_sent_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        alertId: 'alert_sent_contract',
+        eventType: 'dwm.alert.created' as const,
+        status: 'delivered' as const,
+        dryRun: false,
+        endpointHint: 'https://hooks.example.com/sent',
+        endpointHash: 'endpoint_sent_hash',
+        payloadHash: 'payload_sent_hash',
+        payload: {},
+        responseStatus: 204,
+        responseBody: '',
+        error: null,
+        idempotencyKey: 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract',
+        watchlistId: 'watchlist_item_sent_contract',
+        watchlistName: 'Sent watchlist',
+        route: 'customer_webhook',
+        casePath: '/v1/cases/sent',
+        attemptedAt: '2026-06-28T12:07:00.000Z',
+        createdAt: '2026-06-28T12:07:00.000Z',
+    },
+]
+const deliveryLedger = buildDwmWebhookDeliveryLedger({
+    deliveries: retryLedgerRows,
+    auditEvents: [
+        {
+            id: 'audit_live_retry_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_live_contract',
+            deliveryId: 'delivery_live_failed_retry_contract',
+            action: 'delivery.failed',
+            metadata: { status: 'failed' },
+            createdAt: '2026-06-28T12:06:01.000Z',
+        },
+    ],
+    filters: { orgId: 'org_contract' },
+})
+const queuedLedger = deliveryLedger.find(item => item.deliveryId === 'delivery_replay_contract')
+const retryLedger = deliveryLedger.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
+const skippedLedger = deliveryLedger.find(item => item.deliveryId === 'delivery_live_skipped_contract')
+const sentLedger = deliveryLedger.find(item => item.deliveryId === 'delivery_live_sent_contract')
+const rateLimitRetry = planDwmWebhookDeliveryRetry({
+    status: 'failed',
+    dryRun: false,
+    responseStatus: 429,
+    error: 'rate limited',
+    attemptedAt: '2026-06-28T12:10:00.000Z',
+    attemptCount: 1,
+})
 
 expect(evidenceAttempts.length === 4, 'Delivery evidence should include all unfiltered attempts.', evidenceAttempts)
 expect(replayEvidence?.auditEventId === 'audit_replay_contract', 'Replay evidence should link audit event id.', replayEvidence)
@@ -501,6 +583,13 @@ expect(casePathEvidence.length === 1 && casePathEvidence[0].requestId === 'deliv
 expect(dedupeEvidence.length === 1 && dedupeEvidence[0].requestId === 'delivery_replay_contract', 'Delivery evidence should filter by dedupe key.', dedupeEvidence)
 expect(idempotencyEvidence.length === 1 && idempotencyEvidence[0].requestId === 'delivery_replay_contract', 'Delivery evidence should filter by idempotency key.', idempotencyEvidence)
 expect(buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { alertId: 'alert_replay_contract', casePath: replayWorkflowAlert.casePath, dedupeKey: 'dwm_dedupe_replay_contract' } }).length === 1, 'Delivery evidence should combine alert, case path, and dedupe filters.')
+expect(queuedLedger?.status === 'queued' && queuedLedger.rawStatus === 'dry_run' && queuedLedger.retryable === false, 'Delivery ledger should map dry-run attempts to queued/no-retry state.', queuedLedger)
+expect(sentLedger?.status === 'sent' && sentLedger.retryable === false && sentLedger.responseStatus === 204, 'Delivery ledger should map delivered attempts to sent state.', sentLedger)
+expect(retryLedger?.status === 'failed' && retryLedger.retryable === true && retryLedger.attemptCount === 2, 'Delivery ledger should expose retryable failed attempts and attempt count.', retryLedger)
+expect(retryLedger?.nextRetryAt === '2026-06-28T12:11:00.000Z' && retryLedger.errorClass === 'upstream_5xx', 'Retry planner should use backoff from the latest failed attempt.', retryLedger)
+expect(skippedLedger?.status === 'skipped' && skippedLedger.retryable === false && skippedLedger.errorClass === 'live_delivery_disabled', 'Delivery ledger should keep live-disabled skipped attempts non-retryable.', skippedLedger)
+expect(rateLimitRetry.retryable === true && rateLimitRetry.nextRetryAt === '2026-06-28T12:11:00.000Z' && rateLimitRetry.reason === 'rate_limited', 'Retry planner should retry rate-limited failed sends.', rateLimitRetry)
+expect(!JSON.stringify(deliveryLedger).includes(secret), 'Delivery ledger should not expose endpoint, response, or error secrets.', deliveryLedger)
 
 const visibilityAllowedMember = filterDwmWebhookDeliveryEvidenceForVisibility({
     evidence: orgEvidence,
@@ -699,7 +788,11 @@ console.log(JSON.stringify({
         'replay workflow immutability',
         'multi-evidence Discord summary',
         'delivery evidence shaping',
+        'delivery ledger queued/sent/failed/skipped states',
+        'delivery ledger retry backoff',
+        'delivery ledger attempt counts',
         'delivery evidence secret redaction',
+        'delivery ledger secret redaction',
         'delivery evidence wrong-org filtering',
         'delivery evidence case/dedupe/idempotency filters',
         'delivery evidence org visibility allowed/denied',

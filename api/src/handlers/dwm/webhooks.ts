@@ -12,6 +12,7 @@ import {
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDestinationContracts,
     buildDwmWebhookDeliveryEvidence,
+    buildDwmWebhookDeliveryLedger,
     createDwmWebhookDestination,
     deliverDwmAlertNotification,
     filterDwmWebhookDeliveryEvidenceForVisibility,
@@ -214,6 +215,17 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
             dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
         },
     })
+    const deliveryLedger = buildDwmWebhookDeliveryLedger({
+        deliveries,
+        auditEvents,
+        filters: {
+            orgId,
+            destinationId: clean(req.query?.destinationId) || clean(req.query?.destination_id),
+            alertId: clean(req.query?.alertId) || clean(req.query?.alert_id),
+            casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
+            dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
+        },
+    })
     const visibilityResult = orgId && orgId !== userId
         ? filterDwmWebhookDeliveryEvidenceForVisibility({
             evidence,
@@ -228,6 +240,7 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
     const payload: Record<string, unknown> = {
         deliveries,
         deliveryEvidence: visibilityResult ? visibilityResult.deliveryEvidence : evidence,
+        deliveryLedger: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveryLedger,
         visibility: visibilityResult?.decision ?? {
             allowed: true,
             reason: null,

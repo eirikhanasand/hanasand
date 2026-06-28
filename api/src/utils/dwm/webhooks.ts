@@ -134,6 +134,8 @@ export type DwmWebhookDeliveryEvidenceFilters = {
     dedupeKey?: unknown
 }
 
+export type DwmWebhookDeliveryAttemptState = 'queued' | 'sent' | 'failed' | 'skipped'
+
 export type DwmWebhookEvidenceVisibilityInput = OrganizationVisibilityDecisionInput
 
 type NormalizedDestinationInput = {
@@ -542,6 +544,131 @@ export function buildDwmWebhookDeliveryEvidence({
             if (normalizedFilters.dedupeKey && evidence.dedupeKey !== normalizedFilters.dedupeKey && evidence.idempotencyKey !== normalizedFilters.dedupeKey) return false
             return true
         })
+}
+
+export function buildDwmWebhookDeliveryLedger({
+    deliveries,
+    auditEvents = [],
+    filters = {},
+    now = new Date(),
+}: {
+    deliveries: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    filters?: DwmWebhookDeliveryEvidenceFilters
+    now?: Date
+}) {
+    const evidence = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters })
+    const sortedDeliveries = [...deliveries].sort((a, b) => String(a.attemptedAt || a.createdAt).localeCompare(String(b.attemptedAt || b.createdAt)))
+    const attemptCounts = new Map<string, number>()
+    for (const delivery of sortedDeliveries) {
+        const key = delivery.idempotencyKey || delivery.id
+        attemptCounts.set(key, (attemptCounts.get(key) || 0) + 1)
+    }
+
+    return evidence.map((item) => {
+        const delivery = deliveries.find(row => row.id === item.deliveryId)
+        const retryPlan = delivery
+            ? planDwmWebhookDeliveryRetry({
+                status: delivery.status,
+                dryRun: delivery.dryRun,
+                responseStatus: delivery.responseStatus,
+                error: delivery.error,
+                attemptedAt: delivery.attemptedAt,
+                attemptCount: attemptCounts.get(delivery.idempotencyKey || delivery.id) || 1,
+                now,
+            })
+            : planDwmWebhookDeliveryRetry({
+                status: item.status,
+                dryRun: item.dryRun,
+                responseStatus: item.response.httpStatus,
+                error: item.error,
+                attemptedAt: item.attemptedAt,
+                attemptCount: 1,
+                now,
+            })
+        const attemptCount = delivery ? attemptCounts.get(delivery.idempotencyKey || delivery.id) || 1 : 1
+
+        return {
+            requestId: item.requestId,
+            deliveryId: item.deliveryId,
+            destinationId: item.destinationId,
+            orgId: item.orgId,
+            alertId: item.alertId,
+            eventType: item.eventType,
+            status: deliveryAttemptState(item.status, item.dryRun),
+            rawStatus: item.status,
+            dryRun: item.dryRun,
+            live: item.live,
+            liveRequested: item.liveRequested,
+            replay: item.replay,
+            idempotencyKey: item.idempotencyKey,
+            dedupeKey: item.dedupeKey,
+            watchlistId: item.watchlistId,
+            watchlistName: item.watchlistName,
+            route: item.route,
+            casePath: item.casePath,
+            redactedEndpointLabel: item.redactedDestination.endpointHint,
+            redactedDestination: item.redactedDestination,
+            responseStatus: item.response.httpStatus,
+            responseSummary: item.response.summary,
+            error: item.error,
+            errorClass: retryPlan.errorClass,
+            attemptCount,
+            attemptedAt: item.attemptedAt,
+            createdAt: item.createdAt,
+            nextRetryAt: retryPlan.nextRetryAt,
+            retryable: retryPlan.retryable,
+            retryReason: retryPlan.reason,
+            payloadHash: item.payloadHash,
+            auditEventId: item.auditEventId,
+            auditAction: item.auditAction,
+        }
+    })
+}
+
+export function planDwmWebhookDeliveryRetry({
+    status,
+    dryRun,
+    responseStatus,
+    error,
+    attemptedAt,
+    attemptCount = 1,
+    now = new Date(),
+}: {
+    status: DwmWebhookDeliveryPublic['status']
+    dryRun: boolean
+    responseStatus?: number | null
+    error?: string | null
+    attemptedAt?: string | null
+    attemptCount?: number
+    now?: Date
+}) {
+    const errorClass = classifyDeliveryError({ status, dryRun, responseStatus, error })
+    if (dryRun) {
+        return { retryable: false, nextRetryAt: null, errorClass, reason: 'dry_run_no_external_send' }
+    }
+    if (status === 'delivered') {
+        return { retryable: false, nextRetryAt: null, errorClass, reason: 'already_sent' }
+    }
+    if (status === 'skipped') {
+        return { retryable: false, nextRetryAt: null, errorClass, reason: errorClass === 'live_delivery_disabled' ? 'live_delivery_disabled' : 'skipped_not_retryable' }
+    }
+    if (status !== 'failed') {
+        return { retryable: false, nextRetryAt: null, errorClass, reason: 'not_failed' }
+    }
+    if (responseStatus && responseStatus >= 400 && responseStatus < 500 && responseStatus !== 408 && responseStatus !== 429) {
+        return { retryable: false, nextRetryAt: null, errorClass, reason: 'non_retryable_http_status' }
+    }
+
+    const base = attemptedAt ? new Date(attemptedAt) : now
+    const retryMs = retryDelayMs(attemptCount)
+    const nextRetryAt = new Date(base.getTime() + retryMs).toISOString()
+    return {
+        retryable: true,
+        nextRetryAt,
+        errorClass,
+        reason: responseStatus === 429 ? 'rate_limited' : responseStatus && responseStatus >= 500 ? 'upstream_retryable' : 'network_retryable',
+    }
 }
 
 export function filterDwmWebhookDeliveryEvidenceForVisibility({
@@ -1457,6 +1584,44 @@ function severityEmoji(severity: string) {
 
 function buildIdempotencyKey(eventType: DwmAlertEventType, orgId: string, destinationId: string, alertId: string) {
     return `${eventType}:${orgId}:${destinationId}:${alertId}`
+}
+
+function deliveryAttemptState(status: DwmWebhookDeliveryPublic['status'], dryRun: boolean): DwmWebhookDeliveryAttemptState {
+    if (dryRun) return 'queued'
+    if (status === 'delivered') return 'sent'
+    if (status === 'failed') return 'failed'
+    return 'skipped'
+}
+
+function classifyDeliveryError({
+    status,
+    dryRun,
+    responseStatus,
+    error,
+}: {
+    status: DwmWebhookDeliveryPublic['status']
+    dryRun: boolean
+    responseStatus?: number | null
+    error?: string | null
+}) {
+    const message = clean(error).toLowerCase()
+    if (dryRun || status === 'delivered') return null
+    if (message.includes('live dwm webhook delivery is disabled')) return 'live_delivery_disabled'
+    if (responseStatus) {
+        if (responseStatus === 408) return 'timeout'
+        if (responseStatus === 429) return 'rate_limited'
+        if (responseStatus >= 500) return 'upstream_5xx'
+        if (responseStatus >= 400) return 'upstream_4xx'
+    }
+    if (message.includes('timeout') || message.includes('abort')) return 'timeout'
+    if (message.includes('network') || message.includes('fetch') || message.includes('econn')) return 'network_error'
+    if (status === 'skipped') return 'skipped'
+    return status === 'failed' ? 'unknown_failure' : null
+}
+
+function retryDelayMs(attemptCount: number) {
+    const delays = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 6 * 60 * 60_000]
+    return delays[Math.min(Math.max(1, attemptCount), delays.length) - 1]
 }
 
 function firstClean(...values: unknown[]) {
