@@ -43,6 +43,17 @@ export type InviteInput = {
     request_id?: unknown
 }
 
+export type InviteActionInput = {
+    action?: unknown
+    reason?: unknown
+    requestId?: unknown
+    request_id?: unknown
+    expiresAt?: unknown
+    expires_at?: unknown
+}
+
+export type OrganizationInviteAction = 'revoke' | 'resend'
+
 export type WatchlistInput = {
     kind?: unknown
     value?: unknown
@@ -239,6 +250,7 @@ export type OrganizationVisibilityDecision = {
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin', 'member'])
 const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
+const inviteActions = new Set<OrganizationInviteAction>(['revoke', 'resend'])
 const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor', 'actor', 'keyword'])
 const memberRoleTargets = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const defaultWebhookPolicies = new Set<OrganizationDefaultWebhookPolicy>(['active_destinations', 'manual_selection', 'disabled'])
@@ -284,6 +296,29 @@ export function normalizeInviteInput(body: InviteInput | undefined) {
     const expiresAt = normalizeInviteExpiry(body?.expiresAt ?? body?.expires_at)
     const requestId = normalizeInviteRequestId(body?.requestId ?? body?.request_id)
     return { emails, role, expiresAt, requestId }
+}
+
+export function normalizeInviteActionInput(body: InviteActionInput | undefined) {
+    const action = cleanText(body?.action).toLowerCase()
+    if (!inviteActions.has(action as OrganizationInviteAction)) {
+        throw new Error('Invite action must be revoke or resend.')
+    }
+
+    const reason = cleanText(body?.reason)
+    if (reason.length < 3) {
+        throw new Error('Invite action reason is required.')
+    }
+
+    if (reason.length > 1000) {
+        throw new Error('Invite action reason must be 1000 characters or fewer.')
+    }
+
+    const requestId = normalizeInviteRequestId(body?.requestId ?? body?.request_id)
+    const expiresAt = action === 'resend'
+        ? normalizeInviteExpiry(body?.expiresAt ?? body?.expires_at)
+        : undefined
+
+    return { action: action as OrganizationInviteAction, reason, requestId, expiresAt }
 }
 
 export function normalizeOrganizationSettingsInput(body: OrganizationSettingsInput | undefined) {
@@ -429,6 +464,9 @@ export function toInvite(row: OrganizationInviteRow) {
     return {
         id: row.id,
         organizationId: row.organization_id,
+        tenantId: row.organization_id,
+        acceptanceToken: row.id,
+        acceptancePath: `/api/organizations/invites/${encodeURIComponent(row.id)}/accept`,
         email: row.email,
         role: row.role,
         invitedBy: row.invited_by,

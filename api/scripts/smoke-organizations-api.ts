@@ -49,6 +49,7 @@ app.post('/api/organizations', handlers.postOrganization)
 app.post('/api/organizations/invites/:inviteId/accept', handlers.postOrganizationInviteAccept)
 app.get('/api/organizations/:id/invites', handlers.getOrganizationInvites)
 app.post('/api/organizations/:id/invites', handlers.postOrganizationInvites)
+app.post('/api/organizations/:id/invites/:inviteId/actions', handlers.postOrganizationInviteAction)
 app.get('/api/organizations/:id/members', handlers.getOrganizationMembers)
 app.patch('/api/organizations/:id/members/:userId/role', handlers.patchOrganizationMemberRole)
 app.delete('/api/organizations/:id/members/:userId', handlers.deleteOrganizationMember)
@@ -99,6 +100,11 @@ assert.equal(inviteResponse.statusCode, 201, inviteResponse.body)
 const invite = parseBody(inviteResponse.body).invites[0]
 assert.equal(invite.status, 'pending')
 assert.ok(Date.parse(invite.expiresAt) > Date.now())
+assert.equal(invite.acceptanceToken, invite.id)
+assert.equal(invite.acceptancePath, `/api/organizations/invites/${invite.id}/accept`)
+const inviteWorkflow = parseBody(inviteResponse.body).workflow
+assert.equal(inviteWorkflow.results[0].acceptanceToken, invite.id)
+assert.equal(inviteWorkflow.results[0].acceptancePath, `/api/organizations/invites/${invite.id}/accept`)
 
 const acceptResponse = await app.inject({
     method: 'POST',
@@ -279,6 +285,66 @@ const pendingOpsInviteResponse = await app.inject({
     payload: { email: 'pending-ops@example.test', role: 'viewer' },
 })
 assert.equal(pendingOpsInviteResponse.statusCode, 201, pendingOpsInviteResponse.body)
+const pendingOpsInvite = parseBody(pendingOpsInviteResponse.body).invites[0]
+
+const viewerRevokeInviteDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites/${pendingOpsInvite.id}/actions`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+    payload: { action: 'revoke', reason: 'Viewer cannot revoke invites.', requestId: 'smoke-viewer-revoke-denied' },
+})
+assert.equal(viewerRevokeInviteDeniedResponse.statusCode, 403, viewerRevokeInviteDeniedResponse.body)
+
+const revokePendingInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites/${pendingOpsInvite.id}/actions`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { action: 'revoke', reason: 'Duplicate operator invite cleanup.', requestId: 'smoke-revoke-pending-ops' },
+})
+assert.equal(revokePendingInviteResponse.statusCode, 200, revokePendingInviteResponse.body)
+const revokedInviteAction = parseBody(revokePendingInviteResponse.body).inviteAction
+assert.equal(revokedInviteAction.schemaVersion, 'organization.invite_action.v1')
+assert.equal(revokedInviteAction.organizationId, organization.id)
+assert.equal(revokedInviteAction.tenantId, organization.id)
+assert.equal(revokedInviteAction.action, 'revoke')
+assert.equal(revokedInviteAction.status, 'revoked')
+assert.equal(revokedInviteAction.previousStatus, 'pending')
+assert.equal(revokedInviteAction.requestId, 'smoke-revoke-pending-ops')
+assert.equal(revokedInviteAction.acceptanceToken, pendingOpsInvite.id)
+
+const revokedInviteAcceptResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/invites/${pendingOpsInvite.id}/accept`,
+    headers: authHeaders('org_smoke_outsider', 'outsider-token'),
+})
+assert.equal(revokedInviteAcceptResponse.statusCode, 404, revokedInviteAcceptResponse.body)
+
+const resendPendingInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites/${pendingOpsInvite.id}/actions`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: {
+        action: 'resend',
+        reason: 'Restore pending operator invite for rollout.',
+        requestId: 'smoke-resend-pending-ops',
+        expiresAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+})
+assert.equal(resendPendingInviteResponse.statusCode, 200, resendPendingInviteResponse.body)
+const resentInviteAction = parseBody(resendPendingInviteResponse.body).inviteAction
+assert.equal(resentInviteAction.action, 'resend')
+assert.equal(resentInviteAction.previousStatus, 'revoked')
+assert.equal(resentInviteAction.status, 'pending')
+assert.equal(resentInviteAction.requestId, 'smoke-resend-pending-ops')
+assert.equal(parseBody(resendPendingInviteResponse.body).invite.acceptancePath, `/api/organizations/invites/${pendingOpsInvite.id}/accept`)
+
+const acceptedInviteRevokeResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites/${invite.id}/actions`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { action: 'revoke', reason: 'Accepted invites must be member-managed.', requestId: 'smoke-accepted-revoke-denied' },
+})
+assert.equal(acceptedInviteRevokeResponse.statusCode, 409, acceptedInviteRevokeResponse.body)
 
 const bulkEmails = Array.from({ length: 10 }, (_, index) => `bulk-${index + 1}@example.test`)
 const bulkInviteResponse = await app.inject({
@@ -732,6 +798,8 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_update
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archived' && log.metadata.requestId === 'smoke-disable-actor'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_revoked' && log.metadata.requestId === 'smoke-revoke-pending-ops'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_resent' && log.metadata.requestId === 'smoke-resend-pending-ops'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated' && log.metadata.fields.includes('defaultWebhookPolicy')))
 assert.ok(serviceLogs.some(log => log.message === 'organization_ownership_transferred' && log.metadata.targetUserId === 'org_smoke_admin'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_removed' && log.metadata.targetUserId === 'org_smoke_viewer'))
@@ -800,6 +868,12 @@ async function fakeRun(query: string, params: any[] = []) {
         return rows([updated])
     }
 
+    if (compact.startsWith('SELECT * FROM organization_invites WHERE id = $1')) {
+        const [inviteId, organizationId] = params
+        const invite = invites.get(inviteId)
+        return rows(invite && invite.organization_id === organizationId ? [invite] : [])
+    }
+
     if (compact.startsWith('SELECT * FROM organization_invites WHERE organization_id')) {
         if (compact.includes('lower(email) = lower($2)')) {
             const [organizationId, email] = params
@@ -818,6 +892,24 @@ async function fakeRun(query: string, params: any[] = []) {
             : nowRow({ id, organization_id: organizationId, email, role, invited_by: invitedBy, status: 'pending', accepted_at: null, accepted_by: null, expires_at: expiresAt })
         invites.set(invite.id, invite)
         return rows([invite])
+    }
+
+    if (compact.startsWith('UPDATE organization_invites SET status = \'pending\'')) {
+        const [inviteId, organizationId, expiresAt] = params
+        const existing = invites.get(inviteId)
+        if (!existing || existing.organization_id !== organizationId || existing.status === 'accepted') return rows([])
+        const updated = { ...existing, status: 'pending', accepted_at: null, accepted_by: null, expires_at: expiresAt, created_at: iso() }
+        invites.set(inviteId, updated)
+        return rows([updated])
+    }
+
+    if (compact.startsWith('UPDATE organization_invites SET status = \'revoked\'')) {
+        const [inviteId, organizationId] = params
+        const existing = invites.get(inviteId)
+        if (!existing || existing.organization_id !== organizationId || existing.status === 'accepted') return rows([])
+        const updated = { ...existing, status: 'revoked', accepted_at: null, accepted_by: null }
+        invites.set(inviteId, updated)
+        return rows([updated])
     }
 
     if (compact.includes('WITH accepted_invite AS')) {

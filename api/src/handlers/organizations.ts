@@ -6,6 +6,7 @@ import recordLog from '#utils/logs/recordLog.ts'
 import {
     buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
+    normalizeInviteActionInput,
     normalizeInviteInput,
     normalizeMemberRoleInput,
     normalizeOrganizationInput,
@@ -26,6 +27,7 @@ import {
     type OrganizationMemberRow,
     type OrganizationRole,
     type OrganizationRow,
+    type InviteActionInput,
     type InviteInput,
     type OrganizationMemberRoleInput,
     type OrganizationInput,
@@ -49,6 +51,8 @@ type InviteParams = {
     inviteId: string
 }
 
+type OrganizationInviteParams = OrganizationParams & InviteParams
+
 type WatchlistParams = {
     organizationId: string
     itemId: string
@@ -64,6 +68,8 @@ type BulkInviteResult = {
     role: OrganizationRole
     outcome: 'invited' | 'updated_pending_invite' | 'already_member' | 'blocked_removed_member' | 'blocked_deactivated_user'
     inviteId?: string
+    acceptanceToken?: string
+    acceptancePath?: string
     userId?: string
     memberRole?: OrganizationRole
     reason?: string
@@ -619,6 +625,8 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
                 ? 'updated_pending_invite'
                 : 'invited',
             inviteId: inviteRow.id,
+            acceptanceToken: inviteRow.id,
+            acceptancePath: `/api/organizations/invites/${encodeURIComponent(inviteRow.id)}/accept`,
         })
     }
 
@@ -654,6 +662,105 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
             skippedCount: results.length - rows.length,
             duplicateInviteCount: results.filter(result => result.outcome === 'updated_pending_invite').length,
             results,
+        },
+    })
+}
+
+export async function postOrganizationInviteAction(req: FastifyRequest<{ Params: OrganizationInviteParams, Body: InviteActionInput }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    if (!roleCanManageOrganization(organization.role)) {
+        return res.status(403).send({ error: 'Only organization owners and admins can manage invites.' })
+    }
+
+    let input
+    try {
+        input = normalizeInviteActionInput(req.body)
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid invite action.' })
+    }
+
+    const existing = await loadInviteById(req.params.id, req.params.inviteId)
+    if (!existing) {
+        return res.status(404).send({ error: 'Invite not found.' })
+    }
+
+    if (existing.status === 'accepted') {
+        return res.status(409).send({ error: 'Accepted invites cannot be revoked or resent; manage the member instead.' })
+    }
+
+    const resendExpiresAt = input.expiresAt ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+    const result = input.action === 'resend'
+        ? await run(`
+            UPDATE organization_invites
+            SET status = 'pending',
+                accepted_at = NULL,
+                accepted_by = NULL,
+                expires_at = $3,
+                created_at = NOW()
+            WHERE id = $1
+              AND organization_id = $2
+              AND status <> 'accepted'
+            RETURNING *
+        `, [req.params.inviteId, req.params.id, resendExpiresAt])
+        : await run(`
+            UPDATE organization_invites
+            SET status = 'revoked',
+                accepted_at = NULL,
+                accepted_by = NULL
+            WHERE id = $1
+              AND organization_id = $2
+              AND status <> 'accepted'
+            RETURNING *
+        `, [req.params.inviteId, req.params.id])
+
+    if (!result.rows.length) {
+        return res.status(404).send({ error: 'Invite not found.' })
+    }
+
+    await touchOrganization(req.params.id)
+    const serviceLogAction = input.action === 'resend'
+        ? 'organization_invite_resent'
+        : 'organization_invite_revoked'
+    logOrganizationEvent(req, serviceLogAction, req.params.id, userId, {
+        requestId: input.requestId,
+        inviteId: req.params.inviteId,
+        email: existing.email,
+        role: existing.role,
+        previousStatus: existing.status,
+        newStatus: input.action === 'resend' ? 'pending' : 'revoked',
+        expiresAt: input.action === 'resend' ? resendExpiresAt : null,
+        reason: input.reason,
+    })
+
+    const invite = result.rows[0] as OrganizationInviteRow
+    return res.send({
+        invite: toInvite(invite),
+        inviteAction: {
+            schemaVersion: 'organization.invite_action.v1',
+            organizationId: req.params.id,
+            tenantId: req.params.id,
+            inviteId: invite.id,
+            email: invite.email,
+            role: invite.role,
+            action: input.action,
+            actorId: userId,
+            actorRole: organization.role,
+            previousStatus: existing.status,
+            status: invite.status,
+            reason: input.reason,
+            requestId: input.requestId ?? null,
+            serviceLogAction,
+            acceptanceToken: invite.id,
+            acceptancePath: `/api/organizations/invites/${encodeURIComponent(invite.id)}/accept`,
         },
     })
 }
@@ -1147,6 +1254,18 @@ async function loadInviteForEmail(organizationId: string, email: string) {
           AND lower(email) = lower($2)
         LIMIT 1
     `, [organizationId, email])
+
+    return result.rows[0] as OrganizationInviteRow | undefined
+}
+
+async function loadInviteById(organizationId: string, inviteId: string) {
+    const result = await run(`
+        SELECT *
+        FROM organization_invites
+        WHERE id = $1
+          AND organization_id = $2
+        LIMIT 1
+    `, [inviteId, organizationId])
 
     return result.rows[0] as OrganizationInviteRow | undefined
 }
