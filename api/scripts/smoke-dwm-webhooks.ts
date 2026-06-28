@@ -3,8 +3,10 @@ import run from '#db'
 import ensureSchema from '#utils/db/ensureSchema.ts'
 import {
     buildDwmAlertDeliveryPayload,
+    buildDwmWebhookDeliveryEvidence,
     createDwmWebhookDestination,
     deliverDwmAlertNotification,
+    listDwmWebhookAuditEvents,
     listDwmWebhookDeliveries,
     listDwmWebhookDestinations,
     testDwmWebhookDestination,
@@ -140,6 +142,44 @@ async function main() {
     const refreshedDestination = (await listDwmWebhookDestinations(ownerId, orgId)).find(item => item.id === destination.id)
     expect(refreshedDestination?.lastTestStatus === 'dry_run', 'Destination should persist the latest test result.', refreshedDestination)
 
+    const auditEvents = await listDwmWebhookAuditEvents(ownerId, orgId)
+    const deliveryEvidence = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents })
+    const replayEvidence = deliveryEvidence.find(item => item.alertId === alert.id && item.eventType === 'dwm.alert.replayed')
+    const skippedLiveEvidence = deliveryEvidence.find(item => item.alertId === alert.id && item.status === 'skipped')
+    const testEvidence = deliveryEvidence.find(item => item.alertId === 'webhook_test')
+    expect(deliveryEvidence.length >= 3, 'Delivery evidence view should include persisted attempts.', deliveryEvidence)
+    expect(replayEvidence?.destinationId === destination.id, 'Replay evidence should include destination id.', replayEvidence)
+    expect(replayEvidence?.requestId && replayEvidence.requestId === replayEvidence.deliveryId, 'Replay evidence should include stable request id.', replayEvidence)
+    expect(replayEvidence?.status === 'dry_run' && replayEvidence.dryRun === true && replayEvidence.live === false && replayEvidence.liveRequested === false, 'Replay evidence should distinguish dry-run replay.', replayEvidence)
+    expect(replayEvidence?.replay === true, 'Replay evidence should mark replay attempts.', replayEvidence)
+    expect(replayEvidence?.dedupeKey === `dwm_dedupe_${suffix}`, 'Replay evidence should expose alert dedupe key.', replayEvidence)
+    expect(replayEvidence?.casePath === alert.casePath, 'Replay evidence should expose case path.', replayEvidence)
+    expect(replayEvidence?.watchlistId === 'watchlist-acme', 'Replay evidence should include watchlist id.', replayEvidence)
+    expect(replayEvidence?.redactedDestination.endpointHint.includes('/api/webhooks/1234567890/...'), 'Evidence should include redacted Discord destination.', replayEvidence)
+    expect(replayEvidence?.redactedDestination.endpointHash?.startsWith('endpoint_'), 'Evidence should include destination hash.', replayEvidence)
+    expect(replayEvidence?.payloadHash?.startsWith('payload_'), 'Evidence should include payload hash.', replayEvidence)
+    expect(replayEvidence?.auditEventId, 'Replay evidence should link to the audit event id.', replayEvidence)
+    expect(replayEvidence?.auditAction === 'delivery.replayed', 'Replay evidence should expose audit action.', replayEvidence)
+    expect(skippedLiveEvidence?.liveRequested === true && skippedLiveEvidence.live === false && skippedLiveEvidence.status === 'skipped', 'Skipped live evidence should show no external send occurred.', skippedLiveEvidence)
+    expect(String(skippedLiveEvidence?.error || '').includes('Live DWM webhook delivery is disabled'), 'Skipped live evidence should preserve safety-gate error.', skippedLiveEvidence)
+    expect(testEvidence?.status === 'dry_run' && testEvidence.replay === false, 'Test evidence should remain dry-run non-replay.', testEvidence)
+    expect(!JSON.stringify(deliveryEvidence).includes(endpointSecret), 'Delivery evidence leaked Discord endpoint secret.', deliveryEvidence)
+
+    const byOrg = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters: { orgId } })
+    const byWrongOrg = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters: { orgId: `${orgId}_wrong` } })
+    const byDestination = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters: { destinationId: destination.id } })
+    const byAlert = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters: { alertId: alert.id } })
+    const byCasePath = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters: { casePath: alert.casePath } })
+    const byDedupe = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters: { dedupeKey: `dwm_dedupe_${suffix}` } })
+    const byIdempotency = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters: { dedupeKey: replayEvidence?.idempotencyKey } })
+    expect(byOrg.length === deliveryEvidence.length, 'Org evidence filter should include org-scoped attempts.', { byOrg, deliveryEvidence })
+    expect(byWrongOrg.length === 0, 'Org evidence filter should exclude wrong-org attempts.', byWrongOrg)
+    expect(byDestination.length === deliveryEvidence.length, 'Destination evidence filter should include all attempts for the destination.', byDestination)
+    expect(byAlert.length >= 2 && byAlert.every(item => item.alertId === alert.id), 'Alert evidence filter should include replay and skipped attempts for the alert.', byAlert)
+    expect(byCasePath.some(item => item.requestId === replayEvidence?.requestId), 'Case path evidence filter should include replay attempt.', byCasePath)
+    expect(byDedupe.length === 1 && byDedupe[0].requestId === replayEvidence?.requestId, 'Dedupe evidence filter should isolate replay attempt.', byDedupe)
+    expect(byIdempotency.length === 1 && byIdempotency[0].requestId === replayEvidence?.requestId, 'Idempotency evidence filter should isolate replay attempt.', byIdempotency)
+
     const audit = await run(`
         SELECT action, metadata
         FROM dwm_webhook_audit_events
@@ -165,10 +205,19 @@ async function main() {
             'replay delivery',
             'live-disabled safety gate',
             'delivery hashes and attemptedAt',
+            'delivery evidence filters',
+            'delivery evidence redaction',
+            'delivery evidence replay/live/dry-run states',
             'watchlist/route/case context',
             'org-shared destination list',
             'structured audit events',
             'secret redaction',
+        ],
+        integrationChecklist: [
+            'Postgres reachable at DB_HOST/DB_PORT and migrations can run ensureSchema().',
+            'DWM_WEBHOOK_LIVE_DELIVERY is unset or false for dry-run verification.',
+            'Set DWM_WEBHOOK_LIVE_DELIVERY=true only for deliberate live-send Discord tests.',
+            'No external network is required for this smoke while live delivery is disabled.',
         ],
     }, null, 2))
 }

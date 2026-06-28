@@ -408,33 +408,35 @@ const evidenceAttempts = buildDwmWebhookDeliveryEvidence({
 const replayEvidence = evidenceAttempts.find(item => item.requestId === 'delivery_replay_contract')
 const liveEvidence = evidenceAttempts.find(item => item.requestId === 'delivery_live_failed_contract')
 const skippedLiveEvidence = evidenceAttempts.find(item => item.requestId === 'delivery_live_skipped_contract')
-const orgEvidence = buildDwmWebhookDeliveryEvidence({
-    deliveries: evidenceAttempts.map(item => ({
-        id: item.deliveryId,
-        destinationId: item.destinationId,
-        ownerId: 'owner_contract',
-        orgId: item.orgId,
-        alertId: item.alertId,
-        eventType: item.eventType,
-        status: item.status,
-        dryRun: item.dryRun,
-        endpointHint: item.redactedDestination.endpointHint,
-        endpointHash: item.redactedDestination.endpointHash,
-        payloadHash: item.payloadHash,
-        payload: {},
-        responseStatus: item.response.httpStatus,
-        responseBody: item.response.summary,
-        error: item.error,
-        idempotencyKey: item.idempotencyKey,
-        watchlistId: item.watchlistId,
-        watchlistName: item.watchlistName,
-        route: item.route,
-        casePath: item.casePath,
-        attemptedAt: item.attemptedAt,
-        createdAt: item.createdAt,
-    })),
-    filters: { orgId: 'org_contract' },
-})
+const evidenceRows = evidenceAttempts.map(item => ({
+    id: item.deliveryId,
+    destinationId: item.destinationId,
+    ownerId: 'owner_contract',
+    orgId: item.orgId,
+    alertId: item.alertId,
+    eventType: item.eventType,
+    status: item.status,
+    dryRun: item.dryRun,
+    endpointHint: item.redactedDestination.endpointHint,
+    endpointHash: item.redactedDestination.endpointHash,
+    payloadHash: item.payloadHash,
+    payload: {},
+    responseStatus: item.response.httpStatus,
+    responseBody: item.response.summary,
+    error: item.error,
+    idempotencyKey: item.idempotencyKey,
+    watchlistId: item.watchlistId,
+    watchlistName: item.watchlistName,
+    route: item.route,
+    casePath: item.casePath,
+    attemptedAt: item.attemptedAt,
+    createdAt: item.createdAt,
+}))
+const orgEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { orgId: 'org_contract' } })
+const destinationEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { destinationId: 'destination_live_contract' } })
+const casePathEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { casePath: replayWorkflowAlert.casePath } })
+const dedupeEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { dedupeKey: 'dwm_dedupe_replay_contract' } })
+const idempotencyEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { dedupeKey: replayEvidence?.idempotencyKey } })
 
 expect(evidenceAttempts.length === 4, 'Delivery evidence should include all unfiltered attempts.', evidenceAttempts)
 expect(replayEvidence?.auditEventId === 'audit_replay_contract', 'Replay evidence should link audit event id.', replayEvidence)
@@ -446,54 +448,11 @@ expect(liveEvidence?.response.httpStatus === 502, 'Live evidence should expose H
 expect(skippedLiveEvidence?.liveRequested === true && skippedLiveEvidence.live === false && skippedLiveEvidence.status === 'skipped', 'Skipped evidence should show live was requested but not externally sent.', skippedLiveEvidence)
 expect(!JSON.stringify(evidenceAttempts).includes(secret), 'Delivery evidence should redact endpoint, response, and error secrets.', evidenceAttempts)
 expect(orgEvidence.length === 3 && orgEvidence.every(item => item.orgId === 'org_contract'), 'Delivery evidence org filter should exclude wrong-org attempts.', orgEvidence)
-expect(buildDwmWebhookDeliveryEvidence({ deliveries: evidenceAttempts.map(item => ({
-    id: item.deliveryId,
-    destinationId: item.destinationId,
-    ownerId: 'owner_contract',
-    orgId: item.orgId,
-    alertId: item.alertId,
-    eventType: item.eventType,
-    status: item.status,
-    dryRun: item.dryRun,
-    endpointHint: item.redactedDestination.endpointHint,
-    endpointHash: item.redactedDestination.endpointHash,
-    payloadHash: item.payloadHash,
-    payload: {},
-    responseStatus: item.response.httpStatus,
-    responseBody: item.response.summary,
-    error: item.error,
-    idempotencyKey: item.idempotencyKey,
-    watchlistId: item.watchlistId,
-    watchlistName: item.watchlistName,
-    route: item.route,
-    casePath: item.casePath,
-    attemptedAt: item.attemptedAt,
-    createdAt: item.createdAt,
-})), filters: { destinationId: 'destination_live_contract' } })[0]?.requestId === 'delivery_live_failed_contract', 'Delivery evidence should filter by destination id.')
-expect(buildDwmWebhookDeliveryEvidence({ deliveries: evidenceAttempts.map(item => ({
-    id: item.deliveryId,
-    destinationId: item.destinationId,
-    ownerId: 'owner_contract',
-    orgId: item.orgId,
-    alertId: item.alertId,
-    eventType: item.eventType,
-    status: item.status,
-    dryRun: item.dryRun,
-    endpointHint: item.redactedDestination.endpointHint,
-    endpointHash: item.redactedDestination.endpointHash,
-    payloadHash: item.payloadHash,
-    payload: {},
-    responseStatus: item.response.httpStatus,
-    responseBody: item.response.summary,
-    error: item.error,
-    idempotencyKey: item.idempotencyKey,
-    watchlistId: item.watchlistId,
-    watchlistName: item.watchlistName,
-    route: item.route,
-    casePath: item.casePath,
-    attemptedAt: item.attemptedAt,
-    createdAt: item.createdAt,
-})), filters: { alertId: 'alert_replay_contract', casePath: replayWorkflowAlert.casePath, dedupeKey: 'dwm_dedupe_replay_contract' } }).length === 1, 'Delivery evidence should filter by alert, case path, and dedupe key.')
+expect(destinationEvidence[0]?.requestId === 'delivery_live_failed_contract', 'Delivery evidence should filter by destination id.', destinationEvidence)
+expect(casePathEvidence.length === 1 && casePathEvidence[0].requestId === 'delivery_replay_contract', 'Delivery evidence should filter by case path.', casePathEvidence)
+expect(dedupeEvidence.length === 1 && dedupeEvidence[0].requestId === 'delivery_replay_contract', 'Delivery evidence should filter by dedupe key.', dedupeEvidence)
+expect(idempotencyEvidence.length === 1 && idempotencyEvidence[0].requestId === 'delivery_replay_contract', 'Delivery evidence should filter by idempotency key.', idempotencyEvidence)
+expect(buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { alertId: 'alert_replay_contract', casePath: replayWorkflowAlert.casePath, dedupeKey: 'dwm_dedupe_replay_contract' } }).length === 1, 'Delivery evidence should combine alert, case path, and dedupe filters.')
 
 console.log(JSON.stringify({
     ok: true,
@@ -512,6 +471,7 @@ console.log(JSON.stringify({
         'delivery evidence shaping',
         'delivery evidence secret redaction',
         'delivery evidence wrong-org filtering',
+        'delivery evidence case/dedupe/idempotency filters',
         'delivery evidence replay/live/dry-run distinction',
         'secret-free payload',
     ],
