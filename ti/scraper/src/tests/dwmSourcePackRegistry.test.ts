@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildDwmSourcePackPersistenceShape,
+  DwmSourcePackPostgresAdapter,
   InMemoryDwmSourcePackRegistryAdapter,
+  planDwmSourcePackBulkImport,
+  sourcePackRecordFromPostgresRows,
+  sourcePackRecordToPostgresRows,
   type DwmSourcePackCandidateRecord,
-  type DwmSourcePackRecord
+  type DwmSourcePackPostgresRows,
+  type DwmSourcePackRecord,
+  type DwmSourcePackSqlDriver
 } from "../storage/dwmSourcePackRegistry.ts";
 
 describe("dwm source pack registry adapter", () => {
@@ -124,10 +130,134 @@ describe("dwm source pack registry adapter", () => {
         dwm_source_packs: expect.arrayContaining(["pack_id", "family_coverage_json", "health_rollup_json"]),
         dwm_source_pack_candidates: expect.arrayContaining(["target_hash", "target_raw_stored", "policy_boundary_json"])
       },
+      indexes: expect.arrayContaining([
+        "CREATE INDEX IF NOT EXISTS idx_dwm_source_pack_candidates_family ON dwm_source_pack_candidates(declared_family)",
+        "CREATE INDEX IF NOT EXISTS idx_dwm_source_pack_candidates_failure ON dwm_source_pack_candidates((failure_json->>'code'))"
+      ]),
+      sql: {
+        createPacksTable: expect.stringContaining("CREATE TABLE IF NOT EXISTS dwm_source_packs"),
+        createCandidatesTable: expect.stringContaining("target_raw_stored BOOLEAN NOT NULL DEFAULT FALSE CHECK")
+      },
       guardrails: expect.arrayContaining(["target_raw_stored must remain false"])
     });
   });
+
+  test("maps source pack records to DB rows without raw payload columns", () => {
+    const record = pack({
+      id: "pack_rows",
+      candidates: [
+        candidate({ id: "cand_rows", declaredFamily: "telegram", failure: { code: "parser_timeout", message: "timed out" } })
+      ]
+    });
+    const rows = sourcePackRecordToPostgresRows(record);
+
+    expect(rows.packs[0]).toMatchObject({
+      pack_id: "pack_rows",
+      family_coverage_json: { telegram: { total: 1 } },
+      safe_output_json: { rawUnsafeRowsStored: false }
+    });
+    expect(rows.candidates[0]).toMatchObject({
+      candidate_id: "cand_rows",
+      declared_family: "telegram",
+      target_hash: "hash_cand_rows",
+      target_raw_stored: false,
+      failure_json: { code: "parser_timeout" }
+    });
+    expect(JSON.stringify(rows)).not.toContain("rawText");
+    expect(JSON.stringify(rows)).not.toContain("rawPayload");
+    expect(sourcePackRecordFromPostgresRows(rows)).toMatchObject({ id: "pack_rows", candidates: [{ id: "cand_rows" }] });
+  });
+
+  test("uses a DB-backed adapter contract through a fake SQL driver", () => {
+    const driver = new FakeSourcePackSqlDriver();
+    const adapter = new DwmSourcePackPostgresAdapter(driver);
+    adapter.save(pack({
+      id: "pack_db_driver",
+      label: "DB Telegram driver pack",
+      requestId: "req_db_driver",
+      candidates: [
+        candidate({ id: "cand_db_tg", declaredFamily: "telegram", decision: "approved", activationState: "active_canary", status: "active" }),
+        candidate({ id: "cand_db_fail", declaredFamily: "telegram", decision: "retry_scheduled", parserStatus: "parser_retry_scheduled", failure: { code: "parser_timeout" } })
+      ]
+    }));
+
+    expect(driver.upsertCount).toBe(1);
+    expect(adapter.get("pack_db_driver")).toMatchObject({ id: "pack_db_driver", candidates: [{ id: "cand_db_tg" }, { id: "cand_db_fail" }] });
+    expect(adapter.list({ family: "telegram", decision: "approved" })).toMatchObject({ total: 1, items: [{ id: "pack_db_driver" }] });
+    expect(adapter.list({ parserStatus: "parser_retry_scheduled", lastFailure: "parser_timeout" })).toMatchObject({ total: 1, items: [{ id: "pack_db_driver" }] });
+    expect(adapter.list({ requestId: "req_db_driver", label: "Telegram" })).toMatchObject({ total: 1, items: [{ id: "pack_db_driver" }] });
+  });
+
+  test("plans bulk imports with size chunks duplicate policy family caps and safe rejected rows", () => {
+    const plan = planDwmSourcePackBulkImport([
+      pack({ id: "pack_bulk_1", candidates: [candidate({ id: "cand_bulk_1", declaredFamily: "telegram" })] }),
+      pack({ id: "pack_bulk_2", candidates: [candidate({ id: "cand_bulk_2", declaredFamily: "darkweb_onion" })] }),
+      pack({ id: "pack_bulk_1", candidates: [candidate({ id: "cand_bulk_dup", declaredFamily: "telegram" })] }),
+      pack({
+        id: "pack_bulk_oversize",
+        candidates: [
+          candidate({ id: "cand_over_1", declaredFamily: "telegram" }),
+          candidate({ id: "cand_over_2", declaredFamily: "telegram" }),
+          candidate({ id: "cand_over_3", declaredFamily: "telegram" })
+        ]
+      }),
+      pack({
+        id: "pack_bulk_cap",
+        candidates: [
+          candidate({ id: "cand_cap_1", declaredFamily: "darkweb_onion" }),
+          candidate({ id: "cand_cap_2", declaredFamily: "darkweb_onion" })
+        ]
+      })
+    ], {
+      maxPackSize: 2,
+      chunkSize: 1,
+      duplicatePackId: "reject",
+      perFamilyCaps: { darkweb_onion: 1 }
+    });
+
+    expect(plan.summary).toMatchObject({
+      requestedPackCount: 5,
+      acceptedPackCount: 2,
+      rejectedPackCount: 3,
+      maxPackSize: 2,
+      chunkSize: 1,
+      duplicatePackIdBehavior: "reject"
+    });
+    expect(plan.chunks).toEqual([
+      { cursor: "0", nextCursor: "1", packIds: ["pack_bulk_1"] },
+      { cursor: "1", nextCursor: undefined, packIds: ["pack_bulk_2"] }
+    ]);
+    expect(plan.rejectedPacks.map((item) => item.reason)).toEqual([
+      "duplicate pack id rejected by policy",
+      "pack exceeds maxPackSize 2",
+      "family cap exceeded for darkweb_onion: 2/1"
+    ]);
+    expect(plan.rejectedPacks.every((item) => item.safeCandidateRefs.every((ref) => ref.rawStored === false))).toBe(true);
+    expect(JSON.stringify(plan)).not.toContain("@");
+    expect(plan.safeOutput).toMatchObject({ rawUnsafeRowsStored: false, restrictedPayloadDownloadAllowed: false });
+  });
 });
+
+class FakeSourcePackSqlDriver implements DwmSourcePackSqlDriver {
+  readonly rows = new Map<string, DwmSourcePackPostgresRows>();
+  upsertCount = 0;
+
+  upsertPack(rows: DwmSourcePackPostgresRows): void {
+    this.upsertCount += 1;
+    const packId = rows.packs[0].pack_id;
+    this.rows.set(packId, rows);
+  }
+
+  getPack(packId: string): DwmSourcePackPostgresRows | undefined {
+    return this.rows.get(packId);
+  }
+
+  listPacks(query = {}) {
+    const adapter = new InMemoryDwmSourcePackRegistryAdapter([...this.rows.values()].map(sourcePackRecordFromPostgresRows));
+    const result = adapter.list(query);
+    return { rows: result.items.map(sourcePackRecordToPostgresRows), total: result.total, nextCursor: result.nextCursor };
+  }
+}
 
 function pack(input: Partial<DwmSourcePackRecord> = {}): DwmSourcePackRecord {
   const requestedAt = input.requestedAt ?? "2026-06-01T00:00:00.000Z";
