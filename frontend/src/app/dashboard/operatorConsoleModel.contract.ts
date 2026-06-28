@@ -1,5 +1,5 @@
 import { buildOrgOperatingContext, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
-import type { WorkbenchAction, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchOrgContext } from './ti/workbench/workbenchClient'
+import type { WorkbenchAction, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchOrgContext, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
     organizations: [{
@@ -192,6 +192,24 @@ const liveCaseMutationPayloads = [
     { action: 'close', actor: 'dashboard', assignedOwner: 'analyst-1', note: 'Closed after backed evidence and delivery state were reviewed.' },
     { action: 'reopen', actor: 'dashboard', assignedOwner: 'analyst-1', note: 'Reopened because new evidence requires review.' },
 ] satisfies WorkbenchCaseMutationPayload[]
+const memberPickerAssignment = { action: 'assign', actor: 'dashboard', assignedOwner: 'owner@acme.example', note: 'Assigned from org member picker.' } satisfies WorkbenchCaseMutationPayload
+const invitePayload = { email: 'new-analyst@acme.example', role: 'analyst', invitedBy: 'dashboard' } satisfies WorkbenchInvitePayload
+const watchlistAddPayload = {
+    organizationId: 'org_acme',
+    name: 'Acme Security shared exposure watchlist',
+    terms: [{ value: 'portal.acme.com', kind: 'domain' }],
+    status: 'active',
+    webhookDestinationId: 'wh_discord_soc',
+} satisfies WorkbenchWatchlistUpsertPayload
+const watchlistPausePayload = {
+    id: 'wl_acme_exposure',
+    organizationId: 'org_acme',
+    name: 'Shared Acme exposure watchlist',
+    terms: [{ value: 'acme.com', kind: 'domain' }],
+    status: 'paused',
+    webhookDestinationId: 'wh_discord_soc',
+} satisfies WorkbenchWatchlistUpsertPayload
+const missingWatchlistPatchEndpoint = 'PATCH/DELETE /api/dwm/watchlists/:id is not available; use POST /api/dwm/watchlists upsert or pause the watchlist.'
 
 const blockedFallbackAlert = {
     ...selectedLiveAlert,
@@ -217,6 +235,20 @@ const visibleCaseDetail = {
         },
     },
 }
+const readOnlyCaseDetail = {
+    generatedAt: '2026-06-28T10:14:00.000Z',
+    access: {
+        memberId: 'mem_viewer',
+        role: 'viewer',
+        readOnly: true,
+        visibilityDecision: {
+            allowed: true,
+            reason: null,
+            alertVisibilityPolicy: 'members',
+            allowedRoles: ['owner', 'admin', 'analyst', 'member', 'viewer'],
+        },
+    },
+}
 
 void _contract
 void _requiresWorkflowPath
@@ -227,5 +259,11 @@ void (blockedOrgContext.readiness.blockedReasons satisfies string[])
 void (selectedLiveAlert.actions satisfies WorkbenchAction[])
 void (selectedLiveAlert.deliveryEvidence satisfies WorkbenchDeliveryEvidence[])
 void (liveCaseMutationPayloads satisfies WorkbenchCaseMutationPayload[])
+void (memberPickerAssignment satisfies WorkbenchCaseMutationPayload)
+void (invitePayload satisfies WorkbenchInvitePayload)
+void (watchlistAddPayload satisfies WorkbenchWatchlistUpsertPayload)
+void (watchlistPausePayload satisfies WorkbenchWatchlistUpsertPayload)
+void (missingWatchlistPatchEndpoint satisfies string)
 void (blockedFallbackAlert.missingDependency satisfies string)
 void (visibleCaseDetail.access.visibilityDecision.allowedRoles satisfies string[])
+void (readOnlyCaseDetail.access.readOnly satisfies boolean)

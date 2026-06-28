@@ -55,6 +55,22 @@ export type WorkbenchCaseMutationPayload = {
     assignedOwner?: string
 }
 
+export type WorkbenchInvitePayload = {
+    email: string
+    role: string
+    invitedBy: string
+}
+
+export type WorkbenchWatchlistUpsertPayload = {
+    id?: string
+    organizationId?: string
+    tenantId?: string
+    name: string
+    terms: Array<{ value: string, kind?: string }>
+    status?: string
+    webhookDestinationId?: string
+}
+
 export type WorkbenchDeliveryEvidence = {
     id: string
     alertId: string
@@ -137,6 +153,8 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     const [query, setQuery] = useState('')
     const [notes, setNotes] = useState<Record<string, string>>({})
     const [ownerDrafts, setOwnerDrafts] = useState<Record<string, string>>({})
+    const [inviteEmail, setInviteEmail] = useState('')
+    const [inviteRole, setInviteRole] = useState('analyst')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [caseDetails, setCaseDetails] = useState<Record<string, CaseDetailState>>({})
     const [busyAction, setBusyAction] = useState<string | null>(null)
@@ -299,19 +317,65 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             return
         }
         await runPersistentAction(`watchlist:${item.id}`, async () => {
+            const body: WorkbenchWatchlistUpsertPayload = {
+                ...(orgContext.createWatchlistAction?.body || {}),
+                name: orgContext.organization ? `${orgContext.organization.name} shared exposure watchlist` : 'Shared exposure watchlist',
+                terms: [{ value: term, kind: inferTermKind(term) }],
+                status: 'active',
+            }
             const response = await fetch(orgContext.createWatchlistAction?.href || '/api/dwm/watchlists', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({
-                    ...(orgContext.createWatchlistAction?.body || {}),
-                    name: orgContext.organization ? `${orgContext.organization.name} shared exposure watchlist` : 'Shared exposure watchlist',
-                    terms: [{ value: term, kind: inferTermKind(term) }],
-                    status: 'active',
-                }),
+                body: JSON.stringify(body),
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             return payload.watchlist?.id ? `Shared watchlist ${payload.watchlist.id} now covers ${term}.` : `Shared watchlist term ${term} saved.`
+        })
+    }
+
+    async function inviteOrganizationMember() {
+        const organizationId = orgContext?.organization?.id
+        if (!organizationId) {
+            setMessage({ ok: false, text: 'Invite is blocked because no selected organization was returned from GET /api/organizations.' })
+            return
+        }
+        if (!inviteEmail.trim()) {
+            setMessage({ ok: false, text: 'Invite requires an email address.' })
+            return
+        }
+        await runPersistentAction('org:invite', async () => {
+            const body: WorkbenchInvitePayload = { email: inviteEmail.trim(), role: inviteRole, invitedBy: 'dashboard' }
+            const response = await fetch(`/api/organizations/${encodeURIComponent(organizationId)}/invites`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(body),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            setInviteEmail('')
+            return payload.invites?.length ? `Invited ${payload.invites.length} teammate${payload.invites.length === 1 ? '' : 's'}.` : 'Invite queued.'
+        })
+    }
+
+    async function upsertWatchlist(input: { watchlist: WorkbenchOrgContext['watchlists'][number], terms?: Array<{ value: string, kind?: string }>, status?: string }) {
+        await runPersistentAction(`watchlist:update:${input.watchlist.id}`, async () => {
+            const body: WorkbenchWatchlistUpsertPayload = {
+                ...scopeBody(orgContext),
+                id: input.watchlist.id,
+                name: input.watchlist.name,
+                terms: input.terms || input.watchlist.terms,
+                status: input.status || input.watchlist.status,
+                webhookDestinationId: input.watchlist.webhookDestinationId,
+            }
+            const response = await fetch('/api/dwm/watchlists', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(body),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            return payload.watchlist?.id ? `Watchlist ${payload.watchlist.id} updated.` : 'Watchlist updated.'
         })
     }
 
@@ -408,6 +472,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 busyAction={busyAction}
                                 compact={compact}
                                 caseDetail={selectedCaseDetail}
+                                orgContext={orgContext}
                                 onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onOwnerDraftChange={value => setOwnerDrafts(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={(decision) => applyDecision(selected, decision)}
@@ -428,7 +493,13 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 selected={selected}
                                 caseDetail={selectedCaseDetail}
                                 busyAction={busyAction}
+                                inviteEmail={inviteEmail}
+                                inviteRole={inviteRole}
+                                onInviteEmailChange={setInviteEmail}
+                                onInviteRoleChange={setInviteRole}
+                                onInvite={inviteOrganizationMember}
                                 onCreateSharedWatchlistTerm={() => selected && createSharedWatchlistTerm(selected)}
+                                onUpdateWatchlist={upsertWatchlist}
                             />
 
                             <section className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -461,21 +532,32 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     )
 }
 
-function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, onCreateSharedWatchlistTerm }: {
+function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, inviteEmail, inviteRole, onInviteEmailChange, onInviteRoleChange, onInvite, onCreateSharedWatchlistTerm, onUpdateWatchlist }: {
     orgContext?: WorkbenchOrgContext
     selected?: WorkbenchCase
     caseDetail?: CaseDetailState
     busyAction: string | null
+    inviteEmail: string
+    inviteRole: string
+    onInviteEmailChange: (value: string) => void
+    onInviteRoleChange: (value: string) => void
+    onInvite: () => void | Promise<void>
     onCreateSharedWatchlistTerm: () => void | Promise<void>
+    onUpdateWatchlist: (input: { watchlist: WorkbenchOrgContext['watchlists'][number], terms?: Array<{ value: string, kind?: string }>, status?: string }) => void | Promise<void>
 }) {
     const term = selected ? suggestedWatchTerm(selected) : ''
     const termCoverage = term ? watchlistCoverage(orgContext, term) : undefined
     const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
     const visibility = access?.visibilityDecision
+    const readOnly = access?.readOnly === true || visibility?.allowed === false
+    const inviteBlockedReason = !orgContext?.organization
+        ? 'Invite is blocked because no selected organization was returned from GET /api/organizations.'
+        : readOnly ? 'Invite is disabled for this case context because the server marked the member read-only or visibility-blocked.' : ''
     const blockedReason = !orgContext
         ? 'Org operating context is not loaded into the root console.'
         : orgContext.readiness.blockedReasons[0]
-    const canCreateTerm = Boolean(orgContext?.createWatchlistAction && term && !termCoverage?.covered)
+    const canCreateTerm = Boolean(orgContext?.createWatchlistAction && term && !termCoverage?.covered && !readOnly)
+    const activeWatchlists = (orgContext?.watchlists || []).filter(item => item.status === 'active')
 
     return (
         <section className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -499,6 +581,70 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, onCre
                 <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
                     <div className='flex flex-wrap items-center justify-between gap-2'>
                         <div>
+                            <p className='text-xs font-semibold uppercase text-[#667085]'>Team invite</p>
+                            <p className='mt-1 text-xs leading-5 text-[#596170]'>POST /api/organizations/:id/invites adds pending members to the selected org.</p>
+                        </div>
+                        <span className={workflowStatusClass(inviteBlockedReason ? 'blocked' : 'ready')}>{inviteBlockedReason ? 'blocked' : 'ready'}</span>
+                    </div>
+                    <div className='mt-3 grid gap-2'>
+                        <input
+                            value={inviteEmail}
+                            onChange={event => onInviteEmailChange(event.target.value)}
+                            disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
+                            placeholder='analyst@example.com'
+                            className='h-9 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                        />
+                        <div className='flex gap-2'>
+                            <select
+                                value={inviteRole}
+                                onChange={event => onInviteRoleChange(event.target.value)}
+                                disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
+                                className='h-9 min-w-0 flex-1 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                            >
+                                <option value='analyst'>Analyst</option>
+                                <option value='admin'>Admin</option>
+                                <option value='viewer'>Viewer</option>
+                            </select>
+                            <button
+                                type='button'
+                                disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
+                                title={inviteBlockedReason || undefined}
+                                onClick={onInvite}
+                                className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                            >
+                                {busyAction === 'org:invite' ? 'Inviting...' : 'Invite'}
+                            </button>
+                        </div>
+                    </div>
+                    {inviteBlockedReason && <p className='mt-2 text-xs leading-5 text-[#9a3412]'>{inviteBlockedReason}</p>}
+                    {orgContext?.pendingInvites.length ? (
+                        <div className='mt-3 grid gap-1'>
+                            {orgContext.pendingInvites.slice(0, 4).map(invite => (
+                                <p key={invite.id} className='truncate text-xs text-[#667085]'>{invite.email} · {invite.role} · expires {formatDateTime(invite.expiresAt)}</p>
+                            ))}
+                        </div>
+                    ) : <p className='mt-3 text-xs text-[#667085]'>No pending invites returned.</p>}
+                </div>
+
+                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                        <div>
+                            <p className='text-xs font-semibold uppercase text-[#667085]'>Active members</p>
+                            <p className='mt-1 text-xs leading-5 text-[#596170]'>Owner picker uses these identities for PATCH /api/cases/:id assignment.</p>
+                        </div>
+                        <span className={workflowStatusClass(orgContext?.members.length ? 'ready' : 'blocked')}>{orgContext?.members.length ? 'loaded' : 'missing'}</span>
+                    </div>
+                    <div className='mt-3 grid gap-1'>
+                        {(orgContext?.members || []).filter(member => member.status === 'active').slice(0, 5).map(member => (
+                            <p key={member.id} className='truncate text-xs text-[#667085]'>{member.email} · {member.role}</p>
+                        ))}
+                        {!orgContext?.members.length && <p className='text-xs text-[#667085]'>Member API returned no active members; assignment falls back to manual owner text.</p>}
+                    </div>
+                </div>
+
+                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                        <div>
                             <p className='text-xs font-semibold uppercase text-[#667085]'>Selected term</p>
                             <p className='mt-1 break-all text-sm font-semibold text-[#171a21]'>{term || 'none'}</p>
                         </div>
@@ -516,12 +662,56 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, onCre
                     <button
                         type='button'
                         disabled={!canCreateTerm || Boolean(busyAction)}
-                        title={!canCreateTerm ? blockedReason || 'Term is already covered or unavailable.' : undefined}
+                        title={!canCreateTerm ? blockedReason || (readOnly ? 'Disabled because the selected case is read-only for this member.' : 'Term is already covered or unavailable.') : undefined}
                         onClick={onCreateSharedWatchlistTerm}
                         className='mt-3 inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
                     >
                         {busyAction === `watchlist:${selected?.id}` ? 'Saving...' : 'Create shared term'}
                     </button>
+                </div>
+
+                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                        <div>
+                            <p className='text-xs font-semibold uppercase text-[#667085]'>Shared terms</p>
+                            <p className='mt-1 text-xs leading-5 text-[#596170]'>POST /api/dwm/watchlists upserts existing watchlists. PATCH/DELETE /api/dwm/watchlists/:id is not available.</p>
+                        </div>
+                        <span className={workflowStatusClass(activeWatchlists.length ? 'ready' : 'blocked')}>{activeWatchlists.length ? 'active' : 'missing'}</span>
+                    </div>
+                    <div className='mt-3 grid gap-2'>
+                        {activeWatchlists.slice(0, 3).map(watchlist => (
+                            <div key={watchlist.id} className='rounded-lg border border-[#e0e5ed] bg-white p-2'>
+                                <div className='flex items-center justify-between gap-2'>
+                                    <p className='truncate text-xs font-semibold text-[#171a21]'>{watchlist.name}</p>
+                                    <span className='text-[11px] text-[#667085]'>{relativeTime(watchlist.updatedAt)}</span>
+                                </div>
+                                <div className='mt-2 flex flex-wrap gap-1'>
+                                    {watchlist.terms.slice(0, 6).map(termItem => (
+                                        <button
+                                            key={`${watchlist.id}:${termItem.value}`}
+                                            type='button'
+                                            disabled={readOnly || Boolean(busyAction) || watchlist.terms.length <= 1}
+                                            title={watchlist.terms.length <= 1 ? 'Cannot remove the last term through POST /api/dwm/watchlists; pause the watchlist instead.' : readOnly ? 'Disabled because the selected case is read-only for this member.' : 'Remove term via watchlist upsert.'}
+                                            onClick={() => onUpdateWatchlist({ watchlist, terms: watchlist.terms.filter(candidate => candidate.value !== termItem.value) })}
+                                            className='rounded-full border border-[#d8dee9] bg-[#fbfcfe] px-2 py-0.5 text-[11px] font-semibold text-[#596170] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'
+                                        >
+                                            {termItem.kind || inferTermKind(termItem.value)}:{termItem.value}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button
+                                    type='button'
+                                    disabled={readOnly || Boolean(busyAction)}
+                                    title={readOnly ? 'Disabled because the selected case is read-only for this member.' : 'Pause via POST /api/dwm/watchlists with existing id and status=paused.'}
+                                    onClick={() => onUpdateWatchlist({ watchlist, status: 'paused' })}
+                                    className='mt-2 inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'
+                                >
+                                    {busyAction === `watchlist:update:${watchlist.id}` ? 'Saving...' : 'Pause watchlist'}
+                                </button>
+                            </div>
+                        ))}
+                        {!activeWatchlists.length && <p className='text-xs leading-5 text-[#667085]'>No active shared watchlist returned for this org.</p>}
+                    </div>
                 </div>
 
                 {visibility?.allowed === false && (
@@ -878,7 +1068,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
     )
 }
 
-function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
+function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, orgContext, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
@@ -886,6 +1076,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     busyAction: string | null
     compact: boolean
     caseDetail?: CaseDetailState
+    orgContext?: WorkbenchOrgContext
     onNoteChange: (value: string) => void
     onOwnerDraftChange: (value: string) => void
     onDecision: (decision: LocalDecision) => void | Promise<void>
@@ -900,6 +1091,8 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     const effectiveStatus = decision?.status ?? backedStatus ?? item.status
     const effectiveOwner = decision?.owner ?? backedOwner ?? item.owner
     const ownerValue = ownerDraft ?? (effectiveOwner === 'unassigned' ? '' : effectiveOwner)
+    const assignableMembers = orgContext?.members.filter(member => member.status === 'active' && member.role !== 'viewer') || []
+    const readOnly = caseDetail?.status === 'ready' && caseDetail.detail.access?.readOnly === true
     const timeline = decision?.status ? [
         {
             id: `${item.id}_session_decision`,
@@ -935,13 +1128,31 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                         <UserRound className='h-4 w-4 text-[#3056d3]' />
                         Owner
                     </span>
-                    <input
-                        value={ownerValue}
-                        onChange={event => onOwnerDraftChange(event.target.value)}
-                        placeholder='Assign analyst'
-                        className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
-                    />
-                    <span className='text-[11px] text-[#667085]'>{caseDetail?.status === 'ready' ? 'Saved by Assign owner against PATCH /api/cases/:id.' : 'Draft only until a backed case detail is loaded.'}</span>
+                    {assignableMembers.length ? (
+                        <select
+                            value={ownerValue}
+                            onChange={event => onOwnerDraftChange(event.target.value)}
+                            disabled={readOnly}
+                            className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                        >
+                            <option value=''>Unassigned</option>
+                            {assignableMembers.map(member => (
+                                <option key={member.id} value={member.email}>{member.email} ({member.role})</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input
+                            value={ownerValue}
+                            onChange={event => onOwnerDraftChange(event.target.value)}
+                            placeholder='Assign analyst'
+                            className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                        />
+                    )}
+                    <span className='text-[11px] text-[#667085]'>
+                        {assignableMembers.length
+                            ? readOnly ? 'Member picker is read-only because the case API marked this member read-only.' : 'Member picker is backed by /api/organizations/:id/members; Assign owner persists with PATCH /api/cases/:id.'
+                            : 'Manual owner fallback: /api/organizations/:id/members returned no assignable active members.'}
+                    </span>
                 </label>
                 <label className='grid gap-2'>
                     <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
@@ -1253,6 +1464,7 @@ async function readJson(response: Response) {
             attemptedCount?: number
             savedAlertCount?: number
             testedAt?: string
+            invites?: Array<{ id?: string, email?: string, role?: string }>
             delivery?: { id?: string, status?: string }
             deliveries?: Array<{ id?: string, status?: string }>
             case?: { id?: string, status?: string }
@@ -1284,6 +1496,11 @@ function caseMutationResultMessage(action: WorkbenchCaseMutationAction, payload:
     if (action === 'reopen') return `${caseId} reopened.`
     if (action === 'false_positive') return `${caseId} marked false positive.`
     return `${caseId}${status}.`
+}
+
+function scopeBody(orgContext: WorkbenchOrgContext | undefined) {
+    if (orgContext?.scope.organizationId) return { organizationId: orgContext.scope.organizationId }
+    return { tenantId: orgContext?.scope.tenantId || 'default' }
 }
 
 function suggestedWatchTerm(item: WorkbenchCase) {
@@ -1386,4 +1603,10 @@ function relativeTime(value: string) {
     const hours = Math.round(minutes / 60)
     if (hours < 48) return `${hours} hr ago`
     return `${Math.round(hours / 24)} d ago`
+}
+
+function formatDateTime(value: string) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
