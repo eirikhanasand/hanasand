@@ -49,6 +49,16 @@ type WatchlistParams = {
     itemId: string
 }
 
+type BulkInviteResult = {
+    email: string
+    role: OrganizationRole
+    outcome: 'invited' | 'updated_pending_invite' | 'already_member' | 'blocked_removed_member' | 'blocked_deactivated_user'
+    inviteId?: string
+    userId?: string
+    memberRole?: OrganizationRole
+    reason?: string
+}
+
 export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
     if (!valid || !userId) {
@@ -451,8 +461,47 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid invites.' })
     }
 
+    const requestId = input.requestId || randomUUID()
     const rows: OrganizationInviteRow[] = []
+    const results: BulkInviteResult[] = []
     for (const email of input.emails) {
+        const recipient = await loadInviteRecipientState(req.params.id, email)
+        if (recipient?.user_active === false) {
+            results.push({
+                email,
+                role: input.role,
+                outcome: 'blocked_deactivated_user',
+                userId: recipient.user_id,
+                reason: 'Recipient account is deactivated.',
+            })
+            continue
+        }
+
+        if (recipient?.member_status === 'active') {
+            results.push({
+                email,
+                role: input.role,
+                outcome: 'already_member',
+                userId: recipient.user_id,
+                memberRole: recipient.member_role ?? undefined,
+                reason: 'Recipient is already an active organization member.',
+            })
+            continue
+        }
+
+        if (recipient?.member_status === 'removed') {
+            results.push({
+                email,
+                role: input.role,
+                outcome: 'blocked_removed_member',
+                userId: recipient.user_id,
+                memberRole: recipient.member_role ?? undefined,
+                reason: 'Recipient was removed from this organization.',
+            })
+            continue
+        }
+
+        const existingInvite = await loadInviteForEmail(req.params.id, email)
         const invite = await run(`
             INSERT INTO organization_invites (id, organization_id, email, role, invited_by, status, expires_at)
             VALUES ($1, $2, $3, $4, $5, 'pending', $6)
@@ -466,16 +515,52 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
                           created_at = NOW()
             RETURNING *
         `, [randomUUID(), req.params.id, email, input.role, userId, input.expiresAt])
-        rows.push(invite.rows[0] as OrganizationInviteRow)
+        const inviteRow = invite.rows[0] as OrganizationInviteRow
+        rows.push(inviteRow)
+        results.push({
+            email,
+            role: input.role,
+            outcome: existingInvite && existingInvite.status === 'pending' && Date.parse(existingInvite.expires_at) > Date.now()
+                ? 'updated_pending_invite'
+                : 'invited',
+            inviteId: inviteRow.id,
+        })
     }
 
-    await touchOrganization(req.params.id)
+    if (rows.length > 0) {
+        await touchOrganization(req.params.id)
+    }
     logOrganizationEvent(req, 'organization_invites_created', req.params.id, userId, {
+        requestId,
         inviteCount: rows.length,
+        recipientCount: results.length,
+        skippedCount: results.length - rows.length,
+        outcomes: results.reduce<Record<string, number>>((acc, result) => {
+            acc[result.outcome] = (acc[result.outcome] ?? 0) + 1
+            return acc
+        }, {}),
         role: input.role,
         expiresAt: input.expiresAt,
     })
-    return res.status(201).send({ invites: rows.map(toInvite) })
+    return res.status(201).send({
+        requestId,
+        actorId: userId,
+        organizationId: req.params.id,
+        invites: rows.map(toInvite),
+        workflow: {
+            schemaVersion: 'organization.bulk_invite.v1',
+            requestId,
+            organizationId: req.params.id,
+            actorId: userId,
+            role: input.role,
+            expiresAt: input.expiresAt,
+            recipientCount: results.length,
+            invitedCount: rows.length,
+            skippedCount: results.length - rows.length,
+            duplicateInviteCount: results.filter(result => result.outcome === 'updated_pending_invite').length,
+            results,
+        },
+    })
 }
 
 export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params: InviteParams }>, res: FastifyReply) {
@@ -639,6 +724,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
         shared_watchlist_count: bridgeContext.sharedWatchlistCount,
     }
     const generatedAlertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(bridgeOrganization, item))
+    const teamOnboardingReadiness = organizationTeamOnboardingReadiness(bridgeContext)
 
     return res.send({
         organization: toOrganization(organization),
@@ -658,6 +744,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
             sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
             readinessStatus: bridgeContext.readinessStatus,
             ready: generatedAlertReferences.length > 0,
+            teamOnboardingReadiness,
             watchlistItemCount: generatedAlertReferences.length,
             generatedAlertReferences,
             downstreamFields: [
@@ -681,6 +768,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'pendingInviteCount',
                 'sharedWatchlistCount',
                 'readinessStatus',
+                'teamOnboardingReadiness',
             ],
         },
     })
@@ -837,6 +925,41 @@ async function loadOrganizationMembership(organizationId: string, userId: string
     return result.rows[0] as OrganizationMemberRow | undefined
 }
 
+async function loadInviteRecipientState(organizationId: string, email: string) {
+    const result = await run(`
+        SELECT
+            u.id AS user_id,
+            COALESCE(u.active, TRUE) AS user_active,
+            om.role AS member_role,
+            om.status AS member_status
+        FROM users u
+        LEFT JOIN organization_members om
+          ON om.organization_id = $1
+         AND om.user_id = u.id
+        WHERE lower(u.email) = lower($2)
+        LIMIT 1
+    `, [organizationId, email])
+
+    return result.rows[0] as {
+        user_id: string
+        user_active: boolean
+        member_role?: OrganizationRole | null
+        member_status?: OrganizationMemberRow['status'] | null
+    } | undefined
+}
+
+async function loadInviteForEmail(organizationId: string, email: string) {
+    const result = await run(`
+        SELECT *
+        FROM organization_invites
+        WHERE organization_id = $1
+          AND lower(email) = lower($2)
+        LIMIT 1
+    `, [organizationId, email])
+
+    return result.rows[0] as OrganizationInviteRow | undefined
+}
+
 async function activeOwnerCount(organizationId: string) {
     const result = await run(`
         SELECT COUNT(*)::int AS owner_count
@@ -910,4 +1033,29 @@ function removalPermissionError(actorRole: OrganizationRole | undefined, targetR
     if (actorRole === 'admin' && (targetRole === 'member' || targetRole === 'viewer')) return null
     if (actorRole === 'admin') return 'Organization admins can only remove members and viewers.'
     return 'Only organization owners and admins can remove members.'
+}
+
+function organizationTeamOnboardingReadiness(organization: ReturnType<typeof buildOrganizationBridgeContext>) {
+    const targetMemberCount = 10
+    const acceptedOrInvitedCount = organization.activeMemberCount + organization.pendingInviteCount
+    const blockedReasons: string[] = []
+    if (acceptedOrInvitedCount < targetMemberCount) {
+        blockedReasons.push('needs_10_active_members_or_pending_invites')
+    }
+
+    if (organization.sharedWatchlistCount < 1) {
+        blockedReasons.push('needs_shared_watchlist_item')
+    }
+
+    return {
+        schemaVersion: 'organization.team_onboarding_readiness.v1',
+        targetMemberCount,
+        activeMemberCount: organization.activeMemberCount,
+        pendingInviteCount: organization.pendingInviteCount,
+        acceptedOrInvitedCount,
+        sharedWatchlistCount: organization.sharedWatchlistCount,
+        alertVisibilityPolicy: organization.alertVisibilityPolicy,
+        canSupportTenMemberSharedWatchlistRollout: blockedReasons.length === 0,
+        blockedReasons,
+    }
 }

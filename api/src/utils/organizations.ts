@@ -31,6 +31,9 @@ export type InviteInput = {
     emails?: unknown
     role?: unknown
     expiresAt?: unknown
+    expires_at?: unknown
+    requestId?: unknown
+    request_id?: unknown
 }
 
 export type WatchlistInput = {
@@ -240,8 +243,9 @@ export function normalizeInviteInput(body: InviteInput | undefined) {
     }
 
     const role = normalizeInviteRole(body?.role)
-    const expiresAt = normalizeInviteExpiry(body?.expiresAt)
-    return { emails, role, expiresAt }
+    const expiresAt = normalizeInviteExpiry(body?.expiresAt ?? body?.expires_at)
+    const requestId = normalizeInviteRequestId(body?.requestId ?? body?.request_id)
+    return { emails, role, expiresAt, requestId }
 }
 
 export function normalizeOrganizationSettingsInput(body: OrganizationSettingsInput | undefined) {
@@ -646,6 +650,12 @@ function normalizeInviteExpiry(value: unknown) {
     }
 
     return expiresAt.toISOString()
+}
+
+function normalizeInviteRequestId(value: unknown) {
+    const requestId = cleanText(value)
+    if (!requestId) return undefined
+    return requestId.slice(0, 120)
 }
 
 function normalizeWatchlistValue(kind: WatchlistKind, value: unknown) {

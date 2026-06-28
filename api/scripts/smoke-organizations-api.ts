@@ -5,12 +5,13 @@ import { mock } from 'bun:test'
 type Row = Record<string, any>
 
 const users = new Map<string, Row>([
-    ['org_smoke_owner', { id: 'org_smoke_owner', name: 'Org Smoke Owner', avatar: '' }],
-    ['org_smoke_admin', { id: 'org_smoke_admin', name: 'Org Smoke Admin', avatar: '' }],
-    ['org_smoke_member', { id: 'org_smoke_member', name: 'Org Smoke Member', avatar: '' }],
-    ['org_smoke_viewer', { id: 'org_smoke_viewer', name: 'Org Smoke Viewer', avatar: '' }],
-    ['org_smoke_expired', { id: 'org_smoke_expired', name: 'Org Smoke Expired', avatar: '' }],
-    ['org_smoke_outsider', { id: 'org_smoke_outsider', name: 'Org Smoke Outsider', avatar: '' }],
+    ['org_smoke_owner', { id: 'org_smoke_owner', name: 'Org Smoke Owner', avatar: '', email: 'owner@example.test', active: true }],
+    ['org_smoke_admin', { id: 'org_smoke_admin', name: 'Org Smoke Admin', avatar: '', email: 'admin@example.test', active: true }],
+    ['org_smoke_member', { id: 'org_smoke_member', name: 'Org Smoke Member', avatar: '', email: 'member@example.test', active: true }],
+    ['org_smoke_viewer', { id: 'org_smoke_viewer', name: 'Org Smoke Viewer', avatar: '', email: 'viewer@example.test', active: true }],
+    ['org_smoke_expired', { id: 'org_smoke_expired', name: 'Org Smoke Expired', avatar: '', email: 'expired@example.test', active: true }],
+    ['org_smoke_deactivated', { id: 'org_smoke_deactivated', name: 'Org Smoke Deactivated', avatar: '', email: 'deactivated@example.test', active: false }],
+    ['org_smoke_outsider', { id: 'org_smoke_outsider', name: 'Org Smoke Outsider', avatar: '', email: 'outsider@example.test', active: true }],
 ])
 const tokens = new Map([
     ['owner-token', 'org_smoke_owner'],
@@ -18,6 +19,7 @@ const tokens = new Map([
     ['member-token', 'org_smoke_member'],
     ['viewer-token', 'org_smoke_viewer'],
     ['expired-token', 'org_smoke_expired'],
+    ['deactivated-token', 'org_smoke_deactivated'],
     ['outsider-token', 'org_smoke_outsider'],
 ])
 const organizations = new Map<string, Row>()
@@ -122,6 +124,19 @@ const pendingInvitesResponse = await app.inject({
 })
 assert.equal(pendingInvitesResponse.statusCode, 200, pendingInvitesResponse.body)
 assert.deepEqual(parseBody(pendingInvitesResponse.body).invites, [])
+
+const existingMemberInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { email: 'member@example.test', role: 'viewer', requestId: 'smoke-existing-member' },
+})
+assert.equal(existingMemberInviteResponse.statusCode, 201, existingMemberInviteResponse.body)
+const existingMemberInviteWorkflow = parseBody(existingMemberInviteResponse.body).workflow
+assert.equal(existingMemberInviteWorkflow.invitedCount, 0)
+assert.equal(existingMemberInviteWorkflow.skippedCount, 1)
+assert.equal(existingMemberInviteWorkflow.results[0].outcome, 'already_member')
+assert.equal(existingMemberInviteWorkflow.results[0].memberRole, 'member')
 
 const memberInviteResponse = await app.inject({
     method: 'POST',
@@ -262,6 +277,53 @@ const pendingOpsInviteResponse = await app.inject({
 })
 assert.equal(pendingOpsInviteResponse.statusCode, 201, pendingOpsInviteResponse.body)
 
+const bulkEmails = Array.from({ length: 10 }, (_, index) => `bulk-${index + 1}@example.test`)
+const bulkInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: {
+        emails: bulkEmails,
+        role: 'member',
+        requestId: 'smoke-bulk-10',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+})
+assert.equal(bulkInviteResponse.statusCode, 201, bulkInviteResponse.body)
+const bulkInviteWorkflow = parseBody(bulkInviteResponse.body).workflow
+assert.equal(bulkInviteWorkflow.schemaVersion, 'organization.bulk_invite.v1')
+assert.equal(bulkInviteWorkflow.requestId, 'smoke-bulk-10')
+assert.equal(bulkInviteWorkflow.actorId, 'org_smoke_admin')
+assert.equal(bulkInviteWorkflow.organizationId, organization.id)
+assert.equal(bulkInviteWorkflow.recipientCount, 10)
+assert.equal(bulkInviteWorkflow.invitedCount, 10)
+assert.equal(bulkInviteWorkflow.skippedCount, 0)
+assert.deepEqual(bulkInviteWorkflow.results.map((result: Row) => result.outcome), Array(10).fill('invited'))
+
+const duplicateBulkInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { email: bulkEmails[0], role: 'viewer', request_id: 'smoke-duplicate-bulk' },
+})
+assert.equal(duplicateBulkInviteResponse.statusCode, 201, duplicateBulkInviteResponse.body)
+const duplicateInviteWorkflow = parseBody(duplicateBulkInviteResponse.body).workflow
+assert.equal(duplicateInviteWorkflow.duplicateInviteCount, 1)
+assert.equal(duplicateInviteWorkflow.results[0].outcome, 'updated_pending_invite')
+assert.equal(duplicateInviteWorkflow.results[0].email, bulkEmails[0])
+
+const deactivatedInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { email: 'deactivated@example.test', role: 'member', requestId: 'smoke-deactivated-invite' },
+})
+assert.equal(deactivatedInviteResponse.statusCode, 201, deactivatedInviteResponse.body)
+const deactivatedWorkflow = parseBody(deactivatedInviteResponse.body).workflow
+assert.equal(deactivatedWorkflow.invitedCount, 0)
+assert.equal(deactivatedWorkflow.skippedCount, 1)
+assert.equal(deactivatedWorkflow.results[0].outcome, 'blocked_deactivated_user')
+
 const expiredInvite = nowRow({
     id: 'expired-invite',
     organization_id: organization.id,
@@ -375,10 +437,18 @@ assert.equal(readiness.ownerCount, 1)
 assert.deepEqual(readiness.allowedViewerRoles, ['owner', 'admin'])
 assert.equal(readiness.removedMemberDenialReason, 'member_removed')
 assert.equal(readiness.deactivatedMemberDenialReason, 'member_deactivated')
-assert.equal(readiness.pendingInviteCount, 1)
+assert.equal(readiness.pendingInviteCount, 11)
 assert.equal(readiness.sharedWatchlistCount, 2)
 assert.equal(readiness.readinessStatus, 'ready')
 assert.equal(readiness.ready, true)
+assert.equal(readiness.teamOnboardingReadiness.schemaVersion, 'organization.team_onboarding_readiness.v1')
+assert.equal(readiness.teamOnboardingReadiness.targetMemberCount, 10)
+assert.equal(readiness.teamOnboardingReadiness.activeMemberCount, 4)
+assert.equal(readiness.teamOnboardingReadiness.pendingInviteCount, 11)
+assert.equal(readiness.teamOnboardingReadiness.acceptedOrInvitedCount, 15)
+assert.equal(readiness.teamOnboardingReadiness.sharedWatchlistCount, 2)
+assert.equal(readiness.teamOnboardingReadiness.canSupportTenMemberSharedWatchlistRollout, true)
+assert.deepEqual(readiness.teamOnboardingReadiness.blockedReasons, [])
 assert.equal(readiness.generatedAlertReferences.length, 2)
 const domainReference = readiness.generatedAlertReferences.find((reference: Row) => reference.matchedTerm.value === 'acme-shared.example')
 assert.ok(domainReference)
@@ -399,7 +469,7 @@ assert.equal(domainReference.alert.ownerCount, 1)
 assert.deepEqual(domainReference.alert.allowedViewerRoles, ['owner', 'admin'])
 assert.equal(domainReference.alert.removedMemberDenialReason, 'member_removed')
 assert.equal(domainReference.alert.deactivatedMemberDenialReason, 'member_deactivated')
-assert.equal(domainReference.alert.pendingInviteCount, 1)
+assert.equal(domainReference.alert.pendingInviteCount, 11)
 assert.equal(domainReference.alert.sharedWatchlistCount, 2)
 assert.equal(domainReference.alert.readinessStatus, 'ready')
 assert.equal(domainReference.webhookContract.orgId, organization.id)
@@ -487,6 +557,18 @@ const removeViewerResponse = await app.inject({
 })
 assert.equal(removeViewerResponse.statusCode, 200, removeViewerResponse.body)
 assert.equal(parseBody(removeViewerResponse.body).member.status, 'removed')
+
+const removedViewerInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { email: 'viewer@example.test', role: 'viewer', requestId: 'smoke-removed-viewer' },
+})
+assert.equal(removedViewerInviteResponse.statusCode, 201, removedViewerInviteResponse.body)
+const removedViewerInviteWorkflow = parseBody(removedViewerInviteResponse.body).workflow
+assert.equal(removedViewerInviteWorkflow.invitedCount, 0)
+assert.equal(removedViewerInviteWorkflow.skippedCount, 1)
+assert.equal(removedViewerInviteWorkflow.results[0].outcome, 'blocked_removed_member')
 
 const removedViewerWatchlistResponse = await app.inject({
     method: 'GET',
@@ -585,6 +667,12 @@ async function fakeRun(query: string, params: any[] = []) {
     }
 
     if (compact.startsWith('SELECT * FROM organization_invites WHERE organization_id')) {
+        if (compact.includes('lower(email) = lower($2)')) {
+            const [organizationId, email] = params
+            const invite = [...invites.values()].find(row => row.organization_id === organizationId && row.email.toLowerCase() === String(email).toLowerCase())
+            return rows(invite ? [invite] : [])
+        }
+
         return rows([...invites.values()].filter(invite => invite.organization_id === params[0] && invite.status === 'pending' && Date.parse(invite.expires_at) > Date.now()))
     }
 
@@ -638,6 +726,19 @@ async function fakeRun(query: string, params: any[] = []) {
         return rows(member
             ? [{ ...member, name: users.get(member.user_id)?.name ?? member.user_id, avatar: users.get(member.user_id)?.avatar ?? '' }]
             : [])
+    }
+
+    if (compact.startsWith('SELECT u.id AS user_id, COALESCE(u.active, TRUE) AS user_active')) {
+        const [organizationId, email] = params
+        const user = [...users.values()].find(row => row.email?.toLowerCase() === String(email).toLowerCase())
+        if (!user) return rows([])
+        const member = members.get(memberKey(organizationId, user.id))
+        return rows([{
+            user_id: user.id,
+            user_active: user.active !== false,
+            member_role: member?.role ?? null,
+            member_status: member?.status ?? null,
+        }])
     }
 
     if (compact.includes('FROM organization_members om JOIN users u')) {
