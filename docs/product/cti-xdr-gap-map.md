@@ -17,7 +17,7 @@ Assumption boundary: this is competitor-informed product planning, not a claim t
 
 ## Coordinator Scoreboard
 
-Use this table in the 10-minute coordinator loop. The machine-readable mirror is `docs/product/cti-xdr-scoreboard.json`; keep the row IDs and KPI names stable so automation can diff progress without rereading the full document.
+Use this table in the 10-minute coordinator loop. The machine-readable mirror is `docs/product/cti-xdr-scoreboard.json`; keep the row IDs and KPI names stable so automation can diff progress without rereading the full document. Run `node scripts/scan-cti-xdr-scoreboard.mjs` for the compact coordinator summary.
 
 | ID | Pillar | Owner thread/lane | Current status | Last commit/handoff | Next code slice | Measurable KPI | Blocker |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -42,6 +42,12 @@ Use this table in the 10-minute coordinator loop. The machine-readable mirror is
 - Do not show alerts without evidence IDs, source IDs, timestamps, match reason, dedupe key, and delivery state.
 - Do not build webhook settings without test send, payload preview, retry history, and redacted secret handling.
 - Do not call a workflow autonomous unless the page exposes latest run time, changed records, next planned work, and failure/backoff state.
+
+## KPI Movement Rules
+
+Counts as improvement: a KPI moves from a real source, real org/user action, real delivery, or real case transition; a blocker is removed by shipped code plus a focused smoke/probe; or a dirty handoff becomes an isolated commit with product-progress output.
+
+Counts as circular work: adding cards/counters/copy without queue-detail-action behavior; moving demo/sample data while real alerts, active sources, deliveries, cases, and org usage stay flat; or saying autonomous without latest run time, changed records, next planned work, and failure/backoff state.
 
 ## Product Pillars
 
