@@ -1,5 +1,8 @@
 import { buildDwmProductSnapshot, type DwmAlert, type DwmWatchTerm } from "../product/dwmProduct.ts";
-import { stableId } from "../utils.ts";
+import { stableId, uniqueStrings } from "../utils.ts";
+import type { RawCapture, SourceRecord } from "../types.ts";
+
+type DwmAlertVisibilityPolicy = "members" | "admins" | "owners";
 
 export type RuntimeDwmWatchlist = {
   id: string;
@@ -9,6 +12,43 @@ export type RuntimeDwmWatchlist = {
   webhookDestinationId?: string;
   webhookUrl?: string;
   status: "active" | "paused";
+};
+
+export type DwmAlertGenerationCaptureRef = {
+  captureId: string;
+  sourceId?: string;
+  sourceFamily: string;
+  contentHash?: string;
+  observedAt?: string;
+};
+
+export type DwmAlertGenerationCandidate = {
+  id: string;
+  tenantId: string;
+  organizationId?: string;
+  term: DwmWatchTerm;
+  normalizedTerm: string;
+  watchlistIds: string[];
+  watchlistItemIds: string[];
+  webhookDestinationIds: string[];
+  hasWebhookRoute: boolean;
+  visibilityPolicy: DwmAlertVisibilityPolicy;
+  sourceFamilies: string[];
+  captureRefs: DwmAlertGenerationCaptureRef[];
+  dedupeSeed: string;
+  dedupeKeyCandidate: string;
+};
+
+export type DwmAlertGenerationPlan = {
+  schemaVersion: "dwm.alert_generation_plan.v1";
+  tenantId: string;
+  organizationId?: string;
+  visibilityPolicy: DwmAlertVisibilityPolicy;
+  activeWatchlistIds: string[];
+  candidateCount: number;
+  candidates: DwmAlertGenerationCandidate[];
+  blockedWatchlists: Array<{ watchlistId: string; reason: "missing_org_context" | "organization_mismatch"; organizationId?: string }>;
+  skippedWatchlists: Array<{ watchlistId: string; reason: "paused" | "tenant_mismatch" | "empty_terms" }>;
 };
 
 export type RuntimeDwmAlertStore = {
@@ -23,6 +63,7 @@ export type RebuildDwmRuntimeAlertsInput = {
   store: RuntimeDwmAlertStore;
   tenantId: string;
   organizationId?: string;
+  visibilityPolicy?: DwmAlertVisibilityPolicy;
 };
 
 export type RebuildDwmRuntimeAlertsResult = {
@@ -30,37 +71,46 @@ export type RebuildDwmRuntimeAlertsResult = {
   savedAlertCount: number;
   alerts: any[];
   watchlistIds: string[];
+  generationPlan: DwmAlertGenerationPlan;
   readiness: ReturnType<typeof buildDwmProductSnapshot>["readiness"];
 };
 
 export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): RebuildDwmRuntimeAlertsResult {
-  const watchlists = input.store.listDwmWatchlists()
-    .filter((row) => row.tenantId === input.tenantId && row.status === "active");
-  const watchlistIds = watchlists.map((row) => row.id);
-  const terms = watchlists.flatMap((row) => row.terms);
+  const sources = input.store.listSources();
+  const captures = input.store.listCaptures();
+  const generationPlan = buildDwmAlertGenerationPlan({
+    watchlists: input.store.listDwmWatchlists(),
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    visibilityPolicy: input.visibilityPolicy,
+    sources,
+    captures
+  });
+  const terms = generationPlan.candidates.map((candidate) => candidate.term);
   const snapshot = buildDwmProductSnapshot({
     tenantId: input.tenantId,
     watchlist: terms,
-    sources: input.store.listSources(),
-    captures: input.store.listCaptures(),
+    sources,
+    captures,
     includeDemoIfEmpty: false
   });
 
   const alerts = snapshot.alerts.map((alert) => {
+    const generationCandidate = findGenerationCandidate(generationPlan, alert);
     const existing = findExistingAlert(input.store, alert);
     const alertId = existing?.id ?? alert.id;
     const workflowContext = buildDwmAlertWorkflowContext({
       alert: { ...alert, id: alertId },
       tenantId: input.tenantId,
       organizationId: input.organizationId ?? existing?.organizationId,
-      watchlists
+      generationCandidate
     });
     return input.store.saveDwmAlert({
       ...alert,
       id: alertId,
       tenantId: input.tenantId,
       organizationId: input.organizationId ?? existing?.organizationId,
-      watchlistIds,
+      watchlistIds: workflowContext.watchlistIds,
       watchlistItemIds: workflowContext.watchlistItemIds,
       workflowContext,
       webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
@@ -84,8 +134,98 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     rebuiltAt: snapshot.generatedAt,
     savedAlertCount: alerts.length,
     alerts,
-    watchlistIds,
+    watchlistIds: generationPlan.activeWatchlistIds,
+    generationPlan,
     readiness: snapshot.readiness
+  };
+}
+
+export function buildDwmAlertGenerationPlan(input: {
+  watchlists: RuntimeDwmWatchlist[];
+  tenantId: string;
+  organizationId?: string;
+  visibilityPolicy?: DwmAlertVisibilityPolicy;
+  sources?: SourceRecord[];
+  captures?: RawCapture[];
+}): DwmAlertGenerationPlan {
+  const visibilityPolicy = normalizeVisibilityPolicy(input.visibilityPolicy);
+  const sources = input.sources ?? [];
+  const captures = input.captures ?? [];
+  const candidates = new Map<string, DwmAlertGenerationCandidate>();
+  const blockedWatchlists: DwmAlertGenerationPlan["blockedWatchlists"] = [];
+  const skippedWatchlists: DwmAlertGenerationPlan["skippedWatchlists"] = [];
+  const activeWatchlistIds: string[] = [];
+
+  for (const watchlist of input.watchlists) {
+    if (watchlist.tenantId !== input.tenantId) {
+      skippedWatchlists.push({ watchlistId: watchlist.id, reason: "tenant_mismatch" });
+      continue;
+    }
+    if (watchlist.status !== "active") {
+      skippedWatchlists.push({ watchlistId: watchlist.id, reason: "paused" });
+      continue;
+    }
+    if (watchlist.organizationId && !input.organizationId) {
+      blockedWatchlists.push({ watchlistId: watchlist.id, reason: "missing_org_context", organizationId: watchlist.organizationId });
+      continue;
+    }
+    if (watchlist.organizationId && input.organizationId && watchlist.organizationId !== input.organizationId) {
+      blockedWatchlists.push({ watchlistId: watchlist.id, reason: "organization_mismatch", organizationId: watchlist.organizationId });
+      continue;
+    }
+    if (!watchlist.terms.length) {
+      skippedWatchlists.push({ watchlistId: watchlist.id, reason: "empty_terms" });
+      continue;
+    }
+
+    activeWatchlistIds.push(watchlist.id);
+    for (const term of watchlist.terms) {
+      const normalizedTerm = normalizeTerm(term.value);
+      if (!normalizedTerm) continue;
+      const key = `${input.tenantId}:${input.organizationId ?? ""}:${term.kind}:${normalizedTerm}`;
+      const existing = candidates.get(key);
+      const captureRefs = captureRefsForTerm({ term, sources, captures });
+      const sourceFamilies = uniqueStrings(captureRefs.map((ref) => ref.sourceFamily));
+      if (existing) {
+        existing.watchlistIds = uniqueStrings([...existing.watchlistIds, watchlist.id]);
+        existing.watchlistItemIds = uniqueStrings([...existing.watchlistItemIds, ...watchlistItemIdsFor(watchlist, term.value)]);
+        existing.webhookDestinationIds = uniqueStrings([...existing.webhookDestinationIds, watchlist.webhookDestinationId].filter(Boolean) as string[]);
+        existing.hasWebhookRoute = existing.hasWebhookRoute || Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl);
+        existing.captureRefs = mergeCaptureRefs(existing.captureRefs, captureRefs);
+        existing.sourceFamilies = uniqueStrings([...existing.sourceFamilies, ...sourceFamilies]);
+        continue;
+      }
+
+      const dedupeSeed = `${normalizedTerm}:${term.kind}`;
+      candidates.set(key, {
+        id: stableId("dwm_alert_generation_candidate", `${input.tenantId}:${input.organizationId ?? ""}:${dedupeSeed}`),
+        tenantId: input.tenantId,
+        organizationId: input.organizationId,
+        term,
+        normalizedTerm,
+        watchlistIds: [watchlist.id],
+        watchlistItemIds: watchlistItemIdsFor(watchlist, term.value),
+        webhookDestinationIds: [watchlist.webhookDestinationId].filter(Boolean) as string[],
+        hasWebhookRoute: Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl),
+        visibilityPolicy,
+        sourceFamilies,
+        captureRefs,
+        dedupeSeed,
+        dedupeKeyCandidate: stableId("dwm_dedupe_candidate", `${input.tenantId}:${input.organizationId ?? ""}:${dedupeSeed}`)
+      });
+    }
+  }
+
+  return {
+    schemaVersion: "dwm.alert_generation_plan.v1",
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    visibilityPolicy,
+    activeWatchlistIds: uniqueStrings(activeWatchlistIds),
+    candidateCount: candidates.size,
+    candidates: [...candidates.values()],
+    blockedWatchlists,
+    skippedWatchlists
   };
 }
 
@@ -136,16 +276,20 @@ export function buildDwmAlertWorkflowContext(input: {
   alert: DwmAlert;
   tenantId: string;
   organizationId?: string;
-  watchlists: RuntimeDwmWatchlist[];
+  watchlists?: RuntimeDwmWatchlist[];
+  generationCandidate?: DwmAlertGenerationCandidate;
 }) {
   const captureIds = input.alert.provenance?.captureIds ?? (input.alert.evidence ?? []).map((item) => item.provenance?.captureId ?? item.id);
-  const watchlistIds = input.watchlists.map((watchlist) => watchlist.id);
-  const watchlistItemIds = input.watchlists.flatMap((watchlist) => watchlistItemIdsFor(watchlist, input.alert.matchedTerm?.value));
+  const watchlists = input.watchlists ?? [];
+  const watchlistIds = input.generationCandidate?.watchlistIds ?? watchlists.map((watchlist) => watchlist.id);
+  const watchlistItemIds = input.generationCandidate?.watchlistItemIds ?? watchlists.flatMap((watchlist) => watchlistItemIdsFor(watchlist, input.alert.matchedTerm?.value));
   const dedupeKey = String(input.alert.dedupeKey ?? input.alert.webhookDelivery?.dedupeKey);
   const caseIdCandidate = stableId("case", `${input.tenantId}:${input.alert.id}`);
   return {
     tenantId: input.tenantId,
     organizationId: input.organizationId,
+    visibilityPolicy: input.generationCandidate?.visibilityPolicy,
+    generationCandidateId: input.generationCandidate?.id,
     caseIdCandidate,
     watchlistIds,
     watchlistItemIds,
@@ -157,8 +301,8 @@ export function buildDwmAlertWorkflowContext(input: {
     dedupeKey,
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
     casePath: `/v1/cases/${encodeURIComponent(caseIdCandidate)}?alertId=${encodeURIComponent(input.alert.id)}&dedupeKey=${encodeURIComponent(dedupeKey)}`,
-    webhookDestinationIds: input.watchlists.map((watchlist) => watchlist.webhookDestinationId).filter(Boolean),
-    hasWebhookRoute: input.watchlists.some((watchlist) => Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl))
+    webhookDestinationIds: input.generationCandidate?.webhookDestinationIds ?? watchlists.map((watchlist) => watchlist.webhookDestinationId).filter(Boolean),
+    hasWebhookRoute: input.generationCandidate?.hasWebhookRoute ?? watchlists.some((watchlist) => Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl))
   };
 }
 
@@ -168,6 +312,8 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     alertId: alert.id,
     tenantId: workflowContext.tenantId,
     organizationId: workflowContext.organizationId,
+    visibilityPolicy: workflowContext.visibilityPolicy,
+    generationCandidateId: workflowContext.generationCandidateId,
     watchlistIds: workflowContext.watchlistIds,
     watchlistItemIds: workflowContext.watchlistItemIds,
     sourceFamily: workflowContext.sourceFamily,
@@ -191,9 +337,62 @@ function findExistingAlert(store: RuntimeDwmAlertStore, alert: DwmAlert) {
     .find((row) => row.id === alert.id || row.dedupeKey === dedupeKey || row.webhookDelivery?.dedupeKey === dedupeKey);
 }
 
+function findGenerationCandidate(plan: DwmAlertGenerationPlan, alert: DwmAlert): DwmAlertGenerationCandidate | undefined {
+  const normalizedTerm = normalizeTerm(alert.matchedTerm?.value);
+  return plan.candidates.find((candidate) => candidate.normalizedTerm === normalizedTerm && candidate.term.kind === alert.matchedTerm?.kind)
+    ?? plan.candidates.find((candidate) => candidate.normalizedTerm === normalizedTerm);
+}
+
 function watchlistItemIdsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: string | undefined): string[] {
   if (!matchedTerm) return [];
   return watchlist.terms
     .filter((term) => term.value.toLowerCase() === matchedTerm.toLowerCase())
     .map((term) => String((term as any).id ?? `${watchlist.id}:${term.value}`));
+}
+
+function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]; captures: RawCapture[] }): DwmAlertGenerationCaptureRef[] {
+  return input.captures
+    .filter((capture) => captureText(capture).includes(normalizeTerm(input.term.value)))
+    .map((capture) => {
+      const source = input.sources.find((row) => row.id === capture.sourceId);
+      return {
+        captureId: capture.id,
+        sourceId: capture.sourceId,
+        sourceFamily: sourceFamilyFor(source, capture),
+        contentHash: capture.contentHash,
+        observedAt: capture.collectedAt
+      };
+    });
+}
+
+function mergeCaptureRefs(existing: DwmAlertGenerationCaptureRef[], next: DwmAlertGenerationCaptureRef[]): DwmAlertGenerationCaptureRef[] {
+  const byId = new Map(existing.map((ref) => [ref.captureId, ref]));
+  for (const ref of next) byId.set(ref.captureId, byId.get(ref.captureId) ?? ref);
+  return [...byId.values()];
+}
+
+function captureText(capture: RawCapture): string {
+  return [
+    (capture as any).body,
+    (capture as any).text,
+    JSON.stringify((capture as any).metadata ?? {})
+  ].map((value) => String(value ?? "").toLowerCase()).join("\n");
+}
+
+function sourceFamilyFor(source: SourceRecord | undefined, capture: RawCapture): string {
+  const value = String((capture as any).metadata?.adapter ?? source?.type ?? "").toLowerCase();
+  if (value.includes("telegram")) return "telegram_public";
+  if (value.includes("darknet") || value.includes("darkweb") || value.includes("tor")) return "darkweb_metadata";
+  if (value.includes("advisory")) return "public_advisory";
+  if (value.includes("actor")) return "actor_page";
+  if (value.includes("clear")) return "clear_web";
+  return "unknown";
+}
+
+function normalizeTerm(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeVisibilityPolicy(value: unknown): DwmAlertVisibilityPolicy {
+  return value === "admins" || value === "owners" ? value : "members";
 }

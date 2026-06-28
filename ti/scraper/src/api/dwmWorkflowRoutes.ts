@@ -253,7 +253,7 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
   const terms = watchlists.flatMap((watchlist: DwmWatchlist) => watchlist.terms);
   if (!terms.length) return json({ error: { code: "missing_watchlist", message: "Create an active DWM watchlist before rebuilding alerts." } }, 400);
 
-  const rebuilt = rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId });
+  const rebuilt = rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId, visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization) });
   return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, ...rebuilt });
 }
 

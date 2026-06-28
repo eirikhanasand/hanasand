@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertGenerationPlan, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
@@ -115,10 +115,79 @@ describe("dwm alert repository", () => {
       createdAt: "2026-06-28T13:00:00.000Z",
       updatedAt: "2026-06-28T13:00:00.000Z"
     });
+    (store as any).saveDwmWatchlist({
+      id: "watch_repo_acme_duplicate",
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      name: "Acme duplicate exposure watch",
+      terms: [{ id: "watch_item_acme_duplicate_domain", value: "ACME.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_backup",
+      status: "active",
+      createdAt: "2026-06-28T13:00:00.000Z",
+      updatedAt: "2026-06-28T13:00:00.000Z"
+    });
+    (store as any).saveDwmWatchlist({
+      id: "watch_repo_acme_paused",
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      name: "Paused Acme exposure watch",
+      terms: [{ id: "watch_item_acme_paused_domain", value: "acme.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_paused",
+      status: "paused",
+      createdAt: "2026-06-28T13:00:00.000Z",
+      updatedAt: "2026-06-28T13:00:00.000Z"
+    });
 
-    const first = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme", organizationId: "org_repo_acme" });
+    const generationPlan = buildDwmAlertGenerationPlan({
+      watchlists: (store as any).listDwmWatchlists(),
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      visibilityPolicy: "admins",
+      sources: store.listSources(),
+      captures: store.listCaptures()
+    });
+    expect(generationPlan).toMatchObject({
+      schemaVersion: "dwm.alert_generation_plan.v1",
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      visibilityPolicy: "admins",
+      candidateCount: 1,
+      activeWatchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"]
+    });
+    expect(generationPlan.skippedWatchlists).toContainEqual({ watchlistId: "watch_repo_acme_paused", reason: "paused" });
+    expect(generationPlan.candidates[0]).toMatchObject({
+      normalizedTerm: "acme.com",
+      watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+      watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+      webhookDestinationIds: ["webhook_repo_discord", "webhook_repo_backup"],
+      hasWebhookRoute: true,
+      visibilityPolicy: "admins",
+      sourceFamilies: ["telegram_public", "darkweb_metadata"]
+    });
+    expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId).sort()).toEqual(["cap_repo_darkweb_acme", "cap_repo_tg_acme"].sort());
+    expect(generationPlan.candidates[0].dedupeKeyCandidate).toMatch(/^dwm_dedupe_candidate_/);
+
+    const blockedWithoutOrg = buildDwmAlertGenerationPlan({
+      watchlists: (store as any).listDwmWatchlists(),
+      tenantId: "tenant_repo_acme",
+      sources: store.listSources(),
+      captures: store.listCaptures()
+    });
+    expect(blockedWithoutOrg.candidates).toHaveLength(0);
+    expect(blockedWithoutOrg.blockedWatchlists).toEqual([
+      { watchlistId: "watch_repo_acme", reason: "missing_org_context", organizationId: "org_repo_acme" },
+      { watchlistId: "watch_repo_acme_duplicate", reason: "missing_org_context", organizationId: "org_repo_acme" }
+    ]);
+    const blockedRebuild = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme" });
+    expect(blockedRebuild.savedAlertCount).toBe(0);
+    expect(blockedRebuild.generationPlan.blockedWatchlists).toEqual(blockedWithoutOrg.blockedWatchlists);
+    expect((store as any).listDwmAlerts()).toHaveLength(0);
+
+    const first = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme", organizationId: "org_repo_acme", visibilityPolicy: "admins" });
 
     expect(first.savedAlertCount).toBe(2);
+    expect(first.generationPlan.candidateCount).toBe(1);
+    expect(first.generationPlan.skippedWatchlists).toContainEqual({ watchlistId: "watch_repo_acme_paused", reason: "paused" });
     expect(first.alerts.map((alert) => alert.sourceFamily).sort()).toEqual(["darkweb_metadata", "telegram_public"]);
     expect(first.alerts.every((alert) => alert.organizationId === "org_repo_acme")).toBe(true);
     expect(first.alerts.every((alert) => alert.dedupeKey === alert.webhookDelivery.dedupeKey)).toBe(true);
@@ -128,8 +197,9 @@ describe("dwm alert repository", () => {
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.sourceCount).toBe(1);
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.workflowContext).toMatchObject({
       organizationId: "org_repo_acme",
-      watchlistIds: ["watch_repo_acme"],
-      watchlistItemIds: ["watch_item_acme_domain"],
+      visibilityPolicy: "admins",
+      watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+      watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
       sourceFamily: "telegram_public",
       primaryCaptureId: "cap_repo_tg_acme",
       evidenceCount: 1,
@@ -138,7 +208,8 @@ describe("dwm alert repository", () => {
     });
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.webhookContext).toMatchObject({
       organizationId: "org_repo_acme",
-      watchlistItemIds: ["watch_item_acme_domain"],
+      visibilityPolicy: "admins",
+      watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
       captureIds: ["cap_repo_tg_acme"],
       evidenceCount: 1,
       recommendedRoute: "identity_response"
@@ -161,9 +232,11 @@ describe("dwm alert repository", () => {
     expect(telegramSql.dedupe_key).toMatch(/^dwm_dedupe_/);
     expect(telegramSql.provenance.captureIds).toContain("cap_repo_tg_acme");
     expect(telegramSql.evidence[0].provenance.captureId).toBe("cap_repo_tg_acme");
-    expect(telegramSql.watchlist_ids).toEqual(["watch_repo_acme"]);
-    expect(telegramSql.watchlist_item_ids).toEqual(["watch_item_acme_domain"]);
+    expect(telegramSql.watchlist_ids).toEqual(["watch_repo_acme", "watch_repo_acme_duplicate"]);
+    expect(telegramSql.watchlist_item_ids).toEqual(["watch_item_acme_domain", "watch_item_acme_duplicate_domain"]);
     expect(telegramSql.workflow_context.captureIds).toEqual(["cap_repo_tg_acme"]);
+    expect(telegramSql.workflow_context.generationCandidateId).toBe(generationPlan.candidates[0].id);
+    expect(telegramSql.workflow_context.webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
     expect(telegramSql.webhook_context.casePath).toContain(telegramSql.id);
     expect(telegramSql.case_id_candidate).toBe(telegramAlert?.caseIdCandidate);
     expect(telegramSql.case_path).toContain(`/v1/cases/${telegramAlert?.caseIdCandidate}`);
@@ -182,7 +255,7 @@ describe("dwm alert repository", () => {
     });
     store.saveCapture(telegramFollowupCapture);
 
-    const second = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme", organizationId: "org_repo_acme" });
+    const second = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme", organizationId: "org_repo_acme", visibilityPolicy: "admins" });
     const preserved = second.alerts.find((alert) => alert.id === existing.id);
 
     expect(preserved?.reviewState).toBe("reviewing");
