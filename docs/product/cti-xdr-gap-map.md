@@ -15,6 +15,23 @@ The product should compete with serious CTI, DWM, and XDR workflows. Current mar
 
 Assumption boundary: this is competitor-informed product planning, not a claim that Hanasand currently has equivalent coverage. Public competitor pages are marketing pages; use them as workflow expectations, not as exact implementation specs.
 
+## Coordinator Scoreboard
+
+Use this table in the 10-minute coordinator loop. The `Metric key` names should stay stable so automation can diff progress without rereading the full document.
+
+| ID | Pillar | Metric key | Current measurable status | Owner lane | Next code slice |
+| --- | --- | --- | --- | --- | --- |
+| P1 | Organizations/teams | `organizations.orgCount`, `organizations.usersInvited24h` | Partial: auth/users exist; org API work is in progress; no confirmed buyer org onboarding loop yet. | Org/API lane | Finish org create/list/invite/accept/member roles, then wire active org into dashboard and TI/DWM tenant IDs. |
+| P2 | Shared watchlists | `watchlists.sharedWatchlistCount`, `watchlists.activeWatchlistCount`, `watchlists.watchTermsCount` | Partial: scraper DWM watchlist API exists; shared team ownership/version/audit not confirmed. | Org + DWM lane | Convert DWM watchlists to org-owned shared objects with owner, term types, pause/resume, audit events, and last match. |
+| P3 | Webhook/Discord delivery | `watchlists.watchlistsWithWebhook`, `delivery.webhookDeliveries10m`, `delivery.discordDeliveries10m`, `delivery.webhookFailures10m` | Partial: DWM webhook test/deliver/deliveries routes exist; buyer-facing delivery settings and Discord route are not complete. | Delivery lane | Add DWM delivery settings: endpoint, Discord template, test send, payload preview, last deliveries, retry failed. |
+| P4 | Real source coverage | `sources.activeTelegramSourceCount`, `sources.activeDarkWebMetadataSourceCount`, `sources.activeSourceCount`, `sources.sourcesFailingNow` | Partial: source registry, Telegram adapters, darkweb metadata adapters, and source pages exist; active production counts need authoritative API. | Source-ops lane | Add source KPI endpoint used by `/dashboard/ti/control`: active Telegram, active onion/darkweb metadata, failing sources, candidates queued, next scheduled run. |
+| P5 | Collection runs | `collection.runsStarted10m`, `collection.runsSucceeded10m`, `collection.capturesCollected10m`, `collection.screenshotsCaptured10m` | Partial: run/control pages and scraper run APIs exist; screenshots and 10-minute deltas are not coordinator-ready. | Scraper/control lane | Emit compact run delta records with started/succeeded/failed, captures, screenshots, source IDs, and next run time. |
+| P6 | Real alert generation | `alerts.realAlertsGenerated10m`, `alerts.alertsWithEvidence`, `alerts.demoAlertsVisible`, `alerts.duplicateAlertsSuppressed10m` | Partial: alerts can be rebuilt from watchlists + captures; demo fallback still exists and must be excluded from production buyer paths. | DWM alert lane | Add proof path: real watchlist + real capture -> saved alert with evidence ID, source ID, dedupe key, and `demoAlertsVisible=0`. |
+| P7 | Analyst cases | `cases.openCaseCount`, `cases.casesAssigned10m`, `cases.casesClosed10m`, `cases.casesWithAnalystNotes` | Partial: DWM alert workflow states and TI/DWM workbench concepts exist; durable unified case object needs confirmation. | Case/workbench lane | Persist case object over DWM/TI alerts: assign, note, escalate, false-positive, close/reopen, timeline, audit actor. |
+| P8 | Threat actor intelligence | `actorIntel.actorProfilesRefreshed10m`, `actorIntel.profilesWithRecentActivity`, `actorIntel.profilesWithSourceLinks` | Partial: actor pages/enrichment utilities exist; autonomous freshness and source-gated paid/free view need hard proof. | Actor-intel lane | Add actor refresh ledger: changed fields, source IDs, next refresh, stable profile cache, recent activity short-cache, first 5 sources free. |
+| P9 | Audit/helpdesk/admin readiness | `admin.auditEvents10m`, `admin.helpdeskTicketsOpen`, `admin.supportActions10m` | Weak: admin/support work appears in progress; buyer/admin support loops are not yet a product KPI. | Admin/support lane | Add audit/helpdesk readiness endpoint: org audit events, support actions, failed deliveries needing help, source approval requests. |
+| P10 | Deploy health | `deployment.frontendCommit`, `deployment.frontendHealthy`, `deployment.apiHealthy`, `deployment.scraperHealthy` | Partial: `/status` and container health exist; coordinator needs one product-progress record tying deploy health to CTI/DWM KPIs. | Ops lane | Emit `/api/product-progress` or scraper SLO record every 10 minutes with commit, health, and all KPI groups in this table. |
+
 ## Product Pillars
 
 | Pillar | Current repo status | Missing user-visible capability | Strong competitor expectation | Next implementable slice |
@@ -121,4 +138,3 @@ Rules:
 - If a worker proposes more data sources, ask how those sources create alerts, cases, or actor-page updates visible to a buyer.
 - If a worker says “autonomous,” ask for the latest run timestamp, changed fields, source IDs, and next scheduled work.
 - If a worker says “ready for marketing,” ask whether a new buyer can sign up, invite a teammate, add a watchlist, test a webhook, receive a real alert, and close a case.
-
