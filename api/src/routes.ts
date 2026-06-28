@@ -133,6 +133,7 @@ import { getTiEnrichment, postTiEnrichmentRun } from './handlers/ti/enrichment.t
 import { getTiPipeline, postTiPipelineRun } from './handlers/ti/pipeline.ts'
 import {
     deleteOrganizationWatchlist,
+    deleteOrganizationMember,
     getOrganization,
     getOrganizationAlertReadiness,
     getOrganizationInvites,
@@ -143,6 +144,7 @@ import {
     postOrganization,
     postOrganizationInviteAccept,
     postOrganizationInvites,
+    postOrganizationOwnershipTransfer,
     postOrganizationWatchlist,
     putOrganizationSettings,
 } from './handlers/organizations.ts'
@@ -280,6 +282,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/organizations/:id/invites', getOrganizationInvites)
     fastify.post('/organizations/:id/invites', postOrganizationInvites)
     fastify.get('/organizations/:id/members', getOrganizationMembers)
+    fastify.delete('/organizations/:id/members/:userId', deleteOrganizationMember)
+    fastify.post('/organizations/:id/ownership-transfer', postOrganizationOwnershipTransfer)
     fastify.get('/organizations/:id/settings', getOrganizationSettings)
     fastify.put('/organizations/:id/settings', putOrganizationSettings)
     fastify.get('/organizations/:id/alert-readiness', getOrganizationAlertReadiness)

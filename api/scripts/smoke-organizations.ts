@@ -4,6 +4,7 @@ import {
     normalizeInviteInput,
     normalizeOrganizationInput,
     normalizeOrganizationSettingsInput,
+    normalizeOwnershipTransferInput,
     normalizeWatchlistInput,
     buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
@@ -54,6 +55,16 @@ assert.throws(() => normalizeOrganizationSettingsInput({ alertVisibilityPolicy: 
 assert.throws(() => normalizeOrganizationSettingsInput({ retentionDays: 10 }), /Retention days/)
 assert.throws(() => normalizeOrganizationSettingsInput({ auditSafeMetadata: { callback: 'https://hooks.example.test/secret' } }), /emails, URLs, or secrets/)
 
+assert.deepEqual(normalizeOwnershipTransferInput({
+    targetUserId: 'user_next_owner',
+    reason: 'Customer primary admin changed roles.',
+}), {
+    targetUserId: 'user_next_owner',
+    reason: 'Customer primary admin changed roles.',
+})
+assert.throws(() => normalizeOwnershipTransferInput({ targetUserId: 'user_next_owner' }), /reason is required/)
+assert.throws(() => normalizeOwnershipTransferInput({ reason: 'handoff' }), /Target user/)
+
 assert.deepEqual(normalizeWatchlistInput({ kind: 'domain', value: 'https://WWW.Example.COM/login', notes: ' Supplier portal ' }), {
     kind: 'domain',
     value: 'example.com',
@@ -74,6 +85,7 @@ const alertReference = buildOrganizationDwmAlertReference(
         default_webhook_policy: 'manual_selection',
         alert_visibility_policy: 'admins',
         member_count: 8,
+        owner_count: 1,
         pending_invite_count: 2,
         shared_watchlist_count: 1,
     },
@@ -97,6 +109,7 @@ assert.equal(alertReference.alert.route, 'organization_watchlist')
 assert.equal(alertReference.alert.defaultWebhookPolicy, 'manual_selection')
 assert.equal(alertReference.alert.alertVisibilityPolicy, 'admins')
 assert.equal(alertReference.alert.memberCount, 8)
+assert.equal(alertReference.alert.ownerCount, 1)
 assert.equal(alertReference.alert.pendingInviteCount, 2)
 assert.equal(alertReference.alert.sharedWatchlistCount, 1)
 assert.equal(alertReference.alert.readinessStatus, 'ready')
@@ -109,6 +122,7 @@ assert.deepEqual(buildOrganizationBridgeContext({
     name: 'Empty Org',
     slug: 'empty-org',
     member_count: 1,
+    owner_count: 1,
     pending_invite_count: 0,
     shared_watchlist_count: 0,
 }), {
@@ -118,6 +132,7 @@ assert.deepEqual(buildOrganizationBridgeContext({
     defaultWebhookPolicy: 'active_destinations',
     alertVisibilityPolicy: 'members',
     memberCount: 1,
+    ownerCount: 1,
     pendingInviteCount: 0,
     sharedWatchlistCount: 0,
     readinessStatus: 'needs_watchlist',
@@ -135,6 +150,8 @@ assert.match(routes, /fastify\.post\('\/organizations'/)
 assert.match(routes, /fastify\.post\('\/organizations\/:id\/invites'/)
 assert.match(routes, /fastify\.post\('\/organizations\/invites\/:inviteId\/accept'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/members'/)
+assert.match(routes, /fastify\.delete\('\/organizations\/:id\/members\/:userId'/)
+assert.match(routes, /fastify\.post\('\/organizations\/:id\/ownership-transfer'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/settings'/)
 assert.match(routes, /fastify\.put\('\/organizations\/:id\/settings'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/alert-readiness'/)

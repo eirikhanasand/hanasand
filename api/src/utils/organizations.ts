@@ -20,6 +20,12 @@ export type OrganizationSettingsInput = {
     audit_safe_metadata?: unknown
 }
 
+export type OrganizationOwnershipTransferInput = {
+    targetUserId?: unknown
+    target_user_id?: unknown
+    reason?: unknown
+}
+
 export type InviteInput = {
     email?: unknown
     emails?: unknown
@@ -41,6 +47,7 @@ export type OrganizationRow = {
     created_at: string
     updated_at: string
     member_count?: number
+    owner_count?: number
     pending_invite_count?: number
     shared_watchlist_count?: number
     default_webhook_policy?: OrganizationDefaultWebhookPolicy
@@ -114,6 +121,7 @@ export type OrganizationDwmAlertReference = {
         defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
         alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
         memberCount: number
+        ownerCount: number
         pendingInviteCount: number
         sharedWatchlistCount: number
         readinessStatus: OrganizationReadinessStatus
@@ -136,6 +144,7 @@ export type OrganizationDwmAlertReference = {
         defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
         alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
         memberCount: number
+        ownerCount: number
         pendingInviteCount: number
         sharedWatchlistCount: number
         readinessStatus: OrganizationReadinessStatus
@@ -153,6 +162,7 @@ export type OrganizationBridgeContext = {
     defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
     alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
     memberCount: number
+    ownerCount: number
     pendingInviteCount: number
     sharedWatchlistCount: number
     readinessStatus: OrganizationReadinessStatus
@@ -235,6 +245,24 @@ export function normalizeOrganizationSettingsInput(body: OrganizationSettingsInp
     }
 }
 
+export function normalizeOwnershipTransferInput(body: OrganizationOwnershipTransferInput | undefined) {
+    const targetUserId = cleanText(body?.targetUserId ?? body?.target_user_id)
+    if (!targetUserId) {
+        throw new Error('Target user is required.')
+    }
+
+    const reason = cleanText(body?.reason)
+    if (reason.length < 3) {
+        throw new Error('Ownership transfer reason is required.')
+    }
+
+    if (reason.length > 1000) {
+        throw new Error('Ownership transfer reason must be 1000 characters or fewer.')
+    }
+
+    return { targetUserId, reason }
+}
+
 export function normalizeWatchlistInput(body: WatchlistInput | undefined) {
     const kind = cleanText(body?.kind).toLowerCase()
     if (!watchlistKinds.has(kind as WatchlistKind)) {
@@ -274,6 +302,7 @@ export function toOrganization(row: OrganizationRow) {
         slug: row.slug,
         role: row.role,
         memberCount: Number(row.member_count ?? 0),
+        ownerCount: Number(row.owner_count ?? 0),
         pendingInviteCount: Number(row.pending_invite_count ?? 0),
         sharedWatchlistCount: Number(row.shared_watchlist_count ?? 0),
         settings,
@@ -327,7 +356,7 @@ export function toWatchlistItem(row: OrganizationWatchlistRow) {
 }
 
 export function buildOrganizationDwmAlertReference(
-    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>,
+    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>,
     item: OrganizationWatchlistRow
 ): OrganizationDwmAlertReference {
     const watchlistName = `${organization.name} ${item.kind} watchlist`
@@ -364,6 +393,7 @@ export function buildOrganizationDwmAlertReference(
             defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
             alertVisibilityPolicy: bridgeContext.alertVisibilityPolicy,
             memberCount: bridgeContext.memberCount,
+            ownerCount: bridgeContext.ownerCount,
             pendingInviteCount: bridgeContext.pendingInviteCount,
             sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
             readinessStatus: bridgeContext.readinessStatus,
@@ -383,6 +413,7 @@ export function buildOrganizationDwmAlertReference(
             defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
             alertVisibilityPolicy: bridgeContext.alertVisibilityPolicy,
             memberCount: bridgeContext.memberCount,
+            ownerCount: bridgeContext.ownerCount,
             pendingInviteCount: bridgeContext.pendingInviteCount,
             sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
             readinessStatus: bridgeContext.readinessStatus,
@@ -393,7 +424,7 @@ export function buildOrganizationDwmAlertReference(
 }
 
 export function buildOrganizationBridgeContext(
-    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>
+    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>
 ): OrganizationBridgeContext {
     const sharedWatchlistCount = Number(organization.shared_watchlist_count ?? 0)
     return {
@@ -403,6 +434,7 @@ export function buildOrganizationBridgeContext(
         defaultWebhookPolicy: organization.default_webhook_policy ?? 'active_destinations',
         alertVisibilityPolicy: organization.alert_visibility_policy ?? 'members',
         memberCount: Number(organization.member_count ?? 0),
+        ownerCount: Number(organization.owner_count ?? 0),
         pendingInviteCount: Number(organization.pending_invite_count ?? 0),
         sharedWatchlistCount,
         readinessStatus: sharedWatchlistCount > 0 ? 'ready' : 'needs_watchlist',

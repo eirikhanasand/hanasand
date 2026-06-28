@@ -9,6 +9,7 @@ import {
     normalizeInviteInput,
     normalizeOrganizationInput,
     normalizeOrganizationSettingsInput,
+    normalizeOwnershipTransferInput,
     normalizeWatchlistInput,
     organizationSettingsFromRow,
     roleCanManageOrganization,
@@ -23,6 +24,7 @@ import {
     type OrganizationRow,
     type InviteInput,
     type OrganizationInput,
+    type OrganizationOwnershipTransferInput,
     type OrganizationSettingsInput,
     type WatchlistKind,
     type WatchlistInput,
@@ -31,6 +33,11 @@ import {
 
 type OrganizationParams = {
     id: string
+}
+
+type OrganizationMemberParams = {
+    id: string
+    userId: string
 }
 
 type InviteParams = {
@@ -53,6 +60,7 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
             o.*,
             om.role,
             COUNT(DISTINCT active_members.user_id)::int AS member_count,
+            COUNT(DISTINCT active_owners.user_id)::int AS owner_count,
             COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count,
             COUNT(DISTINCT active_watchlist_items.id)::int AS shared_watchlist_count
         FROM organizations o
@@ -63,6 +71,10 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
         LEFT JOIN organization_members active_members
           ON active_members.organization_id = o.id
          AND active_members.status = 'active'
+        LEFT JOIN organization_members active_owners
+          ON active_owners.organization_id = o.id
+         AND active_owners.status = 'active'
+         AND active_owners.role = 'owner'
         LEFT JOIN organization_invites pending_invites
           ON pending_invites.organization_id = o.id
          AND pending_invites.status = 'pending'
@@ -116,10 +128,11 @@ export async function postOrganization(req: FastifyRequest<{ Body: OrganizationI
     })
 
     return res.status(201).send({ organization: toOrganization({
-        ...(organization.rows[0] as OrganizationRow),
-        role: 'owner',
-        member_count: 1,
-        pending_invite_count: 0,
+            ...(organization.rows[0] as OrganizationRow),
+            role: 'owner',
+            member_count: 1,
+            owner_count: 1,
+            pending_invite_count: 0,
     }) })
 }
 
@@ -280,6 +293,139 @@ export async function getOrganizationMembers(req: FastifyRequest<{ Params: Organ
     return res.send({
         organization: toOrganization(organization),
         members: (result.rows as OrganizationMemberRow[]).map(toMember),
+    })
+}
+
+export async function deleteOrganizationMember(req: FastifyRequest<{ Params: OrganizationMemberParams }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const target = await loadOrganizationMembership(req.params.id, req.params.userId)
+    if (!target || target.status !== 'active') {
+        return res.status(404).send({ error: 'Organization member not found.' })
+    }
+
+    const permissionError = removalPermissionError(organization.role, target.role)
+    if (permissionError) {
+        return res.status(403).send({ error: permissionError })
+    }
+
+    const ownerCount = await activeOwnerCount(req.params.id)
+    if (target.role === 'owner' && ownerCount <= 1) {
+        return res.status(409).send({ error: 'Transfer ownership before removing the last owner.' })
+    }
+
+    const removed = await run(`
+        UPDATE organization_members
+        SET status = 'removed'
+        WHERE organization_id = $1
+          AND user_id = $2
+          AND status = 'active'
+        RETURNING *
+    `, [req.params.id, req.params.userId])
+
+    if (!removed.rows.length) {
+        return res.status(404).send({ error: 'Organization member not found.' })
+    }
+
+    await touchOrganization(req.params.id)
+    logOrganizationEvent(req, 'organization_member_removed', req.params.id, userId, {
+        targetUserId: req.params.userId,
+        targetRole: target.role,
+        actorRole: organization.role,
+        ownerCountBefore: ownerCount,
+    })
+
+    const updated = await loadOrganizationForMember(req.params.id, userId)
+    return res.send({
+        organization: updated ? toOrganization(updated) : null,
+        member: toMember(removed.rows[0] as OrganizationMemberRow),
+    })
+}
+
+export async function postOrganizationOwnershipTransfer(req: FastifyRequest<{ Params: OrganizationParams, Body: OrganizationOwnershipTransferInput }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    if (organization.role !== 'owner') {
+        return res.status(403).send({ error: 'Only organization owners can transfer ownership.' })
+    }
+
+    let input
+    try {
+        input = normalizeOwnershipTransferInput(req.body)
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid ownership transfer.' })
+    }
+
+    if (input.targetUserId === userId) {
+        return res.status(400).send({ error: 'Choose another active member as the new owner.' })
+    }
+
+    const target = await loadOrganizationMembership(req.params.id, input.targetUserId)
+    if (!target || target.status !== 'active') {
+        return res.status(404).send({ error: 'Target member not found.' })
+    }
+
+    const ownerCount = await activeOwnerCount(req.params.id)
+    const result = await run(`
+        WITH promoted AS (
+            UPDATE organization_members
+            SET role = 'owner'
+            WHERE organization_id = $1
+              AND user_id = $2
+              AND status = 'active'
+            RETURNING *
+        ),
+        demoted AS (
+            UPDATE organization_members
+            SET role = 'admin'
+            WHERE organization_id = $1
+              AND user_id = $3
+              AND status = 'active'
+              AND role = 'owner'
+            RETURNING *
+        )
+        SELECT promoted.*
+        FROM promoted
+    `, [req.params.id, input.targetUserId, userId])
+
+    if (!result.rows.length) {
+        return res.status(404).send({ error: 'Target member not found.' })
+    }
+
+    await touchOrganization(req.params.id)
+    logOrganizationEvent(req, 'organization_ownership_transferred', req.params.id, userId, {
+        targetUserId: input.targetUserId,
+        previousTargetRole: target.role,
+        previousOwnerCount: ownerCount,
+        reason: input.reason,
+    })
+
+    const updated = await loadOrganizationForMember(req.params.id, userId)
+    return res.send({
+        organization: updated ? toOrganization(updated) : null,
+        transfer: {
+            organizationId: req.params.id,
+            previousOwnerId: userId,
+            newOwnerId: input.targetUserId,
+            reason: input.reason,
+        },
+        member: toMember(result.rows[0] as OrganizationMemberRow),
     })
 }
 
@@ -503,6 +649,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
             defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
             alertVisibilityPolicy: bridgeContext.alertVisibilityPolicy,
             memberCount: bridgeContext.memberCount,
+            ownerCount: bridgeContext.ownerCount,
             pendingInviteCount: bridgeContext.pendingInviteCount,
             sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
             readinessStatus: bridgeContext.readinessStatus,
@@ -522,6 +669,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'defaultWebhookPolicy',
                 'alertVisibilityPolicy',
                 'memberCount',
+                'ownerCount',
                 'pendingInviteCount',
                 'sharedWatchlistCount',
                 'readinessStatus',
@@ -629,6 +777,7 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
             o.*,
             om.role,
             COUNT(DISTINCT active_members.user_id)::int AS member_count,
+            COUNT(DISTINCT active_owners.user_id)::int AS owner_count,
             COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count,
             COUNT(DISTINCT active_watchlist_items.id)::int AS shared_watchlist_count
         FROM organizations o
@@ -639,6 +788,10 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
         LEFT JOIN organization_members active_members
           ON active_members.organization_id = o.id
          AND active_members.status = 'active'
+        LEFT JOIN organization_members active_owners
+          ON active_owners.organization_id = o.id
+         AND active_owners.status = 'active'
+         AND active_owners.role = 'owner'
         LEFT JOIN organization_invites pending_invites
           ON pending_invites.organization_id = o.id
          AND pending_invites.status = 'pending'
@@ -652,6 +805,40 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
     `, [organizationId, userId])
 
     return result.rows[0] as OrganizationRow | undefined
+}
+
+async function loadOrganizationMembership(organizationId: string, userId: string) {
+    const result = await run(`
+        SELECT
+            om.organization_id,
+            om.user_id,
+            u.name,
+            u.avatar,
+            om.role,
+            om.status,
+            om.invited_by,
+            om.joined_at,
+            om.created_at
+        FROM organization_members om
+        JOIN users u ON u.id = om.user_id
+        WHERE om.organization_id = $1
+          AND om.user_id = $2
+        LIMIT 1
+    `, [organizationId, userId])
+
+    return result.rows[0] as OrganizationMemberRow | undefined
+}
+
+async function activeOwnerCount(organizationId: string) {
+    const result = await run(`
+        SELECT COUNT(*)::int AS owner_count
+        FROM organization_members
+        WHERE organization_id = $1
+          AND status = 'active'
+          AND role = 'owner'
+    `, [organizationId])
+
+    return Number(result.rows[0]?.owner_count ?? 0)
 }
 
 async function uniqueOrganizationSlug(baseSlug: string, currentOrganizationId?: string) {
@@ -708,4 +895,11 @@ function organizationSettingsPermissions(role: OrganizationRole | undefined) {
         canEdit,
         editableFields: canEdit ? ['name', 'slug', 'defaultWebhookPolicy', 'alertVisibilityPolicy', 'retentionDays', 'auditSafeMetadata'] : [],
     }
+}
+
+function removalPermissionError(actorRole: OrganizationRole | undefined, targetRole: OrganizationRole) {
+    if (actorRole === 'owner') return null
+    if (actorRole === 'admin' && (targetRole === 'member' || targetRole === 'viewer')) return null
+    if (actorRole === 'admin') return 'Organization admins can only remove members and viewers.'
+    return 'Only organization owners and admins can remove members.'
 }

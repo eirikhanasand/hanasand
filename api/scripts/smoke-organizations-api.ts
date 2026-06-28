@@ -47,6 +47,8 @@ app.post('/api/organizations/invites/:inviteId/accept', handlers.postOrganizatio
 app.get('/api/organizations/:id/invites', handlers.getOrganizationInvites)
 app.post('/api/organizations/:id/invites', handlers.postOrganizationInvites)
 app.get('/api/organizations/:id/members', handlers.getOrganizationMembers)
+app.delete('/api/organizations/:id/members/:userId', handlers.deleteOrganizationMember)
+app.post('/api/organizations/:id/ownership-transfer', handlers.postOrganizationOwnershipTransfer)
 app.get('/api/organizations/:id/settings', handlers.getOrganizationSettings)
 app.put('/api/organizations/:id/settings', handlers.putOrganizationSettings)
 app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertReadiness)
@@ -67,6 +69,7 @@ assert.equal(organizationResponse.statusCode, 201, organizationResponse.body)
 const organization = parseBody(organizationResponse.body).organization
 assert.equal(organization.role, 'owner')
 assert.equal(organization.memberCount, 1)
+assert.equal(organization.ownerCount, 1)
 assert.equal(organization.settings.defaultWebhookPolicy, 'active_destinations')
 assert.equal(organization.settings.alertVisibilityPolicy, 'members')
 assert.equal(organization.settings.retentionDays, 365)
@@ -367,6 +370,7 @@ assert.equal(readiness.tenantId, organization.id)
 assert.equal(readiness.defaultWebhookPolicy, 'manual_selection')
 assert.equal(readiness.alertVisibilityPolicy, 'admins')
 assert.equal(readiness.memberCount, 4)
+assert.equal(readiness.ownerCount, 1)
 assert.equal(readiness.pendingInviteCount, 1)
 assert.equal(readiness.sharedWatchlistCount, 2)
 assert.equal(readiness.readinessStatus, 'ready')
@@ -386,6 +390,7 @@ assert.equal(domainReference.alert.route, 'organization_watchlist')
 assert.equal(domainReference.alert.defaultWebhookPolicy, 'manual_selection')
 assert.equal(domainReference.alert.alertVisibilityPolicy, 'admins')
 assert.equal(domainReference.alert.memberCount, 4)
+assert.equal(domainReference.alert.ownerCount, 1)
 assert.equal(domainReference.alert.pendingInviteCount, 1)
 assert.equal(domainReference.alert.sharedWatchlistCount, 2)
 assert.equal(domainReference.alert.readinessStatus, 'ready')
@@ -407,6 +412,86 @@ const viewerReadinessResponse = await app.inject({
 assert.equal(viewerReadinessResponse.statusCode, 200, viewerReadinessResponse.body)
 assert.equal(parseBody(viewerReadinessResponse.body).alertReadiness.watchlistItemCount, 2)
 
+const memberRemoveViewerResponse = await app.inject({
+    method: 'DELETE',
+    url: `/api/organizations/${organization.id}/members/org_smoke_viewer`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(memberRemoveViewerResponse.statusCode, 403, memberRemoveViewerResponse.body)
+
+const adminRemoveOwnerResponse = await app.inject({
+    method: 'DELETE',
+    url: `/api/organizations/${organization.id}/members/org_smoke_owner`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(adminRemoveOwnerResponse.statusCode, 403, adminRemoveOwnerResponse.body)
+
+const viewerTransferResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/ownership-transfer`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+    payload: { targetUserId: 'org_smoke_admin', reason: 'Viewer should not transfer ownership.' },
+})
+assert.equal(viewerTransferResponse.statusCode, 403, viewerTransferResponse.body)
+
+const invalidTransferResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/ownership-transfer`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { targetUserId: 'org_smoke_admin' },
+})
+assert.equal(invalidTransferResponse.statusCode, 400, invalidTransferResponse.body)
+
+const transferResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/ownership-transfer`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { targetUserId: 'org_smoke_admin', reason: 'Customer primary owner changed.' },
+})
+assert.equal(transferResponse.statusCode, 200, transferResponse.body)
+const transfer = parseBody(transferResponse.body)
+assert.equal(transfer.transfer.previousOwnerId, 'org_smoke_owner')
+assert.equal(transfer.transfer.newOwnerId, 'org_smoke_admin')
+assert.equal(transfer.member.role, 'owner')
+assert.equal(transfer.organization.role, 'admin')
+assert.equal(transfer.organization.ownerCount, 1)
+
+const formerOwnerRemovesNewOwnerResponse = await app.inject({
+    method: 'DELETE',
+    url: `/api/organizations/${organization.id}/members/org_smoke_admin`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(formerOwnerRemovesNewOwnerResponse.statusCode, 403, formerOwnerRemovesNewOwnerResponse.body)
+
+const lastOwnerGuardResponse = await app.inject({
+    method: 'DELETE',
+    url: `/api/organizations/${organization.id}/members/org_smoke_admin`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(lastOwnerGuardResponse.statusCode, 409, lastOwnerGuardResponse.body)
+
+const removeViewerResponse = await app.inject({
+    method: 'DELETE',
+    url: `/api/organizations/${organization.id}/members/org_smoke_viewer`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(removeViewerResponse.statusCode, 200, removeViewerResponse.body)
+assert.equal(parseBody(removeViewerResponse.body).member.status, 'removed')
+
+const removedViewerWatchlistResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(removedViewerWatchlistResponse.statusCode, 404, removedViewerWatchlistResponse.body)
+
+const removedViewerReadinessResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-readiness`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(removedViewerReadinessResponse.statusCode, 404, removedViewerReadinessResponse.body)
+
 const outsiderResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/watchlists`,
@@ -425,6 +510,8 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upsert
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated' && log.metadata.fields.includes('defaultWebhookPolicy')))
+assert.ok(serviceLogs.some(log => log.message === 'organization_ownership_transferred' && log.metadata.targetUserId === 'org_smoke_admin'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_member_removed' && log.metadata.targetUserId === 'org_smoke_viewer'))
 
 await app.close()
 console.log('Organization API smoke passed for role RBAC, invite lifecycle, shared watchlists, alert readiness, and outsider isolation.')
@@ -536,10 +623,48 @@ async function fakeRun(query: string, params: any[] = []) {
         }])
     }
 
+    if (compact.includes('FROM organization_members om JOIN users u') && compact.includes('AND om.user_id = $2')) {
+        const member = members.get(memberKey(params[0], params[1]))
+        return rows(member
+            ? [{ ...member, name: users.get(member.user_id)?.name ?? member.user_id, avatar: users.get(member.user_id)?.avatar ?? '' }]
+            : [])
+    }
+
     if (compact.includes('FROM organization_members om JOIN users u')) {
         return rows([...members.values()]
             .filter(member => member.organization_id === params[0] && member.status === 'active')
             .map(member => ({ ...member, name: users.get(member.user_id)?.name ?? member.user_id, avatar: users.get(member.user_id)?.avatar ?? '' })))
+    }
+
+    if (compact.startsWith('SELECT COUNT(*)::int AS owner_count FROM organization_members')) {
+        return rows([{
+            owner_count: [...members.values()].filter(member => member.organization_id === params[0] && member.status === 'active' && member.role === 'owner').length,
+        }])
+    }
+
+    if (compact.startsWith('UPDATE organization_members SET status')) {
+        const [organizationId, userId] = params
+        const key = memberKey(organizationId, userId)
+        const existing = members.get(key)
+        if (!existing || existing.status !== 'active') return rows([])
+        const removed = { ...existing, status: 'removed' }
+        members.set(key, removed)
+        return rows([{ ...removed, name: users.get(userId)?.name ?? userId, avatar: users.get(userId)?.avatar ?? '' }])
+    }
+
+    if (compact.includes('WITH promoted AS')) {
+        const [organizationId, targetUserId, previousOwnerId] = params
+        const targetKey = memberKey(organizationId, targetUserId)
+        const previousOwnerKey = memberKey(organizationId, previousOwnerId)
+        const target = members.get(targetKey)
+        if (!target || target.status !== 'active') return rows([])
+        const promoted = { ...target, role: 'owner' }
+        members.set(targetKey, promoted)
+        const previousOwner = members.get(previousOwnerKey)
+        if (previousOwner?.status === 'active' && previousOwner.role === 'owner') {
+            members.set(previousOwnerKey, { ...previousOwner, role: 'admin' })
+        }
+        return rows([{ ...promoted, name: users.get(targetUserId)?.name ?? targetUserId, avatar: users.get(targetUserId)?.avatar ?? '' }])
     }
 
     if (compact.startsWith('SELECT id FROM organization_watchlist_items')) {
@@ -590,12 +715,14 @@ async function fakeRun(query: string, params: any[] = []) {
 function organizationSummary(organizationId: string, role: string) {
     const org = organizations.get(organizationId)
     const activeMembers = [...members.values()].filter(member => member.organization_id === organizationId && member.status === 'active')
+    const activeOwners = activeMembers.filter(member => member.role === 'owner')
     const pendingInvites = [...invites.values()].filter(invite => invite.organization_id === organizationId && invite.status === 'pending' && Date.parse(invite.expires_at) > Date.now())
     const sharedWatchlists = [...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at)
     return {
         ...org,
         role,
         member_count: activeMembers.length,
+        owner_count: activeOwners.length,
         pending_invite_count: pendingInvites.length,
         shared_watchlist_count: sharedWatchlists.length,
     }
