@@ -9,6 +9,7 @@ When the user points at one visible flaw, inspect the whole affected surface for
 Before final response, a task is not done until all applicable items are true:
 
 - The user-facing behavior is implemented end to end, not only scaffolded.
+- For product surfaces, the result lets the target user perform the job, not only observe metrics. If the user asks for an analyst/security/customer workflow, ship a workbench: queue, detail view, evidence, decision controls, assignment/notes where applicable, delivery/replay, and audit trail. A dashboard-only answer is incomplete unless the user explicitly asked only for reporting.
 - Nearby related UI/API states are handled: loading, empty, error, hover/focus, mobile, desktop, light/dark when present.
 - The feature is wired to real data or an honest fallback with clear product semantics.
 - The implementation is committed only when the intended diff is cleanly isolated from unrelated dirty work.
@@ -24,8 +25,21 @@ For every request, ask:
 2. What adjacent inconsistency will become obvious once this change ships?
 3. What evidence would prove this works in the actual app, not just in code?
 4. What can be improved within the same scope without creating a risky redesign?
+5. Is this only a dashboard/report when the product actually needs an operator workflow?
 
 Do that work unless it would be unsafe, destructive, or clearly outside the product direction.
+
+## Analyst Portal Bar
+Threat intelligence, DWM, XDR, SOC, monitoring, status, and incident-response work must be treated as operator portals by default. The minimum useful slice is not a card grid. It must include:
+
+- A prioritized queue of actionable items.
+- A selected-item detail panel with evidence, timestamps, source, confidence/reasoning, and blast-radius context.
+- Analyst actions such as review, escalate, assign, mute/false-positive, replay evidence, send/test delivery, and close when the backing API supports them.
+- A visible timeline/audit trail or clear note that persistence is not wired yet.
+- Source/task sidebars that show what collection or enrichment should happen next.
+- Empty states that help the analyst create the first case or run the first collection, not marketing copy.
+
+If a worker creates only overview metrics, chart cards, or promise text for these domains, the task has underdelivered.
 
 ## Product Language
 Avoid vague AI/product filler such as "signals", "confidence" without evidence, "powered by", "seamless", or brand-as-analyst phrasing. Prefer plain explanations that say what data was used, what happened, why it matters, and what the user can inspect next.

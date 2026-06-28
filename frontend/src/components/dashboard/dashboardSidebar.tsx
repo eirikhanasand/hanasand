@@ -83,6 +83,7 @@ export default function DashboardSidebar({
     if (isAdmin) {
         tiAdminItems.push(
             { href: '/dashboard/ti', label: 'TI overview', icon: <Radar className='h-4 w-4' /> },
+            { href: '/dashboard/ti/workbench', label: 'Analyst workbench', icon: <Inbox className='h-4 w-4' /> },
             { href: '/dashboard/ti/activity', label: 'TI activity', icon: <Activity className='h-4 w-4' /> },
             { href: '/dashboard/ti/enrichment', label: 'Actor enrichment', icon: <ListChecks className='h-4 w-4' /> },
             { href: '/dashboard/ti/sources', label: 'TI sources', icon: <DatabaseZap className='h-4 w-4' /> },
