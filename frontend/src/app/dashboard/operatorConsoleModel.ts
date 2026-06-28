@@ -74,6 +74,7 @@ export type DwmDeliveryItem = {
     payloadHash: string
     status: string
     deliveryKind?: 'discord' | 'generic'
+    httpStatus?: number
     error?: string
 }
 
@@ -210,6 +211,19 @@ export function buildReadinessCases(input: {
             nextTasks: hasWebhookDestination ? [`Owner: operator. Destination IDs: ${orgWebhooks.map(item => item.id).join(', ') || webhookWatchlists.map(item => item.webhookDestinationId || item.id).join(', ')}.`, 'Run a webhook test.', 'Send queued alerts and inspect delivery failures.'] : ['Owner: operator. Create a Discord or generic organization webhook destination.', 'Run webhook test.', 'Send queued alerts and inspect delivery failures.'],
             relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks API' }, { href: '/dashboard/dwm', label: 'Configure watchlist webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery setup' }] : [{ href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery setup' }],
             workflowPath: path,
+            deliveryEvidence: input.deliveries.map(delivery => ({
+                id: delivery.id,
+                alertId: delivery.alertId,
+                status: delivery.status,
+                deliveryKind: delivery.deliveryKind,
+                attemptedAt: delivery.attemptedAt,
+                webhookDestinationId: delivery.webhookDestinationId,
+                endpointHash: delivery.endpointHash,
+                payloadHash: delivery.payloadHash,
+                httpStatus: delivery.httpStatus,
+                error: delivery.error,
+            })),
+            missingDependency: input.deliveries.length ? undefined : 'No webhook delivery rows returned from /api/dwm/webhooks/deliveries. Run Test org webhook or Send queued alerts to create DB delivery evidence.',
             actions: webhookActions(input.scope, organization, orgWebhooks, hasWebhookDestination),
         }),
         readinessCase({
@@ -295,6 +309,8 @@ function readinessCase(input: {
     relatedLinks: WorkbenchCase['relatedLinks']
     workflowPath?: WorkbenchWorkflowStep[]
     actions?: WorkbenchAction[]
+    deliveryEvidence?: WorkbenchCase['deliveryEvidence']
+    missingDependency?: string
 }): WorkbenchCase {
     const updatedAt = input.evidence[0]?.observedAt || new Date().toISOString()
 
@@ -324,6 +340,8 @@ function readinessCase(input: {
         relatedLinks: input.relatedLinks,
         workflowPath: input.workflowPath,
         actions: input.actions,
+        deliveryEvidence: input.deliveryEvidence,
+        missingDependency: input.missingDependency,
     }
 }
 

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Clock3, ExternalLink, FileText, Filter, Fingerprint, ListChecks, MessageSquareText, Search, ShieldAlert, UserRound } from 'lucide-react'
 
 export type WorkbenchEvidence = {
@@ -46,6 +46,19 @@ export type WorkbenchAction = {
     disabledReason?: string
 }
 
+export type WorkbenchDeliveryEvidence = {
+    id: string
+    alertId: string
+    status: string
+    deliveryKind?: string
+    attemptedAt: string
+    webhookDestinationId?: string
+    endpointHash: string
+    payloadHash: string
+    httpStatus?: number
+    error?: string
+}
+
 export type WorkbenchCase = {
     id: string
     kind: 'dwm_alert' | 'ti_domain' | 'source_capture' | 'org_readiness' | 'watchlist_readiness' | 'webhook_readiness' | 'source_readiness' | 'alert_readiness'
@@ -72,6 +85,9 @@ export type WorkbenchCase = {
     relatedLinks: Array<{ href: string, label: string }>
     workflowPath?: WorkbenchWorkflowStep[]
     actions?: WorkbenchAction[]
+    caseDetailHref?: string
+    deliveryEvidence?: WorkbenchDeliveryEvidence[]
+    missingDependency?: string
 }
 
 type QueueFilter = 'all' | 'critical' | 'high' | 'persistent' | 'evidence'
@@ -84,12 +100,32 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
     const [query, setQuery] = useState('')
     const [notes, setNotes] = useState<Record<string, string>>({})
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
+    const [caseDetails, setCaseDetails] = useState<Record<string, CaseDetailState>>({})
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const cases = useMemo(() => filterCases(initialCases, filter, query), [initialCases, filter, query])
     const selected = initialCases.find(item => item.id === selectedId) ?? cases[0] ?? initialCases[0]
     const queues = queueSummary(initialCases)
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
+    const selectedCaseDetail = selected ? caseDetails[selected.id] : undefined
+
+    useEffect(() => {
+        if (!selected?.caseDetailHref) return
+        let cancelled = false
+        setCaseDetails(current => ({ ...current, [selected.id]: { status: 'loading' } }))
+        fetch(selected.caseDetailHref, { cache: 'no-store' })
+            .then(async response => {
+                const payload = await readCaseDetailJson(response)
+                if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+                if (!cancelled) setCaseDetails(current => ({ ...current, [selected.id]: { status: 'ready', detail: payload } }))
+            })
+            .catch(error => {
+                if (!cancelled) setCaseDetails(current => ({ ...current, [selected.id]: { status: 'error', error: error instanceof Error ? error.message : String(error) } }))
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [selected?.id, selected?.caseDetailHref])
 
     async function applyDecision(item: WorkbenchCase, decision: LocalDecision) {
         const nextDecision = {
@@ -261,6 +297,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
                                 note={notes[selected.id] ?? ''}
                                 busyAction={busyAction}
                                 compact={compact}
+                                caseDetail={selectedCaseDetail}
                                 onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={(decision) => applyDecision(selected, decision)}
                                 onReplay={() => replayDwmAlert(selected)}
@@ -327,12 +364,175 @@ function EmptyWorkspace() {
     )
 }
 
-function CaseDetail({ item, decision, note, busyAction, compact, onNoteChange, onDecision, onReplay, onSend, onAction }: {
+function BackedInspection({ item, caseDetail, compact }: { item: WorkbenchCase, caseDetail?: CaseDetailState, compact: boolean }) {
+    const localDeliveries = item.deliveryEvidence || []
+    const detailDeliveries = caseDetail?.status === 'ready' ? caseDetail.detail.deliveries || [] : []
+    const deliveries = detailDeliveries.length ? detailDeliveries : localDeliveries
+    const blockedDependency = item.missingDependency || (!item.caseDetailHref && item.kind === 'dwm_alert' ? 'No backed case ID is available for this selected alert. Use Open case after live alerts load; fallback alerts cannot load /api/cases/:id.' : '')
+
+    return (
+        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#171a21]'>Backed inspection</h3>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Case detail, workflow timeline, evidence, delivery attempts, and missing dependencies.</p>
+                </div>
+                {item.caseDetailHref && (
+                    <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                        Case API
+                        <ExternalLink className='h-3.5 w-3.5' />
+                    </Link>
+                )}
+            </div>
+            <div className={`grid gap-3 p-4 ${compact ? 'xl:grid-cols-[0.85fr_1fr]' : 'xl:grid-cols-[0.8fr_1fr]'}`}>
+                <div className='grid gap-3'>
+                    {caseDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading case detail' body='Fetching /api/cases/:id through the dashboard proxy.' />}
+                    {caseDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Case detail unavailable' body={caseDetail.error} />}
+                    {blockedDependency && !caseDetail && <InspectionNotice tone='blocked' title='Blocked dependency' body={blockedDependency} />}
+                    {caseDetail?.status === 'ready' ? (
+                        <>
+                            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <span className='text-sm font-semibold text-[#171a21]'>{caseDetail.detail.case?.id || 'case'}</span>
+                                    <span className={workflowStatusClass(caseDetail.detail.case?.status === 'closed' ? 'blocked' : 'ready')}>{label(caseDetail.detail.case?.status || 'unknown')}</span>
+                                    {caseDetail.detail.access?.mode && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{caseDetail.detail.access.mode}</span>}
+                                </div>
+                                <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{caseDetail.detail.case?.summary || 'No case summary returned.'}</p>
+                                <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
+                                    <p><span className='font-semibold text-[#475467]'>Owner:</span> {caseDetail.detail.case?.assignedOwner || 'unassigned'}</p>
+                                    <p><span className='font-semibold text-[#475467]'>Alert:</span> {caseDetail.detail.case?.alertId || caseDetail.detail.alert?.id || 'none'}</p>
+                                    <p><span className='font-semibold text-[#475467]'>Delivery:</span> {caseDetail.detail.deliveryContext?.deliveryCount ?? 0} attempt(s)</p>
+                                    <p><span className='font-semibold text-[#475467]'>Updated:</span> {relativeTime(caseDetail.detail.case?.updatedAt || caseDetail.detail.generatedAt)}</p>
+                                </div>
+                            </div>
+                            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                                <h4 className='text-sm font-semibold text-[#171a21]'>Allowed next actions</h4>
+                                <div className='mt-2 flex flex-wrap gap-2'>
+                                    {(caseDetail.detail.nextAllowedActions || caseDetail.detail.nextActions || []).map(action => (
+                                        <span key={String(action)} className='rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-[#596170]'>{String(action)}</span>
+                                    ))}
+                                    {!(caseDetail.detail.nextAllowedActions || caseDetail.detail.nextActions || []).length && <span className='text-xs text-[#667085]'>No next actions returned by the case API.</span>}
+                                </div>
+                            </div>
+                        </>
+                    ) : null}
+                    <DeliveryEvidenceRows deliveries={deliveries} />
+                </div>
+                <div className='grid gap-3'>
+                    {caseDetail?.status === 'ready' && (
+                        <>
+                            <TimelineRows title='Case timeline' rows={caseDetail.detail.timeline || []} />
+                            <CaseEvidenceRows evidence={caseDetail.detail.evidence || []} />
+                        </>
+                    )}
+                    {caseDetail?.status !== 'ready' && !deliveries.length && (
+                        <InspectionNotice
+                            tone='neutral'
+                            title='No delivery rows loaded'
+                            body='Delivery evidence appears after POST /api/dwm/webhooks/test or POST /api/dwm/webhooks/deliver writes rows to listDwmWebhookDeliveries.'
+                        />
+                    )}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+function InspectionNotice({ tone, title, body }: { tone: 'neutral' | 'blocked', title: string, body: string }) {
+    return (
+        <div className={`rounded-lg border p-3 ${tone === 'blocked' ? 'border-[#fed7aa] bg-[#fff7ed]' : 'border-[#d8dee9] bg-[#fbfcfe]'}`}>
+            <h4 className={`text-sm font-semibold ${tone === 'blocked' ? 'text-[#9a3412]' : 'text-[#171a21]'}`}>{title}</h4>
+            <p className='mt-1 text-xs leading-5 text-[#596170]'>{body}</p>
+        </div>
+    )
+}
+
+function DeliveryEvidenceRows({ deliveries }: { deliveries: Array<WorkbenchDeliveryEvidence | CaseDelivery> }) {
+    if (!deliveries.length) {
+        return (
+            <InspectionNotice
+                tone='blocked'
+                title='Webhook delivery evidence missing'
+                body='No delivery rows are available. Run Test org webhook or Send alert; if rows still do not appear, wire listDwmWebhookDeliveries through the scraper store and /api/dwm/webhooks/deliveries.'
+            />
+        )
+    }
+
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <h4 className='text-sm font-semibold text-[#171a21]'>Webhook delivery evidence</h4>
+            <div className='mt-3 grid gap-2'>
+                {deliveries.map(delivery => (
+                    <div key={delivery.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <span className='font-mono text-xs font-semibold text-[#171a21]'>{delivery.id}</span>
+                            <span className={workflowStatusClass(delivery.status === 'delivered' || delivery.status === 'dry_run' ? 'ready' : delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'needs_action')}>{label(delivery.status)}</span>
+                            {delivery.deliveryKind && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{delivery.deliveryKind}</span>}
+                        </div>
+                        <div className='mt-2 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
+                            <p><span className='font-semibold text-[#475467]'>Alert:</span> {delivery.alertId}</p>
+                            <p><span className='font-semibold text-[#475467]'>Destination:</span> {delivery.webhookDestinationId || 'watchlist url'}</p>
+                            <p><span className='font-semibold text-[#475467]'>Attempted:</span> {relativeTime(delivery.attemptedAt)}</p>
+                            {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-[#475467]'>HTTP:</span> {delivery.httpStatus}</p>}
+                        </div>
+                        <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{delivery.endpointHash} · {delivery.payloadHash}</p>
+                        {delivery.error && <p className='mt-2 text-xs font-semibold text-[#9a3412]'>{delivery.error}</p>}
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+function TimelineRows({ title, rows }: { title: string, rows: CaseTimelineItem[] }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <h4 className='text-sm font-semibold text-[#171a21]'>{title}</h4>
+            <div className='mt-3 grid gap-3'>
+                {rows.map(row => (
+                    <div key={row.id} className='grid grid-cols-[auto_1fr] gap-3'>
+                        <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#3056d3]' />
+                        <div>
+                            <p className='text-sm font-semibold text-[#171a21]'>{row.title}</p>
+                            <p className='mt-1 text-xs leading-5 text-[#667085]'>{row.detail}</p>
+                            <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(row.at)}</p>
+                        </div>
+                    </div>
+                ))}
+                {!rows.length && <p className='text-xs text-[#667085]'>No case timeline returned.</p>}
+            </div>
+        </div>
+    )
+}
+
+function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <h4 className='text-sm font-semibold text-[#171a21]'>Case API evidence</h4>
+            <div className='mt-3 grid gap-2'>
+                {evidence.map(item => (
+                    <div key={item.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <span className='text-sm font-semibold text-[#171a21]'>{item.sourceName || item.id}</span>
+                            {item.redactionState && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
+                        </div>
+                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{item.excerpt || 'No safe excerpt returned.'}</p>
+                        <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{item.contentHash || item.id}</p>
+                    </div>
+                ))}
+                {!evidence.length && <p className='text-xs text-[#667085]'>No evidence returned by the case API.</p>}
+            </div>
+        </div>
+    )
+}
+
+function CaseDetail({ item, decision, note, busyAction, compact, caseDetail, onNoteChange, onDecision, onReplay, onSend, onAction }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
     busyAction: string | null
     compact: boolean
+    caseDetail?: CaseDetailState
     onNoteChange: (value: string) => void
     onDecision: (decision: LocalDecision) => void | Promise<void>
     onReplay: () => void | Promise<void>
@@ -461,6 +661,8 @@ function CaseDetail({ item, decision, note, busyAction, compact, onNoteChange, o
                 </section>
             ) : null}
 
+            <BackedInspection item={item} caseDetail={caseDetail} compact={compact} />
+
             <section className='grid gap-4 lg:grid-cols-[1fr_0.78fr]'>
                 <div className='rounded-lg border border-[#e0e5ed] bg-white'>
                     <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
@@ -567,12 +769,81 @@ type LocalDecision = {
     decidedAt?: string
 }
 
+type CaseDetailState =
+    | { status: 'loading' }
+    | { status: 'ready', detail: CaseDetailPayload }
+    | { status: 'error', error: string }
+
+type CaseDetailPayload = {
+    schemaVersion?: string
+    generatedAt: string
+    error?: { message?: string }
+    access?: { mode?: string, role?: string, canMutate?: boolean }
+    case?: {
+        id: string
+        alertId?: string
+        title?: string
+        summary?: string
+        status?: string
+        priority?: string
+        assignedOwner?: string
+        updatedAt: string
+    }
+    alert?: { id?: string }
+    alertContext?: {
+        id?: string
+        reviewState?: string
+        deliveryState?: string
+        assignedOwner?: string
+        workflowNote?: string
+    }
+    deliveryContext?: {
+        deliveryCount: number
+        latestDelivery?: CaseDelivery
+        delivered?: boolean
+        retryable?: boolean
+        failed?: CaseDelivery[]
+    }
+    deliveries?: CaseDelivery[]
+    evidence?: CaseEvidence[]
+    timeline?: CaseTimelineItem[]
+    nextActions?: string[]
+    nextAllowedActions?: string[]
+}
+
+type CaseDelivery = WorkbenchDeliveryEvidence & {
+    dryRun?: boolean
+}
+
+type CaseEvidence = {
+    id: string
+    sourceName?: string
+    redactionState?: string
+    contentHash?: string
+    excerpt?: string
+}
+
+type CaseTimelineItem = {
+    id: string
+    at: string
+    title: string
+    detail: string
+}
+
 function DecisionButton({ busy = false, onClick, children }: { busy?: boolean, onClick: () => void | Promise<void>, children: string }) {
     return (
         <button type='button' onClick={onClick} disabled={busy} className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'>
             {children}
         </button>
     )
+}
+
+async function readCaseDetailJson(response: Response) {
+    try {
+        return await response.json() as CaseDetailPayload
+    } catch {
+        return { generatedAt: new Date().toISOString(), error: { message: 'Case detail response was not JSON.' } }
+    }
 }
 
 async function readJson(response: Response) {

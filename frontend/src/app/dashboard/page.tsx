@@ -57,7 +57,7 @@ export default async function Page({
         liveAlertCount: liveAlerts.length,
         renderedAlertCount: alerts.length,
     })
-    const cases = buildWorkbenchCases(overview, alerts, readinessCases, liveAlerts.length > 0, scope)
+    const cases = buildWorkbenchCases(overview, alerts, readinessCases, liveAlerts.length > 0, scope, deliveries)
     const displayName = impersonatingName || impersonatingId || name
     const firstName = displayName.split(/\s+/)[0] || displayName
     const highPriorityCount = cases.filter(item => item.severity === 'critical' || item.severity === 'high').length
@@ -221,8 +221,8 @@ async function loadDwmOrganizationState(): Promise<DwmOrganizationState> {
     }
 }
 
-function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[], readinessCases: WorkbenchCase[], liveAlerts: boolean, scope: OperatorScope): WorkbenchCase[] {
-    const alertCases = alerts.map(alert => alertToCase(alert, liveAlerts, scope))
+function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[], readinessCases: WorkbenchCase[], liveAlerts: boolean, scope: OperatorScope, deliveries: DwmDeliveryItem[]): WorkbenchCase[] {
+    const alertCases = alerts.map(alert => alertToCase(alert, liveAlerts, scope, deliveries))
     const domainCases = overview.domains.map(domain => domainToCase(domain, overview.captures))
     const captureCases = overview.captures.map(captureToCase)
 
@@ -230,7 +230,7 @@ function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[], read
         .sort((a, b) => b.priority - a.priority || b.updatedAt.localeCompare(a.updatedAt))
 }
 
-function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope): WorkbenchCase {
+function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, deliveries: DwmDeliveryItem[]): WorkbenchCase {
     const workflowAlert = alert as DwmWorkflowAlert
     const severity = normalizeSeverity(alert.severity)
     const caseId = workflowAlert.caseId || workflowAlert.caseIdCandidate || workflowAlert.workflowContext?.caseIdCandidate
@@ -239,6 +239,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope):
     const watchlistIds = workflowAlert.workflowContext?.watchlistIds || []
     const webhookDestinationIds = workflowAlert.webhookContext?.webhookDestinationIds || workflowAlert.workflowContext?.webhookDestinationIds || []
     const organizationId = workflowAlert.organizationId || workflowAlert.workflowContext?.organizationId || scope.organizationId
+    const alertDeliveries = deliveries.filter(delivery => delivery.alertId === alert.id)
     const workflowPath = [
         {
             id: `${alert.id}_path_org`,
@@ -341,6 +342,26 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope):
             { href: '/dashboard/automations?setup=dwm', label: 'Webhook subscription' },
         ],
         workflowPath,
+        caseDetailHref: casePath,
+        deliveryEvidence: alertDeliveries.map(delivery => ({
+            id: delivery.id,
+            alertId: delivery.alertId,
+            status: delivery.status,
+            deliveryKind: delivery.deliveryKind,
+            attemptedAt: delivery.attemptedAt,
+            webhookDestinationId: delivery.webhookDestinationId,
+            endpointHash: delivery.endpointHash,
+            payloadHash: delivery.payloadHash,
+            httpStatus: delivery.httpStatus,
+            error: delivery.error,
+        })),
+        missingDependency: !liveAlert
+            ? 'This is a fallback alert. It cannot load /api/cases/:id or delivery rows until live DWM alerts are returned by the backend.'
+            : !casePath
+                ? 'No case ID is attached yet. Use Open case to create the backed /api/cases record.'
+                : !alertDeliveries.length
+                    ? 'No webhook delivery rows returned from /api/dwm/webhooks/deliveries. Run Send alert or Test org webhook to create delivery evidence.'
+                    : undefined,
         actions: liveAlert ? [
             {
                 id: 'open_case',
