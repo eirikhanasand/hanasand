@@ -116,6 +116,14 @@ export type DwmAlertWebhookDispatchPlan = {
     }>
 }
 
+export type DwmWebhookDeliveryEvidenceFilters = {
+    orgId?: unknown
+    destinationId?: unknown
+    alertId?: unknown
+    casePath?: unknown
+    dedupeKey?: unknown
+}
+
 type NormalizedDestinationInput = {
     orgId: string
     name: string
@@ -201,6 +209,9 @@ export function toDwmWebhookAuditEvent(row: DwmWebhookAuditRow) {
         createdAt: row.created_at,
     }
 }
+
+type DwmWebhookDeliveryPublic = ReturnType<typeof toDwmWebhookDelivery>
+type DwmWebhookAuditPublic = ReturnType<typeof toDwmWebhookAuditEvent>
 
 export function normalizeDwmWebhookDestinationInput(
     input: DwmWebhookDestinationInput,
@@ -434,6 +445,90 @@ export async function listDwmWebhookAuditEvents(ownerId: string, orgId?: string)
     `, [ownerId, orgId || null])
 
     return (result.rows as DwmWebhookAuditRow[]).map(toDwmWebhookAuditEvent)
+}
+
+export function buildDwmWebhookDeliveryEvidence({
+    deliveries,
+    auditEvents = [],
+    filters = {},
+}: {
+    deliveries: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    filters?: DwmWebhookDeliveryEvidenceFilters
+}) {
+    const normalizedFilters = {
+        orgId: clean(filters.orgId),
+        destinationId: clean(filters.destinationId),
+        alertId: clean(filters.alertId),
+        casePath: clean(filters.casePath),
+        dedupeKey: clean(filters.dedupeKey),
+    }
+    const auditByDelivery = new Map<string, DwmWebhookAuditPublic>()
+    for (const audit of auditEvents) {
+        if (audit.deliveryId && !auditByDelivery.has(audit.deliveryId)) {
+            auditByDelivery.set(audit.deliveryId, audit)
+        }
+    }
+
+    return deliveries
+        .map((delivery) => {
+            const payloadContext = extractHanasandPayloadContext(delivery.payload)
+            const payloadAlert = recordOrEmpty(payloadContext.alert)
+            const payloadDelivery = recordOrEmpty(payloadContext.delivery)
+            const payloadWatchlist = recordOrEmpty(payloadContext.watchlist)
+            const audit = auditByDelivery.get(delivery.id) || null
+            const dedupeKey = clean(payloadDelivery.dedupeKey)
+                || clean(payloadAlert.dedupeKey)
+                || dedupeFromIdempotencyKey(delivery.idempotencyKey)
+            const casePath = delivery.casePath || clean(payloadDelivery.casePath) || clean(payloadAlert.casePath)
+            const replay = delivery.eventType === 'dwm.alert.replayed' || payloadDelivery.replay === true
+            const liveRequested = !delivery.dryRun
+            const live = liveRequested && delivery.status !== 'skipped'
+
+            return {
+                requestId: delivery.id,
+                deliveryId: delivery.id,
+                orgId: delivery.orgId,
+                destinationId: delivery.destinationId,
+                alertId: delivery.alertId,
+                eventType: delivery.eventType,
+                status: delivery.status,
+                dryRun: delivery.dryRun,
+                live,
+                liveRequested,
+                replay,
+                replayCount: parseCount(payloadAlert.replayCount),
+                route: delivery.route || clean(payloadDelivery.route) || clean(payloadAlert.route),
+                casePath,
+                dedupeKey,
+                idempotencyKey: delivery.idempotencyKey,
+                watchlistId: delivery.watchlistId || clean(payloadWatchlist.id),
+                watchlistName: delivery.watchlistName || clean(payloadWatchlist.name),
+                attemptedAt: delivery.attemptedAt,
+                createdAt: delivery.createdAt,
+                redactedDestination: {
+                    id: delivery.destinationId,
+                    endpointHint: redactDeliveryEvidenceText(delivery.endpointHint),
+                    endpointHash: delivery.endpointHash,
+                },
+                payloadHash: delivery.payloadHash,
+                response: {
+                    httpStatus: delivery.responseStatus,
+                    summary: delivery.responseBody ? redactDeliveryEvidenceText(truncate(delivery.responseBody, 500)) : null,
+                },
+                error: delivery.error ? redactDeliveryEvidenceText(truncate(delivery.error, 500)) : null,
+                auditEventId: audit?.id || null,
+                auditAction: audit?.action || null,
+            }
+        })
+        .filter((evidence) => {
+            if (normalizedFilters.orgId && evidence.orgId !== normalizedFilters.orgId) return false
+            if (normalizedFilters.destinationId && evidence.destinationId !== normalizedFilters.destinationId) return false
+            if (normalizedFilters.alertId && evidence.alertId !== normalizedFilters.alertId) return false
+            if (normalizedFilters.casePath && evidence.casePath !== normalizedFilters.casePath) return false
+            if (normalizedFilters.dedupeKey && evidence.dedupeKey !== normalizedFilters.dedupeKey && evidence.idempotencyKey !== normalizedFilters.dedupeKey) return false
+            return true
+        })
 }
 
 export async function testDwmWebhookDestination(ownerId: string, id: string, input: DwmAlertNotificationInput = {}) {
@@ -1121,6 +1216,28 @@ function redactAuditMetadata(metadata: Record<string, unknown>) {
         }
     }
     return redacted
+}
+
+function extractHanasandPayloadContext(payload: unknown) {
+    const record = recordOrEmpty(payload)
+    return recordOrEmpty(record._hanasand)
+}
+
+function recordOrEmpty(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' ? value as Record<string, unknown> : {}
+}
+
+function dedupeFromIdempotencyKey(value: string) {
+    const parts = value.split(':')
+    return parts.length >= 4 ? parts.slice(3).join(':') : value
+}
+
+function redactDeliveryEvidenceText(value: string) {
+    return value
+        .replace(/(discord(?:app)?\.com\/api\/webhooks\/[^/\s"']+\/)[^/\s"']+/gi, '$1...')
+        .replace(/(api\/webhooks\/[^/\s"']+\/)[^/\s"']+/gi, '$1...')
+        .replace(/([?&](?:token|secret|password|key|credential)=)[^&\s"']+/gi, '$1[redacted]')
+        .replace(/((?:token|secret|password|credential)\s*[:=]\s*)[^,\s"'}]+/gi, '$1[redacted]')
 }
 
 function clean(value: unknown) {

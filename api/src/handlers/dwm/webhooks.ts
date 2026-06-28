@@ -4,6 +4,7 @@ import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import { roleCanManageOrganization, type OrganizationRole } from '#utils/organizations.ts'
 import {
     archiveDwmWebhookDestination,
+    buildDwmWebhookDeliveryEvidence,
     createDwmWebhookDestination,
     deliverDwmAlertNotification,
     listDwmWebhookAuditEvents,
@@ -23,6 +24,14 @@ type OrgQuery = {
     orgId?: string
     org_id?: string
     includeAudit?: string
+    destinationId?: string
+    destination_id?: string
+    alertId?: string
+    alert_id?: string
+    casePath?: string
+    case_path?: string
+    dedupeKey?: string
+    dedupe_key?: string
 }
 
 type Membership = {
@@ -136,11 +145,24 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const deliveries = await listDwmWebhookDeliveries(userId, orgId || undefined)
+    const auditEvents = await listDwmWebhookAuditEvents(userId, orgId || undefined)
     const payload: Record<string, unknown> = {
-        deliveries: await listDwmWebhookDeliveries(userId, orgId || undefined),
+        deliveries,
+        deliveryEvidence: buildDwmWebhookDeliveryEvidence({
+            deliveries,
+            auditEvents,
+            filters: {
+                orgId,
+                destinationId: clean(req.query?.destinationId) || clean(req.query?.destination_id),
+                alertId: clean(req.query?.alertId) || clean(req.query?.alert_id),
+                casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
+                dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
+            },
+        }),
     }
     if (req.query?.includeAudit === 'true') {
-        payload.auditEvents = await listDwmWebhookAuditEvents(userId, orgId || undefined)
+        payload.auditEvents = auditEvents
     }
 
     return res.send(payload)
