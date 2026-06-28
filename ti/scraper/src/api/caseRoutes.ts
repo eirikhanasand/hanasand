@@ -45,12 +45,22 @@ export function listCases(url: URL, options: ApiServerOptions, request?: Request
   if (scope.error) return scope.error;
   const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
-  const requestedStatus = url.searchParams.get("status");
+  const filters = caseFiltersFromUrl(url);
   const cases = ((options.store as any).listCases?.() ?? [])
     .filter((row: AnalystCase) => row.tenantId === scope.tenantId)
-    .filter((row: AnalystCase) => !requestedStatus || row.status === requestedStatus)
+    .filter((row: AnalystCase) => caseMatchesFilters(row, filters, options))
     .sort((a: AnalystCase, b: AnalystCase) => sortCaseQueue(a, b));
-  return json({ organization: scope.organization, access: caseAccessSummary(access), cases });
+  const items = cases.map((caseRecord: AnalystCase) => caseListItem(caseRecord, options, access));
+  return json({
+    schemaVersion: "analyst.case_list.v1",
+    generatedAt: nowIso(),
+    organization: scope.organization,
+    access: caseAccessSummary(access),
+    filters,
+    total: cases.length,
+    cases,
+    items
+  });
 }
 
 export async function createCase(request: Request, options: ApiServerOptions): Promise<Response> {
@@ -170,23 +180,7 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
   const alert = findDwmAlert(options, caseRecord.alertId);
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
   const watchlists = caseWatchlists(options, alert, caseRecord);
-  const timeline = [
-    { id: `${caseRecord.id}:created`, at: caseRecord.createdAt, type: "case_created", title: "Case opened", detail: caseRecord.summary },
-    ...(caseRecord.workflowEvents ?? []).map((event) => ({
-      id: event.id,
-      at: event.at,
-      type: "case_event",
-      title: event.action.replaceAll("_", " "),
-      detail: [event.note, event.toOwner ? `Owner: ${event.toOwner}` : undefined, event.toStatus ? `Status: ${event.toStatus}` : undefined].filter(Boolean).join(" · ")
-    })),
-    ...deliveries.map((delivery: any) => ({
-      id: delivery.id,
-      at: delivery.attemptedAt,
-      type: "delivery",
-      title: `Webhook ${String(delivery.status ?? "attempt").replaceAll("_", " ")}`,
-      detail: delivery.error ?? `HTTP ${delivery.httpStatus ?? 0} · ${delivery.endpointHash}`
-    }))
-  ].sort((a, b) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
+  const timeline = buildCaseTimeline(caseRecord, alert, deliveries);
 
   return {
     schemaVersion: "analyst.case_detail.v1",
@@ -219,7 +213,8 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     deliveries,
     evidence: alert?.evidence ?? [],
     timeline,
-    nextActions: nextActionsForCase(caseRecord, alert, deliveries)
+    nextActions: nextActionsForCase(caseRecord, alert, deliveries),
+    nextAllowedActions: nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
   };
 }
 
@@ -272,6 +267,241 @@ function caseWatchlists(options: ApiServerOptions, alert: any, caseRecord: Analy
       matchedTerms: (watchlist.terms ?? []).filter((term: any) => String(term.value ?? "").toLowerCase() === String(alert?.matchedTerm?.value ?? "").toLowerCase()),
       termCount: (watchlist.terms ?? []).length
     }));
+}
+
+type CaseFilters = {
+  status?: string;
+  assignee?: string;
+  severity?: string;
+  route?: string;
+  watchlistItemId?: string;
+  alertId?: string;
+  dedupeKey?: string;
+  webhookDeliveryId?: string;
+  webhookStatus?: string;
+  from?: string;
+  to?: string;
+  query?: string;
+};
+
+function caseFiltersFromUrl(url: URL): CaseFilters {
+  return {
+    status: normalizeFilter(url.searchParams.get("status")),
+    assignee: normalizeFilter(url.searchParams.get("assignee") ?? url.searchParams.get("assignedOwner") ?? url.searchParams.get("owner")),
+    severity: normalizeFilter(url.searchParams.get("severity") ?? url.searchParams.get("priority")),
+    route: normalizeFilter(url.searchParams.get("route") ?? url.searchParams.get("recommendedRoute")),
+    watchlistItemId: normalizeFilter(url.searchParams.get("watchlistItemId") ?? url.searchParams.get("watchlistItem")),
+    alertId: normalizeFilter(url.searchParams.get("alertId")),
+    dedupeKey: normalizeFilter(url.searchParams.get("dedupeKey")),
+    webhookDeliveryId: normalizeFilter(url.searchParams.get("webhookDeliveryId") ?? url.searchParams.get("deliveryId")),
+    webhookStatus: normalizeFilter(url.searchParams.get("webhookStatus") ?? url.searchParams.get("deliveryStatus")),
+    from: normalizeFilter(url.searchParams.get("from") ?? url.searchParams.get("since")),
+    to: normalizeFilter(url.searchParams.get("to") ?? url.searchParams.get("until")),
+    query: normalizeFilter(url.searchParams.get("q") ?? url.searchParams.get("query") ?? url.searchParams.get("text"))
+  };
+}
+
+function caseMatchesFilters(caseRecord: AnalystCase, filters: CaseFilters, options: ApiServerOptions): boolean {
+  const alert = findDwmAlert(options, caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  if (filters.status && caseRecord.status !== filters.status) return false;
+  if (filters.assignee && normalizeFilter(caseRecord.assignedOwner) !== filters.assignee) return false;
+  if (filters.severity && normalizeFilter(alert?.severity ?? caseRecord.priority) !== filters.severity) return false;
+  if (filters.route && normalizeFilter(alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute ?? alert?.workflowContext?.recommendedRoute) !== filters.route) return false;
+  if (filters.watchlistItemId && !caseWatchlistItemIds(alert).includes(filters.watchlistItemId)) return false;
+  if (filters.alertId && alert?.id !== filters.alertId && caseRecord.alertId !== filters.alertId) return false;
+  if (filters.dedupeKey && normalizeFilter(alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.workflowContext?.dedupeKey) !== filters.dedupeKey) return false;
+  if (filters.webhookDeliveryId && !deliveries.some((delivery: any) => delivery.id === filters.webhookDeliveryId)) return false;
+  if (filters.webhookStatus && !deliveries.some((delivery: any) => normalizeFilter(delivery.status) === filters.webhookStatus)) return false;
+  if ((filters.from || filters.to) && !caseHasTimelineInWindow(caseRecord, alert, deliveries, filters)) return false;
+  if (filters.query && !caseSearchBlob(caseRecord, alert, deliveries).includes(filters.query)) return false;
+  return true;
+}
+
+function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access?: CaseAccessResult) {
+  const alert = findDwmAlert(options, caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const timeline = buildCaseTimeline(caseRecord, alert, deliveries);
+  const latestEvent = timeline[timeline.length - 1];
+  return {
+    id: caseRecord.id,
+    caseId: caseRecord.id,
+    title: caseRecord.title,
+    summary: caseRecord.summary,
+    status: caseRecord.status,
+    priority: caseRecord.priority,
+    severity: alert?.severity ?? caseRecord.priority,
+    assignedOwner: caseRecord.assignedOwner,
+    organizationId: caseRecord.organizationId,
+    tenantId: caseRecord.tenantId,
+    alertId: caseRecord.alertId,
+    dedupeKey: alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.workflowContext?.dedupeKey,
+    recommendedRoute: alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute ?? alert?.workflowContext?.recommendedRoute,
+    watchlistIds: alert?.watchlistIds ?? alert?.workflowContext?.watchlistIds ?? [],
+    watchlistItemIds: caseWatchlistItemIds(alert),
+    webhookDeliveryIds: deliveries.map((delivery: any) => delivery.id),
+    webhookStatuses: [...new Set(deliveries.map((delivery: any) => delivery.status).filter(Boolean))],
+    createdAt: caseRecord.createdAt,
+    updatedAt: caseRecord.updatedAt,
+    closedAt: caseRecord.closedAt,
+    latestEvent,
+    timeline,
+    nextAllowedActions: nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
+  };
+}
+
+function buildCaseTimeline(caseRecord: AnalystCase, alert: any, deliveries: any[]) {
+  return [
+    caseTimelineEvent({
+      id: `${caseRecord.id}:created`,
+      timestamp: caseRecord.createdAt,
+      eventType: "case.created",
+      title: "Case opened",
+      source: "case",
+      caseId: caseRecord.id,
+      alert,
+      actor: caseRecord.workflowEvents?.[0]?.actor,
+      rationale: caseRecord.summary,
+      toStatus: "open"
+    }),
+    ...(caseRecord.workflowEvents ?? []).map((event) => caseTimelineEvent({
+      id: event.id,
+      timestamp: event.at,
+      eventType: `case.${event.action}`,
+      title: event.action.replaceAll("_", " "),
+      source: "case",
+      caseId: caseRecord.id,
+      alert,
+      actor: event.actor,
+      rationale: event.note,
+      fromStatus: event.fromStatus,
+      toStatus: event.toStatus,
+      fromOwner: event.fromOwner,
+      toOwner: event.toOwner
+    })),
+    ...deliveries.map((delivery: any) => caseTimelineEvent({
+      id: delivery.id,
+      timestamp: delivery.attemptedAt,
+      eventType: `webhook.${delivery.status ?? "attempt"}`,
+      title: `Webhook ${String(delivery.status ?? "attempt").replaceAll("_", " ")}`,
+      source: "webhook",
+      caseId: caseRecord.id,
+      alert,
+      webhookDelivery: delivery,
+      rationale: delivery.error ?? `HTTP ${delivery.httpStatus ?? 0} · ${delivery.endpointHash}`
+    }))
+  ].sort((a, b) => String(a.timestamp ?? "").localeCompare(String(b.timestamp ?? "")));
+}
+
+function caseTimelineEvent(input: {
+  id: string;
+  timestamp: string;
+  eventType: string;
+  title: string;
+  source: "case" | "webhook";
+  caseId: string;
+  alert?: any;
+  webhookDelivery?: any;
+  actor?: string;
+  rationale?: string;
+  fromStatus?: string;
+  toStatus?: string;
+  fromOwner?: string;
+  toOwner?: string;
+}) {
+  const detail = [
+    input.rationale,
+    input.toOwner ? `Owner: ${input.toOwner}` : undefined,
+    input.toStatus ? `Status: ${input.toStatus}` : undefined
+  ].filter(Boolean).join(" · ");
+  return {
+    id: input.id,
+    at: input.timestamp,
+    timestamp: input.timestamp,
+    type: input.source === "webhook" ? "delivery" : "case_event",
+    eventType: input.eventType,
+    title: input.title,
+    actor: input.actor,
+    rationale: input.rationale,
+    source: input.source,
+    related: {
+      caseId: input.caseId,
+      alertId: input.alert?.id,
+      dedupeKey: input.alert?.dedupeKey ?? input.alert?.webhookDelivery?.dedupeKey ?? input.alert?.workflowContext?.dedupeKey,
+      watchlistIds: input.alert?.watchlistIds ?? input.alert?.workflowContext?.watchlistIds ?? [],
+      watchlistItemIds: caseWatchlistItemIds(input.alert),
+      webhookDeliveryId: input.webhookDelivery?.id,
+      webhookDestinationId: input.webhookDelivery?.webhookDestinationId,
+      webhookStatus: input.webhookDelivery?.status
+    },
+    fromStatus: input.fromStatus,
+    toStatus: input.toStatus,
+    fromOwner: input.fromOwner,
+    toOwner: input.toOwner,
+    detail
+  };
+}
+
+function nextAllowedActionsForCase(caseRecord: AnalystCase, alert: any, deliveries: any[], access?: CaseAccessResult) {
+  const readOnly = access?.readOnly === true;
+  const base = [
+    { id: "assign", label: "Assign owner", method: "PATCH", requiresRationale: false, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "false_positive" },
+    { id: "escalate", label: "Escalate", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "false_positive" && caseRecord.status !== "suppressed" },
+    { id: "close", label: "Close", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" },
+    { id: "suppress", label: "Suppress", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "suppressed" },
+    { id: "reopen", label: "Reopen", method: "PATCH", requiresRationale: false, enabled: !readOnly && (caseRecord.status === "closed" || caseRecord.status === "suppressed" || caseRecord.status === "false_positive") }
+  ];
+  if (alert?.deliveryState === "ready_to_send" && !deliveries.some((delivery: any) => delivery.status === "delivered")) {
+    base.push({ id: "deliver_webhook", label: "Deliver webhook", method: "POST", requiresRationale: false, enabled: !readOnly });
+  }
+  return base.map((action) => ({ ...action, disabledReason: action.enabled ? undefined : readOnly ? "read_only_member" : "not_applicable_for_status" }));
+}
+
+function caseHasTimelineInWindow(caseRecord: AnalystCase, alert: any, deliveries: any[], filters: CaseFilters): boolean {
+  const from = filters.from ? Date.parse(filters.from) : undefined;
+  const to = filters.to ? Date.parse(filters.to) : undefined;
+  return buildCaseTimeline(caseRecord, alert, deliveries).some((event) => {
+    const timestamp = Date.parse(event.timestamp);
+    if (!Number.isFinite(timestamp)) return false;
+    if (from !== undefined && Number.isFinite(from) && timestamp < from) return false;
+    if (to !== undefined && Number.isFinite(to) && timestamp > to) return false;
+    return true;
+  });
+}
+
+function caseSearchBlob(caseRecord: AnalystCase, alert: any, deliveries: any[]): string {
+  return [
+    caseRecord.id,
+    caseRecord.title,
+    caseRecord.summary,
+    caseRecord.status,
+    caseRecord.assignedOwner,
+    caseRecord.lastDecision,
+    alert?.id,
+    alert?.company,
+    alert?.actor,
+    alert?.sourceFamily,
+    alert?.claimSummary,
+    alert?.matchedTerm?.value,
+    alert?.dedupeKey,
+    alert?.webhookDelivery?.dedupeKey,
+    alert?.workflowContext?.dedupeKey,
+    ...(alert?.evidence ?? []).flatMap((item: any) => [item.id, item.sourceName, item.sourceFamily, item.contentHash, item.excerpt]),
+    ...deliveries.flatMap((delivery: any) => [delivery.id, delivery.status, delivery.webhookDestinationId, delivery.error])
+  ].map((value) => String(value ?? "").toLowerCase()).join(" ");
+}
+
+function caseWatchlistItemIds(alert: any): string[] {
+  return [...new Set([
+    ...(alert?.watchlistItemIds ?? []),
+    ...(alert?.workflowContext?.watchlistItemIds ?? []),
+    ...(alert?.webhookContext?.watchlistItemIds ?? [])
+  ].map((value) => String(value)).filter(Boolean))];
+}
+
+function normalizeFilter(value: unknown): string | undefined {
+  const filter = String(value ?? "").trim().toLowerCase();
+  return filter || undefined;
 }
 
 type CaseAccessResult = {

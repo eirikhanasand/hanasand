@@ -54,6 +54,28 @@ describe("dwm case workflow", () => {
       }), options);
       const orgPayload = await orgResponse.json() as any;
       const organizationId = orgPayload.organization.id;
+      const otherOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        body: JSON.stringify({ name: "Globex Response Team", ownerEmail: "owner@globex.example" })
+      }), options);
+      const otherOrgPayload = await otherOrgResponse.json() as any;
+      const otherOrganizationId = otherOrgPayload.organization.id;
+      (store as any).saveCase({
+        id: "case_globex_leak_guard",
+        tenantId: otherOrganizationId,
+        organizationId: otherOrganizationId,
+        sourceType: "manual",
+        sourceId: "manual_globex",
+        title: "Globex leaked credentials",
+        summary: "This case must never appear in Acme filtered case results.",
+        priority: "critical",
+        status: "open",
+        assignedOwner: "owner@globex.example",
+        createdAt: "2026-06-28T13:02:00.000Z",
+        updatedAt: "2026-06-28T13:02:00.000Z",
+        workflowEvents: [],
+        lastDecision: "Seeded for org isolation test."
+      });
       const memberCreatedAt = "2026-06-28T13:01:00.000Z";
       for (const member of [
         { id: "member_case_analyst_1", email: "analyst-1@acme.com", userId: "analyst-1", role: "analyst" },
@@ -205,7 +227,7 @@ describe("dwm case workflow", () => {
         reviewState: "resolved"
       });
       expect(rebuildAfterClose.alerts[0].workflowEvents.length).toBeGreaterThanOrEqual(3);
-      expect((store as any).listCases()[0].workflowEvents).toHaveLength(3);
+      expect((store as any).getCase(closed.case.id).workflowEvents).toHaveLength(3);
 
       const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${organizationId}`, {
         headers: { "x-user-email": "viewer@acme.com" }
@@ -239,8 +261,65 @@ describe("dwm case workflow", () => {
         retryable: false
       });
       expect(detail.deliveryContext.latestDelivery).toMatchObject({ status: "delivered", webhookDestinationId: webhookPayload.destination.id });
+      const createdEvent = detail.timeline.find((event: any) => event.eventType === "case.created");
+      expect(createdEvent).toMatchObject({
+        eventType: "case.created",
+        source: "case",
+        related: {
+          caseId: closed.case.id,
+          alertId: alert.id,
+          dedupeKey: alert.dedupeKey
+        }
+      });
+      expect(createdEvent.related.watchlistItemIds).toEqual(alert.workflowContext.watchlistItemIds);
+      expect(detail.timeline.some((event: any) => event.eventType === "webhook.delivered" && event.related.webhookDeliveryId === deliveryPayload.deliveries[0].id)).toBe(true);
+      expect(detail.nextAllowedActions.find((action: any) => action.id === "close")).toMatchObject({
+        enabled: false,
+        disabledReason: "read_only_member"
+      });
       expect(detail.timeline.some((event: any) => event.title === "close")).toBe(true);
       expect(detail.nextActions).toContain("Keep closed unless new evidence changes the decision.");
+
+      const filteredCases = async (query: string, userEmail = "viewer@acme.com") => {
+        const response = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${organizationId}&${query}`, {
+          headers: { "x-user-email": userEmail }
+        }), options);
+        return { response, payload: await response.json() as any };
+      };
+      const filterExpectations = [
+        "status=closed",
+        "assignee=ir-lead",
+        `severity=${encodeURIComponent(alert.severity)}`,
+        `route=${encodeURIComponent(alert.recommendedRoute)}`,
+        `watchlistItemId=${encodeURIComponent(alert.workflowContext.watchlistItemIds[0])}`,
+        `alertId=${encodeURIComponent(alert.id)}`,
+        `dedupeKey=${encodeURIComponent(alert.dedupeKey)}`,
+        `webhookDeliveryId=${encodeURIComponent(deliveryPayload.deliveries[0].id)}`,
+        "webhookStatus=delivered",
+        `from=${encodeURIComponent("2026-01-01T00:00:00.000Z")}&to=${encodeURIComponent("2027-01-01T00:00:00.000Z")}`,
+        `q=${encodeURIComponent("Okta session cookie")}`
+      ];
+      for (const query of filterExpectations) {
+        const { response, payload } = await filteredCases(query);
+        expect(response.status).toBe(200);
+        expect(payload.filters).toBeTruthy();
+        expect(payload.items).toHaveLength(1);
+        expect(payload.items[0]).toMatchObject({
+          caseId: closed.case.id,
+          alertId: alert.id,
+          dedupeKey: alert.dedupeKey,
+          recommendedRoute: alert.recommendedRoute,
+          webhookDeliveryIds: [deliveryPayload.deliveries[0].id],
+          webhookStatuses: ["delivered"]
+        });
+        expect(payload.items[0].timeline.some((event: any) => event.eventType === "webhook.delivered")).toBe(true);
+      }
+      const noLeak = await filteredCases(`q=${encodeURIComponent("Globex")}`);
+      expect(noLeak.response.status).toBe(200);
+      expect(noLeak.payload.items).toHaveLength(0);
+      expect(noLeak.payload.cases).toHaveLength(0);
+      const unauthorizedFiltered = await filteredCases(`q=${encodeURIComponent("Okta")}`, "outsider@example.com");
+      expect(unauthorizedFiltered.response.status).toBe(403);
 
       const reopenResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}`, {
         method: "PATCH",
@@ -280,9 +359,9 @@ describe("dwm case workflow", () => {
       expect(suppressed.alert.deliveryState).toBe("muted");
 
       const rehydrated = new FileBackedScraperStore({ snapshotPath });
-      expect((rehydrated as any).listCases()).toHaveLength(1);
-      expect((rehydrated as any).listCases()[0].status).toBe("suppressed");
-      expect((rehydrated as any).listCases()[0].workflowEvents).toHaveLength(5);
+      expect((rehydrated as any).listCases()).toHaveLength(2);
+      expect((rehydrated as any).getCase(closed.case.id).status).toBe("suppressed");
+      expect((rehydrated as any).getCase(closed.case.id).workflowEvents).toHaveLength(5);
       expect((rehydrated as any).getDwmAlert(alert.id).caseId).toBe(closed.case.id);
       expect((rehydrated as any).getDwmAlert(alert.id).caseIdCandidate).toBe(closed.case.id);
     } finally {
