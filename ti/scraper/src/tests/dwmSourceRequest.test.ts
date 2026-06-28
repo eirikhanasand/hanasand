@@ -327,6 +327,108 @@ describe("dwm source requests", () => {
     expect(frontier.snapshot()).toHaveLength(1);
   });
 
+  test("runs source-pack worker into durable active sources and safe frontier tasks without live scraping", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_worker_route_growth",
+        sourcePackLabel: "Worker route source growth",
+        tenantId: "tenant_worker",
+        scope: "APT29",
+        requestedBy: "source-growth-worker",
+        candidates: [
+          { target: "@worker_route_public_cti", type: "telegram_channel", family: "telegram" },
+          { target: "metadata://darkweb/apt29/claims", type: "restricted_metadata", family: "darkweb_metadata" },
+          { target: "@worker_route_public_cti", type: "telegram_channel", family: "telegram" },
+          { target: "metadata://darkweb/password-dump", type: "restricted_metadata", family: "darkweb_onion" }
+        ]
+      })
+    }), { store, frontier });
+    const createdBody = await created.json() as any;
+    expect(created.status).toBe(201);
+    expect(createdBody.summary).toMatchObject({ acceptedCount: 2, rejectedCount: 1, duplicateCount: 1 });
+    expect(store.listSources()).toHaveLength(2);
+    expect(store.listSources().every((source) => source.status !== "active")).toBe(true);
+
+    const run = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_worker_run",
+        sourcePackId: "pack_worker_route_growth",
+        chunkSize: 2,
+        maxAttempts: 4,
+        backoffSeconds: 120,
+        decidedBy: "source-growth-worker",
+        perFamilyConcurrency: { telegram: 4, darkweb_metadata: 1, darkweb_onion: 1 }
+      })
+    }), { store, frontier });
+    const body = await run.json() as any;
+    expect(run.status).toBe(200);
+    expect(body.run.status).toBe("partially_active");
+    expect(body.activation.summary).toMatchObject({ activeSourceCount: 2, blockedCandidateCount: 2 });
+    expect(body.activeSourcePersistence.summary).toMatchObject({ insertedCount: 2, duplicateCount: 0, collectionReadyCount: 2 });
+    expect(body.sourceRecordWrite.summary).toMatchObject({ insertedCount: 0, duplicateCount: 2, sourceRecordCount: 2, collectionEligibleCount: 2 });
+    expect(body.run.sourceRecordSummary).toMatchObject({ upsertedCount: 2 });
+    expect(body.collectionQueue.summary).toMatchObject({ queuedCount: 2, duplicateCount: 0, blockedCount: 0, taskCount: 2 });
+    expect(body.sourceGrowthCounters).toMatchObject({
+      totalCandidates: 4,
+      metadataOnly: 2,
+      restrictedBlocked: 1,
+      queuedCollectionTasks: 2,
+      activeSourceRows: 2
+    });
+    expect(body.sourceGrowthCounters.parserSourceFamilyCounts.telegram).toMatchObject({ telegram_public_parser_ready: 1 });
+    expect(body.sourceGrowthCounters.parserSourceFamilyCounts.darkweb_metadata).toMatchObject({ restricted_metadata_parser_ready: 1 });
+    expect(body.sourceGrowthCounters.parserSourceFamilyCounts.darkweb_onion).toMatchObject({ intake_blocked: 1 });
+    expect(store.listSources()).toHaveLength(2);
+    expect(store.listSources().every((source) => source.status === "active")).toBe(true);
+    expect(store.listSources().find((source) => source.type === "tor_metadata")?.governance).toMatchObject({ metadataOnly: true, approvalState: "approved" });
+    expect(frontier.snapshot()).toHaveLength(2);
+    expect(frontier.snapshot().map((item: any) => item.task)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceType: "telegram_public",
+        targetUrl: "https://t.me/worker_route_public_cti",
+        maxRetries: 4,
+        planning: expect.objectContaining({ sourcePack: expect.objectContaining({ targetRawStored: false }) })
+      }),
+      expect.objectContaining({
+        sourceType: "tor_metadata",
+        targetUrl: "metadata://darkweb/apt29/claims",
+        maxRetries: 4,
+        planning: expect.objectContaining({
+          safetyEnvelope: expect.objectContaining({ allowRestrictedMetadata: true, metadataOnlyRestricted: true })
+        })
+      })
+    ]));
+    expect(JSON.stringify(body)).not.toContain("password-dump");
+    expect(JSON.stringify(body)).not.toContain("rawPayload");
+
+    const repeated = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_worker_run", sourcePackId: "pack_worker_route_growth", chunkSize: 2 })
+    }), { store, frontier });
+    const repeatedBody = await repeated.json() as any;
+    expect(repeated.status).toBe(200);
+    expect(repeatedBody.activeSourcePersistence.summary).toMatchObject({ insertedCount: 0, duplicateCount: 2 });
+    expect(repeatedBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 2, taskCount: 2 });
+    expect(store.listSources()).toHaveLength(2);
+    expect(frontier.snapshot()).toHaveLength(2);
+
+    const status = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_status", sourcePackId: "pack_worker_route_growth" })
+    }), { store, frontier });
+    const statusBody = await status.json() as any;
+    expect(status.status).toBe(200);
+    expect(statusBody.registry).toMatchObject({
+      sourceGrowthCounters: { activeSourceRows: 2, queuedCollectionTasks: 2 },
+      workerReadiness: { activeSourceRows: 2, collectionReadyRows: 2 },
+      lastWorkerRun: { sourcePackId: "pack_worker_route_growth" }
+    });
+  });
+
   test("exposes Telegram-only source-growth pack coverage and health fields without live scraping", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();

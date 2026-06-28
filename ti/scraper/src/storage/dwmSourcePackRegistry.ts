@@ -1311,7 +1311,7 @@ export function sourceRecordFromDwmSourcePackActiveRow(
 export function persistDwmSourcePackSourceRecords(
   store: DwmSourcePackSourceStore,
   activeRows: DwmSourcePackActiveSourceRow[],
-  options: { tenantId?: string; generatedAt?: string; approvedBy?: string } = {}
+  options: { tenantId?: string; generatedAt?: string; approvedBy?: string; updateExisting?: boolean } = {}
 ): DwmSourcePackSourceRecordPersistenceResult {
   const receipts: DwmSourcePackSourceRecordUpsertReceipt[] = [];
   const sources: SourceRecord[] = [];
@@ -1320,8 +1320,15 @@ export function persistDwmSourcePackSourceRecords(
       const source = sourceRecordFromDwmSourcePackActiveRow(row, options);
       const existing = store.getSource?.(source.id) ?? store.listSources?.().find((item) => item.id === source.id);
       if (existing) {
-        receipts.push({ status: "duplicate", sourceId: source.id, candidateId: row.candidateId, source: existing });
-        sources.push(existing);
+        const saved = options.updateExisting ? store.saveSource(mergeSourcePackActiveSourceRecord(existing, source)) : existing;
+        receipts.push({
+          status: "duplicate",
+          sourceId: source.id,
+          candidateId: row.candidateId,
+          source: saved,
+          reason: options.updateExisting ? "existing_source_record_upserted" : undefined
+        });
+        sources.push(saved);
         continue;
       }
       const saved = store.saveSource(source);
@@ -1348,6 +1355,50 @@ export function persistDwmSourcePackSourceRecords(
     },
     safeOutput: sourcePackSafeOutput()
   };
+}
+
+function mergeSourcePackActiveSourceRecord(existing: SourceRecord, source: SourceRecord): SourceRecord {
+  const sourcePack = source.metadata?.sourcePack ?? {};
+  const existingCandidate = existing.metadata?.sourceCandidate ?? {};
+  return {
+    ...existing,
+    ...source,
+    id: existing.id,
+    name: existing.name ?? source.name,
+    type: existing.type ?? source.type,
+    url: existing.url ?? source.url,
+    createdAt: existing.createdAt ?? source.createdAt,
+    metadata: {
+      ...(existing.metadata ?? {}),
+      ...(source.metadata ?? {}),
+      sourceCandidate: {
+        ...existingCandidate,
+        id: sourcePack.candidateId ?? existingCandidate.id,
+        sourceId: existing.id,
+        sourcePackId: sourcePack.packId ?? existingCandidate.sourcePackId,
+        requestId: sourcePack.requestId ?? existingCandidate.requestId,
+        sourceGrowthFamily: source.metadata?.sourceFamily ?? existingCandidate.sourceGrowthFamily,
+        status: "active",
+        validationResult: {
+          ...(existingCandidate.validationResult ?? {}),
+          state: "active",
+          parserStatus: sourcePack.parserStatus,
+          validationScore: sourcePack.validationScore,
+          validationJobKey: sourcePack.validationJobKey,
+          checkedAt: source.updatedAt
+        },
+        parserStatus: sourcePack.parserStatus ?? existingCandidate.parserStatus,
+        healthStatus: "validated",
+        activationDecision: sourcePack.activationState ?? existingCandidate.activationDecision,
+        policyBoundary: source.metadata?.policyBoundary ?? existingCandidate.policyBoundary
+      }
+    },
+    lifecycle: [
+      ...((existing.lifecycle as Array<Record<string, unknown>> | undefined) ?? []),
+      ...((source.lifecycle as Array<Record<string, unknown>> | undefined) ?? [])
+    ],
+    updatedAt: source.updatedAt
+  } as SourceRecord;
 }
 
 export function enqueueDwmSourcePackCollectionTasks(

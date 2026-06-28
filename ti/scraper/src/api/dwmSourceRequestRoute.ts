@@ -4,12 +4,27 @@ import { evaluateMetadataOnlySource } from "../policy/metadataCollectionPolicy.t
 import { buildDwmProductSnapshot } from "../product/dwmProduct.ts";
 import { applyDwmSeedCatalog, sourceDedupeKey } from "../product/dwmSourceInventory.ts";
 import {
+  InMemoryDwmSourcePackActiveSourceAdapter,
   InMemoryDwmSourcePackRegistryAdapter,
+  InMemoryDwmSourcePackValidationQueueAdapter,
+  applyDwmSourcePackValidationResults,
+  buildDwmSourcePackCollectionJobHandoff,
+  enqueueDwmSourcePackCollectionTasks,
+  enqueueDwmSourcePackValidationJobs,
+  persistDwmSourcePackActiveSources,
+  persistDwmSourcePackSourceRecords,
+  planDwmSourcePackValidationBatch,
+  runDwmSourcePackValidationJob,
+  sourcePackWorkerReadinessCounters,
+  type DwmSourceCandidateValidationResult,
+  type DwmSourcePackActiveSourceAdapter,
   type DwmSourcePackCandidateRecord,
   type DwmSourcePackFamily,
   type DwmSourcePackListQuery,
   type DwmSourcePackRecord,
-  type DwmSourcePackRegistryAdapter
+  type DwmSourcePackRegistryAdapter,
+  type DwmSourcePackValidationQueueAdapter,
+  type DwmSourcePackValidationQueueRecord
 } from "../storage/dwmSourcePackRegistry.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
@@ -41,8 +56,13 @@ type DwmSourceRequestBody = {
   requestId?: string;
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
-  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list";
+  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list" | "pack_worker_run";
   packAction?: "approve" | "promote" | "reject" | "retry" | "suppress";
+  chunkSize?: number;
+  maxAttempts?: number;
+  backoffSeconds?: number;
+  perFamilyConcurrency?: Partial<Record<SourceGrowthFamily, number>>;
+  perFamilyCaps?: Partial<Record<SourceGrowthFamily, number>>;
   sourceId?: string;
   candidateId?: string;
   sourceIds?: string[];
@@ -72,8 +92,23 @@ type DwmSourcePackCandidate = {
 type SourceGrowthFamily = DwmSourcePackFamily;
 type SourcePackRegistry = DwmSourcePackRecord;
 type SourcePackRegistryCandidate = DwmSourcePackCandidateRecord;
+type SourcePackWorkerRunRecord = {
+  id: string;
+  sourcePackId: string;
+  sourcePackLabel: string;
+  startedAt: string;
+  completedAt: string;
+  status: string;
+  actor: string;
+  validationJobKeys: string[];
+  sourceRecordSummary: Record<string, unknown>;
+  collectionQueueSummary: Record<string, unknown>;
+};
 
 const sourcePackRegistries = new WeakMap<object, InMemoryDwmSourcePackRegistryAdapter>();
+const sourcePackValidationQueues = new WeakMap<object, InMemoryDwmSourcePackValidationQueueAdapter>();
+const sourcePackActiveSources = new WeakMap<object, InMemoryDwmSourcePackActiveSourceAdapter>();
+const sourcePackWorkerRuns = new WeakMap<object, SourcePackWorkerRunRecord[]>();
 
 export async function createDwmSourceRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<DwmSourceRequestBody>(request);
@@ -470,6 +505,40 @@ function sourcePackStore(options: ApiServerOptions): DwmSourcePackRegistryAdapte
   return registry;
 }
 
+function sourcePackValidationQueue(options: ApiServerOptions): DwmSourcePackValidationQueueAdapter {
+  const configured = options.sourcePackValidationQueue as DwmSourcePackValidationQueueAdapter | undefined;
+  if (configured && typeof configured.enqueue === "function" && typeof configured.transition === "function" && typeof configured.list === "function") return configured;
+  const key = options.store as object;
+  let queue = sourcePackValidationQueues.get(key);
+  if (!queue) {
+    queue = new InMemoryDwmSourcePackValidationQueueAdapter();
+    sourcePackValidationQueues.set(key, queue);
+  }
+  return queue;
+}
+
+function sourcePackActiveSourceStore(options: ApiServerOptions): DwmSourcePackActiveSourceAdapter {
+  const configured = options.sourcePackActiveSourceStore as DwmSourcePackActiveSourceAdapter | undefined;
+  if (configured && typeof configured.upsert === "function" && typeof configured.get === "function" && typeof configured.list === "function") return configured;
+  const key = options.store as object;
+  let activeSources = sourcePackActiveSources.get(key);
+  if (!activeSources) {
+    activeSources = new InMemoryDwmSourcePackActiveSourceAdapter();
+    sourcePackActiveSources.set(key, activeSources);
+  }
+  return activeSources;
+}
+
+function sourcePackWorkerRunStore(options: ApiServerOptions): SourcePackWorkerRunRecord[] {
+  const key = options.store as object;
+  let runs = sourcePackWorkerRuns.get(key);
+  if (!runs) {
+    runs = [];
+    sourcePackWorkerRuns.set(key, runs);
+  }
+  return runs;
+}
+
 function upsertSourcePackRegistry(options: ApiServerOptions, pack: SourcePackRegistry): SourcePackRegistry {
   return sourcePackStore(options).save(sourcePackWithRollups(pack, options));
 }
@@ -642,6 +711,273 @@ function handleSourcePackReview(body: DwmSourceRequestBody, options: ApiServerOp
       restrictedPayloadDownloadAllowed: false
     }
   }, 200);
+}
+
+function handleSourcePackWorkerRun(body: DwmSourceRequestBody, options: ApiServerOptions): Response {
+  const registry = findSourcePackRegistry(body, options);
+  if (!registry) {
+    return json({
+      error: {
+        code: "source_pack_not_found",
+        message: "Provide sourcePackId or sourcePackLabel for source-pack worker processing."
+      },
+      safeOutput: sourcePackSafeOutput()
+    }, 404);
+  }
+
+  const startedAt = nowIso();
+  const actor = body.decidedBy ?? body.approvedBy ?? body.requestedBy ?? "source-pack-worker";
+  const queue = sourcePackValidationQueue(options);
+  const activeSourceStore = sourcePackActiveSourceStore(options);
+  const plan = planDwmSourcePackValidationBatch([registry], {
+    chunkSize: body.chunkSize ?? body.limit ?? 250,
+    maxAttempts: body.maxAttempts ?? 3,
+    backoffSeconds: body.backoffSeconds ?? 300,
+    perFamilyConcurrency: body.perFamilyConcurrency ?? defaultSourcePackWorkerConcurrency(),
+    generatedAt: startedAt
+  });
+  const queuedValidation = enqueueDwmSourcePackValidationJobs(queue, [registry], plan, { generatedAt: startedAt });
+
+  let workingPack = registry;
+  const finalQueueRecords: DwmSourcePackValidationQueueRecord[] = [];
+  const activations: ReturnType<typeof applyDwmSourcePackValidationResults>[] = [];
+  const validationRuns: Array<Record<string, unknown>> = [];
+
+  for (const receipt of queuedValidation.receipts) {
+    const validationStarted = queue.transition(receipt.jobKey, "validating", {
+      job: { ...receipt.record.job, status: "validating", updatedAt: startedAt },
+      updatedAt: startedAt
+    });
+    const run = runDwmSourcePackValidationJob(validationStarted.job, workingPack, validateSourcePackCandidateForWorker, { generatedAt: startedAt });
+    const finalRecord = queue.transition(receipt.jobKey, run.job.status, {
+      job: run.job,
+      retry: run.job.retry,
+      updatedAt: startedAt
+    });
+    const activation = applyDwmSourcePackValidationResults(workingPack, finalRecord, run.results, {
+      generatedAt: startedAt,
+      actor
+    });
+    workingPack = activation.pack;
+    finalQueueRecords.push(finalRecord);
+    activations.push(activation);
+    validationRuns.push({
+      jobKey: receipt.jobKey,
+      enqueueStatus: receipt.status,
+      status: run.job.status,
+      parserStatus: run.job.parserStatus,
+      retry: run.job.retry,
+      results: run.results
+    });
+  }
+
+  const mergedActivation = mergeSourcePackActivations(workingPack, activations);
+  const activePersistence = persistDwmSourcePackActiveSources(activeSourceStore, mergedActivation, {
+    perFamilyCaps: body.perFamilyCaps
+  });
+  const activeRows = activePersistence.receipts
+    .map((receipt) => receipt.row)
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const sourceWrite = persistDwmSourcePackSourceRecords(options.store, activeRows, {
+    tenantId: body.tenantId ?? registry.tenantId,
+    generatedAt: startedAt,
+    approvedBy: actor,
+    updateExisting: true
+  });
+  const handoff = buildDwmSourcePackCollectionJobHandoff(activeRows, { generatedAt: startedAt });
+  const collectionQueue = enqueueDwmSourcePackCollectionTasks(options.frontier, handoff.jobs, options.store.listSources(), {
+    tenantId: body.tenantId ?? registry.tenantId
+  });
+  persistSourcePackWorkerCollectionState(sourceWrite.sources, collectionQueue.receipts, options, startedAt);
+
+  const completedAt = nowIso();
+  const savedPack = upsertSourcePackRegistry(options, {
+    ...workingPack,
+    updatedAt: completedAt,
+    audit: [
+      ...workingPack.audit,
+      {
+        at: completedAt,
+        action: "source_pack_worker_run",
+        actor,
+        validationJobKeys: finalQueueRecords.map((record) => record.jobKey),
+        activeSourceCount: activeRows.length,
+        queuedCollectionCount: collectionQueue.summary.queuedCount
+      }
+    ]
+  });
+  const runRecord: SourcePackWorkerRunRecord = {
+    id: stableId("dwm_source_pack_worker_run", `${savedPack.id}:${startedAt}`),
+    sourcePackId: savedPack.id,
+    sourcePackLabel: savedPack.label,
+    startedAt,
+    completedAt,
+    status: mergedActivation.summary.activeSourceCount > 0 && mergedActivation.summary.blockedCandidateCount > 0 ? "partially_active" : finalQueueRecords.at(-1)?.status ?? "completed",
+    actor,
+    validationJobKeys: finalQueueRecords.map((record) => record.jobKey),
+    sourceRecordSummary: {
+      ...sourceWrite.summary,
+      upsertedCount: sourceWrite.summary.insertedCount + sourceWrite.summary.duplicateCount
+    },
+    collectionQueueSummary: collectionQueue.summary
+  };
+  sourcePackWorkerRunStore(options).push(runRecord);
+
+  return json({
+    action: "pack_worker_run",
+    sourcePackId: savedPack.id,
+    sourcePackLabel: savedPack.label,
+    run: runRecord,
+    validationPlan: plan,
+    validationQueue: {
+      ...queuedValidation,
+      finalRecords: finalQueueRecords
+    },
+    validationRuns,
+    activation: mergedActivation,
+    activeSourcePersistence: activePersistence,
+    sourceRecordWrite: sourceWrite,
+    collectionJobs: handoff,
+    collectionQueue,
+    sourceGrowthCounters: sourcePackGrowthCounters([savedPack], options),
+    workerReadiness: sourcePackWorkerStateForPacks([savedPack], options).readiness,
+    packRegistry: sourcePackRegistryStatus(savedPack, options),
+    safeOutput: sourcePackSafeOutput()
+  }, 200);
+}
+
+function mergeSourcePackActivations(
+  pack: SourcePackRegistry,
+  activations: ReturnType<typeof applyDwmSourcePackValidationResults>[]
+) {
+  return {
+    pack,
+    activeSources: activations.flatMap((activation) => activation.activeSources),
+    blockedCandidates: activations.flatMap((activation) => activation.blockedCandidates),
+    summary: {
+      activeSourceCount: activations.reduce((total, activation) => total + activation.summary.activeSourceCount, 0),
+      blockedCandidateCount: activations.reduce((total, activation) => total + activation.summary.blockedCandidateCount, 0),
+      retryScheduledCount: activations.reduce((total, activation) => total + activation.summary.retryScheduledCount, 0),
+      failedCount: activations.reduce((total, activation) => total + activation.summary.failedCount, 0),
+      disabledCount: activations.reduce((total, activation) => total + activation.summary.disabledCount, 0)
+    },
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
+function validateSourcePackCandidateForWorker(candidate: SourcePackRegistryCandidate): DwmSourceCandidateValidationResult {
+  if (candidate.status === "duplicate") {
+    return {
+      candidateId: candidate.id,
+      state: "disabled",
+      parserStatus: "duplicate_skipped",
+      validationScore: 0,
+      failure: { code: "duplicate_candidate", message: "Duplicate source-pack candidate retained without activation." }
+    };
+  }
+  if (candidate.status === "rejected" || candidate.status === "suppressed" || candidate.decision === "suppressed") {
+    return {
+      candidateId: candidate.id,
+      state: "disabled",
+      parserStatus: "intake_blocked",
+      validationScore: 0,
+      failure: { code: String(candidate.failure?.code ?? "intake_blocked"), message: String(candidate.failure?.message ?? candidate.reason ?? "Candidate was blocked before validation.") }
+    };
+  }
+  if ((candidate.declaredFamily === "darkweb_onion" || candidate.declaredFamily === "darkweb_metadata") && candidate.policyBoundary?.metadataOnly !== true) {
+    return {
+      candidateId: candidate.id,
+      state: "failed",
+      parserStatus: "metadata_policy_blocked",
+      validationScore: 0,
+      failure: { code: "metadata_only_policy_required", message: "Restricted darkweb candidates require metadataOnly governance before activation." }
+    };
+  }
+  if (candidate.parserExpectation.includes("retry_fixture") || candidate.retryHint) {
+    return {
+      candidateId: candidate.id,
+      state: "retry_scheduled",
+      parserStatus: "parser_retry_scheduled",
+      validationScore: 0.45,
+      failure: { code: "parser_retry_scheduled", message: candidate.retryHint ?? "Parser validation retry scheduled." }
+    };
+  }
+  return {
+    candidateId: candidate.id,
+    state: "active",
+    parserStatus: workerParserStatusForFamily(candidate.declaredFamily),
+    validationScore: candidate.declaredFamily === "telegram" ? 0.92 : candidate.policyBoundary?.metadataOnly === true ? 0.78 : 0.7
+  };
+}
+
+function workerParserStatusForFamily(family: SourceGrowthFamily): string {
+  if (family === "telegram") return "telegram_public_parser_ready";
+  if (family === "darkweb_onion" || family === "darkweb_metadata") return "restricted_metadata_parser_ready";
+  return `${family}_parser_ready`;
+}
+
+function defaultSourcePackWorkerConcurrency(): Partial<Record<SourceGrowthFamily, number>> {
+  return {
+    telegram: 25,
+    darkweb_metadata: 8,
+    darkweb_onion: 2,
+    actor_page: 4,
+    public_advisory: 8,
+    clear_web: 8
+  };
+}
+
+function persistSourcePackWorkerCollectionState(
+  sources: SourceRecord[],
+  receipts: Array<{ status: string; taskId: string; sourceId: string; candidateId: string; reason?: string }>,
+  options: ApiServerOptions,
+  at: string
+) {
+  const receiptBySourceId = new Map(receipts.map((receipt) => [receipt.sourceId, receipt]));
+  for (const source of sources) {
+    const receipt = receiptBySourceId.get(source.id);
+    if (!receipt) continue;
+    const candidate = sourceCandidate(source);
+    const collectionTrigger = {
+      id: stableId("dwm_collection_trigger", `${candidate.id}:${source.id}:source_pack_worker`),
+      type: "frontier_collection",
+      queued: receipt.status !== "blocked",
+      unsafeJobQueued: false,
+      queue: "frontier",
+      jobId: receipt.taskId,
+      taskId: receipt.taskId,
+      candidateId: candidate.id,
+      sourceId: source.id,
+      activeSourceId: source.id,
+      reason: receipt.reason,
+      queuedAt: at,
+      policyBoundary: candidate.policyBoundary ?? source.metadata?.policyBoundary,
+      parserStatus: sourceParserStatus(source).status
+    };
+    const alertRebuild = skippedAlertRebuild(source, "captures_required_before_alert_rebuild");
+    options.store.saveSource({
+      ...source,
+      metadata: {
+        ...(source.metadata ?? {}),
+        sourceCandidate: {
+          ...candidate,
+          collectionTrigger,
+          alertRebuild,
+          collectionStatus: collectionTrigger.queued ? "queued" : "not_queued",
+          lastCollectionOutcome: collectionTrigger.queued
+            ? { status: "queued", at, taskId: receipt.taskId, triggerId: collectionTrigger.id }
+            : { status: "skipped", at, reason: receipt.reason ?? "collection_not_queued" }
+        },
+        collectionTrigger,
+        alertRebuild,
+        collectionStatus: collectionTrigger.queued ? "queued" : "not_queued",
+        lastCollectionOutcome: collectionTrigger.queued
+          ? { status: "queued", at, taskId: receipt.taskId, triggerId: collectionTrigger.id }
+          : { status: "skipped", at, reason: receipt.reason ?? "collection_not_queued" }
+      },
+      updatedAt: at
+    } as SourceRecord);
+  }
 }
 
 function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceRequestBody, options: ApiServerOptions, input: {
@@ -825,6 +1161,63 @@ function sourcePackListResponse(body: DwmSourceRequestBody, options: ApiServerOp
   };
 }
 
+function sourcePackWorkerStateForPacks(packs: SourcePackRegistry[], options: ApiServerOptions) {
+  const packIds = new Set(packs.map((pack) => pack.id));
+  const queueRecords = sourcePackValidationQueue(options).list().filter((record) => record.packIds.some((packId) => packIds.has(packId)));
+  const activeRows = sourcePackActiveSourceStore(options).list().filter((row) => packIds.has(row.packId));
+  const runs = sourcePackWorkerRunStore(options).filter((run) => packIds.has(run.sourcePackId));
+  return {
+    readiness: sourcePackWorkerReadinessCounters(packs, queueRecords, activeRows),
+    lastRun: runs.at(-1)
+  };
+}
+
+function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServerOptions) {
+  const packIds = new Set(packs.map((pack) => pack.id));
+  const candidates = packs.flatMap((pack) => pack.candidates);
+  const sources = options.store.listSources().filter((source) => {
+    const candidate = sourceCandidate(source);
+    return packIds.has(String(candidate.sourcePackId ?? source.metadata?.sourcePack?.packId ?? ""));
+  });
+  const queueRecords = sourcePackValidationQueue(options).list().filter((record) => record.packIds.some((packId) => packIds.has(packId)));
+  const activeRows = sourcePackActiveSourceStore(options).list().filter((row) => packIds.has(row.packId));
+  const frontierTasks = options.frontier.snapshot().map((item: any) => item.task ?? item).filter((task: any) => packIds.has(String(task.planning?.sourcePack?.packId ?? "")));
+  const lastRun = sourcePackWorkerRunStore(options).filter((run) => packIds.has(run.sourcePackId)).at(-1);
+  const parserSourceFamilyCounts = SOURCE_GROWTH_FAMILIES.reduce<Record<SourceGrowthFamily, Record<string, number>>>((acc, family) => {
+    acc[family] = {};
+    return acc;
+  }, {} as Record<SourceGrowthFamily, Record<string, number>>);
+  for (const candidate of candidates) {
+    const parserStatus = candidate.parserStatus ?? "not_scheduled";
+    parserSourceFamilyCounts[candidate.declaredFamily][parserStatus] = (parserSourceFamilyCounts[candidate.declaredFamily][parserStatus] ?? 0) + 1;
+  }
+
+  return {
+    totalCandidates: candidates.length,
+    accepted: candidates.filter((candidate) => !["rejected", "duplicate", "suppressed", "disabled", "failed"].includes(candidate.status)).length,
+    rejected: candidates.filter((candidate) => candidate.status === "rejected" || candidate.status === "failed").length,
+    queued: queueRecords.filter((record) => record.status === "queued" || record.status === "validating").length + frontierTasks.length,
+    duplicateOrUpserted: candidates.filter((candidate) => candidate.status === "duplicate").length + Number(lastRun?.sourceRecordSummary?.upsertedCount ?? 0),
+    metadataOnly: candidates.filter((candidate) => candidate.policyBoundary?.metadataOnly === true).length,
+    restrictedBlocked: candidates.filter((candidate) => (
+      (candidate.declaredFamily === "darkweb_onion" || candidate.declaredFamily === "darkweb_metadata")
+      && (
+        candidate.policyBoundary?.metadataOnly !== true
+        || ["approval_required", "failed", "rejected", "disabled"].includes(candidate.status)
+        || Boolean(candidate.failure)
+      )
+    )).length,
+    lastRunId: lastRun?.id,
+    lastRunTime: lastRun?.completedAt,
+    lastRunStatus: lastRun?.status,
+    parserSourceFamilyCounts,
+    sourceFamilyCounts: sourceFamilyCoverage({ sources, registry: packs[0] }),
+    activeSourceRows: activeRows.length,
+    queuedCollectionTasks: frontierTasks.length,
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
 function sourcePackListQuery(body: DwmSourceRequestBody): DwmSourcePackListQuery {
   return {
     family: body.family,
@@ -871,6 +1264,7 @@ function sourcePackStatusItem(source: SourceRecord) {
 function sourcePackRegistryStatus(pack: SourcePackRegistry, options: ApiServerOptions) {
   const sources = sourcesForPack(pack.id, options);
   const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const workerState = sourcePackWorkerStateForPacks([pack], options);
   const candidates = pack.candidates.map((candidate) => {
     const source = candidate.sourceId ? sourceById.get(candidate.sourceId) : undefined;
     if (source) {
@@ -967,6 +1361,9 @@ function sourcePackRegistryStatus(pack: SourcePackRegistry, options: ApiServerOp
     sourceIds: candidates.map((candidate) => candidate.sourceId).filter(Boolean),
     packStatus: sourcePackRollup({ sourcePackId: pack.id, sourcePackLabel: pack.label, sources, registry: pack }),
     familyCoverage: sourceFamilyCoverage({ sources, registry: pack }),
+    sourceGrowthCounters: sourcePackGrowthCounters([pack], options),
+    workerReadiness: workerState.readiness,
+    lastWorkerRun: workerState.lastRun,
     audit: pack.audit,
     safeOutput: pack.safeOutput
   };
@@ -1169,6 +1566,7 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
   if (body.action === "pack_list") return json(sourcePackListResponse(body, options), 200);
   if (body.action === "pack_status") return json(sourcePackStatusResponse(body, options), 200);
   if (body.action === "pack_review") return handleSourcePackReview(body, options);
+  if (body.action === "pack_worker_run") return handleSourcePackWorkerRun(body, options);
 
   const sourceId = String(body.sourceId ?? "").trim();
   const candidateId = String(body.candidateId ?? "").trim();
