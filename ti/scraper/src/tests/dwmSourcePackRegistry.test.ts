@@ -1,16 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import {
   applyDwmSourcePackValidationResults,
+  buildDwmSourcePackCollectionJobHandoff,
   buildDwmSourcePackPersistenceShape,
   buildDwmSourcePackWorkerIntegrationShape,
   DwmSourcePackPostgresAdapter,
+  InMemoryDwmSourcePackActiveSourceAdapter,
   InMemoryDwmSourcePackRegistryAdapter,
   InMemoryDwmSourcePackValidationQueueAdapter,
   enqueueDwmSourcePackValidationJobs,
+  persistDwmSourcePackActiveSources,
   planDwmSourcePackBulkImport,
   planDwmSourcePackValidationBatch,
   runDwmSourcePackValidationJob,
   sourcePackHealthRollup,
+  sourcePackWorkerReadinessCounters,
   sourcePackRecordFromPostgresRows,
   sourcePackRecordToPostgresRows,
   type DwmSourceCandidateValidationResult,
@@ -472,6 +476,96 @@ describe("dwm source pack registry adapter", () => {
     expect(JSON.stringify(activation)).not.toContain("rawPayload");
   });
 
+  test("turns thousands-scale validated candidates into capped durable active rows and collection job handoffs", () => {
+    const queue = new InMemoryDwmSourcePackValidationQueueAdapter();
+    const activeSources = new InMemoryDwmSourcePackActiveSourceAdapter();
+    const sourcePack = pack({
+      id: "pack_worker_scale",
+      requestId: "req_worker_scale",
+      candidates: scaleCandidates(1000)
+    });
+    const plan = planDwmSourcePackValidationBatch([sourcePack], {
+      chunkSize: 200,
+      perFamilyConcurrency: { telegram: 25, darkweb_metadata: 8, darkweb_onion: 2, public_advisory: 5 },
+      maxAttempts: 5,
+      backoffSeconds: 180,
+      generatedAt: "2026-06-28T12:00:00.000Z"
+    });
+    const queued = enqueueDwmSourcePackValidationJobs(queue, [sourcePack], plan, { generatedAt: "2026-06-28T12:01:00.000Z" });
+    const activations = queued.receipts.map((receipt, index) => {
+      const run = runDwmSourcePackValidationJob(receipt.record.job, sourcePack, scaleValidator, {
+        generatedAt: `2026-06-28T12:${String(index + 2).padStart(2, "0")}:00.000Z`
+      });
+      queue.transition(receipt.jobKey, run.job.status, { job: run.job, updatedAt: "2026-06-28T12:10:00.000Z" });
+      return applyDwmSourcePackValidationResults(sourcePack, queue.get(receipt.jobKey)!, run.results, {
+        generatedAt: "2026-06-28T12:11:00.000Z",
+        actor: "source-pack-worker"
+      });
+    });
+    const mergedActivation = {
+      ...activations[0],
+      activeSources: activations.flatMap((activation) => activation.activeSources),
+      blockedCandidates: activations.flatMap((activation) => activation.blockedCandidates),
+      summary: {
+        activeSourceCount: activations.reduce((total, activation) => total + activation.summary.activeSourceCount, 0),
+        blockedCandidateCount: activations.reduce((total, activation) => total + activation.summary.blockedCandidateCount, 0),
+        retryScheduledCount: activations.reduce((total, activation) => total + activation.summary.retryScheduledCount, 0),
+        failedCount: activations.reduce((total, activation) => total + activation.summary.failedCount, 0),
+        disabledCount: activations.reduce((total, activation) => total + activation.summary.disabledCount, 0)
+      }
+    };
+
+    const persisted = persistDwmSourcePackActiveSources(activeSources, mergedActivation, {
+      perFamilyCaps: { telegram: 400, darkweb_metadata: 200 }
+    });
+    const repeated = persistDwmSourcePackActiveSources(activeSources, mergedActivation, {
+      perFamilyCaps: { telegram: 400, darkweb_metadata: 200 }
+    });
+    const handoff = buildDwmSourcePackCollectionJobHandoff(activeSources.list(), { generatedAt: "2026-06-28T12:12:00.000Z" });
+    const counters = sourcePackWorkerReadinessCounters(activations.map((activation) => activation.pack), queue.list(), activeSources.list());
+
+    expect(plan.summary).toMatchObject({ packCount: 1, candidateCount: 1000, jobCount: 5, chunkSize: 200 });
+    expect(queued.summary).toMatchObject({ enqueuedCount: 5, duplicateCount: 0, jobCount: 5, candidateCount: 1000, safeRejectedRowCount: 1 });
+    expect(queue.list().every((record) => record.familyConcurrency.telegram === 25 && record.retry.maxAttempts === 5)).toBe(true);
+    expect(mergedActivation.summary).toEqual({
+      activeSourceCount: 750,
+      blockedCandidateCount: 250,
+      retryScheduledCount: 100,
+      failedCount: 50,
+      disabledCount: 100
+    });
+    expect(persisted.summary).toEqual({
+      insertedCount: 600,
+      duplicateCount: 0,
+      skippedCount: 150,
+      activeSourceCount: 600,
+      collectionReadyCount: 600
+    });
+    expect(repeated.summary).toMatchObject({ insertedCount: 0, duplicateCount: 600, skippedCount: 150, activeSourceCount: 600 });
+    expect(handoff.jobs).toHaveLength(600);
+    expect(handoff.jobs[0]).toMatchObject({
+      status: "queued",
+      targetRawStored: false,
+      retry: { maxAttempts: 5, backoffSeconds: 180 },
+      validationScore: expect.any(Number)
+    });
+    expect(new Set(handoff.jobs.map((job) => job.collectionMode))).toEqual(new Set(["bounded_public_preview", "metadata_only"]));
+    expect(counters).toMatchObject({
+      queuedValidationJobs: 0,
+      activeSourceRows: 600,
+      collectionReadyRows: 600,
+      safeRejectedRows: 1,
+      byFamily: {
+        telegram: { active: 400, collectionReady: 400 },
+        darkweb_metadata: { active: 200, collectionReady: 200 },
+        public_advisory: { retryScheduled: 100 },
+        clear_web: { blocked: 100 }
+      }
+    });
+    expect(JSON.stringify({ queued, persisted, handoff })).not.toContain("rawPayload");
+    expect(JSON.stringify({ queued, persisted, handoff })).not.toContain("@raw");
+  });
+
   test("computes source health rollups for stale parser failures activation lag and retry windows", () => {
     const rollup = sourcePackHealthRollup(pack({
       id: "pack_health_rollup",
@@ -578,6 +672,65 @@ function fakeValidator(candidate: DwmSourcePackCandidateRecord): DwmSourceCandid
     };
   }
   return { candidateId: candidate.id, state: "disabled", parserStatus: "clear_web_parser_disabled" };
+}
+
+function scaleValidator(candidate: DwmSourcePackCandidateRecord): DwmSourceCandidateValidationResult {
+  if (candidate.declaredFamily === "telegram") {
+    return { candidateId: candidate.id, state: "active", parserStatus: "telegram_public_parser_ready", validationScore: 0.94 };
+  }
+  if (candidate.declaredFamily === "darkweb_metadata" || candidate.declaredFamily === "darkweb_onion") {
+    return { candidateId: candidate.id, state: "active", parserStatus: "metadata_parser_ready", validationScore: 0.88 };
+  }
+  if (candidate.declaredFamily === "public_advisory") {
+    return {
+      candidateId: candidate.id,
+      state: "retry_scheduled",
+      parserStatus: "parser_retry_scheduled",
+      validationScore: 0.42,
+      failure: { code: "parser_timeout", message: "fixture parser timeout" }
+    };
+  }
+  return { candidateId: candidate.id, state: "disabled", parserStatus: "parser_disabled", validationScore: 0.1 };
+}
+
+function scaleCandidates(count: number): DwmSourcePackCandidateRecord[] {
+  return Array.from({ length: count }, (_, index) => {
+    if (index < 500) return candidate({
+      id: `cand_scale_tg_${index}`,
+      declaredFamily: "telegram",
+      index,
+      targetRef: {
+        hash: index === 499 ? "scale_duplicate_hash" : `hash_scale_tg_${index}`,
+        preview: `telegram:scale:${index}`,
+        family: "telegram",
+        rawStored: false
+      }
+    });
+    if (index < 750) return candidate({
+      id: `cand_scale_darkweb_${index}`,
+      declaredFamily: "darkweb_metadata",
+      index,
+      policyBoundary: { metadataOnly: true, noPrivateAccess: true, noPayloadDownload: true }
+    });
+    if (index < 800) return candidate({
+      id: `cand_scale_onion_blocked_${index}`,
+      declaredFamily: "darkweb_onion",
+      index,
+      policyBoundary: { metadataOnly: false, noPrivateAccess: true }
+    });
+    if (index < 900) return candidate({ id: `cand_scale_advisory_${index}`, declaredFamily: "public_advisory", index });
+    return candidate({
+      id: `cand_scale_clear_${index}`,
+      declaredFamily: "clear_web",
+      index,
+      targetRef: {
+        hash: index === 999 ? "scale_duplicate_hash" : `hash_scale_clear_${index}`,
+        preview: `clear_web:scale:${index}`,
+        family: "clear_web",
+        rawStored: false
+      }
+    });
+  });
 }
 
 function pack(input: Partial<DwmSourcePackRecord> = {}): DwmSourcePackRecord {
