@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import config from '@/config'
 import { DashboardHeader, DashboardPage, DashboardPanel } from '@/components/dashboard/ui'
+import AccessRecoveryForm from './accessRecoveryForm'
 
 type AdminAuditEvent = {
     id: number
@@ -110,6 +111,9 @@ export default async function ImpersonationAuditPage({
                 title='Admin audit timeline'
                 description='Structured support, organization, invite, and impersonation activity.'
             />
+            <DashboardPanel className='p-4'>
+                <AccessRecoveryForm />
+            </DashboardPanel>
             <DashboardPanel className='p-4'>
                 <form className='grid gap-3' action='/dashboard/system/impersonation'>
                     <div className='grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))]'>
