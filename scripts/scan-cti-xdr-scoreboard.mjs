@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 
 const scoreboardPath = path.join(process.cwd(), "docs/product/cti-xdr-scoreboard.json");
 const requiredRows = [
@@ -44,9 +45,23 @@ function fail(message) {
 }
 
 const scoreboard = JSON.parse(fs.readFileSync(scoreboardPath, "utf8"));
+const recentGitLog = execSync("git log --oneline -16", { encoding: "utf8" });
 
 if (!Array.isArray(scoreboard.rows)) {
   fail("rows must be an array");
+}
+if (scoreboard.latestCommit && !recentGitLog.includes(scoreboard.latestCommit)) {
+  fail(`latestCommit ${scoreboard.latestCommit} is not present in git log --oneline -16`);
+}
+for (const commit of scoreboard.recentConfirmedCommits || []) {
+  if (!recentGitLog.includes(commit)) {
+    fail(`recentConfirmedCommits entry ${commit} is not present in git log --oneline -16`);
+  }
+}
+for (const item of scoreboard.absentExpectedCommits || []) {
+  if (item.commit && recentGitLog.includes(item.commit)) {
+    fail(`absentExpectedCommits entry ${item.commit} is now present in git log --oneline -16`);
+  }
 }
 
 const rowsById = new Map();
@@ -86,6 +101,12 @@ const compact = (value, maxLength = 92) => {
 
 console.log(`CTI/XDR scoreboard ${scoreboard.updatedAt}`);
 console.log(`rows=${scoreboard.rows.length} required=${requiredRows.length} source=${scoreboard.sourceDoc}`);
+if (scoreboard.latestCommit) {
+  console.log(`latestCommit=${scoreboard.latestCommit}`);
+}
+if (Array.isArray(scoreboard.absentExpectedCommits) && scoreboard.absentExpectedCommits.length > 0) {
+  console.log(`absent=${scoreboard.absentExpectedCommits.map((item) => item.commit).join(",")}`);
+}
 console.log("");
 
 for (const id of requiredRows) {
@@ -111,6 +132,12 @@ if (scoreboard.coordinatorInstructions) {
     console.log("deploy:");
     for (const item of scoreboard.coordinatorInstructions.deployCriteria) {
       console.log(`* ${item}`);
+    }
+  }
+  if (Array.isArray(scoreboard.coordinatorInstructions.deployGate)) {
+    console.log("gate:");
+    for (const item of scoreboard.coordinatorInstructions.deployGate) {
+      console.log(`! ${item}`);
     }
   }
 }
