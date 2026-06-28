@@ -61,6 +61,64 @@ export type TiEnrichmentOverview = {
         automaticCoverage: number
         totalRefreshes: number
     }
+    pipeline?: TiPipelineOverview
+}
+
+export type TiPipelineOverview = {
+    worker: {
+        state: 'idle' | 'running' | 'failed'
+        lastStartedAt: string | null
+        lastFinishedAt: string | null
+        lastError: string | null
+        intervalSeconds: number
+        mode: string
+    }
+    queue: {
+        totalActors: number
+        cursor: number
+        nextActors: string[]
+    }
+    stats: {
+        snapshots: number
+        sources: number
+        activity: number
+        published_24h: number
+        runs_24h: number
+    }
+    latestRuns: Array<{
+        id: string
+        actor_key: string
+        actor_name: string
+        status: string
+        started_at: string
+        finished_at: string | null
+        changed_fields: string[]
+        discovered_items: number
+        published_items: number
+        error: string | null
+    }>
+    latestSnapshots: Array<{
+        actor_key: string
+        actor_name: string
+        source_count: number
+        activity_count: number
+        target_count: number
+        ttp_count: number
+        updated_at: string
+    }>
+    latestDiscoveries: Array<{
+        id: string
+        actor_key: string
+        actor_name: string
+        kind: string
+        title: string
+        detail: string
+        source_url: string
+        source_name: string
+        first_seen_at: string
+        last_seen_at: string
+        published_at: string | null
+    }>
 }
 
 type ApiWarmActor = {
@@ -86,6 +144,7 @@ type ApiQueuedActor = Omit<ApiWarmActor, 'actor' | 'refreshedAt'> & {
 type ApiOverview = Omit<TiEnrichmentOverview, 'updatedActors' | 'queuedActors'> & {
     updatedActors?: ApiWarmActor[]
     queuedActors?: ApiQueuedActor[]
+    pipeline?: TiPipelineOverview
 }
 
 export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
@@ -113,6 +172,7 @@ export async function getTiEnrichmentOverview(): Promise<TiEnrichmentOverview> {
                 automaticCoverage: overview.stats?.automaticCoverage ?? 0,
                 totalRefreshes: overview.stats?.totalRefreshes ?? 0,
             },
+            pipeline: overview.pipeline,
         }
     } catch (error) {
         return unavailableOverview(error instanceof Error ? error.message : String(error))
@@ -203,6 +263,7 @@ function unavailableOverview(reason: string): TiEnrichmentOverview {
             automaticCoverage: 0,
             totalRefreshes: 0,
         },
+        pipeline: undefined,
     }
 }
 

@@ -7,7 +7,7 @@ import { formatTiDate } from '@/utils/tiAdmin/ops'
 export const dynamic = 'force-dynamic'
 
 export default async function TiEnrichmentPage() {
-    const { updatedActors, queuedActors, stats, worker } = await getTiEnrichmentOverview()
+    const { updatedActors, queuedActors, stats, worker, pipeline } = await getTiEnrichmentOverview()
 
     return (
         <DashboardPage>
@@ -22,6 +22,10 @@ export default async function TiEnrichmentPage() {
                 <Stat title='Queued next' value={`${stats.queued}`} />
                 <Stat title='Coverage' value={`${stats.automaticCoverage} actors`} />
                 <Stat title='Worker' value={worker.state === 'running' ? 'Running' : worker.state} />
+                {pipeline ? <Stat title='Published 24h' value={`${pipeline.stats.published_24h}`} /> : null}
+                {pipeline ? <Stat title='Pipeline runs 24h' value={`${pipeline.stats.runs_24h}`} /> : null}
+                {pipeline ? <Stat title='Snapshots' value={`${pipeline.stats.snapshots}`} /> : null}
+                {pipeline ? <Stat title='Discoveries' value={`${pipeline.stats.activity}`} /> : null}
             </div>
 
             <DashboardPanel className='p-4'>
@@ -33,6 +37,54 @@ export default async function TiEnrichmentPage() {
                 </div>
                 {worker.lastError ? <p className='mt-3 rounded-lg border border-[#ffd5d0] bg-[#fff4f2] p-3 text-sm text-[#a33428]'>{worker.lastError}</p> : null}
             </DashboardPanel>
+
+            {pipeline ? (
+                <DashboardPanel className='p-5'>
+                    <div className='flex flex-wrap items-start justify-between gap-4'>
+                        <div>
+                            <div className='flex items-center gap-2'>
+                                <CheckCircle2 className='h-4 w-4 text-[#147a3b]' />
+                                <h2 className='text-lg font-semibold text-[#171a21]'>Autonomous publish ledger</h2>
+                            </div>
+                            <p className='mt-2 max-w-3xl text-sm leading-6 text-[#596170]'>
+                                These rows come from the cron-driven discovery pipeline. New actor activity, sources, targets, tradecraft, and datasets are diffed against the previous snapshot and published automatically when first seen.
+                            </p>
+                        </div>
+                        <div className='grid gap-2 text-sm text-[#596170] sm:grid-cols-2'>
+                            <Info label='Pipeline state' value={pipeline.worker.state} />
+                            <Info label='Last finished' value={pipeline.worker.lastFinishedAt ? formatTiDate(pipeline.worker.lastFinishedAt) : 'No run finished'} />
+                        </div>
+                    </div>
+                    <div className='mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]'>
+                        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4'>
+                            <p className='text-xs font-semibold uppercase text-[#667085]'>Latest published discoveries</p>
+                            <div className='mt-3 grid gap-3'>
+                                {pipeline.latestDiscoveries.slice(0, 6).map(item => (
+                                    <div key={item.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                                        <div className='flex flex-wrap items-center justify-between gap-2'>
+                                            <p className='text-sm font-semibold text-[#171a21]'>{item.title}</p>
+                                            <span className='rounded-full bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{item.kind}</span>
+                                        </div>
+                                        <p className='mt-1 text-xs font-semibold uppercase text-[#667085]'>{item.actor_name} · {item.published_at ? formatTiDate(item.published_at) : 'Seen before'}</p>
+                                        <p className='mt-2 line-clamp-2 text-sm leading-6 text-[#596170]'>{item.detail || item.source_name || 'Discovery metadata recorded.'}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4'>
+                            <p className='text-xs font-semibold uppercase text-[#667085]'>Next autonomous actors</p>
+                            <div className='mt-3 flex flex-wrap gap-2'>
+                                {pipeline.queue.nextActors.map(actor => (
+                                    <span key={actor} className='rounded-full border border-[#d8dee9] bg-white px-3 py-1 text-sm font-semibold text-[#344054]'>{actor}</span>
+                                ))}
+                            </div>
+                            <p className='mt-4 text-sm leading-6 text-[#596170]'>
+                                The cursor advances every cron pass. No admin click is required; manual runs only force an immediate pass.
+                            </p>
+                        </div>
+                    </div>
+                </DashboardPanel>
+            ) : null}
 
             <DashboardPanel className='p-5'>
                 <div className='flex items-center gap-2'>
