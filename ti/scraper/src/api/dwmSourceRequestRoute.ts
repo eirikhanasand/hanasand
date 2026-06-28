@@ -42,12 +42,17 @@ type DwmSourceRequestBody = {
 type DwmSourcePackCandidate = {
   target?: string;
   type?: "telegram_channel" | "restricted_metadata";
+  family?: SourceGrowthFamily;
+  refLabel?: string;
+  parserExpectation?: string;
   scope?: string;
   requestedBy?: string;
   priority?: "critical" | "high" | "medium";
   suppress?: boolean;
   reason?: string;
 };
+
+type SourceGrowthFamily = "telegram" | "darkweb_onion" | "darkweb_metadata" | "actor_page" | "public_advisory" | "clear_web";
 
 type SourcePackRegistry = {
   id: string;
@@ -67,7 +72,10 @@ type SourcePackRegistryCandidate = {
   id: string;
   sourceId?: string;
   family: string;
+  declaredFamily: SourceGrowthFamily;
   type: string;
+  refLabel?: string;
+  parserExpectation: string;
   index: number;
   targetRef: {
     hash: string;
@@ -89,6 +97,8 @@ type SourcePackRegistryCandidate = {
   validationResult?: Record<string, unknown>;
   parserStatus?: string;
   healthStatus?: string;
+  activationState?: string;
+  lastTestOutcome?: Record<string, unknown>;
   retryHint?: string;
 };
 
@@ -226,6 +236,8 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
   for (const [index, input] of (body.candidates ?? []).slice(0, limit).entries()) {
     const target = String(input.target ?? "").trim();
     const type = input.type ?? body.type ?? "telegram_channel";
+    const declaredFamily = sourceGrowthFamilyFromCandidate({ target, type, family: input.family });
+    const parserExpectation = input.parserExpectation ?? parserExpectationForFamily(declaredFamily);
     const requestBody: DwmSourceRequestBody = {
       ...body,
       target,
@@ -258,6 +270,9 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
         index,
         target,
         type,
+        declaredFamily,
+        refLabel: input.refLabel,
+        parserExpectation,
         requestedBy: input.requestedBy ?? body.requestedBy ?? "source-pack",
         requestedAt: generatedAt,
         status: "rejected",
@@ -283,6 +298,9 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
         index,
         target,
         type,
+        declaredFamily,
+        refLabel: input.refLabel,
+        parserExpectation,
         requestedBy: input.requestedBy ?? body.requestedBy ?? "source-pack",
         requestedAt: generatedAt,
         status: "duplicate",
@@ -298,7 +316,10 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
       sourcePackId,
       sourcePackLabel,
       packIndex: index,
-      packRequestedAt: generatedAt
+      packRequestedAt: generatedAt,
+      declaredFamily,
+      refLabel: input.refLabel,
+      parserExpectation
     });
     const source = input.suppress === true
       ? saveLifecyclePatch(packedSource, options, {
@@ -317,6 +338,9 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
       index,
       target,
       type,
+      declaredFamily,
+      refLabel: input.refLabel,
+      parserExpectation,
       requestedBy: input.requestedBy ?? body.requestedBy ?? "source-pack",
       requestedAt: generatedAt,
       status: source.status === "suppressed" ? "suppressed" : sourceCandidate(source).status,
@@ -432,8 +456,12 @@ function saveSourcePackMetadata(source: SourceRecord, options: ApiServerOptions,
   sourcePackLabel: string;
   packIndex: number;
   packRequestedAt: string;
+  declaredFamily?: SourceGrowthFamily;
+  refLabel?: string;
+  parserExpectation?: string;
 }): SourceRecord {
   const candidate = sourceCandidate(source);
+  const declaredFamily = input.declaredFamily ?? sourceGrowthFamilyForSource(source);
   return options.store.saveSource({
     ...source,
     metadata: {
@@ -442,12 +470,18 @@ function saveSourcePackMetadata(source: SourceRecord, options: ApiServerOptions,
       sourcePackLabel: input.sourcePackLabel,
       sourcePackIndex: input.packIndex,
       sourcePackRequestedAt: input.packRequestedAt,
+      sourceGrowthFamily: declaredFamily,
+      sourceRefLabel: input.refLabel,
+      parserExpectation: input.parserExpectation ?? parserExpectationForFamily(declaredFamily),
       sourceCandidate: {
         ...candidate,
         sourcePackId: input.sourcePackId,
         sourcePackLabel: input.sourcePackLabel,
         sourcePackIndex: input.packIndex,
-        sourcePackRequestedAt: input.packRequestedAt
+        sourcePackRequestedAt: input.packRequestedAt,
+        sourceGrowthFamily: declaredFamily,
+        refLabel: input.refLabel,
+        parserExpectation: input.parserExpectation ?? parserExpectationForFamily(declaredFamily)
       }
     }
   } as SourceRecord);
@@ -522,6 +556,9 @@ function sourcePackRegistryCandidate(input: {
   index: number;
   target: string;
   type: string;
+  declaredFamily: SourceGrowthFamily;
+  refLabel?: string;
+  parserExpectation: string;
   requestedBy: string;
   requestedAt: string;
   status: string;
@@ -541,7 +578,10 @@ function sourcePackRegistryCandidate(input: {
     id: candidate?.id ?? stableId("dwm_source_pack_candidate", `${input.sourcePackId}:${input.index}:${input.type}:${input.target}`),
     sourceId: input.source?.id,
     family,
+    declaredFamily: input.declaredFamily,
     type: input.type,
+    refLabel: input.refLabel,
+    parserExpectation: input.parserExpectation,
     index: input.index,
     targetRef: safeTargetRef(input.target, family),
     requestedBy: input.requestedBy,
@@ -558,6 +598,8 @@ function sourcePackRegistryCandidate(input: {
     validationResult: candidate?.validationResult ?? (input.failure ? { allowed: false, reason: input.reason ?? input.failure?.message, checkedAt: input.requestedAt } : undefined),
     parserStatus: candidate?.parserStatus,
     healthStatus: candidate?.healthStatus,
+    activationState: candidate?.activationDecision,
+    lastTestOutcome: candidate?.lastTestedAt ? { status: candidate.healthStatus, testedAt: candidate.lastTestedAt } : undefined,
     retryHint: input.retryHint ?? (input.failure?.retryHint ? String(input.failure.retryHint) : undefined)
   };
 }
@@ -805,16 +847,22 @@ function sourcePackListResponse(body: DwmSourceRequestBody, options: ApiServerOp
 
 function sourcePackStatusItem(source: SourceRecord) {
   const candidate = sourceCandidate(source);
+  const family = sourceGrowthFamilyForSource(source);
   return {
     id: candidate.id,
     sourcePackId: candidate.sourcePackId,
     sourcePackLabel: candidate.sourcePackLabel,
     sourceId: source.id,
     family: candidate.family,
+    sourceGrowthFamily: family,
+    refLabel: candidate.refLabel ?? source.metadata?.sourceRefLabel,
+    parserExpectation: candidate.parserExpectation ?? source.metadata?.parserExpectation ?? parserExpectationForFamily(family),
     target: candidate.target,
     status: candidate.status,
     health: sourceHealthStatus(source),
     parser: sourceParserStatus(source),
+    sourceHealth: sourceControlRoomHealth(source),
+    evidenceReadiness: sourceEvidenceReadiness(source),
     lifecycle: sourceLifecycle(source),
     policyBoundary: candidate.policyBoundary,
     collectionTrigger: candidate.collectionTrigger ?? skippedCollectionTrigger(source, "not_queued"),
@@ -834,6 +882,7 @@ function sourcePackRegistryStatus(pack: SourcePackRegistry, options: ApiServerOp
         ...sourcePackStatusItem(source),
         index: candidate.index,
         intakeStatus: candidate.intakeStatus,
+        declaredFamily: candidate.declaredFamily,
         decision: candidate.decision,
         decidedBy: candidate.decidedBy,
         decidedAt: candidate.decidedAt,
@@ -848,7 +897,11 @@ function sourcePackRegistryStatus(pack: SourcePackRegistry, options: ApiServerOp
       sourceId: candidate.sourceId,
       index: candidate.index,
       family: candidate.family,
+      declaredFamily: candidate.declaredFamily,
+      sourceGrowthFamily: candidate.declaredFamily,
       type: candidate.type,
+      refLabel: candidate.refLabel,
+      parserExpectation: candidate.parserExpectation,
       targetRef: candidate.targetRef,
       status: candidate.status,
       intakeStatus: candidate.intakeStatus,
@@ -866,9 +919,12 @@ function sourcePackRegistryStatus(pack: SourcePackRegistry, options: ApiServerOp
       },
       parser: {
         status: "not_scheduled",
-        profile: candidate.family === "darkweb_metadata" ? "restricted_metadata" : "public_channel_handoff",
+        profile: parserProfileForFamily(candidate.declaredFamily),
+        expectation: candidate.parserExpectation,
         warnings: candidate.failure?.message ? [String(candidate.failure.message)] : []
       },
+      sourceHealth: registryOnlySourceHealth(candidate),
+      evidenceReadiness: { canProduceAlertGradeEvidence: false, reason: candidate.status === "duplicate" ? "duplicate source candidate was not activated" : "candidate failed intake validation" },
       lifecycle: {
         status: candidate.status,
         activationState: candidate.decision ?? candidate.status,
@@ -914,6 +970,7 @@ function sourcePackRegistryStatus(pack: SourcePackRegistry, options: ApiServerOp
     candidateIds: candidates.map((candidate) => candidate.id),
     sourceIds: candidates.map((candidate) => candidate.sourceId).filter(Boolean),
     packStatus: sourcePackRollup({ sourcePackId: pack.id, sourcePackLabel: pack.label, sources, registry: pack }),
+    familyCoverage: sourceFamilyCoverage({ sources, registry: pack }),
     audit: pack.audit,
     safeOutput: pack.safeOutput
   };
@@ -1036,6 +1093,7 @@ function sourcePackRollup(input: {
     ].filter((item) => item.code || item.message),
     byStatus,
     byFamily,
+    familyCoverage: sourceFamilyCoverage(input),
     policyBoundaries,
     safeOutput: {
       rawUnsafeRowsStored: false,
@@ -1472,6 +1530,9 @@ function sourceCandidate(source: SourceRecord) {
     sourcePackLabel: existing.sourcePackLabel ?? source.metadata?.sourcePackLabel,
     sourcePackIndex: existing.sourcePackIndex ?? source.metadata?.sourcePackIndex,
     sourcePackRequestedAt: existing.sourcePackRequestedAt ?? source.metadata?.sourcePackRequestedAt,
+    sourceGrowthFamily: existing.sourceGrowthFamily ?? source.metadata?.sourceGrowthFamily,
+    refLabel: existing.refLabel ?? source.metadata?.sourceRefLabel,
+    parserExpectation: existing.parserExpectation ?? source.metadata?.parserExpectation,
     sourceId: source.id,
     family: sourceFamily(source),
     target: existing.target ?? source.url,
@@ -1550,11 +1611,79 @@ function sourceParserStatus(source: SourceRecord) {
   return {
     status: source.metadata?.parserStatus ?? sourceCandidate(source).parserStatus ?? parserStatusForSource(source),
     profile: isRestrictedMetadataSource(source) ? "restricted_metadata" : source.type === "telegram_public" ? "public_channel_handoff" : "default",
+    expectation: sourceCandidate(source).parserExpectation ?? source.metadata?.parserExpectation ?? parserExpectationForFamily(sourceGrowthFamilyForSource(source)),
     lastValidatedAt: source.metadata?.validationResult?.checkedAt ?? sourceCandidate(source).validationResult?.checkedAt,
     lastCollectionOutcome: source.metadata?.lastCollectionOutcome ?? sourceCandidate(source).lastCollectionOutcome,
     retryAfter: source.metadata?.lastCollectionOutcome?.retryAfter,
     warnings: source.metadata?.lastCollectionOutcome?.status === "failed" ? [source.metadata.lastCollectionOutcome.reason ?? "collection failed"] : []
   };
+}
+
+function sourceControlRoomHealth(source: SourceRecord) {
+  const candidate = sourceCandidate(source);
+  const lastCollectionOutcome = candidate.lastCollectionOutcome ?? source.metadata?.lastCollectionOutcome;
+  const collectionTrigger = candidate.collectionTrigger ?? source.metadata?.collectionTrigger;
+  const lastFailure = lastCollectionOutcome?.status === "failed" ? {
+    at: lastCollectionOutcome.at,
+    errorCode: lastCollectionOutcome.errorCode,
+    reason: lastCollectionOutcome.reason,
+    retryCount: lastCollectionOutcome.retryCount
+  } : undefined;
+  return {
+    parserStatus: sourceParserStatus(source),
+    lastCaptureAt: candidate.lastCaptureAt ?? source.metadata?.lastCaptureAt,
+    lastFailure,
+    retryWindow: lastCollectionOutcome?.retryAfter ? {
+      retryAfter: lastCollectionOutcome.retryAfter,
+      backoffSeconds: lastCollectionOutcome.backoffSeconds,
+      retryCount: lastCollectionOutcome.retryCount
+    } : undefined,
+    queuedActivationJobs: collectionTrigger?.queued === true ? [collectionTrigger.jobId ?? collectionTrigger.taskId].filter(Boolean) : [],
+    queuedTestJobs: source.status === "candidate" && source.metadata?.healthStatus === "retry_scheduled"
+      ? [stableId("dwm_source_test_job", `${candidate.id}:retry`)]
+      : [],
+    canProduceAlertGradeEvidence: sourceEvidenceReadiness(source).canProduceAlertGradeEvidence
+  };
+}
+
+function registryOnlySourceHealth(candidate: SourcePackRegistryCandidate) {
+  return {
+    parserStatus: {
+      status: "not_scheduled",
+      profile: parserProfileForFamily(candidate.declaredFamily),
+      expectation: candidate.parserExpectation,
+      warnings: candidate.failure?.message ? [String(candidate.failure.message)] : []
+    },
+    lastCaptureAt: undefined,
+    lastFailure: candidate.failure ? { errorCode: candidate.failure.code, reason: candidate.failure.message } : undefined,
+    retryWindow: undefined,
+    queuedActivationJobs: [],
+    queuedTestJobs: [],
+    canProduceAlertGradeEvidence: false
+  };
+}
+
+function sourceEvidenceReadiness(source: SourceRecord) {
+  const candidate = sourceCandidate(source);
+  if (source.status === "rejected" || source.status === "suppressed") {
+    return { canProduceAlertGradeEvidence: false, reason: `source_${source.status}` };
+  }
+  if (candidate.lastCaptureId || source.metadata?.lastCaptureId) {
+    return {
+      canProduceAlertGradeEvidence: true,
+      reason: "capture_observed",
+      lastCaptureId: candidate.lastCaptureId ?? source.metadata?.lastCaptureId,
+      lastCaptureAt: candidate.lastCaptureAt ?? source.metadata?.lastCaptureAt,
+      alertRebuild: candidate.alertRebuild ?? source.metadata?.alertRebuild
+    };
+  }
+  if (source.status === "active" && source.type === "telegram_public") {
+    return { canProduceAlertGradeEvidence: true, reason: "active_public_source_waiting_for_capture" };
+  }
+  if (isRestrictedMetadataSource(source) && source.governance?.approvalState === "approved") {
+    return { canProduceAlertGradeEvidence: true, reason: "metadata_only_capture_contract_available" };
+  }
+  return { canProduceAlertGradeEvidence: false, reason: "activation_or_capture_required" };
 }
 
 type OperationalNextStep = {
@@ -1987,6 +2116,94 @@ function sourceFamily(source: Pick<SourceRecord, "type" | "url">): string {
   if (String(source.type).includes("telegram") || String(source.url).includes("t.me/")) return "telegram_public";
   if (String(source.type).endsWith("_metadata") || String(source.url).includes(".onion") || String(source.url).startsWith("metadata://darkweb/")) return "darkweb_metadata";
   return String(source.type ?? "unknown");
+}
+
+const SOURCE_GROWTH_FAMILIES: SourceGrowthFamily[] = ["telegram", "darkweb_onion", "darkweb_metadata", "actor_page", "public_advisory", "clear_web"];
+
+function sourceGrowthFamilyFromCandidate(input: { target: string; type: string; family?: SourceGrowthFamily }): SourceGrowthFamily {
+  if (input.family) return input.family;
+  const target = input.target.toLowerCase();
+  if (input.type === "telegram_channel" || target.includes("t.me/") || target.startsWith("@")) return "telegram";
+  if (target.includes(".onion")) return "darkweb_onion";
+  if (input.type === "restricted_metadata" || target.startsWith("metadata://darkweb/")) return "darkweb_metadata";
+  if (/advisory|cisa|cert|vendor/i.test(input.target)) return "public_advisory";
+  if (/actor|apt|threat/i.test(input.target)) return "actor_page";
+  return "clear_web";
+}
+
+function sourceGrowthFamilyForSource(source: SourceRecord): SourceGrowthFamily {
+  const existing = source.metadata?.sourceGrowthFamily;
+  if (SOURCE_GROWTH_FAMILIES.includes(existing)) return existing;
+  return sourceGrowthFamilyFromCandidate({ target: source.url, type: source.type });
+}
+
+function parserExpectationForFamily(family: SourceGrowthFamily): string {
+  if (family === "telegram") return "telegram_public_metadata_and_text_fixture";
+  if (family === "darkweb_onion") return "restricted_onion_metadata_fixture";
+  if (family === "darkweb_metadata") return "restricted_metadata_fixture";
+  if (family === "actor_page") return "actor_profile_page_metadata_fixture";
+  if (family === "public_advisory") return "public_advisory_metadata_fixture";
+  return "clear_web_metadata_fixture";
+}
+
+function parserProfileForFamily(family: SourceGrowthFamily): string {
+  if (family === "telegram") return "public_channel_handoff";
+  if (family === "darkweb_onion" || family === "darkweb_metadata") return "restricted_metadata";
+  if (family === "actor_page") return "actor_page_metadata";
+  if (family === "public_advisory") return "public_advisory";
+  return "clear_web";
+}
+
+function sourceFamilyCoverage(input: { sources: SourceRecord[]; registry?: SourcePackRegistry }) {
+  const byFamily = Object.fromEntries(SOURCE_GROWTH_FAMILIES.map((family) => [family, {
+    total: 0,
+    active: 0,
+    tested: 0,
+    failed: 0,
+    pending: 0,
+    blocked: 0,
+    blockers: [] as Array<Record<string, unknown>>
+  }])) as Record<SourceGrowthFamily, {
+    total: number;
+    active: number;
+    tested: number;
+    failed: number;
+    pending: number;
+    blocked: number;
+    blockers: Array<Record<string, unknown>>;
+  }>;
+  const sourceIds = new Set(input.sources.map((source) => source.id));
+  for (const source of input.sources) {
+    const family = sourceGrowthFamilyForSource(source);
+    const bucket = byFamily[family];
+    const candidate = sourceCandidate(source);
+    bucket.total += 1;
+    if (source.status === "active") bucket.active += 1;
+    if (candidate.lastTestedAt || ["tested", "active"].includes(String(candidate.status))) bucket.tested += 1;
+    if (candidate.lastCollectionOutcome?.status === "failed" || source.metadata?.lastCollectionOutcome?.status === "failed") bucket.failed += 1;
+    if (["candidate", "needs_review"].includes(String(source.status)) || ["queued", "approval_required", "retry_scheduled"].includes(String(candidate.status))) bucket.pending += 1;
+    if (["rejected", "suppressed", "quarantined"].includes(String(source.status))) {
+      bucket.blocked += 1;
+      bucket.blockers.push({ candidateId: candidate.id, sourceId: source.id, status: source.status, reason: source.metadata?.lastLifecycleReason ?? candidate.lastCollectionOutcome?.reason });
+    }
+  }
+  for (const candidate of input.registry?.candidates ?? []) {
+    if (candidate.sourceId && sourceIds.has(candidate.sourceId)) continue;
+    const bucket = byFamily[candidate.declaredFamily];
+    bucket.total += 1;
+    if (candidate.status === "rejected" || candidate.status === "duplicate" || candidate.status === "suppressed") {
+      bucket.blocked += 1;
+      bucket.blockers.push({
+        candidateId: candidate.id,
+        status: candidate.status,
+        reason: candidate.reason ?? candidate.failure?.message,
+        duplicateOf: candidate.duplicateOf
+      });
+    } else {
+      bucket.pending += 1;
+    }
+  }
+  return byFamily;
 }
 
 function publicTelegramBoundary() {

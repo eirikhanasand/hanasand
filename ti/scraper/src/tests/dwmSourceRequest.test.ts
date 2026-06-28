@@ -122,6 +122,10 @@ describe("dwm source requests", () => {
     expect(body.packRegistry).toMatchObject({
       id: "pack_apt29_growth",
       candidateIds: expect.any(Array),
+      familyCoverage: {
+        telegram: { total: 6, active: 0, pending: 3, blocked: 3 },
+        darkweb_metadata: { total: 1, pending: 1 }
+      },
       safeOutput: { rawRejectedTargetsStored: false, rawDuplicateTargetsStored: false }
     });
 
@@ -275,6 +279,10 @@ describe("dwm source requests", () => {
       duplicateCount: 1,
       capturesObservedCount: 1,
       alertRebuild: { completedCount: 1 },
+      familyCoverage: {
+        telegram: { total: 6, active: 1, failed: 1, pending: 1, blocked: 4 },
+        darkweb_metadata: { total: 1, blocked: 1 }
+      },
       safeOutput: { liveNetworkScrapeStarted: false }
     });
     expect(statusBody.packStatus.retryBackoff[0]).toMatchObject({
@@ -283,6 +291,14 @@ describe("dwm source requests", () => {
       backoffSeconds: 30
     });
     expect(statusBody.candidates.find((candidate: any) => candidate.id === publicCandidate.id)).toMatchObject({
+      sourceGrowthFamily: "telegram",
+      parserExpectation: "telegram_public_metadata_and_text_fixture",
+      sourceHealth: {
+        lastCaptureAt: expect.any(String),
+        queuedActivationJobs: [expect.any(String)],
+        canProduceAlertGradeEvidence: true
+      },
+      evidenceReadiness: { canProduceAlertGradeEvidence: true, reason: "capture_observed" },
       lifecycle: { collectionStatus: "capture_observed" },
       alertRebuild: { status: "completed", alertCount: 1 }
     });
@@ -308,6 +324,102 @@ describe("dwm source requests", () => {
     });
     expect(listedBody.packs[0]).toMatchObject({ id: "pack_apt29_growth", packStatus: { capturesObservedCount: 1 } });
     expect(frontier.snapshot()).toHaveLength(1);
+  });
+
+  test("exposes Telegram-only source-growth pack coverage and health fields without live scraping", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_telegram_only_growth",
+        sourcePackLabel: "Telegram-only growth pack",
+        tenantId: "tenant_acme",
+        scope: "APT29",
+        requestedBy: "source-growth-worker",
+        candidates: [
+          { target: "@telegram_growth_one", type: "telegram_channel", family: "telegram", refLabel: "APT29 Telegram public channel 1" },
+          { target: "https://t.me/telegram_growth_two", type: "telegram_channel", family: "telegram", parserExpectation: "telegram_public_metadata_and_text_fixture" }
+        ]
+      })
+    }), { store, frontier });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(201);
+    expect(body.packRegistry).toMatchObject({
+      id: "pack_telegram_only_growth",
+      familyCoverage: {
+        telegram: { total: 2, active: 0, failed: 0, pending: 2, blocked: 0 },
+        darkweb_onion: { total: 0 },
+        darkweb_metadata: { total: 0 },
+        actor_page: { total: 0 },
+        public_advisory: { total: 0 },
+        clear_web: { total: 0 }
+      }
+    });
+    expect(body.packRegistry.candidates[0]).toMatchObject({
+      sourceGrowthFamily: "telegram",
+      refLabel: "APT29 Telegram public channel 1",
+      parserExpectation: "telegram_public_metadata_and_text_fixture",
+      sourceHealth: {
+        parserStatus: { expectation: "telegram_public_metadata_and_text_fixture" },
+        queuedActivationJobs: [],
+        queuedTestJobs: [],
+        canProduceAlertGradeEvidence: false
+      },
+      evidenceReadiness: { canProduceAlertGradeEvidence: false, reason: "activation_or_capture_required" }
+    });
+    expect(frontier.snapshot()).toHaveLength(0);
+
+    const listed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_list", sourcePackLabel: "Telegram-only growth pack" })
+    }), { store, frontier });
+    const listedBody = await listed.json() as any;
+    expect(listed.status).toBe(200);
+    expect(listedBody.packs[0].familyCoverage.telegram).toMatchObject({ total: 2, pending: 2 });
+    expect(JSON.stringify(listedBody.packs[0].candidates)).not.toContain("privateInvite");
+  });
+
+  test("separates Telegram and onion metadata coverage in mixed source-growth packs", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_telegram_onion_growth",
+        sourcePackLabel: "Telegram onion growth pack",
+        tenantId: "tenant_acme",
+        scope: "APT29",
+        candidates: [
+          { target: "@telegram_onion_mix", type: "telegram_channel", family: "telegram" },
+          { target: "http://apt29-example.onion/posts", type: "restricted_metadata", family: "darkweb_onion", refLabel: "APT29 onion metadata source" }
+        ]
+      })
+    }), { store, frontier });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(201);
+    expect(body.packRegistry.familyCoverage).toMatchObject({
+      telegram: { total: 1, pending: 1 },
+      darkweb_onion: { total: 1, pending: 1 },
+      darkweb_metadata: { total: 0 }
+    });
+    const onionCandidate = body.packRegistry.candidates.find((candidate: any) => candidate.sourceGrowthFamily === "darkweb_onion");
+    expect(onionCandidate).toMatchObject({
+      refLabel: "APT29 onion metadata source",
+      parserExpectation: "restricted_onion_metadata_fixture",
+      policyBoundary: { metadataOnly: true, noDownloads: true },
+      sourceHealth: {
+        parserStatus: { profile: "restricted_metadata", expectation: "restricted_onion_metadata_fixture" },
+        canProduceAlertGradeEvidence: false
+      }
+    });
+    expect(frontier.snapshot()).toHaveLength(0);
+    expect(body.packRegistry.safeOutput).toMatchObject({
+      rawUnsafeRowsStored: false,
+      restrictedPayloadDownloadAllowed: false
+    });
   });
 
   test("persists all-rejected source packs without storing raw unsafe rows", async () => {
@@ -399,7 +511,8 @@ describe("dwm source requests", () => {
       persistedCandidateCount: 0,
       registryOnlyCandidateCount: 1,
       duplicateCount: 1,
-      queuedForCollectionCount: 0
+      queuedForCollectionCount: 0,
+      familyCoverage: { telegram: { total: 1, blocked: 1 } }
     });
     expect(store.listSources()).toHaveLength(1);
     expect(frontier.snapshot()).toHaveLength(0);
@@ -412,8 +525,15 @@ describe("dwm source requests", () => {
     expect(status.status).toBe(200);
     expect(statusBody.registry.candidates[0]).toMatchObject({
       status: "duplicate",
+      sourceGrowthFamily: "telegram",
+      parserExpectation: "telegram_public_metadata_and_text_fixture",
       duplicateOf: existingBody.source.id,
       targetRef: { rawStored: false },
+      sourceHealth: {
+        queuedActivationJobs: [],
+        queuedTestJobs: [],
+        canProduceAlertGradeEvidence: false
+      },
       collectionTrigger: { queued: false, unsafeJobQueued: false, reason: "duplicate_skipped" }
     });
     expect(JSON.stringify(statusBody.registry)).not.toContain("@duplicate_registry_cti");
