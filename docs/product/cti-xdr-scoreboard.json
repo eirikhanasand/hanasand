@@ -1,9 +1,10 @@
 {
   "updatedAt": "2026-06-28",
-  "latestCommit": "7802723a",
+  "latestCommit": "8de8f65f",
   "sourceDoc": "docs/product/cti-xdr-gap-map.md",
   "purpose": "Compact implementation scoreboard for the CTI/DWM/XDR product lanes. This is for the 10-minute coordinator loop; it should reduce management overhead and keep workers from shipping dashboard-only slices.",
   "recentConfirmedCommits": [
+    "8de8f65f",
     "7802723a",
     "72dae520",
     "a6e71eb0",
@@ -107,9 +108,9 @@
       "id": "DELIVERY",
       "pillar": "Webhook/Discord deliveries",
       "ownerThread": "Delivery lane",
-      "currentStatus": "Webhook dispatch, replay contract, delivery evidence contract, delivery inspection, and smoke evidence filters are landed; buyer delivery history still needs clean proof.",
-      "lastCommitOrHandoff": "e92dc23f webhook dispatch; 71b1a6b3 replay contract; 14ae5dc9 webhook delivery evidence contract; de91801c delivery inspection; c9c3b28d hardened webhook smoke evidence filters; 7575e28e cleanup.",
-      "nextCodeSlice": "Put delivery controls on the DWM page: endpoint/Discord destination, redacted secret status, test send, payload preview, replay, delivery evidence, last deliveries, retry failed, and dispatch result.",
+      "currentStatus": "Webhook dispatch, replay contract, delivery evidence contract, org visibility on webhook evidence, delivery inspection, and smoke evidence filters are landed; buyer delivery history still needs clean proof.",
+      "lastCommitOrHandoff": "e92dc23f webhook dispatch; 71b1a6b3 replay contract; 14ae5dc9 webhook delivery evidence contract; 8de8f65f org visibility on DWM webhook evidence; de91801c delivery inspection; c9c3b28d hardened webhook smoke evidence filters; 7575e28e cleanup.",
+      "nextCodeSlice": "Put delivery controls on the DWM page: endpoint/Discord destination, redacted secret status, test send, payload preview, replay, org-visible delivery evidence, last deliveries, retry failed, and dispatch result.",
       "measurableKpi": ["delivery.webhookDeliveries10m", "delivery.discordDeliveries10m", "delivery.webhookFailures10m"],
       "blocker": "Need buyer-visible delivery history and retry proof; DWM webhook utility file remains dirty."
     },
@@ -147,8 +148,8 @@
       "id": "DEPLOY",
       "pillar": "Deploy/live status",
       "ownerThread": "Ops lane",
-      "currentStatus": "Partial: latest confirmed currentness reaches 7802723a DWM source pack registry; no single product-progress record ties deploy health to CTI/DWM KPIs.",
-      "lastCommitOrHandoff": "03d29b7c coordinator scoreboard; 7aeaddb5 scan script; c285de78/d4fa7185 currentness checks; latest visible product HEAD 7802723a; 72dae520 dashboard case actions; 48934d20 public TI actor map/copy; 4548062a public TI action handoffs.",
+      "currentStatus": "Partial: latest confirmed currentness reaches 8de8f65f org visibility on DWM webhook evidence; no single product-progress record ties deploy health to CTI/DWM KPIs.",
+      "lastCommitOrHandoff": "03d29b7c coordinator scoreboard; 7aeaddb5 scan script; c285de78/d4fa7185 currentness checks; latest visible product HEAD 8de8f65f; 7802723a source pack registry; 72dae520 dashboard case actions; 48934d20 public TI actor map/copy; 4548062a public TI action handoffs.",
       "nextCodeSlice": "Emit /api/product-progress or scraper SLO record every 10 minutes with commit, frontend/API/scraper health, and every KPI group in this table.",
       "measurableKpi": ["deployment.frontendCommit", "deployment.frontendHealthy", "deployment.apiHealthy", "deployment.scraperHealthy"],
       "blocker": "Multiple active dirty lanes must land before clean deploy proof; strict end-to-end workflow is not yet complete."
