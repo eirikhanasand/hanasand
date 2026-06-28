@@ -144,6 +144,15 @@ import {
     postOrganizationInvites,
     postOrganizationWatchlist,
 } from './handlers/organizations.ts'
+import {
+    deleteDwmWebhookDestination,
+    getDwmWebhookDeliveries,
+    getDwmWebhookDestinations,
+    postDwmWebhookDelivery,
+    postDwmWebhookDestination,
+    postDwmWebhookDestinationTest,
+    putDwmWebhookDestination,
+} from './handlers/dwm/webhooks.ts'
 
 /**
  * Defines the routes available in the API.
@@ -218,6 +227,15 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.post('/ti/enrichment/run', postTiEnrichmentRun)
     fastify.get('/ti/pipeline', getTiPipeline)
     fastify.post('/ti/pipeline/run', postTiPipelineRun)
+
+    // DWM customer notifications
+    fastify.get('/dwm/webhook-destinations', getDwmWebhookDestinations)
+    fastify.post('/dwm/webhook-destinations', postDwmWebhookDestination)
+    fastify.put('/dwm/webhook-destinations/:id', putDwmWebhookDestination)
+    fastify.delete('/dwm/webhook-destinations/:id', deleteDwmWebhookDestination)
+    fastify.post('/dwm/webhook-destinations/:id/test', postDwmWebhookDestinationTest)
+    fastify.get('/dwm/webhook-deliveries', getDwmWebhookDeliveries)
+    fastify.post('/dwm/webhook-deliveries', postDwmWebhookDelivery)
 
     // Article handlers
     fastify.get('/articles', getArticles)

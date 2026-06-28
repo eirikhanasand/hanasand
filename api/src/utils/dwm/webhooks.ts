@@ -1,0 +1,1128 @@
+import crypto from 'node:crypto'
+import run from '#db'
+
+export type DwmWebhookKind = 'webhook' | 'discord'
+export type DwmWebhookStatus = 'active' | 'paused' | 'archived'
+export type DwmAlertEventType = 'dwm.alert.created' | 'dwm.alert.replayed' | 'dwm.alert.test'
+
+export type DwmWebhookDestinationRow = {
+    id: string
+    owner_id: string
+    org_id: string
+    name: string
+    kind: DwmWebhookKind
+    endpoint_encrypted: string
+    endpoint_hint: string
+    endpoint_hash: string
+    status: DwmWebhookStatus
+    events: string[]
+    created_by: string
+    last_tested_at: string | null
+    last_test_status: 'dry_run' | 'delivered' | 'failed' | 'skipped' | null
+    last_test_error: string | null
+    last_test_http_status: number | null
+    last_delivery_at: string | null
+    created_at: string
+    updated_at: string
+}
+
+export type DwmWebhookDeliveryRow = {
+    id: string
+    destination_id: string | null
+    owner_id: string
+    org_id: string
+    alert_id: string
+    event_type: DwmAlertEventType
+    status: 'dry_run' | 'delivered' | 'failed' | 'skipped'
+    dry_run: boolean
+    endpoint_hint: string
+    endpoint_hash: string
+    payload_hash: string
+    payload: unknown
+    response_status: number | null
+    response_body: string | null
+    error: string | null
+    idempotency_key: string
+    watchlist_id: string | null
+    watchlist_name: string | null
+    route: string | null
+    case_path: string | null
+    attempted_at: string
+    created_at: string
+}
+
+export type DwmWebhookAuditRow = {
+    id: string
+    owner_id: string
+    actor_id: string
+    org_id: string
+    destination_id: string | null
+    delivery_id: string | null
+    action: string
+    metadata: unknown
+    created_at: string
+}
+
+export type DwmWebhookDestinationInput = {
+    orgId?: unknown
+    name?: unknown
+    kind?: unknown
+    endpointUrl?: unknown
+    endpoint_url?: unknown
+    status?: unknown
+    events?: unknown
+}
+
+export type DwmAlertNotificationInput = {
+    orgId?: unknown
+    organizationId?: unknown
+    tenantId?: unknown
+    destinationId?: unknown
+    destination_id?: unknown
+    eventType?: unknown
+    event_type?: unknown
+    alertId?: unknown
+    watchlistItemId?: unknown
+    watchlistId?: unknown
+    watchlistName?: unknown
+    dedupeKey?: unknown
+    route?: unknown
+    recommendedRoute?: unknown
+    casePath?: unknown
+    caseUrl?: unknown
+    evidenceCount?: unknown
+    sourceFamily?: unknown
+    alert?: Record<string, unknown>
+    dryRun?: unknown
+    dry_run?: unknown
+    live?: unknown
+}
+
+export type DwmWebhookDispatchDestination = Pick<DwmWebhookDestinationRow,
+    'id' | 'org_id' | 'name' | 'kind' | 'status' | 'events'
+>
+
+export type DwmAlertWebhookDispatchPlan = {
+    ownerId: string
+    orgId: string
+    eventType: DwmAlertEventType
+    alert: Record<string, unknown>
+    selectedDestinations: DwmWebhookDispatchDestination[]
+    skippedDestinations: Array<{
+        id: string
+        orgId: string
+        status: DwmWebhookStatus
+        reason: 'org_mismatch' | 'disabled' | 'event_not_subscribed'
+    }>
+}
+
+type NormalizedDestinationInput = {
+    orgId: string
+    name: string
+    kind: DwmWebhookKind
+    endpointEncrypted: string | null
+    endpointHint: string | null
+    endpointHash: string | null
+    status: DwmWebhookStatus
+    events: DwmAlertEventType[]
+}
+
+const DEFAULT_EVENTS: DwmAlertEventType[] = ['dwm.alert.created', 'dwm.alert.replayed']
+const EVENT_TYPES = new Set<DwmAlertEventType>(['dwm.alert.created', 'dwm.alert.replayed', 'dwm.alert.test'])
+const DESTINATION_STATUSES = new Set<DwmWebhookStatus>(['active', 'paused', 'archived'])
+const WEBHOOK_KINDS = new Set<DwmWebhookKind>(['webhook', 'discord'])
+const SECRET_KEY_SOURCE = process.env.DWM_WEBHOOK_SECRET_KEY
+    || process.env.MAIL_SERVICE_KEY
+    || process.env.VM_API_TOKEN
+    || process.env.DB_PASSWORD
+    || 'hanasand-dwm-webhooks-development-key'
+const SECRET_KEY = crypto.createHash('sha256').update(SECRET_KEY_SOURCE).digest()
+const IV_LENGTH = 12
+
+export function toDwmWebhookDestination(row: DwmWebhookDestinationRow) {
+    return {
+        id: row.id,
+        ownerId: row.owner_id,
+        orgId: row.org_id,
+        name: row.name,
+        kind: row.kind,
+        endpointHint: row.endpoint_hint,
+        endpointHash: row.endpoint_hash,
+        status: row.status,
+        events: row.events,
+        createdBy: row.created_by,
+        lastTestedAt: row.last_tested_at,
+        lastTestStatus: row.last_test_status,
+        lastTestError: row.last_test_error,
+        lastTestHttpStatus: row.last_test_http_status,
+        lastDeliveryAt: row.last_delivery_at,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+    }
+}
+
+export function toDwmWebhookDelivery(row: DwmWebhookDeliveryRow) {
+    return {
+        id: row.id,
+        destinationId: row.destination_id,
+        ownerId: row.owner_id,
+        orgId: row.org_id,
+        alertId: row.alert_id,
+        eventType: row.event_type,
+        status: row.status,
+        dryRun: row.dry_run,
+        endpointHint: row.endpoint_hint,
+        endpointHash: row.endpoint_hash,
+        payloadHash: row.payload_hash,
+        payload: row.payload,
+        responseStatus: row.response_status,
+        responseBody: row.response_body,
+        error: row.error,
+        idempotencyKey: row.idempotency_key,
+        watchlistId: row.watchlist_id,
+        watchlistName: row.watchlist_name,
+        route: row.route,
+        casePath: row.case_path,
+        attemptedAt: row.attempted_at,
+        createdAt: row.created_at,
+    }
+}
+
+export function toDwmWebhookAuditEvent(row: DwmWebhookAuditRow) {
+    return {
+        id: row.id,
+        ownerId: row.owner_id,
+        actorId: row.actor_id,
+        orgId: row.org_id,
+        destinationId: row.destination_id,
+        deliveryId: row.delivery_id,
+        action: row.action,
+        metadata: row.metadata,
+        createdAt: row.created_at,
+    }
+}
+
+export function normalizeDwmWebhookDestinationInput(
+    input: DwmWebhookDestinationInput,
+    ownerId: string,
+    existing?: DwmWebhookDestinationRow
+): NormalizedDestinationInput {
+    const rawEndpoint = clean(input.endpointUrl ?? input.endpoint_url)
+    const endpointUrl = rawEndpoint ? normalizeWebhookUrl(rawEndpoint) : null
+    const kind = parseKind(input.kind, endpointUrl, existing?.kind)
+    const name = clean(input.name) || existing?.name || (kind === 'discord' ? 'Discord alerts' : 'Webhook alerts')
+    const orgId = clean(input.orgId) || existing?.org_id || ownerId
+    const status = parseStatus(input.status ?? existing?.status)
+    const events = parseEvents(input.events ?? existing?.events)
+
+    return {
+        orgId,
+        name: name.slice(0, 120),
+        kind,
+        endpointEncrypted: endpointUrl ? encryptWebhookSecret(endpointUrl) : null,
+        endpointHint: endpointUrl ? redactWebhookEndpoint(endpointUrl) : null,
+        endpointHash: endpointUrl ? hashValue('endpoint', endpointUrl) : null,
+        status,
+        events,
+    }
+}
+
+export async function listDwmWebhookDestinations(ownerId: string, orgId?: string) {
+    if (orgId && orgId !== ownerId) {
+        const result = await run(`
+            SELECT *
+            FROM dwm_webhook_destinations
+            WHERE org_id = $1
+              AND status <> 'archived'
+            ORDER BY updated_at DESC, created_at DESC
+        `, [orgId])
+
+        return (result.rows as DwmWebhookDestinationRow[]).map(toDwmWebhookDestination)
+    }
+
+    const result = await run(`
+        SELECT *
+        FROM dwm_webhook_destinations
+        WHERE owner_id = $1
+          AND status <> 'archived'
+          AND ($2::TEXT IS NULL OR org_id = $2)
+        ORDER BY updated_at DESC, created_at DESC
+    `, [ownerId, orgId || null])
+
+    return (result.rows as DwmWebhookDestinationRow[]).map(toDwmWebhookDestination)
+}
+
+export async function createDwmWebhookDestination(ownerId: string, input: DwmWebhookDestinationInput) {
+    const normalized = normalizeDwmWebhookDestinationInput(input, ownerId)
+    if (!normalized.endpointEncrypted || !normalized.endpointHint) {
+        throw new Error('endpointUrl is required.')
+    }
+
+    const result = await run(`
+        INSERT INTO dwm_webhook_destinations (
+            id,
+            owner_id,
+            org_id,
+            name,
+            kind,
+            endpoint_encrypted,
+            endpoint_hint,
+            endpoint_hash,
+            status,
+            events,
+            created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::TEXT[], $11)
+        RETURNING *
+    `, [
+        crypto.randomUUID(),
+        ownerId,
+        normalized.orgId,
+        normalized.name,
+        normalized.kind,
+        normalized.endpointEncrypted,
+        normalized.endpointHint,
+        normalized.endpointHash,
+        normalized.status,
+        normalized.events,
+        ownerId,
+    ])
+
+    const destination = result.rows[0] as DwmWebhookDestinationRow
+    await recordDwmWebhookAudit({
+        ownerId,
+        actorId: ownerId,
+        orgId: destination.org_id,
+        destinationId: destination.id,
+        action: 'destination.created',
+        metadata: {
+            kind: destination.kind,
+            endpointHint: destination.endpoint_hint,
+            endpointHash: destination.endpoint_hash,
+            events: destination.events,
+            status: destination.status,
+        },
+    })
+
+    return toDwmWebhookDestination(destination)
+}
+
+export async function updateDwmWebhookDestination(ownerId: string, id: string, input: DwmWebhookDestinationInput) {
+    const existing = await loadDwmWebhookDestination(ownerId, id)
+    if (!existing) return null
+
+    const normalized = normalizeDwmWebhookDestinationInput(input, ownerId, existing)
+    const result = await run(`
+        UPDATE dwm_webhook_destinations
+           SET org_id = $2,
+               name = $3,
+               kind = $4,
+               endpoint_encrypted = COALESCE($5, endpoint_encrypted),
+               endpoint_hint = COALESCE($6, endpoint_hint),
+               endpoint_hash = COALESCE($7, endpoint_hash),
+               status = $8,
+               events = $9::TEXT[],
+               updated_at = NOW()
+         WHERE id = $1
+         RETURNING *
+    `, [
+        id,
+        normalized.orgId,
+        normalized.name,
+        normalized.kind,
+        normalized.endpointEncrypted,
+        normalized.endpointHint,
+        normalized.endpointHash,
+        normalized.status,
+        normalized.events,
+    ])
+
+    if (!result.rows.length) return null
+
+    const destination = result.rows[0] as DwmWebhookDestinationRow
+    await recordDwmWebhookAudit({
+        ownerId,
+        actorId: ownerId,
+        orgId: destination.org_id,
+        destinationId: destination.id,
+        action: 'destination.updated',
+        metadata: {
+            kind: destination.kind,
+            endpointHint: destination.endpoint_hint,
+            endpointHash: destination.endpoint_hash,
+            events: destination.events,
+            status: destination.status,
+        },
+    })
+
+    return toDwmWebhookDestination(destination)
+}
+
+export async function archiveDwmWebhookDestination(ownerId: string, id: string) {
+    const existing = await loadDwmWebhookDestination(ownerId, id)
+    if (!existing) return null
+
+    const result = await run(`
+        UPDATE dwm_webhook_destinations
+           SET status = 'archived',
+               updated_at = NOW()
+         WHERE id = $1
+           AND status <> 'archived'
+         RETURNING *
+    `, [id])
+
+    if (!result.rows.length) return null
+
+    const destination = result.rows[0] as DwmWebhookDestinationRow
+    await recordDwmWebhookAudit({
+        ownerId,
+        actorId: ownerId,
+        orgId: destination.org_id,
+        destinationId: destination.id,
+        action: 'destination.archived',
+        metadata: { endpointHint: destination.endpoint_hint, endpointHash: destination.endpoint_hash },
+    })
+
+    return toDwmWebhookDestination(destination)
+}
+
+export async function listDwmWebhookDeliveries(ownerId: string, orgId?: string) {
+    if (orgId && orgId !== ownerId) {
+        const result = await run(`
+            SELECT *
+            FROM dwm_webhook_deliveries
+            WHERE org_id = $1
+            ORDER BY created_at DESC
+            LIMIT 100
+        `, [orgId])
+
+        return (result.rows as DwmWebhookDeliveryRow[]).map(toDwmWebhookDelivery)
+    }
+
+    const result = await run(`
+        SELECT *
+        FROM dwm_webhook_deliveries
+        WHERE owner_id = $1
+          AND ($2::TEXT IS NULL OR org_id = $2)
+        ORDER BY created_at DESC
+        LIMIT 100
+    `, [ownerId, orgId || null])
+
+    return (result.rows as DwmWebhookDeliveryRow[]).map(toDwmWebhookDelivery)
+}
+
+export async function listDwmWebhookAuditEvents(ownerId: string, orgId?: string) {
+    if (orgId && orgId !== ownerId) {
+        const result = await run(`
+            SELECT *
+            FROM dwm_webhook_audit_events
+            WHERE org_id = $1
+            ORDER BY created_at DESC
+            LIMIT 100
+        `, [orgId])
+
+        return (result.rows as DwmWebhookAuditRow[]).map(toDwmWebhookAuditEvent)
+    }
+
+    const result = await run(`
+        SELECT *
+        FROM dwm_webhook_audit_events
+        WHERE owner_id = $1
+          AND ($2::TEXT IS NULL OR org_id = $2)
+        ORDER BY created_at DESC
+        LIMIT 100
+    `, [ownerId, orgId || null])
+
+    return (result.rows as DwmWebhookAuditRow[]).map(toDwmWebhookAuditEvent)
+}
+
+export async function testDwmWebhookDestination(ownerId: string, id: string, input: DwmAlertNotificationInput = {}) {
+    const destination = await loadDwmWebhookDestination(ownerId, id)
+    if (!destination || destination.status === 'archived') return null
+
+    const delivery = await deliverToDwmWebhookDestination({
+        ownerId,
+        destination,
+        eventType: 'dwm.alert.test',
+        alert: buildTestAlert(destination),
+        dryRun: parseBoolean(input.dryRun ?? input.dry_run, true),
+        live: parseBoolean(input.live, false),
+        markTested: true,
+    })
+
+    return delivery
+}
+
+export async function deliverDwmAlertNotification(ownerId: string, input: DwmAlertNotificationInput) {
+    const dispatch = buildDwmAlertWebhookDispatchPlan({
+        ownerId,
+        input,
+        destinations: [],
+    })
+    const destinationId = clean(input.destinationId ?? input.destination_id)
+    const dryRun = parseBoolean(input.dryRun ?? input.dry_run, true)
+    const live = parseBoolean(input.live, false)
+    const destination = destinationId ? await loadDwmWebhookDestination(ownerId, destinationId) : null
+    const candidateDestinations = destinationId
+        ? (destination ? [destination] : [])
+        : await loadDestinationsForOrg(ownerId, dispatch.orgId)
+    const plan = buildDwmAlertWebhookDispatchPlan({
+        ownerId,
+        input,
+        destinations: candidateDestinations,
+    })
+
+    const deliveries = []
+    for (const destination of plan.selectedDestinations) {
+        deliveries.push(await deliverToDwmWebhookDestination({
+            ownerId,
+            destination: destination as DwmWebhookDestinationRow,
+            eventType: plan.eventType,
+            alert: plan.alert,
+            dryRun,
+            live,
+            markTested: false,
+        }))
+    }
+
+    return deliveries
+}
+
+export function buildDwmAlertWebhookDispatchPlan({
+    ownerId,
+    input,
+    destinations,
+}: {
+    ownerId: string
+    input: DwmAlertNotificationInput
+    destinations: DwmWebhookDispatchDestination[]
+}): DwmAlertWebhookDispatchPlan {
+    const eventType = parseEventType(input.eventType ?? input.event_type, 'dwm.alert.created')
+    const alert = normalizeDispatchAlertInput(input)
+    const orgId = clean(input.orgId)
+        || clean(input.organizationId)
+        || clean(input.tenantId)
+        || clean(alert.organizationId)
+        || clean(alert.orgId)
+        || clean(alert.tenantId)
+        || ownerId
+    const selectedDestinations: DwmWebhookDispatchDestination[] = []
+    const skippedDestinations: DwmAlertWebhookDispatchPlan['skippedDestinations'] = []
+
+    for (const destination of destinations) {
+        if (destination.org_id !== orgId) {
+            skippedDestinations.push({ id: destination.id, orgId: destination.org_id, status: destination.status, reason: 'org_mismatch' })
+            continue
+        }
+        if (destination.status !== 'active') {
+            skippedDestinations.push({ id: destination.id, orgId: destination.org_id, status: destination.status, reason: 'disabled' })
+            continue
+        }
+        if (!destination.events.includes(eventType)) {
+            skippedDestinations.push({ id: destination.id, orgId: destination.org_id, status: destination.status, reason: 'event_not_subscribed' })
+            continue
+        }
+        selectedDestinations.push(destination)
+    }
+
+    return {
+        ownerId,
+        orgId,
+        eventType,
+        alert,
+        selectedDestinations,
+        skippedDestinations,
+    }
+}
+
+export function buildDwmAlertDeliveryPayload({
+    destination,
+    alert,
+    eventType,
+    deliveryId = crypto.randomUUID(),
+}: {
+    destination: Pick<DwmWebhookDestinationRow, 'id' | 'kind' | 'name' | 'org_id'>
+    alert: Record<string, unknown>
+    eventType: DwmAlertEventType
+    deliveryId?: string
+}) {
+    const normalizedAlert = normalizeAlert(alert)
+    const watchlist = normalizeWatchlist(alert.watchlist)
+    const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
+    const displayDedupeKey = normalizedAlert.dedupeKey || idempotencyKey
+    const context = {
+        schemaVersion: 'dwm.webhook.v1',
+        eventType,
+        occurredAt: new Date().toISOString(),
+        idempotencyKey,
+        org: {
+            id: destination.org_id,
+            name: clean(alert.orgName) || clean(alert.organizationName) || destination.org_id,
+        },
+        destination: {
+            id: destination.id,
+            name: destination.name,
+            kind: destination.kind,
+        },
+        alert: normalizedAlert,
+        watchlist,
+        delivery: {
+            id: deliveryId,
+            replay: eventType === 'dwm.alert.replayed',
+            dryRunDefault: true,
+            route: normalizedAlert.route,
+            casePath: normalizedAlert.casePath,
+            dedupeKey: displayDedupeKey,
+        },
+    }
+
+    if (destination.kind !== 'discord') {
+        return context
+    }
+
+    return {
+        content: `${severityEmoji(normalizedAlert.severity)} ${normalizedAlert.title}`,
+        allowed_mentions: { parse: [] },
+        embeds: [
+            {
+                title: normalizedAlert.title,
+                description: normalizedAlert.claimSummary,
+                color: severityColor(normalizedAlert.severity),
+                timestamp: normalizedAlert.firstSeenAt || context.occurredAt,
+                fields: [
+                    { name: 'Organization', value: context.org.name, inline: true },
+                    { name: 'Severity', value: normalizedAlert.severity.toUpperCase(), inline: true },
+                    { name: 'Company / domain', value: normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value || 'Not provided', inline: true },
+                    { name: 'Source family', value: normalizedAlert.sourceFamily || 'Unknown', inline: true },
+                    { name: 'Evidence count', value: String(normalizedAlert.evidenceCount), inline: true },
+                    { name: 'Route', value: normalizedAlert.route, inline: true },
+                    { name: 'Dedupe key', value: displayDedupeKey, inline: false },
+                    normalizedAlert.casePath ? { name: 'Case', value: normalizedAlert.casePath, inline: false } : null,
+                    { name: 'Recommended action', value: normalizedAlert.recommendedAction, inline: false },
+                ].filter(Boolean),
+                footer: {
+                    text: `Hanasand DWM ${eventType.replace('dwm.alert.', '')} | ${normalizedAlert.id} | ${watchlist.id || 'no-watchlist'}`,
+                },
+            },
+        ],
+        _hanasand: context,
+    }
+}
+
+export function redactWebhookEndpoint(endpointUrl: string) {
+    try {
+        const url = new URL(endpointUrl)
+        url.username = ''
+        url.password = ''
+        if (isDiscordWebhookUrl(url)) {
+            const parts = url.pathname.split('/').filter(Boolean)
+            const webhookId = parts[2] || 'unknown'
+            return `${url.origin}/api/webhooks/${webhookId}/...`
+        }
+        const suffix = url.pathname.length > 1 ? `${url.pathname.slice(0, 24)}${url.pathname.length > 24 ? '...' : ''}` : ''
+        return `${url.origin}${suffix}`
+    } catch {
+        return 'redacted-webhook'
+    }
+}
+
+async function deliverToDwmWebhookDestination({
+    ownerId,
+    destination,
+    eventType,
+    alert,
+    dryRun,
+    live,
+    markTested,
+}: {
+    ownerId: string
+    destination: DwmWebhookDestinationRow
+    eventType: DwmAlertEventType
+    alert: Record<string, unknown>
+    dryRun: boolean
+    live: boolean
+    markTested: boolean
+}) {
+    const deliveryId = crypto.randomUUID()
+    const payload = buildDwmAlertDeliveryPayload({ destination, alert, eventType, deliveryId })
+    const normalizedAlert = normalizeAlert(alert)
+    const watchlist = normalizeWatchlist(alert.watchlist)
+    const payloadHash = hashValue('payload', JSON.stringify(payload))
+    const shouldSendLive = live && !dryRun && process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true'
+    let status: DwmWebhookDeliveryRow['status'] = dryRun ? 'dry_run' : 'skipped'
+    let responseStatus: number | null = null
+    let responseBody: string | null = null
+    let error: string | null = null
+
+    if (!dryRun && live && process.env.DWM_WEBHOOK_LIVE_DELIVERY !== 'true') {
+        error = 'Live DWM webhook delivery is disabled. Set DWM_WEBHOOK_LIVE_DELIVERY=true and send live=true to enable external calls.'
+    }
+
+    if (shouldSendLive) {
+        try {
+            const endpoint = decryptWebhookSecret(destination.endpoint_encrypted)
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'user-agent': 'hanasand-dwm-webhooks/1.0',
+                },
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(Number(process.env.DWM_WEBHOOK_TIMEOUT_MS || 8000)),
+            })
+            responseStatus = response.status
+            responseBody = truncate(await response.text().catch(() => ''), 2000)
+            status = response.ok ? 'delivered' : 'failed'
+            error = response.ok ? null : `Webhook returned HTTP ${response.status}.`
+        } catch (sendError) {
+            status = 'failed'
+            error = sendError instanceof Error ? sendError.message : String(sendError)
+        }
+    }
+
+    const result = await run(`
+        INSERT INTO dwm_webhook_deliveries (
+            id,
+            destination_id,
+            owner_id,
+            org_id,
+            alert_id,
+            event_type,
+            status,
+            dry_run,
+            endpoint_hint,
+            endpoint_hash,
+            payload_hash,
+            payload,
+            response_status,
+            response_body,
+            error,
+            idempotency_key,
+            watchlist_id,
+            watchlist_name,
+            route,
+            case_path,
+            attempted_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::JSONB, $13, $14, $15, $16, $17, $18, $19, $20, NOW())
+        RETURNING *
+    `, [
+        deliveryId,
+        destination.id,
+        ownerId,
+        destination.org_id,
+        normalizedAlert.id,
+        eventType,
+        status,
+        dryRun,
+        destination.endpoint_hint,
+        destination.endpoint_hash,
+        payloadHash,
+        JSON.stringify(payload),
+        responseStatus,
+        responseBody,
+        error,
+        buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
+        watchlist.id,
+        watchlist.name,
+        normalizedAlert.route,
+        normalizedAlert.casePath,
+    ])
+
+    if (status === 'delivered' || status === 'dry_run' || markTested) {
+        await run(`
+            UPDATE dwm_webhook_destinations
+               SET last_tested_at = CASE WHEN $2 THEN NOW() ELSE last_tested_at END,
+                   last_test_status = CASE WHEN $2 THEN $3 ELSE last_test_status END,
+                   last_test_error = CASE WHEN $2 THEN $4 ELSE last_test_error END,
+                   last_test_http_status = CASE WHEN $2 THEN $5 ELSE last_test_http_status END,
+                   last_delivery_at = CASE WHEN $6 THEN NOW() ELSE last_delivery_at END,
+                   updated_at = NOW()
+             WHERE id = $1
+        `, [destination.id, markTested, status, error, responseStatus, status === 'delivered'])
+    }
+
+    const delivery = result.rows[0] as DwmWebhookDeliveryRow
+    const auditAction = markTested
+        ? 'delivery.tested'
+        : delivery.event_type === 'dwm.alert.replayed'
+            ? 'delivery.replayed'
+            : `delivery.${delivery.status}`
+    await recordDwmWebhookAudit({
+        ownerId,
+        actorId: ownerId,
+        orgId: delivery.org_id,
+        destinationId: destination.id,
+        deliveryId: delivery.id,
+        action: auditAction,
+        metadata: {
+            alertId: delivery.alert_id,
+            eventType: delivery.event_type,
+            status: delivery.status,
+            endpointHint: delivery.endpoint_hint,
+            endpointHash: delivery.endpoint_hash,
+            payloadHash: delivery.payload_hash,
+            dryRun: delivery.dry_run,
+            responseStatus: delivery.response_status,
+            error: delivery.error,
+            idempotencyKey: delivery.idempotency_key,
+            watchlistId: delivery.watchlist_id,
+            route: delivery.route,
+            casePath: delivery.case_path,
+        },
+    })
+
+    return toDwmWebhookDelivery(delivery)
+}
+
+async function recordDwmWebhookAudit({
+    ownerId,
+    actorId,
+    orgId,
+    destinationId = null,
+    deliveryId = null,
+    action,
+    metadata = {},
+}: {
+    ownerId: string
+    actorId: string
+    orgId: string
+    destinationId?: string | null
+    deliveryId?: string | null
+    action: string
+    metadata?: Record<string, unknown>
+}) {
+    await run(`
+        INSERT INTO dwm_webhook_audit_events (
+            id,
+            owner_id,
+            actor_id,
+            org_id,
+            destination_id,
+            delivery_id,
+            action,
+            metadata
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::JSONB)
+    `, [
+        crypto.randomUUID(),
+        ownerId,
+        actorId,
+        orgId,
+        destinationId,
+        deliveryId,
+        action,
+        JSON.stringify(redactAuditMetadata(metadata)),
+    ])
+}
+
+async function loadDwmWebhookDestination(ownerId: string, id: string) {
+    const result = await run(`
+        SELECT *
+        FROM dwm_webhook_destinations
+        WHERE id = $1
+          AND (
+              owner_id = $2
+              OR org_id IN (
+                  SELECT organization_id
+                  FROM organization_members
+                  WHERE user_id = $2
+                    AND status = 'active'
+              )
+          )
+    `, [id, ownerId])
+
+    return (result.rows as DwmWebhookDestinationRow[])[0] || null
+}
+
+async function loadDestinationsForOrg(ownerId: string, orgId: string) {
+    if (orgId !== ownerId) {
+        const result = await run(`
+            SELECT *
+            FROM dwm_webhook_destinations
+            WHERE org_id = $1
+              AND status <> 'archived'
+            ORDER BY created_at ASC
+        `, [orgId])
+
+        return result.rows as DwmWebhookDestinationRow[]
+    }
+
+    const result = await run(`
+        SELECT *
+        FROM dwm_webhook_destinations
+        WHERE owner_id = $1
+          AND org_id = $2
+          AND status <> 'archived'
+        ORDER BY created_at ASC
+    `, [ownerId, orgId])
+
+    return result.rows as DwmWebhookDestinationRow[]
+}
+
+function normalizeWebhookUrl(raw: string) {
+    let url
+    try {
+        url = new URL(raw)
+    } catch {
+        throw new Error('endpointUrl must be a valid URL.')
+    }
+
+    if (url.protocol !== 'https:') {
+        throw new Error('Webhook destinations must use HTTPS.')
+    }
+
+    return url.toString()
+}
+
+function parseKind(value: unknown, endpointUrl?: string | null, fallback?: DwmWebhookKind): DwmWebhookKind {
+    const raw = clean(value)
+    if (WEBHOOK_KINDS.has(raw as DwmWebhookKind)) return raw as DwmWebhookKind
+    if (endpointUrl) {
+        try {
+            return isDiscordWebhookUrl(new URL(endpointUrl)) ? 'discord' : 'webhook'
+        } catch {
+            return 'webhook'
+        }
+    }
+    return fallback || 'webhook'
+}
+
+function parseStatus(value: unknown): DwmWebhookStatus {
+    const status = clean(value)
+    return DESTINATION_STATUSES.has(status as DwmWebhookStatus) ? status as DwmWebhookStatus : 'active'
+}
+
+function parseEvents(value: unknown): DwmAlertEventType[] {
+    if (!Array.isArray(value)) return DEFAULT_EVENTS
+    const events = [...new Set(value.map(clean).filter(event => EVENT_TYPES.has(event as DwmAlertEventType)))] as DwmAlertEventType[]
+    return events.length ? events : DEFAULT_EVENTS
+}
+
+function parseEventType(value: unknown, fallback: DwmAlertEventType): DwmAlertEventType {
+    const event = clean(value)
+    return EVENT_TYPES.has(event as DwmAlertEventType) ? event as DwmAlertEventType : fallback
+}
+
+function parseBoolean(value: unknown, fallback: boolean) {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'string') {
+        if (['true', '1', 'yes'].includes(value.toLowerCase())) return true
+        if (['false', '0', 'no'].includes(value.toLowerCase())) return false
+    }
+    return fallback
+}
+
+function parseCount(value: unknown) {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return Math.floor(value)
+    if (typeof value === 'string' && value.trim()) {
+        const parsed = Number(value)
+        if (Number.isFinite(parsed) && parsed >= 0) return Math.floor(parsed)
+    }
+    return 0
+}
+
+function normalizeDispatchAlertInput(input: DwmAlertNotificationInput) {
+    const nested = input.alert && typeof input.alert === 'object' ? input.alert : {}
+    const watchlist = nested.watchlist && typeof nested.watchlist === 'object'
+        ? nested.watchlist
+        : {
+            id: clean(input.watchlistItemId) || clean(input.watchlistId),
+            name: clean(input.watchlistName),
+            terms: [],
+        }
+
+    return {
+        ...input,
+        ...nested,
+        id: clean(nested.id) || clean(input.alertId) || clean((input as Record<string, unknown>).id),
+        organizationId: clean(nested.organizationId) || clean(input.organizationId) || clean(input.orgId),
+        tenantId: clean(nested.tenantId) || clean(input.tenantId),
+        watchlist,
+        dedupeKey: clean(nested.dedupeKey) || clean(input.dedupeKey) || clean((nested.webhookDelivery as Record<string, unknown> | undefined)?.dedupeKey),
+        route: clean(nested.route) || clean(input.route) || clean(input.recommendedRoute),
+        recommendedRoute: clean(nested.recommendedRoute) || clean(input.recommendedRoute) || clean(input.route),
+        casePath: clean(nested.casePath) || clean(input.casePath) || clean(input.caseUrl),
+        evidenceCount: parseCount(nested.evidenceCount ?? input.evidenceCount),
+        sourceFamily: clean(nested.sourceFamily) || clean(input.sourceFamily),
+    }
+}
+
+function normalizeAlert(alert: Record<string, unknown>) {
+    const matchedTerm = normalizeMatchedTerm(alert.matchedTerm)
+    const company = clean(alert.company) || clean(alert.organizationName) || clean(alert.orgName)
+    const domain = clean(alert.domain) || (matchedTerm.kind === 'domain' ? matchedTerm.value : '')
+    const id = clean(alert.id) || `dwm-alert-${crypto.randomUUID()}`
+    const title = clean(alert.title)
+        || (company && matchedTerm.value ? `${company} matched ${matchedTerm.value}` : '')
+        || 'Dark web monitoring alert'
+    const severity = parseSeverity(alert.severity)
+    const evidence = normalizeEvidence(alert.evidence)
+    const evidenceCount = parseCount(alert.evidenceCount)
+    const route = clean(alert.route)
+        || clean(alert.recommendedRoute)
+        || clean((alert.webhookDelivery as Record<string, unknown> | undefined)?.recommendedRoute)
+        || 'customer_webhook'
+    const casePath = clean(alert.casePath)
+        || clean(alert.caseUrl)
+        || clean(alert.path)
+        || (id === 'webhook_test' ? '/dashboard/dwm' : `/dashboard/dwm?alert=${encodeURIComponent(id)}`)
+
+    return {
+        id,
+        title,
+        severity,
+        company,
+        domain,
+        companyOrDomain: company || domain || matchedTerm.value,
+        claimSummary: clean(alert.claimSummary) || clean(alert.summary) || 'A watched organization or asset matched newly collected threat intelligence.',
+        recommendedAction: clean(alert.recommendedAction) || 'Review the evidence, validate the match, and contact the affected owner if exposure is confirmed.',
+        matchedTerm,
+        sourceFamily: clean(alert.sourceFamily) || clean(alert.source) || 'dark_web',
+        artifactType: clean(alert.artifactType) || clean(alert.type) || 'mention',
+        firstSeenAt: clean(alert.firstSeenAt) || clean(alert.createdAt) || new Date().toISOString(),
+        savedAt: clean(alert.savedAt) || null,
+        reviewState: clean(alert.reviewState) || 'needs_review',
+        deliveryState: clean(alert.deliveryState) || 'pending_review',
+        route,
+        casePath,
+        evidence,
+        evidenceCount: evidence.length || evidenceCount,
+        dedupeKey: clean(alert.dedupeKey) || clean((alert.webhookDelivery as Record<string, unknown> | undefined)?.dedupeKey),
+    }
+}
+
+function normalizeMatchedTerm(value: unknown) {
+    if (!value || typeof value !== 'object') {
+        return { value: clean(value) || '', kind: 'unknown' }
+    }
+    const record = value as Record<string, unknown>
+    return {
+        value: clean(record.value) || clean(record.term) || '',
+        kind: clean(record.kind) || 'unknown',
+    }
+}
+
+function normalizeWatchlist(value: unknown) {
+    if (!value || typeof value !== 'object') {
+        return { id: null, name: null, terms: [] as string[] }
+    }
+    const record = value as Record<string, unknown>
+    const terms = Array.isArray(record.terms)
+        ? record.terms.map(term => typeof term === 'string' ? term : clean((term as Record<string, unknown>)?.value)).filter(Boolean).slice(0, 20)
+        : []
+
+    return {
+        id: clean(record.id) || null,
+        name: clean(record.name) || null,
+        terms,
+    }
+}
+
+function normalizeEvidence(value: unknown) {
+    if (!Array.isArray(value)) return []
+    return value
+        .slice(0, 6)
+        .map(item => typeof item === 'object' && item
+            ? {
+                label: clean((item as Record<string, unknown>).label) || clean((item as Record<string, unknown>).title) || 'Evidence',
+                detail: truncate(clean((item as Record<string, unknown>).detail) || clean((item as Record<string, unknown>).summary), 500),
+                source: clean((item as Record<string, unknown>).source) || clean((item as Record<string, unknown>).sourceName),
+                capturedAt: clean((item as Record<string, unknown>).capturedAt) || clean((item as Record<string, unknown>).at),
+            }
+            : { label: 'Evidence', detail: truncate(clean(item), 500), source: '', capturedAt: '' })
+}
+
+function buildTestAlert(destination: DwmWebhookDestinationRow) {
+    return {
+        id: 'webhook_test',
+        orgName: destination.org_id,
+        title: 'Hanasand DWM webhook test',
+        severity: 'medium',
+        claimSummary: 'This dry-run verifies the destination, Discord formatting, and delivery ledger without exposing the webhook secret.',
+        recommendedAction: 'No action required. Confirm this preview has the context your team expects.',
+        matchedTerm: { value: 'example.com', kind: 'domain' },
+        domain: 'example.com',
+        sourceFamily: 'dark_web',
+        artifactType: 'test_notification',
+        route: 'test_delivery',
+        casePath: '/dashboard/dwm',
+        watchlist: {
+            id: 'test-watchlist',
+            name: 'Webhook test watchlist',
+            terms: ['example.com'],
+        },
+    }
+}
+
+function isDiscordWebhookUrl(url: URL) {
+    return /(^|\.)discord(?:app)?\.com$/i.test(url.hostname) && url.pathname.startsWith('/api/webhooks/')
+}
+
+function parseSeverity(value: unknown) {
+    const severity = clean(value).toLowerCase()
+    return ['critical', 'high', 'medium', 'low', 'info'].includes(severity) ? severity : 'medium'
+}
+
+function severityColor(severity: string) {
+    if (severity === 'critical') return 0xDC2626
+    if (severity === 'high') return 0xEA580C
+    if (severity === 'medium') return 0xD97706
+    if (severity === 'low') return 0x2563EB
+    return 0x475467
+}
+
+function severityEmoji(severity: string) {
+    if (severity === 'critical') return '[CRITICAL]'
+    if (severity === 'high') return '[HIGH]'
+    if (severity === 'medium') return '[MEDIUM]'
+    if (severity === 'low') return '[LOW]'
+    return '[INFO]'
+}
+
+function buildIdempotencyKey(eventType: DwmAlertEventType, orgId: string, destinationId: string, alertId: string) {
+    return `${eventType}:${orgId}:${destinationId}:${alertId}`
+}
+
+function hashValue(scope: string, value: string) {
+    return `${scope}_${crypto.createHash('sha256').update(value).digest('hex').slice(0, 32)}`
+}
+
+function encryptWebhookSecret(value: string) {
+    const iv = crypto.randomBytes(IV_LENGTH)
+    const cipher = crypto.createCipheriv('aes-256-gcm', SECRET_KEY, iv)
+    const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
+    const tag = cipher.getAuthTag()
+    return `${iv.toString('base64')}.${tag.toString('base64')}.${encrypted.toString('base64')}`
+}
+
+function decryptWebhookSecret(value: string) {
+    const [ivB64, tagB64, dataB64] = value.split('.')
+    if (!ivB64 || !tagB64 || !dataB64) return value
+    const decipher = crypto.createDecipheriv('aes-256-gcm', SECRET_KEY, Buffer.from(ivB64, 'base64'))
+    decipher.setAuthTag(Buffer.from(tagB64, 'base64'))
+    const decrypted = Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64')), decipher.final()])
+    return decrypted.toString('utf8')
+}
+
+function truncate(value: string, max: number) {
+    return value.length > max ? `${value.slice(0, max - 3)}...` : value
+}
+
+function redactAuditMetadata(metadata: Record<string, unknown>) {
+    const redacted: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(metadata)) {
+        if (/endpoint|secret|token|password|credential|url/i.test(key) && key !== 'endpointHint') {
+            redacted[key] = '[redacted]'
+        } else if (typeof value === 'string') {
+            redacted[key] = value.slice(0, 1000)
+        } else {
+            redacted[key] = value
+        }
+    }
+    return redacted
+}
+
+function clean(value: unknown) {
+    return typeof value === 'string' ? value.trim() : ''
+}
