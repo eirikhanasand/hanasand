@@ -9,9 +9,11 @@ import {
     roleCanManageOrganization,
     roleCanWriteWatchlist,
     toInvite,
+    toMember,
     toOrganization,
     toWatchlistItem,
     type OrganizationInviteRow,
+    type OrganizationMemberRow,
     type OrganizationRole,
     type OrganizationRow,
     type InviteInput,
@@ -23,6 +25,10 @@ import {
 
 type OrganizationParams = {
     id: string
+}
+
+type InviteParams = {
+    inviteId: string
 }
 
 type WatchlistParams = {
@@ -141,6 +147,44 @@ export async function getOrganizationInvites(req: FastifyRequest<{ Params: Organ
     return res.send({ invites: (result.rows as OrganizationInviteRow[]).map(toInvite) })
 }
 
+export async function getOrganizationMembers(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const result = await run(`
+        SELECT
+            om.organization_id,
+            om.user_id,
+            u.name,
+            u.avatar,
+            om.role,
+            om.status,
+            om.invited_by,
+            om.joined_at,
+            om.created_at
+        FROM organization_members om
+        JOIN users u ON u.id = om.user_id
+        WHERE om.organization_id = $1
+          AND om.status = 'active'
+        ORDER BY
+            CASE om.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
+            om.joined_at ASC,
+            om.user_id ASC
+    `, [req.params.id])
+
+    return res.send({
+        organization: toOrganization(organization),
+        members: (result.rows as OrganizationMemberRow[]).map(toMember),
+    })
+}
+
 export async function postOrganizationInvites(req: FastifyRequest<{ Params: OrganizationParams, Body: InviteInput }>, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
     if (!valid || !userId) {
@@ -181,6 +225,102 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
 
     await touchOrganization(req.params.id)
     return res.status(201).send({ invites: rows.map(toInvite) })
+}
+
+export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params: InviteParams }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const result = await run(`
+        WITH accepted_invite AS (
+            UPDATE organization_invites
+            SET status = 'accepted',
+                accepted_at = NOW(),
+                accepted_by = $2
+            WHERE id = $1
+              AND status = 'pending'
+            RETURNING *
+        ),
+        member AS (
+            INSERT INTO organization_members (organization_id, user_id, role, status, invited_by, joined_at)
+            SELECT organization_id, $2, role, 'active', invited_by, NOW()
+            FROM accepted_invite
+            ON CONFLICT (organization_id, user_id)
+            DO UPDATE SET role = CASE
+                                WHEN organization_members.role = 'owner' THEN 'owner'
+                                ELSE EXCLUDED.role
+                              END,
+                          status = 'active',
+                          invited_by = EXCLUDED.invited_by,
+                          joined_at = NOW()
+            RETURNING *
+        )
+        SELECT
+            accepted_invite.id AS invite_id,
+            accepted_invite.organization_id,
+            accepted_invite.email,
+            accepted_invite.role AS invite_role,
+            accepted_invite.invited_by,
+            accepted_invite.accepted_by,
+            accepted_invite.status AS invite_status,
+            accepted_invite.created_at AS invite_created_at,
+            accepted_invite.accepted_at,
+            member.user_id,
+            member.role AS member_role,
+            member.status AS member_status,
+            member.joined_at,
+            member.created_at AS member_created_at
+        FROM accepted_invite
+        JOIN member ON member.organization_id = accepted_invite.organization_id
+    `, [req.params.inviteId, userId])
+
+    if (!result.rows.length) {
+        return res.status(404).send({ error: 'Pending invite not found.' })
+    }
+
+    const row = result.rows[0] as {
+        invite_id: string
+        organization_id: string
+        email: string
+        invite_role: OrganizationRole
+        invited_by: string
+        accepted_by: string
+        invite_status: 'accepted'
+        invite_created_at: string
+        accepted_at: string
+        user_id: string
+        member_role: OrganizationRole
+        member_status: 'active'
+        joined_at: string
+        member_created_at: string
+    }
+
+    await touchOrganization(row.organization_id)
+    const organization = await loadOrganizationForMember(row.organization_id, userId)
+    return res.send({
+        invite: toInvite({
+            id: row.invite_id,
+            organization_id: row.organization_id,
+            email: row.email,
+            role: row.invite_role,
+            invited_by: row.invited_by,
+            accepted_by: row.accepted_by,
+            status: row.invite_status,
+            created_at: row.invite_created_at,
+            accepted_at: row.accepted_at,
+        }),
+        membership: {
+            organizationId: row.organization_id,
+            userId: row.user_id,
+            role: row.member_role,
+            status: row.member_status,
+            joinedAt: row.joined_at,
+            createdAt: row.member_created_at,
+        },
+        organization: organization ? toOrganization(organization) : null,
+    })
 }
 
 export async function getOrganizationWatchlists(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {

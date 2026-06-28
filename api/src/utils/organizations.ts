@@ -35,9 +35,22 @@ export type OrganizationInviteRow = {
     email: string
     role: OrganizationRole
     invited_by: string
+    accepted_by?: string | null
     status: 'pending' | 'accepted' | 'revoked'
     created_at: string
     accepted_at?: string | null
+}
+
+export type OrganizationMemberRow = {
+    organization_id: string
+    user_id: string
+    name: string
+    avatar: string
+    role: OrganizationRole
+    status: 'active' | 'removed'
+    invited_by?: string | null
+    joined_at: string
+    created_at: string
 }
 
 export type OrganizationWatchlistRow = {
@@ -149,9 +162,24 @@ export function toInvite(row: OrganizationInviteRow) {
         email: row.email,
         role: row.role,
         invitedBy: row.invited_by,
+        acceptedBy: row.accepted_by ?? null,
         status: row.status,
         createdAt: row.created_at,
         acceptedAt: row.accepted_at ?? null,
+    }
+}
+
+export function toMember(row: OrganizationMemberRow) {
+    return {
+        organizationId: row.organization_id,
+        userId: row.user_id,
+        name: row.name,
+        avatar: row.avatar,
+        role: row.role,
+        status: row.status,
+        invitedBy: row.invited_by ?? null,
+        joinedAt: row.joined_at,
+        createdAt: row.created_at,
     }
 }
 

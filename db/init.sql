@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS organization_invites (
     invited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    accepted_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     accepted_at TIMESTAMPTZ,
     UNIQUE (organization_id, email)
 );
