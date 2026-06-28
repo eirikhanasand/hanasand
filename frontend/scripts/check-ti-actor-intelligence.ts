@@ -92,6 +92,10 @@ assert(actionability.sourceProvenance.length >= 1, 'Actionability should expose 
 assert(actionability.watchlist.payloads.some(item => item.value === 'Microsoft'), 'Actionability should carry watchlist relevance payloads.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
 assert(actionability.handoffs.caseBlockers.some(item => /DWM alert ID/i.test(item)), 'No-alert fixture should explain missing case dependency.')
+assert(actionability.geographyHandoffs.some(item => item.code === 'US' && item.watchlistTerm?.value.includes('SolarWinds')), 'APT29 geography should map country observations to watchlist actions.')
+assert(actionability.geographyHandoffs.some(item => item.code === 'RU' && item.role === 'operator' && !item.watchlistTerm), 'Operator-origin geography should remain attribution/enrichment context, not an alert term.')
+assert(actionability.sourceClusters.some(item => item.watchlistTerm?.value === 'microsoft.com'), 'Source provenance should map source domains to watchlist action rows.')
+assert(actionability.sourceClusters.some(item => /Attach capture ID/i.test(item.enrichmentTask)), 'Source provenance without capture IDs should create enrichment work.')
 
 const backed = buildTiActionability({
     ...fixture,
@@ -164,9 +168,12 @@ const quiet = buildTiActionability(quietFixture, quietProfile, [])
 assert(!quiet.shouldAlert, 'Quiet actor should not be alertable.')
 assert(quiet.relatedAlerts.length === 0 && quiet.relatedCases.length === 0, 'Quiet actor should honestly show no current alert or case.')
 assert(quiet.watchlist.state === 'missing_terms', 'Quiet actor should expose missing watchlist terms.')
+assert(quiet.watchlist.blockers.some(item => /Authenticated organization ID/i.test(item)), 'Quiet actor should explain missing org/auth context for watchlist actions.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')
+assert(containsToyThreatIntelCopy('country-level target marker'), 'Copy guard should catch internal map marker language.')
+assert(containsToyThreatIntelCopy('continent bucket'), 'Copy guard should catch internal geography bucket language.')
 assert(!containsToyThreatIntelCopy(JSON.stringify(profile)), 'Shaped actor intelligence should not contain toy TI copy.')
 
 console.log('[ti-actor-intelligence] actor intelligence shaping and copy guardrails passed')

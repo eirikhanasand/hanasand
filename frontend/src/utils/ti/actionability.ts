@@ -1,4 +1,4 @@
-import type { VictimObservation } from './actorProfile'
+import { countryFromValue, type VictimObservation } from './actorProfile'
 import type { TiActorIntelligenceProfile } from './actorIntelligence'
 import type { TiActionabilityContract, TiSearchResponse } from './search'
 
@@ -18,6 +18,8 @@ export type TiActionabilityModel = {
     relatedCases: NonNullable<TiActionabilityContract['relatedCases']>
     sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
     enrichmentGaps: NonNullable<TiActionabilityContract['enrichmentGaps']>
+    geographyHandoffs: GeographyHandoff[]
+    sourceClusters: SourceCluster[]
     handoffs: {
         watchlistEndpoint: string
         alertRebuildEndpoint: string
@@ -34,6 +36,25 @@ type WatchlistCandidate = {
     confidence: number
 }
 
+export type GeographyHandoff = {
+    code: string
+    country: string
+    role: 'operator' | 'target'
+    observationCount: number
+    watchlistTerm?: { kind: WatchlistCandidate['kind']; value: string; reason: string }
+    enrichmentTask: string
+    provenanceSummary: string
+}
+
+export type SourceCluster = {
+    sourceName: string
+    provenance: string
+    captureId?: string
+    confidence?: number
+    watchlistTerm?: { kind: WatchlistCandidate['kind']; value: string; reason: string }
+    enrichmentTask: string
+}
+
 export function buildTiActionability(result: TiSearchResponse, actor: TiActorIntelligenceProfile, victimObservations: VictimObservation[]): TiActionabilityModel {
     const contract = result.actionability
     const candidates = normalizeCandidates(contract?.watchlistCandidates, result, actor, victimObservations)
@@ -42,6 +63,8 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
     const relatedCases = contract?.relatedCases ?? []
     const sourceProvenance = normalizeSourceProvenance(contract?.sourceProvenance, result)
     const enrichmentGaps = normalizeEnrichmentGaps(contract?.enrichmentGaps, result, actor, sourceProvenance)
+    const geographyHandoffs = buildGeographyHandoffs(result, victimObservations, candidates)
+    const sourceClusters = buildSourceClusters(sourceProvenance)
     const firstAlert = relatedAlerts[0]
     const watchlistPayloads = contract?.handoffs?.watchlist?.payloads ?? candidates.slice(0, 8).map(candidate => ({
         kind: candidate.kind,
@@ -77,6 +100,8 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         relatedCases,
         sourceProvenance,
         enrichmentGaps,
+        geographyHandoffs,
+        sourceClusters,
         handoffs: {
             watchlistEndpoint,
             alertRebuildEndpoint,
@@ -88,26 +113,50 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
 }
 
 function normalizeCandidates(contractCandidates: TiActionabilityContract['watchlistCandidates'], result: TiSearchResponse, actor: TiActorIntelligenceProfile, victimObservations: VictimObservation[]): WatchlistCandidate[] {
-    const values = unique([
-        ...(contractCandidates ?? []).map(candidate => `${candidate.kind}:${candidate.value}:${candidate.reason}:${candidate.confidence ?? 0.7}`),
-        ...victimObservations.map(item => `company:${item.victim}:Reported victim or target context:${0.72}`),
-        ...result.recentActivity.map(item => item.victimName ? `company:${item.victimName}:Recent activity victim field:${item.confidence}` : ''),
-        ...result.sources.map(source => {
+    const candidates = [
+        ...(contractCandidates ?? []).map(candidate => ({
+            kind: normalizeKind(candidate.kind),
+            value: candidate.value,
+            reason: candidate.reason,
+            confidence: candidate.confidence ?? 0.7,
+        })),
+        ...victimObservations.map(item => ({
+            kind: 'company' as const,
+            value: item.victim,
+            reason: `Country observation for ${item.country}: ${item.sector}.`,
+            confidence: 0.72,
+        })),
+        ...result.recentActivity.flatMap(item => item.victimName ? [{
+            kind: 'company' as const,
+            value: item.victimName,
+            reason: `Recent activity victim field from ${item.firstReportedAt || item.date}.`,
+            confidence: item.confidence,
+        }] : []),
+        ...result.sources.flatMap(source => {
             const domain = domainFromUrl(source.url || source.provenance)
-            return domain ? `domain:${domain}:Source domain attached to returned evidence:${0.64}` : ''
+            return domain ? [{
+                kind: 'domain' as const,
+                value: domain,
+                reason: `Source domain attached to returned evidence: ${source.name}.`,
+                confidence: 0.64,
+            }] : []
         }),
-        ...actor.targetSectors.slice(0, 3).map(sector => `vendor:${sector}:Sector watchlist category for buyer/vendor exposure:${0.55}`),
-    ])
+        ...actor.targetSectors.slice(0, 3).map(sector => ({
+            kind: 'vendor' as const,
+            value: sector,
+            reason: 'Sector category for buyer, supplier, and vendor exposure review.',
+            confidence: 0.55,
+        })),
+    ]
 
-    return values.map(value => {
-        const [kind, term, reason, confidence] = value.split(':')
-        return {
-            kind: normalizeKind(kind),
-            value: term,
-            reason: reason || 'Candidate watchlist term from returned actor context.',
-            confidence: Number(confidence) || 0.7,
-        }
-    }).filter(candidate => Boolean(candidate.value) && !/not stated|global|multiple|various|unknown/i.test(candidate.value)).slice(0, 12)
+    return uniqueBy(candidates
+        .map(candidate => ({
+            ...candidate,
+            value: candidate.value.trim(),
+            reason: candidate.reason.trim() || 'Candidate watchlist term from returned actor context.',
+        }))
+        .filter(candidate => Boolean(candidate.value) && !/not stated|global|multiple|various|unknown/i.test(candidate.value)), candidate => `${candidate.kind}:${candidate.value.toLowerCase()}`)
+        .slice(0, 12)
 }
 
 function normalizeSourceProvenance(contractSources: TiActionabilityContract['sourceProvenance'], result: TiSearchResponse): NonNullable<TiActionabilityContract['sourceProvenance']> {
@@ -152,6 +201,76 @@ function normalizeEnrichmentGaps(contractGaps: TiActionabilityContract['enrichme
     return uniqueBy(gaps, gap => gap.id).slice(0, 8)
 }
 
+function buildGeographyHandoffs(result: TiSearchResponse, victimObservations: VictimObservation[], candidates: WatchlistCandidate[]): GeographyHandoff[] {
+    const byCountry = new Map<string, VictimObservation[]>()
+    for (const observation of victimObservations) {
+        const country = countryFromValue(observation.country)
+        if (!country) continue
+        byCountry.set(country.code, [...(byCountry.get(country.code) ?? []), observation])
+    }
+
+    const countries = uniqueBy([
+        ...victimObservations.map(observation => observation.country),
+        ...result.targets.flatMap(target => target.regions),
+        ...result.recentActivity.flatMap(item => item.countries ?? []),
+    ].map(countryFromValue).filter((country): country is NonNullable<ReturnType<typeof countryFromValue>> => Boolean(country)), country => country.code)
+
+    const targetRows = countries.map(country => {
+        const observations = byCountry.get(country.code) ?? []
+        const firstObservation = observations[0]
+        const candidate = firstObservation
+            ? candidates.find(item => item.value.toLowerCase() === firstObservation.victim.toLowerCase())
+            : candidates.find(item => item.kind === 'vendor' && result.targets.some(target => target.sector.toLowerCase() === item.value.toLowerCase()))
+        return {
+            code: country.code,
+            country: country.label,
+            role: 'target' as const,
+            observationCount: Math.max(1, observations.length),
+            watchlistTerm: candidate ? { kind: candidate.kind, value: candidate.value, reason: candidate.reason } : undefined,
+            enrichmentTask: firstObservation
+                ? `Corroborate ${firstObservation.victim} with source capture, sector, and timestamp before customer alerting.`
+                : `Collect country-specific source evidence for ${country.label} before using this geography in alert routing.`,
+            provenanceSummary: observations.length
+                ? observations.slice(0, 2).map(item => `${item.victim} · ${item.source}`).join(' | ')
+                : 'Country is present in profile target geography without a named victim row.',
+        }
+    })
+
+    const origin = /apt29|cozy bear|midnight blizzard|nobelium|the dukes/i.test(`${result.query} ${result.aliases.join(' ')}`)
+        ? countryFromValue('Russia')
+        : undefined
+    const originRows: GeographyHandoff[] = origin ? [{
+        code: origin.code,
+        country: origin.label,
+        role: 'operator',
+        observationCount: 1,
+        enrichmentTask: `Keep ${origin.label} as attribution context; do not use operator origin by itself as a customer alert condition.`,
+        provenanceSummary: 'Actor attribution context from public APT29/SVR reporting.',
+    }] : []
+
+    return [...originRows, ...targetRows].slice(0, 12)
+}
+
+function buildSourceClusters(sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>): SourceCluster[] {
+    return sourceProvenance.map(source => {
+        const domain = domainFromUrl(source.provenance)
+        return {
+            sourceName: source.sourceName,
+            provenance: source.provenance,
+            captureId: source.captureId,
+            confidence: source.confidence,
+            watchlistTerm: domain ? {
+                kind: 'domain' as const,
+                value: domain,
+                reason: `Use ${domain} to track source-specific coverage and provenance changes.`,
+            } : undefined,
+            enrichmentTask: source.captureId
+                ? `Use capture ${source.captureId} as replayable case evidence.`
+                : `Attach capture ID or source hash for ${source.sourceName} before case replay.`,
+        }
+    }).slice(0, 8)
+}
+
 function dispositionFor(input: {
     candidates: WatchlistCandidate[]
     matches: NonNullable<TiActionabilityContract['watchlistMatches']>
@@ -188,16 +307,6 @@ function domainFromUrl(value?: string) {
     } catch {
         return null
     }
-}
-
-function unique(values: string[]) {
-    const seen = new Set<string>()
-    return values.map(value => value.trim()).filter(value => {
-        const key = value.toLowerCase()
-        if (!key || seen.has(key)) return false
-        seen.add(key)
-        return true
-    })
 }
 
 function uniqueBy<T>(values: T[], keyFor: (value: T) => string) {

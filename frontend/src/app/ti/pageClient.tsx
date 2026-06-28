@@ -334,7 +334,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     </Panel>
                                 </section>
 
-                                <ThreatActorMap result={result} />
+                                <ThreatActorMap result={result} actionability={actionability} />
                             </div>
                         ) : (
                             <div className='grid min-h-96 place-items-center rounded-lg border border-dashed border-[#d8dee9] bg-white p-8 text-center text-sm text-[#667085]'>Search is still building an analyst queue.</div>
@@ -704,7 +704,7 @@ function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
 function ActionabilityPanel({ actionability, query }: { actionability: TiActionabilityModel; query: string }) {
     const casePath = actionability.relatedCases[0]?.path || actionability.relatedAlerts[0]?.casePath
     return (
-        <Panel title='Workflow Handoff' description='Backed alert, watchlist, and case handoff state for this actor/query result.' icon={<ShieldCheck className='h-4 w-4' />}>
+        <Panel title='Actor Actions' description='Backed alert, watchlist, case, source, and enrichment handoff state for this actor/query result.' icon={<ShieldCheck className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
                     <div className='flex items-center justify-between gap-2'>
@@ -732,6 +732,39 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                     {actionability.watchlist.blockers.length ? <BlockerList blockers={actionability.watchlist.blockers} /> : null}
                 </div>
 
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Geography to action</p>
+                    <div className='mt-2 grid gap-2'>
+                        {actionability.geographyHandoffs.slice(0, 4).map(item => (
+                            <div key={`${item.role}-${item.code}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2'>
+                                <div className='flex items-center justify-between gap-2'>
+                                    <p className='text-xs font-semibold text-[#171a21]'>{item.country}</p>
+                                    <span className='text-[11px] text-[#667085]'>{item.role === 'operator' ? 'attribution' : `${item.observationCount} observation${item.observationCount === 1 ? '' : 's'}`}</span>
+                                </div>
+                                <p className='mt-1 text-xs leading-5 text-[#596170]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
+                            </div>
+                        ))}
+                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-[#667085]'>No country-level action rows returned.</p> : null}
+                    </div>
+                </div>
+
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Provenance to action</p>
+                    <div className='mt-2 grid gap-2'>
+                        {actionability.sourceClusters.slice(0, 4).map(item => (
+                            <div key={`${item.sourceName}-${item.provenance}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2'>
+                                <div className='flex items-center justify-between gap-2'>
+                                    <p className='truncate text-xs font-semibold text-[#171a21]'>{item.sourceName}</p>
+                                    <span className={item.captureId ? 'text-[11px] text-[#147a3b]' : 'text-[11px] text-[#8a5a00]'}>{item.captureId ? 'capture attached' : 'capture needed'}</span>
+                                </div>
+                                <p className='mt-1 truncate font-mono text-[11px] text-[#667085]'>{item.provenance}</p>
+                                <p className='mt-1 text-xs leading-5 text-[#596170]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
+                            </div>
+                        ))}
+                        {!actionability.sourceClusters.length ? <p className='text-xs text-[#667085]'>No source provenance rows returned.</p> : null}
+                    </div>
+                </div>
+
                 <div className='grid gap-2'>
                     <a href='/dashboard/dwm' className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
                         <ExternalLink className='h-3.5 w-3.5' />
@@ -749,6 +782,13 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                         </button>
                     )}
                 </div>
+
+                {!casePath && actionability.handoffs.casePayload ? (
+                    <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                        <p className='text-xs font-semibold uppercase text-[#667085]'>Case handoff payload</p>
+                        <p className='mt-2 font-mono text-[11px] leading-5 text-[#596170]'>{JSON.stringify(actionability.handoffs.casePayload)}</p>
+                    </div>
+                ) : null}
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
                     <p className='text-xs font-semibold uppercase text-[#667085]'>Related backed objects</p>
@@ -1385,7 +1425,7 @@ function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNo
     )
 }
 
-function ThreatActorMap({ result }: { result: TiSearchResponse }) {
+function ThreatActorMap({ result, actionability }: { result: TiSearchResponse; actionability: TiActionabilityModel }) {
     const geo = actorGeoProfile(result)
     const hasPoints = geo.points.length > 0
     const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
@@ -1551,23 +1591,40 @@ function ThreatActorMap({ result }: { result: TiSearchResponse }) {
                     </div>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         {geo.points.map(point => (
-                            <button
+                            <MapPointActionRow
                                 key={`${point.role}-row-${point.code}`}
-                                type='button'
-                                onClick={() => focusCountry(point.code)}
-                                className={`rounded-lg border px-3 py-2 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${selectedPoint?.code === point.code ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-[#eef1f5] bg-[#fbfcfe] hover:border-[#d8dee9] hover:bg-white'}`}
-                            >
-                                <div className='flex items-center justify-between gap-3'>
-                                    <span className='font-semibold text-[#171a21]'>{point.label}</span>
-                                    <span className={point.role === 'operator' ? 'text-[#7c3aed]' : 'text-[#b42318]'}>{point.role === 'operator' ? 'operator origin' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
-                                </div>
-                                <p className='mt-1 leading-5 text-[#667085]'>{point.detail}</p>
-                            </button>
+                                point={point}
+                                active={selectedPoint?.code === point.code}
+                                handoff={actionability.geographyHandoffs.find(item => item.code === point.code && item.role === point.role) ?? actionability.geographyHandoffs.find(item => item.code === point.code)}
+                                onFocus={() => focusCountry(point.code)}
+                            />
                         ))}
                     </div>
                 </div>
             ) : null}
         </div>
+    )
+}
+
+function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnType<typeof actorGeoProfile>['points'][number]; active: boolean; handoff?: TiActionabilityModel['geographyHandoffs'][number]; onFocus: () => void }) {
+    return (
+        <button
+            type='button'
+            onClick={onFocus}
+            className={`rounded-lg border px-3 py-2 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-[#eef1f5] bg-[#fbfcfe] hover:border-[#d8dee9] hover:bg-white'}`}
+        >
+            <div className='flex items-center justify-between gap-3'>
+                <span className='font-semibold text-[#171a21]'>{point.label}</span>
+                <span className={point.role === 'operator' ? 'text-[#7c3aed]' : 'text-[#b42318]'}>{point.role === 'operator' ? 'operator origin' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
+            </div>
+            <p className='mt-1 leading-5 text-[#667085]'>{point.detail}</p>
+            {handoff ? (
+                <div className='mt-2 rounded-md border border-[#dfe5ee] bg-white px-2 py-1.5'>
+                    <p className='font-semibold text-[#344054]'>{handoff.watchlistTerm ? `${handoff.watchlistTerm.kind}: ${handoff.watchlistTerm.value}` : 'Enrichment task'}</p>
+                    <p className='mt-1 leading-5 text-[#667085]'>{handoff.watchlistTerm?.reason ?? handoff.enrichmentTask}</p>
+                </div>
+            ) : null}
+        </button>
     )
 }
 

@@ -104,7 +104,7 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
 }
 
 export function containsToyThreatIntelCopy(value: string) {
-    return /\btarget signal(s)?\b|named examples|toy|demo|coming soon/i.test(value)
+    return /\btarget signal(s)?\b|named examples|target marker|continent bucket|prompt answer|as an ai|toy|demo|coming soon/i.test(value)
 }
 
 function isApt29(result: TiSearchResponse) {
