@@ -129,6 +129,16 @@ export function getCaseDetail(url: URL, options: ApiServerOptions, caseId: strin
   return json(buildCaseDetail(caseRecord, options, scope.organization, access));
 }
 
+export function exportCaseEvidence(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
+  const caseRecord = findCase(options, caseId);
+  if (!caseRecord || caseRecord.tenantId !== scope.tenantId) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  return json(buildCaseExport(caseRecord, options, scope.organization, access, exportOptionsFromUrl(url)));
+}
+
 export async function updateCase(request: Request, options: ApiServerOptions, caseId: string | undefined): Promise<Response> {
   const existing = findCase(options, caseId);
   if (!existing) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
@@ -216,6 +226,188 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     nextActions: nextActionsForCase(caseRecord, alert, deliveries),
     nextAllowedActions: nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
   };
+}
+
+type CaseExportOptions = {
+  shape: "compact" | "full";
+  includeTimeline: boolean;
+  includeEvidence: boolean;
+  includeNextActionPayloads: boolean;
+};
+
+function exportOptionsFromUrl(url: URL): CaseExportOptions {
+  const shape = url.searchParams.get("shape") === "compact" || url.searchParams.get("compact") === "true" ? "compact" : "full";
+  return {
+    shape,
+    includeTimeline: url.searchParams.get("timeline") !== "false" && shape !== "compact",
+    includeEvidence: url.searchParams.get("evidence") !== "false",
+    includeNextActionPayloads: url.searchParams.get("nextActionPayloads") !== "false"
+  };
+}
+
+function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access: CaseAccessResult | undefined, exportOptions: CaseExportOptions) {
+  const alert = findDwmAlert(options, caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const watchlists = caseWatchlists(options, alert, caseRecord);
+  const timeline = buildCaseTimeline(caseRecord, alert, deliveries);
+  const evidence = (alert?.evidence ?? []).map((item: any) => exportEvidenceItem(item, alert));
+  const deliveryEvidence = deliveries.map((delivery: any) => exportDeliveryEvidence(delivery));
+  const nextAllowedActions = nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
+    .map((action) => exportAction(action, caseRecord, access, exportOptions));
+  const matchedWatchlistTerms = watchlists.flatMap((watchlist: any) => (watchlist.matchedTerms ?? []).map((term: any) => ({
+    watchlistId: watchlist.id,
+    watchlistName: watchlist.name,
+    watchlistItemId: String(term.id ?? `${watchlist.id}:${term.value}`),
+    kind: term.kind,
+    value: term.value
+  })));
+  const summary = {
+    caseId: caseRecord.id,
+    title: caseRecord.title,
+    status: caseRecord.status,
+    priority: caseRecord.priority,
+    assignedOwner: caseRecord.assignedOwner,
+    organizationId: caseRecord.organizationId,
+    tenantId: caseRecord.tenantId,
+    alertId: alert?.id ?? caseRecord.alertId,
+    dedupeKey: alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.workflowContext?.dedupeKey,
+    severity: alert?.severity ?? caseRecord.priority,
+    recommendedRoute: alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute ?? alert?.workflowContext?.recommendedRoute,
+    createdAt: caseRecord.createdAt,
+    updatedAt: caseRecord.updatedAt,
+    closedAt: caseRecord.closedAt,
+    evidenceCount: evidence.length,
+    deliveryCount: deliveryEvidence.length,
+    delivered: deliveryEvidence.some((delivery) => delivery.status === "delivered")
+  };
+  const exportBody = {
+    schemaVersion: "analyst.case_export.v1",
+    generatedAt: nowIso(),
+    exportOptions,
+    organization,
+    access: caseAccessSummary(access),
+    summary,
+    case: caseRecord,
+    alertContext: alert ? {
+      id: alert.id,
+      caseId: alert.caseId,
+      caseIdCandidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate,
+      casePath: alert.casePath ?? alert.workflowContext?.casePath,
+      reviewState: alert.reviewState,
+      deliveryState: alert.deliveryState,
+      matchedTerm: alert.matchedTerm,
+      workflowContext: alert.workflowContext,
+      webhookContext: alert.webhookContext,
+      provenance: alert.provenance
+    } : undefined,
+    matchedWatchlistTerms,
+    evidence: exportOptions.includeEvidence ? evidence : undefined,
+    evidenceSummary: evidence.map((item) => ({
+      id: item.id,
+      sourceName: item.sourceName,
+      sourceFamily: item.sourceFamily,
+      observedAt: item.observedAt,
+      contentHash: item.contentHash,
+      redacted: item.redaction.redacted,
+      provenance: item.provenance
+    })),
+    timeline: exportOptions.includeTimeline ? timeline : undefined,
+    timelineSummary: timeline.map((event) => ({
+      id: event.id,
+      timestamp: event.timestamp,
+      eventType: event.eventType,
+      actor: event.actor,
+      source: event.source,
+      related: event.related
+    })),
+    deliveryEvidence,
+    nextAllowedActions,
+    copyText: caseExportCopyText(summary, evidence, deliveryEvidence, matchedWatchlistTerms),
+    auditSafety: {
+      rawSensitiveEvidenceIncluded: false,
+      redactedEvidenceCount: evidence.filter((item) => item.redaction.redacted).length,
+      redactionPolicy: "raw_sensitive evidence and sensitive excerpts are replaced with redaction markers; hashes, provenance, and source metadata remain for audit."
+    }
+  };
+  return {
+    ...exportBody,
+    exportChecksum: stableId("case_export", JSON.stringify({
+      summary,
+      evidence: exportBody.evidenceSummary,
+      timeline: exportBody.timelineSummary,
+      deliveryEvidence,
+      matchedWatchlistTerms
+    }))
+  };
+}
+
+function exportEvidenceItem(item: any, alert: any) {
+  const redactionState = String(item.redactionState ?? (item.sensitive ? "raw_sensitive" : "public_excerpt"));
+  const redacted = redactionState === "raw_sensitive" || item.sensitive === true;
+  return {
+    id: item.id,
+    alertId: alert?.id,
+    sourceId: item.sourceId,
+    sourceName: item.sourceName,
+    sourceFamily: item.sourceFamily,
+    observedAt: item.observedAt ?? item.firstSeenAt,
+    captureMode: item.captureMode,
+    redactionState,
+    redaction: {
+      redacted,
+      reason: redacted ? "raw_sensitive_or_sensitive_evidence" : "public_safe_excerpt",
+      rawIncluded: false
+    },
+    excerpt: redacted ? "[redacted: raw sensitive evidence withheld]" : item.excerpt,
+    contentHash: item.contentHash,
+    provenance: item.provenance,
+    safeToCopy: !redacted,
+    handling: redacted ? "Use hashes/provenance for audit; retrieve raw evidence only through approved evidence controls." : "Public-safe excerpt can be copied into incident handoff."
+  };
+}
+
+function exportDeliveryEvidence(delivery: any) {
+  return {
+    id: delivery.id,
+    deliveryId: delivery.id,
+    alertId: delivery.alertId,
+    watchlistId: delivery.watchlistId,
+    webhookDestinationId: delivery.webhookDestinationId,
+    status: delivery.status,
+    deliveryKind: delivery.deliveryKind,
+    attemptedAt: delivery.attemptedAt,
+    httpStatus: delivery.httpStatus,
+    endpointHash: delivery.endpointHash,
+    payloadHash: delivery.payloadHash,
+    dedupeKey: delivery.dedupeKey,
+    dryRun: delivery.dryRun,
+    error: delivery.error
+  };
+}
+
+function exportAction(action: any, caseRecord: AnalystCase, access: CaseAccessResult | undefined, options: CaseExportOptions) {
+  const includePayload = options.includeNextActionPayloads && access?.readOnly !== true && action.enabled;
+  return {
+    ...action,
+    request: includePayload ? {
+      method: action.method,
+      path: `/v1/cases/${encodeURIComponent(caseRecord.id)}`,
+      body: { action: action.id, organizationId: caseRecord.organizationId }
+    } : undefined
+  };
+}
+
+function caseExportCopyText(summary: any, evidence: Array<any>, deliveryEvidence: Array<any>, matchedWatchlistTerms: Array<any>): string {
+  const visibleEvidence = evidence.slice(0, 5).map((item) => `- ${item.sourceName ?? item.sourceFamily ?? item.id}: ${item.excerpt} (${item.contentHash})`).join("\n");
+  return [
+    `Case ${summary.caseId}: ${summary.title}`,
+    `Status: ${summary.status}; severity: ${summary.severity}; route: ${summary.recommendedRoute ?? "unrouted"}`,
+    `Alert: ${summary.alertId}; dedupe: ${summary.dedupeKey}`,
+    `Matched watchlist terms: ${matchedWatchlistTerms.map((term) => `${term.kind}:${term.value}`).join(", ") || "none"}`,
+    `Webhook deliveries: ${deliveryEvidence.map((delivery) => `${delivery.deliveryId}:${delivery.status}`).join(", ") || "none"}`,
+    "Evidence:",
+    visibleEvidence || "- No exportable evidence."
+  ].join("\n");
 }
 
 function syncAlertForCase(options: ApiServerOptions, alert: any, caseRecord: AnalystCase, event: AnalystCaseEvent) {

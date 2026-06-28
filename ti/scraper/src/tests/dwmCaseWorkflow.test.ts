@@ -228,6 +228,24 @@ describe("dwm case workflow", () => {
       });
       expect(rebuildAfterClose.alerts[0].workflowEvents.length).toBeGreaterThanOrEqual(3);
       expect((store as any).getCase(closed.case.id).workflowEvents).toHaveLength(3);
+      (store as any).saveDwmAlert({
+        ...(store as any).getDwmAlert(alert.id),
+        evidence: [
+          ...((store as any).getDwmAlert(alert.id).evidence ?? []),
+          {
+            id: "evidence_raw_sensitive_case_secret",
+            sourceId: source.id,
+            sourceName: "Restricted raw capture",
+            sourceFamily: "darkweb_metadata",
+            observedAt: "2026-06-28T13:09:00.000Z",
+            captureMode: "metadata_only",
+            redactionState: "raw_sensitive",
+            excerpt: "SECRET RAW PAYLOAD SHOULD NOT EXPORT",
+            contentHash: "hash-sensitive-case-export",
+            provenance: { captureId: "cap_sensitive_case_export", sourceId: source.id }
+          }
+        ]
+      });
 
       const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${organizationId}`, {
         headers: { "x-user-email": "viewer@acme.com" }
@@ -320,6 +338,73 @@ describe("dwm case workflow", () => {
       expect(noLeak.payload.cases).toHaveLength(0);
       const unauthorizedFiltered = await filteredCases(`q=${encodeURIComponent("Okta")}`, "outsider@example.com");
       expect(unauthorizedFiltered.response.status).toBe(403);
+
+      const viewerExportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}/export?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
+      const viewerExport = await viewerExportResponse.json() as any;
+      expect(viewerExportResponse.status).toBe(200);
+      expect(viewerExport).toMatchObject({
+        schemaVersion: "analyst.case_export.v1",
+        access: { role: "viewer", readOnly: true },
+        summary: {
+          caseId: closed.case.id,
+          alertId: alert.id,
+          dedupeKey: alert.dedupeKey,
+          deliveryCount: 1,
+          delivered: true
+        },
+        auditSafety: {
+          rawSensitiveEvidenceIncluded: false,
+          redactedEvidenceCount: 1
+        }
+      });
+      expect(viewerExport.exportChecksum).toMatch(/^case_export_/);
+      expect(viewerExport.matchedWatchlistTerms[0]).toMatchObject({ value: "acme.com", watchlistId: expect.any(String) });
+      expect(viewerExport.deliveryEvidence[0]).toMatchObject({
+        deliveryId: deliveryPayload.deliveries[0].id,
+        status: "delivered",
+        webhookDestinationId: webhookPayload.destination.id,
+        alertId: alert.id
+      });
+      expect(viewerExport.evidence.find((item: any) => item.id === "evidence_raw_sensitive_case_secret")).toMatchObject({
+        excerpt: "[redacted: raw sensitive evidence withheld]",
+        safeToCopy: false,
+        redaction: {
+          redacted: true,
+          rawIncluded: false
+        }
+      });
+      expect(JSON.stringify(viewerExport)).not.toContain("SECRET RAW PAYLOAD SHOULD NOT EXPORT");
+      expect(viewerExport.nextAllowedActions.some((action: any) => action.request)).toBe(false);
+      expect(viewerExport.copyText).toContain(closed.case.id);
+      expect(viewerExport.copyText).toContain(deliveryPayload.deliveries[0].id);
+
+      const adminExportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}/export?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "ir-lead@acme.com" }
+      }), options);
+      const adminExport = await adminExportResponse.json() as any;
+      expect(adminExportResponse.status).toBe(200);
+      expect(adminExport.access).toMatchObject({ role: "admin", readOnly: false });
+      expect(adminExport.nextAllowedActions.find((action: any) => action.id === "reopen").request).toMatchObject({
+        method: "PATCH",
+        path: `/v1/cases/${closed.case.id}`,
+        body: { action: "reopen", organizationId }
+      });
+
+      const compactExportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}/export?organizationId=${organizationId}&shape=compact`, {
+        headers: { "x-user-email": "viewer@acme.com" }
+      }), options);
+      const compactExport = await compactExportResponse.json() as any;
+      expect(compactExportResponse.status).toBe(200);
+      expect(compactExport.exportOptions).toMatchObject({ shape: "compact", includeTimeline: false });
+      expect(compactExport.timeline).toBeUndefined();
+      expect(compactExport.evidenceSummary).toHaveLength(2);
+
+      const outsiderExportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}/export?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "outsider@example.com" }
+      }), options);
+      expect(outsiderExportResponse.status).toBe(403);
 
       const reopenResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${closed.case.id}`, {
         method: "PATCH",

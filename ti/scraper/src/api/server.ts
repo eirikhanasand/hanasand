@@ -7,7 +7,7 @@ import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
-import { createCase, getCaseDetail, listCases, updateCase } from "./caseRoutes.ts";
+import { createCase, exportCaseEvidence, getCaseDetail, listCases, updateCase } from "./caseRoutes.ts";
 import { contractIndex } from "./contractsRoute.ts";
 import { error, json, numberQuery, page, readJson } from "./http.ts";
 import { createOrganization, createOrganizationInvites, createWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook } from "./organizationRoutes.ts";
@@ -38,6 +38,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/test$/.test(url.pathname) && request.method === "POST") return testOrganizationWebhook(request, options, url.pathname.split("/")[3]);
     if (url.pathname === "/v1/cases" && request.method === "GET") return listCases(url, options, request);
     if (url.pathname === "/v1/cases" && request.method === "POST") return createCase(request, options);
+    if (/^\/v1\/cases\/[^/]+\/export$/.test(url.pathname) && request.method === "GET") return exportCaseEvidence(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/cases\/[^/]+$/.test(url.pathname) && request.method === "GET") return getCaseDetail(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/cases\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateCase(request, options, url.pathname.split("/")[3]);
     if (url.pathname === "/v1/sources" && request.method === "GET") return json({ sources: page(options.store.listSources(), url) });
