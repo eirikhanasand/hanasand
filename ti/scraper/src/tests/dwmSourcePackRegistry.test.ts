@@ -4,8 +4,12 @@ import {
   DwmSourcePackPostgresAdapter,
   InMemoryDwmSourcePackRegistryAdapter,
   planDwmSourcePackBulkImport,
+  planDwmSourcePackValidationBatch,
+  runDwmSourcePackValidationJob,
+  sourcePackHealthRollup,
   sourcePackRecordFromPostgresRows,
   sourcePackRecordToPostgresRows,
+  type DwmSourceCandidateValidationResult,
   type DwmSourcePackCandidateRecord,
   type DwmSourcePackPostgresRows,
   type DwmSourcePackRecord,
@@ -236,6 +240,179 @@ describe("dwm source pack registry adapter", () => {
     expect(JSON.stringify(plan)).not.toContain("@");
     expect(plan.safeOutput).toMatchObject({ rawUnsafeRowsStored: false, restrictedPayloadDownloadAllowed: false });
   });
+
+  test("plans validation jobs with chunks backoff concurrency duplicate handling and safe rejected rows", () => {
+    const validationPack = pack({
+      id: "pack_validation_plan",
+      candidates: [
+        candidate({ id: "cand_validate_tg", declaredFamily: "telegram", targetRef: { hash: "target_shared", preview: "telegram:shared", family: "telegram", rawStored: false } }),
+        candidate({ id: "cand_validate_onion", declaredFamily: "darkweb_onion" }),
+        candidate({ id: "cand_validate_adv", declaredFamily: "public_advisory" }),
+        candidate({ id: "cand_validate_dup", declaredFamily: "telegram", targetRef: { hash: "target_shared", preview: "telegram:duplicate", family: "telegram", rawStored: false } })
+      ]
+    });
+
+    const plan = planDwmSourcePackValidationBatch([validationPack], {
+      chunkSize: 2,
+      maxAttempts: 3,
+      backoffSeconds: 60,
+      perFamilyConcurrency: { telegram: 4, darkweb_onion: 1 },
+      generatedAt: "2026-06-28T12:00:00.000Z"
+    });
+
+    expect(plan.summary).toEqual({
+      packCount: 1,
+      candidateCount: 4,
+      jobCount: 2,
+      chunkSize: 2,
+      duplicateCandidateCount: 1,
+      perFamilyConcurrency: { telegram: 4, darkweb_onion: 1 }
+    });
+    expect(plan.jobs[0]).toMatchObject({
+      id: "source_pack_validation_0",
+      packIds: ["pack_validation_plan"],
+      status: "queued",
+      cursor: "0",
+      nextCursor: "2",
+      candidateIds: ["cand_validate_tg", "cand_validate_onion"],
+      familyConcurrency: { telegram: 4, darkweb_onion: 1 },
+      parserStatus: {
+        cand_validate_tg: "queued_for_validation",
+        cand_validate_onion: "queued_for_validation"
+      },
+      retry: { attempt: 0, maxAttempts: 3, backoffSeconds: 60 }
+    });
+    expect(plan.duplicateTargetRefs).toEqual([{ hash: "target_shared", candidateIds: ["cand_validate_tg", "cand_validate_dup"] }]);
+    expect(plan.safeRejectedRows).toEqual([{
+      candidateId: "cand_validate_dup",
+      targetRef: { hash: "target_shared", preview: "telegram:duplicate", family: "telegram", rawStored: false },
+      reason: "duplicate_target_ref"
+    }]);
+    expect(JSON.stringify(plan)).not.toContain("@raw");
+    expect(plan.safeOutput).toMatchObject({ rawDuplicateTargetsStored: false, liveNetworkScrapeStarted: false });
+  });
+
+  test("runs fake no-network validators across source families and validation states", () => {
+    const validationPack = pack({
+      id: "pack_validation_families",
+      candidates: [
+        candidate({ id: "cand_state_tg", declaredFamily: "telegram" }),
+        candidate({ id: "cand_state_onion", declaredFamily: "darkweb_onion" }),
+        candidate({ id: "cand_state_actor", declaredFamily: "actor_page" }),
+        candidate({ id: "cand_state_advisory", declaredFamily: "public_advisory" }),
+        candidate({ id: "cand_state_clear", declaredFamily: "clear_web" })
+      ]
+    });
+    const plan = planDwmSourcePackValidationBatch([validationPack], {
+      chunkSize: 5,
+      generatedAt: "2026-06-28T12:00:00.000Z",
+      backoffSeconds: 120
+    });
+
+    const run = runDwmSourcePackValidationJob(plan.jobs[0], validationPack, fakeValidator, {
+      generatedAt: "2026-06-28T12:05:00.000Z"
+    });
+
+    expect(run.started.status).toBe("validating");
+    expect(run.job.status).toBe("partially_active");
+    expect(run.job.parserStatus).toMatchObject({
+      cand_state_tg: "telegram_public_parser_ready",
+      cand_state_onion: "metadata_parser_ready",
+      cand_state_actor: "actor_page_parser_ready",
+      cand_state_advisory: "parser_retry_scheduled",
+      cand_state_clear: "clear_web_parser_disabled"
+    });
+    expect(run.job.lastFailure).toMatchObject({ candidateId: "cand_state_advisory", code: "parser_timeout" });
+    expect(run.results.map((result) => result.state)).toEqual(["active", "active", "active", "retry_scheduled", "disabled"]);
+
+    const allFailed = runDwmSourcePackValidationJob(plan.jobs[0], validationPack, (candidate) => ({
+      candidateId: candidate.id,
+      state: "failed",
+      parserStatus: "parser_failed",
+      failure: { code: "parser_failed", message: "fixture failure" }
+    }), { generatedAt: "2026-06-28T12:06:00.000Z" });
+    const allRetry = runDwmSourcePackValidationJob(plan.jobs[0], validationPack, (candidate) => ({
+      candidateId: candidate.id,
+      state: "retry_scheduled",
+      parserStatus: "parser_retry_scheduled",
+      failure: { code: "rate_limited", message: "fixture retry" }
+    }), { generatedAt: "2026-06-28T12:07:00.000Z" });
+    const allDisabled = runDwmSourcePackValidationJob(plan.jobs[0], validationPack, (candidate) => ({
+      candidateId: candidate.id,
+      state: "disabled",
+      parserStatus: "parser_disabled"
+    }), { generatedAt: "2026-06-28T12:08:00.000Z" });
+
+    expect(allFailed.job.status).toBe("failed");
+    expect(allRetry.job).toMatchObject({ status: "retry_scheduled", retry: { attempt: 1, retryAfter: expect.any(String) } });
+    expect(allDisabled.job.status).toBe("disabled");
+    expect(run.safeOutput).toMatchObject({ liveNetworkScrapeStarted: false, rawUnsafeRowsStored: false });
+  });
+
+  test("computes source health rollups for stale parser failures activation lag and retry windows", () => {
+    const rollup = sourcePackHealthRollup(pack({
+      id: "pack_health_rollup",
+      candidates: [
+        candidate({
+          id: "cand_health_active",
+          declaredFamily: "telegram",
+          decision: "approved",
+          activationState: "active_canary",
+          status: "active",
+          lastTestOutcome: { captureAt: "2026-06-20T12:00:00.000Z" }
+        }),
+        candidate({
+          id: "cand_health_pending",
+          declaredFamily: "telegram",
+          decision: "queued_for_review",
+          status: "queued",
+          requestedAt: "2026-06-27T12:00:00.000Z"
+        }),
+        candidate({
+          id: "cand_health_failed",
+          declaredFamily: "telegram",
+          decision: "retry_scheduled",
+          status: "retry_scheduled",
+          parserStatus: "parser_retry_scheduled",
+          failure: { code: "parser_timeout", message: "timed out" },
+          retryHint: "retry after 2026-06-28T13:00:00.000Z"
+        }),
+        candidate({
+          id: "cand_health_disabled",
+          declaredFamily: "telegram",
+          decision: "suppressed",
+          status: "disabled"
+        })
+      ]
+    }), {
+      generatedAt: "2026-06-28T12:00:00.000Z",
+      staleAfterSeconds: 3600
+    });
+
+    expect(rollup.coverage.telegram).toEqual({ total: 4, active: 1, pending: 1, failed: 1, disabled: 1 });
+    expect(rollup.staleSources).toEqual([{
+      candidateId: "cand_health_active",
+      lastCaptureAt: "2026-06-20T12:00:00.000Z",
+      staleSeconds: 691200
+    }]);
+    expect(rollup.parserFailures).toEqual([{
+      candidateId: "cand_health_failed",
+      parserStatus: "parser_retry_scheduled",
+      failure: { code: "parser_timeout", message: "timed out" }
+    }]);
+    expect(rollup.activationLag).toEqual([{
+      candidateId: "cand_health_pending",
+      requestedAt: "2026-06-27T12:00:00.000Z",
+      pendingSeconds: 86400,
+      status: "queued"
+    }]);
+    expect(rollup.nextRetryWindows).toEqual([{
+      candidateId: "cand_health_failed",
+      retryAfter: "2026-06-28T13:00:00.000Z",
+      retryHint: "retry after 2026-06-28T13:00:00.000Z",
+      failure: { code: "parser_timeout", message: "timed out" }
+    }]);
+  });
 });
 
 class FakeSourcePackSqlDriver implements DwmSourcePackSqlDriver {
@@ -257,6 +434,27 @@ class FakeSourcePackSqlDriver implements DwmSourcePackSqlDriver {
     const result = adapter.list(query);
     return { rows: result.items.map(sourcePackRecordToPostgresRows), total: result.total, nextCursor: result.nextCursor };
   }
+}
+
+function fakeValidator(candidate: DwmSourcePackCandidateRecord): DwmSourceCandidateValidationResult {
+  if (candidate.declaredFamily === "telegram") {
+    return { candidateId: candidate.id, state: "active", parserStatus: "telegram_public_parser_ready" };
+  }
+  if (candidate.declaredFamily === "darkweb_onion" || candidate.declaredFamily === "darkweb_metadata") {
+    return { candidateId: candidate.id, state: "active", parserStatus: "metadata_parser_ready" };
+  }
+  if (candidate.declaredFamily === "actor_page") {
+    return { candidateId: candidate.id, state: "active", parserStatus: "actor_page_parser_ready" };
+  }
+  if (candidate.declaredFamily === "public_advisory") {
+    return {
+      candidateId: candidate.id,
+      state: "retry_scheduled",
+      parserStatus: "parser_retry_scheduled",
+      failure: { code: "parser_timeout", message: "advisory parser timed out" }
+    };
+  }
+  return { candidateId: candidate.id, state: "disabled", parserStatus: "clear_web_parser_disabled" };
 }
 
 function pack(input: Partial<DwmSourcePackRecord> = {}): DwmSourcePackRecord {
@@ -307,6 +505,7 @@ function candidate(input: Partial<DwmSourcePackCandidateRecord> = {}): DwmSource
     failure: input.failure,
     policyBoundary: input.policyBoundary ?? { publicOnly: true, noPrivateAccess: true },
     validationResult: input.validationResult ?? { allowed: true },
+    lastTestOutcome: input.lastTestOutcome,
     retryHint: input.retryHint
   };
 }

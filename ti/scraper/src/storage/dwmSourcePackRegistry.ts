@@ -82,6 +82,78 @@ export type DwmSourcePackBulkImportPlan = {
   safeOutput: Record<string, boolean>;
 };
 
+export type DwmSourcePackValidationState =
+  | "queued"
+  | "validating"
+  | "failed"
+  | "partially_active"
+  | "active"
+  | "retry_scheduled"
+  | "disabled";
+
+export type DwmSourcePackValidationFailure = {
+  candidateId?: string;
+  code: string;
+  message: string;
+  at: string;
+};
+
+export type DwmSourcePackValidationJob = {
+  id: string;
+  packIds: string[];
+  status: DwmSourcePackValidationState;
+  cursor: string;
+  nextCursor?: string;
+  candidateIds: string[];
+  familyConcurrency: Partial<Record<DwmSourcePackFamily, number>>;
+  parserStatus: Record<string, string>;
+  lastFailure?: DwmSourcePackValidationFailure;
+  retry: {
+    attempt: number;
+    maxAttempts: number;
+    backoffSeconds: number;
+    retryAfter?: string;
+  };
+  duplicateTargetRefs: Array<{ hash: string; candidateIds: string[] }>;
+  safeRejectedRows: Array<{
+    candidateId: string;
+    targetRef: DwmSourcePackCandidateRecord["targetRef"];
+    reason: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DwmSourcePackValidationBatchPlan = {
+  jobs: DwmSourcePackValidationJob[];
+  duplicateTargetRefs: DwmSourcePackValidationJob["duplicateTargetRefs"];
+  safeRejectedRows: DwmSourcePackValidationJob["safeRejectedRows"];
+  summary: {
+    packCount: number;
+    candidateCount: number;
+    jobCount: number;
+    chunkSize: number;
+    duplicateCandidateCount: number;
+    perFamilyConcurrency: Partial<Record<DwmSourcePackFamily, number>>;
+  };
+  safeOutput: Record<string, boolean>;
+};
+
+export type DwmSourceCandidateValidationResult = {
+  candidateId: string;
+  state: Exclude<DwmSourcePackValidationState, "queued" | "validating">;
+  parserStatus: string;
+  failure?: { code: string; message: string };
+};
+
+export type DwmSourcePackHealthRollup = {
+  coverage: Record<DwmSourcePackFamily, { total: number; active: number; pending: number; failed: number; disabled: number }>;
+  staleSources: Array<{ candidateId: string; lastCaptureAt?: string; staleSeconds: number }>;
+  parserFailures: Array<{ candidateId: string; parserStatus?: string; failure?: Record<string, unknown> }>;
+  activationLag: Array<{ candidateId: string; requestedAt: string; pendingSeconds: number; status: string }>;
+  nextRetryWindows: Array<{ candidateId: string; retryAfter?: string; retryHint?: string; failure?: Record<string, unknown> }>;
+};
+
 export type DwmSourcePackListResult = {
   items: DwmSourcePackRecord[];
   nextCursor?: string;
@@ -449,6 +521,166 @@ export function planDwmSourcePackBulkImport(packs: DwmSourcePackRecord[], policy
   };
 }
 
+export function planDwmSourcePackValidationBatch(
+  packs: DwmSourcePackRecord[],
+  options: {
+    chunkSize?: number;
+    generatedAt?: string;
+    maxAttempts?: number;
+    backoffSeconds?: number;
+    perFamilyConcurrency?: Partial<Record<DwmSourcePackFamily, number>>;
+  } = {}
+): DwmSourcePackValidationBatchPlan {
+  const generatedAt = options.generatedAt ?? "2026-06-28T00:00:00.000Z";
+  const chunkSize = Math.max(1, Math.min(options.chunkSize ?? 250, 1000));
+  const perFamilyConcurrency = options.perFamilyConcurrency ?? {};
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
+  const backoffSeconds = Math.max(1, options.backoffSeconds ?? 300);
+  const candidates = packs.flatMap((pack) => pack.candidates.map((candidate) => ({ packId: pack.id, candidate })));
+  const duplicateTargetRefs = findDuplicateTargetRefs(candidates.map((item) => item.candidate));
+  const duplicateIds = new Set(duplicateTargetRefs.flatMap((item) => item.candidateIds.slice(1)));
+  const safeRejectedRows = candidates
+    .filter((item) => duplicateIds.has(item.candidate.id))
+    .map((item) => ({
+      candidateId: item.candidate.id,
+      targetRef: item.candidate.targetRef,
+      reason: "duplicate_target_ref"
+    }));
+  const jobs: DwmSourcePackValidationJob[] = [];
+
+  for (let index = 0; index < candidates.length; index += chunkSize) {
+    const chunk = candidates.slice(index, index + chunkSize);
+    const candidateIds = chunk.map((item) => item.candidate.id);
+    const chunkDuplicateRows = safeRejectedRows.filter((row) => candidateIds.includes(row.candidateId));
+    jobs.push({
+      id: `source_pack_validation_${index}`,
+      packIds: [...new Set(chunk.map((item) => item.packId))],
+      status: "queued",
+      cursor: String(index),
+      nextCursor: index + chunk.length < candidates.length ? String(index + chunk.length) : undefined,
+      candidateIds,
+      familyConcurrency: perFamilyConcurrency,
+      parserStatus: Object.fromEntries(candidateIds.map((candidateId) => [candidateId, "queued_for_validation"])),
+      retry: { attempt: 0, maxAttempts, backoffSeconds },
+      duplicateTargetRefs,
+      safeRejectedRows: chunkDuplicateRows,
+      createdAt: generatedAt,
+      updatedAt: generatedAt
+    });
+  }
+
+  return {
+    jobs,
+    duplicateTargetRefs,
+    safeRejectedRows,
+    summary: {
+      packCount: packs.length,
+      candidateCount: candidates.length,
+      jobCount: jobs.length,
+      chunkSize,
+      duplicateCandidateCount: duplicateIds.size,
+      perFamilyConcurrency
+    },
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
+export function runDwmSourcePackValidationJob(
+  job: DwmSourcePackValidationJob,
+  packs: DwmSourcePackRecord | DwmSourcePackRecord[],
+  validator: (candidate: DwmSourcePackCandidateRecord, job: DwmSourcePackValidationJob) => DwmSourceCandidateValidationResult,
+  options: { generatedAt?: string } = {}
+) {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const selectedCandidates = (Array.isArray(packs) ? packs : [packs])
+    .flatMap((pack) => pack.candidates)
+    .filter((candidate) => job.candidateIds.includes(candidate.id));
+  const started: DwmSourcePackValidationJob = { ...clone(job), status: "validating", updatedAt: generatedAt };
+  const results = selectedCandidates.map((candidate) => validator(candidate, started));
+  const finalStatus = validationStatusFromResults(results);
+  const failure = results.find((result) => result.failure)?.failure;
+  const failedCandidate = results.find((result) => result.failure)?.candidateId;
+  const retry = finalStatus === "retry_scheduled" ? {
+    ...started.retry,
+    attempt: started.retry.attempt + 1,
+    retryAfter: new Date(Date.parse(generatedAt) + started.retry.backoffSeconds * 1000).toISOString()
+  } : started.retry;
+
+  return {
+    started,
+    results,
+    job: {
+      ...started,
+      status: finalStatus,
+      parserStatus: Object.fromEntries(results.map((result) => [result.candidateId, result.parserStatus])),
+      lastFailure: failure ? { candidateId: failedCandidate, code: failure.code, message: failure.message, at: generatedAt } : undefined,
+      retry,
+      updatedAt: generatedAt
+    } satisfies DwmSourcePackValidationJob,
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
+export function sourcePackHealthRollup(
+  pack: DwmSourcePackRecord,
+  options: { generatedAt?: string; staleAfterSeconds?: number } = {}
+): DwmSourcePackHealthRollup {
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const generatedMs = Date.parse(generatedAt);
+  const staleAfterSeconds = Math.max(1, options.staleAfterSeconds ?? 86400);
+  const coverage = emptyFamilyCoverage();
+  const staleSources: DwmSourcePackHealthRollup["staleSources"] = [];
+  const parserFailures: DwmSourcePackHealthRollup["parserFailures"] = [];
+  const activationLag: DwmSourcePackHealthRollup["activationLag"] = [];
+  const nextRetryWindows: DwmSourcePackHealthRollup["nextRetryWindows"] = [];
+
+  for (const candidate of pack.candidates) {
+    const family = coverage[candidate.declaredFamily];
+    const active = candidate.status === "active" || candidate.activationState === "active_canary" || candidate.decision === "approved";
+    family.total += 1;
+    if (active) {
+      family.active += 1;
+    } else if (candidate.status === "disabled" || candidate.decision === "suppressed") {
+      family.disabled += 1;
+    } else if (candidate.status === "failed" || candidate.status === "retry_scheduled" || candidate.failure) {
+      family.failed += 1;
+    } else {
+      family.pending += 1;
+    }
+
+    const lastCaptureAt = String(candidate.lastTestOutcome?.captureAt ?? candidate.lastTestOutcome?.lastCaptureAt ?? "");
+    if (active && (lastCaptureAt === "" || generatedMs - Date.parse(lastCaptureAt) > staleAfterSeconds * 1000)) {
+      staleSources.push({
+        candidateId: candidate.id,
+        lastCaptureAt: lastCaptureAt || undefined,
+        staleSeconds: lastCaptureAt ? Math.floor((generatedMs - Date.parse(lastCaptureAt)) / 1000) : staleAfterSeconds
+      });
+    }
+
+    if (candidate.failure || candidate.parserStatus?.includes("failed") || candidate.parserStatus?.includes("retry")) {
+      parserFailures.push({ candidateId: candidate.id, parserStatus: candidate.parserStatus, failure: candidate.failure });
+    }
+    if (!["active", "disabled", "failed", "retry_scheduled"].includes(candidate.status) && candidate.decision !== "suppressed") {
+      activationLag.push({
+        candidateId: candidate.id,
+        requestedAt: candidate.requestedAt,
+        pendingSeconds: Math.max(0, Math.floor((generatedMs - Date.parse(candidate.requestedAt)) / 1000)),
+        status: candidate.status
+      });
+    }
+    if (candidate.retryHint || candidate.status === "retry_scheduled") {
+      nextRetryWindows.push({
+        candidateId: candidate.id,
+        retryAfter: candidate.retryHint?.match(/\d{4}-\d{2}-\d{2}T[0-9:.]+Z/)?.[0],
+        retryHint: candidate.retryHint,
+        failure: candidate.failure
+      });
+    }
+  }
+
+  return { coverage, staleSources, parserFailures, activationLag, nextRetryWindows };
+}
+
 export function buildDwmSourcePackRegistrySql() {
   return {
     createPacksTable: `
@@ -538,6 +770,39 @@ function sourcePackSafeOutput() {
     rawDuplicateTargetsStored: false,
     liveNetworkScrapeStarted: false,
     restrictedPayloadDownloadAllowed: false
+  };
+}
+
+function findDuplicateTargetRefs(candidates: DwmSourcePackCandidateRecord[]) {
+  const byHash = new Map<string, string[]>();
+  for (const candidate of candidates) {
+    const candidateIds = byHash.get(candidate.targetRef.hash) ?? [];
+    candidateIds.push(candidate.id);
+    byHash.set(candidate.targetRef.hash, candidateIds);
+  }
+  return [...byHash.entries()]
+    .filter(([, candidateIds]) => candidateIds.length > 1)
+    .map(([hash, candidateIds]) => ({ hash, candidateIds }));
+}
+
+function validationStatusFromResults(results: DwmSourceCandidateValidationResult[]): DwmSourcePackValidationState {
+  if (results.length === 0) return "failed";
+  if (results.every((result) => result.state === "active")) return "active";
+  if (results.every((result) => result.state === "disabled")) return "disabled";
+  if (results.every((result) => result.state === "retry_scheduled")) return "retry_scheduled";
+  if (results.some((result) => result.state === "active")) return "partially_active";
+  if (results.some((result) => result.state === "retry_scheduled")) return "retry_scheduled";
+  return "failed";
+}
+
+function emptyFamilyCoverage(): DwmSourcePackHealthRollup["coverage"] {
+  return {
+    telegram: { total: 0, active: 0, pending: 0, failed: 0, disabled: 0 },
+    darkweb_onion: { total: 0, active: 0, pending: 0, failed: 0, disabled: 0 },
+    darkweb_metadata: { total: 0, active: 0, pending: 0, failed: 0, disabled: 0 },
+    actor_page: { total: 0, active: 0, pending: 0, failed: 0, disabled: 0 },
+    public_advisory: { total: 0, active: 0, pending: 0, failed: 0, disabled: 0 },
+    clear_web: { total: 0, active: 0, pending: 0, failed: 0, disabled: 0 }
   };
 }
 
