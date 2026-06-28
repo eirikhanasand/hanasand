@@ -12,6 +12,7 @@ import {
     normalizeOrganizationInput,
     normalizeOrganizationSettingsInput,
     normalizeOwnershipTransferInput,
+    normalizeWatchlistActionInput,
     normalizeWatchlistInput,
     normalizeWatchlistRequestId,
     organizationSettingsFromRow,
@@ -33,6 +34,7 @@ import {
     type OrganizationInput,
     type OrganizationOwnershipTransferInput,
     type OrganizationSettingsInput,
+    type WatchlistActionInput,
     type WatchlistKind,
     type WatchlistInput,
     type OrganizationWatchlistRow,
@@ -56,6 +58,13 @@ type OrganizationInviteParams = OrganizationParams & InviteParams
 type WatchlistParams = {
     organizationId: string
     itemId: string
+}
+
+type WatchlistQuery = {
+    kind?: string
+    status?: string
+    includeArchived?: string
+    include_archived?: string
 }
 
 type WatchlistMutationBody = WatchlistInput & {
@@ -117,6 +126,7 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
         LEFT JOIN organization_watchlist_items active_watchlist_items
           ON active_watchlist_items.organization_id = o.id
          AND active_watchlist_items.archived_at IS NULL
+         AND active_watchlist_items.status = 'active'
         GROUP BY o.id, om.role
         ORDER BY o.updated_at DESC, o.created_at DESC
     `, [userId])
@@ -882,15 +892,19 @@ export async function getOrganizationWatchlists(req: FastifyRequest<{ Params: Or
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
-    const kind = normalizeOptionalKind((req.query as { kind?: string } | undefined)?.kind)
+    const query = req.query as WatchlistQuery | undefined
+    const kind = normalizeOptionalKind(query?.kind)
+    const status = normalizeOptionalWatchlistStatus(query?.status)
+    const includeArchived = status === 'archived' || query?.includeArchived === 'true' || query?.include_archived === 'true'
     const result = await run(`
         SELECT *
         FROM organization_watchlist_items
         WHERE organization_id = $1
-          AND archived_at IS NULL
-          AND ($2::text IS NULL OR kind = $2)
-        ORDER BY kind ASC, value ASC
-    `, [req.params.id, kind])
+          AND ($2::boolean IS TRUE OR archived_at IS NULL)
+          AND ($3::text IS NULL OR kind = $3)
+          AND ($4::text IS NULL OR status = $4)
+        ORDER BY status ASC, kind ASC, value ASC
+    `, [req.params.id, includeArchived, kind, status])
     const watchlistItems = result.rows as OrganizationWatchlistRow[]
 
     return res.send({
@@ -916,6 +930,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
         FROM organization_watchlist_items
         WHERE organization_id = $1
           AND archived_at IS NULL
+          AND status = 'active'
         ORDER BY kind ASC, value ASC
     `, [req.params.id])
     const watchlistItems = result.rows as OrganizationWatchlistRow[]
@@ -959,6 +974,9 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'watchlistItemId',
                 'watchlist.id',
                 'watchlist.terms',
+                'watchlist.status',
+                'watchlist.createdBy',
+                'watchlist.updatedBy',
                 'matchedTerm',
                 'route',
                 'casePath',
@@ -977,6 +995,9 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'teamOnboardingReadiness',
                 'alertGenerationBridge',
                 'alertGenerationBridge.activeWatchlistTerms',
+                'alertGenerationBridge.activeWatchlistTerms.status',
+                'alertGenerationBridge.activeWatchlistTerms.createdBy',
+                'alertGenerationBridge.activeWatchlistTerms.updatedBy',
                 'alertGenerationBridge.termFamilies',
                 'alertGenerationBridge.blockedReasons',
             ],
@@ -996,7 +1017,7 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners, admins, and members can update watchlists.' })
+        return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
     }
 
     let input
@@ -1013,6 +1034,7 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
           AND kind = $2
           AND lower(value) = lower($3)
           AND archived_at IS NULL
+          AND status <> 'archived'
         LIMIT 1
     `, [req.params.id, input.kind, input.value])
 
@@ -1021,16 +1043,20 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
             UPDATE organization_watchlist_items
             SET value = $3,
                 notes = $4,
+                status = 'active',
+                updated_by = $5,
+                lifecycle_reason = $6,
+                lifecycle_request_id = $7,
                 updated_at = NOW()
             WHERE id = $1
               AND organization_id = $2
             RETURNING *
-        `, [existing.rows[0].id, req.params.id, input.value, input.notes])
+        `, [existing.rows[0].id, req.params.id, input.value, input.notes, userId, input.reason ?? null, input.requestId ?? null])
         : await run(`
-        INSERT INTO organization_watchlist_items (id, organization_id, kind, value, notes, created_by)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO organization_watchlist_items (id, organization_id, kind, value, notes, status, created_by, updated_by, lifecycle_reason, lifecycle_request_id)
+        VALUES ($1, $2, $3, $4, $5, 'active', $6, $6, $7, $8)
         RETURNING *
-    `, [randomUUID(), req.params.id, input.kind, input.value, input.notes, userId])
+    `, [randomUUID(), req.params.id, input.kind, input.value, input.notes, userId, input.reason ?? null, input.requestId ?? null])
 
     await touchOrganization(req.params.id)
     const serviceLogAction = 'organization_watchlist_upserted'
@@ -1039,6 +1065,7 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
         watchlistItemId: result.rows[0]?.id,
         kind: input.kind,
         value: input.value,
+        reason: input.reason,
     })
     return res.status(201).send({
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
@@ -1063,7 +1090,7 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners, admins, and members can update watchlists.' })
+        return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
     }
 
     let input
@@ -1078,12 +1105,16 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
         SET kind = $3,
             value = $4,
             notes = $5,
+            updated_by = $6,
+            lifecycle_reason = $7,
+            lifecycle_request_id = $8,
             updated_at = NOW()
         WHERE id = $1
           AND organization_id = $2
           AND archived_at IS NULL
+          AND status <> 'archived'
         RETURNING *
-    `, [req.params.itemId, req.params.organizationId, input.kind, input.value, input.notes])
+    `, [req.params.itemId, req.params.organizationId, input.kind, input.value, input.notes, userId, input.reason ?? null, input.requestId ?? null])
 
     if (!result.rows.length) {
         return res.status(404).send({ error: 'Watchlist item not found.' })
@@ -1096,6 +1127,7 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
         watchlistItemId: req.params.itemId,
         kind: input.kind,
         value: input.value,
+        reason: input.reason,
     })
     return res.send({
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
@@ -1120,20 +1152,25 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners, admins, and members can update watchlists.' })
+        return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
     }
 
     const requestId = normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id ?? req.query?.requestId ?? req.query?.request_id)
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : undefined
 
     const result = await run(`
         UPDATE organization_watchlist_items
-        SET archived_at = NOW(),
+        SET status = 'archived',
+            archived_at = NOW(),
+            updated_by = $3,
+            lifecycle_reason = $4,
+            lifecycle_request_id = $5,
             updated_at = NOW()
         WHERE id = $1
           AND organization_id = $2
           AND archived_at IS NULL
         RETURNING *
-    `, [req.params.itemId, req.params.organizationId])
+    `, [req.params.itemId, req.params.organizationId, userId, reason ?? null, requestId ?? null])
 
     if (!result.rows.length) {
         return res.status(404).send({ error: 'Watchlist item not found.' })
@@ -1143,6 +1180,7 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
     const serviceLogAction = 'organization_watchlist_archived'
     logOrganizationEvent(req, serviceLogAction, req.params.organizationId, userId, {
         requestId,
+        reason,
         watchlistItemId: req.params.itemId,
     })
     return res.send({
@@ -1151,6 +1189,74 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
             action: 'disabled',
             actorId: userId,
             requestId,
+            reason,
+            serviceLogAction,
+        }),
+    })
+}
+
+export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Params: WatchlistParams, Body: WatchlistActionInput }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.organizationId, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    if (!roleCanWriteWatchlist(organization.role)) {
+        return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
+    }
+
+    let input
+    try {
+        input = normalizeWatchlistActionInput(req.body)
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid watchlist action.' })
+    }
+
+    const nextStatus = input.action === 'resume' ? 'active' : input.action === 'pause' ? 'paused' : 'archived'
+    const result = await run(`
+        UPDATE organization_watchlist_items
+        SET status = $3,
+            archived_at = CASE WHEN $3 = 'archived' THEN NOW() ELSE NULL END,
+            updated_by = $4,
+            lifecycle_reason = $5,
+            lifecycle_request_id = $6,
+            updated_at = NOW()
+        WHERE id = $1
+          AND organization_id = $2
+          AND archived_at IS NULL
+        RETURNING *
+    `, [req.params.itemId, req.params.organizationId, nextStatus, userId, input.reason ?? null, input.requestId ?? null])
+
+    if (!result.rows.length) {
+        return res.status(404).send({ error: 'Watchlist item not found.' })
+    }
+
+    await touchOrganization(req.params.organizationId)
+    const serviceLogAction = input.action === 'pause'
+        ? 'organization_watchlist_paused'
+        : input.action === 'resume'
+            ? 'organization_watchlist_resumed'
+            : 'organization_watchlist_archived'
+    logOrganizationEvent(req, serviceLogAction, req.params.organizationId, userId, {
+        requestId: input.requestId,
+        reason: input.reason,
+        watchlistItemId: req.params.itemId,
+        action: input.action,
+        status: nextStatus,
+    })
+
+    return res.send({
+        watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
+        operation: organizationWatchlistOperation(organization, {
+            action: input.action,
+            actorId: userId,
+            requestId: input.requestId,
+            reason: input.reason,
             serviceLogAction,
         }),
     })
@@ -1193,6 +1299,7 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
         LEFT JOIN organization_watchlist_items active_watchlist_items
           ON active_watchlist_items.organization_id = o.id
          AND active_watchlist_items.archived_at IS NULL
+         AND active_watchlist_items.status = 'active'
         WHERE o.id = $1
         GROUP BY o.id, om.role
         LIMIT 1
@@ -1315,6 +1422,15 @@ function normalizeOptionalKind(value: unknown): WatchlistKind | null {
     return ['company', 'domain', 'vendor', 'actor', 'keyword'].includes(kind) ? kind as WatchlistKind : null
 }
 
+function normalizeOptionalWatchlistStatus(value: unknown) {
+    if (typeof value !== 'string' || !value.trim()) {
+        return null
+    }
+
+    const status = value.trim().toLowerCase()
+    return ['active', 'paused', 'archived'].includes(status) ? status : null
+}
+
 function logOrganizationEvent(req: FastifyRequest, action: string, organizationId: string, actorId: string, metadata: Record<string, unknown>) {
     void recordLog({
         service: 'hanasand-api',
@@ -1420,9 +1536,10 @@ function organizationAlertGenerationBridge(
 function organizationWatchlistOperation(
     organization: OrganizationRow,
     input: {
-        action: 'created' | 'updated' | 'disabled'
+        action: 'created' | 'updated' | 'disabled' | 'pause' | 'resume' | 'archive'
         actorId: string
         requestId?: string
+        reason?: string
         serviceLogAction: string
     }
 ) {
@@ -1440,6 +1557,7 @@ function organizationWatchlistOperation(
         ownerOrganizationId: organization.id,
         actorId: input.actorId,
         requestId: input.requestId ?? null,
+        reason: input.reason ?? null,
         visibilityPolicy: decision.alertVisibilityPolicy,
         allowedViewerRoles: decision.allowedRoles,
         serviceLogAction: input.serviceLogAction,

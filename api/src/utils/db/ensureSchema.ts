@@ -531,7 +531,11 @@ export default async function ensureSchema() {
             kind TEXT NOT NULL CHECK (kind IN ('company', 'domain', 'vendor', 'actor', 'keyword')),
             value TEXT NOT NULL,
             notes TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
             created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            lifecycle_reason TEXT,
+            lifecycle_request_id TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             archived_at TIMESTAMPTZ
@@ -539,6 +543,12 @@ export default async function ensureSchema() {
     `)
     await run('ALTER TABLE organization_watchlist_items DROP CONSTRAINT IF EXISTS organization_watchlist_items_kind_check')
     await run('ALTER TABLE organization_watchlist_items ADD CONSTRAINT organization_watchlist_items_kind_check CHECK (kind IN (\'company\', \'domain\', \'vendor\', \'actor\', \'keyword\'))')
+    await run('ALTER TABLE organization_watchlist_items ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT \'active\'')
+    await run('ALTER TABLE organization_watchlist_items ADD COLUMN IF NOT EXISTS updated_by TEXT REFERENCES users(id) ON DELETE SET NULL')
+    await run('ALTER TABLE organization_watchlist_items ADD COLUMN IF NOT EXISTS lifecycle_reason TEXT')
+    await run('ALTER TABLE organization_watchlist_items ADD COLUMN IF NOT EXISTS lifecycle_request_id TEXT')
+    await run('ALTER TABLE organization_watchlist_items DROP CONSTRAINT IF EXISTS organization_watchlist_items_status_check')
+    await run('ALTER TABLE organization_watchlist_items ADD CONSTRAINT organization_watchlist_items_status_check CHECK (status IN (\'active\', \'paused\', \'archived\'))')
     await run('CREATE INDEX IF NOT EXISTS idx_organization_members_user ON organization_members(user_id, status, organization_id)')
     await run('CREATE INDEX IF NOT EXISTS idx_organization_invites_org_status ON organization_invites(organization_id, status, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_organization_watchlist_org_kind ON organization_watchlist_items(organization_id, kind, value) WHERE archived_at IS NULL')

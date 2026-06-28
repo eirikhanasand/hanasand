@@ -178,7 +178,11 @@ CREATE TABLE IF NOT EXISTS organization_watchlist_items (
     kind TEXT NOT NULL CHECK (kind IN ('company', 'domain', 'vendor', 'actor', 'keyword')),
     value TEXT NOT NULL,
     notes TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
     created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    lifecycle_reason TEXT,
+    lifecycle_request_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     archived_at TIMESTAMPTZ

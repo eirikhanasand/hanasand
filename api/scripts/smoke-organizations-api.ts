@@ -60,6 +60,7 @@ app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertR
 app.get('/api/organizations/:id/watchlists', handlers.getOrganizationWatchlists)
 app.post('/api/organizations/:id/watchlists', handlers.postOrganizationWatchlist)
 app.put('/api/organizations/:organizationId/watchlists/:itemId', handlers.putOrganizationWatchlist)
+app.post('/api/organizations/:organizationId/watchlists/:itemId/actions', handlers.postOrganizationWatchlistAction)
 app.delete('/api/organizations/:organizationId/watchlists/:itemId', handlers.deleteOrganizationWatchlist)
 app.get('/api/organizations/:id', handlers.getOrganization)
 
@@ -468,10 +469,17 @@ const ownerWatchlistResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/watchlists`,
     headers: authHeaders('org_smoke_owner', 'owner-token'),
-    payload: { kind: 'domain', value: 'https://www.acme-shared.example/login', notes: 'Customer domain' },
+    payload: { kind: 'domain', value: 'https://www.acme-shared.example/login', notes: 'Customer domain', reason: 'Live proof domain seed.', requestId: 'smoke-domain-create' },
 })
 assert.equal(ownerWatchlistResponse.statusCode, 201, ownerWatchlistResponse.body)
 const ownerWatchlistItem = parseBody(ownerWatchlistResponse.body).watchlistItem
+assert.equal(ownerWatchlistItem.status, 'active')
+assert.equal(ownerWatchlistItem.createdBy, 'org_smoke_owner')
+assert.equal(ownerWatchlistItem.updatedBy, 'org_smoke_owner')
+assert.equal(ownerWatchlistItem.lifecycleReason, 'Live proof domain seed.')
+assert.equal(ownerWatchlistItem.lifecycleRequestId, 'smoke-domain-create')
+assert.equal(ownerWatchlistItem.alertGenerationReference.watchlistItemId, ownerWatchlistItem.id)
+assert.equal(ownerWatchlistItem.alertGenerationReference.category, 'domain')
 
 const memberWatchlistResponse = await app.inject({
     method: 'GET',
@@ -516,6 +524,14 @@ const viewerAddsWatchlistResponse = await app.inject({
 })
 assert.equal(viewerAddsWatchlistResponse.statusCode, 403, viewerAddsWatchlistResponse.body)
 
+const memberAddsWatchlistDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+    payload: { kind: 'keyword', value: 'member should not mutate' },
+})
+assert.equal(memberAddsWatchlistDeniedResponse.statusCode, 403, memberAddsWatchlistDeniedResponse.body)
+
 const viewerArchiveWatchlistResponse = await app.inject({
     method: 'DELETE',
     url: `/api/organizations/${organization.id}/watchlists/${ownerWatchlistItem.id}`,
@@ -530,6 +546,44 @@ const ownerAddsCompanyResponse = await app.inject({
     payload: { kind: 'company', value: 'Acme Shared Holdings', requestId: 'smoke-company-watchlist' },
 })
 assert.equal(ownerAddsCompanyResponse.statusCode, 201, ownerAddsCompanyResponse.body)
+const companyWatchlistItem = parseBody(ownerAddsCompanyResponse.body).watchlistItem
+
+const ownerPausesCompanyResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/${companyWatchlistItem.id}/actions`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { action: 'pause', reason: 'Pause during live proof cleanup.', requestId: 'smoke-pause-company' },
+})
+assert.equal(ownerPausesCompanyResponse.statusCode, 200, ownerPausesCompanyResponse.body)
+assert.equal(parseBody(ownerPausesCompanyResponse.body).watchlistItem.status, 'paused')
+assert.equal(parseBody(ownerPausesCompanyResponse.body).operation.action, 'pause')
+
+const pausedWatchlistsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists?status=paused`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(pausedWatchlistsResponse.statusCode, 200, pausedWatchlistsResponse.body)
+assert.deepEqual(parseBody(pausedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.id), [companyWatchlistItem.id])
+
+const readinessWhilePausedResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-readiness`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(readinessWhilePausedResponse.statusCode, 200, readinessWhilePausedResponse.body)
+assert.equal(parseBody(readinessWhilePausedResponse.body).alertReadiness.sharedWatchlistCount, 1)
+assert.equal(parseBody(readinessWhilePausedResponse.body).alertReadiness.generatedAlertReferences.length, 1)
+
+const ownerResumesCompanyResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/${companyWatchlistItem.id}/actions`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { action: 'resume', reason: 'Resume after cleanup dry run.', request_id: 'smoke-resume-company' },
+})
+assert.equal(ownerResumesCompanyResponse.statusCode, 200, ownerResumesCompanyResponse.body)
+assert.equal(parseBody(ownerResumesCompanyResponse.body).watchlistItem.status, 'active')
+assert.equal(parseBody(ownerResumesCompanyResponse.body).watchlistItem.lifecycleRequestId, 'smoke-resume-company')
 
 const adminAddsActorResponse = await app.inject({
     method: 'POST',
@@ -552,7 +606,7 @@ assert.deepEqual(parseBody(actorFilterResponse.body).watchlistItems.map((item: R
 const memberAddsKeywordResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/watchlists`,
-    headers: authHeaders('org_smoke_member', 'member-token'),
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
     payload: { kind: 'keyword', value: 'Credential Reset', notes: 'Phishing wording', requestId: 'smoke-keyword-watchlist' },
 })
 assert.equal(memberAddsKeywordResponse.statusCode, 201, memberAddsKeywordResponse.body)
@@ -562,8 +616,8 @@ assert.equal(keywordWatchlistItem.value, 'credential reset')
 const memberUpdatesKeywordResponse = await app.inject({
     method: 'PUT',
     url: `/api/organizations/${organization.id}/watchlists/${keywordWatchlistItem.id}`,
-    headers: authHeaders('org_smoke_member', 'member-token'),
-    payload: { kind: 'keyword', value: 'Credential Reset Lures', notes: 'Updated wording', requestId: 'smoke-keyword-update' },
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { kind: 'keyword', value: 'Credential Reset Lures', notes: 'Updated wording', reason: 'Refine live proof keyword.', requestId: 'smoke-keyword-update' },
 })
 assert.equal(memberUpdatesKeywordResponse.statusCode, 200, memberUpdatesKeywordResponse.body)
 assert.equal(parseBody(memberUpdatesKeywordResponse.body).watchlistItem.value, 'credential reset lures')
@@ -572,7 +626,7 @@ assert.equal(parseBody(memberUpdatesKeywordResponse.body).operation.action, 'upd
 const memberAddsVendorResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/watchlists`,
-    headers: authHeaders('org_smoke_member', 'member-token'),
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
     payload: { kind: 'vendor', value: 'Acme Payroll Vendor' },
 })
 assert.equal(memberAddsVendorResponse.statusCode, 201, memberAddsVendorResponse.body)
@@ -686,6 +740,15 @@ const ownerDisablesActorResponse = await app.inject({
 assert.equal(ownerDisablesActorResponse.statusCode, 200, ownerDisablesActorResponse.body)
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.action, 'disabled')
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.requestId, 'smoke-disable-actor')
+assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.status, 'archived')
+
+const archivedWatchlistsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists?status=archived`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(archivedWatchlistsResponse.statusCode, 200, archivedWatchlistsResponse.body)
+assert.deepEqual(parseBody(archivedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.id), [actorWatchlistItem.id])
 
 const memberRemoveViewerResponse = await app.inject({
     method: 'DELETE',
@@ -795,6 +858,8 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created'
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upserted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_updated' && log.metadata.requestId === 'smoke-keyword-update'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_paused' && log.metadata.requestId === 'smoke-pause-company'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_resumed' && log.metadata.requestId === 'smoke-resume-company'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archived' && log.metadata.requestId === 'smoke-disable-actor'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
@@ -1021,42 +1086,61 @@ async function fakeRun(query: string, params: any[] = []) {
     }
 
     if (compact.startsWith('UPDATE organization_watchlist_items SET value')) {
-        const [id, organizationId, value, notes] = params
+        const [id, organizationId, value, notes, updatedBy, reason, requestId] = params
         const existing = watchlists.get(id)
         if (!existing || existing.organization_id !== organizationId) return rows([])
-        const updated = { ...existing, value, notes, updated_at: iso() }
+        const updated = { ...existing, value, notes, status: 'active', updated_by: updatedBy, lifecycle_reason: reason, lifecycle_request_id: requestId, updated_at: iso() }
         watchlists.set(id, updated)
         return rows([updated])
     }
 
     if (compact.startsWith('UPDATE organization_watchlist_items SET kind')) {
-        const [id, organizationId, kind, value, notes] = params
+        const [id, organizationId, kind, value, notes, updatedBy, reason, requestId] = params
         const existing = watchlists.get(id)
-        if (!existing || existing.organization_id !== organizationId || existing.archived_at) return rows([])
-        const updated = { ...existing, kind, value, notes, updated_at: iso() }
+        if (!existing || existing.organization_id !== organizationId || existing.archived_at || existing.status === 'archived') return rows([])
+        const updated = { ...existing, kind, value, notes, updated_by: updatedBy, lifecycle_reason: reason, lifecycle_request_id: requestId, updated_at: iso() }
         watchlists.set(id, updated)
         return rows([updated])
     }
 
     if (compact.startsWith('INSERT INTO organization_watchlist_items')) {
-        const [id, organizationId, kind, value, notes, createdBy] = params
-        const item = nowRow({ id, organization_id: organizationId, kind, value, notes, created_by: createdBy, archived_at: null })
+        const [id, organizationId, kind, value, notes, createdBy, reason, requestId] = params
+        const item = nowRow({ id, organization_id: organizationId, kind, value, notes, status: 'active', created_by: createdBy, updated_by: createdBy, lifecycle_reason: reason, lifecycle_request_id: requestId, archived_at: null })
         watchlists.set(id, item)
         return rows([item])
     }
 
     if (compact.startsWith('SELECT * FROM organization_watchlist_items')) {
-        const [organizationId, kind] = params
-        return rows([...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at && (!kind || item.kind === kind)).sort((a, b) => `${a.kind}:${a.value}`.localeCompare(`${b.kind}:${b.value}`)))
+        if (params.length === 1) {
+            const [organizationId] = params
+            return rows([...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at && item.status === 'active').sort((a, b) => `${a.kind}:${a.value}`.localeCompare(`${b.kind}:${b.value}`)))
+        }
+
+        const [organizationId, includeArchived, kind, status] = params
+        return rows([...watchlists.values()]
+            .filter(item => item.organization_id === organizationId)
+            .filter(item => includeArchived || !item.archived_at)
+            .filter(item => !kind || item.kind === kind)
+            .filter(item => !status || item.status === status)
+            .sort((a, b) => `${a.status}:${a.kind}:${a.value}`.localeCompare(`${b.status}:${b.kind}:${b.value}`)))
     }
 
-    if (compact.startsWith('UPDATE organization_watchlist_items SET archived_at')) {
-        const [id, organizationId] = params
+    if (compact.startsWith('UPDATE organization_watchlist_items SET status = \'archived\'')) {
+        const [id, organizationId, updatedBy, reason, requestId] = params
         const existing = watchlists.get(id)
         if (!existing || existing.organization_id !== organizationId || existing.archived_at) return rows([])
-        const archived = { ...existing, archived_at: iso(), updated_at: iso() }
+        const archived = { ...existing, status: 'archived', archived_at: iso(), updated_by: updatedBy, lifecycle_reason: reason, lifecycle_request_id: requestId, updated_at: iso() }
         watchlists.set(id, archived)
         return rows([archived])
+    }
+
+    if (compact.startsWith('UPDATE organization_watchlist_items SET status = $3')) {
+        const [id, organizationId, status, updatedBy, reason, requestId] = params
+        const existing = watchlists.get(id)
+        if (!existing || existing.organization_id !== organizationId || existing.archived_at) return rows([])
+        const updated = { ...existing, status, archived_at: status === 'archived' ? iso() : null, updated_by: updatedBy, lifecycle_reason: reason, lifecycle_request_id: requestId, updated_at: iso() }
+        watchlists.set(id, updated)
+        return rows([updated])
     }
 
     if (compact.startsWith('UPDATE organizations SET updated_at')) {
@@ -1073,7 +1157,7 @@ function organizationSummary(organizationId: string, role: string) {
     const activeMembers = [...members.values()].filter(member => member.organization_id === organizationId && member.status === 'active' && users.get(member.user_id)?.active !== false)
     const activeOwners = activeMembers.filter(member => member.role === 'owner')
     const pendingInvites = [...invites.values()].filter(invite => invite.organization_id === organizationId && invite.status === 'pending' && Date.parse(invite.expires_at) > Date.now())
-    const sharedWatchlists = [...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at)
+    const sharedWatchlists = [...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at && item.status === 'active')
     return {
         ...org,
         role,

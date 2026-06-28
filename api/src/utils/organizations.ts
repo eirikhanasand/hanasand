@@ -1,5 +1,7 @@
 export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer'
 export type WatchlistKind = 'company' | 'domain' | 'vendor' | 'actor' | 'keyword'
+export type OrganizationWatchlistStatus = 'active' | 'paused' | 'archived'
+export type OrganizationWatchlistAction = 'pause' | 'resume' | 'archive'
 export type OrganizationDefaultWebhookPolicy = 'active_destinations' | 'manual_selection' | 'disabled'
 export type OrganizationAlertVisibilityPolicy = 'members' | 'admins' | 'owners'
 
@@ -58,6 +60,14 @@ export type WatchlistInput = {
     kind?: unknown
     value?: unknown
     notes?: unknown
+    reason?: unknown
+    requestId?: unknown
+    request_id?: unknown
+}
+
+export type WatchlistActionInput = {
+    action?: unknown
+    reason?: unknown
     requestId?: unknown
     request_id?: unknown
 }
@@ -111,7 +121,11 @@ export type OrganizationWatchlistRow = {
     kind: WatchlistKind
     value: string
     notes: string
+    status?: OrganizationWatchlistStatus
     created_by: string
+    updated_by?: string | null
+    lifecycle_reason?: string | null
+    lifecycle_request_id?: string | null
     created_at: string
     updated_at: string
     archived_at?: string | null
@@ -119,14 +133,19 @@ export type OrganizationWatchlistRow = {
 
 export type OrganizationWatchlistTerm = {
     watchlistItemId: string
+    itemId: string
     organizationId: string
     tenantId: string
     kind: WatchlistKind
     termFamily: WatchlistKind
     family: WatchlistKind
+    category: WatchlistKind
     term: string
     value: string
     terms: string[]
+    status: OrganizationWatchlistStatus
+    createdBy: string
+    updatedBy: string | null
 }
 
 export type OrganizationWatchlistAlertGenerationContract = {
@@ -159,6 +178,9 @@ export type OrganizationDwmAlertReference = {
         itemId: string
         kind: WatchlistKind
         termFamily: WatchlistKind
+        status: OrganizationWatchlistStatus
+        createdBy: string
+        updatedBy: string | null
         terms: string[]
     }
     organization: OrganizationBridgeContext
@@ -248,9 +270,10 @@ export type OrganizationVisibilityDecision = {
 }
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin', 'member'])
+const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin'])
 const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const inviteActions = new Set<OrganizationInviteAction>(['revoke', 'resend'])
+const watchlistActions = new Set<OrganizationWatchlistAction>(['pause', 'resume', 'archive'])
 const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor', 'actor', 'keyword'])
 const memberRoleTargets = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const defaultWebhookPolicies = new Set<OrganizationDefaultWebhookPolicy>(['active_destinations', 'manual_selection', 'disabled'])
@@ -403,13 +426,26 @@ export function normalizeWatchlistInput(body: WatchlistInput | undefined) {
     }
 
     const notes = cleanText(body?.notes)
+    const reason = normalizeWatchlistReason(body?.reason)
     const requestId = normalizeWatchlistRequestId(body?.requestId ?? body?.request_id)
     return {
         kind: kind as WatchlistKind,
         value,
         notes: notes.slice(0, 2000),
+        reason,
         requestId,
     }
+}
+
+export function normalizeWatchlistActionInput(body: WatchlistActionInput | undefined) {
+    const action = cleanText(body?.action).toLowerCase()
+    if (!watchlistActions.has(action as OrganizationWatchlistAction)) {
+        throw new Error('Watchlist action must be pause, resume, or archive.')
+    }
+
+    const reason = normalizeWatchlistReason(body?.reason)
+    const requestId = normalizeWatchlistRequestId(body?.requestId ?? body?.request_id)
+    return { action: action as OrganizationWatchlistAction, reason, requestId }
 }
 
 export function roleCanManageOrganization(role: OrganizationRole | undefined) {
@@ -493,20 +529,40 @@ export function toMember(row: OrganizationMemberRow) {
 }
 
 export function toWatchlistItem(row: OrganizationWatchlistRow) {
+    const status = normalizeWatchlistStatus(row)
     return {
         id: row.id,
+        itemId: row.id,
+        watchlistItemId: row.id,
         organizationId: row.organization_id,
         tenantId: row.organization_id,
         ownerOrganizationId: row.organization_id,
         kind: row.kind,
         termFamily: row.kind,
+        category: row.kind,
+        term: row.value,
         value: row.value,
         terms: [row.value],
+        status,
         notes: row.notes,
         createdBy: row.created_by,
+        updatedBy: row.updated_by ?? null,
+        lifecycleReason: row.lifecycle_reason ?? null,
+        lifecycleRequestId: row.lifecycle_request_id ?? null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         archivedAt: row.archived_at ?? null,
+        alertGenerationReference: {
+            schemaVersion: 'organization.watchlist_item_alert_reference.v1',
+            organizationId: row.organization_id,
+            tenantId: row.organization_id,
+            watchlistItemId: row.id,
+            itemId: row.id,
+            termFamily: row.kind,
+            category: row.kind,
+            term: row.value,
+            status,
+        },
     }
 }
 
@@ -524,6 +580,9 @@ export function buildOrganizationDwmAlertReference(
         itemId: item.id,
         kind: item.kind,
         termFamily: item.kind,
+        status: normalizeWatchlistStatus(item),
+        createdBy: item.created_by,
+        updatedBy: item.updated_by ?? null,
         terms: [item.value],
     }
     const matchedTerm = {
@@ -632,14 +691,19 @@ export function organizationSettingsFromRow(row: Pick<OrganizationRow, 'default_
 export function organizationWatchlistTerms(items: OrganizationWatchlistRow[]): OrganizationWatchlistTerm[] {
     return items.map(item => ({
         watchlistItemId: item.id,
+        itemId: item.id,
         organizationId: item.organization_id,
         tenantId: item.organization_id,
         kind: item.kind,
         termFamily: item.kind,
         family: item.kind,
+        category: item.kind,
         term: item.value,
         value: item.value,
         terms: [item.value],
+        status: normalizeWatchlistStatus(item),
+        createdBy: item.created_by,
+        updatedBy: item.updated_by ?? null,
     })).sort((a, b) => `${a.termFamily}:${a.term}`.localeCompare(`${b.termFamily}:${b.term}`))
 }
 
@@ -647,14 +711,15 @@ export function organizationWatchlistAlertGenerationContract(
     organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>,
     items: OrganizationWatchlistRow[]
 ): OrganizationWatchlistAlertGenerationContract {
+    const activeItems = items.filter(item => normalizeWatchlistStatus(item) === 'active')
     const bridgeContext = buildOrganizationBridgeContext({
         ...organization,
-        shared_watchlist_count: items.length,
+        shared_watchlist_count: activeItems.length,
     })
-    const activeWatchlistTerms = organizationWatchlistTerms(items)
+    const activeWatchlistTerms = organizationWatchlistTerms(activeItems)
     const termFamilies = [...new Set(activeWatchlistTerms.map(term => term.termFamily))].sort()
     const blockedReasons: string[] = []
-    if (!items.length) {
+    if (!activeItems.length) {
         blockedReasons.push('needs_shared_watchlist_item')
     }
 
@@ -828,6 +893,17 @@ function normalizeWatchlistValue(kind: WatchlistKind, value: unknown) {
     }
 
     return cleaned
+}
+
+function normalizeWatchlistReason(value: unknown) {
+    const reason = cleanText(value)
+    return reason ? reason.slice(0, 1000) : undefined
+}
+
+function normalizeWatchlistStatus(row: Pick<OrganizationWatchlistRow, 'status' | 'archived_at'>): OrganizationWatchlistStatus {
+    if (row.archived_at) return 'archived'
+    if (row.status === 'paused' || row.status === 'archived') return row.status
+    return 'active'
 }
 
 function cleanText(value: unknown) {
