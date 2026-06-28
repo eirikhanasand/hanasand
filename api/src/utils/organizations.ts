@@ -1,8 +1,23 @@
 export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer'
 export type WatchlistKind = 'company' | 'domain' | 'vendor'
+export type OrganizationDefaultWebhookPolicy = 'active_destinations' | 'manual_selection' | 'disabled'
+export type OrganizationAlertVisibilityPolicy = 'members' | 'admins' | 'owners'
 
 export type OrganizationInput = {
     name?: unknown
+}
+
+export type OrganizationSettingsInput = {
+    name?: unknown
+    slug?: unknown
+    defaultWebhookPolicy?: unknown
+    default_webhook_policy?: unknown
+    alertVisibilityPolicy?: unknown
+    alert_visibility_policy?: unknown
+    retentionDays?: unknown
+    retention_days?: unknown
+    auditSafeMetadata?: unknown
+    audit_safe_metadata?: unknown
 }
 
 export type InviteInput = {
@@ -27,6 +42,11 @@ export type OrganizationRow = {
     updated_at: string
     member_count?: number
     pending_invite_count?: number
+    shared_watchlist_count?: number
+    default_webhook_policy?: OrganizationDefaultWebhookPolicy
+    alert_visibility_policy?: OrganizationAlertVisibilityPolicy
+    retention_days?: number
+    audit_safe_metadata?: Record<string, unknown> | null
     role?: OrganizationRole
 }
 
@@ -84,12 +104,19 @@ export type OrganizationDwmAlertReference = {
         kind: WatchlistKind
         terms: string[]
     }
+    organization: OrganizationBridgeContext
     alert: {
         id: string
         organizationId: string
         orgId: string
         tenantId: string
         orgName: string
+        defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
+        alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
+        memberCount: number
+        pendingInviteCount: number
+        sharedWatchlistCount: number
+        readinessStatus: OrganizationReadinessStatus
         watchlistItemId: string
         matchedTerm: {
             value: string
@@ -106,15 +133,37 @@ export type OrganizationDwmAlertReference = {
         orgId: string
         watchlistId: string
         watchlistName: string
+        defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
+        alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
+        memberCount: number
+        pendingInviteCount: number
+        sharedWatchlistCount: number
+        readinessStatus: OrganizationReadinessStatus
         route: 'organization_watchlist'
         casePath: string
     }
+}
+
+export type OrganizationReadinessStatus = 'ready' | 'needs_watchlist'
+
+export type OrganizationBridgeContext = {
+    id: string
+    name: string
+    slug?: string
+    defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
+    alertVisibilityPolicy: OrganizationAlertVisibilityPolicy
+    memberCount: number
+    pendingInviteCount: number
+    sharedWatchlistCount: number
+    readinessStatus: OrganizationReadinessStatus
 }
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin', 'member'])
 const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor'])
+const defaultWebhookPolicies = new Set<OrganizationDefaultWebhookPolicy>(['active_destinations', 'manual_selection', 'disabled'])
+const alertVisibilityPolicies = new Set<OrganizationAlertVisibilityPolicy>(['members', 'admins', 'owners'])
 
 export function normalizeOrganizationInput(body: OrganizationInput | undefined) {
     const name = cleanText(body?.name)
@@ -157,6 +206,35 @@ export function normalizeInviteInput(body: InviteInput | undefined) {
     return { emails, role, expiresAt }
 }
 
+export function normalizeOrganizationSettingsInput(body: OrganizationSettingsInput | undefined) {
+    const name = body?.name === undefined ? undefined : normalizeSettingsName(body.name)
+    const slug = body?.slug === undefined ? undefined : normalizeSettingsSlug(body.slug)
+    const defaultWebhookPolicy = normalizeDefaultWebhookPolicy(body?.defaultWebhookPolicy ?? body?.default_webhook_policy)
+    const alertVisibilityPolicy = normalizeAlertVisibilityPolicy(body?.alertVisibilityPolicy ?? body?.alert_visibility_policy)
+    const retentionDays = normalizeRetentionDays(body?.retentionDays ?? body?.retention_days)
+    const auditSafeMetadata = normalizeAuditSafeMetadata(body?.auditSafeMetadata ?? body?.audit_safe_metadata)
+
+    if (
+        name === undefined
+        && slug === undefined
+        && defaultWebhookPolicy === undefined
+        && alertVisibilityPolicy === undefined
+        && retentionDays === undefined
+        && auditSafeMetadata === undefined
+    ) {
+        throw new Error('Add at least one organization setting to update.')
+    }
+
+    return {
+        name,
+        slug,
+        defaultWebhookPolicy,
+        alertVisibilityPolicy,
+        retentionDays,
+        auditSafeMetadata,
+    }
+}
+
 export function normalizeWatchlistInput(body: WatchlistInput | undefined) {
     const kind = cleanText(body?.kind).toLowerCase()
     if (!watchlistKinds.has(kind as WatchlistKind)) {
@@ -189,6 +267,7 @@ export function roleCanWriteWatchlist(role: OrganizationRole | undefined) {
 }
 
 export function toOrganization(row: OrganizationRow) {
+    const settings = organizationSettingsFromRow(row)
     return {
         id: row.id,
         name: row.name,
@@ -196,6 +275,8 @@ export function toOrganization(row: OrganizationRow) {
         role: row.role,
         memberCount: Number(row.member_count ?? 0),
         pendingInviteCount: Number(row.pending_invite_count ?? 0),
+        sharedWatchlistCount: Number(row.shared_watchlist_count ?? 0),
+        settings,
         createdBy: row.created_by,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -246,12 +327,13 @@ export function toWatchlistItem(row: OrganizationWatchlistRow) {
 }
 
 export function buildOrganizationDwmAlertReference(
-    organization: Pick<OrganizationRow, 'id' | 'name'>,
+    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>,
     item: OrganizationWatchlistRow
 ): OrganizationDwmAlertReference {
     const watchlistName = `${organization.name} ${item.kind} watchlist`
     const casePath = `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}&watchlistItemId=${encodeURIComponent(item.id)}`
     const dedupeKey = `org:${organization.id}:watchlist:${item.id}:${item.kind}:${item.value.toLowerCase()}`
+    const bridgeContext = buildOrganizationBridgeContext(organization)
     const watchlist = {
         id: item.id,
         name: watchlistName,
@@ -272,12 +354,19 @@ export function buildOrganizationDwmAlertReference(
         watchlistKind: item.kind,
         matchedTerm,
         watchlist,
+        organization: bridgeContext,
         alert: {
             id: dedupeKey,
             organizationId: organization.id,
             orgId: organization.id,
             tenantId: organization.id,
             orgName: organization.name,
+            defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
+            alertVisibilityPolicy: bridgeContext.alertVisibilityPolicy,
+            memberCount: bridgeContext.memberCount,
+            pendingInviteCount: bridgeContext.pendingInviteCount,
+            sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
+            readinessStatus: bridgeContext.readinessStatus,
             watchlistItemId: item.id,
             matchedTerm,
             watchlist,
@@ -291,10 +380,46 @@ export function buildOrganizationDwmAlertReference(
             orgId: organization.id,
             watchlistId: item.id,
             watchlistName,
+            defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
+            alertVisibilityPolicy: bridgeContext.alertVisibilityPolicy,
+            memberCount: bridgeContext.memberCount,
+            pendingInviteCount: bridgeContext.pendingInviteCount,
+            sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
+            readinessStatus: bridgeContext.readinessStatus,
             route: 'organization_watchlist',
             casePath,
         },
     }
+}
+
+export function buildOrganizationBridgeContext(
+    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>
+): OrganizationBridgeContext {
+    const sharedWatchlistCount = Number(organization.shared_watchlist_count ?? 0)
+    return {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        defaultWebhookPolicy: organization.default_webhook_policy ?? 'active_destinations',
+        alertVisibilityPolicy: organization.alert_visibility_policy ?? 'members',
+        memberCount: Number(organization.member_count ?? 0),
+        pendingInviteCount: Number(organization.pending_invite_count ?? 0),
+        sharedWatchlistCount,
+        readinessStatus: sharedWatchlistCount > 0 ? 'ready' : 'needs_watchlist',
+    }
+}
+
+export function organizationSettingsFromRow(row: Pick<OrganizationRow, 'default_webhook_policy' | 'alert_visibility_policy' | 'retention_days' | 'audit_safe_metadata'>) {
+    return {
+        defaultWebhookPolicy: row.default_webhook_policy ?? 'active_destinations',
+        alertVisibilityPolicy: row.alert_visibility_policy ?? 'members',
+        retentionDays: Number(row.retention_days ?? 365),
+        auditSafeMetadata: row.audit_safe_metadata ?? {},
+    }
+}
+
+export function slugForOrganization(value: string) {
+    return slugFor(value)
 }
 
 function normalizeInviteRole(value: unknown): OrganizationRole {
@@ -304,6 +429,96 @@ function normalizeInviteRole(value: unknown): OrganizationRole {
     }
 
     return role as OrganizationRole
+}
+
+function normalizeSettingsName(value: unknown) {
+    const name = cleanText(value)
+    if (!name) {
+        throw new Error('Organization name is required.')
+    }
+
+    if (name.length > 120) {
+        throw new Error('Organization name must be 120 characters or fewer.')
+    }
+
+    return name
+}
+
+function normalizeSettingsSlug(value: unknown) {
+    const slug = slugFor(cleanText(value))
+    if (!slug) {
+        throw new Error('Organization slug is required.')
+    }
+
+    if (slug.length > 80) {
+        throw new Error('Organization slug must be 80 characters or fewer.')
+    }
+
+    return slug
+}
+
+function normalizeDefaultWebhookPolicy(value: unknown) {
+    if (value === undefined) return undefined
+    const policy = cleanText(value).toLowerCase()
+    if (!defaultWebhookPolicies.has(policy as OrganizationDefaultWebhookPolicy)) {
+        throw new Error('Default webhook policy must be active_destinations, manual_selection, or disabled.')
+    }
+
+    return policy as OrganizationDefaultWebhookPolicy
+}
+
+function normalizeAlertVisibilityPolicy(value: unknown) {
+    if (value === undefined) return undefined
+    const policy = cleanText(value).toLowerCase()
+    if (!alertVisibilityPolicies.has(policy as OrganizationAlertVisibilityPolicy)) {
+        throw new Error('Alert visibility policy must be members, admins, or owners.')
+    }
+
+    return policy as OrganizationAlertVisibilityPolicy
+}
+
+function normalizeRetentionDays(value: unknown) {
+    if (value === undefined) return undefined
+    const days = typeof value === 'number' ? value : Number(cleanText(value))
+    if (!Number.isInteger(days) || days < 30 || days > 2555) {
+        throw new Error('Retention days must be an integer between 30 and 2555.')
+    }
+
+    return days
+}
+
+function normalizeAuditSafeMetadata(value: unknown) {
+    if (value === undefined) return undefined
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('Audit-safe metadata must be an object.')
+    }
+
+    const entries = Object.entries(value as Record<string, unknown>)
+    if (entries.length > 20) {
+        throw new Error('Audit-safe metadata can contain at most 20 keys.')
+    }
+
+    return Object.fromEntries(entries.map(([rawKey, rawValue]) => {
+        const key = rawKey.trim().replace(/[^a-zA-Z0-9_.-]+/g, '_').slice(0, 64)
+        if (!key) {
+            throw new Error('Audit-safe metadata keys must contain letters or numbers.')
+        }
+
+        if (rawValue === null || typeof rawValue === 'boolean' || typeof rawValue === 'number') {
+            return [key, rawValue]
+        }
+
+        if (typeof rawValue === 'string') {
+            const value = cleanText(rawValue).slice(0, 240)
+            if (looksSensitive(value)) {
+                throw new Error('Audit-safe metadata cannot contain emails, URLs, or secrets.')
+            }
+
+            return [key, value]
+        }
+
+        throw new Error('Audit-safe metadata values must be strings, numbers, booleans, or null.')
+    }))
 }
 
 function normalizeInviteExpiry(value: unknown) {
@@ -337,6 +552,12 @@ function normalizeWatchlistValue(kind: WatchlistKind, value: unknown) {
 
 function cleanText(value: unknown) {
     return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : ''
+}
+
+function looksSensitive(value: string) {
+    return emailPattern.test(value)
+        || /^https?:\/\//i.test(value)
+        || /(token|secret|password|bearer)\s*[:=]/i.test(value)
 }
 
 function slugFor(value: string) {

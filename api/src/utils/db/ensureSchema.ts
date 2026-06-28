@@ -473,10 +473,24 @@ export default async function ensureSchema() {
             name TEXT NOT NULL,
             slug TEXT NOT NULL UNIQUE,
             created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            default_webhook_policy TEXT NOT NULL DEFAULT 'active_destinations' CHECK (default_webhook_policy IN ('active_destinations', 'manual_selection', 'disabled')),
+            alert_visibility_policy TEXT NOT NULL DEFAULT 'members' CHECK (alert_visibility_policy IN ('members', 'admins', 'owners')),
+            retention_days INT NOT NULL DEFAULT 365 CHECK (retention_days BETWEEN 30 AND 2555),
+            audit_safe_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS default_webhook_policy TEXT NOT NULL DEFAULT \'active_destinations\'')
+    await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS alert_visibility_policy TEXT NOT NULL DEFAULT \'members\'')
+    await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS retention_days INT NOT NULL DEFAULT 365')
+    await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS audit_safe_metadata JSONB NOT NULL DEFAULT \'{}\'::jsonb')
+    await run('ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_default_webhook_policy_check')
+    await run('ALTER TABLE organizations ADD CONSTRAINT organizations_default_webhook_policy_check CHECK (default_webhook_policy IN (\'active_destinations\', \'manual_selection\', \'disabled\'))')
+    await run('ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_alert_visibility_policy_check')
+    await run('ALTER TABLE organizations ADD CONSTRAINT organizations_alert_visibility_policy_check CHECK (alert_visibility_policy IN (\'members\', \'admins\', \'owners\'))')
+    await run('ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_retention_days_check')
+    await run('ALTER TABLE organizations ADD CONSTRAINT organizations_retention_days_check CHECK (retention_days BETWEEN 30 AND 2555)')
     await run(`
         CREATE TABLE IF NOT EXISTS organization_members (
             organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,

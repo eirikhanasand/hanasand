@@ -4,10 +4,13 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import {
+    buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
     normalizeInviteInput,
     normalizeOrganizationInput,
+    normalizeOrganizationSettingsInput,
     normalizeWatchlistInput,
+    organizationSettingsFromRow,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
     toInvite,
@@ -20,6 +23,7 @@ import {
     type OrganizationRow,
     type InviteInput,
     type OrganizationInput,
+    type OrganizationSettingsInput,
     type WatchlistKind,
     type WatchlistInput,
     type OrganizationWatchlistRow,
@@ -49,7 +53,8 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
             o.*,
             om.role,
             COUNT(DISTINCT active_members.user_id)::int AS member_count,
-            COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count
+            COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count,
+            COUNT(DISTINCT active_watchlist_items.id)::int AS shared_watchlist_count
         FROM organizations o
         JOIN organization_members om
           ON om.organization_id = o.id
@@ -61,6 +66,10 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
         LEFT JOIN organization_invites pending_invites
           ON pending_invites.organization_id = o.id
          AND pending_invites.status = 'pending'
+         AND pending_invites.expires_at > NOW()
+        LEFT JOIN organization_watchlist_items active_watchlist_items
+          ON active_watchlist_items.organization_id = o.id
+         AND active_watchlist_items.archived_at IS NULL
         GROUP BY o.id, om.role
         ORDER BY o.updated_at DESC, o.created_at DESC
     `, [userId])
@@ -126,6 +135,87 @@ export async function getOrganization(req: FastifyRequest<{ Params: Organization
     }
 
     return res.send({ organization: toOrganization(organization) })
+}
+
+export async function getOrganizationSettings(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    return res.send({
+        organization: toOrganization(organization),
+        settings: organizationSettingsFromRow(organization),
+        permissions: organizationSettingsPermissions(organization.role),
+    })
+}
+
+export async function putOrganizationSettings(req: FastifyRequest<{ Params: OrganizationParams, Body: OrganizationSettingsInput }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    if (!roleCanManageOrganization(organization.role)) {
+        return res.status(403).send({ error: 'Only organization owners and admins can update settings.' })
+    }
+
+    let input
+    try {
+        input = normalizeOrganizationSettingsInput(req.body)
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid organization settings.' })
+    }
+
+    const slug = input.slug ? await uniqueOrganizationSlug(input.slug, req.params.id) : undefined
+    await run(`
+        UPDATE organizations
+        SET name = COALESCE($2, name),
+            slug = COALESCE($3, slug),
+            default_webhook_policy = COALESCE($4, default_webhook_policy),
+            alert_visibility_policy = COALESCE($5, alert_visibility_policy),
+            retention_days = COALESCE($6, retention_days),
+            audit_safe_metadata = COALESCE($7::jsonb, audit_safe_metadata),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+    `, [
+        req.params.id,
+        input.name ?? null,
+        slug ?? null,
+        input.defaultWebhookPolicy ?? null,
+        input.alertVisibilityPolicy ?? null,
+        input.retentionDays ?? null,
+        input.auditSafeMetadata === undefined ? null : JSON.stringify(input.auditSafeMetadata),
+    ])
+
+    logOrganizationEvent(req, 'organization_settings_updated', req.params.id, userId, {
+        fields: Object.entries({
+            name: input.name,
+            slug,
+            defaultWebhookPolicy: input.defaultWebhookPolicy,
+            alertVisibilityPolicy: input.alertVisibilityPolicy,
+            retentionDays: input.retentionDays,
+            auditSafeMetadata: input.auditSafeMetadata === undefined ? undefined : Object.keys(input.auditSafeMetadata),
+        }).filter(([, value]) => value !== undefined).map(([key]) => key),
+    })
+
+    const updated = await loadOrganizationForMember(req.params.id, userId)
+    return res.send({
+        organization: updated ? toOrganization(updated) : null,
+        settings: updated ? organizationSettingsFromRow(updated) : null,
+        permissions: organizationSettingsPermissions(updated?.role),
+    })
 }
 
 export async function getOrganizationInvites(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
@@ -394,7 +484,15 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
         ORDER BY kind ASC, value ASC
     `, [req.params.id])
     const watchlistItems = result.rows as OrganizationWatchlistRow[]
-    const generatedAlertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(organization, item))
+    const bridgeContext = buildOrganizationBridgeContext({
+        ...organization,
+        shared_watchlist_count: watchlistItems.length,
+    })
+    const bridgeOrganization = {
+        ...organization,
+        shared_watchlist_count: bridgeContext.sharedWatchlistCount,
+    }
+    const generatedAlertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(bridgeOrganization, item))
 
     return res.send({
         organization: toOrganization(organization),
@@ -402,6 +500,12 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
             schemaVersion: 'organization.dwm_alert_readiness.v1',
             organizationId: organization.id,
             tenantId: organization.id,
+            defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
+            alertVisibilityPolicy: bridgeContext.alertVisibilityPolicy,
+            memberCount: bridgeContext.memberCount,
+            pendingInviteCount: bridgeContext.pendingInviteCount,
+            sharedWatchlistCount: bridgeContext.sharedWatchlistCount,
+            readinessStatus: bridgeContext.readinessStatus,
             ready: generatedAlertReferences.length > 0,
             watchlistItemCount: generatedAlertReferences.length,
             generatedAlertReferences,
@@ -415,6 +519,12 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'route',
                 'casePath',
                 'dedupeKey',
+                'defaultWebhookPolicy',
+                'alertVisibilityPolicy',
+                'memberCount',
+                'pendingInviteCount',
+                'sharedWatchlistCount',
+                'readinessStatus',
             ],
         },
     })
@@ -519,7 +629,8 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
             o.*,
             om.role,
             COUNT(DISTINCT active_members.user_id)::int AS member_count,
-            COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count
+            COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count,
+            COUNT(DISTINCT active_watchlist_items.id)::int AS shared_watchlist_count
         FROM organizations o
         JOIN organization_members om
           ON om.organization_id = o.id
@@ -531,6 +642,10 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
         LEFT JOIN organization_invites pending_invites
           ON pending_invites.organization_id = o.id
          AND pending_invites.status = 'pending'
+         AND pending_invites.expires_at > NOW()
+        LEFT JOIN organization_watchlist_items active_watchlist_items
+          ON active_watchlist_items.organization_id = o.id
+         AND active_watchlist_items.archived_at IS NULL
         WHERE o.id = $1
         GROUP BY o.id, om.role
         LIMIT 1
@@ -539,12 +654,13 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
     return result.rows[0] as OrganizationRow | undefined
 }
 
-async function uniqueOrganizationSlug(baseSlug: string) {
+async function uniqueOrganizationSlug(baseSlug: string, currentOrganizationId?: string) {
     const result = await run(`
-        SELECT slug
+        SELECT id, slug
         FROM organizations
-        WHERE slug = $1 OR slug LIKE $2
-    `, [baseSlug, `${baseSlug}-%`])
+        WHERE (slug = $1 OR slug LIKE $2)
+          AND ($3::text IS NULL OR id <> $3)
+    `, [baseSlug, `${baseSlug}-%`, currentOrganizationId ?? null])
     const existing = new Set(result.rows.map((row: { slug: string }) => row.slug))
     if (!existing.has(baseSlug)) {
         return baseSlug
@@ -584,4 +700,12 @@ function logOrganizationEvent(req: FastifyRequest, action: string, organizationI
             ...metadata,
         },
     }).catch(error => req.log.warn({ error, action, organizationId }, 'Failed to persist organization event log'))
+}
+
+function organizationSettingsPermissions(role: OrganizationRole | undefined) {
+    const canEdit = roleCanManageOrganization(role)
+    return {
+        canEdit,
+        editableFields: canEdit ? ['name', 'slug', 'defaultWebhookPolicy', 'alertVisibilityPolicy', 'retentionDays', 'auditSafeMetadata'] : [],
+    }
 }

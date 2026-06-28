@@ -47,6 +47,8 @@ app.post('/api/organizations/invites/:inviteId/accept', handlers.postOrganizatio
 app.get('/api/organizations/:id/invites', handlers.getOrganizationInvites)
 app.post('/api/organizations/:id/invites', handlers.postOrganizationInvites)
 app.get('/api/organizations/:id/members', handlers.getOrganizationMembers)
+app.get('/api/organizations/:id/settings', handlers.getOrganizationSettings)
+app.put('/api/organizations/:id/settings', handlers.putOrganizationSettings)
 app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertReadiness)
 app.get('/api/organizations/:id/watchlists', handlers.getOrganizationWatchlists)
 app.post('/api/organizations/:id/watchlists', handlers.postOrganizationWatchlist)
@@ -65,6 +67,19 @@ assert.equal(organizationResponse.statusCode, 201, organizationResponse.body)
 const organization = parseBody(organizationResponse.body).organization
 assert.equal(organization.role, 'owner')
 assert.equal(organization.memberCount, 1)
+assert.equal(organization.settings.defaultWebhookPolicy, 'active_destinations')
+assert.equal(organization.settings.alertVisibilityPolicy, 'members')
+assert.equal(organization.settings.retentionDays, 365)
+
+const ownerDefaultSettingsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(ownerDefaultSettingsResponse.statusCode, 200, ownerDefaultSettingsResponse.body)
+const ownerDefaultSettings = parseBody(ownerDefaultSettingsResponse.body)
+assert.equal(ownerDefaultSettings.permissions.canEdit, true)
+assert.equal(ownerDefaultSettings.settings.defaultWebhookPolicy, 'active_destinations')
 
 const inviteResponse = await app.inject({
     method: 'POST',
@@ -165,6 +180,84 @@ const viewerInviteBlockedResponse = await app.inject({
     payload: { email: 'blocked-by-viewer@example.test', role: 'member' },
 })
 assert.equal(viewerInviteBlockedResponse.statusCode, 403, viewerInviteBlockedResponse.body)
+
+const invalidSettingsResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { name: '', defaultWebhookPolicy: 'everything' },
+})
+assert.equal(invalidSettingsResponse.statusCode, 400, invalidSettingsResponse.body)
+
+const memberSettingsUpdateResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+    payload: { alertVisibilityPolicy: 'admins' },
+})
+assert.equal(memberSettingsUpdateResponse.statusCode, 403, memberSettingsUpdateResponse.body)
+
+const viewerSettingsUpdateResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+    payload: { defaultWebhookPolicy: 'disabled' },
+})
+assert.equal(viewerSettingsUpdateResponse.statusCode, 403, viewerSettingsUpdateResponse.body)
+
+const adminSettingsResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: {
+        name: 'Smoke Shared Operations',
+        slug: 'shared-ops',
+        defaultWebhookPolicy: 'manual_selection',
+        alertVisibilityPolicy: 'admins',
+        retentionDays: 180,
+        auditSafeMetadata: { region: 'EU', plan: 'team' },
+    },
+})
+assert.equal(adminSettingsResponse.statusCode, 200, adminSettingsResponse.body)
+const adminSettings = parseBody(adminSettingsResponse.body)
+assert.equal(adminSettings.organization.name, 'Smoke Shared Operations')
+assert.equal(adminSettings.organization.slug, 'shared-ops')
+assert.equal(adminSettings.settings.defaultWebhookPolicy, 'manual_selection')
+assert.equal(adminSettings.settings.alertVisibilityPolicy, 'admins')
+assert.equal(adminSettings.settings.retentionDays, 180)
+assert.deepEqual(adminSettings.settings.auditSafeMetadata, { region: 'EU', plan: 'team' })
+assert.equal(adminSettings.permissions.canEdit, true)
+
+for (const [userId, token, canEdit] of [
+    ['org_smoke_member', 'member-token', false],
+    ['org_smoke_viewer', 'viewer-token', false],
+] as const) {
+    const readSettingsResponse = await app.inject({
+        method: 'GET',
+        url: `/api/organizations/${organization.id}/settings`,
+        headers: authHeaders(userId, token),
+    })
+    assert.equal(readSettingsResponse.statusCode, 200, readSettingsResponse.body)
+    const readableSettings = parseBody(readSettingsResponse.body)
+    assert.equal(readableSettings.settings.defaultWebhookPolicy, 'manual_selection')
+    assert.equal(readableSettings.settings.alertVisibilityPolicy, 'admins')
+    assert.equal(readableSettings.permissions.canEdit, canEdit)
+}
+
+const outsiderSettingsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_outsider', 'outsider-token'),
+})
+assert.equal(outsiderSettingsResponse.statusCode, 404, outsiderSettingsResponse.body)
+
+const pendingOpsInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { email: 'pending-ops@example.test', role: 'viewer' },
+})
+assert.equal(pendingOpsInviteResponse.statusCode, 201, pendingOpsInviteResponse.body)
 
 const expiredInvite = nowRow({
     id: 'expired-invite',
@@ -271,6 +364,12 @@ assert.equal(readinessResponse.statusCode, 200, readinessResponse.body)
 const readiness = parseBody(readinessResponse.body).alertReadiness
 assert.equal(readiness.organizationId, organization.id)
 assert.equal(readiness.tenantId, organization.id)
+assert.equal(readiness.defaultWebhookPolicy, 'manual_selection')
+assert.equal(readiness.alertVisibilityPolicy, 'admins')
+assert.equal(readiness.memberCount, 4)
+assert.equal(readiness.pendingInviteCount, 1)
+assert.equal(readiness.sharedWatchlistCount, 2)
+assert.equal(readiness.readinessStatus, 'ready')
 assert.equal(readiness.ready, true)
 assert.equal(readiness.generatedAlertReferences.length, 2)
 const domainReference = readiness.generatedAlertReferences.find((reference: Row) => reference.matchedTerm.value === 'acme-shared.example')
@@ -284,8 +383,18 @@ assert.equal(domainReference.alert.tenantId, organization.id)
 assert.equal(domainReference.alert.watchlistItemId, domainReference.watchlistItemId)
 assert.equal(domainReference.alert.watchlist.id, domainReference.watchlistItemId)
 assert.equal(domainReference.alert.route, 'organization_watchlist')
+assert.equal(domainReference.alert.defaultWebhookPolicy, 'manual_selection')
+assert.equal(domainReference.alert.alertVisibilityPolicy, 'admins')
+assert.equal(domainReference.alert.memberCount, 4)
+assert.equal(domainReference.alert.pendingInviteCount, 1)
+assert.equal(domainReference.alert.sharedWatchlistCount, 2)
+assert.equal(domainReference.alert.readinessStatus, 'ready')
 assert.equal(domainReference.webhookContract.orgId, organization.id)
 assert.equal(domainReference.webhookContract.watchlistId, domainReference.watchlistItemId)
+assert.equal(domainReference.webhookContract.defaultWebhookPolicy, 'manual_selection')
+assert.equal(domainReference.webhookContract.alertVisibilityPolicy, 'admins')
+assert.equal(domainReference.organization.defaultWebhookPolicy, 'manual_selection')
+assert.equal(domainReference.organization.alertVisibilityPolicy, 'admins')
 assert.match(domainReference.alert.casePath, /watchlistItemId=/)
 assert.match(domainReference.alert.dedupeKey, /org:/)
 assert.deepEqual(domainReference.watchlist.terms, ['acme-shared.example'])
@@ -315,6 +424,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upserted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated' && log.metadata.fields.includes('defaultWebhookPolicy')))
 
 await app.close()
 console.log('Organization API smoke passed for role RBAC, invite lifecycle, shared watchlists, alert readiness, and outsider isolation.')
@@ -333,7 +443,7 @@ function parseBody(body: string) {
 async function fakeRun(query: string, params: any[] = []) {
     const compact = query.replace(/\s+/g, ' ').trim()
 
-    if (compact.startsWith('SELECT slug FROM organizations')) {
+    if (compact.startsWith('SELECT slug FROM organizations') || compact.startsWith('SELECT id, slug FROM organizations')) {
         const [slug, like] = params
         const prefix = String(like).replace(/%$/, '')
         return rows([...organizations.values()].filter(org => org.slug === slug || org.slug.startsWith(prefix)).map(org => ({ slug: org.slug })))
@@ -346,7 +456,7 @@ async function fakeRun(query: string, params: any[] = []) {
 
     if (compact.includes('WITH new_organization AS')) {
         const [id, name, slug, userId] = params
-        const org = nowRow({ id, name, slug, created_by: userId })
+        const org = organizationRow({ id, name, slug, created_by: userId })
         organizations.set(id, org)
         members.set(memberKey(id, userId), nowRow({ organization_id: id, user_id: userId, role: 'owner', status: 'active', invited_by: userId, joined_at: iso() }))
         return rows([org])
@@ -357,6 +467,24 @@ async function fakeRun(query: string, params: any[] = []) {
         const activeMemberships = [...members.values()].filter(member => member.status === 'active')
         const scoped = activeMemberships.filter(member => member.user_id === userId && (!organizationId || member.organization_id === organizationId))
         return rows(scoped.map(member => organizationSummary(member.organization_id, member.role)))
+    }
+
+    if (compact.startsWith('UPDATE organizations SET name')) {
+        const [organizationId, name, slug, defaultWebhookPolicy, alertVisibilityPolicy, retentionDays, auditSafeMetadata] = params
+        const existing = organizations.get(organizationId)
+        if (!existing) return rows([])
+        const updated = {
+            ...existing,
+            name: name ?? existing.name,
+            slug: slug ?? existing.slug,
+            default_webhook_policy: defaultWebhookPolicy ?? existing.default_webhook_policy,
+            alert_visibility_policy: alertVisibilityPolicy ?? existing.alert_visibility_policy,
+            retention_days: retentionDays ?? existing.retention_days,
+            audit_safe_metadata: auditSafeMetadata ? JSON.parse(auditSafeMetadata) : existing.audit_safe_metadata,
+            updated_at: iso(),
+        }
+        organizations.set(organizationId, updated)
+        return rows([updated])
     }
 
     if (compact.startsWith('SELECT * FROM organization_invites WHERE organization_id')) {
@@ -462,13 +590,25 @@ async function fakeRun(query: string, params: any[] = []) {
 function organizationSummary(organizationId: string, role: string) {
     const org = organizations.get(organizationId)
     const activeMembers = [...members.values()].filter(member => member.organization_id === organizationId && member.status === 'active')
-    const pendingInvites = [...invites.values()].filter(invite => invite.organization_id === organizationId && invite.status === 'pending')
+    const pendingInvites = [...invites.values()].filter(invite => invite.organization_id === organizationId && invite.status === 'pending' && Date.parse(invite.expires_at) > Date.now())
+    const sharedWatchlists = [...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at)
     return {
         ...org,
         role,
         member_count: activeMembers.length,
         pending_invite_count: pendingInvites.length,
+        shared_watchlist_count: sharedWatchlists.length,
     }
+}
+
+function organizationRow(row: Row) {
+    return nowRow({
+        default_webhook_policy: 'active_destinations',
+        alert_visibility_policy: 'members',
+        retention_days: 365,
+        audit_safe_metadata: {},
+        ...row,
+    })
 }
 
 function nowRow(row: Row) {
