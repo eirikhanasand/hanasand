@@ -1,13 +1,9 @@
 {
   "updatedAt": "2026-06-28",
-  "latestCommit": "3a792212",
+  "latestCommit": "f70187be",
   "sourceDoc": "docs/product/cti-xdr-gap-map.md",
   "purpose": "Compact implementation scoreboard for the CTI/DWM/XDR product lanes. This is for the 10-minute coordinator loop; it should reduce management overhead and keep workers from shipping dashboard-only slices.",
   "recentConfirmedCommits": [
-    "3a792212",
-    "56dd458c",
-    "01ccf3d5",
-    "756f522d",
     "f70187be",
     "bfe5ccc4",
     "42858be6",
@@ -17,7 +13,10 @@
     "e66067d8",
     "8b1c8fea",
     "1625ce8a",
-    "8de8f65f"
+    "8de8f65f",
+    "7802723a",
+    "72dae520",
+    "a6e71eb0"
   ],
   "fullyImplementedWorkflow": false,
   "workflowBlockers": [
@@ -38,7 +37,7 @@
   "absentExpectedCommits": [
     {
       "commit": "fa78a2b0",
-      "status": "not visible in current HEAD git log -20"
+      "status": "not visible in current HEAD git log -16"
     }
   ],
   "rows": [
@@ -46,9 +45,9 @@
       "id": "ORG",
       "pillar": "Orgs",
       "ownerThread": "Org/API lane",
-      "currentStatus": "Landed backend, dashboard readiness, role hardening, org settings policies, member lifecycle guardrails, downstream visibility contract, dashboard org operating layer, and inline dashboard org actions; org/dashboard files remain dirty.",
-      "lastCommitOrHandoff": "bb3f8c9a watchlists to DWM alert contracts; 4aaf8398 dashboard org readiness; 83fc8d94 role RBAC; 16777192/2bc9cbd6 org settings policies; 220d0bd0 member lifecycle guardrails; 48c5ac50 downstream visibility contract; bfe5ccc4 dashboard org operating layer; 3a792212 inline dashboard org actions; 75771f62 cleanup.",
-      "nextCodeSlice": "Finish active-org console flow, org settings/member lifecycle UI, org operating layer/actions probe, then prove DWM/TI tenant propagation from a logged-in buyer session.",
+      "currentStatus": "Landed backend, dashboard readiness, role hardening, org settings policies, member lifecycle guardrails, downstream visibility contract, and dashboard org operating layer; org/dashboard files remain dirty.",
+      "lastCommitOrHandoff": "bb3f8c9a watchlists to DWM alert contracts; 4aaf8398 dashboard org readiness; 83fc8d94 role RBAC; 16777192/2bc9cbd6 org settings policies; 220d0bd0 member lifecycle guardrails; 48c5ac50 organization downstream visibility contract; bfe5ccc4 dashboard org operating layer; 75771f62 cleanup.",
+      "nextCodeSlice": "Finish active-org console flow, org settings/member lifecycle UI, org operating layer probe, then prove DWM/TI tenant propagation from a logged-in buyer session.",
       "measurableKpi": ["organizations.orgCount", "organizations.activeOrgCount"],
       "blocker": "Current org/dashboard dirty work must land before proving routes use org context instead of default."
     },
@@ -106,11 +105,11 @@
       "id": "ALERTS",
       "pillar": "Real alerts",
       "ownerThread": "DWM alert lane",
-      "currentStatus": "Repository rebuild path, alert-to-case bridge, org visibility on DWM alert workflow, searchable timelines, delivery inspection, and portable case evidence export are landed; DWM product real-alert proof remains blocked.",
+      "currentStatus": "Repository rebuild path, alert-to-case bridge, org visibility on DWM alert workflow, searchable timelines, delivery inspection, and portable case evidence export are landed; live capture-to-saved-alert proof remains.",
       "lastCommitOrHandoff": "720414f2 alert provenance; 3f55b12e repository adapter; 6ef17a6e rebuild proof; 7de4c70d alert-to-case bridge; f70187be org visibility on DWM alert workflow; 570539c3 timelines; de91801c delivery inspection; f44b0214 portable analyst case evidence export.",
       "nextCodeSlice": "Prove real watchlist + real capture creates saved alert with evidence ID, source ID, dedupe key, match reason, searchable timeline, portable evidence export, case link, and demoAlertsVisible=0.",
       "measurableKpi": ["alerts.realAlertsGenerated10m", "alerts.alertsWithEvidence", "alerts.demoAlertsVisible"],
-      "blocker": "DWM product real-alert blocker: need automated live capture-to-alert smoke that fails if only demo/default data appears."
+      "blocker": "Need automated capture-to-alert smoke that fails if only demo data appears."
     },
     {
       "id": "DELIVERY",
@@ -126,9 +125,9 @@
       "id": "CASES",
       "pillar": "Analyst cases",
       "ownerThread": "Case/workbench lane",
-      "currentStatus": "DWM analyst case API, alert-to-case bridge, org membership/visibility enforcement, timelines, dashboard case actions, public-TI handoffs/artifacts, copyable payloads, GeoJSON map, delivery inspection, and evidence export are landed; frontend portal/TI pages remain dirty.",
-      "lastCommitOrHandoff": "20f6563f case ownership; ae030422 case API; 7de4c70d alert-to-case bridge; 4b610b01 org membership on cases; f1c126c7 org visibility policy on analyst cases; 570539c3 timelines; 72dae520 dashboard case actions; 4548062a public TI action handoffs; 01ccf3d5 selectable public TI actor artifacts; a6e71eb0 copyable handoff payloads; e66067d8 GeoJSON country shapes; de91801c delivery inspection; f44b0214 evidence export.",
-      "nextCodeSlice": "Probe case queue/detail in console and public-TI action handoff/artifacts with org-scoped visibility, assign, note, escalate, suppress/false-positive, close/reopen, timeline, dashboard action persistence, copyable payload, evidence export, and delivery replay.",
+      "currentStatus": "DWM analyst case API, alert-to-case bridge, org membership/visibility enforcement, timelines, dashboard case actions, public-TI handoffs, copyable payloads, GeoJSON map, delivery inspection, and evidence export are landed; dashboard/public-TI files remain dirty.",
+      "lastCommitOrHandoff": "20f6563f case ownership; ae030422 case API; 7de4c70d alert-to-case bridge; 4b610b01 org membership on cases; f1c126c7 org visibility policy on analyst cases; 570539c3 timelines; 72dae520 dashboard case actions; 4548062a public TI action handoffs; a6e71eb0 copyable handoff payloads; e66067d8 GeoJSON country shapes; de91801c delivery inspection; f44b0214 evidence export.",
+      "nextCodeSlice": "Probe case queue/detail in console and public-TI action handoff with org-scoped visibility, assign, note, escalate, suppress/false-positive, close/reopen, timeline, dashboard action persistence, copyable payload, evidence export, and delivery replay.",
       "measurableKpi": ["cases.openCaseCount", "cases.casesAssigned10m", "cases.casesClosed10m", "cases.casesWithAnalystNotes"],
       "blocker": "Case schema must unify TI actor activity, DWM alerts, delivery history, and public TI actionability handoff."
     },
@@ -136,8 +135,8 @@
       "id": "HELP",
       "pillar": "Helpdesk/impersonation",
       "ownerThread": "Admin/support lane",
-      "currentStatus": "Enterprise support audit, safe recovery action, approval metadata, recovery form, approval decisions/search, live smoke, support inspection workflow, and support-lane cleanup are landed.",
-      "lastCommitOrHandoff": "de55cf56 support audit workflow; f64d187d safe recovery action; 5016df12 recovery approval metadata; ff1225ba recovery form; 39dcc800 access recovery approval decisions; 1de10da7 access recovery approval search; 1625ce8a access recovery live smoke; 756f522d support inspection workflow; 56dd458c removed unrelated changes from support inspection commit.",
+      "currentStatus": "Enterprise support audit, safe recovery action, approval metadata, recovery form, approval decisions/search, and live smoke are landed.",
+      "lastCommitOrHandoff": "de55cf56 support audit workflow; f64d187d safe recovery action; 5016df12 recovery approval metadata; ff1225ba recovery form; 39dcc800 access recovery approval decisions; 1de10da7 access recovery approval search; 1625ce8a access recovery live smoke.",
       "nextCodeSlice": "Probe support console: find org/user, view subscription/onboarding state, submit audited recovery, start scoped impersonation, and file support actions.",
       "measurableKpi": ["admin.helpdeskTicketsOpen", "admin.supportActions10m", "admin.impersonationSessions10m"],
       "blocker": "Needs clean smoke coverage and scoped impersonation/recovery proof before production use; fa78a2b0 is not visible on current HEAD."
@@ -146,8 +145,8 @@
       "id": "AUDIT",
       "pillar": "Structured audit logs",
       "ownerThread": "Admin/audit lane",
-      "currentStatus": "Support and recovery audit workflows, approval metadata, approval decisions/search, live smoke, and support inspection landed; structured org/TI/DWM audit events still need a stable coordinator KPI feed.",
-      "lastCommitOrHandoff": "de55cf56 support audit workflow; f64d187d safe recovery action; 5016df12 recovery approval metadata; ff1225ba recovery form; 39dcc800 approval decisions; 1de10da7 approval search; 1625ce8a recovery live smoke; 756f522d support inspection workflow.",
+      "currentStatus": "Support and recovery audit workflows, approval metadata, approval decisions/search, and live smoke landed; structured org/TI/DWM audit events still need a stable coordinator KPI feed.",
+      "lastCommitOrHandoff": "de55cf56 support audit workflow; f64d187d safe recovery action; 5016df12 recovery approval metadata; ff1225ba recovery form; 39dcc800 approval decisions; 1de10da7 approval search; 1625ce8a recovery live smoke.",
       "nextCodeSlice": "Add append/query audit events for org, invite, watchlist, source, alert, case, support, impersonation, and delivery actions.",
       "measurableKpi": ["admin.auditEvents10m", "admin.auditEventsWithActor"],
       "blocker": "Need retention policy and event schema stability."
@@ -156,8 +155,8 @@
       "id": "DEPLOY",
       "pillar": "Deploy/live status",
       "ownerThread": "Ops lane",
-      "currentStatus": "Partial: latest confirmed currentness reaches 3a792212 inline dashboard org actions; no single product-progress record ties deploy health to CTI/DWM KPIs.",
-      "lastCommitOrHandoff": "03d29b7c coordinator scoreboard; 7aeaddb5 scan script; c285de78/d4fa7185 currentness checks; latest visible product HEAD 3a792212; 01ccf3d5 selectable public TI artifacts; 756f522d support inspection workflow; f70187be DWM alert org visibility; bfe5ccc4 dashboard org operating layer; 42858be6 webhook destination contracts; fc113cdf source family coverage health.",
+      "currentStatus": "Partial: latest confirmed currentness reaches f70187be org visibility on DWM alert workflow; no single product-progress record ties deploy health to CTI/DWM KPIs.",
+      "lastCommitOrHandoff": "03d29b7c coordinator scoreboard; 7aeaddb5 scan script; c285de78/d4fa7185 currentness checks; latest visible product HEAD f70187be; bfe5ccc4 dashboard org operating layer; 42858be6 webhook destination contracts; fc113cdf source family coverage health.",
       "nextCodeSlice": "Emit /api/product-progress or scraper SLO record every 10 minutes with commit, frontend/API/scraper health, and every KPI group in this table.",
       "measurableKpi": ["deployment.frontendCommit", "deployment.frontendHealthy", "deployment.apiHealthy", "deployment.scraperHealthy"],
       "blocker": "Multiple active dirty lanes must land before clean deploy proof; strict end-to-end workflow is not yet complete."
@@ -190,7 +189,7 @@
       "No buyer path depends on demo-only, default-tenant, or manually curated data."
     ],
     "deployGate": [
-      "activeDirtyLanes=dwm-product-real-alert,frontend-portal-ti-pages,org-helpdesk,source-lanes,public-ti,dwm-webhook",
+      "activeDirtyLanes=dwm-product-real-alert,frontend-portal-ti-pages,org-helpdesk,public-ti,dwm-webhook",
       "strictEndToEndWorkflow=not-complete",
       "strictOnePassVerification=not-run"
     ]
