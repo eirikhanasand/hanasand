@@ -4,6 +4,7 @@ import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import {
+    buildOrganizationDwmAlertReference,
     normalizeInviteInput,
     normalizeOrganizationInput,
     normalizeWatchlistInput,
@@ -369,6 +370,51 @@ export async function getOrganizationWatchlists(req: FastifyRequest<{ Params: Or
     return res.send({
         organization: toOrganization(organization),
         watchlistItems: (result.rows as OrganizationWatchlistRow[]).map(toWatchlistItem),
+    })
+}
+
+export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const result = await run(`
+        SELECT *
+        FROM organization_watchlist_items
+        WHERE organization_id = $1
+          AND archived_at IS NULL
+        ORDER BY kind ASC, value ASC
+    `, [req.params.id])
+    const watchlistItems = result.rows as OrganizationWatchlistRow[]
+    const generatedAlertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(organization, item))
+
+    return res.send({
+        organization: toOrganization(organization),
+        alertReadiness: {
+            schemaVersion: 'organization.dwm_alert_readiness.v1',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            ready: generatedAlertReferences.length > 0,
+            watchlistItemCount: generatedAlertReferences.length,
+            generatedAlertReferences,
+            downstreamFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemId',
+                'watchlist.id',
+                'watchlist.terms',
+                'matchedTerm',
+                'route',
+                'casePath',
+                'dedupeKey',
+            ],
+        },
     })
 }
 

@@ -134,6 +134,7 @@ import { getTiPipeline, postTiPipelineRun } from './handlers/ti/pipeline.ts'
 import {
     deleteOrganizationWatchlist,
     getOrganization,
+    getOrganizationAlertReadiness,
     getOrganizationInvites,
     getOrganizationMembers,
     getOrganizations,
@@ -258,6 +259,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/organizations/:id/invites', getOrganizationInvites)
     fastify.post('/organizations/:id/invites', postOrganizationInvites)
     fastify.get('/organizations/:id/members', getOrganizationMembers)
+    fastify.get('/organizations/:id/alert-readiness', getOrganizationAlertReadiness)
     fastify.get('/organizations/:id/watchlists', getOrganizationWatchlists)
     fastify.post('/organizations/:id/watchlists', postOrganizationWatchlist)
     fastify.delete('/organizations/:organizationId/watchlists/:itemId', deleteOrganizationWatchlist)

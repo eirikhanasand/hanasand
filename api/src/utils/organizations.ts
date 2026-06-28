@@ -67,6 +67,50 @@ export type OrganizationWatchlistRow = {
     archived_at?: string | null
 }
 
+export type OrganizationDwmAlertReference = {
+    schemaVersion: 'organization.dwm_alert_bridge.v1'
+    organizationId: string
+    tenantId: string
+    watchlistItemId: string
+    watchlistKind: WatchlistKind
+    matchedTerm: {
+        value: string
+        kind: WatchlistKind
+    }
+    watchlist: {
+        id: string
+        name: string
+        itemId: string
+        kind: WatchlistKind
+        terms: string[]
+    }
+    alert: {
+        id: string
+        organizationId: string
+        orgId: string
+        tenantId: string
+        orgName: string
+        watchlistItemId: string
+        matchedTerm: {
+            value: string
+            kind: WatchlistKind
+        }
+        watchlist: OrganizationDwmAlertReference['watchlist']
+        sourceFamily: 'organization_watchlist'
+        artifactType: 'watchlist_readiness'
+        route: 'organization_watchlist'
+        casePath: string
+        dedupeKey: string
+    }
+    webhookContract: {
+        orgId: string
+        watchlistId: string
+        watchlistName: string
+        route: 'organization_watchlist'
+        casePath: string
+    }
+}
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const organizationRoles = new Set<OrganizationRole>(['owner', 'admin', 'member'])
 const inviteRoles = new Set<OrganizationRole>(['admin', 'member'])
@@ -198,6 +242,58 @@ export function toWatchlistItem(row: OrganizationWatchlistRow) {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         archivedAt: row.archived_at ?? null,
+    }
+}
+
+export function buildOrganizationDwmAlertReference(
+    organization: Pick<OrganizationRow, 'id' | 'name'>,
+    item: OrganizationWatchlistRow
+): OrganizationDwmAlertReference {
+    const watchlistName = `${organization.name} ${item.kind} watchlist`
+    const casePath = `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}&watchlistItemId=${encodeURIComponent(item.id)}`
+    const dedupeKey = `org:${organization.id}:watchlist:${item.id}:${item.kind}:${item.value.toLowerCase()}`
+    const watchlist = {
+        id: item.id,
+        name: watchlistName,
+        itemId: item.id,
+        kind: item.kind,
+        terms: [item.value],
+    }
+    const matchedTerm = {
+        value: item.value,
+        kind: item.kind,
+    }
+
+    return {
+        schemaVersion: 'organization.dwm_alert_bridge.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        watchlistItemId: item.id,
+        watchlistKind: item.kind,
+        matchedTerm,
+        watchlist,
+        alert: {
+            id: dedupeKey,
+            organizationId: organization.id,
+            orgId: organization.id,
+            tenantId: organization.id,
+            orgName: organization.name,
+            watchlistItemId: item.id,
+            matchedTerm,
+            watchlist,
+            sourceFamily: 'organization_watchlist',
+            artifactType: 'watchlist_readiness',
+            route: 'organization_watchlist',
+            casePath,
+            dedupeKey,
+        },
+        webhookContract: {
+            orgId: organization.id,
+            watchlistId: item.id,
+            watchlistName,
+            route: 'organization_watchlist',
+            casePath,
+        },
     }
 }
 

@@ -41,6 +41,7 @@ app.post('/api/organizations/invites/:inviteId/accept', handlers.postOrganizatio
 app.get('/api/organizations/:id/invites', handlers.getOrganizationInvites)
 app.post('/api/organizations/:id/invites', handlers.postOrganizationInvites)
 app.get('/api/organizations/:id/members', handlers.getOrganizationMembers)
+app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertReadiness)
 app.get('/api/organizations/:id/watchlists', handlers.getOrganizationWatchlists)
 app.post('/api/organizations/:id/watchlists', handlers.postOrganizationWatchlist)
 app.delete('/api/organizations/:organizationId/watchlists/:itemId', handlers.deleteOrganizationWatchlist)
@@ -141,12 +142,46 @@ assert.deepEqual(
     ['Acme Payroll Vendor', 'acme-shared.example'].sort()
 )
 
+const readinessResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-readiness`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(readinessResponse.statusCode, 200, readinessResponse.body)
+const readiness = parseBody(readinessResponse.body).alertReadiness
+assert.equal(readiness.organizationId, organization.id)
+assert.equal(readiness.tenantId, organization.id)
+assert.equal(readiness.ready, true)
+assert.equal(readiness.generatedAlertReferences.length, 2)
+const domainReference = readiness.generatedAlertReferences.find((reference: Row) => reference.matchedTerm.value === 'acme-shared.example')
+assert.ok(domainReference)
+assert.equal(domainReference.organizationId, organization.id)
+assert.equal(domainReference.tenantId, organization.id)
+assert.equal(domainReference.watchlistItemId, domainReference.watchlist.id)
+assert.equal(domainReference.alert.organizationId, organization.id)
+assert.equal(domainReference.alert.orgId, organization.id)
+assert.equal(domainReference.alert.tenantId, organization.id)
+assert.equal(domainReference.alert.watchlistItemId, domainReference.watchlistItemId)
+assert.equal(domainReference.alert.watchlist.id, domainReference.watchlistItemId)
+assert.equal(domainReference.alert.route, 'organization_watchlist')
+assert.equal(domainReference.webhookContract.orgId, organization.id)
+assert.equal(domainReference.webhookContract.watchlistId, domainReference.watchlistItemId)
+assert.match(domainReference.alert.casePath, /watchlistItemId=/)
+assert.match(domainReference.alert.dedupeKey, /org:/)
+assert.deepEqual(domainReference.watchlist.terms, ['acme-shared.example'])
+
 const outsiderResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/watchlists`,
     headers: authHeaders('org_smoke_outsider', 'outsider-token'),
 })
 assert.equal(outsiderResponse.statusCode, 404, outsiderResponse.body)
+const outsiderReadinessResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-readiness`,
+    headers: authHeaders('org_smoke_outsider', 'outsider-token'),
+})
+assert.equal(outsiderReadinessResponse.statusCode, 404, outsiderReadinessResponse.body)
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upserted'))

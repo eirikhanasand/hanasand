@@ -4,6 +4,7 @@ import {
     normalizeInviteInput,
     normalizeOrganizationInput,
     normalizeWatchlistInput,
+    buildOrganizationDwmAlertReference,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
 } from '../src/utils/organizations.ts'
@@ -39,6 +40,28 @@ assert.deepEqual(normalizeWatchlistInput({ kind: 'company', value: ' Example Hol
 })
 assert.throws(() => normalizeWatchlistInput({ kind: 'user', value: 'local only' }), /company, domain, or vendor/)
 
+const alertReference = buildOrganizationDwmAlertReference(
+    { id: 'org_acme', name: 'Acme Security' },
+    {
+        id: 'watch_domain_acme',
+        organization_id: 'org_acme',
+        kind: 'domain',
+        value: 'acme.example',
+        notes: '',
+        created_by: 'owner',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+    }
+)
+assert.equal(alertReference.organizationId, 'org_acme')
+assert.equal(alertReference.tenantId, 'org_acme')
+assert.equal(alertReference.watchlistItemId, 'watch_domain_acme')
+assert.equal(alertReference.watchlist.id, 'watch_domain_acme')
+assert.equal(alertReference.alert.watchlistItemId, 'watch_domain_acme')
+assert.equal(alertReference.alert.route, 'organization_watchlist')
+assert.match(alertReference.alert.casePath, /organizationId=org_acme/)
+assert.match(alertReference.alert.dedupeKey, /org:org_acme:watchlist:watch_domain_acme/)
+
 assert.equal(roleCanManageOrganization('owner'), true)
 assert.equal(roleCanManageOrganization('admin'), true)
 assert.equal(roleCanManageOrganization('member'), false)
@@ -50,6 +73,7 @@ assert.match(routes, /fastify\.post\('\/organizations'/)
 assert.match(routes, /fastify\.post\('\/organizations\/:id\/invites'/)
 assert.match(routes, /fastify\.post\('\/organizations\/invites\/:inviteId\/accept'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/members'/)
+assert.match(routes, /fastify\.get\('\/organizations\/:id\/alert-readiness'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/watchlists'/)
 assert.match(routes, /fastify\.post\('\/organizations\/:id\/watchlists'/)
 
