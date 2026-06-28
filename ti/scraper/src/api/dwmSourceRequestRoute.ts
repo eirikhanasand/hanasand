@@ -20,10 +20,12 @@ type DwmSourceRequestBody = {
   targets?: string[];
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
-  action?: "inspect" | "test" | "activate" | "reject" | "retry";
+  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress";
   sourceId?: string;
+  candidateId?: string;
   reason?: string;
   decidedBy?: string;
+  requestedBy?: string;
 };
 
 export async function createDwmSourceRequest(request: Request, options: ApiServerOptions): Promise<Response> {
@@ -51,6 +53,7 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
           ? "Canary-ready public sources were queued; restricted metadata candidates still require analyst approval."
           : "Review generated source candidates, then activate selected public channels into canary polling."
       },
+      createdCandidates: result.createdSources.map((source) => sourceCandidate(source)),
       ...result
     }, body.dryRun ? 200 : 201);
   }
@@ -73,6 +76,7 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
         nextAction: "Review rejected and duplicate targets; created public Telegram sources are bounded to safe preview collection."
       },
       createdSources: created,
+      createdCandidates: created.map((source) => sourceCandidate(source)),
       rejected,
       duplicates,
       summary: { createdCount: created.length, rejectedCount: rejected.length, duplicateCount: duplicates.length }
@@ -94,6 +98,7 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
     }, 200);
     return json({
       source: created.source,
+      candidate: sourceCandidate(created.source),
       lifecycle: sourceLifecycle(created.source),
       policy: sourcePolicyPosture(created.source),
       request: {
@@ -122,6 +127,9 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
   const saved = created.source;
   return json({
     source: saved,
+    candidate: sourceCandidate(saved),
+    lifecycle: sourceLifecycle(saved),
+    policy: sourcePolicyPosture(saved),
     request: {
       id: stableId("dwm_source_request", `${saved.id}:${saved.url}`),
       target: saved.url,
@@ -181,23 +189,43 @@ function telegramSourceFromRequest(input: { target: string; channel: string; bod
       scope: input.body.scope,
       maxItemsPerFetch: 40,
       mediaPolicy: "metadata_only_no_download",
-      collectionBoundary: {
-        publicOnly: true,
-        noPrivateAccess: true,
-        noAutoJoin: true,
-        noCredentialCollection: true,
-        noMediaDownload: true
-      }
+      collectionBoundary: publicTelegramBoundary(),
+      sourceCandidate: initialSourceCandidate({
+        source: { id: stableId("src_dwm_tg", normalizedUrl), type: "telegram_public", url: normalizedUrl, tenantId: input.body.tenantId },
+        generatedAt,
+        target: input.target,
+        requestedBy: input.body.requestedBy ?? input.body.approvedBy ?? "api",
+        scope: input.body.scope,
+        policyBoundary: publicTelegramBoundary(),
+        validationResult: { allowed: true, reason: "public Telegram target passed policy validation", checkedAt: generatedAt },
+        parserStatus: "telegram_public_parser_ready",
+        healthStatus: "not_tested",
+        status: input.body.activate === false ? "queued" : "active",
+        activationDecision: input.body.activate === false ? "pending_operator_review" : "auto_activated_public_preview"
+      })
     }
   } as SourceRecord;
 }
 
 function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiServerOptions): Response {
   const sourceId = String(body.sourceId ?? "").trim();
-  const source = sourceId ? options.store.getSource?.(sourceId) ?? options.store.listSources().find((item) => item.id === sourceId) : undefined;
-  if (!source) return json({ error: { code: "source_not_found", message: "A persisted sourceId is required for lifecycle actions." } }, 404);
+  const candidateId = String(body.candidateId ?? "").trim();
+  const source = lookupLifecycleSource({ sourceId, candidateId }, options);
+  if (!source) return json({ error: { code: "source_not_found", message: "A persisted sourceId or candidateId is required for lifecycle actions." } }, 404);
 
   if (body.action === "inspect") return json(lifecycleResponse(source, "inspect"), 200);
+  if (body.action === "validate") {
+    const validated = saveLifecyclePatch(source, options, {
+      action: "validate",
+      actor: body.decidedBy ?? body.approvedBy ?? "operator",
+      reason: body.reason ?? "operator requested source policy validation",
+      status: source.status,
+      healthStatus: source.metadata?.healthStatus ?? "not_tested",
+      parserStatus: parserStatusForSource(source),
+      activationState: activationStateForSource(source)
+    });
+    return json(lifecycleResponse(validated, "validate"), 200);
+  }
   if (body.action === "test") {
     const tested = saveLifecyclePatch(source, options, {
       action: "test",
@@ -234,7 +262,19 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
     });
     return json(lifecycleResponse(rejected, "reject"), 200);
   }
-  if (body.action === "activate") {
+  if (body.action === "suppress") {
+    const suppressed = saveLifecyclePatch(source, options, {
+      action: "suppress",
+      actor: body.decidedBy ?? body.approvedBy ?? "operator",
+      reason: body.reason ?? "operator suppressed source candidate",
+      status: "suppressed",
+      healthStatus: "suppressed",
+      parserStatus: "not_scheduled",
+      activationState: "suppressed"
+    });
+    return json(lifecycleResponse(suppressed, "suppress"), 200);
+  }
+  if (body.action === "activate" || body.action === "promote") {
     if (isRestrictedMetadataSource(source) && body.approveMetadataOnly !== true) {
       return json({
         error: {
@@ -247,7 +287,7 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
       }, 409);
     }
     const activated = saveLifecyclePatch(source, options, {
-      action: "activate",
+      action: body.action,
       actor: body.approvedBy ?? body.decidedBy ?? "operator",
       reason: body.reason ?? (isRestrictedMetadataSource(source) ? "metadata-only monitoring approved" : "bounded public source canary approved"),
       status: isRestrictedMetadataSource(source) ? "active" : "active",
@@ -313,17 +353,44 @@ function restrictedMetadataSourceFromRequest(input: { target: string; body: DwmS
       reviewState: "pending_metadata_only_approval",
       parserStatus: "metadata_parser_pending",
       healthStatus: "awaiting_policy_review",
-      collectionBoundary: restrictedMetadataBoundary()
+      collectionBoundary: restrictedMetadataBoundary(),
+      sourceCandidate: initialSourceCandidate({
+        source: { id: stableId("src_dwm_restricted", normalizedUrl), type: `${network}_metadata`, url: normalizedUrl, tenantId: input.body.tenantId },
+        generatedAt,
+        target: input.target,
+        requestedBy: input.body.requestedBy ?? input.body.approvedBy ?? "api",
+        scope: input.body.scope,
+        validationResult: {
+          allowed: false,
+          reason: "metadata-only approval ticket required before collection activation",
+          checkedAt: generatedAt,
+          policyGated: true
+        },
+        parserStatus: "metadata_parser_pending",
+        healthStatus: "awaiting_policy_review",
+        status: "approval_required",
+        activationDecision: "pending_metadata_only_approval",
+        approvalTicket: {
+          id: stableId("dwm_metadata_approval_ticket", `${normalizedUrl}:${generatedAt}`),
+          status: "open",
+          requiredApproval: "metadata_only",
+          unsafeScrapingAllowed: false
+        }
+      })
     }
   } as SourceRecord;
 }
 
 function lifecycleResponse(source: SourceRecord, action: string) {
+  const candidate = sourceCandidate(source);
   return {
     action,
     source,
+    candidate,
     lifecycle: sourceLifecycle(source),
     policy: sourcePolicyPosture(source),
+    health: sourceHealthStatus(source),
+    parser: sourceParserStatus(source),
     nextAction: nextSourceAction(source)
   };
 }
@@ -341,20 +408,28 @@ function saveLifecyclePatch(source: SourceRecord, options: ApiServerOptions, inp
   const at = nowIso();
   const restricted = isRestrictedMetadataSource(source);
   const previousEvents = Array.isArray(source.metadata?.sourceRequestAudit) ? source.metadata.sourceRequestAudit : [];
+  const policy = sourcePolicyPosture(source);
+  const previousCandidate = sourceCandidate(source);
+  const validationResult = {
+    allowed: policy.allowed,
+    reason: policy.reason,
+    checkedAt: at,
+    policyGated: restricted && input.action !== "activate" && input.action !== "promote"
+  };
   const next: SourceRecord = {
     ...source,
     status: input.status,
-    accessMethod: restricted && input.action === "activate" ? "approved_proxy" : source.accessMethod,
-    approvedAt: input.action === "activate" ? at : source.approvedAt,
-    approvedBy: input.action === "activate" ? input.actor : source.approvedBy,
+    accessMethod: restricted && (input.action === "activate" || input.action === "promote") ? "approved_proxy" : source.accessMethod,
+    approvedAt: input.action === "activate" || input.action === "promote" ? at : source.approvedAt,
+    approvedBy: input.action === "activate" || input.action === "promote" ? input.actor : source.approvedBy,
     updatedAt: at,
     governance: restricted ? {
       ...(source.governance ?? {}),
       approvalRequired: true,
-      approvalState: input.action === "activate" ? "approved" : input.action === "reject" ? "rejected" : source.governance?.approvalState ?? "pending",
+      approvalState: input.action === "activate" || input.action === "promote" ? "approved" : input.action === "reject" ? "rejected" : source.governance?.approvalState ?? "pending",
       metadataOnly: true,
-      approvedAt: input.action === "activate" ? at : source.governance?.approvedAt,
-      approvedBy: input.action === "activate" ? input.actor : source.governance?.approvedBy,
+      approvedAt: input.action === "activate" || input.action === "promote" ? at : source.governance?.approvedAt,
+      approvedBy: input.action === "activate" || input.action === "promote" ? input.actor : source.governance?.approvedBy,
       policyVersion: source.governance?.policyVersion ?? "dwm-metadata-only:v1",
       riskJustification: source.governance?.riskJustification ?? "Metadata-only boundary required for restricted dark-web monitoring."
     } : source.governance,
@@ -367,8 +442,24 @@ function saveLifecyclePatch(source: SourceRecord, options: ApiServerOptions, inp
       lastLifecycleReason: input.reason,
       lastLifecycleActor: input.actor,
       lastLifecycleAt: at,
-      metadataOnlyApproved: restricted && input.action === "activate" ? true : source.metadata?.metadataOnlyApproved,
+      lastTestedAt: input.action === "test" ? at : source.metadata?.lastTestedAt,
+      validationResult,
+      metadataOnlyApproved: restricted && (input.action === "activate" || input.action === "promote") ? true : source.metadata?.metadataOnlyApproved,
       collectionBoundary: restricted ? restrictedMetadataBoundary() : source.metadata?.collectionBoundary,
+      sourceCandidate: {
+        ...previousCandidate,
+        status: candidateStatusForAction(input.action, input.activationState),
+        validationResult,
+        parserStatus: input.parserStatus,
+        healthStatus: input.healthStatus,
+        lastTestedAt: input.action === "test" ? at : previousCandidate.lastTestedAt,
+        activationDecision: activationDecisionForAction(input.action, input.activationState),
+        decidedBy: ["activate", "promote", "reject", "suppress"].includes(input.action) ? input.actor : previousCandidate.decidedBy,
+        decidedAt: ["activate", "promote", "reject", "suppress"].includes(input.action) ? at : previousCandidate.decidedAt,
+        approvalTicket: restricted && (input.action === "activate" || input.action === "promote")
+          ? { ...(previousCandidate.approvalTicket ?? {}), status: "approved", approvedAt: at, approvedBy: input.actor, unsafeScrapingAllowed: false }
+          : previousCandidate.approvalTicket
+      },
       sourceRequestAudit: [
         ...previousEvents,
         { at, action: input.action, actor: input.actor, reason: input.reason, fromStatus: source.status, toStatus: input.status }
@@ -384,6 +475,9 @@ function sourceLifecycle(source: SourceRecord) {
     activationState: activationStateForSource(source),
     parserStatus: parserStatusForSource(source),
     healthStatus: source.metadata?.healthStatus ?? "untested",
+    validationResult: source.metadata?.validationResult ?? sourceCandidate(source).validationResult,
+    lastTestedAt: source.metadata?.lastTestedAt ?? sourceCandidate(source).lastTestedAt,
+    activationDecision: sourceCandidate(source).activationDecision,
     audit: Array.isArray(source.metadata?.sourceRequestAudit) ? source.metadata.sourceRequestAudit : [],
     persisted: true
   };
@@ -410,6 +504,7 @@ function sourcePolicyPosture(source: SourceRecord) {
 
 function nextSourceAction(source: SourceRecord): string {
   if (source.status === "rejected") return "Candidate is rejected. Retry only if the target or policy boundary changes.";
+  if (source.status === "suppressed") return "Candidate is suppressed. Unsuppress is not automated yet; request a new candidate if the scope changes.";
   if (isRestrictedMetadataSource(source)) {
     return source.governance?.approvalState === "approved"
       ? "Run metadata-only health checks and schedule restricted metadata collection through approved proxy boundaries."
@@ -417,6 +512,12 @@ function nextSourceAction(source: SourceRecord): string {
   }
   if (source.status === "active") return "Source is active for bounded public preview polling on the next canary cycle.";
   return "Test parser and source health, then activate bounded public polling or reject the candidate.";
+}
+
+function lookupLifecycleSource(input: { sourceId: string; candidateId: string }, options: ApiServerOptions): SourceRecord | undefined {
+  if (input.sourceId) return options.store.getSource?.(input.sourceId) ?? options.store.listSources().find((item) => item.id === input.sourceId);
+  if (input.candidateId) return options.store.listSources().find((item) => item.metadata?.sourceCandidate?.id === input.candidateId);
+  return undefined;
 }
 
 function isRestrictedMetadataSource(source: SourceRecord): boolean {
@@ -436,11 +537,137 @@ function testHealthStatus(source: SourceRecord): string {
 
 function activationStateForSource(source: SourceRecord): string {
   if (source.status === "rejected") return "rejected";
+  if (source.status === "suppressed") return "suppressed";
   if (isRestrictedMetadataSource(source)) {
     return source.governance?.approvalState === "approved" ? "metadata_only_approved" : "pending_metadata_only_approval";
   }
   if (source.status === "active") return "active_canary";
   return "candidate_review";
+}
+
+function sourceCandidate(source: SourceRecord) {
+  const existing = source.metadata?.sourceCandidate ?? {};
+  const generatedAt = source.createdAt ?? nowIso();
+  return {
+    id: existing.id ?? stableId("dwm_source_candidate", `${source.tenantId ?? source.metadata?.tenantId ?? "global"}:${source.type}:${source.url}`),
+    sourceId: source.id,
+    family: sourceFamily(source),
+    target: existing.target ?? source.url,
+    tenantId: source.tenantId ?? source.metadata?.tenantId,
+    scope: existing.scope ?? source.metadata?.scope,
+    requestedBy: existing.requestedBy ?? source.approvedBy ?? "unknown",
+    requestedAt: existing.requestedAt ?? generatedAt,
+    policyBoundary: existing.policyBoundary ?? (isRestrictedMetadataSource(source) ? restrictedMetadataBoundary() : source.metadata?.collectionBoundary),
+    status: existing.status ?? candidateStatusForSource(source),
+    validationResult: existing.validationResult ?? {
+      allowed: sourcePolicyPosture(source).allowed,
+      reason: sourcePolicyPosture(source).reason,
+      checkedAt: source.updatedAt ?? generatedAt
+    },
+    parserStatus: existing.parserStatus ?? parserStatusForSource(source),
+    healthStatus: existing.healthStatus ?? source.metadata?.healthStatus ?? "not_tested",
+    lastTestedAt: existing.lastTestedAt ?? source.metadata?.lastTestedAt,
+    activationDecision: existing.activationDecision ?? activationStateForSource(source),
+    decidedBy: existing.decidedBy,
+    decidedAt: existing.decidedAt,
+    approvalTicket: existing.approvalTicket
+  };
+}
+
+function initialSourceCandidate(input: {
+  source: Pick<SourceRecord, "id" | "type" | "url" | "tenantId">;
+  generatedAt: string;
+  target: string;
+  requestedBy: string;
+  scope?: string;
+  validationResult: Record<string, unknown>;
+  parserStatus: string;
+  healthStatus: string;
+  status: string;
+  activationDecision: string;
+  approvalTicket?: Record<string, unknown>;
+  policyBoundary?: Record<string, unknown>;
+}) {
+  return {
+    id: stableId("dwm_source_candidate", `${input.source.tenantId ?? "global"}:${input.source.type}:${input.source.url}`),
+    sourceId: input.source.id,
+    family: sourceFamily(input.source),
+    target: input.target,
+    tenantId: input.source.tenantId,
+    scope: input.scope,
+    requestedBy: input.requestedBy,
+    requestedAt: input.generatedAt,
+    policyBoundary: input.policyBoundary ?? (String(input.source.type).endsWith("_metadata") ? restrictedMetadataBoundary() : undefined),
+    status: input.status,
+    validationResult: input.validationResult,
+    parserStatus: input.parserStatus,
+    healthStatus: input.healthStatus,
+    activationDecision: input.activationDecision,
+    approvalTicket: input.approvalTicket
+  };
+}
+
+function sourceHealthStatus(source: SourceRecord) {
+  return {
+    status: source.health?.status ?? source.metadata?.healthStatus ?? sourceCandidate(source).healthStatus ?? "not_tested",
+    checkedAt: source.health?.checkedAt ?? source.metadata?.lastLifecycleAt,
+    consecutiveFailures: source.health?.consecutiveFailures ?? 0,
+    errorRate: source.health?.errorRate ?? 0,
+    lastError: source.health?.lastError
+  };
+}
+
+function sourceParserStatus(source: SourceRecord) {
+  return {
+    status: source.metadata?.parserStatus ?? sourceCandidate(source).parserStatus ?? parserStatusForSource(source),
+    profile: isRestrictedMetadataSource(source) ? "restricted_metadata" : source.type === "telegram_public" ? "public_channel_handoff" : "default",
+    lastValidatedAt: source.metadata?.validationResult?.checkedAt ?? sourceCandidate(source).validationResult?.checkedAt,
+    warnings: []
+  };
+}
+
+function candidateStatusForSource(source: SourceRecord): string {
+  if (source.status === "active") return "active";
+  if (source.status === "rejected") return "rejected";
+  if (source.status === "suppressed") return "suppressed";
+  if (isRestrictedMetadataSource(source)) return "approval_required";
+  return "queued";
+}
+
+function candidateStatusForAction(action: string, activationState: string): string {
+  if (action === "validate") return "validated";
+  if (action === "test") return "tested";
+  if (action === "activate" || action === "promote") return "active";
+  if (action === "reject") return "rejected";
+  if (action === "suppress") return "suppressed";
+  if (action === "retry") return "retry_scheduled";
+  return activationState;
+}
+
+function activationDecisionForAction(action: string, activationState: string): string {
+  if (action === "validate") return "validated_pending_operator_decision";
+  if (action === "test") return "test_passed_pending_operator_decision";
+  if (action === "activate" || action === "promote") return activationState;
+  if (action === "reject") return "rejected_by_operator";
+  if (action === "suppress") return "suppressed_by_operator";
+  if (action === "retry") return "retry_scheduled";
+  return activationState;
+}
+
+function sourceFamily(source: Pick<SourceRecord, "type" | "url">): string {
+  if (String(source.type).includes("telegram") || String(source.url).includes("t.me/")) return "telegram_public";
+  if (String(source.type).endsWith("_metadata") || String(source.url).includes(".onion") || String(source.url).startsWith("metadata://darkweb/")) return "darkweb_metadata";
+  return String(source.type ?? "unknown");
+}
+
+function publicTelegramBoundary() {
+  return {
+    publicOnly: true,
+    noPrivateAccess: true,
+    noAutoJoin: true,
+    noCredentialCollection: true,
+    noMediaDownload: true
+  };
 }
 
 function restrictedMetadataBoundary() {

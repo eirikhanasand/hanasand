@@ -3,16 +3,19 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 type ControlActionBody = {
-    action?: 'run_query' | 'source_apply_plan' | 'public_channel_status' | 'canary_run' | 'request_source' | 'create_watchlist' | 'rebuild_alerts'
+    action?: 'run_query' | 'source_apply_plan' | 'public_channel_status' | 'canary_run' | 'request_source' | 'source_candidate_action' | 'create_watchlist' | 'rebuild_alerts'
     query?: string
     sourceId?: string
+    candidateId?: string
     sourcePackIds?: string[]
     actions?: string[]
+    candidateAction?: 'inspect' | 'validate' | 'test' | 'activate' | 'promote' | 'reject' | 'retry' | 'suppress'
     target?: string
     targets?: string[]
     sourceType?: 'telegram_channel' | 'restricted_metadata'
     activate?: boolean
     approveMetadataOnly?: boolean
+    reason?: string
     watchlistName?: string
     terms?: string[]
     webhookUrl?: string
@@ -160,7 +163,20 @@ export async function POST(request: NextRequest) {
             activate: body.activate !== false,
             approveMetadataOnly: body.approveMetadataOnly === true,
             approvedBy: 'dashboard/ti/control',
+            requestedBy: 'dashboard/ti/control',
             priority: 'high',
+        })
+    }
+
+    if (body.action === 'source_candidate_action') {
+        return forward(base, '/v1/dwm/source-requests', {
+            action: body.candidateAction || 'inspect',
+            sourceId: body.sourceId,
+            candidateId: body.candidateId,
+            approveMetadataOnly: body.approveMetadataOnly === true,
+            approvedBy: 'dashboard/ti/control',
+            decidedBy: 'dashboard/ti/control',
+            reason: body.reason || 'operator action from TI scraper control room',
         })
     }
 
