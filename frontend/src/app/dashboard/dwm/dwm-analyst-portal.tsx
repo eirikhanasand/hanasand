@@ -199,12 +199,13 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: P
                                         <span className={severityClass(alert.severity)}>{alert.severity}</span>
                                     </div>
                                     <p className='mt-1 truncate font-mono text-xs text-[#667085]'>{alert.matchedTerm.value}</p>
-                                    <p className='mt-2 line-clamp-2 text-xs leading-5 text-[#596170]'>{alert.claimSummary}</p>
-                                    <div className='mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#667085]'>
-                                        <span className='rounded-full bg-white px-2 py-0.5'>{stateLabel(alert.deliveryState || 'pending_review')}</span>
-                                        <span>{alert.workflowEvents?.length || 0} events</span>
-                                        <span>{relativeTimeLabel(alert.firstSeenAt)}</span>
+                                    <div className='mt-3 grid grid-cols-2 gap-2 text-[11px]'>
+                                        <QueueCell label='route' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
+                                        <QueueCell label='urgency' value={stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))} tone={alert.routingContext?.urgency === 'immediate' || alert.severity === 'critical' ? 'bad' : 'neutral'} />
+                                        <QueueCell label='evidence' value={`${alert.evidenceSummary?.evidenceCount ?? alert.evidence.length}`} />
+                                        <QueueCell label='last seen' value={relativeTimeLabel(alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt)} />
                                     </div>
+                                    <p className='mt-3 line-clamp-2 text-xs leading-5 text-[#596170]'>{alert.claimSummary}</p>
                                 </button>
                             )) : (
                                 <div className='rounded-lg border border-dashed border-[#cfd8e6] bg-white p-4 text-sm leading-6 text-[#596170]'>
@@ -271,6 +272,14 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
     const analystNote = localState?.note ?? ''
     const assignee = localState?.assignee ?? alert.assignedOwner ?? 'Unassigned'
     const persistedOwner = assignee === 'Unassigned' ? undefined : assignee
+    const evidenceSummary = alert.evidenceSummary ?? fallbackEvidenceSummary(alert)
+    const routingContext = alert.routingContext ?? fallbackRoutingContext(alert)
+    const matchContext = alert.matchContext ?? {
+        normalizedTerm: alert.matchedTerm.value.toLowerCase(),
+        termKind: alert.matchedTerm.kind,
+        matchType: 'case_insensitive_substring' as const,
+        matchedFieldHints: [],
+    }
     return (
         <div className='grid gap-5 p-5'>
             <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -294,6 +303,35 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                     <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
                 </div>
             </div>
+
+            <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
+                <div className='grid gap-0 md:grid-cols-4'>
+                    <CaseMetric label='Route' value={stateLabel(routingContext.queue)} detail={stateLabel(routingContext.urgency)} tone={routingContext.urgency === 'immediate' ? 'bad' : routingContext.urgency === 'same_day' ? 'warn' : 'neutral'} />
+                    <CaseMetric label='Evidence' value={`${evidenceSummary.evidenceCount}`} detail={`${evidenceSummary.publicSafeCount} redacted · ${evidenceSummary.metadataOnlyCount} metadata`} />
+                    <CaseMetric label='First seen' value={shortTime(evidenceSummary.firstObservedAt)} detail={relativeTimeLabel(evidenceSummary.firstObservedAt)} />
+                    <CaseMetric label='Last seen' value={shortTime(evidenceSummary.lastObservedAt)} detail={relativeTimeLabel(evidenceSummary.lastObservedAt)} />
+                </div>
+                <div className='grid gap-4 border-t border-[#eef1f5] bg-[#fbfcfe] p-4 lg:grid-cols-[0.8fr_1.2fr]'>
+                    <div>
+                        <p className='text-xs font-semibold uppercase text-[#667085]'>Match context</p>
+                        <div className='mt-2 flex flex-wrap gap-2'>
+                            <span className='rounded-full bg-white px-2 py-1 font-mono text-xs font-semibold text-[#171a21]'>{matchContext.normalizedTerm}</span>
+                            <span className='rounded-full bg-white px-2 py-1 text-xs font-semibold text-[#596170]'>{stateLabel(matchContext.termKind)}</span>
+                            <span className='rounded-full bg-white px-2 py-1 text-xs font-semibold text-[#596170]'>{matchContext.matchedFieldHints.length ? matchContext.matchedFieldHints.join(', ') : stateLabel(matchContext.matchType)}</span>
+                        </div>
+                        <div className='mt-3 flex flex-wrap gap-2'>
+                            {Object.entries(evidenceSummary.sourceFamilyCounts).map(([family, count]) => (
+                                <span key={family} className='rounded-full border border-[#d8dee9] bg-white px-2 py-1 text-xs font-semibold text-[#344054]'>{stateLabel(family)}: {count}</span>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <p className='text-xs font-semibold uppercase text-[#667085]'>Routing reason</p>
+                        <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{routingContext.reason}</p>
+                        <p className='mt-1 text-xs font-semibold text-[#667085]'>Customer evidence: {stateLabel(routingContext.customerVisibleEvidence)} · Dedupe {alert.webhookDelivery.dedupeKey}</p>
+                    </div>
+                </div>
+            </section>
 
             <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.55fr_1fr_auto] lg:items-end'>
                 <label className='grid gap-2'>
@@ -351,7 +389,7 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                     <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
                         <div>
                             <h3 className='text-sm font-semibold text-[#171a21]'>Evidence replay</h3>
-                            <p className='mt-0.5 text-xs text-[#667085]'>Safe excerpts, hashes, source families, and retention state.</p>
+                            <p className='mt-0.5 text-xs text-[#667085]'>Safe excerpts, hashes, source families, provenance, and retention state.</p>
                         </div>
                         <RotateCcw className='h-4 w-4 text-[#3056d3]' />
                     </div>
@@ -364,6 +402,12 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                                     <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{stateLabel(item.captureMode)}</span>
                                 </div>
                                 <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{item.excerpt}</p>
+                                <div className='mt-3 grid gap-2 rounded-lg border border-[#eef1f5] bg-white p-3 text-xs text-[#667085] sm:grid-cols-2'>
+                                    <p><span className='font-semibold text-[#475467]'>Observed:</span> {item.observedAt ? shortTime(item.observedAt) : 'unknown'}</p>
+                                    <p><span className='font-semibold text-[#475467]'>Capture:</span> {item.provenance?.captureId ?? item.id}</p>
+                                    <p><span className='font-semibold text-[#475467]'>Source:</span> {item.provenance?.sourceId ?? item.sourceName}</p>
+                                    <p><span className='font-semibold text-[#475467]'>Collector:</span> {item.provenance?.collector || item.provenance?.sourceType || 'unknown'}</p>
+                                </div>
                                 <p className='mt-3 break-all font-mono text-[11px] text-[#667085]'>{item.contentHash}</p>
                             </div>
                         ))}
@@ -438,6 +482,7 @@ function NoCaseWorkspace({ latestCaptures }: { latestCaptures: OperationsSnapsho
 }
 
 function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot, operations: OperationsSnapshot | null }) {
+    const sourceRows = operations?.sourceHealth ?? []
     return (
         <section className='rounded-lg border border-[#e0e5ed] bg-white'>
             <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
@@ -447,16 +492,48 @@ function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot,
                 </div>
                 <SlidersHorizontal className='h-4 w-4 text-[#3056d3]' />
             </div>
-            <div className='grid gap-2 p-3'>
-                {snapshot.sourceCoverage.map(source => (
-                    <div key={source.family} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
-                        <div className='flex items-center justify-between gap-3'>
-                            <span className='text-sm font-semibold text-[#171a21]'>{source.label}</span>
-                            <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{source.activeCount}/{source.sourceCount}</span>
-                        </div>
-                        <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#667085]'>{source.detail}</p>
+            <div className='p-3'>
+                {sourceRows.length ? (
+                    <div className='overflow-hidden rounded-lg border border-[#eef1f5]'>
+                        <table className='w-full text-left text-xs'>
+                            <thead className='bg-[#f8fafc] text-[10px] uppercase text-[#667085]'>
+                                <tr>
+                                    <th className='px-3 py-2 font-semibold'>Source</th>
+                                    <th className='px-3 py-2 font-semibold'>State</th>
+                                    <th className='px-3 py-2 font-semibold'>Last pull</th>
+                                </tr>
+                            </thead>
+                            <tbody className='divide-y divide-[#eef1f5]'>
+                                {sourceRows.slice(0, 8).map(source => (
+                                    <tr key={source.sourceId} className='bg-white align-top'>
+                                        <td className='px-3 py-2'>
+                                            <p className='max-w-[150px] truncate font-semibold text-[#171a21]' title={source.sourceName}>{source.sourceName}</p>
+                                            <p className='mt-0.5 text-[11px] text-[#667085]'>{stateLabel(source.family)} · {source.approvedMetadataOnly ? 'metadata only' : 'message capture'}</p>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <span className={source.status === 'active' ? 'rounded-full bg-[#f4fbf7] px-2 py-0.5 font-semibold text-[#147a3b]' : 'rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#b45309]'}>
+                                                {stateLabel(source.status)}
+                                            </span>
+                                        </td>
+                                        <td className='px-3 py-2 font-semibold text-[#475467]'>{source.lastCollectedAt ? relativeTimeLabel(source.lastCollectedAt) : 'never'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
-                ))}
+                ) : (
+                    <div className='grid gap-2'>
+                        {snapshot.sourceCoverage.map(source => (
+                            <div key={source.family} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
+                                <div className='flex items-center justify-between gap-3'>
+                                    <span className='text-sm font-semibold text-[#171a21]'>{source.label}</span>
+                                    <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{source.activeCount}/{source.sourceCount}</span>
+                                </div>
+                                <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#667085]'>{source.detail}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         </section>
     )
@@ -475,13 +552,18 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
             </div>
             <div className='grid gap-2 p-3'>
                 {visible.slice(0, 6).map(delivery => (
-                    <div key={delivery.id} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
-                        <div className='flex flex-wrap items-center gap-2'>
+                    <div key={delivery.id} className='grid gap-2 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
+                        <div className='flex flex-wrap items-center justify-between gap-2'>
                             <span className={deliveryClass(delivery.status)}>{stateLabel(delivery.status)}</span>
-                            <span className='text-xs text-[#667085]'>{relativeTimeLabel(delivery.attemptedAt)}</span>
+                            <span className='text-xs font-semibold text-[#667085]'>{relativeTimeLabel(delivery.attemptedAt)}</span>
                         </div>
-                        <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{delivery.endpointHash}</p>
-                        {delivery.error && <p className='mt-2 text-xs text-[#9a3412]'>{delivery.error}</p>}
+                        <div className='grid grid-cols-2 gap-2 text-[11px] text-[#667085]'>
+                            <p><span className='font-semibold text-[#475467]'>HTTP:</span> {delivery.httpStatus ?? (delivery.dryRun ? 'dry run' : 'pending')}</p>
+                            <p><span className='font-semibold text-[#475467]'>Payload:</span> {delivery.payloadHash}</p>
+                            <p className='col-span-2 break-all'><span className='font-semibold text-[#475467]'>Endpoint:</span> {delivery.endpointHash}</p>
+                            <p className='col-span-2 break-all'><span className='font-semibold text-[#475467]'>Dedupe:</span> {delivery.dedupeKey}</p>
+                        </div>
+                        {delivery.error && <p className='text-xs text-[#9a3412]'>{delivery.error}</p>}
                     </div>
                 ))}
                 {!visible.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-3 text-sm text-[#596170]'>No webhook attempts yet.</p>}
@@ -496,7 +578,7 @@ function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
             <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-[#171a21]'>Actor context</h3>
-                    <p className='mt-0.5 text-xs text-[#667085]'>UI-friendly summaries for fast triage.</p>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Actor, sources, latest sighting, and watch state.</p>
                 </div>
                 <Fingerprint className='h-4 w-4 text-[#3056d3]' />
             </div>
@@ -507,7 +589,17 @@ function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
                             <span className='text-sm font-semibold text-[#171a21]'>{actor.actor}</span>
                             <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{actor.confidence}%</span>
                         </div>
-                        <p className='mt-2 line-clamp-3 text-xs leading-5 text-[#667085]'>{actor.summary}</p>
+                        <div className='mt-3 grid grid-cols-3 gap-2 text-[11px]'>
+                            <QueueCell label='sources' value={`${actor.sourceCount}`} />
+                            <QueueCell label='captures' value={`${actor.captureCount}`} />
+                            <QueueCell label='latest' value={relativeTimeLabel(actor.latestSeenAt)} />
+                        </div>
+                        <div className='mt-2 flex flex-wrap gap-2'>
+                            <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{stateLabel(actor.watchState)}</span>
+                            {actor.sourceFamilies.slice(0, 2).map(family => (
+                                <span key={family} className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{stateLabel(family)}</span>
+                            ))}
+                        </div>
                     </div>
                 ))}
                 {!snapshot.actorOverviews.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-3 text-sm text-[#596170]'>No actor context in recent metadata yet.</p>}
@@ -524,6 +616,68 @@ function StatusPill({ label, value, tone }: { label: string, value: string, tone
             <p className='mt-0.5 text-sm font-semibold'>{value}</p>
         </div>
     )
+}
+
+function CaseMetric({ label, value, detail, tone = 'neutral' }: { label: string, value: string, detail: string, tone?: 'neutral' | 'warn' | 'bad' }) {
+    const toneClass = tone === 'bad'
+        ? 'text-[#c2410c]'
+        : tone === 'warn'
+            ? 'text-[#b45309]'
+            : 'text-[#3056d3]'
+    return (
+        <div className='border-b border-r border-[#eef1f5] p-4 last:border-r-0 md:border-b-0'>
+            <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
+            <p className={`mt-2 text-xl font-semibold ${toneClass}`}>{value}</p>
+            <p className='mt-1 text-xs font-semibold text-[#667085]'>{detail}</p>
+        </div>
+    )
+}
+
+function QueueCell({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'bad' }) {
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-white px-2 py-1.5'>
+            <p className='text-[9px] font-semibold uppercase text-[#98a2b3]'>{label}</p>
+            <p className={`mt-0.5 truncate font-semibold ${tone === 'bad' ? 'text-[#c2410c]' : 'text-[#475467]'}`} title={value}>{value}</p>
+        </div>
+    )
+}
+
+function fallbackEvidenceSummary(alert: PortalAlert): NonNullable<PortalAlert['evidenceSummary']> {
+    const observed = alert.evidence.map(item => item.observedAt || item.firstSeenAt || alert.firstSeenAt).sort()
+    return {
+        evidenceCount: alert.evidence.length,
+        sourceFamilyCounts: alert.evidence.reduce<Record<string, number>>((counts, item) => {
+            counts[item.sourceFamily] = (counts[item.sourceFamily] ?? 0) + 1
+            return counts
+        }, {}),
+        metadataOnlyCount: alert.evidence.filter(item => item.redactionState === 'metadata_only' || item.provenance?.metadataOnly).length,
+        publicSafeCount: alert.evidence.filter(item => item.redactionState === 'redacted' || item.redactionState === 'public_safe').length,
+        firstObservedAt: observed[0] || alert.firstSeenAt,
+        lastObservedAt: observed[observed.length - 1] || alert.lastSeenAt || alert.firstSeenAt,
+    }
+}
+
+function fallbackRoutingContext(alert: PortalAlert): NonNullable<PortalAlert['routingContext']> {
+    const queue = alert.webhookDelivery.recommendedRoute
+    const urgency = alert.severity === 'critical' ? 'immediate' : alert.severity === 'high' ? 'same_day' : 'watch'
+    return {
+        queue,
+        urgency,
+        customerVisibleEvidence: alert.sourceFamily === 'darkweb_metadata' ? 'metadata_only' : 'redacted_excerpt',
+        reason: `${stateLabel(alert.artifactType)} routes to ${stateLabel(queue)} based on source family, severity, and watched term.`,
+    }
+}
+
+function shortTime(value: string) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return new Intl.DateTimeFormat('en', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Oslo',
+    }).format(date)
 }
 
 function WorkTile({ title, body, state }: { title: string, body: string, state: 'active' | 'pending' }) {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarClock, Pause, Play, Plus, RefreshCw, Trash2, WandSparkles } from 'lucide-react'
+import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, Play, Plus, RefreshCw, Send, Trash2, WandSparkles } from 'lucide-react'
 import {
     createAutomation,
     deleteAutomation,
@@ -56,6 +56,9 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
     const selected = useMemo(() => automations.find(item => item.id === selectedId) || null, [automations, selectedId])
     const activeAutomationCount = useMemo(() => automations.filter(item => item.status === 'active').length, [automations])
+    const selectedHealth = selected ? routeHealthFor(selected) : routeHealthForDraft(draft)
+    const routeIssueCount = automations.reduce((count, item) => count + (item.consecutiveFailures ? 1 : 0), 0)
+    const lastRun = runs[0]
 
     useEffect(() => {
         const nextWebhookDraft = readWebhookDraft()
@@ -65,12 +68,12 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             setDraft(draftFromWebhook(nextWebhookDraft))
             setSelectedId('')
             setRuns([])
-            setStatus('Webhook alert is ready. Review the cadence and create it to start monitoring.')
+            setStatus('Webhook route loaded. Review cadence, detection terms, and delivery channel.')
         } else if (setupIntent === 'dwm') {
             setDraft(dwmFallbackDraft())
             setSelectedId('')
             setRuns([])
-            setStatus('Dark web monitoring alert is ready. Add the delivery endpoint in the instructions, then create it.')
+            setStatus('DWM delivery draft loaded. Add the endpoint and create the route.')
         }
         void load(nextWebhookDraft ? draftSelectionId : undefined)
     }, [setup])
@@ -174,13 +177,13 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
         setSelectedId('')
         setRuns([])
         setDraft(draftFromWebhook(webhookDraft))
-        setStatus('Webhook alert is ready. Review the cadence and create it to start monitoring.')
+        setStatus('Webhook route loaded. Review cadence, detection terms, and delivery channel.')
     }
 
     function clearWebhookDraft() {
         clearStoredWebhookDraft()
         setWebhookDraft(null)
-        setStatus('Saved webhook setup cleared.')
+        setStatus('Saved webhook route cleared.')
     }
 
     function cancelDraft() {
@@ -199,8 +202,8 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             <section className='rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm'>
                 <div className='mb-2 flex items-center justify-between gap-2 px-2 py-1'>
                     <div>
-                        <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Monitoring</p>
-                        <h2 className='text-sm font-semibold text-[#171a21]'>{activeAutomationCount}/{maxActiveAutomations} active alerts</h2>
+                        <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Delivery routes</p>
+                        <h2 className='text-sm font-semibold text-[#171a21]'>{activeAutomationCount}/{maxActiveAutomations} active</h2>
                     </div>
                     <button type='button' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d8dee9] bg-[#f8fafc] text-[#3056d3] hover:bg-[#eef3ff]' onClick={newAutomation} title='New alert' aria-label='New alert'>
                         <Plus className='h-4 w-4' />
@@ -217,11 +220,16 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                                 <span className='truncate text-sm font-semibold text-[#171a21]'>{automation.name}</span>
                                 <span className={`rounded-full px-2 py-0.5 text-[11px] ${automation.status === 'active' ? 'bg-[#e9f8ef] text-[#147a3b]' : 'bg-[#eef1f5] text-[#596170]'}`}>{automation.status}</span>
                             </div>
-                            <p className='mt-2 line-clamp-2 text-xs leading-5 text-[#596170]'>{automation.prompt}</p>
-                            <p className='mt-2 text-[11px] text-[#8c95a5]'>{formatSchedule(automation)}</p>
+                            <div className='mt-3 grid grid-cols-2 gap-2 text-[11px] text-[#667085]'>
+                                <QueueFact label='Next' value={shortDate(automation.nextRunAt || automation.runAt)} />
+                                <QueueFact label='Last' value={automation.lastStatus || 'none'} tone={automation.consecutiveFailures ? 'bad' : automation.lastStatus === 'completed' ? 'ok' : 'neutral'} />
+                                <QueueFact label='Cadence' value={scheduleShort(automation)} />
+                                <QueueFact label='Issues' value={String(automation.consecutiveFailures || 0)} tone={automation.consecutiveFailures ? 'bad' : 'ok'} />
+                            </div>
+                            <p className='mt-2 truncate text-[11px] text-[#8c95a5]'>{deliveryTargetLabel(automation.modelName, automation.actionType)}</p>
                         </button>
                     ))}
-                    {!automations.length && <p className='p-3 text-sm leading-6 text-[#596170]'>No alerts yet. Create one to watch company, vendor, domain, and product mentions.</p>}
+                    {!automations.length && <p className='p-3 text-sm leading-6 text-[#596170]'>No delivery routes yet. Create one to send watchlist matches to a webhook or review queue.</p>}
                 </div>
             </section>
 
@@ -229,8 +237,8 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                 <div className='grid gap-4'>
                     <div className='flex flex-wrap items-center justify-between gap-2'>
                         <div>
-                            <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Editor</p>
-                            <h2 className='text-lg font-semibold text-[#171a21]'>{selected ? selected.name : 'New monitoring alert'}</h2>
+                            <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Delivery control</p>
+                            <h2 className='text-lg font-semibold text-[#171a21]'>{selected ? selected.name : 'New delivery route'}</h2>
                         </div>
                         <div className='flex flex-wrap gap-2'>
                             <IconButton label='Refresh' icon={<RefreshCw className='h-4 w-4' />} onClick={() => void load()} />
@@ -239,19 +247,24 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         </div>
                     </div>
 
+                    <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
+                        <RouteMetric label='Route health' value={selectedHealth.label} detail={selectedHealth.detail} tone={selectedHealth.tone} icon={<DeliveryIcon status={selected?.lastStatus} failures={selected?.consecutiveFailures || 0} />} />
+                        <RouteMetric label='Destination' value={draft.modelName || 'auto'} detail={draft.actionType === 'echo' ? 'delivery test' : 'monitoring check'} tone={draft.modelName ? 'ok' : 'neutral'} icon={<Send className='h-4 w-4' />} />
+                        <RouteMetric label='Next check' value={selected ? shortDate(selected.nextRunAt || selected.runAt) : shortDate(draft.runAt)} detail={scheduleShort(selected || draft)} tone='neutral' icon={<CalendarClock className='h-4 w-4' />} />
+                        <RouteMetric label='Open issues' value={String(selected?.consecutiveFailures || routeIssueCount)} detail={lastRun?.error || selected?.pausedReason || 'delivery failures and paused routes'} tone={selected?.consecutiveFailures || routeIssueCount ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
+                    </div>
+
                     {webhookDraft && (
                         <div className='rounded-lg border border-[#b8c5ff] bg-[#f4f7ff] p-4'>
                             <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
                                 <div className='min-w-0'>
                                     <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Dark web monitoring</p>
-                                    <h3 className='mt-1 text-sm font-semibold text-[#171a21]'>Webhook alert ready to create</h3>
-                                    <p className='mt-1 text-sm leading-6 text-[#3d4656]'>
-                                        Watch {formatTerms(webhookDraft.terms)} and send matching company exposure alerts to {redactWebhookEndpoint(webhookDraft.endpoint)}.
-                                    </p>
+                                    <h3 className='mt-1 text-sm font-semibold text-[#171a21]'>Webhook route ready to create</h3>
+                                    <p className='mt-1 text-sm leading-6 text-[#3d4656]'>Watch {formatTerms(webhookDraft.terms)} and send matched exposure alerts to {redactWebhookEndpoint(webhookDraft.endpoint)}.</p>
                                 </div>
                                 <div className='flex shrink-0 flex-wrap gap-2'>
                                     <button type='button' onClick={useWebhookDraft} className='rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
-                                        Use this setup
+                                        Use route
                                     </button>
                                     <button type='button' onClick={clearWebhookDraft} className='rounded-lg border border-[#ccd6ea] bg-white px-3 py-2 text-sm font-semibold text-[#596170] hover:border-[#aebbd1] hover:text-[#171a21]'>
                                         Clear
@@ -266,40 +279,44 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
                                 <div className='min-w-0'>
                                     <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Dark web monitoring</p>
-                                    <h3 className='mt-1 text-sm font-semibold text-[#171a21]'>Webhook alert ready to create</h3>
-                                    <p className='mt-1 text-sm leading-6 text-[#3d4656]'>
-                                        The alert is prefilled for company, domain, vendor, and product monitoring. Add the delivery endpoint in the instructions, then create the alert.
-                                    </p>
+                                    <h3 className='mt-1 text-sm font-semibold text-[#171a21]'>Webhook route ready to create</h3>
+                                    <p className='mt-1 text-sm leading-6 text-[#3d4656]'>The route is prefilled for company, domain, vendor, and product monitoring. Add the delivery endpoint, then create it.</p>
                                 </div>
-                                <button type='button' onClick={() => setStatus('Review the prefilled alert and create it to start monitoring.')} className='shrink-0 rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
-                                    Use this setup
+                                <button type='button' onClick={() => setStatus('Review the route and create it to start delivery.')} className='shrink-0 rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39]'>
+                                    Use route
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    <div className='grid gap-3 md:grid-cols-2'>
-                        <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Name</span>
-                            <input className={inputClass} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} />
-                        </label>
-                        <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Delivery type</span>
-                            <select className={inputClass} value={draft.actionType} onChange={event => setDraft({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}>
-                                <option value='agent_prompt'>Monitoring check</option>
-                                <option value='echo'>Delivery test</option>
-                            </select>
-                        </label>
-                        <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Delivery channel</span>
-                            <input className={inputClass} value={draft.modelName || ''} placeholder='Webhook, email, or auto' onChange={event => setDraft({ ...draft, modelName: event.target.value.trim() || null })} />
-                        </label>
-                    </div>
-
-                    <label className='grid gap-1.5'>
-                        <span className='text-xs font-medium text-[#596170]'>Alert instructions</span>
-                        <textarea className={`${inputClass} min-h-32 leading-6`} value={draft.prompt} onChange={event => setDraft({ ...draft, prompt: event.target.value })} />
-                    </label>
+                    <section className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                        <div className='mb-3 flex items-center justify-between gap-3'>
+                            <div>
+                                <h3 className='text-sm font-semibold text-[#171a21]'>Route settings</h3>
+                                <p className='mt-0.5 text-xs text-[#667085]'>Destination, route type, cadence, status, and notification policy.</p>
+                            </div>
+                            <span className={draft.status === 'active' ? 'rounded-full bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]' : 'rounded-full bg-[#eef1f5] px-2 py-1 text-xs font-semibold text-[#596170]'}>
+                                {draft.status}
+                            </span>
+                        </div>
+                        <div className='grid gap-3 md:grid-cols-3'>
+                            <label className='grid gap-1.5'>
+                                <span className='text-xs font-medium text-[#596170]'>Route name</span>
+                                <input className={inputClass} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} />
+                            </label>
+                            <label className='grid gap-1.5'>
+                                <span className='text-xs font-medium text-[#596170]'>Route type</span>
+                                <select className={inputClass} value={draft.actionType} onChange={event => setDraft({ ...draft, actionType: event.target.value as AutomationPayload['actionType'] })}>
+                                    <option value='agent_prompt'>Monitoring check</option>
+                                    <option value='echo'>Delivery test</option>
+                                </select>
+                            </label>
+                            <label className='grid gap-1.5'>
+                                <span className='text-xs font-medium text-[#596170]'>Destination</span>
+                                <input className={inputClass} value={draft.modelName || ''} placeholder='Webhook, email, or review queue' onChange={event => setDraft({ ...draft, modelName: event.target.value.trim() || null })} />
+                            </label>
+                        </div>
+                    </section>
 
                     <div className='grid gap-3 md:grid-cols-2 2xl:grid-cols-5'>
                         <label className='grid gap-1.5'>
@@ -325,19 +342,32 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             </select>
                         </label>
                         <label className='grid gap-1.5'>
-                            <span className='text-xs font-medium text-[#596170]'>Timezone</span>
-                            <input className={inputClass} value={draft.timezone || 'UTC'} onChange={event => setDraft({ ...draft, timezone: event.target.value })} />
-                        </label>
-                    </div>
-
-                    <div className='grid gap-3 md:grid-cols-2'>
-                        <label className='grid gap-1.5'>
                             <span className='text-xs font-medium text-[#596170]'>Notify</span>
                             <select className={inputClass} value={draft.notifyOn || 'failure'} onChange={event => setDraft({ ...draft, notifyOn: event.target.value as AutomationPayload['notifyOn'] })}>
                                 <option value='failure'>Delivery issues</option>
                                 <option value='always'>Every check</option>
                                 <option value='never'>Never</option>
                             </select>
+                        </label>
+                    </div>
+
+                    <section className='grid gap-3 rounded-lg border border-[#e0e5ed] bg-white p-3 lg:grid-cols-[1fr_0.55fr]'>
+                        <label className='grid gap-1.5'>
+                            <span className='text-xs font-medium text-[#596170]'>Matching rules</span>
+                            <textarea className={`${inputClass} min-h-28 leading-6`} value={draft.prompt} onChange={event => setDraft({ ...draft, prompt: event.target.value })} />
+                        </label>
+                        <div className='grid content-start gap-2 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 text-xs text-[#596170]'>
+                            <RouteRule label='Terms' value={extractRuleTerms(draft.prompt)} />
+                            <RouteRule label='Payload' value={draft.prompt.toLowerCase().includes('actor') && draft.prompt.toLowerCase().includes('matchedterm') ? 'actor + match fields' : 'custom fields'} />
+                            <RouteRule label='Filter' value={draft.prompt.toLowerCase().includes('only send') ? 'new or updated matches' : 'all matches'} />
+                            <RouteRule label='Destination' value={draft.modelName || 'auto'} />
+                        </div>
+                    </section>
+
+                    <div className='grid gap-3 md:grid-cols-2'>
+                        <label className='grid gap-1.5'>
+                            <span className='text-xs font-medium text-[#596170]'>Timezone</span>
+                            <input className={inputClass} value={draft.timezone || 'UTC'} onChange={event => setDraft({ ...draft, timezone: event.target.value })} />
                         </label>
                         {selected?.pausedReason && (
                             <div className='rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900'>
@@ -349,7 +379,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <div className='flex flex-wrap items-center gap-2'>
                         <button type='button' className='inline-flex items-center gap-2 rounded-lg bg-[#171a21] px-3 py-2 text-sm font-semibold text-white hover:bg-[#2b2f39] disabled:opacity-50' onClick={() => void saveAutomation()} disabled={busy === 'save'}>
                             <WandSparkles className='h-4 w-4' />
-                            {selected ? 'Save alert' : 'Create alert'}
+                            {selected ? 'Save route' : 'Create route'}
                         </button>
                         <button type='button' className='rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-sm font-semibold text-[#596170] hover:border-[#bdc7d5] hover:text-[#171a21]' onClick={cancelDraft} disabled={busy === 'save'}>
                             Cancel
@@ -359,17 +389,18 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
                     {selected && (
                         <div className='grid gap-3 border-t border-[#eef1f5] pt-4'>
-                            <div className='grid gap-2 sm:grid-cols-3'>
+                            <div className='grid gap-2 sm:grid-cols-4'>
                                 <InfoCard icon={<CalendarClock className='h-4 w-4' />} label='Next check' value={formatDate(selected.nextRunAt)} />
-                                <InfoCard icon={<Pause className='h-4 w-4' />} label='Latest delivery' value={`${selected.lastStatus || 'No checks'}${selected.consecutiveFailures ? ` · ${selected.consecutiveFailures} issues` : ''}`} />
+                                <InfoCard icon={<DeliveryIcon status={selected.lastStatus} failures={selected.consecutiveFailures || 0} />} label='Latest result' value={`${selected.lastStatus || 'No checks'}${selected.consecutiveFailures ? ` · ${selected.consecutiveFailures} issues` : ''}`} />
                                 <InfoCard icon={<Play className='h-4 w-4' />} label='Checks' value={`${selected.runCount}`} />
+                                <InfoCard icon={<Clock3 className='h-4 w-4' />} label='Cadence' value={scheduleShort(selected)} />
                             </div>
                             <div className='grid gap-2'>
                                 {runs.map(run => (
                                     <div key={run.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
                                         <div className='flex flex-wrap items-center justify-between gap-2 text-xs text-[#667085]'>
                                             <span>{formatDate(run.startedAt)}</span>
-                                            <span>{run.status}{run.durationMs ? ` · ${(run.durationMs / 1000).toFixed(1)}s` : ''}</span>
+                                            <span className={run.status === 'failed' ? 'font-semibold text-[#9a3412]' : run.status === 'completed' ? 'font-semibold text-[#147a3b]' : 'font-semibold text-[#3056d3]'}>{run.status}{run.durationMs ? ` · ${(run.durationMs / 1000).toFixed(1)}s` : ''}</span>
                                         </div>
                                         {run.status === 'failed'
                                             ? <ErrorNotice compact className='mt-2' message={run.error || run.result || 'Run failed.'} />
@@ -403,6 +434,83 @@ function InfoCard({ icon, label, value }: { icon: React.ReactNode, label: string
             <p className='mt-1 truncate text-sm font-semibold text-[#171a21]'>{value}</p>
         </div>
     )
+}
+
+function RouteMetric({ icon, label, value, detail, tone }: { icon: React.ReactNode, label: string, value: string, detail: string, tone: 'ok' | 'bad' | 'neutral' }) {
+    const toneClass = tone === 'bad'
+        ? 'border-[#ffd7c2] bg-[#fff7f3] text-[#9a3412]'
+        : tone === 'ok'
+            ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]'
+            : 'border-[#e0e5ed] bg-[#fbfcfe] text-[#3056d3]'
+    return (
+        <div className={`rounded-lg border p-3 ${toneClass}`}>
+            <div className='flex items-center justify-between gap-3'>
+                <p className='text-[10px] font-semibold uppercase opacity-80'>{label}</p>
+                {icon}
+            </div>
+            <p className='mt-2 truncate text-lg font-semibold text-[#171a21]'>{value}</p>
+            <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#596170]'>{detail}</p>
+        </div>
+    )
+}
+
+function RouteRule({ label, value }: { label: string, value: string }) {
+    return (
+        <div className='flex items-center justify-between gap-3 rounded-lg border border-[#e0e5ed] bg-white px-3 py-2'>
+            <span className='font-semibold text-[#667085]'>{label}</span>
+            <span className='truncate text-right font-semibold text-[#171a21]' title={value}>{value}</span>
+        </div>
+    )
+}
+
+function QueueFact({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'ok' | 'bad' }) {
+    const toneClass = tone === 'bad' ? 'text-[#9a3412]' : tone === 'ok' ? 'text-[#147a3b]' : 'text-[#344054]'
+    return (
+        <div className='rounded-md border border-[#e0e5ed] bg-white px-2 py-1'>
+            <p className='text-[9px] font-semibold uppercase text-[#8c95a5]'>{label}</p>
+            <p className={`mt-0.5 truncate font-semibold ${toneClass}`}>{value}</p>
+        </div>
+    )
+}
+
+function DeliveryIcon({ status, failures }: { status?: string | null, failures: number }) {
+    if (failures || status === 'failed') return <AlertTriangle className='h-4 w-4 text-[#9a3412]' />
+    if (status === 'completed' || status === 'success') return <CheckCircle2 className='h-4 w-4 text-[#147a3b]' />
+    return <Send className='h-4 w-4' />
+}
+
+function routeHealthFor(automation: AgentAutomation): { label: string, detail: string, tone: 'ok' | 'bad' | 'neutral' } {
+    if (automation.status === 'paused') {
+        return { label: 'Paused', detail: automation.pausedReason || 'Route is not checking right now.', tone: 'neutral' }
+    }
+    if (automation.consecutiveFailures) {
+        return { label: 'Needs attention', detail: `${automation.consecutiveFailures} failed check${automation.consecutiveFailures === 1 ? '' : 's'} in a row.`, tone: 'bad' }
+    }
+    if (automation.lastStatus === 'completed' || automation.lastStatus === 'success') {
+        return { label: 'Healthy', detail: 'Last check completed.', tone: 'ok' }
+    }
+    return { label: 'Waiting', detail: 'No completed check recorded yet.', tone: 'neutral' }
+}
+
+function routeHealthForDraft(draft: AutomationPayload): { label: string, detail: string, tone: 'ok' | 'bad' | 'neutral' } {
+    if (draft.status === 'paused') return { label: 'Paused', detail: 'Route will not check until reactivated.', tone: 'neutral' }
+    if (!draft.modelName) return { label: 'Needs destination', detail: 'Add webhook, email, or review queue before relying on delivery.', tone: 'bad' }
+    return { label: 'Configured', detail: 'Route has a destination and active schedule.', tone: 'ok' }
+}
+
+function deliveryTargetLabel(modelName: string | null | undefined, actionType: AgentAutomation['actionType']) {
+    if (modelName) return modelName
+    return actionType === 'echo' ? 'delivery test' : 'monitoring check'
+}
+
+function extractRuleTerms(prompt: string) {
+    const first = prompt.split('\n').find(line => line.toLowerCase().includes('watch '))
+    if (!first) return 'custom terms'
+    const afterColon = first.split(':').slice(1).join(':').trim()
+    if (!afterColon) return 'company/domain/vendor/product'
+    const terms = afterColon.split(',').map(term => term.trim()).filter(Boolean)
+    if (terms.length <= 2) return terms.join(', ')
+    return `${terms.slice(0, 2).join(', ')} +${terms.length - 2}`
 }
 
 function toDraft(automation: AgentAutomation): AutomationPayload {
@@ -514,7 +622,14 @@ function formatDate(value?: string | null) {
     return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
-function formatSchedule(automation: AgentAutomation) {
-    if (automation.scheduleKind === 'once') return `Once · ${formatDate(automation.runAt)}`
-    return `Every ${automation.intervalMinutes || 0} minutes · next ${formatDate(automation.nextRunAt)} · ${automation.timezone || 'UTC'}`
+function shortDate(value?: string | null) {
+    if (!value) return 'none'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'unknown'
+    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
+}
+
+function scheduleShort(automation: Pick<AutomationPayload, 'scheduleKind' | 'intervalMinutes' | 'runAt'>) {
+    if (automation.scheduleKind === 'once') return 'once'
+    return `${automation.intervalMinutes || 0}m`
 }

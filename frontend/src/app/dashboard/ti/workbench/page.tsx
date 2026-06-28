@@ -120,7 +120,7 @@ function alertToCase(alert: DwmAlert): WorkbenchCase {
         ],
         relatedLinks: [
             { href: '/dashboard/dwm', label: 'Open DWM console' },
-            { href: '/dashboard/automations?setup=dwm', label: 'Webhook subscription' },
+            { href: '/dashboard/automations?setup=dwm', label: 'Delivery route' },
         ],
     }
 }

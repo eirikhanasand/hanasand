@@ -115,8 +115,6 @@ export default function TiScraperControlClient() {
         void load(defaultQuery)
         const interval = window.setInterval(() => void load(query, true), 15000)
         return () => window.clearInterval(interval)
-        // query changes are submitted deliberately, not on each keypress.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const sources = useMemo(() => sourcesFrom(snapshot), [snapshot])
@@ -330,7 +328,7 @@ export default function TiScraperControlClient() {
                                         <div className='mt-3 grid gap-2'>
                                             <ActionButton busy={busyAction === 'run_query'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('run_query')}>Queue live run</ActionButton>
                                             <ActionButton busy={busyAction === 'source_apply_plan'} icon={<FileSearch className='h-4 w-4' />} onClick={() => runAction('source_apply_plan')}>Dry-run source plan</ActionButton>
-                                            <ActionButton busy={busyAction === 'public_channel_status'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('public_channel_status')}>Test public-channel readiness</ActionButton>
+                                            <ActionButton busy={busyAction === 'public_channel_status'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('public_channel_status')}>Check public channels</ActionButton>
                                             <ActionButton busy={busyAction === 'rebuild_alerts'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild watchlist alerts</ActionButton>
                                             <ActionButton icon={<PauseCircle className='h-4 w-4' />} onClick={() => selectedSource && toggleLocalPause(selectedSource.id)}>
                                                 {selectedSource && localControl.sourcePaused[selectedSource.id] ? 'Resume source session' : 'Pause source session'}
@@ -339,7 +337,10 @@ export default function TiScraperControlClient() {
                                             <ActionButton icon={<CheckCircle2 className='h-4 w-4' />} onClick={() => applySessionDecision('promoted for review')}>Promote for review</ActionButton>
                                             <ActionButton icon={<XCircle className='h-4 w-4' />} onClick={() => applySessionDecision('suppressed in session')}>Suppress session</ActionButton>
                                         </div>
-                                        <p className='mt-3 text-xs leading-5 text-[#667085]'>Run, canary, public-channel readiness, enrichment, source request, watchlist creation, alert rebuild, and source apply-plan hit live APIs. Pause, retry, promote, suppress, and notes are session-local unless backed by a future case API.</p>
+                                        <div className='mt-3 grid gap-2 text-xs text-[#667085] sm:grid-cols-2'>
+                                            <Info label='Backed actions' value='run, canary, channel check, enrich, source request, watchlist, alert rebuild, source plan' />
+                                            <Info label='Session actions' value='pause, retry, promote, suppress, notes' />
+                                        </div>
                                     </div>
                                 </section>
 
@@ -423,7 +424,7 @@ export default function TiScraperControlClient() {
                                     <ActionButton compact busy={busyAction === 'create_watchlist'} icon={<ListChecks className='h-4 w-4' />} onClick={() => runAction('create_watchlist')}>Save watchlist</ActionButton>
                                     <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
                                 </div>
-                                <p>Org scope currently maps to tenant `default` through the scraper API. The stricter backend contract needed is explicit orgId, membership auth, watchlist ownership, and alert/webhook isolation per org.</p>
+                                <p>Org scope currently maps to tenant `default` through the scraper API. Next backend work is explicit orgId, membership auth, watchlist ownership, and alert/webhook isolation per org.</p>
                             </SidePanel>
 
                             <SidePanel title='Audit and History' icon={<History className='h-4 w-4' />}>
@@ -462,12 +463,12 @@ export default function TiScraperControlClient() {
                         {!endpointRows.length ? <p className='text-sm text-[#596170]'>No endpoint checks available.</p> : null}
                     </div>
                 </Panel>
-                <Panel title='How Updates Reach /ti/<query>' icon={<FileSearch className='h-4 w-4' />}>
-                    <div className='grid gap-2 text-sm leading-6 text-[#596170]'>
-                        <p>1. `POST /v1/intel/runs` queues source tasks for the query.</p>
-                        <p>2. `/v1/frontier` shows scheduled work; workers capture pages and metadata.</p>
-                        <p>3. `/v1/intel/search` and quality/canary endpoints decide whether rows can appear as public actor-page context.</p>
-                        <p>4. `/ti/&lt;query&gt;` shows only safe source-backed activity, profile fields, and review states returned by the API wrapper.</p>
+                <Panel title='Public Page Feed' icon={<FileSearch className='h-4 w-4' />}>
+                    <div className='grid gap-2 md:grid-cols-2'>
+                        <Info label='Run input' value='/v1/intel/runs' />
+                        <Info label='Queue state' value={`${queueCount} frontier tasks`} />
+                        <Info label='Quality gate' value={qualitySummary(snapshot)} />
+                        <Info label='Public output' value={`safe source-backed context for /ti/${query}`} />
                     </div>
                 </Panel>
             </section>
@@ -736,7 +737,7 @@ function publicImpactFor(item: WorkItem, query: string) {
     if (item.kind === 'frontier_task') return `If this task captures relevant evidence for ${query}, it can become a source-backed activity row after dedupe, redaction, and quality gating.`
     if (item.kind === 'source') return `This source can expand or degrade ${query} coverage. Changes should go through dry-run apply plans so public actor pages do not inherit noisy or unsafe evidence.`
     if (item.kind === 'policy') return `Restricted metadata can support review state, hashes, timing, actor/victim fields, and safe excerpts, but it should not expose raw leaked data on /ti/${encodeURIComponent(query)}.`
-    if (item.kind === 'platform') return `Endpoint failures can force the public page into searching/partial states even when sources exist.`
+    if (item.kind === 'platform') return 'Endpoint failures can force the public page into searching/partial states even when sources exist.'
     return `This item affects whether /ti/${encodeURIComponent(query)} can show current, source-backed data instead of generic actor context.`
 }
 
@@ -890,7 +891,7 @@ function actionSummary(result: ActionResult) {
     const run = asRecord(payload.run)
     if (run.id) return `Run ${String(run.id)} returned with ${String(run.taskCount ?? 'unknown')} task(s).`
     if (Array.isArray(payload.warmed)) return `Enrichment warmed ${payload.warmed.length} actor profile(s).`
-    if (payload.applyPlan || payload.contract) return 'Dry-run plan returned. Review impacts before applying changes elsewhere.'
+    if (payload.applyPlan || payload.contract) return 'Source plan returned. Review affected sources before applying changes.'
     return result.ok ? 'The scraper/API returned a response.' : 'The action did not complete.'
 }
 
