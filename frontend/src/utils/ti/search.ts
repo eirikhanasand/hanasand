@@ -65,6 +65,7 @@ export interface TiSearchResponse {
     analystLoop?: TiAnalystLoop
     collectionStrategy?: TiCollectionStrategy
     actorIntelligence?: TiActorIntelligenceContract
+    actionability?: TiActionabilityContract
 }
 
 export interface TiActorIntelligenceContract {
@@ -81,6 +82,76 @@ export interface TiActorIntelligenceContract {
     confidence?: number
     confidenceReasoning?: string[]
     sourceProvenance?: string[]
+}
+
+export interface TiActionabilityContract {
+    schemaVersion?: 'ti.query.actionability.v1'
+    alertDisposition?: 'ready_for_alert_review' | 'watchlist_required' | 'case_ready' | 'not_alertable' | 'needs_enrichment'
+    shouldAlert?: boolean
+    rationale?: string
+    watchlistCandidates?: Array<{
+        kind: 'company' | 'domain' | 'vendor'
+        value: string
+        reason: string
+        confidence?: number
+    }>
+    watchlistMatches?: Array<{
+        organizationId?: string
+        watchlistItemId?: string
+        kind: 'company' | 'domain' | 'vendor'
+        value: string
+        route?: string
+        casePath?: string
+    }>
+    relatedAlerts?: Array<{
+        id: string
+        title: string
+        status: string
+        severity?: string
+        caseIdCandidate?: string
+        casePath?: string
+        source?: string
+    }>
+    relatedCases?: Array<{
+        id: string
+        title: string
+        status: string
+        priority?: string
+        path?: string
+    }>
+    sourceProvenance?: Array<{
+        sourceId?: string
+        sourceName: string
+        provenance: string
+        captureId?: string
+        confidence?: number
+    }>
+    enrichmentGaps?: Array<{
+        id: string
+        title: string
+        severity: 'high' | 'medium' | 'low'
+        detail: string
+        dependency: string
+    }>
+    handoffs?: {
+        watchlist?: {
+            method: 'POST'
+            endpoint: string
+            payloads: Array<{ kind: 'company' | 'domain' | 'vendor'; value: string; notes: string }>
+            missing?: string[]
+        }
+        alertRebuild?: {
+            method: 'POST'
+            endpoint: string
+            missing?: string[]
+        }
+        caseCreate?: {
+            method: 'POST'
+            endpoint: string
+            payload?: { alertId: string; title?: string; priority?: string; note?: string }
+            missing?: string[]
+        }
+    }
 }
 
 export interface TiCollectionStrategy {

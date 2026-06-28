@@ -25,6 +25,7 @@ export interface TiSearchResponse {
     analystLoop?: TiAnalystLoop
     collectionStrategy?: TiCollectionStrategy
     actorIntelligence?: TiActorIntelligenceContract
+    actionability?: TiActionabilityContract
 }
 
 export interface TiActorIntelligenceContract {
@@ -41,6 +42,76 @@ export interface TiActorIntelligenceContract {
     confidence?: number
     confidenceReasoning?: string[]
     sourceProvenance?: string[]
+}
+
+export interface TiActionabilityContract {
+    schemaVersion?: 'ti.query.actionability.v1'
+    alertDisposition?: 'ready_for_alert_review' | 'watchlist_required' | 'case_ready' | 'not_alertable' | 'needs_enrichment'
+    shouldAlert?: boolean
+    rationale?: string
+    watchlistCandidates?: Array<{
+        kind: 'company' | 'domain' | 'vendor'
+        value: string
+        reason: string
+        confidence?: number
+    }>
+    watchlistMatches?: Array<{
+        organizationId?: string
+        watchlistItemId?: string
+        kind: 'company' | 'domain' | 'vendor'
+        value: string
+        route?: string
+        casePath?: string
+    }>
+    relatedAlerts?: Array<{
+        id: string
+        title: string
+        status: string
+        severity?: string
+        caseIdCandidate?: string
+        casePath?: string
+        source?: string
+    }>
+    relatedCases?: Array<{
+        id: string
+        title: string
+        status: string
+        priority?: string
+        path?: string
+    }>
+    sourceProvenance?: Array<{
+        sourceId?: string
+        sourceName: string
+        provenance: string
+        captureId?: string
+        confidence?: number
+    }>
+    enrichmentGaps?: Array<{
+        id: string
+        title: string
+        severity: 'high' | 'medium' | 'low'
+        detail: string
+        dependency: string
+    }>
+    handoffs?: {
+        watchlist?: {
+            method: 'POST'
+            endpoint: string
+            payloads: Array<{ kind: 'company' | 'domain' | 'vendor'; value: string; notes: string }>
+            missing?: string[]
+        }
+        alertRebuild?: {
+            method: 'POST'
+            endpoint: string
+            missing?: string[]
+        }
+        caseCreate?: {
+            method: 'POST'
+            endpoint: string
+            payload?: { alertId: string; title?: string; priority?: string; note?: string }
+            missing?: string[]
+        }
+    }
 }
 
 export type TiResultState = 'queued' | 'searching' | 'partial' | 'ready' | 'metadata_review' | 'blocked_unsafe_target' | 'needs_source_activation'
@@ -242,6 +313,7 @@ interface KnownActorContext extends Pick<TiSearchResponse, 'aliases' | 'targets'
     sources?: TiSource[]
     notes?: string[]
     actorIntelligence?: TiActorIntelligenceContract
+    actionability?: TiActionabilityContract
 }
 
 const tiResponseCache = new Map<string, { expiresAt: number, result: TiSearchResponse }>()
@@ -384,6 +456,7 @@ export async function discoverThreatActorProfile(query: string): Promise<TiSearc
         datasets: mergeDatasets(discovered.datasets, seeded.datasets),
         sources: mergeSources(discovered.sources, seeded.sources),
         actorIntelligence: discovered.actorIntelligence ?? seeded.actorIntelligence,
+        actionability: discovered.actionability ?? seeded.actionability,
         notes: uniqueStrings([
             ...seeded.notes,
             ...discovered.notes,
@@ -858,7 +931,14 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
             operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length }),
             analystLoop: buildAnalystLoop({ query, seeded: { recentActivity: activity }, operationalStatus: buildOperationalStatus(null, { query, mode: 'live_search', taskCount: matches.length }) }),
             collectionStrategy: collectionStrategy(),
-            actorIntelligence: known?.actorIntelligence
+            actorIntelligence: known?.actorIntelligence,
+            actionability: actionabilityForQuery(query, known, mergeSources(matches.slice(0, 8).map(match => ({
+                id: match.id,
+                name: match.publisher ?? match.title,
+                type: match.kind === 'news' ? 'live_news' : match.kind === 'background' ? 'background_reference' : 'live_clear_web',
+                provenance: match.url,
+                url: safeTiLink(match.url)
+            })), known?.sources ?? []))
         }
     }
 
@@ -882,7 +962,8 @@ async function liveSearch(query: string): Promise<TiSearchResponse> {
         operationalStatus,
         analystLoop: buildAnalystLoop({ query, operationalStatus }),
         collectionStrategy: collectionStrategy(),
-        actorIntelligence: known?.actorIntelligence
+        actorIntelligence: known?.actorIntelligence,
+        actionability: actionabilityForQuery(query, known)
     }
 }
 
@@ -912,7 +993,8 @@ function seededSearch(query: string): TiSearchResponse {
         operationalStatus,
         analystLoop,
         collectionStrategy: collectionStrategy(),
-        actorIntelligence: known?.actorIntelligence
+        actorIntelligence: known?.actorIntelligence,
+        actionability: actionabilityForQuery(query, known)
     }
 }
 
@@ -1470,6 +1552,120 @@ function booleanValue(value: unknown, fallback: boolean) {
 
 function formatPercent(value: number) {
     return `${Math.round(value * 100)}%`
+}
+
+function actionabilityForQuery(query: string, known?: KnownActorContext | null, sources = known?.sources ?? []): TiActionabilityContract {
+    const sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']> = (sources.length ? sources : known ? automaticActorSources(query) : []).map(source => ({
+        sourceId: source.id,
+        sourceName: source.name,
+        provenance: source.url || source.provenance,
+        confidence: known?.confidence ?? 0.58
+    })).filter(source => source.provenance)
+    const watchlistCandidates = known ? watchlistCandidatesForKnownActor(query, known) : watchlistCandidatesForQuery(query)
+    const hasEvidence = sourceProvenance.length > 0
+    const alertDisposition: NonNullable<TiActionabilityContract['alertDisposition']> = watchlistCandidates.length
+        ? 'watchlist_required'
+        : hasEvidence ? 'needs_enrichment' : 'not_alertable'
+
+    return {
+        schemaVersion: 'ti.query.actionability.v1',
+        alertDisposition,
+        shouldAlert: false,
+        rationale: watchlistCandidates.length
+            ? 'Actor/query relevance is ready to seed organization watchlists, but no backed watchlist match, generated DWM alert, or case ID is attached to this public result.'
+            : 'No customer watchlist term, generated alert, or case link is attached to this query result yet.',
+        watchlistCandidates,
+        watchlistMatches: [],
+        relatedAlerts: [],
+        relatedCases: [],
+        sourceProvenance,
+        enrichmentGaps: [
+            {
+                id: 'organization-watchlist-match',
+                title: 'Attach organization watchlist match',
+                severity: 'high',
+                detail: 'The public query result needs an authenticated organization watchlist match before it should alert a customer.',
+                dependency: 'GET /api/organizations/:id/alert-readiness generatedAlertReferences or /v1/dwm/watchlists match context'
+            },
+            {
+                id: 'dwm-alert-link',
+                title: 'Return generated DWM alert ID',
+                severity: 'high',
+                detail: 'Case creation is backed by /v1/cases and requires a DWM alert ID; this result has no related alert ID attached.',
+                dependency: '/v1/dwm/alerts or /v1/dwm/alerts/rebuild'
+            },
+            ...(sourceProvenance.some(source => source.captureId) ? [] : [{
+                id: 'capture-id-provenance',
+                title: 'Attach capture IDs for replay',
+                severity: 'medium' as const,
+                detail: 'Source provenance is visible, but capture IDs are not attached for replay or case evidence.',
+                dependency: 'sourceProvenance[].captureId'
+            }])
+        ],
+        handoffs: {
+            watchlist: {
+                method: 'POST',
+                endpoint: '/api/organizations/:id/watchlists',
+                payloads: watchlistCandidates.slice(0, 8).map(candidate => ({
+                    kind: candidate.kind,
+                    value: candidate.value,
+                    notes: `${query}: ${candidate.reason}`
+                })),
+                missing: ['Authenticated organization ID', 'owner/admin/member watchlist permission']
+            },
+            alertRebuild: {
+                method: 'POST',
+                endpoint: '/v1/dwm/alerts/rebuild',
+                missing: ['Active organization watchlist', 'recent source capture matching at least one watchlist term']
+            },
+            caseCreate: {
+                method: 'POST',
+                endpoint: '/v1/cases',
+                missing: ['DWM alert ID from /v1/dwm/alerts or /v1/dwm/alerts/rebuild']
+            }
+        }
+    }
+}
+
+function watchlistCandidatesForKnownActor(query: string, known: KnownActorContext): NonNullable<TiActionabilityContract['watchlistCandidates']> {
+    const normalized = query.trim().toLowerCase()
+    const fixed = normalized === 'apt29' || normalized.includes('cozy bear') || normalized.includes('midnight blizzard')
+        ? [
+            { kind: 'company' as const, value: 'Microsoft', reason: 'Public reporting and returned actor profile include Microsoft email intrusion context.', confidence: 0.78 },
+            { kind: 'vendor' as const, value: 'SolarWinds', reason: 'Public reporting and returned actor profile include SolarWinds supply-chain campaign context.', confidence: 0.78 },
+            { kind: 'company' as const, value: 'Hewlett Packard Enterprise', reason: 'Public reporting and returned actor profile include HPE cloud email intrusion context.', confidence: 0.7 },
+            { kind: 'domain' as const, value: 'microsoft.com', reason: 'Domain watchlist term for Microsoft-related exposure routing.', confidence: 0.62 }
+        ]
+        : []
+    const sectorCandidates = known.targets.slice(0, 3).map(target => ({
+        kind: 'vendor' as const,
+        value: target.sector,
+        reason: `Actor target sector from returned profile: ${target.rationale}`,
+        confidence: Math.min(target.confidence, 0.68)
+    }))
+    return uniqueCandidates([...fixed, ...sectorCandidates]).slice(0, 10)
+}
+
+function watchlistCandidatesForQuery(query: string): NonNullable<TiActionabilityContract['watchlistCandidates']> {
+    const clean = query.trim()
+    if (!clean) return []
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(clean)) {
+        return [{ kind: 'domain', value: clean.toLowerCase(), reason: 'Query is a domain supported by organization watchlists.', confidence: 0.72 }]
+    }
+    if (!/apt|cve-|campaign|malware|actor/i.test(clean)) {
+        return [{ kind: 'company', value: clean, reason: 'Query can be saved as an organization company watchlist term.', confidence: 0.58 }]
+    }
+    return []
+}
+
+function uniqueCandidates(candidates: NonNullable<TiActionabilityContract['watchlistCandidates']>) {
+    const seen = new Set<string>()
+    return candidates.filter(candidate => {
+        const key = `${candidate.kind}:${candidate.value.toLowerCase()}`
+        if (!candidate.value.trim() || seen.has(key)) return false
+        seen.add(key)
+        return true
+    })
 }
 
 function knownActorProfile(query: string): KnownActorContext | null {

@@ -1,4 +1,5 @@
 import { buildActorIntelligence, containsToyThreatIntelCopy } from '../src/utils/ti/actorIntelligence'
+import { buildTiActionability } from '../src/utils/ti/actionability'
 import type { TiSearchResponse } from '../src/utils/ti/search'
 
 const fixture: TiSearchResponse = {
@@ -46,16 +47,40 @@ const fixture: TiSearchResponse = {
         url: 'https://www.microsoft.com/en-us/security/blog/',
     }],
     notes: [],
+    actionability: {
+        schemaVersion: 'ti.query.actionability.v1',
+        alertDisposition: 'watchlist_required',
+        shouldAlert: false,
+        rationale: 'Actor/query relevance is ready to seed organization watchlists, but no backed watchlist match, generated DWM alert, or case ID is attached to this public result.',
+        watchlistCandidates: [
+            { kind: 'company', value: 'Microsoft', reason: 'Public reporting includes Microsoft email intrusion context.', confidence: 0.78 },
+            { kind: 'vendor', value: 'SolarWinds', reason: 'Public reporting includes SolarWinds supply-chain campaign context.', confidence: 0.78 },
+        ],
+        sourceProvenance: [
+            { sourceId: 'microsoft', sourceName: 'Microsoft', provenance: 'https://www.microsoft.com/en-us/security/blog/', confidence: 0.82 },
+        ],
+        relatedAlerts: [],
+        relatedCases: [],
+        enrichmentGaps: [{
+            id: 'dwm-alert-link',
+            title: 'Return generated DWM alert ID',
+            severity: 'high',
+            detail: 'Case creation is backed by /v1/cases and requires a DWM alert ID.',
+            dependency: '/v1/dwm/alerts or /v1/dwm/alerts/rebuild',
+        }],
+    },
 }
 
-const profile = buildActorIntelligence(fixture, [{
+const victims = [{
     victim: 'SolarWinds Orion customers and U.S. federal agencies',
     country: 'United States',
     sector: 'Government and software supply chain',
     incident: 'SolarWinds Orion compromise enabled downstream access into government and enterprise environments.',
     timeframe: '2020',
     source: 'public government and vendor reporting',
-}])
+}]
+const profile = buildActorIntelligence(fixture, victims)
+const actionability = buildTiActionability(fixture, profile, victims)
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
 assert(profile.malwareTools.includes('SUNBURST'), 'APT29 should include SUNBURST tooling context.')
@@ -63,6 +88,82 @@ assert(profile.campaigns.some(item => /SolarWinds/i.test(item)), 'APT29 should i
 assert(profile.targetSectors.some(item => /Government/i.test(item)), 'APT29 should include government targeting context.')
 assert(profile.sourceProvenance.length >= 2, 'APT29 should expose source provenance.')
 assert(profile.confidenceReasoning.length >= 2, 'APT29 should expose confidence reasoning.')
+assert(actionability.sourceProvenance.length >= 1, 'Actionability should expose backed provenance rows.')
+assert(actionability.watchlist.payloads.some(item => item.value === 'Microsoft'), 'Actionability should carry watchlist relevance payloads.')
+assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
+assert(actionability.handoffs.caseBlockers.some(item => /DWM alert ID/i.test(item)), 'No-alert fixture should explain missing case dependency.')
+
+const backed = buildTiActionability({
+    ...fixture,
+    query: 'apt29 microsoft',
+    actionability: {
+        ...fixture.actionability,
+        alertDisposition: 'case_ready',
+        shouldAlert: true,
+        watchlistMatches: [{
+            organizationId: 'org_1',
+            watchlistItemId: 'watch_1',
+            kind: 'company',
+            value: 'Microsoft',
+            route: 'organization_watchlist',
+            casePath: '/dashboard/dwm?organizationId=org_1&watchlistItemId=watch_1',
+        }],
+        relatedAlerts: [{
+            id: 'dwm_alert_1',
+            title: 'Microsoft actor relevance matched watchlist',
+            status: 'pending_review',
+            severity: 'high',
+            caseIdCandidate: 'case_1',
+            casePath: '/v1/cases/case_1?alertId=dwm_alert_1',
+            source: 'DWM alerts API',
+        }],
+        relatedCases: [{
+            id: 'case_1',
+            title: 'Microsoft actor relevance',
+            status: 'open',
+            priority: 'high',
+            path: '/v1/cases/case_1?alertId=dwm_alert_1',
+        }],
+        handoffs: {
+            caseCreate: {
+                method: 'POST',
+                endpoint: '/v1/cases',
+                payload: { alertId: 'dwm_alert_1', title: 'Microsoft actor relevance', priority: 'high' },
+            },
+        },
+    },
+}, profile, victims)
+assert(backed.shouldAlert, 'Backed alert/case fixture should be alertable.')
+assert(backed.relatedCases[0]?.id === 'case_1', 'Backed actionability should preserve related case IDs.')
+assert(backed.handoffs.casePayload?.alertId === 'dwm_alert_1', 'Backed actionability should produce a case handoff payload.')
+
+const quietFixture: TiSearchResponse = {
+    ...fixture,
+    query: 'quiet-actor',
+    summary: 'Quiet actor profile without current customer relevance.',
+    confidence: 0.32,
+    aliases: [],
+    recentActivity: [],
+    targets: [],
+    ttps: [],
+    sources: [],
+    actionability: {
+        schemaVersion: 'ti.query.actionability.v1',
+        alertDisposition: 'not_alertable',
+        shouldAlert: false,
+        rationale: 'No current source, watchlist, alert, or case data is attached.',
+        watchlistCandidates: [],
+        relatedAlerts: [],
+        relatedCases: [],
+        sourceProvenance: [],
+        enrichmentGaps: [],
+    },
+}
+const quietProfile = buildActorIntelligence(quietFixture, [])
+const quiet = buildTiActionability(quietFixture, quietProfile, [])
+assert(!quiet.shouldAlert, 'Quiet actor should not be alertable.')
+assert(quiet.relatedAlerts.length === 0 && quiet.relatedCases.length === 0, 'Quiet actor should honestly show no current alert or case.')
+assert(quiet.watchlist.state === 'missing_terms', 'Quiet actor should expose missing watchlist terms.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')

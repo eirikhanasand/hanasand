@@ -3,6 +3,7 @@
 import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
+import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
 import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
@@ -153,6 +154,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const alertItems = alertItemsFor(result)
     const victimObservations = useMemo(() => victimObservationsFor(result), [result])
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
+    const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
     const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById), [result, victimObservations, sourceUrlById])
     const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources, actorIntel), [result, victimObservations, sources, actorIntel])
     const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
@@ -162,7 +164,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedNote = selected ? notes[selected.id] ?? '' : ''
     const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
-    const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel)
+    const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const sessionEvents = Object.entries(localDecisions).map(([id, decision]) => {
         const item = workItems.find(entry => entry.id === id)
         return {
@@ -338,6 +340,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                     <aside className='order-3 grid content-start gap-4 border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:border-l lg:border-t-0'>
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
+                        <ActionabilityPanel actionability={actionability} query={result.query} />
                         <EnrichmentTasksPanel tasks={enrichmentTasks} />
 
                         <div data-ti-actions='true'>
@@ -695,6 +698,80 @@ function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
     )
 }
 
+function ActionabilityPanel({ actionability, query }: { actionability: TiActionabilityModel; query: string }) {
+    const casePath = actionability.relatedCases[0]?.path || actionability.relatedAlerts[0]?.casePath
+    return (
+        <Panel title='Workflow Handoff' description='Backed alert, watchlist, and case handoff state for this actor/query result.' icon={<ShieldCheck className='h-4 w-4' />}>
+            <div className='grid gap-3'>
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <div className='flex items-center justify-between gap-2'>
+                        <p className='text-xs font-semibold uppercase text-[#667085]'>Alert decision</p>
+                        <span className={actionability.shouldAlert ? 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'rounded-lg bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00]'}>
+                            {formatLabel(actionability.alertDisposition)}
+                        </span>
+                    </div>
+                    <p className='mt-2 text-xs leading-5 text-[#596170]'>{actionability.rationale}</p>
+                </div>
+
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <div className='flex items-center justify-between gap-2'>
+                        <p className='text-xs font-semibold uppercase text-[#667085]'>Watchlist handoff</p>
+                        <span className={actionability.watchlist.state === 'backed_matches' ? 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'rounded-lg bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'}>
+                            {formatLabel(actionability.watchlist.state)}
+                        </span>
+                    </div>
+                    <p className='mt-2 font-mono text-[11px] text-[#667085]'>POST {actionability.watchlist.endpoint}</p>
+                    <div className='mt-2 flex flex-wrap gap-1.5'>
+                        {actionability.watchlist.payloads.length ? actionability.watchlist.payloads.slice(0, 6).map(payload => (
+                            <span key={`${payload.kind}-${payload.value}`} className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{payload.kind}: {payload.value}</span>
+                        )) : <span className='text-xs text-[#667085]'>No backed watchlist payload yet</span>}
+                    </div>
+                    {actionability.watchlist.blockers.length ? <BlockerList blockers={actionability.watchlist.blockers} /> : null}
+                </div>
+
+                <div className='grid gap-2'>
+                    <a href='/dashboard/dwm' className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                        <ExternalLink className='h-3.5 w-3.5' />
+                        Open DWM workbench
+                    </a>
+                    {casePath ? (
+                        <a href={casePath} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                            <ExternalLink className='h-3.5 w-3.5' />
+                            Open related case
+                        </a>
+                    ) : (
+                        <button type='button' disabled title={actionability.handoffs.caseBlockers.join('; ')} className='inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-3 text-xs font-semibold text-[#98a2b3]'>
+                            <ClipboardList className='h-3.5 w-3.5' />
+                            Create backed case
+                        </button>
+                    )}
+                </div>
+
+                <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
+                    <p className='text-xs font-semibold uppercase text-[#667085]'>Related backed objects</p>
+                    <p className='mt-2 text-xs leading-5 text-[#596170]'>
+                        {actionability.relatedAlerts.length} alert{actionability.relatedAlerts.length === 1 ? '' : 's'} · {actionability.relatedCases.length} case{actionability.relatedCases.length === 1 ? '' : 's'} · {actionability.sourceProvenance.length} provenance row{actionability.sourceProvenance.length === 1 ? '' : 's'}
+                    </p>
+                    {!actionability.relatedAlerts.length && !actionability.relatedCases.length ? (
+                        <p className='mt-2 text-xs leading-5 text-[#8a5a00]'>No alert or case ID is attached to {query}; rebuild alerts after saving a matching watchlist term.</p>
+                    ) : null}
+                </div>
+            </div>
+        </Panel>
+    )
+}
+
+function BlockerList({ blockers }: { blockers: string[] }) {
+    return (
+        <div className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3'>
+            <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Missing dependency</p>
+            <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00]'>
+                {blockers.map(item => <li key={item}>{item}</li>)}
+            </ul>
+        </div>
+    )
+}
+
 function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     return (
         <Panel title='Source and Enrichment Tasks' description='Concrete collection or backend contract work needed for this actor/query to feed stronger alerts.' icon={<Database className='h-4 w-4' />}>
@@ -912,13 +989,19 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
     }
 }
 
-function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem | undefined, watchlist: WatchlistRelevance, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile): EnrichmentTask[] {
+function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem | undefined, watchlist: WatchlistRelevance, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel): EnrichmentTask[] {
     const hasReviewInbox = Boolean(result.analystLoop?.metadataReviewInbox.length)
     const hasSourceUrls = sources.some(source => source.url || linkFromText(source.provenance))
     const hasOrganizations = watchlist.organizations.length > 0
     const hasActivity = result.recentActivity.length > 0
     const hasActorCore = actor.malwareTools.length > 0 && actor.campaigns.length > 0 && actor.infrastructure.length > 0
+    const actionabilityTasks: EnrichmentTask[] = actionability.enrichmentGaps.map(gap => ({
+        title: gap.title,
+        status: gap.severity === 'high' ? 'needs_api' : 'needs_review',
+        detail: `${gap.detail} Dependency: ${gap.dependency}.`,
+    }))
     return [
+        ...actionabilityTasks,
         {
             title: 'Complete actor enrichment profile',
             status: hasActorCore ? 'ready' : 'needs_api',
