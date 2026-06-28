@@ -4,7 +4,10 @@ import searchThreatIntel, { TiSearchResponse } from '@/utils/ti/search'
 import { actorGeoProfile, victimObservationsFor } from '@/utils/ti/actorProfile'
 import { buildActorIntelligence, type TiActorIntelligenceProfile } from '@/utils/ti/actorIntelligence'
 import { buildTiActionability, type TiActionabilityModel } from '@/utils/ti/actionability'
-import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
+import { countryCentroids } from '@/utils/monitoring/geo'
+import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
+import mapData from '@parent/public/world.json'
+import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { humanizeSlug } from '../seo'
@@ -1385,54 +1388,154 @@ function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNo
 function ThreatActorMap({ result }: { result: TiSearchResponse }) {
     const geo = actorGeoProfile(result)
     const hasPoints = geo.points.length > 0
+    const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
+    const [selectedCode, setSelectedCode] = useState(geo.points[0]?.code ?? '')
+    const dragRef = useRef<{ x: number, y: number, viewBox: ViewBox } | null>(null)
+    const mapPaths = useMemo(() => mapData.features.map((feature, index) => {
+        let d = ''
+
+        function drawRing(ring: number[][]) {
+            return ring.reduce((path, point, pointIndex) => {
+                const [x, y] = project([point[1], point[0]])
+                return `${path}${pointIndex === 0 ? 'M' : 'L'} ${x} ${y} `
+            }, '') + 'Z '
+        }
+
+        if (feature.geometry.type === 'Polygon') {
+            ;(feature.geometry.coordinates as number[][][]).forEach((ring) => {
+                d += drawRing(ring)
+            })
+        } else if (feature.geometry.type === 'MultiPolygon') {
+            ;(feature.geometry.coordinates as number[][][][]).forEach((polygon) => {
+                polygon.forEach((ring) => {
+                    d += drawRing(ring)
+                })
+            })
+        }
+
+        return (
+            <path
+                key={`${feature.properties?.name || 'country'}-${index}`}
+                d={d}
+                className='fill-[#e9eff7] stroke-[#c9d5e6] stroke-[0.55] transition-colors hover:fill-[#dce7f5]'
+            />
+        )
+    }), [])
+    const selectedPoint = geo.points.find(point => point.code === selectedCode) ?? geo.points[0]
+
+    useEffect(() => {
+        if (!geo.points.length) return
+        if (!geo.points.some(point => point.code === selectedCode)) {
+            setSelectedCode(geo.points[0]?.code ?? '')
+        }
+    }, [geo.points, selectedCode])
+
+    function focusCountry(code: string) {
+        const coords = countryCentroids[code]
+        setSelectedCode(code)
+        if (coords) setViewBox(getCountryFocusView(coords))
+    }
+
     return (
         <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#f8fafc]'>
             <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3'>
                 <div>
                     <h2 className='text-sm font-semibold text-[#171a21]'>Country-Level Actor Map</h2>
-                    <p className='mt-0.5 text-xs text-[#667085]'>Purple marks reported operator origin. Red marks countries with returned victim or targeting observations.</p>
+                    <p className='mt-0.5 text-xs text-[#667085]'>GeoJSON-backed country view of reported operator origin and countries with victim or targeting observations.</p>
                 </div>
                 <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3]'>{hasPoints ? `${geo.points.length} countries` : 'Country data pending'}</span>
             </div>
-            <div className='relative bg-[#f7f9fc] p-3'>
-                <svg viewBox='0 0 640 320' role='img' aria-label={`Country-level actor map for ${humanizeSlug(result.query)}`} className='h-72 w-full'>
-                    <rect width='640' height='320' rx='18' fill='#ffffff' />
-                    <WorldMapBase />
-                    {geo.points.map(point => {
-                        const color = point.role === 'operator' ? '#7c3aed' : '#d92d20'
-                        const label = mapLabelPosition(point.code)
+            <div className='relative min-h-96 overflow-hidden bg-[#f7f9fc]'>
+                <div className='absolute left-3 top-3 z-20 rounded-lg border border-[#dfe5ee] bg-white/90 px-3 py-1.5 text-xs text-[#596170] shadow-sm backdrop-blur'>
+                    <span className='inline-flex items-center gap-2'>
+                        <Move className='h-3.5 w-3.5' />
+                        Drag to pan · wheel to zoom
+                    </span>
+                </div>
+                <div className='absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-lg border border-[#dfe5ee] bg-white/90 p-1 shadow-sm backdrop-blur'>
+                    <MapZoomButton label='-' onClick={() => setViewBox((current) => zoomViewBox(current, 1.18, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
+                    <MapZoomButton label='Reset' wide onClick={() => setViewBox(INITIAL_VIEWBOX)} />
+                    <MapZoomButton label='+' onClick={() => setViewBox((current) => zoomViewBox(current, 0.84, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
+                </div>
+                <svg
+                    viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
+                    role='img'
+                    aria-label={`Country-level actor map for ${humanizeSlug(result.query)}`}
+                    className='relative z-10 h-96 w-full cursor-grab bg-white active:cursor-grabbing'
+                    onMouseDown={(event) => {
+                        dragRef.current = { x: event.clientX, y: event.clientY, viewBox }
+                    }}
+                    onMouseMove={(event) => {
+                        if (!dragRef.current) return
+                        const scaleX = dragRef.current.viewBox.width / MAP_WIDTH
+                        const scaleY = dragRef.current.viewBox.height / MAP_HEIGHT
+                        setViewBox(clampViewBox({
+                            ...dragRef.current.viewBox,
+                            x: dragRef.current.viewBox.x - ((event.clientX - dragRef.current.x) * scaleX),
+                            y: dragRef.current.viewBox.y - ((event.clientY - dragRef.current.y) * scaleY),
+                        }))
+                    }}
+                    onMouseUp={() => { dragRef.current = null }}
+                    onMouseLeave={() => { dragRef.current = null }}
+                    onWheel={(event) => {
+                        event.preventDefault()
+                        const rect = event.currentTarget.getBoundingClientRect()
+                        const px = ((event.clientX - rect.left) / rect.width) * viewBox.width + viewBox.x
+                        const py = ((event.clientY - rect.top) / rect.height) * viewBox.height + viewBox.y
+                        setViewBox((current) => zoomViewBox(current, event.deltaY > 0 ? 1.12 : 0.88, px, py))
+                    }}
+                >
+                    <rect x='0' y='0' width={MAP_WIDTH} height={MAP_HEIGHT} fill='#ffffff' />
+                    <g>{mapPaths}</g>
+                    {geo.flows.map(flow => {
+                        const from = countryCentroids[flow.from.code]
+                        const to = countryCentroids[flow.to.code]
+                        if (!from || !to) return null
+                        const [x1, y1] = project(from)
+                        const [x2, y2] = project(to)
+                        const dx = x2 - x1
+                        const dy = y2 - y1
+                        const distance = Math.sqrt((dx * dx) + (dy * dy))
+                        const cx = (x1 + x2) / 2
+                        const cy = (y1 + y2) / 2 - (distance * 0.22)
                         return (
-                            <g key={`${point.role}-${point.code}`}>
-                                <circle cx={point.x} cy={point.y} r='10' fill={color} opacity='0.12' />
-                                <circle cx={point.x} cy={point.y} r='5.5' fill={color} opacity='0.94' />
-                                <circle cx={point.x} cy={point.y} r='2' fill='#ffffff' />
+                            <path
+                                key={`${flow.from.code}-${flow.to.code}`}
+                                d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
+                                fill='none'
+                                stroke='#d92d20'
+                                strokeDasharray='5 5'
+                                strokeWidth='1.8'
+                                opacity='0.45'
+                            />
+                        )
+                    })}
+                    {geo.points.map(point => {
+                        const coords = countryCentroids[point.code]
+                        if (!coords) return null
+                        const [x, y] = project(coords)
+                        const active = selectedPoint?.code === point.code
+                        const color = point.role === 'operator' ? '#7c3aed' : '#d92d20'
+                        const radius = point.role === 'operator' ? 7 : 5 + Math.min(6, point.count * 2)
+                        return (
+                            <g key={`${point.role}-${point.code}`} onClick={() => focusCountry(point.code)} className='cursor-pointer'>
+                                <circle cx={x} cy={y} r={radius + 10} fill={color} opacity={active ? '0.18' : '0.09'} />
+                                <circle cx={x} cy={y} r={radius} fill={color} opacity='0.92' stroke='#ffffff' strokeWidth='1.5' />
+                                <circle cx={x} cy={y} r='2' fill='#ffffff' />
                                 <text
-                                    x={point.x + label.dx}
-                                    y={point.y + label.dy}
-                                    textAnchor={label.anchor}
-                                    fill='#171a21'
+                                    x={x}
+                                    y={y - radius - 7}
+                                    textAnchor='middle'
+                                    className='fill-[#171a21] text-[10px] font-bold'
                                     stroke='#ffffff'
                                     strokeWidth='3'
                                     paintOrder='stroke'
-                                    fontSize='10'
-                                    fontWeight='700'
                                 >
-                                    {point.label}
+                                    {point.code}
                                 </text>
                             </g>
                         )
                     })}
-                    {geo.flows.map(flow => (
-                        <path
-                            key={`${flow.from.code}-${flow.to.code}`}
-                            d={`M${flow.from.x} ${flow.from.y} C ${(flow.from.x + flow.to.x) / 2} ${Math.min(flow.from.y, flow.to.y) - 42}, ${(flow.from.x + flow.to.x) / 2} ${Math.min(flow.from.y, flow.to.y) - 42}, ${flow.to.x} ${flow.to.y}`}
-                            fill='none'
-                            stroke='#d92d20'
-                            strokeDasharray='4 5'
-                            strokeWidth='1.4'
-                            opacity='0.36'
-                        />
-                    ))}
                 </svg>
                 {!hasPoints ? (
                     <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/80 text-center text-sm font-medium text-[#667085]'>
@@ -1448,13 +1551,18 @@ function ThreatActorMap({ result }: { result: TiSearchResponse }) {
                     </div>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         {geo.points.map(point => (
-                            <div key={`${point.role}-row-${point.code}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
+                            <button
+                                key={`${point.role}-row-${point.code}`}
+                                type='button'
+                                onClick={() => focusCountry(point.code)}
+                                className={`rounded-lg border px-3 py-2 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${selectedPoint?.code === point.code ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-[#eef1f5] bg-[#fbfcfe] hover:border-[#d8dee9] hover:bg-white'}`}
+                            >
                                 <div className='flex items-center justify-between gap-3'>
                                     <span className='font-semibold text-[#171a21]'>{point.label}</span>
                                     <span className={point.role === 'operator' ? 'text-[#7c3aed]' : 'text-[#b42318]'}>{point.role === 'operator' ? 'operator origin' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
                                 </div>
                                 <p className='mt-1 leading-5 text-[#667085]'>{point.detail}</p>
-                            </div>
+                            </button>
                         ))}
                     </div>
                 </div>
@@ -1463,49 +1571,16 @@ function ThreatActorMap({ result }: { result: TiSearchResponse }) {
     )
 }
 
-function WorldMapBase() {
+function MapZoomButton({ label, onClick, wide = false }: { label: string; onClick: () => void; wide?: boolean }) {
     return (
-        <g>
-            <path d='M105 80 L155 66 L210 75 L240 102 L220 136 L165 151 L113 137 L82 111 Z' fill='#edf2f8' stroke='#d8e0eb' />
-            <path d='M154 154 L197 166 L224 205 L210 257 L178 294 L145 273 L130 228 L139 186 Z' fill='#edf2f8' stroke='#d8e0eb' />
-            <path d='M300 78 L342 62 L391 72 L420 98 L407 126 L357 132 L309 112 Z' fill='#edf2f8' stroke='#d8e0eb' />
-            <path d='M353 132 L400 139 L432 178 L425 228 L394 272 L357 250 L335 198 Z' fill='#edf2f8' stroke='#d8e0eb' />
-            <path d='M407 70 L485 57 L559 86 L597 127 L579 165 L512 174 L464 148 L420 124 Z' fill='#edf2f8' stroke='#d8e0eb' />
-            <path d='M497 181 L548 189 L586 227 L573 269 L527 282 L488 251 Z' fill='#edf2f8' stroke='#d8e0eb' />
-            <path d='M36 160 H604 M320 32 V288 M36 96 H604 M36 224 H604' stroke='#edf2f8' strokeWidth='1' />
-            <path d='M31 48 H609 V292 H31 Z' fill='none' stroke='#edf2f8' />
-            {countryShapes.map(shape => (
-                <path key={shape.code} d={shape.d} fill='#dde6f2' stroke='#c7d2e2' strokeWidth='0.8' />
-            ))}
-        </g>
+        <button
+            type='button'
+            onClick={onClick}
+            className={`rounded-md border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${wide ? 'min-w-16' : 'min-w-8'}`}
+        >
+            {label}
+        </button>
     )
-}
-
-const countryShapes = [
-    { code: 'US', d: 'M111 111 L153 98 L186 115 L178 134 L139 139 L109 128 Z' },
-    { code: 'CA', d: 'M92 72 L160 55 L207 72 L181 94 L129 95 L88 86 Z' },
-    { code: 'GB', d: 'M300 84 L312 89 L309 102 L297 98 Z' },
-    { code: 'NO', d: 'M328 61 L340 69 L335 85 L324 78 Z' },
-    { code: 'DE', d: 'M321 101 L334 102 L336 116 L322 119 L315 110 Z' },
-    { code: 'FR', d: 'M305 113 L322 116 L323 130 L311 138 L300 128 Z' },
-    { code: 'RU', d: 'M360 62 L455 51 L552 79 L576 111 L535 129 L456 112 L388 103 Z' },
-    { code: 'UA', d: 'M345 115 L369 116 L376 127 L350 130 Z' },
-    { code: 'CN', d: 'M460 126 L508 122 L532 148 L508 170 L463 158 Z' },
-    { code: 'JP', d: 'M543 126 L552 137 L548 151 L538 141 Z' },
-    { code: 'IN', d: 'M448 151 L474 161 L466 196 L444 181 Z' },
-    { code: 'AU', d: 'M500 229 L548 222 L575 246 L558 271 L510 266 Z' },
-]
-
-function mapLabelPosition(code: string): { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' } {
-    const offsets: Record<string, { dx: number; dy: number; anchor: 'start' | 'middle' | 'end' }> = {
-        GB: { dx: 0, dy: -17, anchor: 'middle' },
-        DE: { dx: 12, dy: 15, anchor: 'start' },
-        RU: { dx: 13, dy: -7, anchor: 'start' },
-        US: { dx: 12, dy: -8, anchor: 'start' },
-        FR: { dx: -12, dy: 16, anchor: 'end' },
-        NL: { dx: -12, dy: -10, anchor: 'end' },
-    }
-    return offsets[code] ?? { dx: 9, dy: -7, anchor: 'start' }
 }
 
 function EmptyLine({ text }: { text: string }) {

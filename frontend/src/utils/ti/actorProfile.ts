@@ -159,9 +159,9 @@ function operatorOriginFor(result: TiSearchResponse) {
 
 function operatorOriginDetail(result: TiSearchResponse) {
     if (isApt29Query(result.query)) {
-        return 'Public reporting attributes APT29 to Russia-linked SVR activity. This is shown as reported operator origin, not as an alliance or trust category.'
+        return 'Public reporting attributes APT29 to Russia-linked SVR activity.'
     }
-    return 'Operator origin is shown only when this profile has explicit country attribution.'
+    return 'Reported operator origin from attributed profile evidence.'
 }
 
 function targetCountryDetail(result: TiSearchResponse, country: string) {
@@ -169,7 +169,7 @@ function targetCountryDetail(result: TiSearchResponse, country: string) {
     if (victims.length) return `Returned observations: ${victims.slice(0, 3).join(', ')}. Open the victim table for sector, timeframe, incident, and source basis.`
     const activities = result.recentActivity.filter(item => item.countries?.some(countryValue => countryFromValue(countryValue)?.label === country))
     if (activities.length) return activities[0]?.title ?? 'Country-level targeting mentioned in recent activity.'
-    return 'Country-level observation from reported activity; broad regions and alliance buckets are excluded.'
+    return 'Country-level observation from reported activity.'
 }
 
 function apt29VictimObservations(): VictimObservation[] {
@@ -218,7 +218,7 @@ function apt29VictimObservations(): VictimObservation[] {
             victim: 'Government and policy organizations',
             country: 'Germany',
             sector: 'Government and policy',
-            incident: 'European government and policy-sector targeting appears in public APT29/SVR reporting. This is a country-level target marker, not a continent bucket.',
+            incident: 'Public APT29/SVR reporting includes European government and policy-sector targeting, including German government and policy organizations.',
             timeframe: 'multi-year reporting',
             source: 'public advisory reporting',
         },
