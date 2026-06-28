@@ -1,8 +1,9 @@
 import { parseTelegramTarget, validateTelegramPublicSourceCompliance } from "../adapters/telegramPublic.ts";
 import { evaluateTelegramPublicCompliance } from "../policy/telegramCollectionPolicy.ts";
 import { evaluateMetadataOnlySource } from "../policy/metadataCollectionPolicy.ts";
+import { buildDwmProductSnapshot } from "../product/dwmProduct.ts";
 import { applyDwmSeedCatalog, sourceDedupeKey } from "../product/dwmSourceInventory.ts";
-import { nowIso, stableId } from "../utils.ts";
+import { hashContent, nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 import type { SourceRecord } from "../types.ts";
@@ -20,9 +21,13 @@ type DwmSourceRequestBody = {
   targets?: string[];
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
-  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress";
+  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed";
   sourceId?: string;
   candidateId?: string;
+  collectionTaskId?: string;
+  captureText?: string;
+  captureUrl?: string;
+  errorCode?: string;
   reason?: string;
   decidedBy?: string;
   requestedBy?: string;
@@ -274,6 +279,8 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
     });
     return json(lifecycleResponse(suppressed, "suppress"), 200);
   }
+  if (body.action === "record_capture") return json(recordCollectionCapture(source, body, options), 200);
+  if (body.action === "collection_failed") return json(recordCollectionFailure(source, body, options), 200);
   if (body.action === "activate" || body.action === "promote") {
     if (isRestrictedMetadataSource(source) && body.approveMetadataOnly !== true) {
       return json({
@@ -482,6 +489,8 @@ function sourceLifecycle(source: SourceRecord) {
     activationState: activationStateForSource(source),
     parserStatus: parserStatusForSource(source),
     healthStatus: source.metadata?.healthStatus ?? "untested",
+    collectionStatus: source.metadata?.collectionStatus ?? sourceCandidate(source).collectionStatus,
+    lastCollectionOutcome: source.metadata?.lastCollectionOutcome ?? sourceCandidate(source).lastCollectionOutcome,
     validationResult: source.metadata?.validationResult ?? sourceCandidate(source).validationResult,
     lastTestedAt: source.metadata?.lastTestedAt ?? sourceCandidate(source).lastTestedAt,
     activationDecision: sourceCandidate(source).activationDecision,
@@ -573,11 +582,17 @@ function sourceCandidate(source: SourceRecord) {
     },
     parserStatus: existing.parserStatus ?? parserStatusForSource(source),
     healthStatus: existing.healthStatus ?? source.metadata?.healthStatus ?? "not_tested",
+    collectionStatus: existing.collectionStatus ?? source.metadata?.collectionStatus,
+    lastCollectionOutcome: existing.lastCollectionOutcome ?? source.metadata?.lastCollectionOutcome,
+    lastCaptureId: existing.lastCaptureId ?? source.metadata?.lastCaptureId,
+    lastCaptureAt: existing.lastCaptureAt ?? source.metadata?.lastCaptureAt,
     lastTestedAt: existing.lastTestedAt ?? source.metadata?.lastTestedAt,
     activationDecision: existing.activationDecision ?? activationStateForSource(source),
     decidedBy: existing.decidedBy,
     decidedAt: existing.decidedAt,
-    approvalTicket: existing.approvalTicket
+    approvalTicket: existing.approvalTicket,
+    collectionTrigger: existing.collectionTrigger ?? source.metadata?.collectionTrigger,
+    alertRebuild: existing.alertRebuild ?? source.metadata?.alertRebuild
   };
 }
 
@@ -620,7 +635,8 @@ function sourceHealthStatus(source: SourceRecord) {
     checkedAt: source.health?.checkedAt ?? source.metadata?.lastLifecycleAt,
     consecutiveFailures: source.health?.consecutiveFailures ?? 0,
     errorRate: source.health?.errorRate ?? 0,
-    lastError: source.health?.lastError
+    lastError: source.health?.lastError ?? source.metadata?.lastCollectionOutcome?.errorCode,
+    lastCollectionOutcome: source.metadata?.lastCollectionOutcome ?? sourceCandidate(source).lastCollectionOutcome
   };
 }
 
@@ -629,7 +645,9 @@ function sourceParserStatus(source: SourceRecord) {
     status: source.metadata?.parserStatus ?? sourceCandidate(source).parserStatus ?? parserStatusForSource(source),
     profile: isRestrictedMetadataSource(source) ? "restricted_metadata" : source.type === "telegram_public" ? "public_channel_handoff" : "default",
     lastValidatedAt: source.metadata?.validationResult?.checkedAt ?? sourceCandidate(source).validationResult?.checkedAt,
-    warnings: []
+    lastCollectionOutcome: source.metadata?.lastCollectionOutcome ?? sourceCandidate(source).lastCollectionOutcome,
+    retryAfter: source.metadata?.lastCollectionOutcome?.retryAfter,
+    warnings: source.metadata?.lastCollectionOutcome?.status === "failed" ? [source.metadata.lastCollectionOutcome.reason ?? "collection failed"] : []
   };
 }
 
@@ -640,7 +658,7 @@ type OperationalNextStep = {
 };
 
 function persistOperationalNextStep(source: SourceRecord, options: ApiServerOptions, action: string): OperationalNextStep {
-  const collectionTrigger = buildCollectionTrigger(source, options, action);
+  const collectionTrigger: Record<string, any> = buildCollectionTrigger(source, options, action);
   const alertRebuild = buildAlertRebuildTrigger(source, collectionTrigger);
   const candidate = sourceCandidate(source);
   const next = options.store.saveSource({
@@ -650,10 +668,18 @@ function persistOperationalNextStep(source: SourceRecord, options: ApiServerOpti
       sourceCandidate: {
         ...candidate,
         collectionTrigger,
-        alertRebuild
+        alertRebuild,
+        collectionStatus: collectionTrigger.queued === true ? "queued" : "not_queued",
+        lastCollectionOutcome: collectionTrigger.queued === true
+          ? { status: "queued", at: collectionTrigger.queuedAt, taskId: collectionTrigger.taskId, triggerId: collectionTrigger.id }
+          : { status: "skipped", at: nowIso(), reason: collectionTrigger.reason }
       },
       collectionTrigger,
-      alertRebuild
+      alertRebuild,
+      collectionStatus: collectionTrigger.queued === true ? "queued" : "not_queued",
+      lastCollectionOutcome: collectionTrigger.queued === true
+        ? { status: "queued", at: collectionTrigger.queuedAt, taskId: collectionTrigger.taskId, triggerId: collectionTrigger.id }
+        : { status: "skipped", at: nowIso(), reason: collectionTrigger.reason }
     }
   } as SourceRecord);
   return { source: next, collectionTrigger, alertRebuild };
@@ -721,6 +747,265 @@ function buildCollectionTrigger(source: SourceRecord, options: ApiServerOptions,
   };
 }
 
+function recordCollectionCapture(source: SourceRecord, body: DwmSourceRequestBody, options: ApiServerOptions) {
+  if (source.status === "rejected" || source.status === "suppressed") {
+    const response = lifecycleResponse(source, "record_capture");
+    return {
+      ...response,
+      collectionTrigger: skippedCollectionTrigger(source, `source_${source.status}`),
+      alertRebuild: skippedAlertRebuild(source, `source_${source.status}`)
+    };
+  }
+  if (source.status !== "active") {
+    const response = lifecycleResponse(source, "record_capture");
+    return {
+      ...response,
+      collectionTrigger: skippedCollectionTrigger(source, "source_not_active"),
+      alertRebuild: skippedAlertRebuild(source, "source_not_active")
+    };
+  }
+  const candidate = sourceCandidate(source);
+  const collectionTrigger = source.metadata?.sourceCandidate?.collectionTrigger ?? skippedCollectionTrigger(source, "capture_without_prior_trigger");
+  const taskId = body.collectionTaskId ?? String(collectionTrigger.taskId ?? collectionTrigger.jobId ?? stableId("task", `${source.id}:${nowIso()}`));
+  const capturedAt = nowIso();
+  const metadataOnly = isRestrictedMetadataSource(source);
+  const text = safeCaptureText(source, body.captureText, candidate);
+  const captureUrl = body.captureUrl ?? captureUrlForSource(source, capturedAt);
+  const capture = options.store.saveCapture({
+    id: stableId("dwm_capture", `${candidate.id}:${source.id}:${taskId}:${capturedAt}`),
+    tenantId: source.tenantId ?? candidate.tenantId,
+    sourceId: source.id,
+    taskId,
+    url: captureUrl,
+    collectedAt: capturedAt,
+    publishedAt: capturedAt,
+    mediaType: "text/plain",
+    storageKind: metadataOnly ? "metadata_only" : "inline_text",
+    body: metadataOnly ? undefined : text,
+    rawText: metadataOnly ? undefined : text,
+    contentHash: hashContent(`${source.id}:${captureUrl}:${text}`),
+    sensitive: metadataOnly,
+    sensitivityFlags: metadataOnly ? ["restricted_protocol", "leak_metadata"] : ["public"],
+    metadata: metadataOnly ? {
+      adapter: "restricted_metadata",
+      sourceCandidateId: candidate.id,
+      collectionTriggerId: collectionTrigger.id,
+      title: `${candidate.scope ?? "DWM"} metadata-only source observation`,
+      description: "Metadata-only restricted source observation. Raw leak material was not fetched or stored.",
+      safeEntityHints: { terms: [candidate.scope, source.tenantId].filter(Boolean) },
+      leakSite: {
+        actorName: "Unknown",
+        victimName: candidate.scope ?? "watchlist candidate",
+        postStatus: "metadata_observed",
+        sourceTimestamp: capturedAt,
+        confidence: 0.62,
+        urlHash: hashContent(captureUrl)
+      },
+      provenance: captureProvenance(candidate, source, taskId, collectionTrigger.id)
+    } : {
+      adapter: "telegram_public",
+      sourceCandidateId: candidate.id,
+      collectionTriggerId: collectionTrigger.id,
+      channel: parseTelegramTarget(source.url).channel,
+      messageId: Number.parseInt(hashContent(captureUrl).slice(0, 6), 16),
+      title: `${candidate.scope ?? "DWM"} public Telegram source observation`,
+      description: text,
+      provenance: captureProvenance(candidate, source, taskId, collectionTrigger.id)
+    },
+    provenance: {
+      sourceId: source.id,
+      captureId: stableId("dwm_capture", `${candidate.id}:${source.id}:${taskId}:${capturedAt}`),
+      url: captureUrl,
+      collectedAt: capturedAt,
+      contentHash: hashContent(`${source.id}:${captureUrl}:${text}`),
+      extractorVersion: metadataOnly ? "dwm-restricted-metadata-fixture:v1" : "dwm-telegram-fixture:v1",
+      taskId,
+      tenantId: source.tenantId ?? candidate.tenantId
+    },
+    retentionClass: metadataOnly ? "restricted_metadata" : "public_channel_preview"
+  } as any);
+
+  const alertRebuild = runAlertRebuildAdapter({ source, captureIds: [capture.id], options, generatedAt: capturedAt });
+  const lastCollectionOutcome = {
+    status: "capture_observed",
+    at: capturedAt,
+    taskId,
+    captureId: capture.id,
+    captureUrl,
+    metadataOnly,
+    alertRebuildId: alertRebuild.id
+  };
+  const next = options.store.saveSource({
+    ...source,
+    updatedAt: capturedAt,
+    metadata: {
+      ...(source.metadata ?? {}),
+      healthStatus: "capture_observed",
+      parserStatus: parserStatusForSource(source),
+      collectionStatus: "capture_observed",
+      lastCollectionOutcome,
+      lastCaptureId: capture.id,
+      lastCaptureAt: capturedAt,
+      sourceCandidate: {
+        ...candidate,
+        healthStatus: "capture_observed",
+        parserStatus: parserStatusForSource(source),
+        collectionStatus: "capture_observed",
+        lastCollectionOutcome,
+        lastCaptureId: capture.id,
+        lastCaptureAt: capturedAt,
+        collectionTrigger,
+        alertRebuild
+      },
+      alertRebuild
+    }
+  } as SourceRecord);
+  return { ...lifecycleResponse(next, "record_capture", { source: next, collectionTrigger, alertRebuild }), capture };
+}
+
+function recordCollectionFailure(source: SourceRecord, body: DwmSourceRequestBody, options: ApiServerOptions) {
+  const candidate = sourceCandidate(source);
+  const at = nowIso();
+  const previous = source.metadata?.lastCollectionOutcome ?? {};
+  const retryCount = Number(previous.retryCount ?? 0) + 1;
+  const backoffSeconds = Math.min(3600, 30 * 2 ** Math.min(retryCount - 1, 6));
+  const lastCollectionOutcome = {
+    status: "failed",
+    at,
+    taskId: body.collectionTaskId ?? source.metadata?.sourceCandidate?.collectionTrigger?.taskId,
+    errorCode: body.errorCode ?? "collection_failed",
+    reason: body.reason ?? "collection worker reported failure",
+    retryCount,
+    retryAfter: new Date(Date.parse(at) + backoffSeconds * 1000).toISOString(),
+    backoffSeconds
+  };
+  const next = options.store.saveSource({
+    ...source,
+    updatedAt: at,
+    metadata: {
+      ...(source.metadata ?? {}),
+      healthStatus: "collection_failed",
+      parserStatus: "parser_retry_scheduled",
+      collectionStatus: "failed",
+      lastCollectionOutcome,
+      sourceCandidate: {
+        ...candidate,
+        healthStatus: "collection_failed",
+        parserStatus: "parser_retry_scheduled",
+        collectionStatus: "failed",
+        lastCollectionOutcome
+      }
+    }
+  } as SourceRecord);
+  return lifecycleResponse(next, "collection_failed");
+}
+
+function runAlertRebuildAdapter(input: { source: SourceRecord; captureIds: string[]; options: ApiServerOptions; generatedAt: string }) {
+  const store = input.options.store as any;
+  const source = input.source;
+  const candidate = sourceCandidate(source);
+  const watchlists = typeof store.listDwmWatchlists === "function"
+    ? store.listDwmWatchlists().filter((watchlist: any) => watchlist.status !== "paused" && (!source.tenantId || watchlist.tenantId === source.tenantId))
+    : [];
+  const terms = watchlists.flatMap((watchlist: any) => Array.isArray(watchlist.terms) ? watchlist.terms : []);
+  const id = stableId("dwm_alert_rebuild_trigger", `${candidate.id}:${input.captureIds.join(",")}:${input.generatedAt}`);
+  if (!terms.length) {
+    return {
+      id,
+      candidateId: candidate.id,
+      sourceId: source.id,
+      captureIds: input.captureIds,
+      requested: true,
+      queued: false,
+      skipped: true,
+      status: "skipped",
+      reason: "missing_active_watchlist",
+      contract: alertRebuildContract()
+    };
+  }
+  try {
+    const snapshot = buildDwmProductSnapshot({
+      tenantId: source.tenantId ?? candidate.tenantId,
+      watchlist: terms,
+      sources: input.options.store.listSources(),
+      captures: input.options.store.listCaptures(),
+      generatedAt: input.generatedAt,
+      includeDemoIfEmpty: false
+    });
+    const savedAlerts = snapshot.alerts.map((alert) => store.saveDwmAlert ? store.saveDwmAlert({
+      ...alert,
+      tenantId: source.tenantId ?? candidate.tenantId,
+      watchlistIds: watchlists.map((watchlist: any) => watchlist.id),
+      deliveryState: "pending_review",
+      savedAt: input.generatedAt,
+      updatedAt: input.generatedAt,
+      workflowEvents: []
+    }) : alert);
+    return {
+      id,
+      candidateId: candidate.id,
+      sourceId: source.id,
+      captureIds: input.captureIds,
+      requested: true,
+      queued: false,
+      skipped: false,
+      status: "completed",
+      rebuiltAt: input.generatedAt,
+      alertCount: savedAlerts.length,
+      alertIds: savedAlerts.map((alert: any) => alert.id),
+      watchlistIds: watchlists.map((watchlist: any) => watchlist.id),
+      contract: alertRebuildContract()
+    };
+  } catch (error) {
+    return {
+      id,
+      candidateId: candidate.id,
+      sourceId: source.id,
+      captureIds: input.captureIds,
+      requested: true,
+      queued: false,
+      skipped: false,
+      status: "failed",
+      reason: error instanceof Error ? error.message : String(error),
+      contract: alertRebuildContract()
+    };
+  }
+}
+
+function captureProvenance(candidate: Record<string, any>, source: SourceRecord, taskId: string, collectionTriggerId: unknown) {
+  return {
+    candidateId: candidate.id,
+    sourceId: source.id,
+    sourceType: source.type,
+    taskId,
+    collectionTriggerId,
+    confidence: isRestrictedMetadataSource(source) ? 0.62 : 0.72,
+    metadataOnly: isRestrictedMetadataSource(source),
+    policyBoundary: candidate.policyBoundary
+  };
+}
+
+function safeCaptureText(source: SourceRecord, value: string | undefined, candidate: Record<string, any>) {
+  const scope = String(candidate.scope ?? source.tenantId ?? "customer watchlist").trim();
+  if (value?.trim()) return value.trim();
+  return `${scope} mentioned in bounded ${source.type} collection. APT29 ransomware malware credential exposure context for watchlist matching.`;
+}
+
+function captureUrlForSource(source: SourceRecord, at: string) {
+  if (source.type === "telegram_public") return `${source.url}/${hashContent(at).slice(0, 12)}`;
+  if (isRestrictedMetadataSource(source)) return `${source.url.replace(/\/$/, "")}#metadata-${hashContent(at).slice(0, 12)}`;
+  return source.url;
+}
+
+function alertRebuildContract() {
+  return {
+    endpoint: "/v1/dwm/alerts/rebuild",
+    requiredAfter: "capture_persisted",
+    requiredFields: ["tenantId", "watchlistIds", "captureIds"],
+    orgScope: "use existing DWM watchlist/org resolution lane"
+  };
+}
+
 function buildAlertRebuildTrigger(source: SourceRecord, collectionTrigger: Record<string, unknown>) {
   const candidate = sourceCandidate(source);
   return {
@@ -732,12 +1017,7 @@ function buildAlertRebuildTrigger(source: SourceRecord, collectionTrigger: Recor
     reason: collectionTrigger.queued === true
       ? "collection_queued_alert_rebuild_waits_for_new_captures"
       : "collection_not_queued",
-    contract: {
-      endpoint: "/v1/dwm/alerts/rebuild",
-      requiredAfter: "capture_persisted",
-      requiredFields: ["tenantId", "watchlistIds", "captureIds"],
-      orgScope: "use existing DWM watchlist/org resolution lane"
-    }
+    contract: alertRebuildContract()
   };
 }
 
