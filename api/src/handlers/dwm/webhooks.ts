@@ -13,6 +13,7 @@ import {
     buildDwmWebhookDestinationContracts,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
+    buildDwmWebhookDeliveryRequestInput,
     createDwmWebhookDestination,
     buildDwmWebhookDeliveryReadiness,
     deliverDwmAlertNotification,
@@ -266,15 +267,21 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
     const userId = await authenticatedUserId(req, res)
     if (!userId) return
 
-    const orgId = clean(req.body?.orgId) || clean(req.body?.organizationId) || clean(req.body?.tenantId) || userId
+    const input = buildDwmWebhookDeliveryRequestInput(req.body || {})
+    const orgId = clean(input.orgId) || clean(input.organizationId) || clean(input.tenantId) || userId
     const permissionError = await memberPermissionError(orgId, userId)
     if (permissionError) {
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
 
-    const deliveries = await deliverDwmAlertNotification(userId, { ...req.body, orgId })
+    const deliveries = await deliverDwmAlertNotification(userId, { ...input, orgId })
     return res.status(202).send({
         deliveries,
+        deliveryReadiness: buildDwmWebhookDeliveryReadiness({
+            destinations: await listDwmWebhookDestinations(userId, orgId),
+            deliveries: await listDwmWebhookDeliveries(userId, orgId),
+            auditEvents: await listDwmWebhookAuditEvents(userId, orgId),
+        }),
         dryRunDefault: true,
         liveDeliveryEnabled: process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
     })

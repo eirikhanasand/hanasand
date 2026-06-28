@@ -6,6 +6,7 @@ import {
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryReadiness,
+    buildDwmWebhookDeliveryRequestInput,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     normalizeDwmWebhookDestinationInput,
@@ -239,6 +240,13 @@ const replayTriggerInput = buildDwmAlertWebhookNotificationInput(workflowReplayH
     dryRun: true,
 })
 const targetedReplayTriggerInput = buildDwmAlertWebhookNotificationInput(workflowReplayHandoff.alert, workflowReplayHandoff.options)
+const apiDeliveryRequestInput = buildDwmWebhookDeliveryRequestInput({
+    alert: replayWorkflowAlert,
+    eventType: 'dwm.alert.replayed',
+    dryRun: true,
+    live: false,
+    destinationId: 'destination_replay_contract',
+})
 const replayPlan = buildDwmAlertWebhookDispatchPlan({
     ownerId: workflowReplayHandoff.ownerId,
     input: replayTriggerInput,
@@ -276,6 +284,9 @@ expect(replayTriggerInput.sourceFamily === 'telegram_public', 'Replay trigger in
 expect(replayTriggerInput.casePath === replayWorkflowAlert.casePath, 'Replay trigger input should map case path.', replayTriggerInput)
 expect(replayTriggerInput.dedupeKey === 'dwm_dedupe_replay_contract', 'Replay trigger input should map dedupe key.', replayTriggerInput)
 expect(targetedReplayTriggerInput.destinationId === 'destination_replay_contract' && targetedReplayTriggerInput.dryRun === true && targetedReplayTriggerInput.live === false, 'Replay handoff should accept destination selection plus dry-run/live mode.', targetedReplayTriggerInput)
+expect(apiDeliveryRequestInput.organizationId === 'org_contract' && apiDeliveryRequestInput.destinationId === 'destination_replay_contract', 'API delivery bridge should normalize persisted alert org and destination context.', apiDeliveryRequestInput)
+expect(apiDeliveryRequestInput.casePath === replayWorkflowAlert.casePath && apiDeliveryRequestInput.sourceFamily === 'telegram_public', 'API delivery bridge should normalize case and source context.', apiDeliveryRequestInput)
+expect(apiDeliveryRequestInput.dryRun === true && apiDeliveryRequestInput.live === false, 'API delivery bridge should preserve dry-run/live gate.', apiDeliveryRequestInput)
 expect(replayPlan.selectedDestinations.length === 1, 'Replay dispatch should select the active org destination.', replayPlan)
 expect(replayPlan.eventType === 'dwm.alert.replayed', 'Replay dispatch should preserve replay event type.', replayPlan)
 expect(replayAlertContext.id === 'alert_replay_contract', 'Replay payload should link to the same alert id.', replayPayload)
@@ -907,6 +918,7 @@ console.log(JSON.stringify({
         'alert replay trigger adapter',
         'workflow replay handoff type contract',
         'adapter destination dry-run/live selection',
+        'API delivery bridge persisted-alert normalization',
         'replay alert/dedupe/case linkage',
         'idempotent duplicate replay key',
         'replay workflow immutability',

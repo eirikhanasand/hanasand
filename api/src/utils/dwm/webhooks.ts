@@ -1027,6 +1027,26 @@ export function buildDwmAlertWebhookNotificationInput(
     }
 }
 
+export function buildDwmWebhookDeliveryRequestInput(input: DwmAlertNotificationInput): DwmAlertNotificationInput {
+    const alert = input.alert && typeof input.alert === 'object' ? input.alert : null
+    if (!alert) return input
+
+    const normalized = buildDwmAlertWebhookNotificationInput(alert, {
+        eventType: input.eventType ?? input.event_type,
+        destinationId: input.destinationId ?? input.destination_id,
+        dryRun: input.dryRun ?? input.dry_run,
+        live: input.live,
+    })
+    const orgId = firstClean(input.orgId, input.organizationId, input.tenantId, normalized.orgId, normalized.organizationId, normalized.tenantId)
+
+    return {
+        ...input,
+        ...normalized,
+        orgId,
+        organizationId: orgId,
+    }
+}
+
 export async function triggerDwmAlertWebhookNotification(
     ownerId: string,
     alert: Record<string, unknown>,
