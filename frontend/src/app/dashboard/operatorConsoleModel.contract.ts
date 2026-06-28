@@ -1,5 +1,5 @@
 import { buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
-import type { WorkbenchAction, WorkbenchCase, WorkbenchDeliveryEvidence } from './ti/workbench/workbenchClient'
+import type { WorkbenchAction, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence } from './ti/workbench/workbenchClient'
 
 const organizationState = {
     organizations: [{
@@ -141,8 +141,29 @@ const selectedLiveAlert = {
     deliveryEvidence: deliveries,
 } satisfies WorkbenchCase
 
+const liveCaseMutationPayloads = [
+    { action: 'assign', actor: 'dashboard', assignedOwner: 'analyst-1', note: 'Assigned from the root operator console.' },
+    { action: 'note', actor: 'dashboard', assignedOwner: 'analyst-1', note: 'Evidence reviewed from selected case detail.' },
+    { action: 'escalate', actor: 'dashboard', assignedOwner: 'ir-lead', note: 'Customer-owned domain and delivery route confirmed.' },
+    { action: 'suppress', actor: 'dashboard', assignedOwner: 'analyst-1', note: 'Suppressed as low-value or false positive after evidence review.' },
+    { action: 'close', actor: 'dashboard', assignedOwner: 'analyst-1', note: 'Closed after backed evidence and delivery state were reviewed.' },
+    { action: 'reopen', actor: 'dashboard', assignedOwner: 'analyst-1', note: 'Reopened because new evidence requires review.' },
+] satisfies WorkbenchCaseMutationPayload[]
+
+const blockedFallbackAlert = {
+    ...selectedLiveAlert,
+    id: 'fallback_alert_acme',
+    persistent: false,
+    actions: [],
+    caseDetailHref: undefined,
+    deliveryEvidence: [],
+    missingDependency: 'This is a fallback alert. It cannot PATCH /api/cases/:id until live DWM alerts return a backed case ID.',
+} satisfies WorkbenchCase
+
 void _contract
 void _requiresWorkflowPath
 void _requiresBackedActions
 void (selectedLiveAlert.actions satisfies WorkbenchAction[])
 void (selectedLiveAlert.deliveryEvidence satisfies WorkbenchDeliveryEvidence[])
+void (liveCaseMutationPayloads satisfies WorkbenchCaseMutationPayload[])
+void (blockedFallbackAlert.missingDependency satisfies string)

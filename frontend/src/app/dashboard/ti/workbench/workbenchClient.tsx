@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Clock3, ExternalLink, FileText, Filter, Fingerprint, ListChecks, MessageSquareText, Search, ShieldAlert, UserRound } from 'lucide-react'
 
 export type WorkbenchEvidence = {
@@ -40,10 +40,19 @@ export type WorkbenchWorkflowStep = {
 export type WorkbenchAction = {
     id: string
     label: string
-    method: 'GET' | 'POST'
+    method: 'GET' | 'POST' | 'PATCH'
     href: string
     body?: Record<string, unknown>
     disabledReason?: string
+}
+
+export type WorkbenchCaseMutationAction = 'assign' | 'note' | 'escalate' | 'suppress' | 'close' | 'reopen' | 'false_positive'
+
+export type WorkbenchCaseMutationPayload = {
+    action: WorkbenchCaseMutationAction
+    actor: string
+    note?: string
+    assignedOwner?: string
 }
 
 export type WorkbenchDeliveryEvidence = {
@@ -99,6 +108,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
     const [filter, setFilter] = useState<QueueFilter>('all')
     const [query, setQuery] = useState('')
     const [notes, setNotes] = useState<Record<string, string>>({})
+    const [ownerDrafts, setOwnerDrafts] = useState<Record<string, string>>({})
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [caseDetails, setCaseDetails] = useState<Record<string, CaseDetailState>>({})
     const [busyAction, setBusyAction] = useState<string | null>(null)
@@ -109,18 +119,29 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedCaseDetail = selected ? caseDetails[selected.id] : undefined
 
+    const refreshCaseDetail = useCallback(async (itemId: string, href: string, options: { loading?: boolean } = {}) => {
+        if (options.loading !== false) setCaseDetails(current => ({ ...current, [itemId]: { status: 'loading' } }))
+        const response = await fetch(href, { cache: 'no-store' })
+        const payload = await readCaseDetailJson(response)
+        if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+        setCaseDetails(current => ({ ...current, [itemId]: { status: 'ready', detail: payload } }))
+        return payload
+    }, [])
+
     useEffect(() => {
         if (!selected?.caseDetailHref) return
         let cancelled = false
-        setCaseDetails(current => ({ ...current, [selected.id]: { status: 'loading' } }))
-        fetch(selected.caseDetailHref, { cache: 'no-store' })
+        const itemId = selected.id
+        const href = selected.caseDetailHref
+        setCaseDetails(current => ({ ...current, [itemId]: { status: 'loading' } }))
+        fetch(href, { cache: 'no-store' })
             .then(async response => {
                 const payload = await readCaseDetailJson(response)
                 if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-                if (!cancelled) setCaseDetails(current => ({ ...current, [selected.id]: { status: 'ready', detail: payload } }))
+                if (!cancelled) setCaseDetails(current => ({ ...current, [itemId]: { status: 'ready', detail: payload } }))
             })
             .catch(error => {
-                if (!cancelled) setCaseDetails(current => ({ ...current, [selected.id]: { status: 'error', error: error instanceof Error ? error.message : String(error) } }))
+                if (!cancelled) setCaseDetails(current => ({ ...current, [itemId]: { status: 'error', error: error instanceof Error ? error.message : String(error) } }))
             })
         return () => {
             cancelled = true
@@ -169,6 +190,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
             return 'Evidence replay recorded in the DWM workflow.'
         })
     }
@@ -183,6 +205,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
             return payload.attemptedCount ? 'Webhook delivery attempted.' : 'No webhook delivery was attempted.'
         })
     }
@@ -203,11 +226,42 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
             return actionResultMessage(action, payload)
         })
     }
 
+    async function runBackedCaseMutation(item: WorkbenchCase, mutation: CaseMutationInput) {
+        if (!item.caseDetailHref) {
+            setMessage({ ok: false, text: item.missingDependency || 'This selected item has no backed /api/cases/:id route. Use session-local triage or open/create the case first.' })
+            return
+        }
+        await runPersistentAction(`case:${item.id}:${mutation.action}`, async () => {
+            const body: WorkbenchCaseMutationPayload = {
+                action: mutation.action,
+                actor: 'dashboard',
+                note: mutation.note || undefined,
+                assignedOwner: mutation.assignedOwner || undefined,
+            }
+            const response = await fetch(item.caseDetailHref as string, {
+                method: 'PATCH',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(body),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            await refreshCaseDetail(item.id, item.caseDetailHref as string, { loading: false })
+            setLocalDecisions(current => {
+                const next = { ...current }
+                delete next[item.id]
+                return next
+            })
+            return caseMutationResultMessage(mutation.action, payload)
+        })
+    }
+
     async function runPersistentAction(key: string, action: () => Promise<string>) {
+        if (busyAction) return
         setBusyAction(key)
         setMessage(null)
         try {
@@ -295,11 +349,14 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full' }
                                 item={selected}
                                 decision={selectedDecision}
                                 note={notes[selected.id] ?? ''}
+                                ownerDraft={ownerDrafts[selected.id]}
                                 busyAction={busyAction}
                                 compact={compact}
                                 caseDetail={selectedCaseDetail}
                                 onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
+                                onOwnerDraftChange={value => setOwnerDrafts(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={(decision) => applyDecision(selected, decision)}
+                                onBackedCaseMutation={(mutation) => runBackedCaseMutation(selected, mutation)}
                                 onReplay={() => replayDwmAlert(selected)}
                                 onSend={() => sendDwmAlert(selected)}
                                 onAction={(action) => runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
@@ -408,7 +465,10 @@ function BackedInspection({ item, caseDetail, compact }: { item: WorkbenchCase, 
                             <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
                                 <h4 className='text-sm font-semibold text-[#171a21]'>Allowed next actions</h4>
                                 <div className='mt-2 flex flex-wrap gap-2'>
-                                    {(caseDetail.detail.nextAllowedActions || caseDetail.detail.nextActions || []).map(action => (
+                                    {(caseDetail.detail.nextAllowedActions || []).map(action => (
+                                        <span key={action.id} title={action.disabledReason} className={workflowStatusClass(action.enabled ? 'ready' : 'blocked')}>{action.label}</span>
+                                    ))}
+                                    {!(caseDetail.detail.nextAllowedActions || []).length && (caseDetail.detail.nextActions || []).map(action => (
                                         <span key={String(action)} className='rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-[#596170]'>{String(action)}</span>
                                     ))}
                                     {!(caseDetail.detail.nextAllowedActions || caseDetail.detail.nextActions || []).length && <span className='text-xs text-[#667085]'>No next actions returned by the case API.</span>}
@@ -526,21 +586,166 @@ function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
     )
 }
 
-function CaseDetail({ item, decision, note, busyAction, compact, caseDetail, onNoteChange, onDecision, onReplay, onSend, onAction }: {
+function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDetail, onDecision, onBackedCaseMutation, onReplay, onSend }: {
+    item: WorkbenchCase
+    note: string
+    owner: string
+    effectiveStatus: string
+    busyAction: string | null
+    caseDetail?: CaseDetailState
+    onDecision: (decision: LocalDecision) => void | Promise<void>
+    onBackedCaseMutation: (mutation: CaseMutationInput) => void | Promise<void>
+    onReplay: () => void | Promise<void>
+    onSend: () => void | Promise<void>
+}) {
+    const readyCase = caseDetail?.status === 'ready' ? caseDetail.detail.case : undefined
+    const hasBackedCase = Boolean(readyCase)
+    const busy = Boolean(busyAction)
+    const closeAction = effectiveStatus === 'closed' ? 'reopen' : 'close'
+
+    if (!hasBackedCase) {
+        return (
+            <div className='grid gap-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] p-3'>
+                <div>
+                    <p className='text-xs font-semibold uppercase text-[#9a3412]'>Session-local triage</p>
+                    <p className='mt-1 text-xs leading-5 text-[#596170]'>{item.missingDependency || 'Backed case mutations require a live /api/cases/:id detail response. These controls only update this browser session.'}</p>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                    <DecisionButton busy={busy} onClick={() => onDecision({ status: 'reviewing', owner, reason: note || 'Review started.' })}>Review</DecisionButton>
+                    <DecisionButton busy={busy} onClick={() => onDecision({ status: 'escalated', owner, reason: note || 'Escalated for customer or incident response.' })}>Escalate</DecisionButton>
+                    <DecisionButton busy={busy} onClick={() => onDecision({ status: 'suppressed', owner, reason: note || 'Suppressed as low-value or false positive.' })}>Suppress</DecisionButton>
+                    <DecisionButton busy={busy} onClick={() => onDecision({ status: effectiveStatus === 'closed' ? 'needs_review' : 'closed', owner, reason: note || (effectiveStatus === 'closed' ? 'Reopened for review.' : 'Closed in analyst workbench.') })}>
+                        {effectiveStatus === 'closed' ? 'Reopen' : 'Close'}
+                    </DecisionButton>
+                    {item.kind === 'dwm_alert' && (
+                        <>
+                            <DecisionButton busy={busy || busyAction === `replay:${item.id}`} onClick={onReplay}>Replay</DecisionButton>
+                            <DecisionButton busy={busy || busyAction === `send:${item.id}`} onClick={onSend}>Send</DecisionButton>
+                        </>
+                    )}
+                </div>
+            </div>
+        )
+    }
+
+    const hasOwner = owner.trim() && owner.trim() !== 'unassigned'
+    const noteText = note.trim()
+    return (
+        <div className='grid gap-2 rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3'>
+            <div>
+                <p className='text-xs font-semibold uppercase text-[#147a3b]'>Backed case actions</p>
+                <p className='mt-1 text-xs leading-5 text-[#596170]'>These controls PATCH /api/cases/:id, then reload the case detail pane before reporting success.</p>
+            </div>
+            <div className='flex flex-wrap gap-2'>
+                <CaseMutationButton
+                    item={item}
+                    action='assign'
+                    label='Assign owner'
+                    busy={busy}
+                    busyAction={busyAction}
+                    allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
+                    disabledReason={!hasOwner ? 'Owner is required.' : undefined}
+                    onClick={() => onBackedCaseMutation({ action: 'assign', assignedOwner: owner.trim(), note: noteText || `Assigned to ${owner.trim()}.` })}
+                />
+                <CaseMutationButton
+                    item={item}
+                    action='note'
+                    label='Add note'
+                    busy={busy}
+                    busyAction={busyAction}
+                    allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
+                    disabledReason={!noteText ? 'Decision rationale is required.' : undefined}
+                    onClick={() => onBackedCaseMutation({ action: 'note', assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText })}
+                />
+                <CaseMutationButton
+                    item={item}
+                    action='escalate'
+                    label='Escalate'
+                    busy={busy}
+                    busyAction={busyAction}
+                    allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
+                    disabledReason={!noteText ? 'Escalation requires rationale.' : undefined}
+                    onClick={() => onBackedCaseMutation({ action: 'escalate', assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText || 'Escalated for customer or incident response.' })}
+                />
+                <CaseMutationButton
+                    item={item}
+                    action='suppress'
+                    label='Suppress'
+                    busy={busy}
+                    busyAction={busyAction}
+                    allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
+                    disabledReason={!noteText ? 'Suppression requires rationale.' : undefined}
+                    onClick={() => onBackedCaseMutation({ action: 'suppress', assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText || 'Suppressed as low-value or false positive.' })}
+                />
+                <CaseMutationButton
+                    item={item}
+                    action={closeAction}
+                    label={effectiveStatus === 'closed' ? 'Reopen' : 'Close'}
+                    busy={busy}
+                    busyAction={busyAction}
+                    allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
+                    disabledReason={closeAction === 'close' && !noteText ? 'Closing requires rationale.' : undefined}
+                    onClick={() => onBackedCaseMutation({ action: closeAction, assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText || (closeAction === 'reopen' ? 'Reopened for review.' : 'Closed from analyst workbench.') })}
+                />
+                {item.kind === 'dwm_alert' && (
+                    <>
+                        <DecisionButton busy={busy || busyAction === `replay:${item.id}`} onClick={onReplay}>Replay</DecisionButton>
+                        <DecisionButton busy={busy || busyAction === `send:${item.id}`} onClick={onSend}>Send</DecisionButton>
+                    </>
+                )}
+            </div>
+        </div>
+    )
+}
+
+function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction, allowedActions, disabledReason, onClick }: {
+    item: WorkbenchCase
+    action: WorkbenchCaseMutationAction
+    label: string
+    busy: boolean
+    busyAction: string | null
+    allowedActions: CaseAllowedAction[]
+    disabledReason?: string
+    onClick: () => void | Promise<void>
+}) {
+    const allowed = allowedActions.find(candidate => candidate.id === action)
+    const blockedReason = disabledReason || allowed?.disabledReason || (allowed && !allowed.enabled ? 'Not applicable for current case status.' : undefined)
+    const disabled = busy || Boolean(blockedReason)
+    return (
+        <button
+            type='button'
+            onClick={onClick}
+            disabled={disabled}
+            title={blockedReason}
+            className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+        >
+            {busyAction === `case:${item.id}:${action}` ? 'Saving...' : actionLabel}
+        </button>
+    )
+}
+
+function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
+    ownerDraft?: string
     busyAction: string | null
     compact: boolean
     caseDetail?: CaseDetailState
     onNoteChange: (value: string) => void
+    onOwnerDraftChange: (value: string) => void
     onDecision: (decision: LocalDecision) => void | Promise<void>
+    onBackedCaseMutation: (mutation: CaseMutationInput) => void | Promise<void>
     onReplay: () => void | Promise<void>
     onSend: () => void | Promise<void>
     onAction: (action: WorkbenchAction) => void | Promise<void>
 }) {
-    const effectiveStatus = decision?.status ?? item.status
-    const effectiveOwner = decision?.owner ?? item.owner
+    const backedCase = caseDetail?.status === 'ready' ? caseDetail.detail.case : undefined
+    const backedStatus = backedCase?.status
+    const backedOwner = backedCase?.assignedOwner || 'unassigned'
+    const effectiveStatus = decision?.status ?? backedStatus ?? item.status
+    const effectiveOwner = decision?.owner ?? backedOwner ?? item.owner
+    const ownerValue = ownerDraft ?? (effectiveOwner === 'unassigned' ? '' : effectiveOwner)
     const timeline = decision?.status ? [
         {
             id: `${item.id}_session_decision`,
@@ -570,19 +775,19 @@ function CaseDetail({ item, decision, note, busyAction, compact, caseDetail, onN
                 </div>
             </div>
 
-            <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)_auto] lg:items-end'>
+            <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)]'>
                 <label className='grid gap-2'>
                     <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
                         <UserRound className='h-4 w-4 text-[#3056d3]' />
                         Owner
                     </span>
                     <input
-                        value={effectiveOwner === 'unassigned' ? '' : effectiveOwner}
-                        onChange={event => onDecision({ owner: event.target.value.trim() || 'unassigned' })}
+                        value={ownerValue}
+                        onChange={event => onOwnerDraftChange(event.target.value)}
                         placeholder='Assign analyst'
                         className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
                     />
-                    <span className='text-[11px] text-[#667085]'>Session-local until TI case ownership persistence is wired.</span>
+                    <span className='text-[11px] text-[#667085]'>{caseDetail?.status === 'ready' ? 'Saved by Assign owner against PATCH /api/cases/:id.' : 'Draft only until a backed case detail is loaded.'}</span>
                 </label>
                 <label className='grid gap-2'>
                     <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
@@ -596,20 +801,18 @@ function CaseDetail({ item, decision, note, busyAction, compact, caseDetail, onN
                         className='min-h-20 resize-y rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
                     />
                 </label>
-                <div className='flex flex-wrap gap-2 lg:justify-end'>
-                    <DecisionButton onClick={() => onDecision({ status: 'reviewing', reason: note || 'Review started.' })}>Review</DecisionButton>
-                    <DecisionButton onClick={() => onDecision({ status: 'escalated', reason: note || 'Escalated for customer or incident response.' })}>Escalate</DecisionButton>
-                    {item.kind === 'dwm_alert' && (
-                        <>
-                            <DecisionButton busy={busyAction === `replay:${item.id}`} onClick={onReplay}>Replay</DecisionButton>
-                            <DecisionButton busy={busyAction === `send:${item.id}`} onClick={onSend}>Send</DecisionButton>
-                        </>
-                    )}
-                    <DecisionButton onClick={() => onDecision({ status: 'suppressed', reason: note || 'Suppressed as low-value or false positive.' })}>Suppress</DecisionButton>
-                    <DecisionButton onClick={() => onDecision({ status: effectiveStatus === 'closed' ? 'needs_review' : 'closed', reason: note || (effectiveStatus === 'closed' ? 'Reopened for review.' : 'Closed in analyst workbench.') })}>
-                        {effectiveStatus === 'closed' ? 'Reopen' : 'Close'}
-                    </DecisionButton>
-                </div>
+                <CaseActionRail
+                    item={item}
+                    note={note}
+                    owner={ownerValue.trim() || effectiveOwner}
+                    effectiveStatus={effectiveStatus}
+                    busyAction={busyAction}
+                    caseDetail={caseDetail}
+                    onDecision={onDecision}
+                    onBackedCaseMutation={onBackedCaseMutation}
+                    onReplay={onReplay}
+                    onSend={onSend}
+                />
             </section>
 
             {(item.workflowPath?.length || item.actions?.length) ? (
@@ -769,6 +972,12 @@ type LocalDecision = {
     decidedAt?: string
 }
 
+type CaseMutationInput = {
+    action: WorkbenchCaseMutationAction
+    note?: string
+    assignedOwner?: string
+}
+
 type CaseDetailState =
     | { status: 'loading' }
     | { status: 'ready', detail: CaseDetailPayload }
@@ -808,7 +1017,16 @@ type CaseDetailPayload = {
     evidence?: CaseEvidence[]
     timeline?: CaseTimelineItem[]
     nextActions?: string[]
-    nextAllowedActions?: string[]
+    nextAllowedActions?: CaseAllowedAction[]
+}
+
+type CaseAllowedAction = {
+    id: WorkbenchCaseMutationAction | 'deliver_webhook'
+    label: string
+    method: 'PATCH' | 'POST'
+    requiresRationale?: boolean
+    enabled: boolean
+    disabledReason?: string
 }
 
 type CaseDelivery = WorkbenchDeliveryEvidence & {
@@ -870,6 +1088,19 @@ function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnTyp
     if (payload.deliveries?.[0]?.id) return `Latest delivery ${payload.deliveries[0].id} is ${payload.deliveries[0].status || 'recorded'}.`
     if (payload.testedAt) return `Webhook test recorded at ${payload.testedAt}.`
     return `${action.label} completed.`
+}
+
+function caseMutationResultMessage(action: WorkbenchCaseMutationAction, payload: Awaited<ReturnType<typeof readJson>>) {
+    const caseId = payload.case?.id ? `Case ${payload.case.id}` : 'Case'
+    const status = payload.case?.status ? ` is ${payload.case.status}` : ' updated'
+    if (action === 'assign') return `${caseId} owner saved.`
+    if (action === 'note') return `${caseId} rationale saved.`
+    if (action === 'escalate') return `${caseId}${status} and ready for routing.`
+    if (action === 'suppress') return `${caseId}${status}; delivery muted.`
+    if (action === 'close') return `${caseId}${status}.`
+    if (action === 'reopen') return `${caseId} reopened.`
+    if (action === 'false_positive') return `${caseId} marked false positive.`
+    return `${caseId}${status}.`
 }
 
 function mapDwmDecision(status: string, currentStatus: string) {
