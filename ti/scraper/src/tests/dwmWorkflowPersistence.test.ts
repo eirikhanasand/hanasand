@@ -1172,6 +1172,37 @@ describe("dwm workflow persistence", () => {
     const quietList = await quietListResponse.json() as any;
     expect(quietListResponse.status).toBe(200);
     expect(quietList.alerts).toHaveLength(0);
+    expect(quietList.alertQueueVisibility).toMatchObject({
+      schemaVersion: "dwm.org_alert_queue_visibility.v1",
+      organizationId: quietOrg.id,
+      counts: {
+        visibleAlertCount: 0,
+        expectedAlertDelta: 0,
+        matchedCandidateCount: 0,
+        unmatchedCandidateCount: 1
+      },
+      generationReadiness: {
+        readyForRebuild: true,
+        readyForCustomerDelivery: false,
+        blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"]),
+        zeroAlertProof: {
+          schemaVersion: "dwm.zero_alert_proof.v1",
+          zeroAlert: true,
+          state: "blocked_no_matching_capture",
+          expectedAlertDelta: 0,
+          nextAction: "Add or collect a recent capture containing the active watchlist term."
+        }
+      },
+      zeroAlertProof: {
+        state: "blocked_no_matching_capture",
+        watchlistTerms: [{
+          term: "quiet.example",
+          watchlistItemIds: ["watch_item_workflow_quiet_nomatch"],
+          hasMatchingCaptures: false,
+          captureRefCount: 0
+        }]
+      }
+    });
   });
 });
 

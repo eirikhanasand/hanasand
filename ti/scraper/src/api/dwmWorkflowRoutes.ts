@@ -1275,6 +1275,14 @@ function buildDwmAlertQueueVisibility(input: {
   const lifecycleStatus = organizationLifecycleStatus(input.organization);
   const lifecycleBlocker = lifecycleStatus === "archived" ? "org_archived" : lifecycleStatus === "deleted" ? "org_deleted" : undefined;
   const workflowSummaries = input.alerts.map(buildDwmAlertWorkflowSummary);
+  const generationReadiness = buildDwmAlertGenerationReadiness({
+    watchlists: (input.options.store as any).listDwmWatchlists?.() ?? [],
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    visibilityPolicy: organizationAlertVisibilityPolicy(input.organization),
+    sources: input.options.store.listSources(),
+    captures: input.options.store.listCaptures()
+  });
   const lifecycleBlockers = uniqueAlertStrings([
     lifecycleBlocker,
     ...workflowSummaries.flatMap((summary: any) => summary.membershipContext?.alertGenerationBlockerCodes ?? summary.membershipContext?.blockedReasons ?? []),
@@ -1317,8 +1325,19 @@ function buildDwmAlertQueueVisibility(input: {
       openAlertCount: input.alerts.filter((alert: any) => !["closed", "suppressed"].includes(String(alert.workflowStatus ?? "new"))).length,
       caseLinkedCount: input.alerts.filter((alert: any) => Boolean(alert.caseId || alert.casePath)).length,
       watchlistItemCount: watchlistItemIds.length,
-      alertGeneratorKeyCount: alertGeneratorKeys.length
+      alertGeneratorKeyCount: alertGeneratorKeys.length,
+      expectedAlertDelta: generationReadiness.zeroAlertProof.expectedAlertDelta,
+      matchedCandidateCount: generationReadiness.counts.matchedCandidateCount,
+      unmatchedCandidateCount: generationReadiness.counts.unmatchedCandidateCount
     },
+    generationReadiness: {
+      schemaVersion: generationReadiness.schemaVersion,
+      readyForRebuild: generationReadiness.readyForRebuild,
+      readyForCustomerDelivery: generationReadiness.readyForCustomerDelivery,
+      blockerCodes: generationReadiness.blockerCodes,
+      zeroAlertProof: generationReadiness.zeroAlertProof
+    },
+    zeroAlertProof: generationReadiness.zeroAlertProof,
     watchlistScope: {
       watchlistItemIds,
       alertGeneratorKeys,
