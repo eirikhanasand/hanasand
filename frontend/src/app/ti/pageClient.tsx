@@ -939,23 +939,60 @@ function CampaignTimelinePanel({ timeline }: { timeline: TiActorIntelligenceProf
                 </span>
             </div>
             <div className='mt-2 grid gap-2'>
-                {timeline.length ? timeline.slice(0, 4).map(item => (
-                    <div key={`${item.firstReportedAt}-${item.title}`} className='rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
-                        <div className='flex flex-wrap items-start justify-between gap-2'>
-                            <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
-                            <span className='shrink-0 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatDate(item.firstReportedAt)}</span>
+                {timeline.length ? timeline.slice(0, 4).map(item => {
+                    const payload = campaignActivityPayloadFor(item)
+                    return (
+                        <div key={`${item.firstReportedAt}-${item.title}`} data-ti-campaign-activity-export='true' className='rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                        {item.affectedSectors.slice(0, 2).join(', ') || 'Sector not returned'} · {item.countries.slice(0, 2).join(', ') || 'Country not returned'} · {Math.round(item.confidence * 100)}%
+                                    </p>
+                                </div>
+                                <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0'>
+                                    <span className={sourceHealthChipClass(item.freshness)}>{formatDate(item.firstReportedAt)}</span>
+                                    <CopyPayloadButton label='Campaign activity' payload={payload} />
+                                </div>
+                            </div>
+                            <div className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2 dark:border-[#273244]'>
+                                <p className='wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                    {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'source reference needed'} · {item.provenanceRefs.length ? `${item.provenanceRefs.length} provenance reference${item.provenanceRefs.length === 1 ? '' : 's'}` : 'provenance needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
+                                </p>
+                                {item.provenanceRefs[0] ? <p className='break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.provenanceRefs[0]}</p> : null}
+                            </div>
                         </div>
-                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            {item.affectedSectors.slice(0, 2).join(', ') || 'Sector not returned'} · {item.countries.slice(0, 2).join(', ') || 'Country not returned'} · {Math.round(item.confidence * 100)}%
-                        </p>
-                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
-                            {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'source reference needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'provenance attached'}
-                        </p>
-                    </div>
-                )) : <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Queue campaign enrichment before trend or case review.</p>}
+                    )
+                }) : <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Queue campaign enrichment before trend or case review.</p>}
             </div>
         </div>
     )
+}
+
+function campaignActivityPayloadFor(item: TiActorIntelligenceProfile['campaignTimeline'][number]) {
+    const missing = item.missing.length ? item.missing : [
+        item.sourceIds.length ? '' : 'sourceIds',
+        item.provenanceRefs.length ? '' : 'provenanceRefs',
+        Date.parse(item.firstReportedAt) || /\b(19|20)\d{2}\b/.test(item.firstReportedAt) ? '' : 'firstReportedAt',
+    ].filter(Boolean)
+    return {
+        schemaVersion: 'ti.public_actor.campaign_activity.v1',
+        title: item.title,
+        firstReportedAt: item.firstReportedAt,
+        confidence: item.confidence,
+        freshness: item.freshness,
+        affectedSectors: item.affectedSectors,
+        countries: item.countries,
+        sourceIds: item.sourceIds,
+        provenanceRefs: item.provenanceRefs,
+        route: missing.length ? '/dashboard/ti/enrichment' : '/dashboard/ti/workbench',
+        recommendedAction: missing.length ? 'queue_enrichment' : 'attach_to_case_review',
+        blockedBy: missing.map(field => ({
+            ownerLane: /source|provenance/i.test(field) ? 'source' : 'public-ti',
+            field,
+            reason: `Attach ${coverageMissingLabel(field)} before using this activity row for case review.`,
+        })),
+    }
 }
 
 function DossierList({ title, values, artifactKind, artifactByLookup, selectedArtifactId, onSelectArtifact }: {
