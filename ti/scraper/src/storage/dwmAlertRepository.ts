@@ -1252,6 +1252,15 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmAlertDownstreamHandoffBlockerCode[];
   const alertId = alert?.id ? String(alert.id) : undefined;
   const tenantId = alert?.tenantId ?? workflow.tenantId ?? webhook.tenantId;
+  const persistedDeliveryBlockerCodes = asStringArray(context.blockerCodes).filter((code): code is DwmDeliveryReadinessBlockerCode => [
+    "missing_org_ref",
+    "missing_capture_evidence",
+    "case_route_unavailable",
+    "delivery_disabled",
+    "replay_already_delivered",
+    "duplicate_delivered_dedupe",
+    "entitlement_denied"
+  ].includes(code));
   const deliverySelectionBlockerCodes = uniqueStrings([
     ...blockerCodes.filter((code) => [
       "org_mismatch",
@@ -1267,6 +1276,9 @@ export function buildDwmAlertDownstreamHandoff(input: {
       "revoked_actor",
       "no_active_source_match"
     ].includes(code)),
+    ...persistedDeliveryBlockerCodes,
+    delivered ? "replay_already_delivered" : undefined,
+    delivered ? "duplicate_delivered_dedupe" : undefined,
     !selectedCaptureIds.length || evidenceCount === 0 ? "missing_capture_evidence" : undefined,
     webhookDestinationIds.length === 0 ? "delivery_disabled" : undefined
   ].filter(Boolean).map(String)) as Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;

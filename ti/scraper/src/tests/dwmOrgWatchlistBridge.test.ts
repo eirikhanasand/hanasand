@@ -995,7 +995,13 @@ describe("DWM org watchlist bridge", () => {
     expect(delivery.deliveries[0]).toMatchObject({
       status: "skipped",
       endpointHash: "retired_watchlist",
-      error: "No active watchlist remains for this alert.",
+      error: "Delivery selection blocked by retired watchlist.",
+      alertId: alert.id,
+      organizationId: activeOrgId,
+      tenantId: activeOrgId,
+      dedupeKey: alert.dedupeKey,
+      payloadHash: "not_sent",
+      httpStatus: 0,
       watchlistId: "watch_lifecycle_active"
     });
 

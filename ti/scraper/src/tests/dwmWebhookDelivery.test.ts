@@ -111,6 +111,104 @@ describe("dwm webhook delivery", () => {
       lastDeliveryStatus: "delivered"
     });
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
+
+    const duplicateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", alertId: (store as any).listDwmAlerts()[0].id })
+    }), options);
+    const duplicate = await duplicateResponse.json() as any;
+    expect(duplicateResponse.status).toBe(200);
+    expect(duplicate.attemptedCount).toBe(1);
+    expect(duplicate.deliveries[0]).toMatchObject({
+      status: "skipped",
+      endpointHash: "replay_already_delivered",
+      error: "Delivery selection blocked by replay already delivered."
+    });
+    expect(seen).toHaveLength(1);
+  });
+
+  test("uses alert delivery selection for org webhook destination choice", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source);
+    store.saveCapture(capture);
+    store.saveOrganization({
+      id: "org_webhook_selection",
+      name: "Webhook Selection Org",
+      status: "active",
+      createdAt: "2026-06-27T21:00:00.000Z",
+      updatedAt: "2026-06-27T21:00:00.000Z"
+    });
+    store.saveOrganizationMember({
+      id: "member-webhook-selection-owner",
+      organizationId: "org_webhook_selection",
+      email: "owner@webhook-selection.example",
+      userId: "owner-webhook-selection",
+      role: "owner",
+      status: "active",
+      createdAt: "2026-06-27T21:00:00.000Z",
+      updatedAt: "2026-06-27T21:00:00.000Z"
+    });
+    store.saveWebhookDestination({
+      id: "webhook_selection_first",
+      organizationId: "org_webhook_selection",
+      tenantId: "org_webhook_selection",
+      name: "First destination",
+      url: "https://hooks.example.com/first",
+      kind: "generic",
+      status: "active",
+      createdAt: "2026-06-27T21:00:00.000Z",
+      updatedAt: "2026-06-27T21:00:00.000Z"
+    });
+    store.saveWebhookDestination({
+      id: "webhook_selection_chosen",
+      organizationId: "org_webhook_selection",
+      tenantId: "org_webhook_selection",
+      name: "Chosen destination",
+      url: "https://hooks.example.com/chosen",
+      kind: "generic",
+      status: "active",
+      createdAt: "2026-06-27T21:00:00.000Z",
+      updatedAt: "2026-06-27T21:00:00.000Z"
+    });
+    const seen: Array<{ url: string; body: any }> = [];
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      webhookFetch: async (url: string, init: RequestInit) => {
+        seen.push({ url, body: JSON.parse(String(init.body)) });
+        return new Response("ok", { status: 202 });
+      }
+    };
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      headers: { "x-user-email": "owner@webhook-selection.example" },
+      body: JSON.stringify({ organizationId: "org_webhook_selection", terms: ["acme.com"], webhookDestinationId: "webhook_selection_chosen" })
+    }), options);
+    const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner@webhook-selection.example" },
+      body: JSON.stringify({ organizationId: "org_webhook_selection" })
+    }), options);
+    const rebuild = await rebuildResponse.json() as any;
+    expect(rebuild.savedAlertCount).toBe(1);
+    expect(rebuild.alerts[0].deliveryReadinessContext.webhookDestinationIds).toEqual(["webhook_selection_chosen"]);
+
+    const deliverResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      headers: { "x-user-email": "owner@webhook-selection.example" },
+      body: JSON.stringify({ organizationId: "org_webhook_selection", alertId: rebuild.alerts[0].id })
+    }), options);
+    const delivered = await deliverResponse.json() as any;
+    expect(deliverResponse.status).toBe(200);
+    expect(delivered.deliveries[0]).toMatchObject({
+      status: "delivered",
+      webhookDestinationId: "webhook_selection_chosen"
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toBe("https://hooks.example.com/chosen");
+    expect(seen[0].body.webhookDestinationId).toBe("webhook_selection_chosen");
+    expect(seen[0].body.selectedCaptureIds).toEqual(["cap_webhook_acme"]);
   });
 
   test("records skipped delivery when the watchlist has no webhook URL", async () => {

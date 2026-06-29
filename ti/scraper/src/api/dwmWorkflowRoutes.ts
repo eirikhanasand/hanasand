@@ -437,8 +437,51 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
   for (const alert of alerts.slice(0, Math.max(1, Math.min(Number(body.limit ?? 25), 100)))) {
     const alertWatchlistIds = new Set((alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? []).map(String));
     const watchlist = watchlists.find((row: DwmWatchlist) => alertWatchlistIds.has(row.id)) ?? (!alertWatchlistIds.size ? watchlists[0] : undefined);
-    const destination = selectWebhookDestination(options, orgDestinations, watchlist, body.webhookDestinationId ? String(body.webhookDestinationId) : undefined);
-    const disabledDestination = findDisabledWebhookDestination(options, body.webhookDestinationId ? String(body.webhookDestinationId) : watchlist?.webhookDestinationId);
+    const existingDeliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
+    const downstreamHandoff = buildDwmAlertDownstreamHandoff({
+      alert,
+      deliveries: existingDeliveries,
+      organizationId: scope.organizationId,
+      ...downstreamLifecycleForAlert(options, alert, scope),
+      generatedAt
+    });
+    const hardSelectionBlocker = downstreamHandoff.deliverySelection.blockerCodes.find((code: string) => [
+      "replay_already_delivered",
+      "duplicate_delivered_dedupe",
+      "archived_org",
+      "retired_watchlist",
+      "disabled_destination",
+      "closed_alert",
+      "suppressed_alert",
+      "revoked_actor",
+      "no_active_source_match"
+    ].includes(code));
+    if (hardSelectionBlocker) {
+      const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${hardSelectionBlocker}:${generatedAt}`);
+      const delivery = (options.store as any).saveDwmWebhookDelivery({
+        id: deliveryId,
+        organizationId: scope.organizationId,
+        tenantId,
+        alertId: alert.id,
+        watchlistId: alert.watchlistIds?.[0] ?? watchlist?.id ?? "delivery_selection_blocked",
+        webhookDestinationId: downstreamHandoff.deliverySelection.selectedWebhookDestinationId,
+        endpointHash: String(hardSelectionBlocker),
+        dedupeKey: alert.webhookDelivery?.dedupeKey ?? downstreamHandoff.deliverySelection.deliveryDedupeKey ?? deliveryId,
+        attemptedAt: generatedAt,
+        dryRun,
+        payloadHash: "not_sent",
+        deliveryKind: "generic",
+        status: "skipped",
+        httpStatus: 0,
+        error: `Delivery selection blocked by ${String(hardSelectionBlocker).replaceAll("_", " ")}.`
+      });
+      deliveries.push(delivery);
+      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
+      continue;
+    }
+    const requestedDestinationId = body.webhookDestinationId ? String(body.webhookDestinationId) : downstreamHandoff.deliverySelection.selectedWebhookDestinationId;
+    const destination = selectWebhookDestination(options, orgDestinations, watchlist, requestedDestinationId);
+    const disabledDestination = findDisabledWebhookDestination(options, requestedDestinationId ?? watchlist?.webhookDestinationId);
     if (!watchlist || disabledDestination) {
       const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${disabledDestination ? "disabled-destination" : "retired-watchlist"}:${generatedAt}`);
       const delivery = (options.store as any).saveDwmWebhookDelivery({
