@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir } from "./apiTestHarness.ts";
 import { handleApiRequest } from "../api/server.ts";
-import { buildDwmEntitlementVisibilityBlocker, evaluateProposedDwmWatchlistEntitlement } from "../api/dwmEntitlementRoutes.ts";
+import {
+  buildDwmEntitlementDownstreamAdoptionExamples,
+  buildDwmEntitlementVisibilityBlocker,
+  evaluateProposedDwmWatchlistEntitlement
+} from "../api/dwmEntitlementRoutes.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -820,5 +824,119 @@ describe("dwm entitlement policy", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("publishes deterministic downstream entitlement adoption examples without route-string parsing", () => {
+    const contract = buildDwmEntitlementDownstreamAdoptionExamples({
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      requestId: "req-adoption-contract"
+    });
+    expect(contract.schemaVersion).toBe("dwm.entitlement_downstream_adoption.v1");
+    expect(contract.generatedAt).toBe("2026-06-29T12:00:00.000Z");
+    const examples = new Map(contract.examples.map((item) => [item.id, item]));
+    for (const id of [
+      "no_policy_permissive",
+      "plan_limit_exceeded",
+      "projected_usage_exceeded",
+      "nonmember_visibility_denied",
+      "source_growth_denied",
+      "webhook_delivery_denied",
+      "alert_rebuild_denied",
+      "alert_replay_denied",
+      "analyst_handoff_blocked"
+    ] as const) {
+      expect(examples.has(id)).toBe(true);
+    }
+
+    expect(examples.get("no_policy_permissive")).toMatchObject({
+      status: "permissive_no_policy",
+      separation: "permissive_no_policy",
+      consumers: expect.arrayContaining(["product-progress", "helpdesk", "alert-workflow"]),
+      sample: {
+        readinessAction: {
+          persistedPolicy: false,
+          blockerCodes: [],
+          blockers: [],
+          blockedAction: null
+        }
+      }
+    });
+    expect(examples.get("no_policy_permissive")?.supportText).toContain("Do not mark this enterprise-ready");
+
+    expect(examples.get("plan_limit_exceeded")?.sample.blocker).toMatchObject({
+      schemaVersion: "dwm.entitlement_blocker.v1",
+      ownerLane: "entitlement",
+      actionId: "watchlist_create",
+      action: "create_dwm_watchlist",
+      blockerCode: "active_watchlists",
+      blockedAction: "create_dwm_watchlist",
+      status: "blocked",
+      route: "/v1/dwm/watchlists",
+      requestId: "req-adoption-contract",
+      source: "entitlement",
+      limit: { code: "active_watchlists", used: 2, limit: 1, remaining: 0 }
+    });
+    expect(examples.get("projected_usage_exceeded")).toMatchObject({
+      consumers: expect.arrayContaining(["public-ti", "product-progress"]),
+      separation: "entitlement",
+      sample: {
+        blocker: {
+          blockerCode: "watch_terms",
+          projectedUsage: { watchTerms: 7 },
+          supportText: "Projected watch_terms usage exceeds the current plan."
+        }
+      }
+    });
+
+    expect(examples.get("nonmember_visibility_denied")?.sample.blocker).toMatchObject({
+      schemaVersion: "dwm.entitlement_blocker.v1",
+      source: "visibility",
+      blockerCode: "not_member",
+      limit: undefined,
+      supportText: "Access was denied by organization visibility/RBAC before entitlement evaluation."
+    });
+
+    expect(examples.get("source_growth_denied")?.sample.blocker).toMatchObject({
+      ownerLane: "source-growth",
+      actionId: "source_growth",
+      blockerCode: "source_packs",
+      route: "/v1/dwm/source-requests"
+    });
+    expect(examples.get("webhook_delivery_denied")?.sample.blocker).toMatchObject({
+      ownerLane: "webhook",
+      actionId: "webhook_delivery",
+      action: "deliver_dwm_webhook",
+      blockerCode: "webhook_destinations",
+      route: "/v1/dwm/webhooks/deliver"
+    });
+    expect(examples.get("alert_rebuild_denied")?.sample.blocker).toMatchObject({
+      ownerLane: "alert-workflow",
+      actionId: "alert_rebuild",
+      action: "rebuild_dwm_alerts",
+      blockerCode: "alert_rebuilds_today",
+      route: "/v1/dwm/alerts/rebuild"
+    });
+    expect(examples.get("alert_replay_denied")?.sample.blocker).toMatchObject({
+      ownerLane: "alert-workflow",
+      actionId: "alert_replay",
+      action: "replay_dwm_alert",
+      blockerCode: "alert_rebuilds_today",
+      route: "/v1/dwm/alerts/:id/replay"
+    });
+    expect(examples.get("analyst_handoff_blocked")?.sample.blocker).toMatchObject({
+      ownerLane: "analyst-handoff",
+      actionId: "analyst_handoff",
+      source: "analyst_handoff",
+      analystHandoff: {
+        code: "webhook_audit_contract_mismatch",
+        stage: "webhook_audit",
+        field: "webhookTrigger.auditEvents",
+        recoverable: false
+      }
+    });
+
+    const serialized = JSON.stringify(contract);
+    expect(serialized).not.toContain("@");
+    expect(serialized).not.toContain("rawTerms");
   });
 });
