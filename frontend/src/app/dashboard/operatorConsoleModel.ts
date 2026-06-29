@@ -208,6 +208,11 @@ export type AnalystWorkflowReadiness = ProductReadinessSnapshotBase & {
     caseStatus?: string
     assignedOwner?: string
     latestCaseAt?: string
+    caseDetailReady?: boolean
+    caseDetailRoute?: string
+    caseDetailSchemaVersion?: string
+    caseDetailTimelineCount?: number
+    caseDetailReadOnly?: boolean
 }
 
 export type EntitlementReadiness = ProductReadinessSnapshotBase & {
@@ -670,6 +675,7 @@ function normalizeAnalystWorkflowReadiness(input: AnalystWorkflowReadiness | und
     const blockers = [
         input.caseId ? '' : 'No analyst case id was loaded.',
         caseMatchesDashboardAlert ? '' : 'No analyst case is linked to the dashboard-visible alert.',
+        input.caseDetailReady ? '' : 'Analyst case detail route is not readable.',
         context.dashboardEvidence.status === 'ready' ? '' : 'Dashboard alert evidence is not ready.',
         ...(input.blockers || []),
     ].filter(Boolean)
@@ -677,17 +683,17 @@ function normalizeAnalystWorkflowReadiness(input: AnalystWorkflowReadiness | und
         ...input,
         status: blockers.length ? 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
         checkedAt: input.checkedAt || context.checkedAt,
-        source: input.source || context.route,
+        source: input.source || [context.route, input.caseDetailRoute].filter(Boolean).join(' + '),
         href: input.href || (input.caseId ? `/dashboard/ti/workbench?case=${encodeURIComponent(input.caseId)}` : '/dashboard/ti/workbench'),
         blockers,
         ownerLane: input.ownerLane || 'dashboard',
-        unavailableReason: blockers.length ? input.unavailableReason || 'missing_analyst_case_readiness' : undefined,
+        unavailableReason: blockers.length ? input.unavailableReason || (input.caseDetailReady ? 'missing_analyst_case_readiness' : 'missing_analyst_case_detail_readiness') : undefined,
         staleAfterSeconds: input.staleAfterSeconds ?? 600,
         proofTimestamp: input.proofTimestamp || input.latestCaseAt || input.checkedAt || context.checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'analyst_workflow',
-        integrationProbeHint: input.integrationProbeHint || 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
-        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'analyst.workflow.readiness.v1',
-        detail: input.detail || (blockers.length ? blockers.join('; ') : `Analyst case ${input.caseId} is linked to dashboard alert ${input.alertId}.`),
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/cases must return a case linked to the dashboard-visible alert and GET /api/cases/:id must return readable detail with timeline evidence.',
+        backendProofContractVersion: input.backendProofContractVersion || [input.schemaVersion || 'analyst.workflow.readiness.v1', input.caseDetailSchemaVersion].filter(Boolean).join(' + '),
+        detail: input.detail || (blockers.length ? blockers.join('; ') : `Analyst case ${input.caseId} is linked to dashboard alert ${input.alertId} and detail route ${input.caseDetailRoute || '/api/cases/:id'} is readable.`),
     }
 }
 

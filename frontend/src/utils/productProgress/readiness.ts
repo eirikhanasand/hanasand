@@ -23,6 +23,23 @@ type AnalystCaseProofRow = {
     createdAt?: string
 }
 
+export type AnalystCaseDetailProofInput = {
+    route: string
+    fetchOk: boolean
+    fetchStatus?: number
+    fetchError?: string
+    schemaVersion?: string
+    caseId?: string
+    alertId?: string
+    status?: string
+    assignedOwner?: string
+    updatedAt?: string
+    readOnly?: boolean
+    canMutate?: boolean
+    timelineCount?: number
+    proofTimestamp?: string
+}
+
 export type DwmAlertGenerationReadinessInput = {
     schemaVersion?: string
     status?: 'ready' | 'needs_action' | 'blocked' | 'unavailable' | string
@@ -51,6 +68,7 @@ export type ProductProgressEndpointInput = {
     alertGeneration?: DwmAlertGenerationReadinessInput
     alerts?: AlertProofRow[]
     cases?: AnalystCaseProofRow[]
+    caseDetail?: AnalystCaseDetailProofInput
     deliveries?: DeliveryProofRow[]
     deploy?: Partial<DeployProbeReadiness>
     entitlement?: EntitlementReadiness
@@ -131,6 +149,7 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             route: input.routes.cases || '/api/cases',
             alert,
             cases: input.cases || [],
+            caseDetail: input.caseDetail,
         }),
     }
 }
@@ -366,34 +385,53 @@ function analystWorkflowFromRows(input: {
     route: string
     alert?: AlertProofRow
     cases: AnalystCaseProofRow[]
+    caseDetail?: AnalystCaseDetailProofInput
 }): AnalystWorkflowReadiness {
     const analystCase = chooseCaseForAlert(input.alert?.id, input.cases)
     const latestCaseAt = analystCase?.updatedAt || analystCase?.createdAt
+    const detailMatchesCase = Boolean(
+        input.caseDetail?.fetchOk
+        && analystCase?.id
+        && input.caseDetail.caseId === analystCase.id
+        && (!input.caseDetail.alertId || input.caseDetail.alertId === analystCase.alertId),
+    )
+    const detailAccessReady = Boolean(input.caseDetail?.readOnly || input.caseDetail?.canMutate)
+    const detailTimelineReady = Boolean((input.caseDetail?.timelineCount || 0) > 0)
+    const detailReady = Boolean(detailMatchesCase && detailAccessReady && detailTimelineReady)
     const blockers = [
         input.alert?.id ? '' : 'No dashboard-visible backend alert was loaded.',
         analystCase?.id ? '' : 'No analyst case is linked to the dashboard-visible alert.',
+        input.caseDetail?.fetchOk ? '' : input.caseDetail?.fetchError || (input.caseDetail?.fetchStatus ? `Case detail route returned HTTP ${input.caseDetail.fetchStatus}.` : 'Case detail route was not loaded.'),
+        detailMatchesCase ? '' : 'Case detail route did not return the selected analyst case.',
+        detailAccessReady ? '' : 'Case detail route did not expose a readable access mode.',
+        detailTimelineReady ? '' : 'Case detail route did not include timeline evidence.',
         latestCaseAt ? '' : 'Analyst case timestamp is missing.',
     ].filter(Boolean)
     return {
         schemaVersion: 'analyst.workflow.readiness.v1',
         status: blockers.length ? 'needs_action' : 'ready',
         checkedAt: input.checkedAt,
-        source: input.route,
+        source: [input.route, input.caseDetail?.route].filter(Boolean).join(' + ') || input.route,
         href: analystCase?.id ? `/dashboard/ti/workbench?case=${encodeURIComponent(analystCase.id)}` : '/dashboard/ti/workbench',
         caseId: analystCase?.id,
         alertId: analystCase?.alertId,
         caseStatus: analystCase?.status,
         assignedOwner: analystCase?.assignedOwner,
         latestCaseAt,
+        caseDetailReady: detailReady,
+        caseDetailRoute: input.caseDetail?.route,
+        caseDetailSchemaVersion: input.caseDetail?.schemaVersion,
+        caseDetailTimelineCount: input.caseDetail?.timelineCount,
+        caseDetailReadOnly: input.caseDetail?.readOnly,
         blockers,
         ownerLane: 'dashboard',
-        unavailableReason: blockers.length ? 'missing_analyst_case_readiness' : undefined,
+        unavailableReason: blockers.length ? detailReady ? 'missing_analyst_case_readiness' : 'missing_analyst_case_detail_readiness' : undefined,
         staleAfterSeconds: 600,
-        proofTimestamp: latestCaseAt || input.checkedAt,
+        proofTimestamp: input.caseDetail?.proofTimestamp || latestCaseAt || input.checkedAt,
         expectedDashboardRowId: 'analyst_workflow',
-        integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
-        backendProofContractVersion: 'analyst.workflow.readiness.v1',
-        detail: blockers.length ? blockers.join('; ') : `Analyst case ${analystCase?.id} is linked to dashboard alert ${analystCase?.alertId}.`,
+        integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert and GET /api/cases/:id must return readable detail with timeline evidence.',
+        backendProofContractVersion: ['analyst.workflow.readiness.v1', input.caseDetail?.schemaVersion].filter(Boolean).join(' + '),
+        detail: blockers.length ? blockers.join('; ') : `Analyst case ${analystCase?.id} is linked to dashboard alert ${analystCase?.alertId}; case detail includes ${input.caseDetail?.timelineCount || 0} timeline event${input.caseDetail?.timelineCount === 1 ? '' : 's'}.`,
     }
 }
 

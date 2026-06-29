@@ -3,7 +3,7 @@ import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
 import { deployLedgerFromStatusPayload } from '@/utils/productProgress/deployLedger'
 import { helpdeskAuditFetchResultsFromLedger, loadProductHelpdeskAuditProofLedger } from '@/utils/productProgress/helpdeskAuditProofSource'
 import { loadProductPublicTiProofLedger, publicTiFetchResultFromLedger } from '@/utils/productProgress/publicTiProofSource'
-import type { DwmAlertGenerationReadinessInput } from '@/utils/productProgress/readiness'
+import type { AnalystCaseDetailProofInput, DwmAlertGenerationReadinessInput } from '@/utils/productProgress/readiness'
 import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
@@ -41,9 +41,16 @@ export async function GET(request: NextRequest) {
         ? await fetchInternalJson(request, `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/alert-readiness`)
         : { ok: false, status: 0, error: 'No selected organization available for organization readiness.' }
     const organizationProof = organizationReadinessProof(organizationReadiness)
+    const alertRows = rows((alerts.json as { alerts?: unknown[] } | undefined)?.alerts)
     const deliveryRows = rows((deliveries.json as { deliveries?: unknown[] } | undefined)?.deliveries) as DwmDeliveryItem[]
+    const caseRows = rows((cases.json as { cases?: unknown[] } | undefined)?.cases)
     const watchlistRows = rows((watchlists.json as { watchlists?: unknown[] } | undefined)?.watchlists) as DwmWatchlistSummary[]
     const webhookRows = rows((organizationWebhooks.json as { destinations?: unknown[] } | undefined)?.destinations) as DwmOrganizationWebhookDestination[]
+    const selectedCase = selectCaseForProductProgress(alertRows, caseRows, deliveryRows)
+    const selectedCaseDetailRoute = selectedCase?.id ? `/api/cases/${encodeURIComponent(String(selectedCase.id))}` : undefined
+    const selectedCaseDetail = selectedCaseDetailRoute
+        ? await fetchInternalJson(request, selectedCaseDetailRoute)
+        : { ok: false, status: 0, error: 'No selected analyst case was available for case detail readiness.' }
     const normalizedSourceProxy = normalizeSourceProxy(sourceProxy, query, generatedAt)
     const helpdeskProofLedger = (!supportRecovery.ok || !auditEvents.ok || !supportAuditExportProof(auditEvents))
         ? await loadProductHelpdeskAuditProofLedger()
@@ -71,14 +78,15 @@ export async function GET(request: NextRequest) {
             route: routes.dwmProduct || '/api/dwm/product?demo=false',
             fetch: dwmProduct,
         }),
-        alerts: rows((alerts.json as { alerts?: unknown[] } | undefined)?.alerts),
+        alerts: alertRows,
         alertGeneration: alertGenerationReadiness({
             generatedAt,
             route: routes.alertGenerationReadiness || '/api/dwm/alerts/generation-readiness',
             fetch: alertGeneration,
         }),
         deliveries: deliveryRows,
-        cases: rows((cases.json as { cases?: unknown[] } | undefined)?.cases),
+        cases: caseRows,
+        caseDetail: analystCaseDetailProof(selectedCaseDetail, selectedCaseDetailRoute || '/api/cases/:id'),
         orgAlertExport: orgAlertExportReadiness({
             generatedAt,
             route: selectedOrganization ? `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/alert-readiness` : routes.orgAlertExport || '/api/dwm/watchlists',
@@ -261,6 +269,47 @@ function normalizeSourceProxy(result: FetchResult, query: string, generatedAt: s
 
 function rows(value: unknown[] | undefined) {
     return Array.isArray(value) ? value as Array<Record<string, unknown>> : []
+}
+
+function selectCaseForProductProgress(alerts: Array<Record<string, unknown>>, cases: Array<Record<string, unknown>>, deliveries: DwmDeliveryItem[]) {
+    const deliveryAlertIds = new Set(deliveries.map(row => row.alertId).filter(Boolean))
+    const selectedAlert = alerts.find(row => row.id && deliveryAlertIds.has(String(row.id)))
+        || alerts.find(row => row.id)
+    if (!selectedAlert?.id) return undefined
+    return cases.find(row => row.id && row.alertId === selectedAlert.id && !['closed', 'false_positive', 'suppressed'].includes(String(row.status || '')))
+}
+
+function analystCaseDetailProof(fetch: FetchResult, route: string): AnalystCaseDetailProofInput {
+    const payload = fetch.json as {
+        schemaVersion?: string
+        access?: { readOnly?: boolean, canMutate?: boolean }
+        case?: {
+            id?: string
+            alertId?: string
+            status?: string
+            assignedOwner?: string
+            updatedAt?: string
+            createdAt?: string
+        }
+        timeline?: unknown[]
+        proofLedger?: { generatedAt?: string }
+    } | undefined
+    return {
+        route,
+        fetchOk: fetch.ok,
+        fetchStatus: fetch.status,
+        fetchError: fetch.error,
+        schemaVersion: payload?.schemaVersion,
+        caseId: payload?.case?.id,
+        alertId: payload?.case?.alertId,
+        status: payload?.case?.status,
+        assignedOwner: payload?.case?.assignedOwner,
+        updatedAt: payload?.case?.updatedAt || payload?.case?.createdAt,
+        readOnly: payload?.access?.readOnly,
+        canMutate: payload?.access?.canMutate,
+        timelineCount: rows(payload?.timeline).length,
+        proofTimestamp: payload?.case?.updatedAt || payload?.case?.createdAt || payload?.proofLedger?.generatedAt,
+    }
 }
 
 function uniqueStrings(values: string[]) {

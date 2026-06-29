@@ -15,6 +15,15 @@ const organizationAlertReadinessRouteSource = readFileSync(new URL('../src/app/a
 const caseCustomerNotificationProxySource = readFileSync(new URL('../src/app/api/cases/[id]/customer-notification/route.ts', here), 'utf8')
 const caseExportProxySource = readFileSync(new URL('../src/app/api/cases/[id]/export/route.ts', here), 'utf8')
 
+for (const token of [
+    'selectCaseForProductProgress',
+    'analystCaseDetailProof',
+    '/api/cases/${encodeURIComponent(String(selectedCase.id))}',
+    'caseDetail: analystCaseDetailProof',
+]) {
+    assert.ok(productProgressRouteSource.includes(token), `Product-progress route missing analyst case detail proof token: ${token}`)
+}
+
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
     productProgress: '/api/product-progress',
@@ -102,6 +111,21 @@ const partialPayload = buildProductProgressPayload({
     sourceProxy,
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
     cases: [{ id: 'case_acme_1', alertId: 'alert_acme_1', status: 'reviewing', assignedOwner: 'analyst@acme.example', updatedAt: generatedAt }],
+    caseDetail: {
+        route: '/api/cases/case_acme_1',
+        fetchOk: true,
+        fetchStatus: 200,
+        schemaVersion: 'product.analyst_case_detail_proof.v1',
+        caseId: 'case_acme_1',
+        alertId: 'alert_acme_1',
+        status: 'reviewing',
+        assignedOwner: 'analyst@acme.example',
+        updatedAt: generatedAt,
+        readOnly: true,
+        canMutate: false,
+        timelineCount: 1,
+        proofTimestamp: generatedAt,
+    },
     deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
 })
 
@@ -120,6 +144,10 @@ assert.equal(partialPayload.dashboardEvidence?.sourceProxyReady, true)
 assert.equal(partialPayload.dashboardEvidence?.deployProbeFresh, false)
 assert.equal(partialPayload.analystWorkflow?.caseId, 'case_acme_1')
 assert.equal(partialPayload.analystWorkflow?.alertId, 'alert_acme_1')
+assert.equal(partialPayload.analystWorkflow?.caseDetailReady, true)
+assert.equal(partialPayload.analystWorkflow?.caseDetailSchemaVersion, 'product.analyst_case_detail_proof.v1')
+assert.equal(partialPayload.analystWorkflow?.caseDetailTimelineCount, 1)
+assert.equal(partialPayload.analystWorkflow?.caseDetailReadOnly, true)
 assert.equal(partialPayload.deployProbe?.status, 'needs_action')
 assert.equal(partialPayload.publicTiProvenance?.status, 'unavailable')
 assert.equal(partialPayload.helpdeskAudit?.status, 'unavailable')
@@ -160,6 +188,21 @@ assert.equal(partialPayload.dashboardEvidence?.ownerLane, 'dashboard')
 assert.equal(partialPayload.dashboardEvidence?.unavailableReason, 'missing_live_deploy_probe')
 assert.equal(partialPayload.dwmProduct?.ownerLane, 'dwm')
 assert.equal(partialPayload.dwmProduct?.unavailableReason, 'missing_dwm_product_snapshot')
+
+const listOnlyAnalystPayload = buildProductProgressPayload({
+    generatedAt,
+    checkedAt: generatedAt,
+    query: 'LockBit',
+    routes,
+    sourceProxy,
+    alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
+    cases: [{ id: 'case_acme_1', alertId: 'alert_acme_1', status: 'reviewing', assignedOwner: 'analyst@acme.example', updatedAt: generatedAt }],
+    deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
+})
+assert.equal(listOnlyAnalystPayload.analystWorkflow?.status, 'needs_action')
+assert.equal(listOnlyAnalystPayload.analystWorkflow?.caseDetailReady, false)
+assert.equal(listOnlyAnalystPayload.analystWorkflow?.unavailableReason, 'missing_analyst_case_detail_readiness')
+assert.equal(listOnlyAnalystPayload.analystWorkflow?.blockers?.some(blocker => blocker.includes('Case detail route')), true)
 
 const organizationState = {
     organizations: [{

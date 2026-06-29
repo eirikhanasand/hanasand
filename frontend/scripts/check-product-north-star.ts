@@ -94,6 +94,21 @@ const partialPayload = buildProductProgressPayload({
     },
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
     cases: [{ id: 'case_acme_1', alertId: 'alert_acme_1', status: 'reviewing', assignedOwner: 'analyst@acme.example', updatedAt: generatedAt }],
+    caseDetail: {
+        route: '/api/cases/case_acme_1',
+        fetchOk: true,
+        fetchStatus: 200,
+        schemaVersion: 'product.analyst_case_detail_proof.v1',
+        caseId: 'case_acme_1',
+        alertId: 'alert_acme_1',
+        status: 'reviewing',
+        assignedOwner: 'analyst@acme.example',
+        updatedAt: generatedAt,
+        readOnly: true,
+        canMutate: false,
+        timelineCount: 1,
+        proofTimestamp: generatedAt,
+    },
     deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
 })
 
