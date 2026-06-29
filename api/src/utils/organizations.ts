@@ -530,6 +530,32 @@ export type OrganizationSharedWatchlistDownstreamProof = {
         alertGeneratorKeys: string[]
         alertGenerationRefField: 'activeTerms[].alertGenerationRef'
         dedupeScope: 'organization_watchlist_term'
+        persistenceContract: {
+            schemaVersion: 'organization.watchlist_alert_persistence_contract.v1'
+            organizationId: string
+            tenantId: string
+            sourceFamily: 'organization_watchlist'
+            storageModule: 'ti/scraper/src/storage/dwmAlertRepository.ts'
+            upsertFunction: 'upsertDwmAlert'
+            requiredInputFields: string[]
+            persistedAlertFields: string[]
+            workflowContextFields: string[]
+            watchlistScope: {
+                watchlistItemIds: string[]
+                alertGeneratorKeys: string[]
+                alertGenerationRefField: 'workflowContext.alertGenerationRefs[]'
+                watchlistItemIdField: 'watchlistItemIds[]'
+            }
+            dedupe: {
+                scope: 'organization_watchlist_term'
+                keyFields: Array<'organizationId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm'>
+                crossTenantCollisionAllowed: false
+            }
+            lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'watchlist_paused' | 'watchlist_archived' | 'member_revoked' | 'nonmember_denied'>
+            visibilityDecisionField: 'workflowContext.visibilityDecision'
+            casePathField: 'casePath'
+            blockerCodes: Array<OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason>
+        }
         queueVisibilityContract: {
             schemaVersion: 'organization.watchlist_alert_visibility_contract.v1'
             organizationId: string
@@ -663,6 +689,56 @@ export type OrganizationSharedWatchlistDownstreamProof = {
     blockers: string[]
 }
 
+export type OrganizationSharedWatchlistIntegrationGuardrailCode =
+    | 'schema_mismatch'
+    | 'org_scope_mismatch'
+    | 'watchlist_scope_mismatch'
+    | 'alert_contract_missing'
+    | 'case_contract_missing'
+    | 'webhook_contract_missing'
+    | 'payload_shape_missing'
+    | 'nonmember_enumeration_enabled'
+    | 'raw_terms_enabled'
+    | 'redaction_missing'
+    | 'route_missing'
+
+export type OrganizationSharedWatchlistIntegrationGuardrails = {
+    schemaVersion: 'organization.shared_watchlist_integration_guardrails.v1'
+    organizationId: string
+    tenantId: string
+    ok: boolean
+    checkedContracts: Array<
+        | 'organization.shared_watchlist_downstream_proof.v1'
+        | 'organization.watchlist_alert_persistence_contract.v1'
+        | 'organization.watchlist_alert_visibility_contract.v1'
+        | 'organization.watchlist_case_workflow_contract.v1'
+        | 'organization.watchlist_webhook_delivery_contract.v1'
+        | 'organization.shared_watchlist_audit_contract.v1'
+    >
+    requiredPayloadShape: string[]
+    downstreamRoutes: {
+        alertList: 'GET /v1/dwm/alerts'
+        alertReplay: 'POST /v1/dwm/alerts/:id/replay'
+        caseOpen: 'POST /v1/cases'
+        webhookDeliver: 'POST /v1/dwm/webhooks/deliver'
+    }
+    orgScope: {
+        ownerOrganizationId: string
+        watchlistItemIds: string[]
+        alertGeneratorKeys: string[]
+        alertContractOrgId: string
+        caseContractOrgId: string
+        webhookContractOrgId: string
+    }
+    safety: {
+        nonmemberEnumeration: false
+        containsRawTerms: false
+        redactedFields: string[]
+    }
+    proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    blockerCodes: OrganizationSharedWatchlistIntegrationGuardrailCode[]
+}
+
 export type OrganizationWatchlistAlertTermsExport = {
     schemaVersion: 'organization.watchlist_alert_terms_export.v1'
     organizationId: string
@@ -679,6 +755,7 @@ export type OrganizationWatchlistAlertTermsExport = {
     alertBridgeContract: OrganizationWatchlistAlertBridgeContract
     downstreamAuthorization: OrganizationDownstreamAuthorizationExport
     sharedWatchlistDownstreamProof: OrganizationSharedWatchlistDownstreamProof
+    sharedWatchlistIntegrationGuardrails: OrganizationSharedWatchlistIntegrationGuardrails
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -1472,6 +1549,66 @@ export function organizationSharedWatchlistDownstreamProof(
             alertGeneratorKeys,
             alertGenerationRefField: 'activeTerms[].alertGenerationRef',
             dedupeScope: 'organization_watchlist_term',
+            persistenceContract: {
+                schemaVersion: 'organization.watchlist_alert_persistence_contract.v1',
+                organizationId: organization.id,
+                tenantId: organization.id,
+                sourceFamily: 'organization_watchlist',
+                storageModule: 'ti/scraper/src/storage/dwmAlertRepository.ts',
+                upsertFunction: 'upsertDwmAlert',
+                requiredInputFields: [
+                    'organizationId',
+                    'tenantId',
+                    'watchlistItemIds',
+                    'workflowContext.alertGenerationRefs',
+                    'workflowContext.alertGeneratorKeys',
+                    'workflowContext.watchlistTermContexts',
+                    'workflowContext.visibilityDecision',
+                    'casePath',
+                ],
+                persistedAlertFields: [
+                    'organizationId',
+                    'tenantId',
+                    'watchlistItemIds',
+                    'watchlistIds',
+                    'workflowContext.organizationId',
+                    'workflowContext.alertGenerationRefs',
+                    'workflowContext.alertGeneratorKeys',
+                    'workflowContext.watchlistTermContexts',
+                    'workflowContext.visibilityDecision',
+                    'casePath',
+                    'dedupeKey',
+                ],
+                workflowContextFields: [
+                    'organizationId',
+                    'tenantId',
+                    'sourceFamily',
+                    'alertGenerationRefs',
+                    'alertGeneratorKeys',
+                    'watchlistTermContexts',
+                    'visibilityDecision',
+                    'allowedActions',
+                    'casePath',
+                ],
+                watchlistScope: {
+                    watchlistItemIds: activeTerms.map(term => term.watchlistItemId),
+                    alertGeneratorKeys,
+                    alertGenerationRefField: 'workflowContext.alertGenerationRefs[]',
+                    watchlistItemIdField: 'watchlistItemIds[]',
+                },
+                dedupe: {
+                    scope: 'organization_watchlist_term',
+                    keyFields: ['organizationId', 'watchlistItemId', 'termFamily', 'normalizedTerm'],
+                    crossTenantCollisionAllowed: false,
+                },
+                lifecycleBlockers: ['org_archived', 'org_deleted', 'watchlist_paused', 'watchlist_archived', 'member_revoked', 'nonmember_denied'],
+                visibilityDecisionField: 'workflowContext.visibilityDecision',
+                casePathField: 'casePath',
+                blockerCodes: [
+                    ...alertBlockers,
+                    ...(downstreamAuthorization.visibility.allowed ? [] : [downstreamAuthorization.visibility.reason].filter(Boolean)),
+                ] as Array<OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason>,
+            },
             queueVisibilityContract: {
                 schemaVersion: 'organization.watchlist_alert_visibility_contract.v1',
                 organizationId: organization.id,
@@ -1710,6 +1847,8 @@ export function organizationSharedWatchlistDownstreamProof(
                 'watchlistOwnership.activeIds',
                 'watchlistOwnership.lifecycleStatuses',
                 'alertBridge.alertGeneratorKeys',
+                'alertBridge.persistenceContract.persistedAlertFields',
+                'alertBridge.persistenceContract.workflowContextFields',
                 'alertBridge.queueVisibilityContract.actorVisibility',
                 'alertBridge.queueVisibilityContract.watchlistScope',
                 'alertBridge.expectedAlertFields',
@@ -1738,6 +1877,143 @@ export function organizationSharedWatchlistDownstreamProof(
         },
         blockers: Array.from(new Set([...alertBlockers, ...caseBlockers, ...webhookBlockers])).sort(),
     }
+}
+
+export function organizationSharedWatchlistIntegrationGuardrails(
+    proof: OrganizationSharedWatchlistDownstreamProof
+): OrganizationSharedWatchlistIntegrationGuardrails {
+    const blockerCodes: OrganizationSharedWatchlistIntegrationGuardrailCode[] = []
+    const requiredPayloadShape = [
+        'alertBridge.persistenceContract.persistedAlertFields',
+        'alertBridge.persistenceContract.workflowContextFields',
+        'alertBridge.queueVisibilityContract.actorVisibility',
+        'alertBridge.queueVisibilityContract.watchlistScope',
+        'caseBridge.caseWorkflowContract.actorActions',
+        'caseBridge.caseWorkflowContract.watchlistScope',
+        'webhookBridge.deliveryContract.destinationSelection',
+        'webhookBridge.deliveryContract.idempotency',
+        'audit.eventActions',
+        'audit.requiredMetadataFields',
+    ]
+    const watchlistIds = [...proof.watchlistOwnership.activeIds].sort()
+    const persistenceWatchlistIds = [...proof.alertBridge.persistenceContract.watchlistScope.watchlistItemIds].sort()
+    const alertWatchlistIds = [...proof.alertBridge.queueVisibilityContract.watchlistScope.watchlistItemIds].sort()
+    const caseWatchlistIds = [...proof.caseBridge.caseWorkflowContract.watchlistScope.watchlistItemIds].sort()
+    const alertGeneratorKeys = [...proof.alertBridge.alertGeneratorKeys].sort()
+    const persistenceContractKeys = [...proof.alertBridge.persistenceContract.watchlistScope.alertGeneratorKeys].sort()
+    const alertContractKeys = [...proof.alertBridge.queueVisibilityContract.watchlistScope.alertGeneratorKeys].sort()
+    const caseContractKeys = [...proof.caseBridge.caseWorkflowContract.watchlistScope.alertGeneratorKeys].sort()
+
+    if (proof.schemaVersion !== 'organization.shared_watchlist_downstream_proof.v1') blockerCodes.push('schema_mismatch')
+    if (proof.audit.schemaVersion !== 'organization.shared_watchlist_audit_contract.v1') blockerCodes.push('schema_mismatch')
+    if (proof.alertBridge.persistenceContract.schemaVersion !== 'organization.watchlist_alert_persistence_contract.v1') blockerCodes.push('alert_contract_missing')
+    if (proof.alertBridge.queueVisibilityContract.schemaVersion !== 'organization.watchlist_alert_visibility_contract.v1') blockerCodes.push('alert_contract_missing')
+    if (proof.caseBridge.caseWorkflowContract.schemaVersion !== 'organization.watchlist_case_workflow_contract.v1') blockerCodes.push('case_contract_missing')
+    if (proof.webhookBridge.deliveryContract.schemaVersion !== 'organization.watchlist_webhook_delivery_contract.v1') blockerCodes.push('webhook_contract_missing')
+
+    if (
+        proof.ownerOrganizationId !== proof.organizationId
+        || proof.tenantId !== proof.organizationId
+        || proof.alertBridge.persistenceContract.organizationId !== proof.organizationId
+        || proof.alertBridge.persistenceContract.tenantId !== proof.organizationId
+        || proof.alertBridge.queueVisibilityContract.organizationId !== proof.organizationId
+        || proof.alertBridge.queueVisibilityContract.tenantId !== proof.organizationId
+        || proof.caseBridge.caseWorkflowContract.organizationId !== proof.organizationId
+        || proof.caseBridge.caseWorkflowContract.tenantId !== proof.organizationId
+        || proof.webhookBridge.deliveryContract.organizationId !== proof.organizationId
+        || proof.webhookBridge.deliveryContract.tenantId !== proof.organizationId
+        || proof.webhookBridge.deliveryContract.destinationSelection.requiredDestinationOrgId !== proof.organizationId
+    ) {
+        blockerCodes.push('org_scope_mismatch')
+    }
+
+    if (
+        !sameStringSet(watchlistIds, persistenceWatchlistIds)
+        || !sameStringSet(watchlistIds, alertWatchlistIds)
+        || !sameStringSet(watchlistIds, caseWatchlistIds)
+        || !sameStringSet(alertGeneratorKeys, persistenceContractKeys)
+        || !sameStringSet(alertGeneratorKeys, alertContractKeys)
+        || !sameStringSet(alertGeneratorKeys, caseContractKeys)
+    ) {
+        blockerCodes.push('watchlist_scope_mismatch')
+    }
+
+    for (const field of requiredPayloadShape) {
+        if (!proof.integration.payloadShape.includes(field)) blockerCodes.push('payload_shape_missing')
+    }
+
+    if (
+        proof.integration.nonmemberEnumeration
+        || proof.alertBridge.queueVisibilityContract.actorVisibility.nonmemberEnumeration
+        || proof.webhookBridge.deliveryContract.destinationSelection.nonmemberDestinationEnumeration
+    ) {
+        blockerCodes.push('nonmember_enumeration_enabled')
+    }
+    if (proof.integration.containsRawTerms) blockerCodes.push('raw_terms_enabled')
+    if (
+        !proof.alertBridge.queueVisibilityContract.redactedFields.includes('activeTerms[].term')
+        || !proof.caseBridge.caseWorkflowContract.redactedFields.includes('case.evidence.rawContent')
+        || !proof.webhookBridge.deliveryContract.redactedFields.includes('destination.secret')
+    ) {
+        blockerCodes.push('redaction_missing')
+    }
+    if (
+        proof.alertBridge.queueVisibilityContract.routes.list !== 'GET /v1/dwm/alerts'
+        || proof.alertBridge.queueVisibilityContract.routes.replay !== 'POST /v1/dwm/alerts/:id/replay'
+        || proof.caseBridge.caseWorkflowContract.routes.open !== 'POST /v1/cases'
+        || proof.webhookBridge.route !== 'POST /v1/dwm/webhooks/deliver'
+    ) {
+        blockerCodes.push('route_missing')
+    }
+
+    const uniqueBlockers = [...new Set(blockerCodes)]
+    return {
+        schemaVersion: 'organization.shared_watchlist_integration_guardrails.v1',
+        organizationId: proof.organizationId,
+        tenantId: proof.tenantId,
+        ok: uniqueBlockers.length === 0,
+        checkedContracts: [
+            'organization.shared_watchlist_downstream_proof.v1',
+            'organization.watchlist_alert_persistence_contract.v1',
+            'organization.watchlist_alert_visibility_contract.v1',
+            'organization.watchlist_case_workflow_contract.v1',
+            'organization.watchlist_webhook_delivery_contract.v1',
+            'organization.shared_watchlist_audit_contract.v1',
+        ],
+        requiredPayloadShape,
+        downstreamRoutes: {
+            alertList: 'GET /v1/dwm/alerts',
+            alertReplay: 'POST /v1/dwm/alerts/:id/replay',
+            caseOpen: 'POST /v1/cases',
+            webhookDeliver: 'POST /v1/dwm/webhooks/deliver',
+        },
+        orgScope: {
+            ownerOrganizationId: proof.ownerOrganizationId,
+            watchlistItemIds: watchlistIds,
+            alertGeneratorKeys,
+            alertContractOrgId: proof.alertBridge.persistenceContract.organizationId,
+            caseContractOrgId: proof.caseBridge.caseWorkflowContract.organizationId,
+            webhookContractOrgId: proof.webhookBridge.deliveryContract.organizationId,
+        },
+        safety: {
+            nonmemberEnumeration: false,
+            containsRawTerms: false,
+            redactedFields: [
+                ...new Set([
+                    ...proof.alertBridge.queueVisibilityContract.redactedFields,
+                    ...proof.caseBridge.caseWorkflowContract.redactedFields,
+                    ...proof.webhookBridge.deliveryContract.redactedFields,
+                ]),
+            ].sort(),
+        },
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        blockerCodes: uniqueBlockers,
+    }
+}
+
+function sameStringSet(left: string[], right: string[]) {
+    if (left.length !== right.length) return false
+    return left.every((value, index) => value === right[index])
 }
 
 export function organizationVisibilityDecision(input: OrganizationVisibilityDecisionInput): OrganizationVisibilityDecision {
@@ -2342,6 +2618,8 @@ export function organizationWatchlistAlertTermsExport(
         archivedCount,
     })
     const cleanupRequired = pausedCount + archivedCount > 0
+    const sharedWatchlistDownstreamProof = organizationSharedWatchlistDownstreamProof(organization, items, member, alertGeneration, downstreamAuthorization)
+    const sharedWatchlistIntegrationGuardrails = organizationSharedWatchlistIntegrationGuardrails(sharedWatchlistDownstreamProof)
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -2556,7 +2834,8 @@ export function organizationWatchlistAlertTermsExport(
             ],
         },
         activeTerms,
-        sharedWatchlistDownstreamProof: organizationSharedWatchlistDownstreamProof(organization, items, member, alertGeneration, downstreamAuthorization),
+        sharedWatchlistDownstreamProof,
+        sharedWatchlistIntegrationGuardrails,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
