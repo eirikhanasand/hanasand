@@ -5,6 +5,10 @@ import {
   type DwmAlertWorkflowContract,
   type DwmAlertWorkflowPreservationBlocker
 } from "./alertWorkflowContract.ts";
+import type {
+  TiSourceProvenanceAlertRebuildReceipt,
+  TiSourceProvenanceAlertRebuildReceiptBlocker
+} from "./sourceProvenanceTiPageContract.ts";
 
 export const DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION = "dwm.org_alert_workflow_bridge.v1" as const;
 export const DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION = "dwm.org_alert_webhook_fixture.v1" as const;
@@ -12,6 +16,7 @@ export const DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION = "dwm.org_al
 export const DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION = "dwm.org_alert_source_evidence.v1" as const;
 export const DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION = "dwm.org_alert_webhook_reconciliation.v1" as const;
 export const DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION = "dwm.org_alert_operator_readiness.v1" as const;
+export const DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION = "dwm.org_alert_case_action_packet.v1" as const;
 
 export type OrgAlertWorkflowWatchlistRef = {
   watchlistId: string;
@@ -152,7 +157,7 @@ export type OrgAlertWebhookFixtureBlocker = {
     | "webhook_destination_not_found"
     | "webhook_destination_scope_mismatch"
     | "webhook_destination_not_verified";
-  ownerLane: "watchlist" | "alert" | "case" | "source" | "webhook";
+  ownerLane: "watchlist" | "alert" | "case" | "source" | "webhook" | "publicTI";
   rowId: string;
   alertId?: string;
   watchlistId: string;
@@ -330,6 +335,7 @@ export type OrgAlertOperatorReadinessPacket = {
   blockers: OrgAlertOperatorReadinessBlocker[];
   requiredReports: {
     sourceEvidence: boolean;
+    sourceRebuildReceipt: boolean;
     webhookFixture: boolean;
     webhookReconciliation: boolean;
   };
@@ -346,9 +352,11 @@ export type OrgAlertOperatorReadinessRow = {
   captureIds: string[];
   webhookDestinationIds: string[];
   matchedDeliveryIds: string[];
+  sourceRebuildReceiptIds: string[];
   stages: {
     workflowBridge: boolean;
     sourceEvidence: boolean;
+    sourceRebuildReceipt: boolean | "not_required";
     webhookFixture: boolean;
     webhookReconciliation: boolean | "not_required";
   };
@@ -359,14 +367,63 @@ export type OrgAlertOperatorReadinessRow = {
 export type OrgAlertOperatorReadinessBlocker = {
   code:
     | "missing_source_evidence_report"
+    | "missing_source_rebuild_receipt_report"
     | "missing_webhook_fixture_report"
     | "missing_webhook_reconciliation_report"
     | OrgAlertWorkflowBridgeBlocker["code"]
     | OrgAlertSourceEvidenceBlocker["code"]
+    | TiSourceProvenanceAlertRebuildReceiptBlocker["code"]
     | OrgAlertWebhookFixtureBlocker["code"]
     | OrgAlertWebhookDeliveryReconciliationBlocker["code"];
-  ownerLane: "watchlist" | "alert" | "case" | "source" | "webhook";
-  stage: "workflow_bridge" | "source_evidence" | "webhook_fixture" | "webhook_reconciliation";
+  ownerLane: "watchlist" | "alert" | "case" | "source" | "webhook" | "org" | "publicTI";
+  stage: "workflow_bridge" | "source_evidence" | "source_rebuild_receipt" | "webhook_fixture" | "webhook_reconciliation";
+  rowId?: string;
+  alertId?: string;
+  watchlistId?: string;
+  watchlistItemId?: string;
+  path: string;
+  message: string;
+};
+
+export type OrgAlertCaseActionPacket = {
+  schemaVersion: typeof DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId: string;
+  rows: OrgAlertCaseActionRow[];
+  blockers: OrgAlertCaseActionBlocker[];
+  payloadShape: string[];
+};
+
+export type OrgAlertCaseActionRow = {
+  rowId: string;
+  watchlistId: string;
+  watchlistItemId?: string;
+  alertIds: string[];
+  casePaths: string[];
+  alertDetailPaths: string[];
+  webhookDestinationIds: string[];
+  matchedDeliveryIds: string[];
+  sourceFamilies: string[];
+  captureCount: number;
+  ready: boolean;
+  allowedActions: OrgAlertCaseAction[];
+  blockedActions: OrgAlertCaseAction[];
+};
+
+export type OrgAlertCaseAction = {
+  action: "open_case" | "review_alert" | "review_delivery" | "restore_source_evidence" | "rebuild_alerts" | "deliver_webhook";
+  ownerLane: "case" | "alert" | "source" | "webhook";
+  route: string;
+  method: "GET" | "POST";
+  reason: string;
+  blockerCodes: string[];
+};
+
+export type OrgAlertCaseActionBlocker = {
+  code: OrgAlertOperatorReadinessBlocker["code"];
+  ownerLane: OrgAlertOperatorReadinessBlocker["ownerLane"];
   rowId?: string;
   alertId?: string;
   watchlistId?: string;
@@ -494,31 +551,38 @@ export function buildOrgAlertSourceEvidenceReport(input: {
 export function buildOrgAlertOperatorReadinessPacket(input: {
   bridge: OrgAlertWorkflowBridgeReport;
   sourceEvidence?: OrgAlertSourceEvidenceReport;
+  sourceRebuildReceipts?: TiSourceProvenanceAlertRebuildReceipt[];
   webhookFixture?: OrgAlertWebhookFixtureContract;
   webhookReconciliation?: OrgAlertWebhookDeliveryReconciliation;
   checkedAt?: string;
   requireSourceEvidence?: boolean;
+  requireSourceRebuildReceipt?: boolean;
   requireWebhookFixture?: boolean;
   requireWebhookReconciliation?: boolean;
 }): OrgAlertOperatorReadinessPacket {
   const requireSourceEvidence = input.requireSourceEvidence !== false;
+  const requireSourceRebuildReceipt = input.requireSourceRebuildReceipt === true;
   const requireWebhookFixture = input.requireWebhookFixture !== false;
   const requireWebhookReconciliation = input.requireWebhookReconciliation === true;
   const rows = input.bridge.rows.map((row) => operatorReadinessRow({
     row,
     sourceEvidence: input.sourceEvidence,
+    sourceRebuildReceipts: input.sourceRebuildReceipts,
     webhookFixture: input.webhookFixture,
     webhookReconciliation: input.webhookReconciliation,
     requireSourceEvidence,
+    requireSourceRebuildReceipt,
     requireWebhookFixture,
     requireWebhookReconciliation
   }));
   const blockers = [
     ...(requireSourceEvidence && !input.sourceEvidence ? input.bridge.rows.map((row) => missingOperatorReportBlocker("missing_source_evidence_report", "source_evidence", "source", row)) : []),
+    ...(requireSourceRebuildReceipt && !input.sourceRebuildReceipts?.length ? input.bridge.rows.map((row) => missingOperatorReportBlocker("missing_source_rebuild_receipt_report", "source_rebuild_receipt", "alert", row)) : []),
     ...(requireWebhookFixture && !input.webhookFixture ? input.bridge.rows.map((row) => missingOperatorReportBlocker("missing_webhook_fixture_report", "webhook_fixture", "webhook", row)) : []),
     ...(requireWebhookReconciliation && !input.webhookReconciliation ? input.bridge.rows.map((row) => missingOperatorReportBlocker("missing_webhook_reconciliation_report", "webhook_reconciliation", "webhook", row)) : []),
     ...input.bridge.blockers.map((blocker) => operatorBlocker("workflow_bridge", blocker)),
     ...(input.sourceEvidence?.blockers.map((blocker) => operatorBlocker("source_evidence", blocker)) ?? []),
+    ...(input.sourceRebuildReceipts?.flatMap((receipt) => receipt.blockers.map((blocker) => operatorSourceRebuildReceiptBlocker(receipt, blocker, input.bridge.rows))) ?? []),
     ...(input.webhookFixture?.blockers.map((blocker) => operatorBlocker("webhook_fixture", blocker)) ?? []),
     ...(input.webhookReconciliation?.blockers.map((blocker) => operatorBlocker("webhook_reconciliation", blocker)) ?? [])
   ];
@@ -532,9 +596,37 @@ export function buildOrgAlertOperatorReadinessPacket(input: {
     blockers,
     requiredReports: {
       sourceEvidence: requireSourceEvidence,
+      sourceRebuildReceipt: requireSourceRebuildReceipt,
       webhookFixture: requireWebhookFixture,
       webhookReconciliation: requireWebhookReconciliation
     }
+  };
+}
+
+export function buildOrgAlertCaseActionPacket(input: {
+  readiness: OrgAlertOperatorReadinessPacket;
+  checkedAt?: string;
+}): OrgAlertCaseActionPacket {
+  const rows = input.readiness.rows.map(caseActionRow);
+  const blockers = input.readiness.blockers.map((blocker) => ({
+    code: blocker.code,
+    ownerLane: blocker.ownerLane,
+    rowId: blocker.rowId,
+    alertId: blocker.alertId,
+    watchlistId: blocker.watchlistId,
+    watchlistItemId: blocker.watchlistItemId,
+    path: blocker.path,
+    message: blocker.message
+  }));
+  return {
+    schemaVersion: DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION,
+    checkedAt: input.checkedAt ?? input.readiness.checkedAt,
+    ok: input.readiness.ok && rows.every((row) => row.ready) && blockers.length === 0,
+    tenantId: input.readiness.tenantId,
+    organizationId: input.readiness.organizationId,
+    rows,
+    blockers,
+    payloadShape: ["rows[].allowedActions", "rows[].blockedActions", "blockers[]"]
   };
 }
 
@@ -632,16 +724,22 @@ function sourceEvidenceRow(input: {
 function operatorReadinessRow(input: {
   row: OrgAlertWorkflowBridgeRow;
   sourceEvidence?: OrgAlertSourceEvidenceReport;
+  sourceRebuildReceipts?: TiSourceProvenanceAlertRebuildReceipt[];
   webhookFixture?: OrgAlertWebhookFixtureContract;
   webhookReconciliation?: OrgAlertWebhookDeliveryReconciliation;
   requireSourceEvidence: boolean;
+  requireSourceRebuildReceipt: boolean;
   requireWebhookFixture: boolean;
   requireWebhookReconciliation: boolean;
 }): OrgAlertOperatorReadinessRow {
   const sourceRow = input.sourceEvidence?.rows.find((row) => row.rowId === input.row.rowId);
+  const sourceRebuildReceipts = (input.sourceRebuildReceipts ?? []).filter((receipt) => receiptMatchesOperatorRow(receipt, input.row));
   const fixtureDeliveries = input.webhookFixture?.deliveries.filter((delivery) => delivery.rowId === input.row.rowId) ?? [];
   const reconciliationRows = input.webhookReconciliation?.rows.filter((row) => fixtureDeliveries.some((delivery) => delivery.deliveryId === row.plannedDeliveryId)) ?? [];
   const sourceReady = input.requireSourceEvidence ? sourceRow?.ready === true : (sourceRow?.ready ?? true);
+  const sourceRebuildReady = input.requireSourceRebuildReceipt
+    ? sourceRebuildReceipts.length > 0 && sourceRebuildReceipts.every((receipt) => receipt.ok)
+    : (input.sourceRebuildReceipts ? sourceRebuildReceipts.length > 0 && sourceRebuildReceipts.every((receipt) => receipt.ok) : "not_required");
   const fixtureReady = input.requireWebhookFixture ? fixtureDeliveries.length > 0 && fixtureDeliveries.every((delivery) => delivery.ready) : (fixtureDeliveries.length ? fixtureDeliveries.every((delivery) => delivery.ready) : true);
   const reconciliationReady = input.requireWebhookReconciliation
     ? reconciliationRows.length > 0 && reconciliationRows.every((row) => row.ready)
@@ -649,9 +747,11 @@ function operatorReadinessRow(input: {
   const blockerCodes = uniqueStrings([
     ...input.row.blockerCodes,
     ...(sourceRow?.blockerCodes ?? []),
+    ...sourceRebuildReceipts.flatMap((receipt) => receipt.blockers.map((blocker) => blocker.code)),
     ...fixtureDeliveries.flatMap((delivery) => delivery.blockerCodes),
     ...reconciliationRows.flatMap((row) => row.blockerCodes),
     input.requireSourceEvidence && !sourceRow ? "missing_source_evidence_report" : undefined,
+    input.requireSourceRebuildReceipt && sourceRebuildReceipts.length === 0 ? "missing_source_rebuild_receipt_report" : undefined,
     input.requireWebhookFixture && fixtureDeliveries.length === 0 ? "missing_webhook_fixture_report" : undefined,
     input.requireWebhookReconciliation && reconciliationRows.length === 0 ? "missing_webhook_reconciliation_report" : undefined
   ].filter(Boolean).map(String));
@@ -667,19 +767,114 @@ function operatorReadinessRow(input: {
     captureIds: sourceRow?.captureIds ?? input.row.provenance.captureIds,
     webhookDestinationIds: uniqueStrings(fixtureDeliveries.flatMap((delivery) => delivery.destinationIds)),
     matchedDeliveryIds: uniqueStrings(reconciliationRows.flatMap((row) => row.matchedDeliveryIds)),
+    sourceRebuildReceiptIds: uniqueStrings(sourceRebuildReceipts.map((receipt) => receipt.id)),
     stages: {
       workflowBridge: input.row.ready,
       sourceEvidence: sourceReady,
+      sourceRebuildReceipt: sourceRebuildReady,
       webhookFixture: fixtureReady,
       webhookReconciliation: reconciliationReady
     },
     ready: input.row.ready
       && sourceReady === true
+      && (sourceRebuildReady === true || sourceRebuildReady === "not_required")
       && fixtureReady === true
       && (reconciliationReady === true || reconciliationReady === "not_required")
       && blockerCodes.length === 0,
     blockerCodes
   };
+}
+
+function caseActionRow(row: OrgAlertOperatorReadinessRow): OrgAlertCaseActionRow {
+  const blockedActions = caseBlockedActions(row);
+  const allowedActions = row.ready ? caseAllowedActions(row) : [];
+  return {
+    rowId: row.rowId,
+    watchlistId: row.watchlistId,
+    watchlistItemId: row.watchlistItemId,
+    alertIds: row.alertIds,
+    casePaths: row.casePaths,
+    alertDetailPaths: row.alertDetailPaths,
+    webhookDestinationIds: row.webhookDestinationIds,
+    matchedDeliveryIds: row.matchedDeliveryIds,
+    sourceFamilies: row.sourceFamilies,
+    captureCount: row.captureIds.length,
+    ready: row.ready,
+    allowedActions,
+    blockedActions
+  };
+}
+
+function caseAllowedActions(row: OrgAlertOperatorReadinessRow): OrgAlertCaseAction[] {
+  const alertId = row.alertIds[0] ?? "";
+  const casePath = row.casePaths[0];
+  const alertDetailPath = row.alertDetailPaths[0];
+  const deliveryId = row.matchedDeliveryIds[0];
+  return [
+    {
+      action: "open_case",
+      ownerLane: "case",
+      route: casePath ?? `/v1/cases?alertId=${encodeURIComponent(alertId)}`,
+      method: "GET",
+      reason: "Open the linked alert case.",
+      blockerCodes: []
+    },
+    ...(alertDetailPath ? [{
+      action: "review_alert" as const,
+      ownerLane: "alert" as const,
+      route: alertDetailPath,
+      method: "GET" as const,
+      reason: "Review the preserved alert detail.",
+      blockerCodes: []
+    }] : []),
+    ...(deliveryId ? [{
+      action: "review_delivery" as const,
+      ownerLane: "webhook" as const,
+      route: `/v1/dwm/webhook-deliveries/${encodeURIComponent(deliveryId)}`,
+      method: "GET" as const,
+      reason: "Review the matched webhook delivery.",
+      blockerCodes: []
+    }] : [])
+  ];
+}
+
+function caseBlockedActions(row: OrgAlertOperatorReadinessRow): OrgAlertCaseAction[] {
+  const blockerCodes = uniqueStrings(row.blockerCodes);
+  const actions: OrgAlertCaseAction[] = [];
+  const sourceBlockers = blockerCodes.filter((code) => code.includes("source") || code.includes("capture") || code.includes("provenance"));
+  const webhookBlockers = blockerCodes.filter((code) => code.includes("webhook") || code.includes("delivery"));
+  const alertBlockers = blockerCodes.filter((code) => code.includes("alert") || code.includes("rebuild"));
+  if (sourceBlockers.length) {
+    actions.push({
+      action: "restore_source_evidence",
+      ownerLane: "source",
+      route: "/v1/dwm/source-requests",
+      method: "POST",
+      reason: "Restore source evidence before case action can continue.",
+      blockerCodes: sourceBlockers
+    });
+  }
+  if (webhookBlockers.length) {
+    actions.push({
+      action: "deliver_webhook",
+      ownerLane: "webhook",
+      route: "/v1/dwm/webhooks/deliver",
+      method: "POST",
+      reason: "Repair webhook delivery before case action can continue.",
+      blockerCodes: webhookBlockers
+    });
+  }
+  if (alertBlockers.length) {
+    actions.push({
+      action: "rebuild_alerts",
+      ownerLane: "alert",
+      route: "/v1/dwm/alerts/rebuild",
+      method: "POST",
+      reason: "Rebuild or repair alert workflow output.",
+      blockerCodes: alertBlockers
+    });
+  }
+  return actions;
 }
 
 function operatorBlocker(
@@ -709,7 +904,7 @@ function operatorBlocker(
 }
 
 function missingOperatorReportBlocker(
-  code: Extract<OrgAlertOperatorReadinessBlocker["code"], "missing_source_evidence_report" | "missing_webhook_fixture_report" | "missing_webhook_reconciliation_report">,
+  code: Extract<OrgAlertOperatorReadinessBlocker["code"], "missing_source_evidence_report" | "missing_source_rebuild_receipt_report" | "missing_webhook_fixture_report" | "missing_webhook_reconciliation_report">,
   stage: OrgAlertOperatorReadinessBlocker["stage"],
   ownerLane: OrgAlertOperatorReadinessBlocker["ownerLane"],
   row: OrgAlertWorkflowBridgeRow
@@ -727,8 +922,33 @@ function missingOperatorReportBlocker(
   };
 }
 
+function operatorSourceRebuildReceiptBlocker(
+  receipt: TiSourceProvenanceAlertRebuildReceipt,
+  blocker: TiSourceProvenanceAlertRebuildReceiptBlocker,
+  rows: OrgAlertWorkflowBridgeRow[]
+): OrgAlertOperatorReadinessBlocker {
+  const row = rows.find((candidate) => receiptMatchesOperatorRow(receipt, candidate));
+  return {
+    code: blocker.code,
+    ownerLane: blocker.ownerLane,
+    stage: "source_rebuild_receipt",
+    rowId: row?.rowId,
+    alertId: receipt.matches.alertIds[0] ?? row?.matchedAlertIds[0],
+    watchlistId: row?.watchlistId,
+    watchlistItemId: row?.watchlistItemId,
+    path: blocker.path,
+    message: blocker.message
+  };
+}
+
+function receiptMatchesOperatorRow(receipt: TiSourceProvenanceAlertRebuildReceipt, row: OrgAlertWorkflowBridgeRow): boolean {
+  if (row.matchedAlertIds.some((alertId) => receipt.matches.alertIds.includes(alertId))) return true;
+  return Boolean(row.watchlistItemId && receipt.matches.watchlistItemIds.includes(row.watchlistItemId));
+}
+
 function operatorMissingReportMessage(code: OrgAlertOperatorReadinessBlocker["code"]): string {
   if (code === "missing_source_evidence_report") return "Source evidence report is required for operator readiness.";
+  if (code === "missing_source_rebuild_receipt_report") return "Source provenance alert rebuild receipt is required for operator readiness.";
   if (code === "missing_webhook_fixture_report") return "Webhook fixture report is required for operator readiness.";
   if (code === "missing_webhook_reconciliation_report") return "Webhook delivery reconciliation is required for operator readiness.";
   return "Required operator readiness report is missing.";

@@ -6,6 +6,7 @@ export const TI_SOURCE_PROVENANCE_ORG_WATCHLIST_CANDIDATE_SCHEMA_VERSION = "orga
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_actor_profile_contract.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -381,6 +382,71 @@ export type TiSourceProvenanceAlertRebuildResponseAlert = {
   };
 };
 
+export type TiSourceProvenanceActorProfileFieldName =
+  | "aliases"
+  | "motivations"
+  | "sectors"
+  | "regions"
+  | "infrastructure"
+  | "techniques"
+  | "campaigns";
+
+export type TiSourceProvenanceActorProfileContract = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  fields: TiSourceProvenanceActorProfileField[];
+  gaps: TiSourceProvenanceActorProfileGap[];
+  coverage: {
+    sourceFamilies: string[];
+    sourceIds: string[];
+    captureIds: string[];
+    contentHashes: string[];
+    newestEvidenceAt?: string;
+    averageConfidence: number;
+  };
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceActorProfileField = {
+  field: TiSourceProvenanceActorProfileFieldName;
+  values: string[];
+  confidence: number;
+  sourceFamilies: string[];
+  provenanceRefs: Array<{
+    sourceId?: string;
+    captureId?: string;
+    contentHash?: string;
+    sourceFamily?: string;
+    capturedAt?: string;
+    confidence: number;
+  }>;
+  freshness?: {
+    newestEvidenceAt?: string;
+    state: "fresh" | "missing";
+  };
+  ready: boolean;
+};
+
+export type TiSourceProvenanceActorProfileGap = {
+  code: `missing_${TiSourceProvenanceActorProfileFieldName}` | "source_provenance_not_ready";
+  field: TiSourceProvenanceActorProfileFieldName | "sourceProvenance";
+  ownerLane: "source" | "publicTI";
+  message: string;
+  retryable: boolean;
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -723,6 +789,88 @@ export function buildSourceProvenanceAlertRebuildReceipt(input: {
   };
 }
 
+export function buildSourceProvenanceActorProfileContract(input: {
+  contract: TiSourceProvenancePageContract;
+  values?: Partial<Record<TiSourceProvenanceActorProfileFieldName, string[]>>;
+  generatedAt?: string;
+}): TiSourceProvenanceActorProfileContract {
+  const generatedAt = input.generatedAt ?? input.contract.generatedAt;
+  const readyRows = input.contract.rows.filter((row) => row.ready);
+  const fields = actorProfileFieldSpecs(input.contract.actor, input.values ?? {}).map((spec) => {
+    const rows = rowsForActorProfileField(spec.field, readyRows);
+    const values = uniqueStrings(spec.values);
+    return {
+      field: spec.field,
+      values,
+      confidence: rows.length > 0 ? average(rows.map((row) => row.confidence)) : 0,
+      sourceFamilies: uniqueStrings(rows.map((row) => row.sourceFamily).filter(Boolean).map(String)),
+      provenanceRefs: rows.map((row) => ({
+        sourceId: row.sourceId,
+        captureId: row.captureId,
+        contentHash: row.contentHash,
+        sourceFamily: row.sourceFamily,
+        capturedAt: row.capturedAt,
+        confidence: row.confidence
+      })),
+      freshness: {
+        newestEvidenceAt: newestTimestamp(rows.map((row) => row.capturedAt)),
+        state: rows.length > 0 ? "fresh" as const : "missing" as const
+      },
+      ready: values.length > 0 && rows.length > 0
+    };
+  });
+  const gaps = [
+    ...(!input.contract.ok ? [{
+      code: "source_provenance_not_ready" as const,
+      field: "sourceProvenance" as const,
+      ownerLane: "source" as const,
+      message: "Source provenance must be complete before the public TI actor profile can be trusted.",
+      retryable: true
+    }] : []),
+    ...fields.filter((field) => !field.ready).map((field) => ({
+      code: `missing_${field.field}` as const,
+      field: field.field,
+      ownerLane: "publicTI" as const,
+      message: `Public TI actor profile is missing source-backed ${field.field}.`,
+      retryable: true
+    }))
+  ];
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_actor_profile", `${input.contract.id}:${generatedAt}:${fields.map((field) => `${field.field}:${field.values.join(",")}`).join("|")}`),
+    generatedAt,
+    ok: gaps.length === 0,
+    tenantId: input.contract.tenantId,
+    organizationId: input.contract.organizationId,
+    actor: input.contract.actor,
+    publicTiRoute: input.contract.page.route,
+    fields,
+    gaps,
+    coverage: {
+      sourceFamilies: uniqueStrings(readyRows.map((row) => row.sourceFamily).filter(Boolean).map(String)),
+      sourceIds: uniqueStrings(readyRows.map((row) => row.sourceId).filter(Boolean).map(String)),
+      captureIds: uniqueStrings(readyRows.map((row) => row.captureId).filter(Boolean).map(String)),
+      contentHashes: uniqueStrings(readyRows.map((row) => row.contentHash).filter(Boolean).map(String)),
+      newestEvidenceAt: newestTimestamp(readyRows.map((row) => row.capturedAt)),
+      averageConfidence: average(readyRows.map((row) => row.confidence))
+    },
+    payloadShape: [
+      "fields[].field",
+      "fields[].values",
+      "fields[].provenanceRefs",
+      "fields[].freshness",
+      "coverage.sourceFamilies",
+      "gaps[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -1014,6 +1162,37 @@ function alertSourceBridgeIds(alert: TiSourceProvenanceAlertRebuildResponseAlert
     alert.evidenceSummary?.sourceBridgeId,
     ...(alert.evidenceSummary?.sourceBridgeIds ?? [])
   ].filter(Boolean).map(String));
+}
+
+function actorProfileFieldSpecs(
+  actor: string,
+  values: Partial<Record<TiSourceProvenanceActorProfileFieldName, string[]>>
+): Array<{ field: TiSourceProvenanceActorProfileFieldName; values: string[] }> {
+  return [
+    { field: "aliases", values: values.aliases ?? [actor] },
+    { field: "motivations", values: values.motivations ?? [] },
+    { field: "sectors", values: values.sectors ?? [] },
+    { field: "regions", values: values.regions ?? [] },
+    { field: "infrastructure", values: values.infrastructure ?? [] },
+    { field: "techniques", values: values.techniques ?? [] },
+    { field: "campaigns", values: values.campaigns ?? [] }
+  ];
+}
+
+function rowsForActorProfileField(
+  field: TiSourceProvenanceActorProfileFieldName,
+  rows: TiSourceProvenancePageRow[]
+): TiSourceProvenancePageRow[] {
+  return rows.filter((row) => {
+    const relationship = String(row.relationship ?? "");
+    const family = String(row.sourceFamily ?? "");
+    if (field === "aliases") return true;
+    if (field === "motivations") return relationship === "actor_activity" || family === "actor_page";
+    if (field === "sectors" || field === "regions") return relationship === "targeting" || family === "public_advisory" || family === "darkweb_metadata";
+    if (field === "infrastructure") return relationship === "infrastructure" || family === "public_advisory" || family === "darkweb_onion";
+    if (field === "techniques") return relationship === "tooling" || family === "actor_page" || family === "public_advisory";
+    return relationship === "actor_activity" || family === "telegram_public" || family === "public_advisory";
+  });
 }
 
 function sourceProvenanceAlertRebuildActions(

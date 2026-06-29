@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
+  buildSourceProvenanceActorProfileContract,
   buildSourceProvenanceAlertRebuildReceipt,
   buildSourceProvenanceAlertRebuildReadiness,
   buildSourceProvenanceAlertRebuildRequest,
@@ -531,6 +533,154 @@ describe("source provenance TI page contract", () => {
     expect(JSON.stringify(receipt)).not.toContain("password");
   });
 
+  test("builds source-backed public TI actor profile fields with provenance and freshness", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [
+        sourceRow(),
+        {
+          ...sourceRow(),
+          sourceId: "src_public_advisory",
+          sourceFamily: "public_advisory",
+          captureId: "cap_public_advisory_apt29",
+          contentHash: "hash_public_advisory_apt29",
+          provenance: "Public advisory links APT29 to phishing infrastructure and defense evasion techniques.",
+          relationship: "targeting",
+          confidence: 0.8
+        },
+        {
+          ...sourceRow(),
+          sourceId: "src_actor_page",
+          sourceFamily: "actor_page",
+          captureId: "cap_actor_page_apt29",
+          contentHash: "hash_actor_page_apt29",
+          provenance: "Actor page records Nobelium aliases, espionage motivation, and campaign history.",
+          relationship: "tooling",
+          confidence: 0.74
+        }
+      ]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: {
+        aliases: ["APT29", "Nobelium"],
+        motivations: ["espionage"],
+        sectors: ["government", "technology"],
+        regions: ["North America", "Europe"],
+        infrastructure: ["example.com"],
+        techniques: ["phishing", "defense evasion"],
+        campaigns: ["diplomatic phishing"]
+      }
+    });
+
+    expect(profile).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      publicTiRoute: "/ti/APT29",
+      gaps: [],
+      coverage: {
+        sourceFamilies: expect.arrayContaining(["telegram_public", "public_advisory", "actor_page"]),
+        sourceIds: expect.arrayContaining(["src_telegram", "src_public_advisory", "src_actor_page"]),
+        captureIds: expect.arrayContaining(["cap_telegram_apt29", "cap_public_advisory_apt29", "cap_actor_page_apt29"]),
+        contentHashes: expect.arrayContaining(["hash_telegram_apt29", "hash_public_advisory_apt29", "hash_actor_page_apt29"]),
+        newestEvidenceAt: "2026-06-29T10:15:00.000Z",
+        averageConfidence: 0.8
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(profile.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        field: "aliases",
+        values: expect.arrayContaining(["APT29", "Nobelium"]),
+        ready: true,
+        provenanceRefs: expect.arrayContaining([expect.objectContaining({ sourceId: "src_telegram", captureId: "cap_telegram_apt29" })])
+      }),
+      expect.objectContaining({
+        field: "infrastructure",
+        values: ["example.com"],
+        ready: true,
+        sourceFamilies: expect.arrayContaining(["public_advisory"])
+      }),
+      expect.objectContaining({
+        field: "techniques",
+        values: expect.arrayContaining(["phishing", "defense evasion"]),
+        ready: true,
+        sourceFamilies: expect.arrayContaining(["public_advisory", "actor_page"])
+      }),
+      expect.objectContaining({
+        field: "campaigns",
+        values: ["diplomatic phishing"],
+        ready: true,
+        sourceFamilies: expect.arrayContaining(["telegram_public", "public_advisory"])
+      })
+    ]));
+    expect(profile.payloadShape).toEqual(expect.arrayContaining([
+      "fields[].values",
+      "fields[].provenanceRefs",
+      "coverage.sourceFamilies",
+      "gaps[]"
+    ]));
+    expect(JSON.stringify(profile)).not.toContain("rawText");
+    expect(JSON.stringify(profile)).not.toContain("password");
+  });
+
+  test("reports public TI actor profile gaps when source-backed fields are missing", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+
+    expect(profile.ok).toBe(false);
+    expect(profile.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        field: "aliases",
+        values: expect.arrayContaining(["APT28", "Fancy Bear"]),
+        ready: true
+      }),
+      expect.objectContaining({
+        field: "infrastructure",
+        values: [],
+        ready: false,
+        provenanceRefs: []
+      })
+    ]));
+    expect(profile.gaps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_motivations", field: "motivations", ownerLane: "publicTI" }),
+      expect.objectContaining({ code: "missing_sectors", field: "sectors", ownerLane: "publicTI" }),
+      expect.objectContaining({ code: "missing_regions", field: "regions", ownerLane: "publicTI" }),
+      expect.objectContaining({ code: "missing_infrastructure", field: "infrastructure", ownerLane: "publicTI" }),
+      expect.objectContaining({ code: "missing_techniques", field: "techniques", ownerLane: "publicTI" }),
+      expect.objectContaining({ code: "missing_campaigns", field: "campaigns", ownerLane: "publicTI" })
+    ]));
+  });
+
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {
     const contract = buildSourceProvenanceTiPageContract({
       tenantId: "tenant_acme",
@@ -727,7 +877,14 @@ describe("source provenance TI page contract", () => {
   });
 });
 
-function sourceRow() {
+function sourceRow(overrides: Partial<ReturnType<typeof sourceRowBase>> = {}) {
+  return {
+    ...sourceRowBase(),
+    ...overrides
+  };
+}
+
+function sourceRowBase() {
   return {
     tenantId: "tenant_acme",
     organizationId: "org_acme",

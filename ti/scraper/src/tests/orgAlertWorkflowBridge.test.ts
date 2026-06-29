@@ -232,6 +232,84 @@ describe("org alert workflow bridge", () => {
     });
   });
 
+  test("includes source provenance rebuild receipt proof in operator readiness", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const sourceEvidence = buildOrgAlertSourceEvidenceReport({
+      bridge,
+      sources: sourceRefs(),
+      captures: [],
+      sourceProvenanceSummaries: [sourceProvenanceSummary()],
+      checkedAt: "2026-06-29T15:00:00.000Z"
+    });
+    const webhookFixture = buildOrgAlertWebhookFixtureContract({
+      bridge,
+      destinations: [webhookDestination()],
+      destinationIdsByWatchlistId: { watch_acme_domains: ["webhook_discord"] }
+    });
+    const packet = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      sourceEvidence,
+      sourceRebuildReceipts: [sourceRebuildReceipt()],
+      webhookFixture,
+      requireSourceRebuildReceipt: true
+    });
+
+    expect(packet).toMatchObject({
+      ok: true,
+      requiredReports: {
+        sourceEvidence: true,
+        sourceRebuildReceipt: true,
+        webhookFixture: true,
+        webhookReconciliation: false
+      },
+      rows: [{
+        alertIds: ["alert_acme_lumma"],
+        sourceRebuildReceiptIds: ["receipt_source_rebuild_acme_lumma"],
+        stages: {
+          workflowBridge: true,
+          sourceEvidence: true,
+          sourceRebuildReceipt: true,
+          webhookFixture: true,
+          webhookReconciliation: "not_required"
+        },
+        ready: true,
+        blockerCodes: []
+      }]
+    });
+  });
+
+  test("requires source rebuild receipts when operator readiness depends on alert creation proof", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const packet = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      requireSourceEvidence: false,
+      requireWebhookFixture: false,
+      requireSourceRebuildReceipt: true,
+      checkedAt: "2026-06-29T15:03:00.000Z"
+    });
+
+    expect(packet.ok).toBe(false);
+    expect(packet.rows[0]).toMatchObject({
+      sourceRebuildReceiptIds: [],
+      stages: {
+        sourceEvidence: true,
+        sourceRebuildReceipt: false,
+        webhookFixture: true,
+        webhookReconciliation: "not_required"
+      },
+      ready: false,
+      blockerCodes: ["missing_source_rebuild_receipt_report"]
+    });
+    expect(packet.blockers).toEqual([
+      expect.objectContaining({
+        code: "missing_source_rebuild_receipt_report",
+        ownerLane: "alert",
+        stage: "source_rebuild_receipt",
+        watchlistItemId: "watch_item_acme_com"
+      })
+    ]);
+  });
+
   test("keeps missing operator readiness reports as owner-coded blockers", () => {
     const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
     const packet = buildOrgAlertOperatorReadinessPacket({
@@ -691,6 +769,51 @@ function captureRefs() {
     contentHash: "hash_acme_followup",
     collectedAt: "2026-06-29T14:30:00.000Z"
   }];
+}
+
+function sourceRebuildReceipt() {
+  return {
+    schemaVersion: "ti.source_provenance_alert_rebuild_receipt.v1" as const,
+    id: "receipt_source_rebuild_acme_lumma",
+    generatedAt: "2026-06-29T15:00:00.000Z",
+    ok: true,
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    sourceCandidateId: "candidate_public_ti_acme",
+    sourceBridgeId: "ti_source_provenance_alertability_acme",
+    alertRebuildRequestId: "request_source_rebuild_acme_lumma",
+    response: {
+      source: "dwm_alert_rebuild" as const,
+      rebuiltAt: "2026-06-29T14:58:00.000Z",
+      savedAlertCount: 1,
+      dryRun: true
+    },
+    matches: {
+      alertIds: ["alert_acme_lumma"],
+      watchlistItemIds: ["watch_item_acme_com"],
+      alertGeneratorKeys: ["org:org_acme:watchlist:watch_item_acme_com:domain:acme.com"],
+      sourceBridgeIds: ["ti_source_provenance_alertability_acme"]
+    },
+    caseHandoffRows: [{
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      casePath: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+      ready: true
+    }],
+    blockers: [],
+    payloadShape: [
+      "response.savedAlertCount",
+      "matches.alertIds",
+      "caseHandoffRows[]",
+      "blockers[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false as const,
+      restrictedMetadataLeaked: false as const,
+      privateTelegramContentExposed: false as const,
+      liveNetworkScrapeStarted: false as const
+    }
+  };
 }
 
 function sourceProvenanceSummary() {
