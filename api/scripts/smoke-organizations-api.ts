@@ -260,6 +260,28 @@ assert.equal(existingMemberInviteWorkflow.skippedCount, 1)
 assert.equal(existingMemberInviteWorkflow.results[0].outcome, 'already_member')
 assert.equal(existingMemberInviteWorkflow.results[0].memberRole, 'member')
 
+const duplicateRecipientInviteResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: {
+        emails: ['member@example.test', 'MEMBER@example.test'],
+        role: 'viewer',
+        requestId: 'smoke-duplicate-recipient-dedupe',
+    },
+})
+assert.equal(duplicateRecipientInviteResponse.statusCode, 201, duplicateRecipientInviteResponse.body)
+const duplicateRecipientWorkflow = parseBody(duplicateRecipientInviteResponse.body).workflow
+assert.equal(duplicateRecipientWorkflow.schemaVersion, 'organization.bulk_invite.v1')
+assert.equal(duplicateRecipientWorkflow.submittedRecipientCount, 2)
+assert.equal(duplicateRecipientWorkflow.recipientCount, 1)
+assert.equal(duplicateRecipientWorkflow.normalizedRecipientCount, 1)
+assert.equal(duplicateRecipientWorkflow.duplicateRecipientCount, 1)
+assert.equal(duplicateRecipientWorkflow.invitedCount, 0)
+assert.equal(duplicateRecipientWorkflow.skippedCount, 1)
+assert.equal(duplicateRecipientWorkflow.results[0].email, 'member@example.test')
+assert.equal(duplicateRecipientWorkflow.results[0].outcome, 'already_member')
+
 const memberInviteResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/invites`,
@@ -673,7 +695,10 @@ assert.equal(bulkInviteWorkflow.schemaVersion, 'organization.bulk_invite.v1')
 assert.equal(bulkInviteWorkflow.requestId, 'smoke-bulk-10')
 assert.equal(bulkInviteWorkflow.actorId, 'org_smoke_admin')
 assert.equal(bulkInviteWorkflow.organizationId, organization.id)
+assert.equal(bulkInviteWorkflow.submittedRecipientCount, 10)
 assert.equal(bulkInviteWorkflow.recipientCount, 10)
+assert.equal(bulkInviteWorkflow.normalizedRecipientCount, 10)
+assert.equal(bulkInviteWorkflow.duplicateRecipientCount, 0)
 assert.equal(bulkInviteWorkflow.invitedCount, 10)
 assert.equal(bulkInviteWorkflow.skippedCount, 0)
 assert.equal(bulkInviteWorkflow.expiresAt, parseBody(bulkInviteResponse.body).invites[0].expiresAt)
@@ -1483,6 +1508,7 @@ assert.equal(readiness.readinessProof.inviteLifecycleProof.schemaVersion, 'organ
 assert.equal(readiness.readinessProof.inviteLifecycleProof.pendingInviteCount, 12)
 assert.equal(readiness.readinessProof.inviteLifecycleProof.inviteTenSupported, true)
 assert.equal(readiness.readinessProof.inviteLifecycleProof.maxRecipientsPerRequest, 25)
+assert.equal(readiness.readinessProof.inviteLifecycleProof.duplicateRecipientHandling, 'dedupe_case_insensitive')
 assert.equal(readiness.readinessProof.inviteLifecycleProof.defaultExpiryDays, 14)
 assert.equal(readiness.readinessProof.inviteLifecycleProof.acceptanceTokenField, 'invite.acceptanceToken')
 assert.equal(readiness.readinessProof.inviteLifecycleProof.acceptanceRoute, 'POST /api/organizations/invites/:inviteId/accept')
@@ -1496,6 +1522,8 @@ assert.ok(readiness.readinessProof.inviteLifecycleProof.lifecycleBlockers.includ
 assert.ok(readiness.readinessProof.inviteLifecycleProof.lifecycleBlockers.includes('org_archived'))
 assert.ok(readiness.readinessProof.inviteLifecycleProof.auditActions.includes('organization_invite_resent'))
 assert.ok(readiness.readinessProof.inviteLifecycleProof.requiredMetadataFields.includes('recipientCount'))
+assert.ok(readiness.readinessProof.inviteLifecycleProof.requiredMetadataFields.includes('submittedRecipientCount'))
+assert.ok(readiness.readinessProof.inviteLifecycleProof.requiredMetadataFields.includes('duplicateRecipientCount'))
 assert.ok(readiness.readinessProof.inviteLifecycleProof.requiredMetadataFields.includes('previousStatus'))
 assert.equal(readiness.readinessProof.inviteLifecycleProof.nonmemberEnumeration, false)
 assert.equal(readiness.readinessProof.uiProof.nonmemberEnumeration, false)
@@ -3804,6 +3832,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_
 assert.ok(serviceLogs.some(log => log.message === 'organization_alert_case_visibility_denied' && log.metadata.requestId === 'smoke-member-alert-case-denied' && log.metadata.denialReason === 'role_not_allowed' && log.metadata.allowedRoles.includes('admin')))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_cleanup_archived' && log.metadata.requestId === 'smoke-proof-cleanup'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.requestId === 'smoke-duplicate-recipient-dedupe' && log.metadata.submittedRecipientCount === 2 && log.metadata.recipientCount === 1 && log.metadata.duplicateRecipientCount === 1))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === invite.id && log.metadata.blockerCode === 'invite_already_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === pendingOpsInvite.id && log.metadata.blockerCode === 'member_revoked'))

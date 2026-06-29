@@ -823,7 +823,9 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
     logOrganizationEvent(req, 'organization_invites_created', req.params.id, userId, {
         requestId,
         inviteCount: rows.length,
+        submittedRecipientCount: input.submittedRecipientCount,
         recipientCount: results.length,
+        duplicateRecipientCount: input.duplicateRecipientCount,
         skippedCount: results.length - rows.length,
         outcomes: results.reduce<Record<string, number>>((acc, result) => {
             acc[result.outcome] = (acc[result.outcome] ?? 0) + 1
@@ -844,7 +846,10 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
             actorId: userId,
             role: input.role,
             expiresAt: input.expiresAt,
+            submittedRecipientCount: input.submittedRecipientCount,
             recipientCount: results.length,
+            normalizedRecipientCount: input.normalizedRecipientCount,
+            duplicateRecipientCount: input.duplicateRecipientCount,
             invitedCount: rows.length,
             skippedCount: results.length - rows.length,
             duplicateInviteCount: results.filter(result => result.outcome === 'updated_pending_invite').length,

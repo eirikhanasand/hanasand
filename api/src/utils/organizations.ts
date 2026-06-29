@@ -1686,6 +1686,7 @@ export type OrganizationReadinessProof = {
         pendingInviteCount: number
         inviteTenSupported: boolean
         maxRecipientsPerRequest: 25
+        duplicateRecipientHandling: 'dedupe_case_insensitive'
         defaultExpiryDays: 14
         acceptanceTokenField: 'invite.acceptanceToken'
         acceptanceRoute: 'POST /api/organizations/invites/:inviteId/accept'
@@ -1697,7 +1698,7 @@ export type OrganizationReadinessProof = {
         blockedOutcomes: Array<'already_member' | 'blocked_removed_member' | 'blocked_deactivated_user'>
         lifecycleBlockers: Array<'invite_expired' | 'member_revoked' | 'org_archived' | 'org_deleted'>
         auditActions: Array<'organization_invites_created' | 'organization_invite_accepted' | 'organization_invite_revoked' | 'organization_invite_resent'>
-        requiredMetadataFields: Array<'requestId' | 'role' | 'recipientCount' | 'invitedCount' | 'skippedCount' | 'inviteId' | 'action' | 'previousStatus' | 'newStatus'>
+        requiredMetadataFields: Array<'requestId' | 'role' | 'recipientCount' | 'submittedRecipientCount' | 'duplicateRecipientCount' | 'invitedCount' | 'skippedCount' | 'inviteId' | 'action' | 'previousStatus' | 'newStatus'>
         nonmemberEnumeration: false
     }
     uiProof: {
@@ -1769,9 +1770,10 @@ export function normalizeOrganizationInput(body: OrganizationInput | undefined) 
 export function normalizeInviteInput(body: InviteInput | undefined) {
     const fromArray = Array.isArray(body?.emails) ? body.emails : []
     const fromSingle = typeof body?.email === 'string' ? [body.email] : []
-    const emails = Array.from(new Set([...fromArray, ...fromSingle]
+    const submittedEmails = [...fromArray, ...fromSingle]
         .map(email => cleanText(email).toLowerCase())
-        .filter(Boolean)))
+        .filter(Boolean)
+    const emails = Array.from(new Set(submittedEmails))
 
     if (!emails.length) {
         throw new Error('Add at least one invite email.')
@@ -1789,7 +1791,15 @@ export function normalizeInviteInput(body: InviteInput | undefined) {
     const role = normalizeInviteRole(body?.role)
     const expiresAt = normalizeInviteExpiry(body?.expiresAt ?? body?.expires_at)
     const requestId = normalizeInviteRequestId(body?.requestId ?? body?.request_id)
-    return { emails, role, expiresAt, requestId }
+    return {
+        emails,
+        role,
+        expiresAt,
+        requestId,
+        submittedRecipientCount: submittedEmails.length,
+        normalizedRecipientCount: emails.length,
+        duplicateRecipientCount: submittedEmails.length - emails.length,
+    }
 }
 
 export function normalizeInviteActionInput(body: InviteActionInput | undefined) {
@@ -4513,6 +4523,7 @@ export function organizationReadinessProof(input: {
             pendingInviteCount: input.lifecycleReadiness.counts.pendingInviteCount,
             inviteTenSupported: input.lifecycleReadiness.counts.pendingInviteCount + input.lifecycleReadiness.counts.activeMemberCount >= 10,
             maxRecipientsPerRequest: 25,
+            duplicateRecipientHandling: 'dedupe_case_insensitive',
             defaultExpiryDays: 14,
             acceptanceTokenField: 'invite.acceptanceToken',
             acceptanceRoute: 'POST /api/organizations/invites/:inviteId/accept',
@@ -4533,6 +4544,8 @@ export function organizationReadinessProof(input: {
                 'requestId',
                 'role',
                 'recipientCount',
+                'submittedRecipientCount',
+                'duplicateRecipientCount',
                 'invitedCount',
                 'skippedCount',
                 'inviteId',
