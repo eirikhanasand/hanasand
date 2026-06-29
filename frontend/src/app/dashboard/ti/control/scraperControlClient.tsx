@@ -301,7 +301,7 @@ export default function TiScraperControlClient() {
                                         </div>
                                     </div>
 
-                                    <div className='mt-4 grid gap-3 md:grid-cols-3'>
+                                    <div className='mt-4 grid gap-3 lg:grid-cols-2 2xl:grid-cols-3'>
                                         {selected.evidence.map(item => <Info key={item.label} label={item.label} value={item.value} />)}
                                     </div>
                                 </section>
@@ -821,9 +821,9 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
 
 function Info({ label, value }: { label: string; value: string }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
+        <div className='min-w-0 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
             <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{label}</p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>{value || 'unknown'}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold leading-5 text-[#171a21] dark:text-[#d8deea]'>{value || 'unknown'}</p>
         </div>
     )
 }
