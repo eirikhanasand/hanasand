@@ -62,11 +62,11 @@ export default async function Page({
                 <section className='rounded-xl border border-[#d9e2ef] bg-white p-5 shadow-sm dark:border-[#26364f] dark:bg-[#101927]'>
                     <div className='flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
                         <div>
-                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>North star</p>
-                            <h2 className='mt-2 text-xl font-semibold text-[#171a21] dark:text-white'>What has to work for buyers</h2>
+                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>Readiness groups</p>
+                            <h2 className='mt-2 text-xl font-semibold text-[#171a21] dark:text-white'>Operational proof</h2>
                         </div>
                         <p className='max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
-                            Each direction below is derived from readiness rows. If the supporting proof is missing, it shows the owner and blocker instead of a green claim.
+                            Each group is derived from readiness rows. Missing proof shows the owner and blocker instead of a ready state.
                         </p>
                     </div>
                     <div className='mt-5 grid gap-3 lg:grid-cols-5'>
@@ -121,8 +121,8 @@ function DirectionCard({ item }: { item: ProductNorthStarDirection }) {
                     {item.blocker}
                 </p>
             )}
-            <Link href={item.href} className='mt-auto inline-flex w-fit items-center gap-1 pt-4 text-xs font-semibold text-[#3056d3] transition hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white'>
-                Open owner surface
+            <Link href={item.href} className='mt-4 inline-flex min-h-9 w-fit items-center gap-1 rounded-lg border border-[#d9e2ef] px-2.5 py-1.5 text-xs font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238] dark:hover:text-white'>
+                Open workflow
                 <ExternalLink className='h-3.5 w-3.5' />
             </Link>
         </article>
@@ -180,7 +180,7 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
             )}
             <div className='mt-4 flex items-center justify-between gap-3 border-t border-[#e4eaf2] pt-3 dark:border-[#26364f]'>
                 <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#97a6bd]'>{row.integrationProbeHint}</p>
-                <Link href={row.href} className='inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#d9e2ef] px-2.5 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
+                <Link href={row.href} className='inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg border border-[#d9e2ef] px-2.5 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
                     Open
                     <ExternalLink className='h-3.5 w-3.5' />
                 </Link>

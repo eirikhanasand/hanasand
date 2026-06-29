@@ -106,11 +106,13 @@ for (const token of [
     'data-north-star-direction-backed-rows',
     'data-north-star-direction-owner-lanes',
     '/api/product-progress',
+    'Operational proof',
+    'Open workflow',
 ]) {
     assert.ok(pageSource.includes(token), `Readiness page missing ${token}.`)
 }
 
-for (const phrase of ['powered by', 'confidence', 'signals', 'dashboard slop', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock']) {
+for (const phrase of ['powered by', 'confidence', 'signals', 'dashboard slop', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock', 'buyers', 'open owner surface']) {
     assert.equal(pageSource.toLowerCase().includes(phrase), false, `Readiness page contains banned copy: ${phrase}`)
     assert.equal(modelSource.toLowerCase().includes(phrase), false, `North-star model contains banned copy: ${phrase}`)
 }
