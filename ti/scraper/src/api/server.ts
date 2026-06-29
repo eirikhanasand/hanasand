@@ -12,6 +12,7 @@ import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./
 import { createCase, exportCaseEvidence, getCaseDetail, listCases, recordCaseCustomerNotification, updateCase } from "./caseRoutes.ts";
 import { contractIndex } from "./contractsRoute.ts";
 import { error, json, numberQuery, page, readJson } from "./http.ts";
+import { handleOrgAlertCaseActionLedgerRequest } from "./orgAlertCaseActionLedgerRoutes.ts";
 import { createOrganization, createOrganizationInvites, createWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook } from "./organizationRoutes.ts";
 import { publicChannelApplyPlan, publicChannelStatus } from "./publicChannelDispatch.ts";
 import { qualityPayload } from "./qualityRoute.ts";
@@ -20,6 +21,7 @@ import { searchResponse } from "./searchRoute.ts";
 import type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 import { metrics, productSlo } from "./sloRoute.ts";
 import { createSource, sourceApplyPlan, updateSource } from "./sourceRoutes.ts";
+import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 export type { ApiServerHandle, ApiServerOptions } from "./serverTypes.ts";
 export function startApiServer(options: ApiServerOptions): ApiServerHandle {
   const server = Bun.serve({ port: options.port ?? 8097, fetch: (request) => handleApiRequest(request, options) });
@@ -28,6 +30,11 @@ export function startApiServer(options: ApiServerOptions): ApiServerHandle {
 export async function handleApiRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const url = new URL(request.url);
   try {
+    const orgAlertCaseActionLedgerResponse = await handleOrgAlertCaseActionLedgerRequest(request, {
+      repository: orgAlertCaseActionLedgerRepository(options)
+    });
+    if (orgAlertCaseActionLedgerResponse) return orgAlertCaseActionLedgerResponse;
+
     if (url.pathname === "/v1/health") return json({ ok: true, service: "ti-scraper", generatedAt: nowIso() });
     if (url.pathname === "/v1/contracts") return json(contractIndex());
     if (url.pathname === "/v1/metrics") return json(metrics(options));
@@ -194,6 +201,14 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
   } catch (caught) {
     return error("internal_error", caught instanceof Error ? caught.message : String(caught), 500);
   }
+}
+
+function orgAlertCaseActionLedgerRepository(options: ApiServerOptions): InMemoryOrgAlertCaseActionLedgerRepository {
+  const existing = (options as any).orgAlertCaseActionLedgerRepository;
+  if (existing) return existing as InMemoryOrgAlertCaseActionLedgerRepository;
+  const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+  (options as any).orgAlertCaseActionLedgerRepository = repository;
+  return repository;
 }
 
 function parseWatchlistParam(value: string): string[] {

@@ -3,6 +3,8 @@ import {
   handleOrgAlertCaseActionLedgerRequest,
   ORG_ALERT_CASE_ACTION_LEDGER_ROUTE
 } from "../api/orgAlertCaseActionLedgerRoutes.ts";
+import { handleApiRequest } from "../api/server.ts";
+import { FocusedFrontier } from "../frontier/frontier.ts";
 import {
   buildOrgAlertCaseActionPacket,
   buildOrgAlertCaseActionReceipt,
@@ -12,6 +14,7 @@ import {
   buildOrgAlertWorkflowBridgeReport
 } from "../product/orgAlertWorkflowBridge.ts";
 import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import fixture from "./fixtures/org-alert-workflow-bridge-happy.json";
 
 describe("org alert case action ledger route contract", () => {
@@ -135,6 +138,36 @@ describe("org alert case action ledger route contract", () => {
     const response = await route(new Request(routeUrl(), { method: "DELETE" }), repository);
     expect(response.status).toBe(405);
     expect(await response.json()).toMatchObject({ error: { code: "method_not_allowed" } });
+  });
+
+  test("is reachable through the scraper API server with a durable per-options repository", async () => {
+    const options = {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    };
+    const receipt = readyActionReceipt();
+    const created = await handleApiRequest(new Request(routeUrl(), {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        receipt,
+        recordedAt: "2026-06-29T15:05:00.000Z"
+      })
+    }), options);
+    const listed = await handleApiRequest(new Request(routeUrl(`?tenantId=tenant_acme&organizationId=org_acme&receiptId=${receipt.id}`)), options);
+    const listedBody = await listed.json() as any;
+
+    expect(created.status).toBe(201);
+    expect(listed.status).toBe(200);
+    expect(listedBody).toMatchObject({
+      ok: true,
+      records: [expect.objectContaining({
+        receiptId: receipt.id,
+        alertIds: ["alert_acme_lumma"],
+        auditEventId: expect.stringMatching(/^org_alert_case_action_audit_/)
+      })]
+    });
   });
 });
 
