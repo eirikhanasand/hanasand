@@ -57,6 +57,36 @@ const partialPayload = buildProductProgressPayload({
                 activeSourceRows: 12,
                 collectionReadyRows: 12,
             },
+            sourceOperationsReadiness: {
+                schemaVersion: 'dwm.source_operations_readiness.v1',
+                nextOperatorActions: [{ action: 'inspect_source_family', reason: 'verify coverage before customer alerting' }],
+            },
+            sourceCustomerConfig: {
+                schemaVersion: 'dwm.source_pack_customer_config.v1',
+                sourceConfigs: [{ redactedIdentity: { rawStored: false } }],
+                safeOutput: {
+                    rawTargetsExposed: false,
+                    privateTelegramContentExposed: false,
+                    liveNetworkScrapeStarted: false,
+                },
+            },
+            sourceReadinessArtifact: {
+                schemaVersion: 'dwm.source_readiness_artifact.v1',
+                readinessLedgerRows: [{ state: 'ready', safeOutput: { liveNetworkScrapeStarted: false } }],
+                actorCoverage: [{ watchlistTerm: 'LockBit', actorSections: { overview: { covered: true } } }],
+                sharedWatchlistAlertability: {
+                    activeSourceFamilies: ['telegram', 'darkweb_onion'],
+                    matchableFields: ['actor', 'company', 'domain'],
+                    sourceTrust: { averageScore: 0.91 },
+                },
+                safeOutput: { liveNetworkScrapeStarted: false },
+            },
+            proxyVerification: {
+                schemaVersion: 'dwm.source_pack_worker_proxy_verification.v1',
+                state: 'ready',
+                checks: [{ id: 'safe_output_no_live_network', status: 'pass' }],
+            },
+            sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
             lastRun: { status: 'completed', completedAt: generatedAt },
         },
     },

@@ -58,6 +58,36 @@ const sourceProxy = {
             activeSourceRows: 349,
             collectionReadyRows: 349,
         },
+        sourceOperationsReadiness: {
+            schemaVersion: 'dwm.source_operations_readiness.v1',
+            nextOperatorActions: [{ action: 'inspect_source_family', reason: 'verify freshness before customer alerting' }],
+        },
+        sourceCustomerConfig: {
+            schemaVersion: 'dwm.source_pack_customer_config.v1',
+            sourceConfigs: [{ redactedIdentity: { rawStored: false } }],
+            safeOutput: {
+                rawTargetsExposed: false,
+                privateTelegramContentExposed: false,
+                liveNetworkScrapeStarted: false,
+            },
+        },
+        sourceReadinessArtifact: {
+            schemaVersion: 'dwm.source_readiness_artifact.v1',
+            readinessLedgerRows: [{ state: 'ready', safeOutput: { liveNetworkScrapeStarted: false } }],
+            actorCoverage: [{ watchlistTerm: 'LockBit', actorSections: { overview: { covered: true } } }],
+            sharedWatchlistAlertability: {
+                activeSourceFamilies: ['telegram', 'darkweb_onion'],
+                matchableFields: ['actor', 'company', 'domain'],
+                sourceTrust: { averageScore: 0.91 },
+            },
+            safeOutput: { liveNetworkScrapeStarted: false },
+        },
+        proxyVerification: {
+            schemaVersion: 'dwm.source_pack_worker_proxy_verification.v1',
+            state: 'ready',
+            checks: [{ id: 'safe_output_no_live_network', status: 'pass' }],
+        },
+        sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
         lastRun: { status: 'completed', completedAt: generatedAt },
     },
 }
@@ -210,6 +240,12 @@ assertDependencyProofFields(partialExternal.sourceGrowth)
 assert.equal(partialExternal.sourceGrowth?.ownerLane, 'source')
 assert.equal(partialExternal.sourceGrowth?.expectedDashboardRowId, 'source_inventory_probe')
 assert.equal(partialExternal.sourceGrowth?.staleAfterSeconds, 7200)
+assert.equal(partialExternal.sourceGrowth?.status, 'ready')
+assert.equal(partialExternal.sourceGrowth?.sourceOperationsReady, true)
+assert.equal(partialExternal.sourceGrowth?.sourceCustomerConfigReady, true)
+assert.equal(partialExternal.sourceGrowth?.sourceReadinessArtifactReady, true)
+assert.equal(partialExternal.sourceGrowth?.sourceProxyVerificationReady, true)
+assert.equal(partialExternal.sourceGrowth?.backendProofContractVersion?.includes('dwm.source_readiness_artifact.v1'), true)
 const partialContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },

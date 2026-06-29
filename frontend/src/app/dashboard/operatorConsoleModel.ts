@@ -212,6 +212,11 @@ export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     proxyExposed?: boolean
     inventoryReachable?: boolean
     sourcePacksReachable?: boolean
+    sourceOperationsReady?: boolean
+    sourceCustomerConfigReady?: boolean
+    sourceReadinessArtifactReady?: boolean
+    sourceProxyVerificationReady?: boolean
+    sourceFamilyCount?: number
     registeredTotal?: number
     activeSourceCount?: number
     catalogCandidates?: number
@@ -279,8 +284,45 @@ export type DashboardSourceProofProxyPayload = {
             candidateCount?: number
         }
         workerReadiness?: SourcePackWorkerReadinessSnapshot
-        readiness?: SourcePackWorkerReadinessSnapshot
+        readiness?: SourcePackWorkerReadinessSnapshot & { state?: string, blockers?: string[] }
         lastRun?: { completedAt?: string, updatedAt?: string, startedAt?: string, status?: string }
+        sourceOperationsReadiness?: {
+            schemaVersion?: string
+            nextOperatorActions?: unknown[]
+            typedBlockers?: Array<{ code?: string, severity?: string }>
+        }
+        sourceCustomerConfig?: {
+            schemaVersion?: string
+            sourceConfigs?: Array<{ redactedIdentity?: { rawStored?: boolean } }>
+            safeOutput?: {
+                rawTargetsExposed?: boolean
+                privateTelegramContentExposed?: boolean
+                liveNetworkScrapeStarted?: boolean
+            }
+        }
+        sourceReadinessArtifact?: {
+            schemaVersion?: string
+            readinessLedgerRows?: unknown[]
+            actorCoverage?: unknown[]
+            sharedWatchlistAlertability?: {
+                activeSourceFamilies?: unknown[]
+                matchableFields?: unknown[]
+                sourceTrust?: unknown
+            }
+            safeOutput?: {
+                liveNetworkScrapeStarted?: boolean
+            }
+        }
+        proxyVerification?: {
+            schemaVersion?: string
+            state?: string
+            blockers?: string[]
+            checks?: Array<{ id?: string, status?: string }>
+            requiredJsonPaths?: string[]
+            worker3JsonAssertions?: string[]
+        }
+        sourceFamilyCounts?: Record<string, number>
+        parserSourceFamilyCounts?: Record<string, number>
     }
 }
 
@@ -745,7 +787,23 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
     const worker = input.sourcePacks?.workerReadiness || input.sourcePacks?.readiness
     const workerLastRunAt = input.sourcePacks?.lastRun?.completedAt || input.sourcePacks?.lastRun?.updatedAt || input.sourcePacks?.lastRun?.startedAt
     const workerFresh = workerLastRunAt ? minutesBetween(workerLastRunAt, options.checkedAt) <= staleAfterMinutes : false
-    const workerReady = Boolean(worker && workerFresh && (worker.collectionReadyRows || worker.activeSourceRows))
+    const sourceOperationsReady = input.sourcePacks?.sourceOperationsReadiness?.schemaVersion === 'dwm.source_operations_readiness.v1'
+        && Array.isArray(input.sourcePacks.sourceOperationsReadiness.nextOperatorActions)
+    const sourceCustomerConfigReady = input.sourcePacks?.sourceCustomerConfig?.schemaVersion === 'dwm.source_pack_customer_config.v1'
+        && input.sourcePacks.sourceCustomerConfig.safeOutput?.rawTargetsExposed === false
+        && input.sourcePacks.sourceCustomerConfig.safeOutput?.privateTelegramContentExposed === false
+        && input.sourcePacks.sourceCustomerConfig.safeOutput?.liveNetworkScrapeStarted === false
+        && (input.sourcePacks.sourceCustomerConfig.sourceConfigs || []).every(config => config.redactedIdentity?.rawStored === false)
+    const sourceReadinessArtifactReady = input.sourcePacks?.sourceReadinessArtifact?.schemaVersion === 'dwm.source_readiness_artifact.v1'
+        && Array.isArray(input.sourcePacks.sourceReadinessArtifact.readinessLedgerRows)
+        && input.sourcePacks.sourceReadinessArtifact.safeOutput?.liveNetworkScrapeStarted === false
+        && Boolean(input.sourcePacks.sourceReadinessArtifact.sharedWatchlistAlertability?.sourceTrust)
+    const sourceProxyVerificationReady = input.sourcePacks?.proxyVerification?.schemaVersion === 'dwm.source_pack_worker_proxy_verification.v1'
+        && input.sourcePacks.proxyVerification.state === 'ready'
+        && (input.sourcePacks.proxyVerification.checks || []).some(check => check.id === 'safe_output_no_live_network' && check.status === 'pass')
+    const sourceFamilyCount = Object.keys(input.sourcePacks?.sourceFamilyCounts || {}).length
+    const workerRowsReady = Boolean(worker && workerFresh && (worker.collectionReadyRows || worker.activeSourceRows))
+    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && sourceFamilyCount > 0)
     const blockers = [
         inventoryReachable ? '' : `Source inventory endpoint is not reachable through ${options.route}.`,
         sourcePacksReachable ? '' : `Source-pack endpoint is not reachable through ${options.route}.`,
@@ -753,6 +811,13 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         worker && !workerLastRunAt ? 'Source-pack worker last run timestamp is missing.' : '',
         worker && workerLastRunAt && !workerFresh ? `Source-pack worker status is stale; last run ${workerLastRunAt}.` : '',
         worker && workerFresh && !(worker.collectionReadyRows || worker.activeSourceRows) ? 'Source-pack worker has no collection-ready source rows.' : '',
+        sourceOperationsReady ? '' : 'Source operations readiness proof is missing or incomplete.',
+        sourceCustomerConfigReady ? '' : 'Source customer configuration proof is missing, incomplete, or not redacted.',
+        sourceReadinessArtifactReady ? '' : 'Source readiness artifact is missing ledger, trust, or safe-output proof.',
+        sourceProxyVerificationReady ? '' : 'Source proxy verification proof is missing or not ready.',
+        sourceFamilyCount > 0 ? '' : 'Source family counts were not returned by the source-pack proof.',
+        ...(Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
+        ...(Array.isArray(input.sourcePacks?.proxyVerification?.blockers) ? input.sourcePacks.proxyVerification.blockers.filter(Boolean) : []),
     ].filter(Boolean)
     const status: ReadinessStatus = inventoryReachable && sourcePacksReachable && workerReady ? 'ready' : inventoryReachable || sourcePacksReachable ? 'needs_action' : 'blocked'
     const counts = input.sourceInventory?.counts
@@ -763,6 +828,11 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         proxyExposed: inventoryReachable && sourcePacksReachable,
         inventoryReachable,
         sourcePacksReachable,
+        sourceOperationsReady,
+        sourceCustomerConfigReady,
+        sourceReadinessArtifactReady,
+        sourceProxyVerificationReady,
+        sourceFamilyCount,
         registeredTotal: counts?.registeredTotal,
         activeSourceCount: counts?.registeredActiveOrCanary,
         catalogCandidates: counts?.catalogTotalCandidates ?? input.sourcePacks?.counts?.candidateCount,
@@ -787,8 +857,15 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         staleAfterSeconds: staleAfterMinutes * 60,
         proofTimestamp: workerLastRunAt || input.sourceInventory?.generatedAt || input.generatedAt || options.checkedAt,
         expectedDashboardRowId: 'source_inventory_probe',
-        integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
-        backendProofContractVersion: input.sourceInventory?.schemaVersion || 'dwm.source_inventory.v1',
+        integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, workerReadiness, sourceOperationsReadiness, sourceCustomerConfig, sourceReadinessArtifact, proxyVerification, and sourceFamilyCounts.',
+        backendProofContractVersion: [
+            input.sourceInventory?.schemaVersion || 'dwm.source_inventory.v1',
+            input.sourcePacks?.schemaVersion || 'dwm.source_packs.v1',
+            input.sourcePacks?.sourceOperationsReadiness?.schemaVersion || 'dwm.source_operations_readiness.v1',
+            input.sourcePacks?.sourceCustomerConfig?.schemaVersion || 'dwm.source_pack_customer_config.v1',
+            input.sourcePacks?.sourceReadinessArtifact?.schemaVersion || 'dwm.source_readiness_artifact.v1',
+            input.sourcePacks?.proxyVerification?.schemaVersion || 'dwm.source_pack_worker_proxy_verification.v1',
+        ].join(' + '),
     }
 }
 
@@ -1662,6 +1739,7 @@ function sourceGrowthDetail(input: SourceGrowthReadiness) {
     const counts = [
         typeof input.activeSourceCount === 'number' && typeof input.registeredTotal === 'number' ? `${input.activeSourceCount}/${input.registeredTotal} active sources` : '',
         typeof input.catalogCandidates === 'number' ? `${input.catalogCandidates} catalog candidates` : '',
+        typeof input.sourceFamilyCount === 'number' ? `${input.sourceFamilyCount} source families` : '',
         typeof input.netNewCandidates === 'number' ? `${input.netNewCandidates} net-new` : '',
         typeof input.reviewQueueCount === 'number' ? `${input.reviewQueueCount} queued for review` : '',
         typeof input.collectionReadyRows === 'number' ? `${input.collectionReadyRows} worker-ready rows` : '',
