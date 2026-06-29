@@ -3055,6 +3055,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sections: actorReadiness.actorSections,
       provenance: actorReadiness.provenance,
       evidenceReadiness: actorReadiness.evidenceReadiness,
+      parserHealthReadiness: actorReadiness.parserHealthReadiness,
       freshness: actorReadiness.freshness,
       sourceCoverage: actorReadiness.sourceCoverage,
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
@@ -3070,6 +3071,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       query,
       activeSourceFamilies: actorReadiness.alertability.activeSourceFamilies,
       evidenceReadiness: actorReadiness.evidenceReadiness,
+      parserHealthReadiness: actorReadiness.parserHealthReadiness,
       sourceCoverage: actorReadiness.sourceCoverage,
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
       captureReadiness: actorReadiness.captureReadiness,
@@ -3092,6 +3094,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.safeOutput.liveNetworkScrapeStarted == false",
       ".actorReadiness.freshness.captureFreshness.state | IN(\"fresh\",\"needs_capture\",\"stale\")",
       ".actorReadiness.evidenceReadiness.schemaVersion == \"dwm.actor_evidence_readiness.v1\"",
+      ".actorReadiness.parserHealthReadiness.schemaVersion == \"dwm.actor_parser_health_readiness.v1\"",
       ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
       ".actorReadiness.sourcePackActionReadiness.schemaVersion == \"dwm.actor_source_pack_action_readiness.v1\"",
       ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
@@ -3195,6 +3198,13 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     candidateGaps,
     freshness
   });
+  const parserHealthReadiness = sourceActorParserHealthReadiness({
+    query,
+    sourceReadinessLedgerRows,
+    sourceCoverage,
+    sourcePackActionReadiness,
+    freshness
+  });
   const captureReadiness = sourceActorCaptureReadiness({
     query,
     sourceReadinessLedgerRows,
@@ -3235,6 +3245,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     missingSections,
     provenance,
     evidenceReadiness,
+    parserHealthReadiness,
     freshness,
     candidateGaps,
     retryBlockers,
@@ -3333,6 +3344,89 @@ function sourceActorDownstreamReadinessRows(input: {
       }
     };
   });
+}
+
+function sourceActorParserHealthReadiness(input: {
+  query: string;
+  sourceReadinessLedgerRows: Array<Record<string, any>>;
+  sourceCoverage: Array<Record<string, any>>;
+  sourcePackActionReadiness: Record<string, any>;
+  freshness: Record<string, any>;
+}) {
+  const ledgerByFamily = new Map(input.sourceReadinessLedgerRows.map((row) => [String(row.family), row]));
+  const retryActionByFamily = new Map((input.sourcePackActionReadiness.retryActions ?? []).map((action: any) => [String(action.family), action]));
+  const activationActionByFamily = new Map((input.sourcePackActionReadiness.activationActions ?? []).map((action: any) => [String(action.family), action]));
+  const rows = input.sourceCoverage.map((coverage) => {
+    const family = String(coverage.family);
+    const ledger = ledgerByFamily.get(family);
+    const statuses = uniqueSourceReadinessStrings([
+      ...(coverage.parserStatuses ?? []),
+      ...(ledger?.parserStatuses ?? [])
+    ]);
+    const retryBackoff = ledger?.retryBackoff ?? coverage.retryBackoff;
+    const parserState = statuses.some((status) => /failed|retry|blocked/i.test(String(status))) || retryBackoff?.retryable === true
+      ? "retry_required"
+      : statuses.length > 0
+        ? "ready"
+        : Number(coverage.candidateCount ?? 0) > 0
+          ? "not_scheduled"
+          : "missing_source";
+    return {
+      schemaVersion: "dwm.actor_parser_health_readiness_row.v1",
+      proofId: stableId("dwm_actor_parser_health_readiness_row", `${input.query}:${family}:${parserState}:${statuses.join(",")}`),
+      query: input.query,
+      family,
+      parserState,
+      parserStatuses: statuses,
+      sourceIds: ledger?.sourceIds ?? coverage.sourceIds ?? [],
+      candidateIds: ledger?.candidateIds ?? coverage.candidateIds ?? [],
+      lastCaptureAt: ledger?.lastCaptureAt ?? coverage.lastCaptureAt,
+      lastEnrichmentAt: ledger?.lastEnrichmentAt ?? coverage.lastEnrichmentAt,
+      checkedAt: input.freshness.checkedAt,
+      retryBackoff,
+      actionability: {
+        retryAvailable: retryActionByFamily.has(family),
+        activationAvailable: activationActionByFamily.has(family),
+        nextActions: [
+          ...(retryActionByFamily.has(family) ? ["retry"] : []),
+          ...(activationActionByFamily.has(family) ? ["activate"] : [])
+        ],
+        retryAction: retryActionByFamily.get(family),
+        activationAction: activationActionByFamily.get(family),
+        liveNetworkFetchRequired: false
+      },
+      blockers: [
+        ...(parserState === "missing_source" ? [{ code: "missing_source_family", severity: "warning", family, retryable: true }] : []),
+        ...(parserState === "not_scheduled" ? [{ code: "parser_not_scheduled", severity: "warning", family, retryable: true }] : []),
+        ...(parserState === "retry_required" ? [{ code: "parser_retry_required", severity: "warning", family, retryable: true }] : [])
+      ],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "dwm.actor_parser_health_readiness.v1",
+    proofId: stableId("dwm_actor_parser_health_readiness", `${input.query}:${rows.map((row) => `${row.family}:${row.parserState}`).join(",")}`),
+    query: input.query,
+    parserReady: rows.some((row) => row.parserState === "ready") && rows.every((row) => row.parserState !== "retry_required"),
+    rows,
+    summary: {
+      readyFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.parserState === "ready").map((row) => row.family)),
+      retryFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.parserState === "retry_required").map((row) => row.family)),
+      missingFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.parserState === "missing_source").map((row) => row.family)),
+      notScheduledFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.parserState === "not_scheduled").map((row) => row.family))
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
 }
 
 function sourceActorEvidenceReadiness(input: {
