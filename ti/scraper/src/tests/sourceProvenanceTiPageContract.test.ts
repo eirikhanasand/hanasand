@@ -11,6 +11,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
@@ -25,6 +26,7 @@ import {
   buildSourceProvenanceSourcePackActivationReadiness,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
+  buildSourceProvenanceScraperEnrichmentLifecycle,
   buildSourceProvenanceWatchlistAlertBridgePacket,
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
@@ -1612,6 +1614,184 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(readiness)).not.toContain("rawText");
     expect(JSON.stringify(readiness)).not.toContain("password");
+  });
+
+  test("codifies scraper enrichment lifecycle from source intake through actor case handoff", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      }), sourceRow({
+        actor: "APT28",
+        sourceId: "src_public_advisory_apt28",
+        sourceFamily: "public_advisory",
+        captureId: "cap_public_advisory_apt28",
+        contentHash: "hash_public_advisory_apt28",
+        provenance: "Public advisory fixture links APT28 to phishing infrastructure.",
+        relationship: "targeting",
+        confidence: 0.82
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({ profile });
+    const campaignCandidate = plan.candidates.find((candidate) => candidate.field === "campaigns");
+    const sectorCandidate = plan.candidates.find((candidate) => candidate.field === "sectors");
+    expect(campaignCandidate).toBeDefined();
+    expect(sectorCandidate).toBeDefined();
+    const workflow = buildSourceProvenanceActorProfileSourceUpdateWorkflow({
+      plan,
+      health: [{
+        candidateId: campaignCandidate!.candidateId,
+        parserStatus: "retry_scheduled",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        failureReason: "fixture parser found no campaign timestamp"
+      }, {
+        candidateId: sectorCandidate!.candidateId,
+        parserStatus: "ready"
+      }]
+    });
+    const request = buildSourceProvenanceSourcePackIntakeRequest({ workflow });
+    const receipt = buildSourceProvenanceSourcePackIntakeReceipt({ request });
+    const readiness = buildSourceProvenanceSourcePackActivationReadiness({
+      receipt,
+      generatedAt: "2026-06-29T12:25:00.000Z"
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract, includeSourceFamilies: false, includeRelationships: false });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({
+      bridge,
+      watchlistId: "watch_public_ti_apt28",
+      requestId: "req_scraper_lifecycle"
+    });
+    const rebuildRequest = buildSourceProvenanceAlertRebuildRequest({ candidate, sourceContractId: contract.id });
+    const rebuildReceipt = buildSourceProvenanceAlertRebuildReceipt({
+      request: rebuildRequest,
+      response: {
+        rebuiltAt: "2026-06-29T12:30:00.000Z",
+        savedAlertCount: 1,
+        dryRun: true,
+        alerts: [{
+          id: "alert_apt28_lifecycle",
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          workflowContext: {
+            watchlistItemIds: [candidate.activeTerms[0].watchlistItemId],
+            alertGeneratorKeys: [candidate.activeTerms[0].alertGeneratorKey],
+            sourceBridgeId: bridge.id,
+            caseId: "case_apt28_lifecycle",
+            casePath: "/dashboard/dwm/cases/case_apt28_lifecycle"
+          }
+        }]
+      }
+    });
+    const enrichment = buildSourceProvenanceAlertEnrichmentPacket({ contract, receipt: rebuildReceipt });
+    const handoff = buildSourceProvenanceActorEnrichmentCaseHandoff({ enrichment });
+    const lifecycle = buildSourceProvenanceScraperEnrichmentLifecycle({
+      activationReadiness: readiness,
+      caseHandoff: handoff,
+      generatedAt: "2026-06-29T12:35:00.000Z"
+    });
+
+    expect(lifecycle).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      sourcePackActivationReadinessId: readiness.id,
+      actorCaseHandoffId: handoff.id,
+      sourceHealth: readiness.sourceHealth,
+      enrichmentFreshness: {
+        state: "fresh",
+        newestEvidenceAt: "2026-06-29T10:15:00.000Z",
+        readyCaseRows: 1,
+        blockedCaseRows: 0
+      },
+      docsAsContract: {
+        noLiveNetworkByDefault: true,
+        fixtureBacked: true,
+        liveProbeOptIn: true
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(lifecycle.stages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        stage: "candidate_intake",
+        status: "complete",
+        route: expect.objectContaining({
+          path: "/v1/dwm/source-requests",
+          liveNetworkFetch: false,
+          body: expect.objectContaining({ action: "source_pack_intake", dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        stage: "policy_validation",
+        status: "blocked",
+        nextAction: "request_policy_approval"
+      }),
+      expect.objectContaining({
+        stage: "activation_test",
+        status: "ready",
+        route: expect.objectContaining({
+          liveNetworkFetch: false,
+          body: expect.objectContaining({ action: "test", dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        stage: "retry_backoff",
+        status: "retry_scheduled",
+        route: expect.objectContaining({
+          body: expect.objectContaining({ action: "retry", dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        stage: "case_handoff",
+        status: "complete",
+        evidenceRefs: expect.objectContaining({
+          alertIds: ["alert_apt28_lifecycle"],
+          captureIds: expect.arrayContaining(["cap_actor_page_apt28", "cap_public_advisory_apt28"])
+        })
+      })
+    ]));
+    expect(lifecycle.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "policy_approval_required",
+        ownerLane: "policy",
+        candidateId: expect.stringMatching(/^ti_source_provenance_actor_profile_gap_candidate_/)
+      }),
+      expect.objectContaining({
+        code: "parser_retry_scheduled",
+        ownerLane: "parser",
+        candidateId: campaignCandidate!.candidateId,
+        retryAfter: "2026-06-29T12:37:00.000Z"
+      })
+    ]));
+    expect(lifecycle.payloadShape).toEqual(expect.arrayContaining([
+      "stages[].route",
+      "sourceHealth",
+      "enrichmentFreshness",
+      "blockers[]"
+    ]));
+    expect(JSON.stringify(lifecycle)).not.toContain("rawText");
+    expect(JSON.stringify(lifecycle)).not.toContain("password");
   });
 
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {

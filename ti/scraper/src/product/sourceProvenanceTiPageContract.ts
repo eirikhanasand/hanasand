@@ -15,6 +15,7 @@ export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VE
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION = "ti.source_provenance_source_pack_activation_readiness.v1" as const;
+export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -919,6 +920,90 @@ export type TiSourceProvenanceSourcePackActivationAction = {
   };
 };
 
+export type TiSourceProvenanceScraperEnrichmentLifecycle = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute?: string;
+  sourcePackActivationReadinessId: string;
+  actorCaseHandoffId?: string;
+  stages: TiSourceProvenanceScraperEnrichmentLifecycleStage[];
+  sourceHealth: TiSourceProvenanceSourcePackActivationReadiness["sourceHealth"];
+  enrichmentFreshness: {
+    state: "fresh" | "missing";
+    newestEvidenceAt?: string;
+    readyCaseRows: number;
+    blockedCaseRows: number;
+  };
+  docsAsContract: {
+    noLiveNetworkByDefault: true;
+    fixtureBacked: true;
+    liveProbeOptIn: true;
+    lifecycle: Array<
+      | "candidate_intake"
+      | "policy_validation"
+      | "activation_test"
+      | "fetch_parse"
+      | "retry_backoff"
+      | "source_health"
+      | "provenance"
+      | "enrichment_freshness"
+      | "case_handoff"
+    >;
+  };
+  blockers: TiSourceProvenanceScraperEnrichmentLifecycleBlocker[];
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceScraperEnrichmentLifecycleStage = {
+  stage:
+    | "candidate_intake"
+    | "policy_validation"
+    | "activation_test"
+    | "fetch_parse"
+    | "retry_backoff"
+    | "source_health"
+    | "provenance"
+    | "enrichment_freshness"
+    | "case_handoff";
+  status: "complete" | "ready" | "blocked" | "retry_scheduled";
+  ownerLane: "source" | "parser" | "publicTI" | "alert" | "case" | "policy";
+  evidenceRefs: {
+    candidateIds: string[];
+    sourceIds: string[];
+    captureIds: string[];
+    alertIds: string[];
+  };
+  nextAction: "review_candidates" | "request_policy_approval" | "test_source" | "retry_parser" | "inspect_source_health" | "repair_provenance" | "open_case_handoff" | "wait_for_case_handoff";
+  route?: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+};
+
+export type TiSourceProvenanceScraperEnrichmentLifecycleBlocker = {
+  code: "no_testable_source" | "policy_approval_required" | "parser_retry_scheduled" | "case_handoff_blocked";
+  ownerLane: "source" | "parser" | "case" | "policy";
+  path: string;
+  message: string;
+  candidateId?: string;
+  alertId?: string;
+  retryAfter?: string;
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -1800,6 +1885,117 @@ export function buildSourceProvenanceSourcePackActivationReadiness(input: {
   };
 }
 
+export function buildSourceProvenanceScraperEnrichmentLifecycle(input: {
+  activationReadiness: TiSourceProvenanceSourcePackActivationReadiness;
+  caseHandoff?: TiSourceProvenanceActorEnrichmentCaseHandoff;
+  generatedAt?: string;
+}): TiSourceProvenanceScraperEnrichmentLifecycle {
+  const generatedAt = input.generatedAt ?? input.activationReadiness.generatedAt;
+  const actions = input.activationReadiness.actions;
+  const testActions = actions.filter((action) => action.action === "test_source");
+  const retryActions = actions.filter((action) => action.action === "retry_parser");
+  const approvalActions = actions.filter((action) => action.action === "request_policy_approval");
+  const caseRows = input.caseHandoff?.rows ?? [];
+  const readyCaseRows = caseRows.filter((row) => row.ready);
+  const blockedCaseRows = caseRows.filter((row) => !row.ready);
+  const blockers = uniqueLifecycleBlockers([
+    ...(testActions.length === 0
+      ? [{
+          code: "no_testable_source" as const,
+          ownerLane: "source" as const,
+          path: "activationReadiness.actions",
+          message: "No source candidate is ready for a dry-run parser/source health test."
+        }]
+      : []),
+    ...approvalActions.map((action) => ({
+      code: "policy_approval_required" as const,
+      ownerLane: "policy" as const,
+      path: "activationReadiness.actions[].route.body.action",
+      message: "Restricted metadata candidate requires policy approval before activation.",
+      candidateId: action.candidateId
+    })),
+    ...retryActions.map((action) => ({
+      code: "parser_retry_scheduled" as const,
+      ownerLane: "parser" as const,
+      path: "activationReadiness.actions[].nextRetryAt",
+      message: "Parser test is retryable and must wait for the next retry window.",
+      candidateId: action.candidateId,
+      retryAfter: action.nextRetryAt
+    })),
+    ...((input.caseHandoff && !input.caseHandoff.ok)
+      ? input.caseHandoff.blockers.map((blocker) => ({
+          code: "case_handoff_blocked" as const,
+          ownerLane: "case" as const,
+          path: blocker.path,
+          message: blocker.message,
+          alertId: blocker.alertId
+        }))
+      : [])
+  ]);
+  const newestEvidenceAt = newestTimestamp(caseRows.map((row) => row.freshness.newestEvidenceAt));
+  const freshnessState = newestEvidenceAt ? "fresh" : "missing";
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_scraper_enrichment_lifecycle", `${input.activationReadiness.id}:${input.caseHandoff?.id ?? ""}:${generatedAt}`),
+    generatedAt,
+    ok: blockers.length === 0,
+    tenantId: input.activationReadiness.tenantId,
+    organizationId: input.activationReadiness.organizationId,
+    actor: input.activationReadiness.actor,
+    publicTiRoute: input.caseHandoff?.publicTiRoute,
+    sourcePackActivationReadinessId: input.activationReadiness.id,
+    actorCaseHandoffId: input.caseHandoff?.id,
+    stages: sourceProvenanceLifecycleStages({
+      activationReadiness: input.activationReadiness,
+      caseHandoff: input.caseHandoff,
+      testActions,
+      retryActions,
+      approvalActions,
+      blockedCaseRows,
+      freshnessState
+    }),
+    sourceHealth: input.activationReadiness.sourceHealth,
+    enrichmentFreshness: {
+      state: freshnessState,
+      newestEvidenceAt,
+      readyCaseRows: readyCaseRows.length,
+      blockedCaseRows: blockedCaseRows.length
+    },
+    docsAsContract: {
+      noLiveNetworkByDefault: true,
+      fixtureBacked: true,
+      liveProbeOptIn: true,
+      lifecycle: [
+        "candidate_intake",
+        "policy_validation",
+        "activation_test",
+        "fetch_parse",
+        "retry_backoff",
+        "source_health",
+        "provenance",
+        "enrichment_freshness",
+        "case_handoff"
+      ]
+    },
+    blockers,
+    payloadShape: [
+      "stages[].stage",
+      "stages[].status",
+      "stages[].route",
+      "sourceHealth",
+      "enrichmentFreshness",
+      "blockers[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -2108,6 +2304,134 @@ function actorEnrichmentCaseHandoffBlocker(
   alertId?: string
 ): TiSourceProvenanceActorEnrichmentCaseHandoffBlocker {
   return { code, ownerLane, path, message, alertId };
+}
+
+function sourceProvenanceLifecycleStages(input: {
+  activationReadiness: TiSourceProvenanceSourcePackActivationReadiness;
+  caseHandoff?: TiSourceProvenanceActorEnrichmentCaseHandoff;
+  testActions: TiSourceProvenanceSourcePackActivationAction[];
+  retryActions: TiSourceProvenanceSourcePackActivationAction[];
+  approvalActions: TiSourceProvenanceSourcePackActivationAction[];
+  blockedCaseRows: TiSourceProvenanceActorEnrichmentCaseHandoffRow[];
+  freshnessState: "fresh" | "missing";
+}): TiSourceProvenanceScraperEnrichmentLifecycleStage[] {
+  const actions = input.activationReadiness.actions;
+  const allCandidateIds = uniqueStrings(actions.map((action) => action.candidateId));
+  const allSourceIds = uniqueStrings(actions.map((action) => action.sourceId).filter(Boolean).map(String));
+  const caseCaptureIds = uniqueStrings((input.caseHandoff?.rows ?? []).flatMap((row) => row.captureIds));
+  const caseAlertIds = uniqueStrings((input.caseHandoff?.rows ?? []).map((row) => row.alertId));
+  const firstTestAction = input.testActions[0];
+  const firstRetryAction = input.retryActions[0];
+  const firstApprovalAction = input.approvalActions[0];
+
+  return [
+    {
+      stage: "candidate_intake",
+      status: actions.length > 0 ? "complete" : "blocked",
+      ownerLane: "source",
+      evidenceRefs: lifecycleEvidenceRefs(allCandidateIds, allSourceIds, [], []),
+      nextAction: "review_candidates",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: { action: "source_pack_intake", dryRun: true },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    },
+    {
+      stage: "policy_validation",
+      status: input.approvalActions.length > 0 ? "blocked" : "complete",
+      ownerLane: "policy",
+      evidenceRefs: lifecycleEvidenceRefs(input.approvalActions.map((action) => action.candidateId), [], [], []),
+      nextAction: input.approvalActions.length > 0 ? "request_policy_approval" : "test_source",
+      route: firstApprovalAction?.route
+    },
+    {
+      stage: "activation_test",
+      status: input.testActions.length > 0 ? "ready" : "blocked",
+      ownerLane: "source",
+      evidenceRefs: lifecycleEvidenceRefs(input.testActions.map((action) => action.candidateId), input.testActions.map((action) => action.sourceId).filter(Boolean).map(String), [], []),
+      nextAction: "test_source",
+      route: firstTestAction?.route
+    },
+    {
+      stage: "fetch_parse",
+      status: input.testActions.length > 0 ? "ready" : "blocked",
+      ownerLane: "parser",
+      evidenceRefs: lifecycleEvidenceRefs(input.testActions.map((action) => action.candidateId), input.testActions.map((action) => action.sourceId).filter(Boolean).map(String), [], []),
+      nextAction: "test_source",
+      route: firstTestAction?.route
+    },
+    {
+      stage: "retry_backoff",
+      status: input.retryActions.length > 0 ? "retry_scheduled" : "complete",
+      ownerLane: "parser",
+      evidenceRefs: lifecycleEvidenceRefs(input.retryActions.map((action) => action.candidateId), input.retryActions.map((action) => action.sourceId).filter(Boolean).map(String), [], []),
+      nextAction: input.retryActions.length > 0 ? "retry_parser" : "inspect_source_health",
+      route: firstRetryAction?.route
+    },
+    {
+      stage: "source_health",
+      status: input.activationReadiness.sourceHealth.blockedByPolicy > 0 || input.activationReadiness.sourceHealth.retryScheduled > 0 ? "ready" : "complete",
+      ownerLane: "source",
+      evidenceRefs: lifecycleEvidenceRefs(allCandidateIds, allSourceIds, [], []),
+      nextAction: "inspect_source_health",
+      route: {
+        method: "GET",
+        path: "/v1/dwm/source-requests",
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    },
+    {
+      stage: "provenance",
+      status: caseCaptureIds.length > 0 ? "complete" : "blocked",
+      ownerLane: "publicTI",
+      evidenceRefs: lifecycleEvidenceRefs([], allSourceIds, caseCaptureIds, caseAlertIds),
+      nextAction: caseCaptureIds.length > 0 ? "open_case_handoff" : "repair_provenance"
+    },
+    {
+      stage: "enrichment_freshness",
+      status: input.freshnessState === "fresh" ? "complete" : "blocked",
+      ownerLane: "publicTI",
+      evidenceRefs: lifecycleEvidenceRefs([], allSourceIds, caseCaptureIds, caseAlertIds),
+      nextAction: input.freshnessState === "fresh" ? "open_case_handoff" : "repair_provenance"
+    },
+    {
+      stage: "case_handoff",
+      status: input.caseHandoff ? (input.blockedCaseRows.length > 0 || !input.caseHandoff.ok ? "blocked" : "complete") : "ready",
+      ownerLane: "case",
+      evidenceRefs: lifecycleEvidenceRefs([], allSourceIds, caseCaptureIds, caseAlertIds),
+      nextAction: input.caseHandoff ? "open_case_handoff" : "wait_for_case_handoff"
+    }
+  ];
+}
+
+function lifecycleEvidenceRefs(
+  candidateIds: string[],
+  sourceIds: string[],
+  captureIds: string[],
+  alertIds: string[]
+): TiSourceProvenanceScraperEnrichmentLifecycleStage["evidenceRefs"] {
+  return {
+    candidateIds: uniqueStrings(candidateIds),
+    sourceIds: uniqueStrings(sourceIds),
+    captureIds: uniqueStrings(captureIds),
+    alertIds: uniqueStrings(alertIds)
+  };
+}
+
+function uniqueLifecycleBlockers(
+  blockers: TiSourceProvenanceScraperEnrichmentLifecycleBlocker[]
+): TiSourceProvenanceScraperEnrichmentLifecycleBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}:${blocker.candidateId ?? ""}:${blocker.alertId ?? ""}:${blocker.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function alertWatchlistItemIds(alert: TiSourceProvenanceAlertRebuildResponseAlert): string[] {
