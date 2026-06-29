@@ -3486,14 +3486,17 @@ function sourceActorIntakeRecommendation(query: string, family: string) {
 
 function sourceActorCandidateIntakeContract(query: string, actorReadiness: Record<string, any>) {
   const candidatePreviews = actorReadiness.candidateGaps.map((gap: any) => sourceActorCandidateIntakePreview(query, gap));
+  const sourcePackId = stableId("dwm_actor_source_pack", query.toLowerCase());
   return {
     schemaVersion: "dwm.actor_source_candidate_intake.v1",
     mode: "prepare_no_network",
     query,
+    sourcePackWorkflow: sourceActorCandidateIntakeWorkflow(query, sourcePackId, candidatePreviews),
     route: {
       method: "POST",
       path: "/v1/dwm/source-requests",
       body: {
+        sourcePackId,
         sourcePackLabel: `${query} enrichment source pack`,
         scope: query,
         candidates: actorReadiness.candidateGaps.map((gap: any) => gap.intakeRecommendation)
@@ -3517,6 +3520,74 @@ function sourceActorCandidateIntakeContract(query: string, actorReadiness: Recor
     candidatePreviews,
     candidateGaps: actorReadiness.candidateGaps,
     safeOutput: actorReadiness.safeOutput
+  };
+}
+
+function sourceActorCandidateIntakeWorkflow(query: string, sourcePackId: string, candidatePreviews: Array<Record<string, any>>) {
+  const safeCandidatePreviews = candidatePreviews.filter((preview) => preview.policyResult?.allowed === true);
+  return {
+    schemaVersion: "dwm.actor_source_candidate_intake_workflow.v1",
+    query,
+    sourcePackId,
+    mode: "prepare_no_network",
+    idempotencyKey: stableId("dwm_actor_source_pack_workflow", `${query}:${sourcePackId}:${safeCandidatePreviews.map((preview) => preview.proofId).join(",")}`),
+    steps: [
+      {
+        step: "create_source_pack",
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          sourcePackId,
+          sourcePackLabel: `${query} enrichment source pack`,
+          scope: query,
+          candidates: safeCandidatePreviews.map((preview) => preview.candidate)
+        },
+        idempotencyKey: stableId("dwm_actor_source_pack_create", sourcePackId),
+        liveNetworkFetch: false
+      },
+      {
+        step: "validate_candidates",
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          action: "pack_worker_run",
+          sourcePackId,
+          chunkSize: Math.max(1, Math.min(25, safeCandidatePreviews.length || 1)),
+          dryRun: true
+        },
+        idempotencyKey: stableId("dwm_actor_source_pack_validate", sourcePackId),
+        liveNetworkFetch: false
+      },
+      {
+        step: "review_activation",
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          action: "pack_review",
+          sourcePackId,
+          packAction: "approve",
+          approveMetadataOnly: safeCandidatePreviews.some((preview) => preview.policyResult?.metadataOnly === true),
+          reason: `${query} source enrichment candidate approval`
+        },
+        idempotencyKey: stableId("dwm_actor_source_pack_review", sourcePackId),
+        requiresOperatorApproval: true,
+        liveNetworkFetch: false
+      }
+    ],
+    expectedStateTransitions: ["candidate_requested", "validation_ready", "operator_review_required", "activation_queued"],
+    blockedCandidates: candidatePreviews
+      .filter((preview) => preview.policyResult?.allowed !== true)
+      .map((preview) => ({
+        family: preview.family,
+        proofId: preview.proofId,
+        blockers: preview.blockers
+      })),
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
   };
 }
 

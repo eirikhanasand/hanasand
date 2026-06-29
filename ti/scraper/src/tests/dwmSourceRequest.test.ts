@@ -1719,10 +1719,46 @@ describe("dwm source requests", () => {
     expect(body.candidateIntakeContract).toMatchObject({
       schemaVersion: "dwm.actor_source_candidate_intake.v1",
       mode: "prepare_no_network",
+      sourcePackWorkflow: {
+        schemaVersion: "dwm.actor_source_candidate_intake_workflow.v1",
+        sourcePackId: expect.any(String),
+        idempotencyKey: expect.any(String),
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            step: "create_source_pack",
+            method: "POST",
+            path: "/v1/dwm/source-requests",
+            body: expect.objectContaining({
+              sourcePackId: expect.any(String),
+              sourcePackLabel: "APT28 enrichment source pack",
+              scope: "APT28",
+              candidates: expect.arrayContaining([
+                expect.objectContaining({ family: "darkweb_onion", type: "restricted_metadata" }),
+                expect.objectContaining({ family: "actor_page", type: "public_url" })
+              ])
+            }),
+            liveNetworkFetch: false
+          }),
+          expect.objectContaining({
+            step: "validate_candidates",
+            body: expect.objectContaining({ action: "pack_worker_run", dryRun: true }),
+            liveNetworkFetch: false
+          }),
+          expect.objectContaining({
+            step: "review_activation",
+            body: expect.objectContaining({ action: "pack_review", packAction: "approve", approveMetadataOnly: true }),
+            requiresOperatorApproval: true,
+            liveNetworkFetch: false
+          })
+        ]),
+        expectedStateTransitions: expect.arrayContaining(["candidate_requested", "validation_ready", "operator_review_required", "activation_queued"]),
+        safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+      },
       route: {
         method: "POST",
         path: "/v1/dwm/source-requests",
         body: {
+          sourcePackId: expect.any(String),
           sourcePackLabel: "APT28 enrichment source pack",
           scope: "APT28",
           candidates: expect.arrayContaining([
