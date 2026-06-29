@@ -67,11 +67,23 @@ export type DwmWebhookAuditRow = {
 export type DwmWebhookDestinationInput = {
     orgId?: unknown
     name?: unknown
+    label?: unknown
     kind?: unknown
+    type?: unknown
     endpointUrl?: unknown
     endpoint_url?: unknown
+    webhookUrl?: unknown
+    webhook_url?: unknown
+    url?: unknown
+    channel?: unknown
+    channelName?: unknown
+    channel_name?: unknown
     status?: unknown
     events?: unknown
+    requestId?: unknown
+    request_id?: unknown
+    entitlementAllowed?: unknown
+    entitlement_allowed?: unknown
 }
 
 export type DwmAlertNotificationInput = {
@@ -156,6 +168,19 @@ export type DwmWebhookDestinationAdminProofBlockerCode =
     | 'permission_denied'
     | 'dedupe_already_delivered'
     | 'audit_missing'
+    | 'retry_not_eligible'
+export type DwmWebhookDestinationCrudAction = 'create' | 'update' | 'disable' | 'enable' | 'test'
+export type DwmWebhookDestinationCrudBlockerCode =
+    | 'invalid_url'
+    | 'unsupported_destination_type'
+    | 'duplicate_destination'
+    | 'destination_disabled'
+    | 'no_verified_dry_run'
+    | 'unhealthy_destination'
+    | 'entitlement_plan_denied'
+    | 'permission_denied'
+    | 'audit_missing'
+    | 'idempotency_duplicate'
     | 'retry_not_eligible'
 
 export type DwmWebhookEvidenceVisibilityInput = OrganizationVisibilityDecisionInput
@@ -262,10 +287,11 @@ export function normalizeDwmWebhookDestinationInput(
     ownerId: string,
     existing?: DwmWebhookDestinationRow
 ): NormalizedDestinationInput {
-    const rawEndpoint = clean(input.endpointUrl ?? input.endpoint_url)
+    const rawEndpoint = firstClean(input.endpointUrl, input.endpoint_url, input.webhookUrl, input.webhook_url, input.url)
     const endpointUrl = rawEndpoint ? normalizeWebhookUrl(rawEndpoint) : null
-    const kind = parseKind(input.kind, endpointUrl, existing?.kind)
-    const name = clean(input.name) || existing?.name || (kind === 'discord' ? 'Discord alerts' : 'Webhook alerts')
+    const kind = parseKind(input.kind ?? input.type, endpointUrl, existing?.kind)
+    const channelName = firstClean(input.channelName, input.channel_name, input.channel)
+    const name = firstClean(input.name, input.label, channelName) || existing?.name || (kind === 'discord' ? 'Discord alerts' : 'Webhook alerts')
     const orgId = clean(input.orgId) || existing?.org_id || ownerId
     const status = parseStatus(input.status ?? existing?.status)
     const events = parseEvents(input.events ?? existing?.events)
@@ -1358,6 +1384,181 @@ export function buildDwmWebhookDestinationLifecycle({
             createdAt: health.createdAt,
         }
     })
+}
+
+export function buildDwmWebhookDestinationCrudContract({
+    action,
+    ownerId,
+    input = {},
+    destination = null,
+    destinations = [],
+    deliveries = [],
+    auditEvents = [],
+    viewerRole = null,
+    canManage = false,
+    entitlementAllowed = true,
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+}: {
+    action: DwmWebhookDestinationCrudAction
+    ownerId: string
+    input?: DwmWebhookDestinationInput
+    destination?: DwmWebhookDestinationPublic | null
+    destinations?: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    viewerRole?: string | null
+    canManage?: boolean
+    entitlementAllowed?: boolean
+    liveDeliveryEnabled?: boolean
+}) {
+    const requestId = firstClean(input.requestId, input.request_id)
+    const rawEndpoint = firstClean(input.endpointUrl, input.endpoint_url, input.webhookUrl, input.webhook_url, input.url)
+    const rawKind = firstClean(input.kind, input.type)
+    const endpointValidation = validateWebhookEndpointForContract(rawEndpoint)
+    const normalizedKind = WEBHOOK_KINDS.has(rawKind as DwmWebhookKind)
+        ? rawKind as DwmWebhookKind
+        : endpointValidation.normalizedUrl
+            ? parseKind(rawKind, endpointValidation.normalizedUrl, destination?.kind)
+            : destination?.kind || 'webhook'
+    const normalizedEndpointHash = endpointValidation.normalizedUrl ? hashValue('endpoint', endpointValidation.normalizedUrl) : destination?.endpointHash || null
+    const normalizedEndpointHint = endpointValidation.normalizedUrl ? redactWebhookEndpoint(endpointValidation.normalizedUrl) : destination?.endpointHint || null
+    const normalizedOrgId = firstClean(input.orgId, destination?.orgId, ownerId)
+    const normalizedLabel = firstClean(input.name, input.label, input.channelName, input.channel_name, input.channel, destination?.name)
+        || (normalizedKind === 'discord' ? 'Discord alerts' : 'Webhook alerts')
+    const status = parseStatus(input.status ?? destination?.status ?? (action === 'disable' ? 'paused' : 'active'))
+    const scopedDestinations = destinations.filter(item => item.orgId === normalizedOrgId)
+    const duplicate = normalizedEndpointHash
+        ? scopedDestinations.find(item => item.endpointHash === normalizedEndpointHash && item.id !== destination?.id && item.status !== 'archived') || null
+        : null
+    const adminProof = buildDwmWebhookDestinationAdminProof({
+        destinations: destination ? [destination] : scopedDestinations,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+    })
+    const proofRow = destination ? adminProof.destinations.find(item => item.destinationId === destination.id) || null : null
+    const blockers: ReturnType<typeof crudBlocker>[] = []
+
+    if (!canManage) {
+        blockers.push(crudBlocker('permission_denied', 'Only organization owners and admins can manage webhook destinations.', destination?.id || null))
+    }
+    if (!entitlementAllowed || parseBoolean(input.entitlementAllowed ?? input.entitlement_allowed, true) === false) {
+        blockers.push(crudBlocker('entitlement_plan_denied', 'Current plan does not allow another webhook destination.', destination?.id || null))
+    }
+    if (endpointValidation.error && (rawEndpoint || action === 'create')) {
+        blockers.push(crudBlocker('invalid_url', endpointValidation.error, destination?.id || null))
+    }
+    if (rawKind && !WEBHOOK_KINDS.has(rawKind as DwmWebhookKind)) {
+        blockers.push(crudBlocker('unsupported_destination_type', 'Destination type must be discord or webhook.', destination?.id || null))
+    }
+    if (duplicate && action === 'create') {
+        blockers.push(crudBlocker('duplicate_destination', 'An active destination already uses this endpoint for the organization.', duplicate.id))
+    }
+    if ((action === 'update' || action === 'disable' || action === 'enable' || action === 'test') && !destination) {
+        blockers.push(crudBlocker('permission_denied', 'Webhook destination is not available for this organization.', null))
+    }
+    if ((action === 'disable' || action === 'test') && destination?.status !== 'active') {
+        blockers.push(crudBlocker('destination_disabled', 'Destination is disabled.', destination?.id || null, false, action === 'test'))
+    }
+    if ((action === 'test' || action === 'enable') && proofRow?.health.adminProofBlockers.some(blocker => blocker.code === 'no_live_endpoint')) {
+        blockers.push(crudBlocker('invalid_url', 'Destination has no valid webhook URL reference.', destination?.id || null))
+    }
+    if ((action === 'test' || action === 'enable') && proofRow?.health.adminProofBlockers.some(blocker => blocker.code === 'no_verified_dry_run')) {
+        blockers.push(crudBlocker('no_verified_dry_run', 'Destination has no verified dry-run delivery yet.', destination?.id || null, action === 'test', false))
+    }
+    if (proofRow?.health.adminProofBlockers.some(blocker => blocker.code === 'destination_unhealthy')) {
+        blockers.push(crudBlocker('unhealthy_destination', 'Destination health is blocked or retrying.', destination?.id || null, Boolean(proofRow.retry.retryable), false))
+    }
+    if (proofRow?.health.adminProofBlockers.some(blocker => blocker.code === 'audit_missing')) {
+        blockers.push(crudBlocker('audit_missing', 'Destination has no linked audit event.', destination?.id || null, false, false))
+    }
+    if (proofRow?.health.adminProofBlockers.some(blocker => blocker.code === 'dedupe_already_delivered')) {
+        blockers.push(crudBlocker('idempotency_duplicate', 'Latest destination delivery idempotency key has already been delivered.', destination?.id || null, false, false))
+    }
+    if (proofRow?.health.adminProofBlockers.some(blocker => blocker.code === 'retry_not_eligible')) {
+        blockers.push(crudBlocker('retry_not_eligible', 'Latest failed or skipped delivery attempt is not eligible for retry.', destination?.id || null, false, false))
+    }
+
+    const uniqueBlockers = uniqueCrudBlockers(blockers)
+    const blocking = uniqueBlockers.filter(blocker => blocker.blocking)
+    return {
+        schemaVersion: 'dwm.webhook.destination_crud.v1',
+        action,
+        requestId: requestId || null,
+        ownerId,
+        orgId: normalizedOrgId,
+        canApply: blocking.length === 0,
+        access: {
+            role: clean(viewerRole) || null,
+            canManage,
+            canCreate: canManage,
+            canUpdate: canManage && Boolean(destination),
+            canDisable: canManage && destination?.status === 'active',
+            canEnable: canManage && Boolean(destination) && destination?.status !== 'active',
+            canTest: canManage && Boolean(destination),
+            memberSafe: !canManage,
+        },
+        desired: {
+            label: normalizedLabel.slice(0, 120),
+            type: normalizedKind,
+            kind: normalizedKind,
+            channel: firstClean(input.channelName, input.channel_name, input.channel) || null,
+            status,
+            events: parseEvents(input.events),
+            redactedEndpoint: {
+                endpointHint: normalizedEndpointHint,
+                endpointHash: normalizedEndpointHash,
+            },
+        },
+        destination: destination
+            ? {
+                id: destination.id,
+                orgId: destination.orgId,
+                label: destination.name,
+                type: destination.kind,
+                status: destination.status,
+                enabled: destination.status === 'active',
+                redactedEndpoint: {
+                    endpointHint: redactDeliveryEvidenceText(destination.endpointHint),
+                    endpointHash: destination.endpointHash,
+                },
+            }
+            : null,
+        duplicateDestinationId: duplicate?.id || null,
+        blockers: uniqueBlockers,
+        blockingCodes: blocking.map(blocker => blocker.code),
+        health: proofRow
+            ? {
+                status: proofRow.health.status,
+                ready: proofRow.health.ready,
+                blockers: proofRow.health.adminProofBlockers,
+                retry: proofRow.retry,
+                audit: proofRow.audit,
+                productProgress: adminProof.productProgress,
+            }
+            : {
+                status: 'pending',
+                ready: false,
+                blockers: [],
+                retry: null,
+                audit: null,
+                productProgress: adminProof.productProgress,
+            },
+        audit: {
+            latestAuditEventId: proofRow?.audit.latestAuditEventId || null,
+            auditEventIds: proofRow?.audit.auditEventIds || [],
+        },
+        idempotency: {
+            duplicateKeyCount: proofRow?.dedupe.duplicateKeyCount || 0,
+            alreadyDelivered: proofRow?.dedupe.alreadyDelivered || false,
+            latestDedupeKey: proofRow?.dedupe.latestDedupeKey || null,
+            duplicateDestinationId: duplicate?.id || null,
+        },
+        noNetwork: true,
+        liveDeliveryEnabled,
+    }
 }
 
 export function buildDwmWebhookDestinationAdminProof({
@@ -2676,6 +2877,41 @@ function operationBlocker(
 function uniqueOperationBlockers(blockers: ReturnType<typeof operationBlocker>[]) {
     const seen = new Set<string>()
     const unique: ReturnType<typeof operationBlocker>[] = []
+    for (const blocker of blockers) {
+        const key = `${blocker.code}:${blocker.destinationId || ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(blocker)
+    }
+    return unique
+}
+
+function validateWebhookEndpointForContract(rawEndpoint: string) {
+    if (!rawEndpoint) return { normalizedUrl: null, error: 'endpointUrl is required.' }
+    try {
+        const url = new URL(rawEndpoint)
+        if (url.protocol !== 'https:') {
+            return { normalizedUrl: null, error: 'Webhook destinations must use HTTPS.' }
+        }
+        return { normalizedUrl: url.toString(), error: null }
+    } catch {
+        return { normalizedUrl: null, error: 'endpointUrl must be a valid URL.' }
+    }
+}
+
+function crudBlocker(
+    code: DwmWebhookDestinationCrudBlockerCode,
+    message: string,
+    destinationId: string | null = null,
+    retryable = false,
+    blocking = true
+) {
+    return { code, message, destinationId, retryable, blocking }
+}
+
+function uniqueCrudBlockers(blockers: ReturnType<typeof crudBlocker>[]) {
+    const seen = new Set<string>()
+    const unique: ReturnType<typeof crudBlocker>[] = []
     for (const blocker of blockers) {
         const key = `${blocker.code}:${blocker.destinationId || ''}`
         if (seen.has(key)) continue

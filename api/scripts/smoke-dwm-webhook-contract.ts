@@ -5,6 +5,7 @@ import {
     buildDwmOrgAlertWebhookDeliveryContract,
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDestinationAdminProof,
+    buildDwmWebhookDestinationCrudContract,
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
@@ -1335,6 +1336,25 @@ const operationDestinations = [
         createdAt: '2026-06-28T11:00:00.000Z',
         updatedAt: '2026-06-28T12:09:00.000Z',
     },
+    {
+        id: 'destination_paused_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Paused Discord',
+        kind: 'discord' as const,
+        endpointHint: 'https://discord.com/api/webhooks/555555555/...',
+        endpointHash: 'endpoint_paused_hash',
+        status: 'paused' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:04:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:10:00.000Z',
+    },
 ]
 const operationAuditEvents = [
     ...auditEventContracts.map(item => ({
@@ -1535,6 +1555,161 @@ const skippedDestinationProof = destinationAdminProof.destinations.find(item => 
 const sentDestinationProof = destinationAdminProof.destinations.find(item => item.destinationId === 'destination_sent_contract')
 const missingUrlDestinationProof = destinationAdminProof.destinations.find(item => item.destinationId === 'destination_missing_url_contract')
 const memberReplayDestinationProof = memberDestinationAdminProof.destinations.find(item => item.destinationId === 'destination_replay_contract')
+const crudCreateContract = buildDwmWebhookDestinationCrudContract({
+    action: 'create',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destinations: operationDestinations,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        label: 'Customer Discord',
+        type: 'discord',
+        webhookUrl: 'https://discord.com/api/webhooks/999999999/new-token',
+        channelName: '#alerts',
+        requestId: 'req_crud_create_contract',
+    },
+})
+const crudDuplicateContract = buildDwmWebhookDestinationCrudContract({
+    action: 'create',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destinations: [
+        ...operationDestinations,
+        {
+            id: 'destination_duplicate_endpoint_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            name: 'Existing duplicate Discord',
+            kind: 'discord' as const,
+            endpointHint: crudCreateContract.desired.redactedEndpoint.endpointHint || 'https://discord.com/api/webhooks/999999999/...',
+            endpointHash: crudCreateContract.desired.redactedEndpoint.endpointHash || 'endpoint_duplicate_hash',
+            status: 'active' as const,
+            events: ['dwm.alert.created', 'dwm.alert.replayed'],
+            createdBy: 'owner_contract',
+            lastTestedAt: '2026-06-28T12:04:00.000Z',
+            lastTestStatus: 'dry_run' as const,
+            lastTestError: null,
+            lastTestHttpStatus: null,
+            lastDeliveryAt: null,
+            createdAt: '2026-06-28T11:00:00.000Z',
+            updatedAt: '2026-06-28T12:11:00.000Z',
+        },
+    ],
+    input: {
+        orgId: 'org_contract',
+        name: 'Duplicate Discord',
+        endpointUrl: 'https://discord.com/api/webhooks/999999999/new-token',
+    },
+})
+const crudInvalidUrlContract = buildDwmWebhookDestinationCrudContract({
+    action: 'create',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destinations: operationDestinations,
+    input: {
+        orgId: 'org_contract',
+        endpointUrl: 'http://insecure.example/webhook',
+    },
+})
+const crudUnsupportedTypeContract = buildDwmWebhookDestinationCrudContract({
+    action: 'create',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destinations: operationDestinations,
+    input: {
+        orgId: 'org_contract',
+        type: 'teams',
+        endpointUrl: 'https://hooks.example.com/teams',
+    },
+})
+const crudEntitlementDeniedContract = buildDwmWebhookDestinationCrudContract({
+    action: 'create',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    entitlementAllowed: false,
+    destinations: operationDestinations,
+    input: {
+        orgId: 'org_contract',
+        endpointUrl: 'https://hooks.example.com/denied',
+    },
+})
+const crudUpdateContract = buildDwmWebhookDestinationCrudContract({
+    action: 'update',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destination: operationDestinations.find(item => item.id === 'destination_replay_contract') || null,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        label: 'Renamed Discord',
+        url: 'https://discord.com/api/webhooks/987654321/rotated-token',
+        channel: '#security',
+    },
+})
+const crudDisableContract = buildDwmWebhookDestinationCrudContract({
+    action: 'disable',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destination: operationDestinations.find(item => item.id === 'destination_replay_contract') || null,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: { orgId: 'org_contract' },
+})
+const crudEnableContract = buildDwmWebhookDestinationCrudContract({
+    action: 'enable',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destination: operationDestinations.find(item => item.id === 'destination_paused_contract') || null,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: { orgId: 'org_contract', status: 'active' },
+})
+const crudTestContract = buildDwmWebhookDestinationCrudContract({
+    action: 'test',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destination: operationDestinations.find(item => item.id === 'destination_replay_contract') || null,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: { orgId: 'org_contract' },
+})
+const crudRoleDeniedContract = buildDwmWebhookDestinationCrudContract({
+    action: 'update',
+    ownerId: 'owner_contract',
+    viewerRole: 'member',
+    canManage: false,
+    destination: operationDestinations.find(item => item.id === 'destination_replay_contract') || null,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: { orgId: 'org_contract', label: 'Member rename denied' },
+})
+const crudIdempotencyContract = buildDwmWebhookDestinationCrudContract({
+    action: 'test',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destination: operationDestinations.find(item => item.id === 'destination_sent_contract') || null,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: { orgId: 'org_contract' },
+})
 const replayReadiness = readiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const retryReadiness = readiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const disabledReadiness = readiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
@@ -1632,6 +1807,21 @@ expect(memberDestinationAdminProof.access.memberSafe === true && memberReplayDes
 expect(nonmemberDestinationAdminProof.visibility.allowed === false && nonmemberDestinationAdminProof.destinations.length === 0 && nonmemberDestinationAdminProof.blockers.some(item => item.code === 'permission_denied'), 'Destination admin proof should deny nonmembers without leaking destination metadata.', nonmemberDestinationAdminProof)
 expect(orgAlertDeliveryContract.destinationAdminProof.schemaVersion === 'dwm.webhook.destination_admin_proof.v1' && orgAlertDeliveryContract.destinationAdminProof.destinations.length === auditDestinationRows.length, 'Org alert delivery contract should include destination admin proof.', orgAlertDeliveryContract.destinationAdminProof)
 expect(!JSON.stringify(destinationAdminProof).includes(secret) && !JSON.stringify(memberDestinationAdminProof).includes(secret), 'Destination admin proof should not leak endpoint secrets.', { destinationAdminProof, memberDestinationAdminProof })
+expect(crudCreateContract.schemaVersion === 'dwm.webhook.destination_crud.v1' && crudCreateContract.action === 'create' && crudCreateContract.canApply === true, 'Destination CRUD contract should allow valid create preflight.', crudCreateContract)
+expect(crudCreateContract.desired.label === 'Customer Discord' && crudCreateContract.desired.channel === '#alerts' && crudCreateContract.desired.type === 'discord', 'Destination CRUD contract should normalize customer-facing label/type/channel aliases.', crudCreateContract)
+expect(crudCreateContract.desired.redactedEndpoint.endpointHash?.startsWith('endpoint_') && !JSON.stringify(crudCreateContract).includes('new-token'), 'Destination CRUD contract should hash and redact create endpoints.', crudCreateContract)
+expect(crudDuplicateContract.canApply === false && crudDuplicateContract.blockers.some(item => item.code === 'duplicate_destination' && item.blocking === true), 'Destination CRUD contract should block duplicate org endpoint creates.', crudDuplicateContract)
+expect(crudInvalidUrlContract.canApply === false && crudInvalidUrlContract.blockers.some(item => item.code === 'invalid_url'), 'Destination CRUD contract should block invalid/insecure URLs.', crudInvalidUrlContract)
+expect(crudUnsupportedTypeContract.canApply === false && crudUnsupportedTypeContract.blockers.some(item => item.code === 'unsupported_destination_type'), 'Destination CRUD contract should block unsupported destination types.', crudUnsupportedTypeContract)
+expect(crudEntitlementDeniedContract.canApply === false && crudEntitlementDeniedContract.blockers.some(item => item.code === 'entitlement_plan_denied'), 'Destination CRUD contract should expose entitlement/plan denial blockers.', crudEntitlementDeniedContract)
+expect(crudUpdateContract.canApply === true && crudUpdateContract.action === 'update' && crudUpdateContract.desired.label === 'Renamed Discord' && crudUpdateContract.desired.channel === '#security', 'Destination CRUD contract should allow admin update and endpoint rotation preflight.', crudUpdateContract)
+expect(crudDisableContract.canApply === true && crudDisableContract.access.canDisable === true && crudDisableContract.audit.auditEventIds.includes('audit_delivery_test_contract'), 'Destination CRUD contract should expose disable capability and audit linkage.', crudDisableContract)
+expect(crudEnableContract.canApply === true && crudEnableContract.action === 'enable' && crudEnableContract.access.canEnable === true, 'Destination CRUD contract should allow enable preflight for paused destinations.', crudEnableContract)
+expect(crudTestContract.canApply === true && crudTestContract.access.canTest === true && crudTestContract.noNetwork === true, 'Destination CRUD contract should allow dry-run test preflight without network.', crudTestContract)
+expect(crudRoleDeniedContract.canApply === false && crudRoleDeniedContract.blockers.some(item => item.code === 'permission_denied'), 'Destination CRUD contract should enforce owner/admin mutation gates.', crudRoleDeniedContract)
+expect(crudIdempotencyContract.idempotency.alreadyDelivered === true && crudIdempotencyContract.blockers.some(item => item.code === 'idempotency_duplicate' && item.blocking === false), 'Destination CRUD contract should expose idempotency duplicates without leaking secrets.', crudIdempotencyContract)
+expect(crudTestContract.health.productProgress.schemaVersion === 'dwm.webhook.destination_admin_product_progress.v1' && crudTestContract.health.productProgress.deliveryReadyCount >= 1, 'Destination CRUD contract should link product-progress/admin-proof health fields.', crudTestContract)
+expect(!JSON.stringify([crudCreateContract, crudUpdateContract, crudIdempotencyContract]).includes(secret) && !JSON.stringify(crudUpdateContract).includes('rotated-token'), 'Destination CRUD contracts should not leak endpoint secrets.', { crudCreateContract, crudUpdateContract, crudIdempotencyContract })
 expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'created' && auditCreated.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Audit contract should expose destination create events with redacted endpoint refs.', auditCreated)
 expect(auditUpdated?.outcome === 'updated' && (auditUpdated.metadata as Record<string, unknown>).token === '[redacted]', 'Audit contract should expose destination update events without secrets.', auditUpdated)
 expect(auditArchived?.outcome === 'disabled' && auditArchived.severity === 'warning' && auditArchived.destination?.enabled === false, 'Audit contract should expose destination disable/archive events.', auditArchived)
@@ -1705,6 +1895,16 @@ console.log(JSON.stringify({
         'destination admin proof replay/dedupe state',
         'destination admin proof audit linkage',
         'destination admin proof secret redaction',
+        'destination CRUD create/update aliases',
+        'destination CRUD invalid URL blocker',
+        'destination CRUD unsupported type blocker',
+        'destination CRUD duplicate endpoint blocker',
+        'destination CRUD entitlement blocker',
+        'destination CRUD disable/enable/test preflight',
+        'destination CRUD role denial',
+        'destination CRUD idempotency/audit linkage',
+        'destination CRUD product-progress linkage',
+        'destination CRUD secret redaction',
         'delivery evidence secret redaction',
         'delivery ledger secret redaction',
         'destination readiness secret redaction',
@@ -1737,6 +1937,12 @@ console.log(JSON.stringify({
             'destinationAdminProof.destinations[].replay.latestReplayRequestId',
             'destinationAdminProof.destinations[].dedupe.latestDedupeKey',
             'destinationAdminProof.destinations[].audit.latestAuditEventId',
+            'destinationCrud.schemaVersion',
+            'destinationCrud.action',
+            'destinationCrud.canApply',
+            'destinationCrud.blockers[].code',
+            'destinationCrud.desired.redactedEndpoint.endpointHash',
+            'destinationCrud.health.productProgress.status',
         ],
         expectedNoSecretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
         expectedNoNetwork: true,

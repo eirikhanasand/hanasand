@@ -11,6 +11,7 @@ import {
     archiveDwmWebhookDestination,
     buildDwmOrgAlertWebhookDeliveryContract,
     buildDwmWebhookAuditEventContracts,
+    buildDwmWebhookDestinationCrudContract,
     buildDwmWebhookDestinationAdminProof,
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationLifecycle,
@@ -112,11 +113,38 @@ export async function postDwmWebhookDestination(req: FastifyRequest<{ Body: DwmW
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
 
+    const existingDestinations = await listDwmWebhookDestinations(userId, orgId)
+    const destinationCrud = buildDwmWebhookDestinationCrudContract({
+        action: 'create',
+        ownerId: userId,
+        input: { ...req.body, orgId },
+        destinations: existingDestinations,
+        viewerRole: orgId === userId ? 'owner' : 'admin',
+        canManage: true,
+    })
+    if (!destinationCrud.canApply) {
+        return res.status(destinationCrud.blockingCodes.includes('duplicate_destination') ? 409 : 400).send({
+            error: destinationCrud.blockers[0]?.message || 'Webhook destination cannot be created.',
+            destinationCrud,
+        })
+    }
+
     try {
         const destination = await createDwmWebhookDestination(userId, { ...req.body, orgId })
         const auditEvents = await listDwmWebhookAuditEvents(userId, destination.orgId)
+        const destinations = [destination, ...existingDestinations.filter(item => item.id !== destination.id)]
         return res.status(201).send({
             destination,
+            destinationCrud: buildDwmWebhookDestinationCrudContract({
+                action: 'create',
+                ownerId: userId,
+                input: { ...req.body, orgId },
+                destination,
+                destinations,
+                auditEvents,
+                viewerRole: orgId === userId ? 'owner' : 'admin',
+                canManage: true,
+            }),
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], auditEvents })[0],
             destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], auditEvents })[0],
             destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], auditEvents, viewerRole: 'owner', canManage: true })[0],
@@ -144,6 +172,27 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
     }
 
     try {
+        const currentDestinations = await listDwmWebhookDestinations(userId, nextOrgId)
+        const destinationBefore = currentDestinations.find(item => item.id === req.params.id) || null
+        const action = destinationCrudActionForUpdate(req.body, destinationBefore)
+        const preflightCrud = buildDwmWebhookDestinationCrudContract({
+            action,
+            ownerId: userId,
+            input: { ...req.body, orgId: nextOrgId },
+            destination: destinationBefore,
+            destinations: currentDestinations,
+            deliveries: await listDwmWebhookDeliveries(userId, nextOrgId),
+            auditEvents: await listDwmWebhookAuditEvents(userId, nextOrgId),
+            viewerRole: 'admin',
+            canManage: true,
+        })
+        if (!preflightCrud.canApply) {
+            return res.status(400).send({
+                error: preflightCrud.blockers[0]?.message || 'Webhook destination cannot be updated.',
+                destinationCrud: preflightCrud,
+            })
+        }
+
         const destination = await updateDwmWebhookDestination(userId, req.params.id, { ...req.body, orgId: nextOrgId })
         if (!destination) {
             return res.status(404).send({ error: 'Webhook destination not found.' })
@@ -152,6 +201,17 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
         const auditEvents = await listDwmWebhookAuditEvents(userId, destination.orgId)
         return res.send({
             destination,
+            destinationCrud: buildDwmWebhookDestinationCrudContract({
+                action,
+                ownerId: userId,
+                input: { ...req.body, orgId: nextOrgId },
+                destination,
+                destinations: currentDestinations.map(item => item.id === destination.id ? destination : item),
+                deliveries,
+                auditEvents,
+                viewerRole: 'admin',
+                canManage: true,
+            }),
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
             destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0],
             destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0],
@@ -177,6 +237,26 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
 
+    const currentDestinations = await listDwmWebhookDestinations(userId, existing.orgId)
+    const destinationBefore = currentDestinations.find(item => item.id === req.params.id) || null
+    const preflightCrud = buildDwmWebhookDestinationCrudContract({
+        action: 'disable',
+        ownerId: userId,
+        input: { orgId: existing.orgId },
+        destination: destinationBefore,
+        destinations: currentDestinations,
+        deliveries: await listDwmWebhookDeliveries(userId, existing.orgId),
+        auditEvents: await listDwmWebhookAuditEvents(userId, existing.orgId),
+        viewerRole: 'admin',
+        canManage: true,
+    })
+    if (!preflightCrud.canApply) {
+        return res.status(400).send({
+            error: preflightCrud.blockers[0]?.message || 'Webhook destination cannot be disabled.',
+            destinationCrud: preflightCrud,
+        })
+    }
+
     const destination = await archiveDwmWebhookDestination(userId, req.params.id)
     if (!destination) {
         return res.status(404).send({ error: 'Webhook destination not found.' })
@@ -185,6 +265,17 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
     const auditEvents = await listDwmWebhookAuditEvents(userId, destination.orgId)
     return res.send({
         destination,
+        destinationCrud: buildDwmWebhookDestinationCrudContract({
+            action: 'disable',
+            ownerId: userId,
+            input: { orgId: destination.orgId },
+            destination,
+            destinations: [destination, ...currentDestinations.filter(item => item.id !== destination.id)],
+            deliveries,
+            auditEvents,
+            viewerRole: 'admin',
+            canManage: true,
+        }),
         destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0],
         destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0],
@@ -207,6 +298,28 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
 
+    const preflightDestinations = await listDwmWebhookDestinations(userId, existing.orgId)
+    const preflightDestination = preflightDestinations.find(item => item.id === req.params.id) || null
+    const preflightDeliveries = await listDwmWebhookDeliveries(userId, existing.orgId)
+    const preflightAuditEvents = await listDwmWebhookAuditEvents(userId, existing.orgId)
+    const preflightCrud = buildDwmWebhookDestinationCrudContract({
+        action: 'test',
+        ownerId: userId,
+        input: { ...(req.body || {}), orgId: existing.orgId },
+        destination: preflightDestination,
+        destinations: preflightDestinations,
+        deliveries: preflightDeliveries,
+        auditEvents: preflightAuditEvents,
+        viewerRole: 'admin',
+        canManage: true,
+    })
+    if (!preflightCrud.canApply) {
+        return res.status(400).send({
+            error: preflightCrud.blockers[0]?.message || 'Webhook destination cannot be tested.',
+            destinationCrud: preflightCrud,
+        })
+    }
+
     const delivery = await testDwmWebhookDestination(userId, req.params.id, req.body || {})
     if (!delivery) {
         return res.status(404).send({ error: 'Webhook destination not found.' })
@@ -218,6 +331,19 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
     return res.status(202).send({
         delivery,
         preview: buildDwmWebhookDeliveryPreview(delivery),
+        destinationCrud: destination
+            ? buildDwmWebhookDestinationCrudContract({
+                action: 'test',
+                ownerId: userId,
+                input: { ...(req.body || {}), orgId: existing.orgId },
+                destination,
+                destinations,
+                deliveries,
+                auditEvents,
+                viewerRole: 'admin',
+                canManage: true,
+            })
+            : null,
         destinationContract: destination
             ? buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0]
             : null,
@@ -485,6 +611,12 @@ function destinationLifecycleAccess(orgId: string, userId: string, membership: M
         viewerRole: role,
         canManage: roleCanManageOrganization(role || undefined),
     }
+}
+
+function destinationCrudActionForUpdate(input: DwmWebhookDestinationInput, destination: { status?: string } | null) {
+    const nextStatus = clean(input.status)
+    if (destination && destination.status !== 'active' && nextStatus === 'active') return 'enable' as const
+    return 'update' as const
 }
 
 async function loadOrganizationMembership(orgId: string, userId: string): Promise<Membership | null> {
