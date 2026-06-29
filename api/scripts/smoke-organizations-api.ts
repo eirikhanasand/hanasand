@@ -3083,6 +3083,29 @@ assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item:
 assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.enabled), [true])
 assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.disabledReason), [null])
 
+const wrongOrgWatchlistUpdateResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${secondOrganization.id}/watchlists/${ownerWatchlistItem.id}`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { kind: 'domain', value: 'wrong-org-update.example', reason: 'Wrong org item mutation must not enumerate.', requestId: 'smoke-wrong-org-watchlist-update-denied' },
+})
+assert.equal(wrongOrgWatchlistUpdateResponse.statusCode, 404, wrongOrgWatchlistUpdateResponse.body)
+const wrongOrgWatchlistUpdateDenied = parseBody(wrongOrgWatchlistUpdateResponse.body).watchlistLookupDenial
+assert.equal(wrongOrgWatchlistUpdateDenied.schemaVersion, 'organization.watchlist_lookup_denial.v1')
+assert.equal(wrongOrgWatchlistUpdateDenied.organizationId, secondOrganization.id)
+assert.equal(wrongOrgWatchlistUpdateDenied.tenantId, secondOrganization.id)
+assert.equal(wrongOrgWatchlistUpdateDenied.actorId, 'org_smoke_owner')
+assert.equal(wrongOrgWatchlistUpdateDenied.actorRole, 'owner')
+assert.equal(wrongOrgWatchlistUpdateDenied.action, 'update_watchlist')
+assert.equal(wrongOrgWatchlistUpdateDenied.itemId, ownerWatchlistItem.id)
+assert.equal(wrongOrgWatchlistUpdateDenied.blockerCode, 'watchlist_not_found_or_cross_org')
+assert.equal(wrongOrgWatchlistUpdateDenied.nonmemberEnumeration, false)
+assert.equal(wrongOrgWatchlistUpdateDenied.crossOrgEnumerationAllowed, false)
+assert.ok(wrongOrgWatchlistUpdateDenied.safeFields.includes('itemId'))
+assert.ok(wrongOrgWatchlistUpdateDenied.noLeakFields.includes('otherOrg.watchlistItemIds'))
+assert.equal(wrongOrgWatchlistUpdateDenied.serviceLogAction, 'organization_watchlist_lookup_denied')
+assert.equal(wrongOrgWatchlistUpdateDenied.requestId, 'smoke-wrong-org-watchlist-update-denied')
+
 const alertTermsRetryResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-alert-terms-ready-retry`,
@@ -3598,6 +3621,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutati
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-viewer-watchlist-archive-denied' && log.metadata.action === 'archive_watchlist' && log.metadata.actorRole === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-member-watchlist-update-denied' && log.metadata.action === 'update_watchlist' && log.metadata.actorRole === 'member'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-member-cleanup-denied' && log.metadata.action === 'cleanup_watchlists' && log.metadata.actorRole === 'member'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.requestId === 'smoke-wrong-org-watchlist-update-denied' && log.metadata.action === 'update_watchlist' && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-viewer-alert-terms-denied' && log.metadata.denialReason === 'role_not_allowed'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-alert-terms-paused' && log.metadata.role === 'member'))

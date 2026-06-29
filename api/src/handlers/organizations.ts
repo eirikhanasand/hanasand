@@ -55,6 +55,7 @@ import {
     type WatchlistCleanupInput,
     type WatchlistKind,
     type WatchlistInput,
+    type OrganizationWatchlistAction,
     type OrganizationWatchlistRow,
 } from '#utils/organizations.ts'
 
@@ -1707,7 +1708,12 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
     `, [req.params.itemId, req.params.organizationId, input.kind, input.value, input.notes, userId, input.reason ?? null, input.requestId ?? null])
 
     if (!result.rows.length) {
-        return res.status(404).send({ error: 'Watchlist item not found.' })
+        return sendWatchlistLookupDenial(req, res, organization, userId, {
+            action: 'update_watchlist',
+            itemId: req.params.itemId,
+            requestId: input.requestId,
+            reason: input.reason,
+        })
     }
 
     await touchOrganization(req.params.organizationId)
@@ -1769,7 +1775,12 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
     `, [req.params.itemId, req.params.organizationId, userId, reason ?? null, requestId ?? null])
 
     if (!result.rows.length) {
-        return res.status(404).send({ error: 'Watchlist item not found.' })
+        return sendWatchlistLookupDenial(req, res, organization, userId, {
+            action: 'archive_watchlist',
+            itemId: req.params.itemId,
+            requestId,
+            reason,
+        })
     }
 
     await touchOrganization(req.params.organizationId)
@@ -1842,7 +1853,12 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
     `, [req.params.itemId, req.params.organizationId, nextStatus, userId, input.reason ?? null, input.requestId ?? null, input.action])
 
     if (!result.rows.length) {
-        return res.status(404).send({ error: 'Watchlist item not found.' })
+        return sendWatchlistLookupDenial(req, res, organization, userId, {
+            action: input.action,
+            itemId: req.params.itemId,
+            requestId: input.requestId,
+            reason: input.reason,
+        })
     }
 
     await touchOrganization(req.params.organizationId)
@@ -2267,6 +2283,62 @@ function sendWatchlistMutationDenial(
         denialReason: denial.denialReason,
     })
     return res.status(403).send({ error: input.message, watchlistMutationDenial: denial })
+}
+
+function sendWatchlistLookupDenial(
+    req: FastifyRequest,
+    res: FastifyReply,
+    organization: OrganizationRow,
+    actorId: string,
+    input: {
+        action: 'update_watchlist' | 'archive_watchlist' | OrganizationWatchlistAction
+        itemId: string
+        requestId?: string | null
+        reason?: string | null
+    }
+) {
+    const denial = {
+        schemaVersion: 'organization.watchlist_lookup_denial.v1' as const,
+        organizationId: organization.id,
+        tenantId: organization.id,
+        actorId,
+        actorRole: organization.role ?? null,
+        action: input.action,
+        itemId: input.itemId,
+        blockerCode: 'watchlist_not_found_or_cross_org' as const,
+        statusCode: 404,
+        nonmemberEnumeration: false as const,
+        crossOrgEnumerationAllowed: false as const,
+        message: 'Watchlist item not found.',
+        safeFields: [
+            'schemaVersion',
+            'organizationId',
+            'tenantId',
+            'actorRole',
+            'action',
+            'itemId',
+            'blockerCode',
+            'requestId',
+        ],
+        noLeakFields: [
+            'otherOrg.watchlistItemIds',
+            'otherOrg.alertGeneratorKeys',
+            'activeTerms[]',
+        ],
+        serviceLogAction: 'organization_watchlist_lookup_denied' as const,
+        requestId: input.requestId ?? null,
+        reason: input.reason ?? null,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+    }
+    logOrganizationEvent(req, denial.serviceLogAction, organization.id, actorId, {
+        requestId: denial.requestId,
+        reason: denial.reason,
+        action: denial.action,
+        itemId: denial.itemId,
+        actorRole: organization.role,
+        blockerCode: denial.blockerCode,
+    })
+    return res.status(404).send({ error: denial.message, watchlistLookupDenial: denial })
 }
 
 function removalPermissionError(actorRole: OrganizationRole | undefined, targetRole: OrganizationRole) {
