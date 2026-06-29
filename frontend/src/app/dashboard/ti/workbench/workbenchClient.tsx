@@ -309,6 +309,18 @@ type AlertDetailPayload = {
     error?: { message?: string }
 }
 
+type WorkbenchApiPayload = {
+    error?: { message?: string }
+    attemptedCount?: number
+    savedAlertCount?: number
+    testedAt?: string
+    invites?: Array<{ id?: string, email?: string, role?: string }>
+    delivery?: { id?: string, status?: string }
+    deliveries?: Array<{ id?: string, status?: string }>
+    case?: { id?: string, status?: string, organizationId?: string }
+    watchlist?: { id?: string, status?: string }
+}
+
 export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', orgContext, initialSelectedId }: { initialCases: WorkbenchCase[], chrome?: 'full' | 'compact', orgContext?: WorkbenchOrgContext, initialSelectedId?: string }) {
     const router = useRouter()
     const compact = chrome === 'compact'
@@ -425,9 +437,10 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
     }, [alertDetails, refreshAlertDetail, selected])
 
-    async function refreshBackedSelection(item: WorkbenchCase) {
+    async function refreshBackedSelection(item: WorkbenchCase, payload?: WorkbenchApiPayload, action?: WorkbenchAction) {
         if (item.kind === 'dwm_alert' && item.persistent) await refreshAlertDetail(item.id, { loading: false })
-        if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
+        const caseHref = item.caseDetailHref || caseDetailHrefFromPayload(payload, action, orgContext)
+        if (caseHref) await refreshCaseDetail(item.id, caseHref, { loading: false })
     }
 
     async function applyDecision(item: WorkbenchCase, decision: LocalDecision) {
@@ -459,7 +472,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             setLocalDecisions(current => ({ ...current, [item.id]: nextDecision }))
-            await refreshBackedSelection(item)
+            await refreshBackedSelection(item, payload)
             return decisionStatus ? `${label(decisionStatus)} saved to the DWM workflow.` : 'Owner saved to the DWM workflow.'
         })
     }
@@ -473,7 +486,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            await refreshBackedSelection(item)
+            await refreshBackedSelection(item, payload)
             return 'Evidence replay recorded in the DWM workflow.'
         })
     }
@@ -488,7 +501,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            await refreshBackedSelection(item)
+            await refreshBackedSelection(item, payload, action)
             return payload.attemptedCount ? 'Webhook delivery attempted.' : 'No webhook delivery was attempted.'
         })
     }
@@ -513,7 +526,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            await refreshBackedSelection(item)
+            await refreshBackedSelection(item, payload, action)
             return actionResultMessage(action, payload)
         })
     }
@@ -2558,20 +2571,26 @@ async function readAlertDetailJson(response: Response) {
 
 async function readJson(response: Response) {
     try {
-        return await response.json() as {
-            error?: { message?: string }
-            attemptedCount?: number
-            savedAlertCount?: number
-            testedAt?: string
-            invites?: Array<{ id?: string, email?: string, role?: string }>
-            delivery?: { id?: string, status?: string }
-            deliveries?: Array<{ id?: string, status?: string }>
-            case?: { id?: string, status?: string }
-            watchlist?: { id?: string, status?: string }
-        }
+        return await response.json() as WorkbenchApiPayload
     } catch {
         return {}
     }
+}
+
+function caseDetailHrefFromPayload(payload: WorkbenchApiPayload | undefined, action: WorkbenchAction | undefined, orgContext: WorkbenchOrgContext | undefined) {
+    const caseId = payload?.case?.id
+    if (!caseId) return undefined
+    const organizationId = payload.case?.organizationId
+        || stringValue(action?.body?.organizationId)
+        || orgContext?.organization?.id
+        || orgContext?.scope.organizationId
+    const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
+    return `/api/cases/${encodeURIComponent(caseId)}${query}`
+}
+
+function stringValue(value: unknown) {
+    const normalized = typeof value === 'string' ? value.trim() : ''
+    return normalized || undefined
 }
 
 function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnType<typeof readJson>>) {
