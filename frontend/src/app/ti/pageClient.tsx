@@ -1291,6 +1291,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                             <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#131c29] dark:text-[#d8e2f2]'>
                                 {sourceRequestRouteLabel(row.route)}
                             </span>
+                            <CopyPayloadButton label='Source evidence request' payload={sourceEvidenceRequestPayloadFor(row, drilldown)} />
                             {row.href ? (
                                 <a href={row.href} target='_blank' rel='noopener noreferrer' className='inline-flex min-h-7 max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-[#d8dee9] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                                     <ExternalLink className='h-3 w-3' />
@@ -1318,6 +1319,31 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
             ) : null}
         </div>
     )
+}
+
+function sourceEvidenceRequestPayloadFor(row: SelectedSourceDrilldownRow, drilldown: SelectedSourceDrilldown) {
+    return {
+        schemaVersion: 'ti.public_actor.source_evidence_request.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: drilldown.query,
+        generatedAt: drilldown.generatedAt,
+        selectedItemId: drilldown.selectedItem.id,
+        selectedItemTitle: drilldown.selectedItem.title,
+        rowId: row.rowId,
+        sourceName: row.sourceName,
+        sourceId: row.sourceId,
+        provenance: row.provenance,
+        href: row.href,
+        captureId: row.captureId,
+        reportDate: row.reportDate,
+        confidence: row.confidence,
+        state: row.state,
+        ownerLane: row.ownerLane,
+        route: row.route,
+        missing: row.missing,
+        handoff: row.handoff,
+    }
 }
 
 function SourceDrilldownHandoff({ label, ready, endpoint, missing }: { label: string; ready: boolean; endpoint: string; missing: string[] }) {
