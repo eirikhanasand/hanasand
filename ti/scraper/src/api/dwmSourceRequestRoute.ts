@@ -3046,14 +3046,17 @@ function sourceActorEnrichmentReadinessResponse(body: DwmSourceRequestBody, opti
 }
 
 function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Record<string, any>) {
+  const publicTiQueryAdapter = sourceActorPublicTiQueryAdapter(query, actorReadiness);
   return {
     schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
     proofId: actorReadiness.proofId,
     query,
+    publicTiQueryAdapter,
     publicTiActorPage: {
       schemaVersion: "ti.public_actor.source_readiness.v1",
       proofId: actorReadiness.proofId,
       query,
+      queryAdapter: publicTiQueryAdapter,
       actorMetadata: actorReadiness.actorMetadata,
       state: actorReadiness.state,
       sections: actorReadiness.actorSections,
@@ -3121,6 +3124,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.sourceConsumerBridge.consumers | all(has(\"consumer\") and has(\"ready\") and has(\"sourceFamilies\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".actorReadiness.sourceSectionReadiness.schemaVersion == \"dwm.actor_source_section_readiness.v1\"",
       ".actorReadiness.sourceSectionReadiness.sections | all(has(\"section\") and has(\"state\") and has(\"sourceFamilies\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".proofArtifacts.publicTiQueryAdapter.schemaVersion == \"ti.public_actor.query_adapter.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.sections | all(has(\"section\") and has(\"state\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3328,6 +3333,121 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
       restrictedMetadataLeaked: false,
       liveNetworkScrapeStarted: false,
       restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<string, any>) {
+  const evidenceByFamily = new Map<string, Record<string, any>>((actorReadiness.evidenceReadiness?.rows ?? []).map((row: any) => [String(row.family), row]));
+  const sectionRows = (actorReadiness.sourceSectionReadiness?.sections ?? []).map((section: any) => {
+    const families = section.sourceFamilies ?? [];
+    return {
+      schemaVersion: "ti.public_actor.query_adapter_section.v1",
+      proofId: stableId("ti_public_actor_query_adapter_section", `${query}:${section.section}:${section.state}:${families.join(",")}`),
+      query,
+      section: section.section,
+      state: section.state,
+      sourceFamilies: families,
+      provenance: (section.provenance ?? []).map((row: any) => ({
+        family: row.family,
+        sourceIds: row.sourceIds ?? [],
+        candidateIds: row.candidateIds ?? [],
+        timestamps: row.timestamps,
+        privacyBoundary: row.privacyBoundary,
+        sourceTrust: row.sourceTrust,
+        evidenceProofId: evidenceByFamily.get(String(row.family))?.proofId
+      })),
+      timestamps: section.timestamps,
+      confidence: section.confidence,
+      matchableFields: section.matchableFields ?? [],
+      alertableFields: section.alertableFields ?? [],
+      gaps: (section.missingFamilies ?? []).map((family: string) => ({
+        family,
+        intakeRecommendation: (actorReadiness.candidateGaps ?? []).find((gap: any) => gap.family === family)?.intakeRecommendation,
+        state: "missing_source"
+      })),
+      blockers: section.blockers ?? [],
+      nextActions: (section.nextActions ?? []).map((action: any) => ({
+        type: action.type,
+        priority: action.priority,
+        reasonCode: action.reasonCode,
+        route: action.route,
+        liveNetworkFetch: false
+      })),
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.query_adapter.v1",
+    proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
+    query,
+    route: {
+      method: "GET",
+      path: `/ti/${encodeURIComponent(query.toLowerCase())}`,
+      liveNetworkFetch: false
+    },
+    actor: {
+      actorId: actorReadiness.actorMetadata?.actorId,
+      displayName: actorReadiness.actorMetadata?.displayName ?? query,
+      aliases: actorReadiness.actorMetadata?.aliases ?? [],
+      noSyntheticActorClaims: true
+    },
+    readiness: {
+      state: actorReadiness.state,
+      publicTiReady: actorReadiness.sourceConsumerBridge?.summary?.publicTiReady === true,
+      alertReady: actorReadiness.sourceConsumerBridge?.summary?.alertReady === true,
+      watchlistMatchReady: actorReadiness.sourceConsumerBridge?.summary?.watchlistMatchReady === true,
+      freshnessState: actorReadiness.freshness?.captureFreshness?.state,
+      lastSuccessfulCaptureAt: actorReadiness.freshness?.lastSuccessfulCaptureAt,
+      lastSuccessfulEnrichmentAt: actorReadiness.freshness?.lastSuccessfulEnrichmentAt
+    },
+    sections: sectionRows,
+    evidence: (actorReadiness.evidenceReadiness?.rows ?? []).map((row: any) => ({
+      family: row.family,
+      proofId: row.proofId,
+      state: row.state,
+      confidence: row.confidence,
+      confidenceTier: row.confidenceTier,
+      timestamps: row.timestamps,
+      evidenceFields: row.evidenceFields ?? [],
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      gap: row.gap,
+      safeOutput: row.safeOutput
+    })),
+    sourceHealth: (actorReadiness.sourceFamilyHealth?.rows ?? []).map((row: any) => ({
+      family: row.family,
+      state: row.state,
+      parserState: row.parserState,
+      captureState: row.captureState,
+      freshnessState: row.freshnessState,
+      confidence: row.confidence,
+      confidenceTier: row.confidenceTier,
+      timestamps: row.timestamps,
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      privacyBoundary: row.privacyBoundary,
+      blockers: row.blockers ?? [],
+      nextActions: row.nextActions ?? [],
+      safeOutput: row.safeOutput
+    })),
+    alertability: {
+      matchableFields: actorReadiness.alertability?.matchableFields ?? [],
+      activeSourceFamilies: actorReadiness.alertability?.activeSourceFamilies ?? [],
+      watchlistMatchReadiness: actorReadiness.alertGenerationReadiness?.watchlistMatchReadiness,
+      alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
+    },
+    gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
     }
   };
 }
