@@ -1229,6 +1229,13 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     }
     if (selected.caseDetailHref) {
         rows.push({ id: 'open_case', label: 'Open selected case', detail: selected.caseDetailHref, tone: 'ready', href: selected.caseDetailHref })
+        rows.push({
+            id: 'export_case_evidence',
+            label: 'Export case evidence',
+            detail: `GET ${caseExportHref(selected.caseDetailHref)}.`,
+            tone: 'ready',
+            href: caseExportHref(selected.caseDetailHref),
+        })
     } else if (selected.kind === 'dwm_alert') {
         rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'No backed case ID is attached to this alert.', tone: 'blocked' })
     }

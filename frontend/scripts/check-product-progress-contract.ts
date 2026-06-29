@@ -779,6 +779,7 @@ assert.ok(workbenchSource.includes('customerNotificationContext'), 'Case continu
 assert.ok(caseCustomerNotificationProxySource.includes('/v1/cases/${encodeURIComponent(id)}/customer-notification'), 'Dashboard case notification proxy should forward to the TI case notification contract.')
 assert.ok(workbenchSource.includes('caseExportHref'), 'Selected backed cases should expose the audit-safe case export route.')
 assert.ok(workbenchSource.includes('Case export'), 'Selected backed case inspection should deep-link to the export payload.')
+assert.ok(workbenchSource.includes('export_case_evidence'), 'Selected backed cases should expose evidence export in the operator action rail.')
 assert.ok(caseExportProxySource.includes('/v1/cases/${encodeURIComponent(id)}/export'), 'Dashboard case export proxy should forward to the TI case export contract.')
 assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
 assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
