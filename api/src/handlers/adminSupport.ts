@@ -44,6 +44,8 @@ type AuditQuery = {
     session?: string
     supportSession?: string
     supportSessionId?: string
+    workflow?: string
+    bridgeWorkflow?: string
     reason?: string
     outcome?: string
     from?: string
@@ -345,6 +347,8 @@ const adminAuditFilters = new Set([
     'session',
     'supportSession',
     'supportSessionId',
+    'workflow',
+    'bridgeWorkflow',
     'reason',
     'outcome',
     'from',
@@ -378,6 +382,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const correlation = text(query.correlation || query.correlationId)
     const idempotency = text(query.idempotency || query.idempotencyKey || query.idempotency_key)
     const supportSession = text(query.session || query.supportSession || query.supportSessionId)
+    const workflow = text(query.workflow || query.bridgeWorkflow)
     const reason = text(query.reason)
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
     const from = text(query.from)
@@ -436,6 +441,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
         const placeholder = add(`%${supportSession}%`)
         where.push('(e.entity_id ILIKE ' + placeholder + ' OR e.context->>\'supportSessionId\' ILIKE ' + placeholder + ')')
     }
+    if (workflow) where.push(`e.context->>'workflow' ILIKE ${add(`%${workflow}%`)}`)
     if (reason) where.push(`e.reason ILIKE ${add(`%${reason}%`)}`)
     if (outcome) where.push(`e.outcome = ${add(outcome)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
@@ -474,7 +480,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
 
     const events = result.rows.map(toAdminAuditEvent)
     const timeline = events.map(event => event.detail.timelineEvent)
-    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, reason, outcome, from, to, limit }
+    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, reason, outcome, from, to, limit }
     return res.send({
         events,
         filters,
