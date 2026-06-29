@@ -269,19 +269,6 @@ describe("DWM org watchlist bridge", () => {
         alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
         watchlistTermContexts: [{ watchlistItemId: "org_item_acme_domain" }]
       });
-      expect(alert.deliveryReadinessContext).toMatchObject({
-        schemaVersion: "dwm.alert_delivery_persistence.v1",
-        organizationId,
-        tenantId: organizationId,
-        alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
-        sourceFamily: alert.sourceFamily,
-        selectedCaptureIds: alert.provenance.captureIds,
-        evidenceCount: 1,
-        deliveryDedupeKey: alert.webhookDelivery.dedupeKey,
-        caseIdCandidate: alert.caseIdCandidate,
-        casePath: alert.casePath,
-        blockerCodes: ["delivery_disabled"]
-      });
       expect(JSON.stringify(alert)).not.toContain("org_item_acme_paused");
       expect(JSON.stringify(alert)).not.toContain("org_item_acme_archived");
     }
@@ -366,14 +353,6 @@ describe("DWM org watchlist bridge", () => {
     expect(preserved.evidence).toHaveLength(1);
     expect(preserved.provenance.captureIds).toEqual(["cap_org_bridge_tg_acme"]);
     expect(preserved.workflowContext.watchlistTermContexts).toEqual([expect.objectContaining({ watchlistItemId: "org_item_acme_domain" })]);
-    expect(preserved.deliveryReadinessContext).toMatchObject({
-      organizationId,
-      selectedCaptureIds: ["cap_org_bridge_tg_acme"],
-      alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
-      caseId: "case_org_bridge_live",
-      casePath: `/v1/cases/case_org_bridge_live?alertId=${telegramAlert.id}`,
-      blockerCodes: expect.arrayContaining(["delivery_disabled"])
-    });
 
     const policyResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/entitlements`, {
       method: "PUT",

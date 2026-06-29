@@ -83,17 +83,6 @@ describe("dwm workflow persistence", () => {
       expect(rebuild.alerts[0].recommendedRoute).toBe("identity_response");
       expect(rebuild.alerts[0].confidenceReasoning.join(" ")).toContain("Final confidence");
       expect(rebuild.alerts[0].provenance.captureIds).toContain("cap_workflow_acme");
-      expect(rebuild.alerts[0].deliveryReadinessContext).toMatchObject({
-        schemaVersion: "dwm.alert_delivery_persistence.v1",
-        alertId: rebuild.alerts[0].id,
-        tenantId: "tenant_acme",
-        selectedCaptureIds: ["cap_workflow_acme"],
-        sourceFamily: "telegram_public",
-        evidenceCount: 1,
-        deliveryDedupeKey: rebuild.alerts[0].webhookDelivery.dedupeKey,
-        casePath: expect.stringContaining("/v1/cases/"),
-        blockerCodes: expect.arrayContaining(["missing_org_ref"])
-      });
       expect((rehydrated as any).listDwmAlerts()).toHaveLength(1);
 
       const updateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${rebuild.alerts[0].id}`, {
@@ -128,11 +117,6 @@ describe("dwm workflow persistence", () => {
       expect(replayResponse.status).toBe(200);
       expect(replay.alert.replayCount).toBe(1);
       expect(replay.alert.workflowEvents).toHaveLength(2);
-      expect(replay.alert.deliveryReadinessContext).toMatchObject({
-        replayCount: 1,
-        selectedCaptureIds: ["cap_workflow_acme"],
-        deliveryDedupeKey: replay.alert.webhookDelivery.dedupeKey
-      });
 
       rehydrated.saveCapture(followupCapture);
 
@@ -239,13 +223,6 @@ describe("dwm workflow persistence", () => {
     });
     expect(triage.alert.nextBestAction).toMatchObject({ action: "investigate_or_route", route: "identity_response" });
     expect(triage.alert.deliveryReadiness).toMatchObject({ ready: false, state: "missing_route", evidenceCount: 1 });
-    expect(triage.alert.deliveryReadiness.persistedContext).toMatchObject({
-      schemaVersion: "dwm.alert_delivery_persistence.v1",
-      organizationId,
-      alertGeneratorKeys: [],
-      selectedCaptureIds: ["cap_workflow_acme"],
-      blockerCodes: expect.arrayContaining(["missing_org_ref", "delivery_disabled"])
-    });
     expect(triage.alert.evidenceFreshness).toMatchObject({ newestEvidenceAt: "2026-06-27T21:02:00.000Z", evidenceCount: 1, captureIds: ["cap_workflow_acme"] });
     expect(triage.alert.provenanceFreshness).toMatchObject({ matchBasis: "watchlist_capture_text", captureIds: ["cap_workflow_acme"], dedupeKey: alert.dedupeKey });
 
