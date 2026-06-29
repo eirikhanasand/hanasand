@@ -538,6 +538,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             filters,
             eventIds: timeline.map(event => event.id),
             summary: impersonationTimelineSummary(timeline),
+            filterContract: impersonationTimelineFilterContract(filters, timeline),
             events: timeline,
             redacted: true,
             links: {
@@ -592,6 +593,49 @@ function impersonationTimelineSummary(timeline: Array<Record<string, any>>) {
         sessionIds: unique(timeline.map(event => event.entity?.id)),
         outcomes: unique(timeline.map(event => event.outcome)),
     }
+}
+
+function impersonationTimelineFilterContract(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    return {
+        schemaVersion: 'support.impersonation.timeline_filter_contract.v1',
+        filters,
+        supportedFilters: ['q', 'actor', 'target', 'action', 'outcome', 'method', 'path', 'session', 'from', 'to', 'limit'],
+        lifecycleStorage: 'impersonation_events',
+        auditStorage: 'admin_audit_events',
+        eventCount: timeline.length,
+        redacted: true,
+        unavailableFilters: [
+            {
+                filter: 'requestId',
+                reason: 'Lifecycle rows do not store request ids; use admin audit events for request correlation.',
+                route: '/api/admin/audit-events?action=impersonation&source=admin&service=hanasand-api',
+            },
+            {
+                filter: 'deniedOutcome',
+                reason: 'Denied impersonation attempts are stored as structured admin audit events.',
+                route: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
+            },
+        ],
+        replay: {
+            lifecycle: impersonationEventsQuery(filters),
+            audit: `/api/admin/audit-events?action=impersonation&source=admin&service=hanasand-api${filters.session ? `&entity=${encodeURIComponent(String(filters.session))}` : ''}`,
+        },
+        copyText: [
+            'Impersonation timeline filter contract',
+            `Lifecycle replay: ${impersonationEventsQuery(filters)}`,
+            'Denied attempts: /api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
+        ].join('\n'),
+    }
+}
+
+function impersonationEventsQuery(filters: Record<string, unknown>) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(filters)) {
+        if (value === undefined || value === null || value === '') continue
+        params.set(key, String(value))
+    }
+    const query = params.toString()
+    return `/api/impersonation/events${query ? `?${query}` : ''}`
 }
 
 function normalizeDurationMinutes(value: unknown) {
