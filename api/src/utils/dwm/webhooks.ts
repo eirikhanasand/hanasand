@@ -3030,9 +3030,29 @@ export function buildDwmWebhookCustomerSetupProof({
     const retryScheduled = readiness.destinations.filter(destination => destination.retryState.retryable)
     const terminalFailures = replayGuard.entries.filter(entry => entry.retry.terminalFailure)
     const firstActiveDestination = activeDestinations[0] || null
-    const firstActiveDestinationTest = firstActiveDestination
-        ? destinationTests.find(test => test.destinationId === firstActiveDestination.destinationId) || null
-        : null
+    const dryRunTestRequests = activeDestinations.map(destination => {
+        const test = destinationTests.find(item => item.destinationId === destination.destinationId) || null
+        return {
+            method: 'POST',
+            route: `POST /api/dwm/webhook-destinations/${destination.destinationId}/test`,
+            noNetwork: true,
+            externalSendEnabled: false,
+            destinationId: destination.destinationId,
+            orgId: destination.orgId,
+            label: destination.label,
+            enabled: destination.enabled,
+            status: destination.status,
+            body: {
+                dryRun: true,
+                live: false,
+                eventType: 'dwm.alert.test',
+                destinationId: destination.destinationId,
+                orgId: destination.orgId,
+            },
+            payloadPreview: test?.dryRunPayloadPreview || null,
+            blockers: test?.blockers || [],
+        }
+    })
     const blockers = []
     if (destinations.length === 0) blockers.push(retryQueueBlocker('missing_webhook_destination', 'Create a Discord or webhook destination before enabling customer alert delivery.', null, true))
     if (destinations.length > 0 && activeDestinations.length === 0) blockers.push(retryQueueBlocker('no_active_destination', 'All webhook destinations are disabled.', null, true))
@@ -3097,22 +3117,8 @@ export function buildDwmWebhookCustomerSetupProof({
                 blockers: uniqueBlockers,
             },
         ],
-        dryRunTestRequest: firstActiveDestination
-            ? {
-                method: 'POST',
-                route: `POST /api/dwm/webhook-destinations/${firstActiveDestination.destinationId}/test`,
-                noNetwork: true,
-                externalSendEnabled: false,
-                body: {
-                    dryRun: true,
-                    live: false,
-                    eventType: 'dwm.alert.test',
-                    destinationId: firstActiveDestination.destinationId,
-                    orgId: firstActiveDestination.orgId,
-                },
-                payloadPreview: firstActiveDestinationTest?.dryRunPayloadPreview || null,
-            }
-            : null,
+        dryRunTestRequest: dryRunTestRequests[0] || null,
+        dryRunTestRequests,
         deliveryReadiness: readiness,
         destinationTests,
         destinationAdminProof: adminProof,

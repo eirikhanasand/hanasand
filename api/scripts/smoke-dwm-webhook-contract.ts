@@ -2955,6 +2955,8 @@ expect(customerSetup.access.canCreate === true && customerSetup.access.canTest =
 expect(customerSetupDryRunStep?.status === 'complete' && customerSetup.dryRunTestRequest?.noNetwork === true && customerSetup.dryRunTestRequest.externalSendEnabled === false, 'Customer setup proof should expose no-network dry-run test request.', customerSetup)
 expect(customerSetup.dryRunTestRequest?.payloadPreview?.schemaVersion === 'dwm.webhook.destination_test_payload_preview.v1' && customerSetup.dryRunTestRequest.payloadPreview.discord.fieldNames.includes('Evidence count'), 'Customer setup proof should expose a Discord payload preview for dry-run tests.', customerSetup.dryRunTestRequest)
 expect(customerSetup.dryRunTestRequest?.payloadPreview?.context.orgId === 'org_contract' && customerSetup.dryRunTestRequest.payloadPreview.context.dedupeKey.includes('webhook_test'), 'Customer setup dry-run preview should carry org and test dedupe context.', customerSetup.dryRunTestRequest?.payloadPreview)
+expect(customerSetup.dryRunTestRequests.length === customerSetup.summary.activeDestinationCount && customerSetup.dryRunTestRequests.every(item => item.noNetwork === true && item.body.eventType === 'dwm.alert.test'), 'Customer setup proof should expose one no-network dry-run test request per active destination.', customerSetup.dryRunTestRequests)
+expect(customerSetup.dryRunTestRequests.some(item => item.destinationId === 'destination_replay_contract' && item.payloadPreview?.discord.fieldNames.includes('Watchlist')) && customerSetup.dryRunTestRequests.every(item => item.destinationId !== 'destination_disabled_contract'), 'Customer setup dry-run request list should include Discord previews for active destinations and exclude disabled destinations.', customerSetup.dryRunTestRequests)
 expect(customerSetupDeliveryStep?.route === 'POST /api/dwm/webhook-deliveries' && customerSetup.blockers.some(item => item.code === 'live_delivery_disabled'), 'Customer setup proof should expose delivery route and live-disabled blocker.', customerSetup)
 expect(customerSetup.summary.retryScheduledCount >= 1 && customerSetup.summary.terminalFailureCount >= 1, 'Customer setup proof should surface retry and terminal failure counts.', customerSetup)
 expect(nonmemberCustomerSetup.status === 'permission_denied' && nonmemberCustomerSetup.setupSteps.length === 0 && nonmemberCustomerSetup.blockers.some(item => item.code === 'permission_denied'), 'Customer setup proof should deny nonmembers without leaking setup details.', nonmemberCustomerSetup)
@@ -3155,6 +3157,7 @@ console.log(JSON.stringify({
         'customer setup proof delete/archive routes',
         'customer setup proof dry-run request',
         'customer setup proof dry-run payload preview',
+        'customer setup proof per-destination dry-run requests',
         'customer setup proof live-disabled blocker',
         'customer setup proof retry/terminal counts',
         'customer setup proof nonmember denial',
@@ -3314,6 +3317,8 @@ console.log(JSON.stringify({
             'customerSetup.setupSteps[].status',
             'customerSetup.dryRunTestRequest.noNetwork',
             'customerSetup.dryRunTestRequest.payloadPreview.discord.fieldNames',
+            'customerSetup.dryRunTestRequests[].destinationId',
+            'customerSetup.dryRunTestRequests[].payloadPreview.discord.fieldNames',
             'customerSetup.routes.test',
             'customerSetup.routes.delete',
             'customerSetup.routes.archive',
