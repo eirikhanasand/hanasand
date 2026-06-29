@@ -264,10 +264,10 @@ export type WorkbenchCase = {
 
 type QueueFilter = 'all' | 'critical' | 'high' | 'persistent' | 'evidence'
 
-export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', orgContext }: { initialCases: WorkbenchCase[], chrome?: 'full' | 'compact', orgContext?: WorkbenchOrgContext }) {
+export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', orgContext, initialSelectedId }: { initialCases: WorkbenchCase[], chrome?: 'full' | 'compact', orgContext?: WorkbenchOrgContext, initialSelectedId?: string }) {
     const router = useRouter()
     const compact = chrome === 'compact'
-    const [selectedId, setSelectedId] = useState(initialCases[0]?.id ?? '')
+    const [selectedId, setSelectedId] = useState(() => initialCases.find(item => item.id === initialSelectedId)?.id ?? initialCases[0]?.id ?? '')
     const [filter, setFilter] = useState<QueueFilter>('all')
     const [query, setQuery] = useState('')
     const [notes, setNotes] = useState<Record<string, string>>({})

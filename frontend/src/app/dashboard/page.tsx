@@ -102,6 +102,8 @@ export default async function Page({
         liveAlertCount: liveAlerts.length,
     })
     const cases = buildWorkbenchCases(overview, alerts, [...handoffCases, ...readinessCases], liveAlerts.length > 0, scope, deliveries)
+    const requestedCaseId = firstParam(params?.case)
+    const initialSelectedId = cases.find(item => item.id === requestedCaseId)?.id
     const displayName = impersonatingName || impersonatingId || name
     const firstName = displayName.split(/\s+/)[0] || displayName
     const highPriorityCount = cases.filter(item => item.severity === 'critical' || item.severity === 'high').length
@@ -121,7 +123,7 @@ export default async function Page({
                 persistentCount={cases.filter(item => item.persistent).length}
             />
 
-            <AnalystWorkbenchClient initialCases={cases} chrome='compact' orgContext={orgContext} />
+            <AnalystWorkbenchClient initialCases={cases} chrome='compact' orgContext={orgContext} initialSelectedId={initialSelectedId} />
         </DashboardPage>
     )
 }
