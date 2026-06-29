@@ -2765,20 +2765,41 @@ function stringValue(value: unknown) {
     return normalized || undefined
 }
 
+function objectValue(value: unknown) {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
+}
+
+function arrayValue(value: unknown) {
+    return Array.isArray(value) ? value : []
+}
+
+function stringArrayValue(value: unknown) {
+    return arrayValue(value).map(item => stringValue(item)).filter((item): item is string => Boolean(item))
+}
+
+function numberValue(value: unknown) {
+    const normalized = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(normalized) ? normalized : undefined
+}
+
 function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnType<typeof readJson>>) {
     if (payload.case?.id) return `Case ${payload.case.id} is ${payload.case.status || 'open'}.`
     if (typeof payload.savedAlertCount === 'number') return `Rebuilt ${payload.savedAlertCount} alert${payload.savedAlertCount === 1 ? '' : 's'}.`
     if (typeof payload.attemptedCount === 'number') return `Webhook delivery attempted for ${payload.attemptedCount} alert${payload.attemptedCount === 1 ? '' : 's'}.`
     if (action.id === 'request_source_coverage') {
         const sourcePayload = payload as Record<string, unknown>
-        const summary = sourcePayload.summary && typeof sourcePayload.summary === 'object' ? sourcePayload.summary as Record<string, unknown> : {}
-        const createdCount = Number(summary.telegramPublicCreated ?? summary.darkwebMetadataCreated ?? summary.createdCount ?? 0)
-        const duplicateCount = Number(summary.duplicateCount ?? 0)
+        const sourceProofMessage = sourceOperationsActionMessage(sourcePayload)
+        if (sourceProofMessage) return sourceProofMessage
+        const summary = objectValue(sourcePayload.summary) || {}
+        const createdCount = numberValue(summary.telegramPublicCreated ?? summary.darkwebMetadataCreated ?? summary.createdCount) ?? 0
+        const duplicateCount = numberValue(summary.duplicateCount) ?? 0
         if (Number.isFinite(createdCount) && Number.isFinite(duplicateCount) && (createdCount || duplicateCount)) return `Source request applied: ${createdCount} created, ${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'}.`
-        const source = sourcePayload.source && typeof sourcePayload.source === 'object' ? sourcePayload.source as { id?: string } : undefined
-        const candidate = sourcePayload.candidate && typeof sourcePayload.candidate === 'object' ? sourcePayload.candidate as { id?: string } : undefined
-        if (source?.id) return `Source ${source.id} queued for coverage.`
-        if (candidate?.id) return `Source candidate ${candidate.id} queued for review.`
+        const source = objectValue(sourcePayload.source)
+        const candidate = objectValue(sourcePayload.candidate)
+        const sourceId = stringValue(source?.id)
+        const candidateId = stringValue(candidate?.id)
+        if (sourceId) return `Source ${sourceId} queued for coverage.`
+        if (candidateId) return `Source candidate ${candidateId} queued for review.`
         return 'Source coverage request accepted.'
     }
     if (action.id === 'run_canary_collection') {
@@ -2793,6 +2814,58 @@ function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnTyp
     if (payload.deliveries?.[0]?.id) return `Latest delivery ${payload.deliveries[0].id} is ${payload.deliveries[0].status || 'recorded'}.`
     if (payload.testedAt) return `Webhook test recorded at ${payload.testedAt}.`
     return `${action.label} completed.`
+}
+
+function sourceOperationsActionMessage(payload: Record<string, unknown>) {
+    const sourceOperationsReadiness = objectValue(payload.sourceOperationsReadiness)
+        || objectValue(objectValue(payload.sourcePacks)?.sourceOperationsReadiness)
+        || objectValue(objectValue(objectValue(payload.sourceInventory)?.sourcePackWorker)?.sourceOperationsReadiness)
+    const sourceOperationsQueue = objectValue(payload.sourceOperationsQueue)
+        || objectValue(objectValue(payload.actorReadiness)?.sourceOperationsQueue)
+        || objectValue(objectValue(objectValue(payload.proofArtifacts)?.dashboardSourceReadiness)?.sourceOperationsQueue)
+    const sourceOperationsAdapter = objectValue(payload.sourceOperationsAdapter)
+        || objectValue(objectValue(objectValue(payload.proofArtifacts)?.dashboardSourceReadiness)?.sourceOperationsAdapter)
+    const collectionTrigger = objectValue(payload.collectionTrigger)
+    const alertRebuild = objectValue(payload.alertRebuild)
+    const queueItems = arrayValue(sourceOperationsQueue?.queueItems)
+    const adapterRows = arrayValue(sourceOperationsAdapter?.rows)
+
+    if (sourceOperationsReadiness) {
+        const summary = objectValue(sourceOperationsReadiness.summary) || {}
+        const actionability = objectValue(sourceOperationsReadiness.actionability)
+        const nextAction = objectValue(arrayValue(sourceOperationsReadiness.nextOperatorActions)[0])
+        const lastActionId = stringArrayValue(sourceOperationsReadiness.lastActionIds)[0]
+        const parts = [
+            numberValue(summary.readyFamilies) !== undefined ? `${numberValue(summary.readyFamilies)} ready families` : undefined,
+            numberValue(summary.actionableFamilies) !== undefined ? `${numberValue(summary.actionableFamilies)} actionable families` : undefined,
+            numberValue(summary.candidateCount) !== undefined ? `${numberValue(summary.candidateCount)} candidates` : undefined,
+            queueItems.length ? `${queueItems.length} queued operation${queueItems.length === 1 ? '' : 's'}` : undefined,
+            lastActionId ? `last action ${lastActionId}` : undefined,
+        ].filter(Boolean)
+        const next = [stringValue(nextAction?.action), stringValue(nextAction?.reason)].filter(Boolean).join(': ')
+        const retry = actionability?.canRetry === false ? ' Retry is blocked by source policy.' : ''
+        return `Source operations proof returned${parts.length ? `: ${parts.join(', ')}` : '.'}${next ? `. Next: ${next}` : ''}${retry}`
+    }
+
+    if (queueItems.length) return `Source operations queue returned ${queueItems.length} item${queueItems.length === 1 ? '' : 's'} for operator review.`
+    if (adapterRows.length) return `Source operations proof returned ${adapterRows.length} row${adapterRows.length === 1 ? '' : 's'} for dashboard readiness.`
+
+    const collectionQueued = collectionTrigger?.queued === true
+    const collectionReason = stringValue(collectionTrigger?.reason)
+    const collectionTaskId = stringValue(collectionTrigger?.taskId) || stringValue(collectionTrigger?.jobId)
+    const rebuildStatus = stringValue(alertRebuild?.status)
+    const rebuildReason = stringValue(alertRebuild?.reason)
+    if (collectionTrigger || alertRebuild) {
+        const collectionText = collectionQueued
+            ? `collection queued${collectionTaskId ? ` as ${collectionTaskId}` : ''}`
+            : `collection not queued${collectionReason ? `: ${collectionReason}` : ''}`
+        const rebuildText = rebuildStatus || rebuildReason
+            ? `alert rebuild ${rebuildStatus || 'pending'}${rebuildReason ? `: ${rebuildReason}` : ''}`
+            : 'alert rebuild state returned'
+        return `Source workflow updated: ${collectionText}; ${rebuildText}.`
+    }
+
+    return undefined
 }
 
 function caseMutationResultMessage(action: WorkbenchCaseMutationAction, payload: Awaited<ReturnType<typeof readJson>>) {
