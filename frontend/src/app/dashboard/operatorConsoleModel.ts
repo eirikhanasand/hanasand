@@ -108,7 +108,7 @@ export type DwmDeliveryItem = {
 }
 
 type ReadinessStatus = WorkbenchProductReadinessItem['status']
-type ProductReadinessOwnerLane = 'public-ti' | 'helpdesk' | 'integration' | 'source' | 'org' | 'webhook' | 'dashboard'
+type ProductReadinessOwnerLane = 'public-ti' | 'helpdesk' | 'integration' | 'source' | 'org' | 'webhook' | 'dashboard' | 'dwm'
 
 export type ProductReadinessSnapshotBase = {
     status: ReadinessStatus
@@ -196,6 +196,17 @@ export type EntitlementReadiness = ProductReadinessSnapshotBase & {
     checkedRole?: string
 }
 
+export type DwmProductSnapshotReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'dwm.product_snapshot.readiness.v1' | string
+    tenantId?: string
+    watchlistTermCount?: number
+    alertCount?: number
+    sourceFamilyCount?: number
+    actorOverviewCount?: number
+    latestAlertAt?: string
+    readinessDecision?: string
+}
+
 export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     schemaVersion: 'dwm.source_inventory.v1' | string
     proxyExposed?: boolean
@@ -227,15 +238,16 @@ export type ProductReadinessExternalState = {
     webhookHealth?: WebhookHealthReadiness
     dashboardEvidence?: DashboardAlertEvidenceReadiness
     entitlement?: EntitlementReadiness
+    dwmProduct?: DwmProductSnapshotReadiness
 }
 
 export const PRODUCT_PROGRESS_SCHEMA_VERSION = 'product.progress.readiness.v1'
 
-export const PRODUCT_READINESS_FULL_CHAIN_GATE_IDS = ['org_members', 'shared_watchlists', 'entitlement_readiness', 'source_coverage', 'source_inventory_probe', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'helpdesk_audit', 'deploy_probe'] as const
+export const PRODUCT_READINESS_FULL_CHAIN_GATE_IDS = ['org_members', 'shared_watchlists', 'entitlement_readiness', 'source_coverage', 'source_inventory_probe', 'dwm_product_snapshot', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'helpdesk_audit', 'deploy_probe'] as const
 
-export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe'] as const
+export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'dwm_product_snapshot', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe'] as const
 
-export const PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'webhook_delivery', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance'] as const
+export const PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'dwm_product_snapshot', 'webhook_delivery', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance'] as const
 
 export type DashboardSourceProofProxyPayload = {
     ok?: boolean
@@ -296,6 +308,7 @@ export type ProductProgressReadinessPayload = {
         organizations?: string
         watchlists?: string
         operations?: string
+        dwmProduct?: string
         deliveries?: string
         organizationWebhooks?: string
         supportRecovery?: string
@@ -309,6 +322,7 @@ export type ProductProgressReadinessPayload = {
     webhookHealth?: WebhookHealthReadiness
     dashboardEvidence?: DashboardAlertEvidenceReadiness
     entitlement?: EntitlementReadiness
+    dwmProduct?: DwmProductSnapshotReadiness
 }
 
 export function parseProductProgressReadinessPayload(input: unknown): ProductProgressReadinessPayload | null {
@@ -339,6 +353,7 @@ export function buildProductProgressExternalState(input: ProductProgressReadines
             webhookHealth: unavailableWebhookHealth(route, options.checkedAt),
             dashboardEvidence: unavailableDashboardEvidence(route, options.checkedAt),
             entitlement: unavailableEntitlementReadiness(route, options.checkedAt),
+            dwmProduct: unavailableDwmProduct(route, options.checkedAt),
         }
     }
 
@@ -367,6 +382,7 @@ export function buildProductProgressExternalState(input: ProductProgressReadines
         webhookHealth: normalizeWebhookHealthReadiness(input.webhookHealth, input.routes?.webhookHealth || route, options.checkedAt),
         dashboardEvidence,
         entitlement: normalizeEntitlementReadiness(input.entitlement, input.routes?.entitlement || route, options.checkedAt),
+        dwmProduct: normalizeDwmProductReadiness(input.dwmProduct, input.routes?.dwmProduct || route, options.checkedAt),
     }
 }
 
@@ -424,6 +440,25 @@ function unavailableDeployProbe(source: string, checkedAt: string): DeployProbeR
         expectedDashboardRowId: 'deploy_probe',
         integrationProbeHint: 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
         backendProofContractVersion: 'product.deploy_probe.readiness.v1',
+    }
+}
+
+function unavailableDwmProduct(source: string, checkedAt: string): DwmProductSnapshotReadiness {
+    return {
+        schemaVersion: 'dwm.product_snapshot.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard/dwm',
+        detail: 'Live DWM product snapshot is not loaded by product progress.',
+        blockers: ['DWM owner must expose /api/dwm/product with demo=false before this can become ready.'],
+        ownerLane: 'dwm',
+        unavailableReason: 'missing_dwm_product_snapshot',
+        staleAfterSeconds: 900,
+        proofTimestamp: checkedAt,
+        expectedDashboardRowId: 'dwm_product_snapshot',
+        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+        backendProofContractVersion: 'dwm.product.v1',
     }
 }
 
@@ -652,6 +687,27 @@ function normalizeEntitlementReadiness(input: EntitlementReadiness | undefined, 
         integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
         backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dwm.entitlement.readiness.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : entitlementDetail(input)),
+    }
+}
+
+function normalizeDwmProductReadiness(input: DwmProductSnapshotReadiness | undefined, source: string, checkedAt: string): DwmProductSnapshotReadiness {
+    if (!input) return unavailableDwmProduct(source, checkedAt)
+    const blockers = input.blockers || []
+    return {
+        ...input,
+        status: input.status === 'unavailable' ? 'unavailable' : blockers.length ? input.status === 'blocked' ? 'blocked' : 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
+        checkedAt: input.checkedAt || checkedAt,
+        source: input.source || source,
+        href: input.href || '/dashboard/dwm',
+        blockers,
+        ownerLane: input.ownerLane || 'dwm',
+        unavailableReason: blockers.length ? input.unavailableReason || 'missing_dwm_product_snapshot' : undefined,
+        staleAfterSeconds: input.staleAfterSeconds ?? 900,
+        proofTimestamp: input.proofTimestamp || input.latestAlertAt || input.checkedAt || checkedAt,
+        expectedDashboardRowId: input.expectedDashboardRowId || 'dwm_product_snapshot',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+        backendProofContractVersion: input.backendProofContractVersion || 'dwm.product.v1',
+        detail: input.detail || (blockers.length ? blockers.join('; ') : dwmProductDetail(input)),
     }
 }
 
@@ -1130,6 +1186,7 @@ function buildProductReadiness(input: {
     const helpdeskAudit = input.externalReadiness?.helpdeskAudit
     const deployProbe = input.externalReadiness?.deployProbe
     const sourceGrowth = input.externalReadiness?.sourceGrowth
+    const dwmProduct = input.externalReadiness?.dwmProduct
     const orgAlertExport = input.externalReadiness?.orgAlertExport
     const webhookHealth = input.externalReadiness?.webhookHealth
     const dashboardEvidence = input.externalReadiness?.dashboardEvidence
@@ -1201,6 +1258,23 @@ function buildProductReadiness(input: {
             href: '/dashboard/ti/workbench',
             checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.sourceCoverage?.latestRunAt,
             backendProofContractVersion: 'dwm.alert.matching.readiness.v1',
+        },
+        {
+            id: 'dwm_product_snapshot',
+            label: 'DWM product snapshot',
+            status: dwmProduct?.status || 'unavailable',
+            detail: dwmProduct
+                ? dwmProduct.detail || dwmProductDetail(dwmProduct)
+                : 'Live DWM product snapshot is not loaded by product progress.',
+            source: dwmProduct?.source || 'Missing /api/dwm/product proof',
+            href: dwmProduct?.href || '/dashboard/dwm',
+            checkedAt: dwmProduct?.checkedAt || dwmProduct?.latestAlertAt,
+            staleAfterSeconds: dwmProduct?.staleAfterSeconds,
+            proofTimestamp: dwmProduct?.proofTimestamp,
+            unavailableReason: dwmProduct?.unavailableReason,
+            expectedDashboardRowId: dwmProduct?.expectedDashboardRowId,
+            integrationProbeHint: dwmProduct?.integrationProbeHint,
+            backendProofContractVersion: dwmProduct?.backendProofContractVersion || dwmProduct?.schemaVersion,
         },
         {
             id: 'webhook_delivery',
@@ -1369,6 +1443,8 @@ function productReadinessWorkflow(item: WorkbenchProductReadinessItem): { ownerL
         case 'dashboard_alert':
         case 'dashboard_evidence':
             return { ownerLane: 'SOC analyst', operatorAction: item.status === 'ready' ? 'Open alert proof' : 'Open dashboard evidence' }
+        case 'dwm_product_snapshot':
+            return { ownerLane: 'DWM owner', operatorAction: item.status === 'ready' ? 'Inspect product snapshot' : 'Open DWM product proof' }
         case 'webhook_delivery':
         case 'webhook_health':
             return { ownerLane: 'Delivery ops', operatorAction: item.status === 'ready' ? 'Review delivery proof' : 'Open delivery setup' }
@@ -1433,6 +1509,13 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
                 integrationProbeHint: 'GET /api/dwm/alerts must return a real backend alert visible in the operator dashboard queue.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_dashboard_alert',
+            }
+        case 'dwm_product_snapshot':
+            return {
+                backendProofContractVersion: 'dwm.product.v1',
+                integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_dwm_product_snapshot',
             }
         case 'webhook_delivery':
             return {
@@ -1583,6 +1666,15 @@ function sourceGrowthDetail(input: SourceGrowthReadiness) {
     ].filter(Boolean)
     const proxy = sourceGrowthReady(input) ? 'operator proxy and worker status loaded' : input.proxyExposed ? 'operator proxy loaded; worker readiness still blocked' : 'scraper inventory works, dashboard proxy still missing'
     return counts.length ? `${counts.join(', ')}; ${proxy}.` : proxy + '.'
+}
+
+function dwmProductDetail(input: DwmProductSnapshotReadiness) {
+    const counts = [
+        typeof input.watchlistTermCount === 'number' ? `${input.watchlistTermCount} watchlist terms` : '',
+        typeof input.alertCount === 'number' ? `${input.alertCount} alerts` : '',
+        typeof input.sourceFamilyCount === 'number' ? `${input.sourceFamilyCount} source families` : '',
+    ].filter(Boolean)
+    return counts.length ? `Live DWM product snapshot loaded with ${counts.join(', ')}.` : 'DWM product snapshot loaded, but coverage counts were not returned.'
 }
 
 function sourceGrowthReady(input: SourceGrowthReadiness | undefined) {

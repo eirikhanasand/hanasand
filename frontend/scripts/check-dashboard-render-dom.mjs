@@ -6,6 +6,7 @@ import { chromium } from '@playwright/test'
 const expectedRows = {
     dashboard_evidence: '/dashboard',
     source_inventory_probe: '/dashboard/ti/sources',
+    dwm_product_snapshot: '/dashboard/dwm',
     entitlement_readiness: '/dashboard/dwm',
     webhook_delivery: '/dashboard/automations?setup=dwm',
     org_alert_export: '/dashboard/dwm',

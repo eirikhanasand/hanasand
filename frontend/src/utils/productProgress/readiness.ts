@@ -1,4 +1,4 @@
-import type { DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
+import type { DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, DwmProductSnapshotReadiness, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 type AlertProofRow = {
     id?: string
@@ -28,6 +28,7 @@ export type ProductProgressEndpointInput = {
     helpdeskAudit?: HelpdeskAuditReadiness
     orgAlertExport?: OrganizationAlertExportReadiness
     webhookHealth?: WebhookHealthReadiness
+    dwmProduct?: DwmProductSnapshotReadiness
 }
 
 export function buildProductProgressPayload(input: ProductProgressEndpointInput): ProductProgressReadinessPayload {
@@ -79,6 +80,7 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
         orgAlertExport: input.orgAlertExport || unavailableOrgAlertExport(input.routes.orgAlertExport || input.routes.productProgress || '/api/product-progress', checkedAt),
         webhookHealth: input.webhookHealth || webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || []),
         entitlement: entitlementReadiness(input.entitlement, input.routes.entitlement || input.routes.productProgress || '/api/product-progress', checkedAt),
+        dwmProduct: input.dwmProduct || unavailableDwmProduct(input.routes.dwmProduct || input.routes.productProgress || '/api/product-progress', checkedAt),
         dashboardEvidence: dashboardEvidenceFromRows({
             checkedAt,
             route: input.routes.dashboardAlerts || '/dashboard',
@@ -167,6 +169,25 @@ function unavailableOrgAlertExport(source: string, checkedAt: string): Organizat
         expectedDashboardRowId: 'org_alert_export',
         integrationProbeHint: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
         backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
+    }
+}
+
+function unavailableDwmProduct(source: string, checkedAt: string): DwmProductSnapshotReadiness {
+    return {
+        schemaVersion: 'dwm.product_snapshot.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard/dwm',
+        detail: 'Live DWM product snapshot endpoint is not wired into product progress yet.',
+        blockers: ['DWM owner must expose /api/dwm/product with demo=false before this can become ready.'],
+        ownerLane: 'dwm',
+        unavailableReason: 'missing_dwm_product_snapshot',
+        staleAfterSeconds: 900,
+        proofTimestamp: checkedAt,
+        expectedDashboardRowId: 'dwm_product_snapshot',
+        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+        backendProofContractVersion: 'dwm.product.v1',
     }
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
-import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmWatchlistSummary, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
+import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,8 +15,9 @@ export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
     const routes = productProgressRoutes(query)
-    const [sourceProxy, alerts, deliveries, organizations, watchlists, supportRecovery, auditEvents] = await Promise.all([
+    const [sourceProxy, dwmProduct, alerts, deliveries, organizations, watchlists, supportRecovery, auditEvents] = await Promise.all([
         fetchInternalJson(request, routes.sourceProxy || '/api/ti/scraper/control'),
+        fetchInternalJson(request, routes.dwmProduct || '/api/dwm/product?demo=false'),
         fetchInternalJson(request, routes.dashboardAlerts || '/api/dwm/alerts'),
         fetchInternalJson(request, routes.deliveries || '/api/dwm/webhooks/deliveries'),
         fetchInternalJson(request, routes.organizations || '/api/organizations'),
@@ -38,6 +39,11 @@ export async function GET(request: NextRequest) {
         query,
         routes,
         sourceProxy: normalizeSourceProxy(sourceProxy, query, generatedAt),
+        dwmProduct: dwmProductReadiness({
+            generatedAt,
+            route: routes.dwmProduct || '/api/dwm/product?demo=false',
+            fetch: dwmProduct,
+        }),
         alerts: rows((alerts.json as { alerts?: unknown[] } | undefined)?.alerts),
         deliveries: deliveryRows,
         orgAlertExport: orgAlertExportReadiness({
@@ -94,6 +100,7 @@ function productProgressRoutes(query: string) {
         organizations: '/api/organizations',
         watchlists: '/api/dwm/watchlists',
         operations: '/api/dwm/operations',
+        dwmProduct: '/api/dwm/product?demo=false',
         deliveries: '/api/dwm/webhooks/deliveries',
         organizationWebhooks: '/api/organizations/:id/webhooks',
         supportRecovery: '/api/backend/admin/support/access-recovery',
@@ -295,6 +302,62 @@ function helpdeskAuditReadiness(input: {
         integrationProbeHint: 'GET /api/backend/admin/support/access-recovery and GET /api/backend/admin/audit-events must return recovery queue and audit events.',
         backendProofContractVersion: 'support.audit.readiness.v1',
         detail: blockers.length ? blockers.join('; ') : `${auditEvents.length} audit event${auditEvents.length === 1 ? '' : 's'} and ${supportQueueDepth} recovery record${supportQueueDepth === 1 ? '' : 's'} loaded.`,
+    }
+}
+
+function dwmProductReadiness(input: {
+    generatedAt: string
+    route: string
+    fetch: FetchResult
+}): DwmProductSnapshotReadiness {
+    const payload = input.fetch.json as {
+        schemaVersion?: string
+        tenantId?: string
+        generatedAt?: string
+        watchlist?: unknown[]
+        alerts?: Array<{ firstSeenAt?: string, lastSeenAt?: string }>
+        sourceCoverage?: unknown[]
+        actorOverviews?: unknown[]
+        readiness?: { decision?: string, blockers?: string[] }
+    } | undefined
+    const schemaLoaded = input.fetch.ok && payload?.schemaVersion === 'dwm.product.v1'
+    const watchlistTermCount = schemaLoaded ? rows(payload?.watchlist).length : 0
+    const alertCount = schemaLoaded ? rows(payload?.alerts).length : 0
+    const sourceFamilyCount = schemaLoaded ? rows(payload?.sourceCoverage).length : 0
+    const latestAlertAt = schemaLoaded ? latestTimestamp(rows(payload?.alerts).map(row => String(row.lastSeenAt || row.firstSeenAt || ''))) : undefined
+    const readinessBlockers = Array.isArray(payload?.readiness?.blockers) ? payload.readiness.blockers.filter(Boolean) : []
+    const blockers = [
+        input.fetch.ok ? '' : input.fetch.error || `DWM product route returned HTTP ${input.fetch.status}.`,
+        schemaLoaded ? '' : 'DWM product route did not return dwm.product.v1 from the live backend.',
+        watchlistTermCount > 0 ? '' : 'DWM product snapshot did not return watchlist terms.',
+        sourceFamilyCount > 0 ? '' : 'DWM product snapshot did not return source coverage.',
+        alertCount > 0 ? '' : 'DWM product snapshot did not return alert proof.',
+        ...readinessBlockers,
+    ].filter(Boolean)
+    return {
+        schemaVersion: 'dwm.product_snapshot.readiness.v1',
+        status: blockers.length ? 'needs_action' : 'ready',
+        checkedAt: input.generatedAt,
+        source: input.route,
+        href: '/dashboard/dwm',
+        tenantId: payload?.tenantId,
+        watchlistTermCount,
+        alertCount,
+        sourceFamilyCount,
+        actorOverviewCount: schemaLoaded ? rows(payload?.actorOverviews).length : 0,
+        latestAlertAt,
+        readinessDecision: payload?.readiness?.decision,
+        blockers,
+        ownerLane: 'dwm',
+        unavailableReason: blockers.length ? 'missing_dwm_product_snapshot' : undefined,
+        staleAfterSeconds: 900,
+        proofTimestamp: latestAlertAt || payload?.generatedAt || input.generatedAt,
+        expectedDashboardRowId: 'dwm_product_snapshot',
+        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+        backendProofContractVersion: 'dwm.product.v1',
+        detail: blockers.length
+            ? blockers.join('; ')
+            : `${watchlistTermCount} watchlist term${watchlistTermCount === 1 ? '' : 's'}, ${alertCount} alert${alertCount === 1 ? '' : 's'}, and ${sourceFamilyCount} source famil${sourceFamilyCount === 1 ? 'y' : 'ies'} loaded from DWM product snapshot.`,
     }
 }
 

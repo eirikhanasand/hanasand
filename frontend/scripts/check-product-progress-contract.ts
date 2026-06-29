@@ -23,6 +23,7 @@ const routes = {
     orgAlertExport: '/api/organizations/org_acme/watchlist-alert-terms',
     webhookHealth: '/api/dwm/webhooks',
     dashboardAlerts: '/api/dwm/alerts',
+    dwmProduct: '/api/dwm/product?demo=false',
 }
 const sourceProxy = {
     ok: true,
@@ -88,6 +89,7 @@ assert.equal(partialPayload.helpdeskAudit?.status, 'unavailable')
 assert.equal(partialPayload.entitlement?.status, 'unavailable')
 assert.equal(partialPayload.orgAlertExport?.status, 'unavailable')
 assert.equal(partialPayload.webhookHealth?.status, 'needs_action')
+assert.equal(partialPayload.dwmProduct?.status, 'unavailable')
 
 for (const dependency of [
     partialPayload.publicTiProvenance,
@@ -96,6 +98,7 @@ for (const dependency of [
     partialPayload.entitlement,
     partialPayload.orgAlertExport,
     partialPayload.webhookHealth,
+    partialPayload.dwmProduct,
     partialPayload.dashboardEvidence,
 ]) {
     assertDependencyProofFields(dependency)
@@ -115,6 +118,8 @@ assert.equal(partialPayload.webhookHealth?.ownerLane, 'webhook')
 assert.equal(partialPayload.webhookHealth?.unavailableReason, 'missing_webhook_lifecycle_health_api')
 assert.equal(partialPayload.dashboardEvidence?.ownerLane, 'dashboard')
 assert.equal(partialPayload.dashboardEvidence?.unavailableReason, 'missing_live_deploy_probe')
+assert.equal(partialPayload.dwmProduct?.ownerLane, 'dwm')
+assert.equal(partialPayload.dwmProduct?.unavailableReason, 'missing_dwm_product_snapshot')
 
 const organizationState = {
     organizations: [{
@@ -236,6 +241,7 @@ assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.href, '/dashboard/ti/sources')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.href, '/dashboard/dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.href, '/dashboard/automations?setup=dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.href, '/dashboard/dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.href, '/dashboard/dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/dashboard/automations?setup=dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.href, '/dashboard/system/impersonation')
@@ -249,6 +255,7 @@ const readyPayload = {
     helpdeskAudit: { ...partialPayload.helpdeskAudit!, status: 'ready' as const, blockers: [], auditedActions: 2, openRecoveryRequests: 0 },
     orgAlertExport: { ...partialPayload.orgAlertExport!, status: 'ready' as const, blockers: [], activeTermCount: 1, canGenerateAlerts: true },
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1 },
+    dwmProduct: { ...partialPayload.dwmProduct!, status: 'ready' as const, blockers: [], watchlistTermCount: 1, alertCount: 1, sourceFamilyCount: 2, latestAlertAt: generatedAt, source: routes.dwmProduct, unavailableReason: undefined },
     dashboardEvidence: { ...partialPayload.dashboardEvidence!, status: 'ready' as const, blockers: [], deployProbeFresh: true },
     deployProbe: { ...partialPayload.deployProbe!, status: 'ready' as const, blockers: [], apiHealthy: true, scraperHealthy: true, latestProbeAt: generatedAt },
 }
@@ -317,6 +324,26 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         integrationProbeHint: 'GET /api/backend/admin/support/access-recovery and GET /api/backend/admin/audit-events must return recovery queue and audit events.',
         backendProofContractVersion: 'support.audit.readiness.v1',
     },
+    dwmProduct: {
+        schemaVersion: 'dwm.product_snapshot.readiness.v1',
+        status: 'ready',
+        checkedAt: generatedAt,
+        source: '/api/dwm/product?demo=false',
+        href: '/dashboard/dwm',
+        tenantId: 'org_acme',
+        watchlistTermCount: 1,
+        alertCount: 1,
+        sourceFamilyCount: 2,
+        actorOverviewCount: 1,
+        latestAlertAt: generatedAt,
+        blockers: [],
+        ownerLane: 'dwm',
+        staleAfterSeconds: 900,
+        proofTimestamp: generatedAt,
+        expectedDashboardRowId: 'dwm_product_snapshot',
+        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+        backendProofContractVersion: 'dwm.product.v1',
+    },
 })
 assert.equal(backedOrgWebhookPayload.orgAlertExport?.status, 'ready')
 assert.equal(backedOrgWebhookPayload.orgAlertExport?.source, '/api/dwm/watchlists')
@@ -325,6 +352,7 @@ assert.equal(backedOrgWebhookPayload.webhookHealth?.source, '/api/organizations/
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).orgAlertExport?.status, 'ready')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).webhookHealth?.status, 'ready')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).helpdeskAudit?.status, 'ready')
+assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).dwmProduct?.status, 'ready')
 const readyContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -402,6 +430,7 @@ assert.equal(degradedContext.readiness.productReadiness.find(item => item.id ===
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'source_coverage')?.status, 'blocked')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.status, 'needs_action')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'dashboard_alert')?.status, 'blocked')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.status, 'unavailable')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.status, 'needs_action')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.status, 'needs_action')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'public_ti_provenance')?.status, 'unavailable')
@@ -424,6 +453,7 @@ for (const dependency of [
     readyPayload.deployProbe,
     readyPayload.orgAlertExport,
     readyPayload.webhookHealth,
+    readyPayload.dwmProduct,
     readyPayload.dashboardEvidence,
 ]) {
     assertDependencyProofFields(dependency)
@@ -441,6 +471,7 @@ const longLabelContext = buildOrgOperatingContext({
     externalReadiness: buildProductProgressExternalState(readyPayload, { checkedAt: generatedAt }),
 })
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'org_members')?.status, 'ready')
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.status, 'ready')
 assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'org_members')?.detail.includes('Very Long Customer Label'))
 assert.ok(longLabelContext.readiness.productReadiness.every(item => typeof item.blockerCount === 'number'))
 assert.ok(longLabelContext.readiness.productReadiness.every(item => item.deepLinkTarget === item.href))
@@ -491,7 +522,9 @@ for (const scopedProgressToken of [
     'orgAlertExportReadiness',
     'webhookHealthReadiness',
     'helpdeskAuditReadiness',
+    'dwmProductReadiness',
     '/api/dwm/watchlists',
+    '/api/dwm/product?demo=false',
     '/api/organizations/:id/webhooks',
     '/api/backend/admin/support/access-recovery',
     '/api/backend/admin/audit-events?limit=50',

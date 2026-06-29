@@ -20,6 +20,11 @@ const readinessRows = {
         backendProbe: 'GET /api/ti/scraper/control + source readiness 930f93af',
         commits: ['930f93af', '178ec078', '342c1fe3'],
     },
+    dwm_product_snapshot: {
+        href: '/dashboard/dwm',
+        backendProbe: 'GET /api/dwm/product?demo=false',
+        commits: ['9d4c7118', '03d8d1ec'],
+    },
     entitlement_readiness: {
         href: '/dashboard/dwm',
         backendProbe: 'GET /api/dwm/entitlements/readiness',
