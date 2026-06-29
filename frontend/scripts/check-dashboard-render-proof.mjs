@@ -8,6 +8,7 @@ const sourceOpsSource = readFileSync(new URL('../src/app/dashboard/ti/control/sc
 const checkerSource = readFileSync(new URL('./check-product-progress-contract.ts', import.meta.url), 'utf8')
 const webhookProofCheckerSource = readFileSync(new URL('./check-product-progress-webhook-proof.ts', import.meta.url), 'utf8')
 const alertGenerationProofCheckerSource = readFileSync(new URL('./check-product-progress-alert-generation.ts', import.meta.url), 'utf8')
+const publicTiProofCheckerSource = readFileSync(new URL('./check-product-progress-public-ti.ts', import.meta.url), 'utf8')
 const progressSource = readFileSync(new URL('../src/utils/productProgress/readiness.ts', import.meta.url), 'utf8')
 const renderDomSource = readFileSync(new URL('./check-dashboard-render-dom.mjs', import.meta.url), 'utf8')
 
@@ -59,7 +60,7 @@ const readinessRows = {
     },
     public_ti_provenance: {
         href: '/ti',
-        backendProbe: 'GET /api/public-ti/provenance/readiness',
+        backendProbe: 'GET /api/ti/search publicTiAnswer + actionability + source family coverage matrix',
         commits: ['def920a7', '929f3416'],
     },
 }
@@ -93,6 +94,15 @@ for (const alertGenerationProofToken of [
     'DWM alert-generation proof did not include a generation evidence window with capture timestamps.',
 ]) {
     assert.ok(alertGenerationProofCheckerSource.includes(alertGenerationProofToken), `Alert-generation product-progress checker missing token: ${alertGenerationProofToken}`)
+}
+
+for (const publicTiProofToken of [
+    'ti.public_actor.source_family_coverage_matrix.v1',
+    'sourceFamilyCoverageMatrix',
+    'sourceFamilyCoverageCount',
+    'sourceFamilyOperationTypeCount',
+]) {
+    assert.ok(publicTiProofCheckerSource.includes(publicTiProofToken), `Public TI product-progress checker missing token: ${publicTiProofToken}`)
 }
 
 for (const attr of [
