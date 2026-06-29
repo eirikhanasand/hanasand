@@ -1542,6 +1542,29 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             href: '/api/backend/admin/audit-events?limit=50',
         })
     }
+    if (selected.kind === 'alert_readiness') {
+        rows.push({
+            id: 'open_alert_generation_readiness',
+            label: 'Generation proof',
+            detail: 'GET /api/dwm/alerts/generation-readiness returns source, watchlist, and alertability proof for generated alerts.',
+            tone: selected.missingDependency ? 'needs_action' : 'ready',
+            href: '/api/dwm/alerts/generation-readiness',
+        })
+        rows.push({
+            id: 'inspect_generated_alerts',
+            label: 'Generated alerts',
+            detail: 'GET /api/dwm/alerts returns the persisted alert queue for the selected organization/member scope.',
+            tone: selected.missingDependency ? 'needs_action' : 'ready',
+            href: '/api/dwm/alerts',
+        })
+        rows.push({
+            id: 'open_dwm_alert_workflow',
+            label: 'Open DWM workflow',
+            detail: 'Open the DWM workflow to update watchlists, rebuild alerts, and inspect generated alert state.',
+            tone: 'ready',
+            href: '/dashboard/dwm',
+        })
+    }
     const handledActionIds = new Set(rows.flatMap(row => [row.id, row.action?.id].filter(Boolean) as string[]))
     for (const action of selected.actions || []) {
         if (handledActionIds.has(action.id) || action.id === 'rebuild_alerts') continue
