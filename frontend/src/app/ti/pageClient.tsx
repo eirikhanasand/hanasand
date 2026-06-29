@@ -4161,7 +4161,7 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
                 d={d}
                 role={point ? 'button' : undefined}
                 tabIndex={point ? 0 : undefined}
-                aria-label={point ? `${point.label}: ${point.role === 'operator' ? 'reported operator origin' : 'reported victim or target country'}` : undefined}
+                aria-label={point ? `${point.label}: ${point.role === 'operator' ? 'reported operator origin' : 'reported victim or targeting observation'}` : undefined}
                 onClick={point ? () => focusCountry(point.code) : undefined}
                 onKeyDown={point ? (event) => {
                     if (event.key !== 'Enter' && event.key !== ' ') return
@@ -4182,22 +4182,22 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
     }, [geo.points, selectedCode])
 
     return (
-        <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#f8fafc]'>
-            <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3'>
+        <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#f8fafc] dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3 dark:border-[#273244]'>
                 <div>
-                    <h2 className='text-sm font-semibold text-[#171a21]'>Country-Level Actor Map</h2>
-                    <p className='mt-0.5 text-xs text-[#667085]'>GeoJSON-backed country view of reported operator origin and countries with victim or targeting observations.</p>
+                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Country Context</h2>
+                    <p className='mt-0.5 text-xs text-[#667085] dark:text-[#9aa8bd]'>Source-backed country coverage for operator attribution and targeting observations.</p>
                 </div>
-                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3]'>{hasPoints ? `${geo.points.length} countries` : 'Country data pending'}</span>
+                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#131c29] dark:text-[#9eb3ff]'>{hasPoints ? `${geo.points.length} countries` : 'Country data pending'}</span>
             </div>
-            <div className='relative min-h-96 overflow-hidden bg-[#f7f9fc]'>
-                <div className='absolute left-3 top-3 z-20 rounded-lg border border-[#dfe5ee] bg-white/90 px-3 py-1.5 text-xs text-[#596170] shadow-sm backdrop-blur'>
+            <div className='relative min-h-96 overflow-hidden bg-[#f7f9fc] dark:bg-[#0b111a]'>
+                <div className='absolute left-3 top-3 z-20 rounded-lg border border-[#dfe5ee] bg-white/90 px-3 py-1.5 text-xs text-[#596170] shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101826]/90 dark:text-[#b7c2d4]'>
                     <span className='inline-flex items-center gap-2'>
                         <Move className='h-3.5 w-3.5' />
                         Drag to pan · wheel to zoom
                     </span>
                 </div>
-                <div className='absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-lg border border-[#dfe5ee] bg-white/90 p-1 shadow-sm backdrop-blur'>
+                <div className='absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-lg border border-[#dfe5ee] bg-white/90 p-1 shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101826]/90'>
                     <MapZoomButton label='−' onClick={() => setViewBox((current) => zoomViewBox(current, 1.18, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
                     <MapZoomButton label='Reset' wide onClick={() => setViewBox(INITIAL_VIEWBOX)} />
                     <MapZoomButton label='+' onClick={() => setViewBox((current) => zoomViewBox(current, 0.84, MAP_WIDTH / 2, MAP_HEIGHT / 2))} />
@@ -4206,7 +4206,7 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
                     viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
                     role='img'
                     aria-label={`Country-level actor map for ${humanizeSlug(result.query)}`}
-                    className='relative z-10 h-96 w-full cursor-grab bg-white active:cursor-grabbing'
+                    className='relative z-10 h-96 w-full cursor-grab bg-white active:cursor-grabbing dark:bg-[#0b111a]'
                     onMouseDown={(event) => {
                         dragRef.current = { x: event.clientX, y: event.clientY, viewBox }
                     }}
@@ -4271,7 +4271,7 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
                                     x={x}
                                     y={y - radius - 7}
                                     textAnchor='middle'
-                                    className='fill-[#171a21] text-[10px] font-bold'
+                                    className='fill-[#171a21] text-[10px] font-bold dark:fill-[#eef4ff]'
                                     stroke='#ffffff'
                                     strokeWidth='3'
                                     paintOrder='stroke'
@@ -4283,16 +4283,17 @@ function ThreatActorMap({ result, actionability, onSelectCountry }: { result: Ti
                     })}
                 </svg>
                 {!hasPoints ? (
-                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/80 text-center text-sm font-medium text-[#667085]'>
+                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/80 px-4 text-center text-sm font-medium text-[#667085] dark:bg-[#101826]/85 dark:text-[#b7c2d4]'>
                         Country mapping will appear when this profile has country-level target or origin observations.
                     </div>
                 ) : null}
             </div>
             {hasPoints ? (
-                <div className='grid gap-3 border-t border-[#e8edf5] bg-white px-4 py-3'>
+                <div className='grid gap-3 border-t border-[#e8edf5] bg-white px-4 py-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex flex-wrap gap-3 text-xs'>
-                        <span className='inline-flex items-center gap-1.5 text-[#667085]'><span className='h-2.5 w-2.5 rounded-full bg-[#7c3aed]' />Reported operator origin</span>
-                        <span className='inline-flex items-center gap-1.5 text-[#667085]'><span className='h-2.5 w-2.5 rounded-full bg-[#d92d20]' />Reported victim or target country</span>
+                        <span className='inline-flex items-center gap-1.5 text-[#667085] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full bg-[#7c3aed]' />Operator attribution</span>
+                        <span className='inline-flex items-center gap-1.5 text-[#667085] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full bg-[#d92d20]' />Victim or targeting observation</span>
+                        <span className='inline-flex items-center gap-1.5 text-[#667085] dark:text-[#9aa8bd]'><span className='h-2.5 w-2.5 rounded-full border border-[#b7c2d4]' />Country-level source coverage</span>
                     </div>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         {geo.points.map(point => (
@@ -4327,25 +4328,36 @@ const mapFeatureNameToCode: Record<string, string> = {
 }
 
 function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnType<typeof actorGeoProfile>['points'][number]; active: boolean; handoff?: TiActionabilityModel['geographyHandoffs'][number]; onFocus: () => void }) {
+    const payload = geographyContextPayloadFor(point, handoff)
+    const routeLabel = handoff?.watchlistTerm ? 'Watchlist review' : 'Source enrichment'
     return (
-        <button
-            type='button'
-            onClick={onFocus}
-            className={`rounded-lg border px-3 py-2 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-[#eef1f5] bg-[#fbfcfe] hover:border-[#d8dee9] hover:bg-white'}`}
+        <div
+            data-ti-geo-context-actions='true'
+            className={`rounded-lg border px-3 py-2 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] dark:border-[#5269d8] dark:bg-[#172449]' : 'border-[#eef1f5] bg-[#fbfcfe] hover:border-[#d8dee9] hover:bg-white dark:border-[#273244] dark:bg-[#131c29] dark:hover:border-[#314057] dark:hover:bg-[#172131]'}`}
         >
-            <div className='flex items-center justify-between gap-3'>
-                <span className='font-semibold text-[#171a21]'>{point.label}</span>
-                <span className={point.role === 'operator' ? 'text-[#7c3aed]' : 'text-[#b42318]'}>{point.role === 'operator' ? 'operator origin' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
-            </div>
-            <p className='mt-1 leading-5 text-[#667085]'>{point.detail}</p>
+            <button type='button' onClick={onFocus} className='grid w-full min-w-0 gap-1 text-left focus:outline-none'>
+                <span className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                    <span className='min-w-0 wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{point.label}</span>
+                    <span className={point.role === 'operator' ? 'whitespace-nowrap text-[#7c3aed] dark:text-[#b89cff]' : 'whitespace-nowrap text-[#b42318] dark:text-[#ffb4aa]'}>{point.role === 'operator' ? 'operator attribution' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
+                </span>
+            </button>
+            <p className='mt-1 leading-5 text-[#667085] dark:text-[#9aa8bd]'>{point.detail}</p>
             {handoff ? (
-                <div className='mt-2 rounded-md border border-[#dfe5ee] bg-white px-2 py-1.5'>
-                    <p className='font-semibold text-[#344054]'>{handoff.watchlistTerm ? `${handoff.watchlistTerm.kind}: ${handoff.watchlistTerm.value}` : 'Enrichment task'}</p>
-                    <p className='mt-1 leading-5 text-[#667085]'>{handoff.watchlistTerm?.reason ?? handoff.enrichmentTask}</p>
+                <div className='mt-2 rounded-md border border-[#dfe5ee] bg-white px-2 py-1.5 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                        <div className='min-w-0'>
+                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{handoff.watchlistTerm ? `${handoff.watchlistTerm.kind}: ${handoff.watchlistTerm.value}` : 'Enrichment task'}</p>
+                            <p className='mt-1 leading-5 text-[#667085] dark:text-[#9aa8bd]'>{handoff.watchlistTerm?.reason ?? handoff.enrichmentTask}</p>
+                        </div>
+                        <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0'>
+                            <span className={sourceHealthChipClass(handoff.watchlistTerm ? 'ready' : 'review')}>{routeLabel}</span>
+                            <CopyPayloadButton label='Geography context' payload={payload} />
+                        </div>
+                    </div>
                     {handoff.evidenceRows.length ? (
                         <div data-ti-geo-provenance='true' className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2'>
                             {handoff.evidenceRows.slice(0, 2).map(row => (
-                                <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-[#667085]'>
+                                <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
                                     {row.victim} · {formatDate(row.reportDate)} · {Math.round(row.confidence * 100)}% · {row.sourceIds.length ? row.sourceIds.map(sourceId => `source ${sourceId}`).join(', ') : row.source}
                                 </p>
                             ))}
@@ -4353,8 +4365,38 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
                     ) : null}
                 </div>
             ) : null}
-        </button>
+        </div>
     )
+}
+
+function geographyContextPayloadFor(point: ReturnType<typeof actorGeoProfile>['points'][number], handoff?: TiActionabilityModel['geographyHandoffs'][number]) {
+    return {
+        schemaVersion: 'ti.public_actor.geography_context.v1',
+        country: {
+            code: point.code,
+            name: point.label,
+            role: point.role,
+            observationCount: point.count,
+            basis: 'country_source_coverage',
+        },
+        action: handoff?.watchlistTerm ? 'review_watchlist_term' : 'queue_source_enrichment',
+        watchlistTerm: handoff?.watchlistTerm ?? null,
+        enrichmentTask: handoff?.enrichmentTask ?? `Attach source evidence before routing ${point.label} into monitoring.`,
+        provenanceSummary: handoff?.provenanceSummary ?? point.detail,
+        evidence: handoff?.evidenceRows.map(row => ({
+            victim: row.victim,
+            source: row.source,
+            sourceIds: row.sourceIds,
+            provenanceRefs: row.provenanceRefs,
+            reportDate: row.reportDate,
+            confidence: row.confidence,
+        })) ?? [],
+        route: handoff?.watchlistTerm ? '/dashboard/ti/watchlists' : '/dashboard/ti/enrichment',
+        blockedBy: handoff ? [] : [{
+            ownerLane: 'source',
+            reason: 'Country row needs source evidence before it can be routed.',
+        }],
+    }
 }
 
 function MapZoomButton({ label, onClick, wide = false }: { label: string; onClick: () => void; wide?: boolean }) {
