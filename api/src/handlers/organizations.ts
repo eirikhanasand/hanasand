@@ -1648,6 +1648,7 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
         operation: organizationWatchlistOperation(organization, {
             action: existing.rows[0] ? 'updated' : 'created',
+            watchlistItemId: result.rows[0]?.id,
             actorId: userId,
             requestId: input.requestId,
             reason: input.reason,
@@ -1729,6 +1730,7 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
         operation: organizationWatchlistOperation(organization, {
             action: 'updated',
+            watchlistItemId: req.params.itemId,
             actorId: userId,
             requestId: input.requestId,
             serviceLogAction,
@@ -1794,6 +1796,7 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
         operation: organizationWatchlistOperation(organization, {
             action: 'disabled',
+            watchlistItemId: req.params.itemId,
             actorId: userId,
             requestId,
             reason,
@@ -1881,6 +1884,7 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
         watchlistItem: toWatchlistItem(result.rows[0] as OrganizationWatchlistRow),
         operation: organizationWatchlistOperation(organization, {
             action: input.action,
+            watchlistItemId: req.params.itemId,
             actorId: userId,
             requestId: input.requestId,
             reason: input.reason,
@@ -2539,6 +2543,7 @@ function organizationWatchlistOperation(
     organization: OrganizationRow,
     input: {
         action: 'created' | 'updated' | 'disabled' | 'pause' | 'resume' | 'archive' | 'restore'
+        watchlistItemId: string
         actorId: string
         requestId?: string
         reason?: string
@@ -2560,6 +2565,8 @@ function organizationWatchlistOperation(
         organizationId: organization.id,
         tenantId: organization.id,
         ownerOrganizationId: organization.id,
+        watchlistItemId: input.watchlistItemId,
+        watchlistId: input.watchlistItemId,
         actorId: input.actorId,
         requestId: input.requestId ?? null,
         reason: input.reason ?? null,
@@ -2567,15 +2574,53 @@ function organizationWatchlistOperation(
         allowedViewerRoles: decision.allowedRoles,
         serviceLogAction: input.serviceLogAction,
         duplicateTermScope: 'organization' as const,
+        ownerContext: {
+            schemaVersion: 'organization.watchlist_owner_context.v1' as const,
+            organizationId: organization.id,
+            tenantId: organization.id,
+            ownerOrganizationId: organization.id,
+            watchlistItemId: input.watchlistItemId,
+            watchlistId: input.watchlistItemId,
+            actorId: input.actorId,
+            actorRole: organization.role ?? 'viewer',
+            visibilityPolicy: decision.alertVisibilityPolicy,
+            allowedViewerRoles: decision.allowedRoles,
+            sourceFamily: 'organization_watchlist' as const,
+            route: 'organization_watchlist' as const,
+            alertBridgeFields: [
+                'organizationId',
+                'tenantId',
+                'ownerOrganizationId',
+                'watchlistItemId',
+                'watchlistId',
+                'workflowContext.alertGenerationRefs',
+                'workflowContext.alertGeneratorKeys',
+            ],
+            webhookBridgeFields: [
+                'organizationId',
+                'tenantId',
+                'ownerOrganizationId',
+                'watchlistItemId',
+                'destination.org_id',
+                'webhookDestinationIds[]',
+            ],
+            crossTenantCollisionAllowed: false,
+            nonmemberEnumeration: false,
+        },
         upsert: input.action === 'created' || input.action === 'updated'
             ? {
                 schemaVersion: 'organization.watchlist_upsert.v1' as const,
+                watchlistItemId: input.watchlistItemId,
+                ownerOrganizationId: organization.id,
                 idempotent: true,
                 duplicateTermMatched: Boolean(input.duplicateTermMatched),
                 existingItemId: input.existingItemId ?? null,
                 actionTaken: input.duplicateTermMatched ? 'updated_existing_item' as const : 'created_new_item' as const,
                 crossOrganizationDuplicateAllowed: true,
                 sameOrganizationDuplicateCreatesNewItem: false,
+                duplicateScopeKeyFields: ['organizationId', 'kind', 'normalizedValue'] as const,
+                alertDedupeKeyFields: ['organizationId', 'watchlistItemId', 'termFamily', 'normalizedTerm'] as const,
+                webhookDestinationOrgField: 'destination.org_id' as const,
             }
             : null,
         lifecycleTransition: {
