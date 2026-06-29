@@ -1,5 +1,5 @@
 import { PUBLIC_TI_HANDOFF_ACTIONS, PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_HANDOFF_SOURCE, validatePublicTiHandoffPayload, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
-import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, resolveDashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductReadinessExternalState } from './operatorConsoleModel'
+import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductReadinessExternalState } from './operatorConsoleModel'
 import type { OperatorActionRailRow, WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchProductReadinessItem, WorkbenchPublicTiHandoff, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
@@ -157,15 +157,79 @@ const externalReadiness = {
         source: 'Scraper network /v1/dwm/source-inventory; missing frontend proxy',
     },
 } satisfies ProductReadinessExternalState
+const sourceProofProxyPayload = {
+    ok: true,
+    generatedAt: '2026-06-28T10:19:00.000Z',
+    query: 'LockBit',
+    baseConfigured: true,
+    endpoints: {
+        sourceInventory: { ok: true, status: 200 },
+        sourcePacks: { ok: true, status: 200 },
+    },
+    sourceInventory: {
+        schemaVersion: 'dwm.source_inventory.v1',
+        generatedAt: '2026-06-28T10:19:00.000Z',
+        counts: {
+            registeredTotal: 349,
+            registeredActiveOrCanary: 349,
+            catalogTotalCandidates: 8000,
+            netNewCandidates: 7816,
+            duplicateCandidates: 184,
+            reviewQueue: 8000,
+        },
+    },
+    sourcePacks: {
+        schemaVersion: 'dwm.source_packs.v1',
+        generatedAt: '2026-06-28T10:19:00.000Z',
+        counts: { packCount: 2, candidateCount: 8000 },
+        workerReadiness: {
+            queuedValidationJobs: 0,
+            validatingJobs: 0,
+            activeSourceRows: 349,
+            collectionReadyRows: 349,
+        },
+        lastRun: { status: 'completed', completedAt: '2026-06-28T10:18:00.000Z' },
+    },
+} satisfies DashboardSourceProofProxyPayload
+const operatorSourceProof = buildSourceProofReadinessFromProxy(sourceProofProxyPayload, {
+    route: '/api/ti/scraper/control?q=LockBit',
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const staleSourceProof = buildSourceProofReadinessFromProxy({
+    ...sourceProofProxyPayload,
+    sourcePacks: {
+        ...sourceProofProxyPayload.sourcePacks,
+        lastRun: { status: 'completed', completedAt: '2026-06-28T07:00:00.000Z' },
+    },
+}, {
+    route: '/api/ti/scraper/control?q=LockBit',
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const missingWorkerSourceProof = buildSourceProofReadinessFromProxy({
+    ...sourceProofProxyPayload,
+    sourcePacks: {
+        schemaVersion: 'dwm.source_packs.v1',
+        generatedAt: '2026-06-28T10:19:00.000Z',
+        counts: { packCount: 2, candidateCount: 8000 },
+    },
+}, {
+    route: '/api/ti/scraper/control?q=LockBit',
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
 const operatorReachableExternalReadiness = {
     ...externalReadiness,
-    sourceGrowth: {
-        ...externalReadiness.sourceGrowth,
-        status: 'ready',
-        proxyExposed: true,
-        source: 'GET /api/dwm/source-inventory',
-        href: '/dashboard/ti/sources',
-    },
+    sourceGrowth: operatorSourceProof,
+} satisfies ProductReadinessExternalState
+const staleWorkerExternalReadiness = {
+    ...externalReadiness,
+    sourceGrowth: staleSourceProof,
+} satisfies ProductReadinessExternalState
+const missingWorkerExternalReadiness = {
+    ...externalReadiness,
+    sourceGrowth: missingWorkerSourceProof,
 } satisfies ProductReadinessExternalState
 
 const cases = buildReadinessCases({
@@ -259,6 +323,28 @@ const sourceProofOrgContext = buildOrgOperatingContext({
     liveAlertCount: 1,
     liveAlertIds: ['alert_acme_1'],
     externalReadiness: operatorReachableExternalReadiness,
+})
+const staleWorkerOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: staleWorkerExternalReadiness,
+})
+const missingWorkerOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: missingWorkerExternalReadiness,
 })
 const blockedDeliveryOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
@@ -653,6 +739,10 @@ void (orgContext.readiness.fullChainReady satisfies boolean)
 void (orgContext.readiness.productReadiness[0]?.status satisfies string | undefined)
 void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
+void expectProductReadinessStatus(staleWorkerOrgContext, 'source_inventory_probe', 'needs_action')
+void (staleWorkerOrgContext.readiness.fullChainReady satisfies boolean)
+void expectProductReadinessStatus(missingWorkerOrgContext, 'source_inventory_probe', 'needs_action')
+void (missingWorkerOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(orgContext, 'public_ti_provenance', 'ready')
 void expectProductReadinessStatus(orgContext, 'helpdesk_audit', 'ready')
 void expectProductReadinessStatus(orgContext, 'deploy_probe', 'ready')

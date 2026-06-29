@@ -8,7 +8,7 @@ import { demoDwmProductSnapshot, type DwmAlert, type DwmSeverity } from '@/utils
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
-import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, resolveDashboardViewerIdentity, type DashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
+import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +54,7 @@ export default async function Page({
         loadDwmOperations(scope, viewerIdentity),
         loadDwmDeliveries(scope, viewerIdentity),
     ])
+    const sourceProofReadiness = await loadDashboardSourceProof(Headers, watchlists)
     const liveAlerts = alertLoad.alerts
     const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
     const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
@@ -80,6 +81,7 @@ export default async function Page({
         deliveries,
         liveAlertCount: liveAlerts.length,
         liveAlertIds: liveAlerts.map(alert => alert.id),
+        externalReadiness: { sourceGrowth: sourceProofReadiness },
     })
     const handoffCases = buildPublicTiHandoffCase({
         decode: publicTiHandoff,
@@ -257,6 +259,50 @@ function identityPayload(identity: DashboardViewerIdentity): DwmAlertAccessState
         actor: identity.actor,
         source: identity.source,
     }
+}
+
+async function loadDashboardSourceProof(Headers: Headers, watchlists: DwmWatchlistSummary[]) {
+    const route = sourceProofRoute(Headers, watchlists)
+    if (!route.url) {
+        return buildSourceProofReadinessFromProxy(null, {
+            route: route.label,
+            checkedAt: new Date().toISOString(),
+        })
+    }
+
+    try {
+        const response = await fetch(route.url, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        const payload = await response.json() as DashboardSourceProofProxyPayload
+        return buildSourceProofReadinessFromProxy({ ...payload, ok: response.ok && payload.ok !== false }, {
+            route: route.label,
+            checkedAt: new Date().toISOString(),
+        })
+    } catch {
+        return buildSourceProofReadinessFromProxy(null, {
+            route: route.label,
+            checkedAt: new Date().toISOString(),
+        })
+    }
+}
+
+function sourceProofRoute(Headers: Headers, watchlists: DwmWatchlistSummary[]) {
+    const host = Headers.get('x-forwarded-host') || Headers.get('host')
+    const proto = Headers.get('x-forwarded-proto') || 'http'
+    const query = sourceProofQuery(watchlists)
+    const label = `/api/ti/scraper/control?q=${encodeURIComponent(query)}`
+    if (!host) return { label }
+    const url = new URL('/api/ti/scraper/control', `${proto}://${host}`)
+    url.searchParams.set('q', query)
+    return { url, label }
+}
+
+function sourceProofQuery(watchlists: DwmWatchlistSummary[]) {
+    const terms = watchlists
+        .filter(watchlist => watchlist.status === 'active')
+        .flatMap(watchlist => watchlist.terms || [])
+        .map(term => term.value.trim())
+        .filter(Boolean)
+    return terms.slice(0, 4).join(',') || 'APT29'
 }
 
 async function loadDwmOrganizationState(): Promise<DwmOrganizationState> {

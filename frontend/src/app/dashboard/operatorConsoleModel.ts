@@ -152,12 +152,22 @@ export type DeployProbeReadiness = ProductReadinessSnapshotBase & {
 export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     schemaVersion: 'dwm.source_inventory.v1' | string
     proxyExposed?: boolean
+    inventoryReachable?: boolean
+    sourcePacksReachable?: boolean
     registeredTotal?: number
     activeSourceCount?: number
     catalogCandidates?: number
     netNewCandidates?: number
     duplicateCandidates?: number
     reviewQueueCount?: number
+    sourcePackCount?: number
+    workerStatus?: 'ready' | 'missing' | 'stale' | 'blocked' | 'unavailable'
+    workerLastRunAt?: string
+    workerStaleAfterMinutes?: number
+    queuedValidationJobs?: number
+    validatingJobs?: number
+    activeSourceRows?: number
+    collectionReadyRows?: number
     latestInventoryAt?: string
 }
 
@@ -166,6 +176,121 @@ export type ProductReadinessExternalState = {
     helpdeskAudit?: HelpdeskAuditReadiness
     deployProbe?: DeployProbeReadiness
     sourceGrowth?: SourceGrowthReadiness
+}
+
+export type DashboardSourceProofProxyPayload = {
+    ok?: boolean
+    generatedAt?: string
+    query?: string
+    baseConfigured?: boolean
+    error?: { code?: string, message?: string }
+    endpoints?: {
+        sourceInventory?: { ok?: boolean, status?: number, error?: string }
+        sourcePacks?: { ok?: boolean, status?: number, error?: string }
+    }
+    sourceInventory?: {
+        schemaVersion?: string
+        generatedAt?: string
+        counts?: {
+            registeredTotal?: number
+            registeredActiveOrCanary?: number
+            catalogTotalCandidates?: number
+            netNewCandidates?: number
+            duplicateCandidates?: number
+            reviewQueue?: number
+        }
+    }
+    sourcePacks?: {
+        schemaVersion?: string
+        generatedAt?: string
+        counts?: {
+            packCount?: number
+            candidateCount?: number
+        }
+        workerReadiness?: SourcePackWorkerReadinessSnapshot
+        readiness?: SourcePackWorkerReadinessSnapshot
+        lastRun?: { completedAt?: string, updatedAt?: string, startedAt?: string, status?: string }
+    }
+}
+
+export type SourcePackWorkerReadinessSnapshot = {
+    queuedValidationJobs?: number
+    validatingJobs?: number
+    activeSourceRows?: number
+    collectionReadyRows?: number
+}
+
+export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofProxyPayload | null | undefined, options: {
+    route: string
+    checkedAt: string
+    staleAfterMinutes?: number
+}): SourceGrowthReadiness {
+    const staleAfterMinutes = options.staleAfterMinutes ?? 120
+    if (!input?.ok || input.baseConfigured === false) {
+        return {
+            schemaVersion: 'dwm.source_inventory.v1',
+            status: 'unavailable',
+            proxyExposed: false,
+            inventoryReachable: false,
+            sourcePacksReachable: false,
+            checkedAt: options.checkedAt,
+            source: options.route,
+            href: '/dashboard/ti/sources',
+            detail: input?.error?.message || 'Source inventory proxy is unavailable from the dashboard.',
+            blockers: [input?.error?.message || 'Source inventory proxy is unavailable from the dashboard.'],
+        }
+    }
+
+    const inventoryReachable = input.endpoints?.sourceInventory?.ok === true && input.sourceInventory?.schemaVersion === 'dwm.source_inventory.v1'
+    const sourcePacksReachable = input.endpoints?.sourcePacks?.ok === true && input.sourcePacks?.schemaVersion === 'dwm.source_packs.v1'
+    const worker = input.sourcePacks?.workerReadiness || input.sourcePacks?.readiness
+    const workerLastRunAt = input.sourcePacks?.lastRun?.completedAt || input.sourcePacks?.lastRun?.updatedAt || input.sourcePacks?.lastRun?.startedAt
+    const workerFresh = workerLastRunAt ? minutesBetween(workerLastRunAt, options.checkedAt) <= staleAfterMinutes : false
+    const workerReady = Boolean(worker && workerFresh && (worker.collectionReadyRows || worker.activeSourceRows))
+    const blockers = [
+        inventoryReachable ? '' : `Source inventory endpoint is not reachable through ${options.route}.`,
+        sourcePacksReachable ? '' : `Source-pack endpoint is not reachable through ${options.route}.`,
+        worker ? '' : 'Source-pack worker readiness is not exposed by the dashboard proxy.',
+        worker && !workerLastRunAt ? 'Source-pack worker last run timestamp is missing.' : '',
+        worker && workerLastRunAt && !workerFresh ? `Source-pack worker status is stale; last run ${workerLastRunAt}.` : '',
+        worker && workerFresh && !(worker.collectionReadyRows || worker.activeSourceRows) ? 'Source-pack worker has no collection-ready source rows.' : '',
+    ].filter(Boolean)
+    const status: ReadinessStatus = inventoryReachable && sourcePacksReachable && workerReady ? 'ready' : inventoryReachable || sourcePacksReachable ? 'needs_action' : 'blocked'
+    const counts = input.sourceInventory?.counts
+
+    return {
+        schemaVersion: 'dwm.source_inventory.v1',
+        status,
+        proxyExposed: inventoryReachable && sourcePacksReachable,
+        inventoryReachable,
+        sourcePacksReachable,
+        registeredTotal: counts?.registeredTotal,
+        activeSourceCount: counts?.registeredActiveOrCanary,
+        catalogCandidates: counts?.catalogTotalCandidates ?? input.sourcePacks?.counts?.candidateCount,
+        netNewCandidates: counts?.netNewCandidates,
+        duplicateCandidates: counts?.duplicateCandidates,
+        reviewQueueCount: counts?.reviewQueue,
+        sourcePackCount: input.sourcePacks?.counts?.packCount,
+        workerStatus: workerReady ? 'ready' : worker ? workerFresh ? 'blocked' : 'stale' : 'missing',
+        workerLastRunAt,
+        workerStaleAfterMinutes: staleAfterMinutes,
+        queuedValidationJobs: worker?.queuedValidationJobs,
+        validatingJobs: worker?.validatingJobs,
+        activeSourceRows: worker?.activeSourceRows,
+        collectionReadyRows: worker?.collectionReadyRows,
+        latestInventoryAt: input.sourceInventory?.generatedAt || input.generatedAt,
+        checkedAt: options.checkedAt,
+        source: options.route,
+        href: '/dashboard/ti/sources',
+        blockers,
+    }
+}
+
+function minutesBetween(from: string, to: string) {
+    const fromTime = new Date(from).getTime()
+    const toTime = new Date(to).getTime()
+    if (Number.isNaN(fromTime) || Number.isNaN(toTime)) return Number.POSITIVE_INFINITY
+    return Math.max(0, Math.round((toTime - fromTime) / 60000))
 }
 
 export type DwmAlertAccessState = {
@@ -551,7 +676,7 @@ function buildProductReadiness(input: {
     const helpdeskAudit = input.externalReadiness?.helpdeskAudit
     const deployProbe = input.externalReadiness?.deployProbe
     const sourceGrowth = input.externalReadiness?.sourceGrowth
-    const sourceGrowthStatus: WorkbenchProductReadinessItem['status'] = sourceGrowth?.proxyExposed === true && sourceGrowth.status === 'ready'
+    const sourceGrowthStatus: WorkbenchProductReadinessItem['status'] = sourceGrowthReady(sourceGrowth)
         ? 'ready'
         : sourceGrowth ? sourceGrowth.status === 'blocked' ? 'blocked' : 'needs_action' : 'unavailable'
 
@@ -695,9 +820,14 @@ function sourceGrowthDetail(input: SourceGrowthReadiness) {
         typeof input.catalogCandidates === 'number' ? `${input.catalogCandidates} catalog candidates` : '',
         typeof input.netNewCandidates === 'number' ? `${input.netNewCandidates} net-new` : '',
         typeof input.reviewQueueCount === 'number' ? `${input.reviewQueueCount} queued for review` : '',
+        typeof input.collectionReadyRows === 'number' ? `${input.collectionReadyRows} worker-ready rows` : '',
     ].filter(Boolean)
-    const proxy = input.proxyExposed ? 'operator proxy loaded' : 'scraper inventory works, dashboard proxy still missing'
+    const proxy = sourceGrowthReady(input) ? 'operator proxy and worker status loaded' : input.proxyExposed ? 'operator proxy loaded; worker readiness still blocked' : 'scraper inventory works, dashboard proxy still missing'
     return counts.length ? `${counts.join(', ')}; ${proxy}.` : proxy + '.'
+}
+
+function sourceGrowthReady(input: SourceGrowthReadiness | undefined) {
+    return Boolean(input?.proxyExposed && input.inventoryReachable !== false && input.sourcePacksReachable !== false && input.status === 'ready' && input.workerStatus === 'ready')
 }
 
 function publicTiHandoffCase(input: {
