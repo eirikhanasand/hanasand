@@ -1505,7 +1505,10 @@ export type OrganizationDwmAlertReference = {
         crossTenantCollisionAllowed: false
     }
     webhookContract: {
+        schemaVersion: 'organization.alert_reference_webhook_contract.v1'
         orgId: string
+        organizationId: string
+        tenantId: string
         watchlistId: string
         watchlistName: string
         defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
@@ -1521,6 +1524,11 @@ export type OrganizationDwmAlertReference = {
         readinessStatus: OrganizationReadinessStatus
         route: 'organization_watchlist'
         casePath: string
+        requiredDestinationOrgId: string
+        selectedDestinationOrgField: 'destination.org_id'
+        selectedDestinationIdField: 'webhookDestinationIds[]'
+        ownerContext: OrganizationDwmAlertReference['ownerContext']
+        noLeakFields: Array<'destination.secret' | 'otherOrg.destinationIds' | 'otherOrg.alertGeneratorKeys'>
     }
 }
 
@@ -5224,7 +5232,10 @@ export function buildOrganizationDwmAlertReference(
             },
         },
         webhookContract: {
+            schemaVersion: 'organization.alert_reference_webhook_contract.v1',
             orgId: organization.id,
+            organizationId: organization.id,
+            tenantId: organization.id,
             watchlistId: item.id,
             watchlistName,
             defaultWebhookPolicy: bridgeContext.defaultWebhookPolicy,
@@ -5240,6 +5251,15 @@ export function buildOrganizationDwmAlertReference(
             readinessStatus: bridgeContext.readinessStatus,
             route: 'organization_watchlist',
             casePath,
+            requiredDestinationOrgId: organization.id,
+            selectedDestinationOrgField: 'destination.org_id',
+            selectedDestinationIdField: 'webhookDestinationIds[]',
+            ownerContext,
+            noLeakFields: [
+                'destination.secret',
+                'otherOrg.destinationIds',
+                'otherOrg.alertGeneratorKeys',
+            ],
         },
     }
 }
