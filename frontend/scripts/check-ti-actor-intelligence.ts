@@ -174,6 +174,12 @@ assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'orgWat
 assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'caseHandoff' && stage.request?.path === '/v1/cases'), 'Consumer readiness should include case request shape.')
 assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'webhookTrigger' && stage.request?.path === '/v1/dwm/webhooks/deliver'), 'Consumer readiness should include webhook dry-run request shape.')
 assert(actionability.consumerReadiness.blockers.some(blocker => blocker.code === 'missing_org'), 'Public APT29 readiness should keep org-required blockers explicit.')
+assert(actionability.readiness.schemaVersion === 'ti.public_actor.readiness.v1', 'Public TI should expose backed readiness metadata.')
+assert(actionability.readiness.state === 'degraded', 'APT29 public result should be usable but degraded until org/capture/alert/case/delivery data is attached.')
+assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_org' && blocker.ownerLane === 'org' && blocker.route === '/dashboard/dwm'), 'Readiness blockers should route missing org context to the org lane.')
+assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_capture' && blocker.ownerLane === 'source'), 'Readiness blockers should route missing capture evidence to source work.')
+assert(actionability.readiness.blockers.some(blocker => blocker.code === 'missing_webhook_destination' && blocker.ownerLane === 'webhook'), 'Readiness blockers should route missing webhook destinations to webhook work.')
+assert(actionability.readiness.blockers.some(blocker => blocker.code === 'stale_provenance' && blocker.ownerLane === 'public-ti'), 'Stale actor evidence should remain a public TI blocker.')
 assert(actionability.enrichmentGapQueue.some(item => item.route === '/dashboard/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
 assert(actionability.exportPayloads.enrichment.backedRoute === '/dashboard/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
@@ -309,10 +315,71 @@ assert(backed.caseHandoff.backedRoute === '/v1/cases/case_1?alertId=dwm_alert_1'
 assert(backed.webhookDeliveryHandoff.ready, 'Backed webhook delivery should be ready when alert, capture, and destination context exists.')
 assert(backed.exportPayloads.webhookDelivery.body.alertId === 'dwm_alert_1', 'Backed webhook delivery should carry the DWM alert ID.')
 assert(JSON.stringify(backed.exportPayloads.webhookDelivery.body).includes('webhook_1'), 'Backed webhook delivery should carry destination IDs.')
+assert(backed.readiness.backedIds.organizationIds.includes('org_1'), 'Backed readiness should carry organization IDs.')
+assert(backed.readiness.backedIds.watchlistIds.includes('watchlist_1'), 'Backed readiness should carry watchlist IDs.')
+assert(backed.readiness.backedIds.alertIds.includes('dwm_alert_1'), 'Backed readiness should carry alert IDs.')
+assert(backed.readiness.backedIds.casePaths.includes('/v1/cases/case_1?alertId=dwm_alert_1'), 'Backed readiness should carry case paths.')
+assert(backed.readiness.backedIds.captureIds.includes('capture_1'), 'Backed readiness should carry capture IDs.')
+assert(backed.readiness.backedIds.webhookDestinationIds.includes('webhook_1'), 'Backed readiness should carry webhook destination IDs.')
+assert(backed.readiness.blockers.some(blocker => blocker.code === 'unavailable_contract' && blocker.ownerLane === 'entitlement'), 'Backed readiness should call out missing entitlement readiness when org context exists.')
 assert(backed.consumerReadiness.ready, 'Backed consumer readiness should be ready when watchlist, alert, case, capture, and webhook context exist.')
 assert(backed.consumerReadiness.stages.every(stage => stage.state === 'ready'), 'Backed consumer readiness stages should all be ready.')
 assert(backed.consumerReadiness.bundlePreview.stages.orgWatchlist?.request?.body.watchlistId === 'watchlist_1', 'Consumer readiness should carry persisted watchlist ID for alert rebuild.')
 assert(backed.consumerReadiness.bundlePreview.stages.webhookTrigger?.request?.body.idempotencyKey, 'Webhook consumer readiness should carry idempotency key.')
+
+const entitlementBlocked = buildTiActionability({
+    ...fixture,
+    query: 'apt29 entitlement blocked',
+    actionability: {
+        ...fixture.actionability,
+        watchlistMatches: [{
+            tenantId: 'tenant_1',
+            organizationId: 'org_1',
+            watchlistId: 'watchlist_1',
+            watchlistItemId: 'watch_1',
+            kind: 'company',
+            value: 'Microsoft',
+        }],
+        sourceProvenance: [
+            { sourceId: 'microsoft', sourceName: 'Microsoft', provenance: 'https://www.microsoft.com/en-us/security/blog/', confidence: 0.82, captureId: 'capture_1' },
+        ],
+        relatedAlerts: [{
+            id: 'dwm_alert_1',
+            title: 'Microsoft actor relevance matched watchlist',
+            status: 'pending_review',
+            severity: 'high',
+            tenantId: 'tenant_1',
+            organizationId: 'org_1',
+            captureIds: ['capture_1'],
+            webhookDestinationIds: ['webhook_1'],
+            deliveryReadinessContext: {
+                schemaVersion: 'dwm.alert_delivery_persistence.v1',
+                state: 'blocked',
+                ready: false,
+                blockerCodes: ['entitlement_denied'],
+                selectedCaptureIds: ['capture_1'],
+                webhookDestinationIds: ['webhook_1'],
+                entitlement: { status: 'active', blockedReasons: ['alert_rebuilds_today'] },
+            },
+        }],
+        relatedWebhookDestinations: [{ id: 'webhook_1', name: 'SOC incident intake', status: 'active' }],
+        entitlementReadiness: {
+            schemaVersion: 'dwm.entitlement_readiness.v1',
+            actions: {
+                alert_rebuild: {
+                    ownerLane: 'alert-workflow',
+                    status: 'blocked',
+                    blockerCodes: ['alert_rebuilds_today'],
+                    route: '/v1/dwm/alerts/rebuild',
+                    dashboardText: 'This organization has reached the alert rebuild limit.',
+                    helpdeskText: 'Raise the alert rebuild limit or retry after the daily window resets.',
+                },
+            },
+        },
+    },
+}, profile, victims)
+assert(entitlementBlocked.readiness.blockers.some(blocker => blocker.code === 'entitlement_blocked' && blocker.ownerLane === 'entitlement' && blocker.source === 'entitlement_readiness'), 'Entitlement readiness should surface entitlement-owned blockers.')
+assert(entitlementBlocked.readiness.blockers.some(blocker => blocker.code === 'entitlement_blocked' && blocker.source === 'delivery_readiness'), 'Delivery readiness entitlement denials should be preserved.')
 
 const quietFixture: TiSearchResponse = {
     ...fixture,
@@ -351,6 +418,9 @@ assert(quiet.caseHandoff.blocked, 'Unknown actor should block case handoff.')
 assert(quiet.webhookDeliveryHandoff.blocked, 'Unknown actor should block webhook delivery handoff.')
 assert(!quiet.consumerReadiness.ready, 'Unknown actor should block consumer readiness.')
 assert(quiet.consumerReadiness.blockers.some(blocker => blocker.code === 'missing_watchlist_term'), 'Unknown actor should expose missing watchlist term blocker.')
+assert(quiet.readiness.state === 'blocked', 'Unknown actor should be blocked rather than fake-actionable.')
+assert(quiet.readiness.blockers.some(blocker => blocker.code === 'missing_source_provenance' && blocker.ownerLane === 'source'), 'Unknown actor should expose missing source provenance owner.')
+assert(quiet.readiness.blockers.some(blocker => blocker.code === 'missing_org_watchlist' && blocker.ownerLane === 'org'), 'Unknown actor should expose missing watchlist owner.')
 assert(quietArtifacts.length === 0, 'Sparse actor path should not invent selectable artifacts.')
 assert(nextActorArtifactId(quietArtifacts, undefined, 'next') === '', 'Keyboard helper should stay empty for sparse actor artifacts.')
 for (const phrase of bannedUiCopy) {
@@ -370,6 +440,8 @@ assert(pageClientSource.includes('Local triage list; source evidence stays attac
 assert(pageClientSource.includes('Open console'), 'Public TI page should route analysts to the authenticated console without internal lane names.')
 assert(pageClientSource.includes('Case handoff'), 'Public TI page should summarize case handoff state instead of dumping raw JSON.')
 assert(pageClientSource.includes('source gap'), 'Public TI enrichment statuses should use source-gap language instead of implementation labels.')
+assert(pageClientSource.includes('Readiness'), 'Public TI page should expose backed readiness and degraded states.')
+assert(pageClientSource.includes('Backed IDs, blockers, and next handoff owner'), 'Public TI page should describe backed readiness without prompt-shaped language.')
 assert(pageClientSource.includes('Review sources'), 'Public TI decision flow should start with source review.')
 assert(pageClientSource.includes('Prepare watchlist'), 'Public TI decision flow should include watchlist preparation.')
 assert(pageClientSource.includes('Rebuild alerts'), 'Public TI decision flow should include alert rebuild.')

@@ -130,6 +130,19 @@ export interface TiActionabilityContract {
         captureIds?: string[]
         evidenceCount?: number
         webhookDestinationIds?: string[]
+        deliveryReadinessContext?: {
+            schemaVersion?: 'dwm.alert_delivery_persistence.v1'
+            state?: 'ready' | 'blocked' | 'closed' | 'suppressed' | 'delivered'
+            ready?: boolean
+            blockerCodes?: string[]
+            casePath?: string
+            selectedCaptureIds?: string[]
+            webhookDestinationIds?: string[]
+            entitlement?: {
+                status?: string
+                blockedReasons?: string[]
+            }
+        }
     }>
     relatedCases?: Array<{
         id: string
@@ -185,6 +198,26 @@ export interface TiActionabilityContract {
             payload?: Record<string, unknown>
             missing?: string[]
         }
+    }
+    entitlementReadiness?: {
+        schemaVersion?: 'dwm.entitlement_readiness.v1'
+        actions?: Record<string, {
+            ownerLane?: string
+            status?: 'allowed' | 'blocked' | 'permissive_no_policy' | 'needs_input'
+            blockerCodes?: string[]
+            route?: string
+            dashboardText?: string
+            helpdeskText?: string
+            blockers?: Array<{
+                schemaVersion?: 'dwm.entitlement_blocker.v1'
+                ownerLane?: string
+                actionId?: string
+                blockerCode?: string
+                route?: string
+                supportText?: string
+                dashboardText?: string
+            }>
+        }>
     }
 }
 

@@ -929,6 +929,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
             <div className='grid gap-3'>
                 <DecisionFlow steps={decisionSteps} disposition={actionability.alertDisposition} shouldAlert={actionability.shouldAlert} rationale={actionability.rationale} />
                 <ConsumerReadinessPanel actionability={actionability} />
+                <ReadinessBlockersPanel actionability={actionability} />
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex items-center justify-between gap-2'>
@@ -1018,6 +1019,54 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
             </div>
         </Panel>
+    )
+}
+
+function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabilityModel }) {
+    const ids = actionability.readiness.backedIds
+    const backedRows = [
+        { label: 'Orgs', value: ids.organizationIds.length },
+        { label: 'Watchlists', value: ids.watchlistItemIds.length || ids.watchlistIds.length },
+        { label: 'Alerts', value: ids.alertIds.length },
+        { label: 'Captures', value: ids.captureIds.length },
+        { label: 'Destinations', value: ids.webhookDestinationIds.length },
+    ]
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Readiness</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Backed IDs, blockers, and next handoff owner for this result.</p>
+                </div>
+                <span className={actionability.readiness.state === 'ready' ? decisionStepStatusClass('ready') : actionability.readiness.state === 'blocked' ? decisionStepStatusClass('blocked') : decisionStepStatusClass('review')}>
+                    {formatLabel(actionability.readiness.state)}
+                </span>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3'>
+                {backedRows.map(row => (
+                    <div key={row.label} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                        <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{row.label}</p>
+                        <p className='mt-1 text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.value}</p>
+                    </div>
+                ))}
+            </div>
+            {actionability.readiness.blockers.length ? (
+                <div className='mt-3 grid gap-2'>
+                    {actionability.readiness.blockers.slice(0, 5).map(blocker => (
+                        <div key={`${blocker.code}-${blocker.field}`} className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 dark:border-[#5a4316] dark:bg-[#231b0c]'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#8a5a00]'>{readinessOwnerLabel(blocker.ownerLane)}</p>
+                                <span className='shrink-0 rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00] dark:bg-[#2b210e]'>{formatLabel(blocker.code)}</span>
+                            </div>
+                            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#8a5a00]'>{blocker.detail}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{blocker.handoff}</p>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className='mt-3 text-xs leading-5 text-[#147a3b]'>No blocking readiness issues returned.</p>
+            )}
+        </div>
     )
 }
 
@@ -1597,6 +1646,16 @@ function decisionLabel(status: LocalDecision['status']) {
     if (status === 'suppressed') return 'Suppressed'
     if (status === 'reopened') return 'Reopened'
     return 'Closed'
+}
+
+function readinessOwnerLabel(owner: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']) {
+    if (owner === 'public-ti') return 'Public TI'
+    if (owner === 'org') return 'Organization'
+    if (owner === 'alert') return 'Alert workflow'
+    if (owner === 'case') return 'Case workflow'
+    if (owner === 'webhook') return 'Webhook delivery'
+    if (owner === 'entitlement') return 'Entitlement'
+    return 'Source collection'
 }
 
 function defaultDecisionReason(status: LocalDecision['status']) {
