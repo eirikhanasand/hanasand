@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
+  buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
 } from "../product/sourceProvenanceTiPageContract.ts";
 
@@ -204,6 +205,95 @@ describe("source provenance TI page contract", () => {
     expect(bridge.payloadShape).toEqual(expect.arrayContaining(["watchlistTerms[].alertGenerationRef", "watchlistTerms[].captureIds", "blockers[]"]));
   });
 
+  test("maps alertable source provenance to an org watchlist alert terms export", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow()]
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract, includeSourceFamilies: false, includeRelationships: false });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({
+      bridge,
+      watchlistId: "watch_public_ti_apt29",
+      createdBy: "analyst@acme.example",
+      requestId: "req_source_provenance_1",
+      reason: "Materialize public TI actor coverage."
+    });
+
+    expect(candidate).toMatchObject({
+      schemaVersion: "organization.watchlist_alert_terms_export.v1",
+      artifactId: "ti_source_provenance.org_watchlist_candidate",
+      ok: true,
+      redacted: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      watchlistId: "watch_public_ti_apt29",
+      canGenerateAlerts: true,
+      blockedReasons: [],
+      blockers: []
+    });
+    expect(candidate.payloadShape).toEqual(expect.arrayContaining([
+      "activeTerms[].alertGenerationRef",
+      "activeTerms[].provenanceRefs",
+      "blockers[]"
+    ]));
+    expect(candidate.activeTerms).toEqual([
+      expect.objectContaining({
+        organizationId: "org_acme",
+        tenantId: "tenant_acme",
+        watchlistId: "watch_public_ti_apt29",
+        kind: "actor",
+        termFamily: "actor",
+        term: "APT29",
+        value: "APT29",
+        status: "active",
+        createdBy: "analyst@acme.example",
+        lifecycleReason: "Materialize public TI actor coverage.",
+        lifecycleRequestId: "req_source_provenance_1",
+        provenanceRefs: expect.objectContaining({
+          sourceContractId: contract.id,
+          sourceBridgeId: bridge.id,
+          sourceIds: ["src_telegram"],
+          captureIds: ["cap_telegram_apt29"],
+          contentHashes: ["hash_telegram_apt29"],
+          confidence: 0.86
+        }),
+        alertGenerationRef: expect.objectContaining({
+          schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+          source: "organization_shared_watchlist",
+          organizationId: "org_acme",
+          tenantId: "tenant_acme",
+          ownerOrganizationId: "org_acme",
+          watchlistId: "watch_public_ti_apt29",
+          termFamily: "actor",
+          category: "actor",
+          term: "APT29",
+          normalizedTerm: "apt29",
+          status: "active",
+          lifecycle: expect.objectContaining({
+            status: "active",
+            requestId: "req_source_provenance_1",
+            createdBy: "analyst@acme.example"
+          }),
+          dedupe: expect.objectContaining({
+            scope: "organization_watchlist_term",
+            parts: expect.objectContaining({
+              organizationId: "org_acme",
+              tenantId: "tenant_acme",
+              termFamily: "actor",
+              normalizedTerm: "apt29"
+            })
+          })
+        })
+      })
+    ]);
+    expect(candidate.activeTerms[0].alertGeneratorKey).toBe(candidate.activeTerms[0].alertGenerationRef.dedupe.key);
+    expect(JSON.stringify(candidate)).not.toContain("rawText");
+    expect(JSON.stringify(candidate)).not.toContain("password");
+  });
+
   test("blocks alertability when source provenance is not ready or org scope is absent", () => {
     const contract = buildSourceProvenanceTiPageContract({
       tenantId: "tenant_acme",
@@ -225,6 +315,36 @@ describe("source provenance TI page contract", () => {
       expect.objectContaining({ code: "missing_organization_scope", ownerLane: "org" }),
       expect.objectContaining({ code: "source_provenance_not_ready", ownerLane: "source" })
     ]));
+  });
+
+  test("does not emit org watchlist terms when provenance alertability is blocked", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [{
+        ...sourceRow(),
+        organizationId: undefined,
+        captureId: undefined,
+        contentHash: undefined
+      }]
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({ bridge });
+
+    expect(candidate).toMatchObject({
+      schemaVersion: "organization.watchlist_alert_terms_export.v1",
+      ok: false,
+      canGenerateAlerts: false,
+      activeTerms: [],
+      blockedReasons: expect.arrayContaining(["missing_organization_scope", "source_provenance_not_ready"])
+    });
+    expect(candidate.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_organization_scope", ownerLane: "org" }),
+      expect.objectContaining({ code: "source_provenance_not_ready", ownerLane: "source" })
+    ]));
+    expect(JSON.stringify(candidate)).not.toContain("cap_telegram_apt29");
+    expect(JSON.stringify(candidate)).not.toContain("hash_telegram_apt29");
   });
 });
 

@@ -2,6 +2,7 @@ import { stableId, uniqueStrings } from "../utils.ts";
 
 export const TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_page_contract.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERTABILITY_BRIDGE_SCHEMA_VERSION = "ti.source_provenance_alertability_bridge.v1" as const;
+export const TI_SOURCE_PROVENANCE_ORG_WATCHLIST_CANDIDATE_SCHEMA_VERSION = "organization.watchlist_alert_terms_export.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -125,6 +126,86 @@ export type TiSourceProvenanceAlertabilityBlocker = {
   message: string;
 };
 
+export type TiSourceProvenanceOrgWatchlistCandidate = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ORG_WATCHLIST_CANDIDATE_SCHEMA_VERSION;
+  artifactId: "ti_source_provenance.org_watchlist_candidate";
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  redacted: true;
+  tenantId: string;
+  organizationId?: string;
+  watchlistId?: string;
+  sourceBridgeId: string;
+  canGenerateAlerts: boolean;
+  payloadShape: string[];
+  activeTerms: TiSourceProvenanceOrgWatchlistCandidateTerm[];
+  blockedReasons: TiSourceProvenanceAlertabilityBlocker["code"][];
+  blockers: TiSourceProvenanceAlertabilityBlocker[];
+};
+
+export type TiSourceProvenanceOrgWatchlistCandidateTerm = {
+  watchlistId: string;
+  watchlistItemId: string;
+  itemId: string;
+  organizationId: string;
+  tenantId: string;
+  kind: "actor" | "keyword";
+  category: "actor" | "keyword";
+  termFamily: "actor" | "keyword";
+  term: string;
+  value: string;
+  terms: string[];
+  status: "active";
+  createdBy?: string;
+  updatedBy: null;
+  lifecycleReason: string | null;
+  lifecycleRequestId: string | null;
+  provenanceRefs: {
+    sourceContractId: string;
+    sourceBridgeId: string;
+    sourceTermId: string;
+    sourceIds: string[];
+    captureIds: string[];
+    contentHashes: string[];
+    confidence: number;
+  };
+  alertGeneratorKey: string;
+  alertGenerationRef: {
+    schemaVersion: "organization.watchlist_alert_generation_ref.v1";
+    source: "organization_shared_watchlist";
+    organizationId: string;
+    tenantId: string;
+    ownerOrganizationId: string;
+    watchlistId: string;
+    watchlistItemId: string;
+    itemId: string;
+    termFamily: "actor" | "keyword";
+    category: "actor" | "keyword";
+    term: string;
+    normalizedTerm: string;
+    status: "active";
+    lifecycle: {
+      status: "active";
+      reason: string | null;
+      requestId: string | null;
+      createdBy?: string;
+      updatedBy: null;
+    };
+    dedupe: {
+      scope: "organization_watchlist_term";
+      key: string;
+      parts: {
+        organizationId: string;
+        tenantId: string;
+        watchlistItemId: string;
+        termFamily: "actor" | "keyword";
+        normalizedTerm: string;
+      };
+    };
+  };
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -229,6 +310,54 @@ export function buildSourceProvenanceAlertabilityBridge(input: {
     payloadShape: ["watchlistTerms[].value", "watchlistTerms[].kind", "watchlistTerms[].alertGenerationRef", "watchlistTerms[].captureIds", "blockers[]"],
     watchlistTerms,
     blockers
+  };
+}
+
+export function buildSourceProvenanceOrgWatchlistCandidate(input: {
+  bridge: TiSourceProvenanceAlertabilityBridge;
+  watchlistId?: string;
+  createdBy?: string;
+  requestId?: string;
+  reason?: string | null;
+  generatedAt?: string;
+}): TiSourceProvenanceOrgWatchlistCandidate {
+  const generatedAt = input.generatedAt ?? input.bridge.generatedAt;
+  const watchlistId = input.watchlistId ?? (input.bridge.organizationId
+    ? stableId("org_watchlist_public_ti", `${input.bridge.organizationId}:${input.bridge.sourceContractId}`)
+    : undefined);
+  const activeTerms = input.bridge.ok && input.bridge.organizationId && watchlistId
+    ? input.bridge.watchlistTerms.map((term) => orgWatchlistCandidateTerm({
+      bridge: input.bridge,
+      term,
+      watchlistId,
+      createdBy: input.createdBy,
+      requestId: input.requestId,
+      reason: input.reason ?? "Created from public TI source provenance."
+    }))
+    : [];
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ORG_WATCHLIST_CANDIDATE_SCHEMA_VERSION,
+    artifactId: "ti_source_provenance.org_watchlist_candidate",
+    id: stableId("ti_source_provenance_org_watchlist_candidate", `${input.bridge.id}:${watchlistId ?? ""}:${generatedAt}`),
+    generatedAt,
+    ok: input.bridge.ok && activeTerms.length > 0,
+    redacted: true,
+    tenantId: input.bridge.tenantId,
+    organizationId: input.bridge.organizationId,
+    watchlistId,
+    sourceBridgeId: input.bridge.id,
+    canGenerateAlerts: input.bridge.ok && activeTerms.length > 0,
+    payloadShape: [
+      "organizationId",
+      "tenantId",
+      "watchlistId",
+      "activeTerms[].alertGenerationRef",
+      "activeTerms[].provenanceRefs",
+      "blockers[]"
+    ],
+    activeTerms,
+    blockedReasons: input.bridge.blockers.map((blocker) => blocker.code),
+    blockers: input.bridge.blockers
   };
 }
 
@@ -358,6 +487,82 @@ function alertabilityBlockers(
     });
   }
   return blockers;
+}
+
+function orgWatchlistCandidateTerm(input: {
+  bridge: TiSourceProvenanceAlertabilityBridge;
+  term: TiSourceProvenanceAlertabilityTerm;
+  watchlistId: string;
+  createdBy?: string;
+  requestId?: string;
+  reason: string | null;
+}): TiSourceProvenanceOrgWatchlistCandidateTerm {
+  const organizationId = String(input.bridge.organizationId);
+  const termFamily = input.term.kind === "actor" ? "actor" : "keyword";
+  const normalizedTerm = input.term.value.toLowerCase();
+  const watchlistItemId = stableId("org_watchlist_item", `${organizationId}:${termFamily}:${input.term.value}`);
+  const key = `org:${organizationId}:watchlist:${watchlistItemId}:${termFamily}:${normalizedTerm}`;
+  return {
+    watchlistId: input.watchlistId,
+    watchlistItemId,
+    itemId: watchlistItemId,
+    organizationId,
+    tenantId: input.bridge.tenantId,
+    kind: termFamily,
+    category: termFamily,
+    termFamily,
+    term: input.term.value,
+    value: input.term.value,
+    terms: [input.term.value],
+    status: "active",
+    createdBy: input.createdBy,
+    updatedBy: null,
+    lifecycleReason: input.reason,
+    lifecycleRequestId: input.requestId ?? null,
+    provenanceRefs: {
+      sourceContractId: input.bridge.sourceContractId,
+      sourceBridgeId: input.bridge.id,
+      sourceTermId: input.term.termId,
+      sourceIds: input.term.sourceIds,
+      captureIds: input.term.captureIds,
+      contentHashes: input.term.contentHashes,
+      confidence: input.term.confidence
+    },
+    alertGeneratorKey: key,
+    alertGenerationRef: {
+      schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+      source: "organization_shared_watchlist",
+      organizationId,
+      tenantId: input.bridge.tenantId,
+      ownerOrganizationId: organizationId,
+      watchlistId: input.watchlistId,
+      watchlistItemId,
+      itemId: watchlistItemId,
+      termFamily,
+      category: termFamily,
+      term: input.term.value,
+      normalizedTerm,
+      status: "active",
+      lifecycle: {
+        status: "active",
+        reason: input.reason,
+        requestId: input.requestId ?? null,
+        createdBy: input.createdBy,
+        updatedBy: null
+      },
+      dedupe: {
+        scope: "organization_watchlist_term",
+        key,
+        parts: {
+          organizationId,
+          tenantId: input.bridge.tenantId,
+          watchlistItemId,
+          termFamily,
+          normalizedTerm
+        }
+      }
+    }
+  };
 }
 
 function blockerPath(code: TiSourceProvenancePageBlocker["code"]): string {

@@ -6867,6 +6867,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
         bridgeAdapter: supportAuditBridgeAdapterContract(filters),
         workflowProof: supportAuditEventWorkflowProof({ detail, timelineEvent, filters }),
         integrationFixture: supportAuditEventIntegrationFixture({ detail, timelineEvent, relatedTimeline, filters }),
+        timelineReplayContract: supportAuditTimelineReplayContract(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         relatedTimeline: {
             schemaVersion: 'admin.audit.event_related_timeline.v1',
@@ -6876,6 +6877,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
             filterContract: supportAuditFilterContract(filters, relatedTimeline),
             exportProof: supportAuditExportProof(filters, relatedTimeline),
             compliancePacket: supportAuditCompliancePacket(filters, relatedTimeline),
+            timelineReplayContract: supportAuditTimelineReplayContract(filters, relatedTimeline),
             workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline),
             timeline: relatedTimeline,
             redacted: true,
@@ -6900,6 +6902,50 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
             `Timeline: ${auditFilterQuery(filters)}`,
             `Workflow proof: support.audit.event_workflow_proof.v1`,
         ].filter(Boolean).join('\n'),
+    }
+}
+
+function supportAuditTimelineReplayContract(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const replayQuery = auditFilterQuery(filters)
+    return {
+        schemaVersion: 'support.audit.timeline_replay_contract.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        route: '/api/admin/audit-events',
+        detailRouteTemplate: '/api/admin/audit-events/:id',
+        supportedFilters: {
+            org: ['org', 'orgId', 'organizationId'],
+            actor: ['actor', 'actorId', 'supportActor', 'supportActorId'],
+            target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
+            action: ['action', 'actionType'],
+            severity: ['severity'],
+            time: ['from', 'to'],
+            entity: ['entity', 'entityId', 'entityType'],
+            request: ['request', 'requestId', 'correlation', 'correlationId'],
+            outcome: ['outcome'],
+            query: ['q'],
+            reason: ['reason', 'supportReason'],
+        },
+        replay: {
+            query: replayQuery,
+            filters,
+            eventIds: timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id)),
+            detailRoutes: timeline.map(event => event.links?.detail).filter(Boolean),
+        },
+        timelineShape: {
+            requiredFields: ['id', 'timestamp', 'actionType', 'severity', 'outcome', 'actor.id', 'target.id', 'organization.id', 'entity.id', 'requestId', 'reason'],
+            detailPayloads: ['filterContract', 'exportProof', 'compliancePacket', 'workflowProof', 'integrationFixture', 'timelineReplayContract'],
+            redactionRequired: true,
+        },
+        blockers: [
+            timeline.length ? '' : 'audit_unavailable',
+            replayQuery.includes('?') ? '' : 'missing_replay_filter',
+        ].filter(Boolean),
+        copyText: [
+            'Support audit timeline replay',
+            `Replay: ${replayQuery}`,
+            `Events: ${timeline.map(event => event.id).filter(Boolean).join(', ') || 'none'}`,
+        ].join('\n'),
     }
 }
 
