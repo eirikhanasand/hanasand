@@ -37,7 +37,7 @@ export default async function Page({
                             <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>Product readiness</p>
                             <h1 className='mt-2 text-3xl font-semibold tracking-normal text-[#171a21] dark:text-white'>Threat monitoring readiness</h1>
                             <p className='mt-3 max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
-                                This page reads the same readiness contract used by the console. A row stays non-ready until the named backend contract is loaded.
+                                This page reads the same readiness contract used by the console. A row stays non-ready until the named backend contract is loaded, fresh, and tied to a workflow.
                             </p>
                         </div>
                         <div className='grid gap-2 sm:grid-cols-3 lg:min-w-[460px]'>
@@ -61,10 +61,10 @@ export default async function Page({
                     <div className='flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
                         <div>
                             <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>Readiness groups</p>
-                            <h2 className='mt-2 text-xl font-semibold text-[#171a21] dark:text-white'>Operational proof</h2>
+                            <h2 className='mt-2 text-xl font-semibold text-[#171a21] dark:text-white'>Operational evidence</h2>
                         </div>
                         <p className='max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
-                            Each group is derived from readiness rows. Missing proof shows the owner and blocker instead of a ready state.
+                            Each group is derived from readiness rows. Missing evidence shows the owner, blocker, and contract instead of a ready state.
                         </p>
                     </div>
                     <div className='mt-5 grid gap-3 lg:grid-cols-5'>
@@ -154,6 +154,7 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
             data-north-star-proof-timestamp={row.proofTimestamp}
             data-north-star-backend-proof-contract-version={row.backendProofContractVersion}
             data-north-star-stale-after-seconds={row.staleAfterSeconds}
+            data-north-star-expected-dashboard-row-id={row.expectedDashboardRowId}
         >
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
@@ -167,8 +168,10 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
             </div>
             <dl className='mt-4 grid gap-2 text-xs'>
                 <Fact label='Owner' value={row.ownerLane} />
-                <Fact label='Proof' value={row.backendProofContractVersion} />
+                <Fact label='Contract' value={row.backendProofContractVersion} />
                 <Fact label='Checked' value={formatChecked(row.proofTimestamp)} />
+                <Fact label='Stale after' value={formatDuration(row.staleAfterSeconds)} />
+                <Fact label='Row id' value={row.expectedDashboardRowId} />
                 <Fact label='Source' value={row.proofSource} />
             </dl>
             {row.blocker && (
@@ -245,4 +248,14 @@ function formatChecked(value: string) {
     const hours = Math.round(minutes / 60)
     if (hours < 24) return `${hours}h ago`
     return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+}
+
+function formatDuration(seconds: number) {
+    if (!Number.isFinite(seconds) || seconds <= 0) return 'not loaded'
+    if (seconds < 60) return `${Math.round(seconds)}s`
+    const minutes = Math.round(seconds / 60)
+    if (minutes < 60) return `${minutes}m`
+    const hours = Math.round(minutes / 60)
+    if (hours < 24) return `${hours}h`
+    return `${Math.round(hours / 24)}d`
 }

@@ -23,6 +23,7 @@ export type ProductNorthStarRow = {
     proofSource: string
     proofTimestamp: string
     staleAfterSeconds: number
+    expectedDashboardRowId: string
     backendProofContractVersion: string
     blocker: string
     integrationProbeHint: string
@@ -89,6 +90,7 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             snapshot: external.orgAlertExport,
             fallbackHref: '/dashboard/dwm',
             fallbackOwner: 'org',
+            fallbackExpectedDashboardRowId: 'org_alert_export',
             fallbackContract: 'organization.watchlist_alert_terms_export.v1',
             fallbackProbe: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
             fallbackBlocker: 'Shared watchlist export proof is not loaded.',
@@ -100,6 +102,7 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             snapshot: external.sourceGrowth,
             fallbackHref: '/dashboard/ti/sources',
             fallbackOwner: 'source',
+            fallbackExpectedDashboardRowId: 'source_inventory_probe',
             fallbackContract: 'dwm.source_inventory.v1',
             fallbackProbe: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
             fallbackBlocker: 'Source inventory and worker readiness proof is not loaded.',
@@ -109,24 +112,28 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             id: 'real_alert_generation',
             label: 'Real alert generation',
             snapshot: external.dashboardEvidence,
-            fallbackHref: '/dashboard',
+            fallbackHref: '/dashboard/ti/workbench',
             fallbackOwner: 'dashboard',
+            fallbackExpectedDashboardRowId: 'dashboard_evidence',
             fallbackContract: 'dashboard.alert_evidence.readiness.v1',
             fallbackProbe: 'Product progress must include a dashboard-visible alert with matching delivery/source/deploy proof.',
             fallbackBlocker: 'Dashboard-visible alert proof is not loaded.',
             readyDetail: 'A backend alert is visible in the dashboard with matched delivery evidence.',
+            hrefOverride: '/dashboard/ti/workbench',
         }),
         webhookDeliveryRow(external, generatedAt),
         snapshotRow({
             id: 'analyst_workflow',
             label: 'Analyst workflow',
             snapshot: external.dashboardEvidence,
-            fallbackHref: '/dashboard',
+            fallbackHref: '/dashboard/ti/workbench',
             fallbackOwner: 'dashboard',
+            fallbackExpectedDashboardRowId: 'dashboard_evidence',
             fallbackContract: 'dashboard.alert_evidence.readiness.v1',
             fallbackProbe: 'Dashboard evidence must include a real alert id that can be opened by the analyst workbench.',
             fallbackBlocker: 'No backed alert is available for analyst review.',
             readyDetail: 'A backed alert is available for analyst review.',
+            hrefOverride: '/dashboard/ti/workbench',
         }),
         snapshotRow({
             id: 'support_admin_audit',
@@ -134,28 +141,20 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             snapshot: external.helpdeskAudit,
             fallbackHref: '/dashboard/system/impersonation',
             fallbackOwner: 'helpdesk',
+            fallbackExpectedDashboardRowId: 'helpdesk_audit',
             fallbackContract: 'support.audit.readiness.v1',
             fallbackProbe: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
             fallbackBlocker: 'Support and admin audit proof is not loaded.',
             readyDetail: 'Support actions and recovery state have structured audit proof.',
         }),
-        snapshotRow({
-            id: 'public_ti_enrichment',
-            label: 'Public TI enrichment',
-            snapshot: external.publicTiProvenance,
-            fallbackHref: '/ti',
-            fallbackOwner: 'public-ti',
-            fallbackContract: 'ti.public_provenance.readiness.v1',
-            fallbackProbe: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
-            fallbackBlocker: 'Public TI provenance proof is not loaded.',
-            readyDetail: 'Public TI enrichment has source, evidence, and freshness proof.',
-        }),
+        publicTiEnrichmentRow(external, query),
         snapshotRow({
             id: 'deploy_live_status',
             label: 'Deploy and live status',
             snapshot: external.deployProbe,
             fallbackHref: '/status',
             fallbackOwner: 'integration',
+            fallbackExpectedDashboardRowId: 'deploy_probe',
             fallbackContract: 'product.deploy_probe.readiness.v1',
             fallbackProbe: 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
             fallbackBlocker: 'Live deploy probe proof is not loaded.',
@@ -281,6 +280,7 @@ function organizationsRow(external: ProductReadinessExternalState, generatedAt: 
         proofSource: [entitlement?.source, orgExport?.source].filter(Boolean).join(' + ') || 'Missing organization readiness proof',
         proofTimestamp: latestTimestamp([entitlement?.proofTimestamp, orgExport?.proofTimestamp, generatedAt]) || generatedAt,
         staleAfterSeconds: Math.min(entitlement?.staleAfterSeconds || 900, orgExport?.staleAfterSeconds || 900),
+        expectedDashboardRowId: [entitlement?.expectedDashboardRowId || 'entitlement_readiness', orgExport?.expectedDashboardRowId || 'org_alert_export'].join(','),
         backendProofContractVersion: [entitlement?.backendProofContractVersion || entitlement?.schemaVersion, orgExport?.backendProofContractVersion || orgExport?.schemaVersion].filter(Boolean).join(' + ') || 'organization.readiness.v1',
         blocker: state === 'ready' ? '' : blocker || 'Organization readiness proof is incomplete.',
         integrationProbeHint: [entitlement?.integrationProbeHint, orgExport?.integrationProbeHint].filter(Boolean).join(' ') || 'Load entitlement and organization alert-term export readiness.',
@@ -302,6 +302,7 @@ function webhookDeliveryRow(external: ProductReadinessExternalState, generatedAt
         proofSource: health?.source || 'Missing DWM webhook health readiness contract',
         proofTimestamp: latestTimestamp([health?.proofTimestamp, dashboard?.proofTimestamp, generatedAt]) || generatedAt,
         staleAfterSeconds: Math.min(health?.staleAfterSeconds || 900, dashboard?.staleAfterSeconds || 600),
+        expectedDashboardRowId: [health?.expectedDashboardRowId || 'webhook_health', dashboard?.expectedDashboardRowId || 'dashboard_evidence'].join(','),
         backendProofContractVersion: [health?.backendProofContractVersion || health?.schemaVersion, dashboard?.backendProofContractVersion || dashboard?.schemaVersion].filter(Boolean).join(' + ') || 'dwm.webhook.readiness.v1',
         blocker: state === 'ready' ? '' : [rowBlocker(health, 'Webhook lifecycle proof is not loaded.'), hasMatchedDelivery ? '' : 'No delivery row is matched to a dashboard-visible alert.'].filter(Boolean).join(' '),
         integrationProbeHint: health?.integrationProbeHint || 'GET /api/dwm/webhooks must return active destination count and lifecycle health.',
@@ -314,10 +315,12 @@ function snapshotRow(input: {
     snapshot?: ProductReadinessSnapshotBase & { schemaVersion?: string }
     fallbackHref: string
     fallbackOwner: string
+    fallbackExpectedDashboardRowId: string
     fallbackContract: string
     fallbackProbe: string
     fallbackBlocker: string
     readyDetail: string
+    hrefOverride?: string
 }): ProductNorthStarRow {
     const snapshot = input.snapshot
     const state = snapshot?.status || 'unavailable'
@@ -327,14 +330,37 @@ function snapshotRow(input: {
         state,
         ownerLane: snapshot?.ownerLane || input.fallbackOwner,
         detail: state === 'ready' ? input.readyDetail : snapshot?.detail || input.fallbackBlocker,
-        href: snapshot?.href || input.fallbackHref,
+        href: input.hrefOverride || snapshot?.href || input.fallbackHref,
         proofSource: snapshot?.source || input.fallbackBlocker,
         proofTimestamp: snapshot?.proofTimestamp || snapshot?.checkedAt || '',
         staleAfterSeconds: snapshot?.staleAfterSeconds || 900,
+        expectedDashboardRowId: snapshot?.expectedDashboardRowId || input.fallbackExpectedDashboardRowId,
         backendProofContractVersion: snapshot?.backendProofContractVersion || snapshot?.schemaVersion || input.fallbackContract,
         blocker: state === 'ready' ? '' : rowBlocker(snapshot, input.fallbackBlocker),
         integrationProbeHint: snapshot?.integrationProbeHint || input.fallbackProbe,
     }
+}
+
+function publicTiEnrichmentRow(external: ProductReadinessExternalState, query: string): ProductNorthStarRow {
+    const row = snapshotRow({
+        id: 'public_ti_enrichment',
+        label: 'Public TI enrichment',
+        snapshot: external.publicTiProvenance,
+        fallbackHref: actorIntelligenceHref(query),
+        fallbackOwner: 'public-ti',
+        fallbackExpectedDashboardRowId: 'public_ti_provenance',
+        fallbackContract: 'ti.public_provenance.readiness.v1',
+        fallbackProbe: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
+        fallbackBlocker: 'Public TI provenance proof is not loaded.',
+        readyDetail: 'Public TI enrichment has source, evidence, and freshness proof.',
+    })
+    if (row.href === '/ti') return { ...row, href: actorIntelligenceHref(query) }
+    return row
+}
+
+function actorIntelligenceHref(query: string) {
+    const slug = query.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
+    return slug ? `/ti/${encodeURIComponent(slug)}` : '/ti'
 }
 
 function combineState(...states: Array<ReadinessStatus | undefined>): ReadinessStatus {

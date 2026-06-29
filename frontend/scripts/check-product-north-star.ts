@@ -72,6 +72,7 @@ assert.equal(partialScoreboard.direction.length, 5)
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.state === 'needs_action'))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
 assert.ok(partialScoreboard.rows.every(row => row.ownerLane && row.href && row.backendProofContractVersion && row.integrationProbeHint))
+assert.ok(partialScoreboard.rows.every(row => row.expectedDashboardRowId && row.staleAfterSeconds > 0 && row.proofTimestamp))
 assert.ok(partialScoreboard.rows.every(row => row.state === 'ready' || row.blocker))
 assert.ok(partialScoreboard.direction.every(item => item.ownerLanes.length && item.backedRowIds.length && item.proofSummary && item.href))
 assert.ok(partialScoreboard.direction.every(item => item.state === 'ready' || item.blocker))
@@ -81,12 +82,23 @@ assert.deepEqual(rowHrefs(partialScoreboard), {
     organizations: '/dashboard/dwm',
     shared_watchlists: '/dashboard/dwm',
     source_coverage: '/dashboard/ti/sources',
-    real_alert_generation: '/dashboard',
+    real_alert_generation: '/dashboard/ti/workbench',
     webhook_delivery: '/dashboard/automations?setup=dwm',
-    analyst_workflow: '/dashboard',
+    analyst_workflow: '/dashboard/ti/workbench',
     support_admin_audit: '/dashboard/system/impersonation',
-    public_ti_enrichment: '/ti',
+    public_ti_enrichment: '/ti/lockbit',
     deploy_live_status: '/status',
+})
+assert.deepEqual(rowExpectedDashboardIds(partialScoreboard), {
+    organizations: 'entitlement_readiness,org_alert_export',
+    shared_watchlists: 'org_alert_export',
+    source_coverage: 'source_inventory_probe',
+    real_alert_generation: 'dashboard_evidence',
+    webhook_delivery: 'webhook_health,dashboard_evidence',
+    analyst_workflow: 'dashboard_evidence',
+    support_admin_audit: 'helpdesk_audit',
+    public_ti_enrichment: 'public_ti_provenance',
+    deploy_live_status: 'deploy_probe',
 })
 assert.equal(parseProductNorthStarScoreboard(partialScoreboard)?.schemaVersion, 'product.north_star.readiness.v1')
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, schemaVersion: 'wrong' }), null)
@@ -115,14 +127,16 @@ for (const token of [
     'data-north-star-proof-timestamp',
     'data-north-star-backend-proof-contract-version',
     'data-north-star-stale-after-seconds',
+    'data-north-star-expected-dashboard-row-id',
     'data-north-star-direction-id',
     'data-north-star-direction-state',
     'data-north-star-direction-backed-rows',
     'data-north-star-direction-owner-lanes',
     '/api/product-readiness',
     'parseProductNorthStarScoreboard',
-    'Operational proof',
+    'Operational evidence',
     'Open workflow',
+    'Stale after',
 ]) {
     assert.ok(pageSource.includes(token), `Readiness page missing ${token}.`)
 }
@@ -146,4 +160,8 @@ for (const phrase of ['powered by', 'confidence', 'signals', 'control room', 'na
 
 function rowHrefs(scoreboard: ReturnType<typeof buildProductNorthStarScoreboard>) {
     return Object.fromEntries(scoreboard.rows.map(row => [row.id, row.href]))
+}
+
+function rowExpectedDashboardIds(scoreboard: ReturnType<typeof buildProductNorthStarScoreboard>) {
+    return Object.fromEntries(scoreboard.rows.map(row => [row.id, row.expectedDashboardRowId]))
 }
