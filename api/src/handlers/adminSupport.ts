@@ -6947,6 +6947,23 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
             timeRange: auditFilterQuery({ from: filters.from || '2026-01-01T00:00:00.000Z', to: filters.to || '2026-01-02T00:00:00.000Z' }),
             textQuery: auditFilterQuery({ q: filters.q || 'customer@example.com' }),
         },
+        denialReplay: {
+            schemaVersion: 'support.audit.denial_replay.v1',
+            supportedOutcomes: ['success', 'denied', 'failed'],
+            deniedActionQuery: auditFilterQuery({ action: filters.action || 'support.organization.access_recovery', outcome: 'denied', org: filters.org || '' }),
+            missingReasonQuery: auditFilterQuery({ action: filters.action || 'support', outcome: filters.outcome || 'denied', reason: '' }),
+            requiredAuditFields: ['actor.id', 'target.id', 'organization.id', 'actionType', 'outcome', 'reason', 'requestId'],
+            expectedDeniedActions: [
+                'support.inspect',
+                'support.organization.invite_assist',
+                'support.organization.invite_resend',
+                'support.organization.invite_revoke',
+                'support.organization.member_role_recovery',
+                'support.organization.access_recovery',
+                'impersonation.start',
+            ],
+            redactionRequired: true,
+        },
         integrationReadiness: {
             fixtureName: 'support-audit-timeline-replay',
             expectedResponsePath: 'detail.timelineReplayContract',
