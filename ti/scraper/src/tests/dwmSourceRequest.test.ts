@@ -1679,6 +1679,42 @@ describe("dwm source requests", () => {
             })
           ])
         },
+        sourceSectionReadiness: {
+          schemaVersion: "dwm.actor_source_section_readiness.v1",
+          summary: expect.objectContaining({
+            coveredSections: expect.arrayContaining(["overview", "infrastructure", "targeting", "evidence", "freshness"]),
+            missingSections: [],
+            sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
+            averageConfidence: expect.any(Number)
+          }),
+          sections: expect.arrayContaining([
+            expect.objectContaining({
+              section: "overview",
+              state: "covered",
+              sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]),
+              provenance: expect.arrayContaining([
+                expect.objectContaining({
+                  family: "telegram",
+                  sourceIds: expect.arrayContaining([expect.any(String)]),
+                  privacyBoundary: expect.objectContaining({ noPrivateTelegram: true })
+                })
+              ]),
+              timestamps: expect.objectContaining({
+                lastCaptureAt: expect.any(String),
+                lastEnrichmentAt: expect.any(String)
+              }),
+              confidence: expect.any(Number),
+              matchableFields: expect.arrayContaining(["text"]),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            }),
+            expect.objectContaining({
+              section: "targeting",
+              state: "covered",
+              sourceFamilies: expect.arrayContaining(["darkweb_metadata", "public_advisory"]),
+              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+            })
+          ])
+        },
         alertCaseHandoffReadiness: {
           schemaVersion: "dwm.actor_alert_case_handoff_readiness.v1",
           alertReady: true,
@@ -1766,6 +1802,12 @@ describe("dwm source requests", () => {
               expect.objectContaining({ consumer: "publicTiActorPage", ready: true })
             ])
           }),
+          sourceSectionReadiness: expect.objectContaining({
+            schemaVersion: "dwm.actor_source_section_readiness.v1",
+            sections: expect.arrayContaining([
+              expect.objectContaining({ section: "overview", state: "covered" })
+            ])
+          }),
           freshness: expect.objectContaining({
             captureFreshness: expect.objectContaining({ state: "fresh" })
           })
@@ -1808,6 +1850,11 @@ describe("dwm source requests", () => {
               watchlistMatchReady: true
             })
           }),
+          sourceSectionReadiness: expect.objectContaining({
+            summary: expect.objectContaining({
+              coveredSections: expect.arrayContaining(["overview", "evidence"])
+            })
+          }),
           freshnessState: "fresh"
         },
         worker3Assertions: expect.arrayContaining([
@@ -1819,6 +1866,7 @@ describe("dwm source requests", () => {
           ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
           ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
           ".actorReadiness.sourceConsumerBridge.schemaVersion == \"dwm.actor_source_consumer_bridge.v1\"",
+          ".actorReadiness.sourceSectionReadiness.schemaVersion == \"dwm.actor_source_section_readiness.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -2206,6 +2254,37 @@ describe("dwm source requests", () => {
           })
         ])
       },
+      sourceSectionReadiness: {
+        schemaVersion: "dwm.actor_source_section_readiness.v1",
+        summary: expect.objectContaining({
+          coveredSections: expect.arrayContaining(["overview", "evidence", "freshness"]),
+          missingSections: expect.arrayContaining(["infrastructure", "targeting"]),
+          gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+          nextActionTypes: expect.arrayContaining(["request_candidate", "record_capture"])
+        }),
+        sections: expect.arrayContaining([
+          expect.objectContaining({
+            section: "infrastructure",
+            state: "missing_source",
+            missingFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "missing_source_family", section: "infrastructure" })
+            ]),
+            nextActions: expect.arrayContaining([
+              expect.objectContaining({ type: "request_candidate", liveNetworkFetch: false })
+            ]),
+            safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+          }),
+          expect.objectContaining({
+            section: "overview",
+            state: "covered",
+            sourceFamilies: expect.arrayContaining(["telegram"]),
+            nextActions: expect.arrayContaining([
+              expect.objectContaining({ type: "record_capture", liveNetworkFetch: false })
+            ])
+          })
+        ])
+      },
       safeOutput: {
         liveNetworkScrapeStarted: false,
         privateTelegramContentExposed: false,
@@ -2378,6 +2457,11 @@ describe("dwm source requests", () => {
           schemaVersion: "dwm.actor_source_consumer_bridge.v1",
           consumers: expect.arrayContaining([
             expect.objectContaining({ consumer: "sharedWatchlistAlerts", ready: false })
+          ])
+        }),
+        sourceSectionReadiness: expect.objectContaining({
+          sections: expect.arrayContaining([
+            expect.objectContaining({ section: "infrastructure", state: "missing_source" })
           ])
         }),
         freshnessState: "needs_capture"
@@ -2604,6 +2688,25 @@ describe("dwm source requests", () => {
             ])
           })
         ])
+      },
+      sourceSectionReadiness: {
+        schemaVersion: "dwm.actor_source_section_readiness.v1",
+        summary: expect.objectContaining({
+          missingSections: expect.arrayContaining(["overview", "infrastructure", "targeting"]),
+          gapFamilies: expect.arrayContaining(["telegram", "actor_page"]),
+          nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+        }),
+        sections: expect.arrayContaining([
+          expect.objectContaining({
+            section: "overview",
+            state: "missing_source",
+            sourceFamilies: [],
+            nextActions: expect.arrayContaining([
+              expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false }),
+              expect.objectContaining({ type: "request_candidate", liveNetworkFetch: false })
+            ])
+          })
+        ])
       }
     });
     expect(retryBody.proofArtifacts).toMatchObject({
@@ -2626,6 +2729,11 @@ describe("dwm source requests", () => {
         sourceConsumerBridge: expect.objectContaining({
           consumers: expect.arrayContaining([
             expect.objectContaining({ consumer: "sharedWatchlistAlerts", ready: false })
+          ])
+        }),
+        sourceSectionReadiness: expect.objectContaining({
+          sections: expect.arrayContaining([
+            expect.objectContaining({ section: "overview", state: "missing_source" })
           ])
         })
       },

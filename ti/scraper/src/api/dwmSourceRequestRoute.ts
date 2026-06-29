@@ -1187,6 +1187,10 @@ function uniqueSourceReadinessStrings(values: unknown[]): string[] {
   return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
 }
 
+function uniqueSourceReadinessObjects<T>(values: T[], keyFor: (value: T) => string): T[] {
+  return Array.from(new Map(values.map((value) => [keyFor(value), value])).values());
+}
+
 function uniqueSourceReadinessBlockers(blockers: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
   return dedupeBlockers(blockers.map((blocker) => ({
     code: blocker.code ?? "unknown_blocker",
@@ -3064,6 +3068,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourceOperationsQueue: actorReadiness.sourceOperationsQueue,
       sourceFamilyHealth: actorReadiness.sourceFamilyHealth,
       sourceConsumerBridge: actorReadiness.sourceConsumerBridge,
+      sourceSectionReadiness: actorReadiness.sourceSectionReadiness,
       missingDataGaps: actorReadiness.candidateGaps,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
@@ -3082,6 +3087,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourceOperationsQueue: actorReadiness.sourceOperationsQueue,
       sourceFamilyHealth: actorReadiness.sourceFamilyHealth,
       sourceConsumerBridge: actorReadiness.sourceConsumerBridge,
+      sourceSectionReadiness: actorReadiness.sourceSectionReadiness,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
@@ -3113,6 +3119,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.sourceFamilyHealth.rows | all(has(\"family\") and has(\"parserState\") and has(\"timestamps\") and has(\"confidence\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".actorReadiness.sourceConsumerBridge.schemaVersion == \"dwm.actor_source_consumer_bridge.v1\"",
       ".actorReadiness.sourceConsumerBridge.consumers | all(has(\"consumer\") and has(\"ready\") and has(\"sourceFamilies\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".actorReadiness.sourceSectionReadiness.schemaVersion == \"dwm.actor_source_section_readiness.v1\"",
+      ".actorReadiness.sourceSectionReadiness.sections | all(has(\"section\") and has(\"state\") and has(\"sourceFamilies\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3269,6 +3277,13 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     candidateGaps,
     freshness
   });
+  const sourceSectionReadiness = sourceActorSectionReadiness({
+    query,
+    actorSections,
+    sourceFamilyHealth,
+    sourceOperationsQueue,
+    candidateGaps
+  });
   return {
     proofId: stableId("dwm_actor_source_readiness", `${query}:${readinessArtifact.generatedAt}:${latestCaptureAt ?? "no_capture"}:${latestEnrichmentAt ?? "no_enrichment"}`),
     query,
@@ -3304,6 +3319,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     sourceOperationsQueue,
     sourceFamilyHealth,
     sourceConsumerBridge,
+    sourceSectionReadiness,
     alertability,
     alertCaseHandoffReadiness: sourceConsumerBridge.alertCaseHandoffReadiness,
     safeOutput: {
@@ -4124,6 +4140,104 @@ function sourceActorConsumerBridge(input: {
       lastProofAt: latestIso(consumerRows.flatMap((row) => [row.timestamps?.lastCaptureAt, row.timestamps?.lastEnrichmentAt])) ?? input.freshness.checkedAt
     },
     alertCaseHandoffReadiness: input.alertCaseHandoffReadiness,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorSectionReadiness(input: {
+  query: string;
+  actorSections: Record<string, any>;
+  sourceFamilyHealth: Record<string, any>;
+  sourceOperationsQueue: Record<string, any>;
+  candidateGaps: Array<Record<string, any>>;
+}) {
+  const familyRows = input.sourceFamilyHealth.rows ?? [];
+  const familyByName = new Map(familyRows.map((row: any) => [String(row.family), row]));
+  const actionsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const item of input.sourceOperationsQueue.queueItems ?? []) {
+    const families = item.family === "all_active" ? familyRows.map((row: any) => String(row.family)) : [String(item.family)];
+    for (const family of families) actionsByFamily.set(family, [...(actionsByFamily.get(family) ?? []), {
+      id: item.id,
+      type: item.type,
+      priority: item.priority,
+      reasonCode: item.reasonCode,
+      route: item.route,
+      liveNetworkFetch: false
+    }]);
+  }
+  const gapByFamily = new Map(input.candidateGaps.map((gap) => [String(gap.family), gap]));
+  const sections = Object.entries(input.actorSections).map(([section, raw]: [string, any]) => {
+    const sourceFamilies = uniqueSourceReadinessStrings(raw?.sourceFamilies ?? []);
+    const supportingRows = sourceFamilies.map((family) => familyByName.get(family)).filter(Boolean) as Array<Record<string, any>>;
+    const missingFamilies = SOURCE_GROWTH_FAMILIES
+      .filter((family) => actorSectionsForFamily(family).includes(section))
+      .filter((family) => !sourceFamilies.includes(family) && gapByFamily.has(family));
+    const blockers = dedupeBlockers([
+      ...(raw?.blockers ?? []),
+      ...missingFamilies.map((family) => ({ code: "missing_source_family", severity: "warning", section, family, retryable: true })),
+      ...supportingRows.flatMap((row) => row.blockers ?? [])
+    ]);
+    const confidenceRows = supportingRows.filter((row) => Number(row.confidence ?? 0) > 0);
+    const nextActions = uniqueSourceReadinessObjects([
+      ...supportingRows.flatMap((row) => actionsByFamily.get(String(row.family)) ?? []),
+      ...missingFamilies.flatMap((family) => actionsByFamily.get(family) ?? [])
+    ], (item) => `${item.type}:${item.reasonCode}:${item.route?.path}:${JSON.stringify(item.route?.body ?? {})}`);
+    return {
+      schemaVersion: "dwm.actor_source_section_readiness_row.v1",
+      proofId: stableId("dwm_actor_source_section_readiness_row", `${input.query}:${section}:${sourceFamilies.join(",")}:${blockers.map((blocker) => blocker.code).join(",")}`),
+      query: input.query,
+      section,
+      state: raw?.covered === true ? "covered" : "missing_source",
+      covered: raw?.covered === true,
+      sourceFamilies,
+      missingFamilies,
+      provenance: supportingRows.map((row) => ({
+        family: row.family,
+        sourceIds: row.sourceIds ?? [],
+        candidateIds: row.candidateIds ?? [],
+        timestamps: row.timestamps,
+        privacyBoundary: row.privacyBoundary,
+        sourceTrust: row.sourceTrust
+      })),
+      timestamps: {
+        lastCaptureAt: latestIso(supportingRows.map((row) => row.timestamps?.lastCaptureAt)),
+        lastEnrichmentAt: latestIso(supportingRows.map((row) => row.timestamps?.lastEnrichmentAt))
+      },
+      confidence: confidenceRows.length > 0
+        ? Math.round((confidenceRows.reduce((sum, row) => sum + Number(row.confidence ?? 0), 0) / confidenceRows.length) * 100) / 100
+        : 0,
+      matchableFields: uniqueSourceReadinessStrings(supportingRows.flatMap((row) => row.alertability?.matchableFields ?? [])),
+      alertableFields: uniqueSourceReadinessStrings(supportingRows.flatMap((row) => row.alertability?.alertableFields ?? [])),
+      blockers,
+      nextActions,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "dwm.actor_source_section_readiness.v1",
+    proofId: stableId("dwm_actor_source_section_readiness", `${input.query}:${sections.map((row) => `${row.section}:${row.state}:${row.sourceFamilies.join(",")}`).join("|")}`),
+    query: input.query,
+    sections,
+    summary: {
+      coveredSections: uniqueSourceReadinessStrings(sections.filter((row) => row.covered).map((row) => row.section)),
+      missingSections: uniqueSourceReadinessStrings(sections.filter((row) => !row.covered).map((row) => row.section)),
+      sourceFamilies: uniqueSourceReadinessStrings(sections.flatMap((row) => row.sourceFamilies)),
+      gapFamilies: uniqueSourceReadinessStrings(sections.flatMap((row) => row.missingFamilies)),
+      nextActionTypes: uniqueSourceReadinessStrings(sections.flatMap((row) => row.nextActions.map((action: any) => action.type))),
+      averageConfidence: sections.length > 0
+        ? Math.round((sections.reduce((sum, row) => sum + Number(row.confidence ?? 0), 0) / sections.length) * 100) / 100
+        : 0
+    },
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
