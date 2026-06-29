@@ -5728,7 +5728,7 @@ function supportActionPreparationInput(query: SupportInspectionQuery, action: st
         }
     }
 
-    let reason = ''
+    let reason: string
     try {
         reason = requireAuditReason(query.reason, 'Support action preparation reason')
     } catch (error) {
@@ -6900,7 +6900,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
             detail.copyText,
             `Detail: /api/admin/audit-events/${event.id}`,
             `Timeline: ${auditFilterQuery(filters)}`,
-            `Workflow proof: support.audit.event_workflow_proof.v1`,
+            'Workflow proof: support.audit.event_workflow_proof.v1',
         ].filter(Boolean).join('\n'),
     }
 }
