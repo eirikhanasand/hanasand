@@ -1210,11 +1210,50 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const parsedLimit = Number(query.limit || 50)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100) : 50
     const sessionState = supportSession ? await loadSupportSessionState(supportSession) : null
+    const inspectionRequestId = supportRequestId(req)
     if (supportSession && !sessionState) {
         return res.status(404).send(supportError('support_session_not_found', 'Support session not found.', { supportSessionId: supportSession }))
     }
-    const org = requestedOrg || sessionState?.organizationId || ''
-    const user = requestedUser || sessionState?.targetUserId || ''
+    if (sessionState) {
+        const orgMismatch = Boolean(requestedOrg && sessionState.organizationId && requestedOrg !== sessionState.organizationId)
+        const userMismatch = Boolean(requestedUser && sessionState.targetUserId && requestedUser !== sessionState.targetUserId)
+        if (orgMismatch || userMismatch) {
+            const blocker = orgMismatch ? 'support_session_org_mismatch' : 'support_session_user_mismatch'
+            await recordAdminAuditEvent(req, {
+                actionType: 'support.inspect',
+                actorId: actor.id,
+                targetType: 'support_session',
+                targetId: supportSession,
+                organizationId: sessionState.organizationId || requestedOrg || null,
+                entityId: supportSession,
+                requestId: inspectionRequestId,
+                severity: 'warning',
+                outcome: 'denied',
+                reason: sessionState.reason || undefined,
+                context: {
+                    schemaVersion: 'support.inspection.session_scope_guard.v1',
+                    supportSessionId: supportSession,
+                    requestedOrg: requestedOrg || null,
+                    requestedUser: requestedUser || null,
+                    scopedOrg: sessionState.organizationId || null,
+                    scopedUser: sessionState.targetUserId || null,
+                    blockerCode: blocker,
+                    noCrossOrgLeakage: true,
+                    redactionRequired: true,
+                },
+            })
+            return res.status(403).send(supportError(blocker, 'Support session scope does not allow this inspection target.', {
+                supportSessionId: supportSession,
+                requestedOrg: requestedOrg || null,
+                requestedUser: requestedUser || null,
+                scopedOrg: sessionState.organizationId || null,
+                scopedUser: sessionState.targetUserId || null,
+                noCrossOrgLeakage: true,
+            }))
+        }
+    }
+    const org = sessionState?.organizationId || requestedOrg || ''
+    const user = sessionState?.targetUserId || requestedUser || ''
     const request = requestedRequest || sessionState?.requestId || ''
     const entity = requestedEntity || supportSession
     const filterError = supportInspectionFilterError(query, { org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, from, to, limit })

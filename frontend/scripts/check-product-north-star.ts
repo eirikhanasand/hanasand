@@ -178,8 +178,27 @@ for (const token of [
     'Proof state',
     'Next blocker',
     'Open readiness',
+    'data-home-workflow-proof',
+    'data-home-workflow-proof-ready-rows',
+    'data-home-workflow-proof-total-rows',
+    'data-home-direction-id',
+    'data-home-direction-state',
+    'data-home-direction-backed-rows',
+    'data-home-direction-owner-lanes',
+    'Customer workflow proof',
+    'Current proof',
+    'Inspect readiness',
 ]) {
     assert.ok(homeSource.includes(token), `Homepage missing product readiness proof token: ${token}.`)
+}
+
+for (const token of [
+    'scoreboard.direction.map',
+    'item.blocker || item.detail',
+    'item.proofSummary',
+    'item.href',
+]) {
+    assert.ok(homeSource.includes(token), `Homepage workflow proof is not wired to north-star direction data: ${token}.`)
 }
 
 for (const phrase of ['Refresh signal', ' item.signal', 'High-speed', 'Buyer workflow']) {

@@ -158,6 +158,8 @@ export default async function Page({
                             )
                         })}
                     </div>
+
+                    <HomeWorkflowProof scoreboard={scoreboard} />
                 </div>
             </section>
 
@@ -280,6 +282,78 @@ function HomeReadinessFact({ label, value }: { label: string, value: string }) {
             <p className='mt-1 line-clamp-2 text-sm font-semibold leading-5 text-[#171a21] dark:text-white'>{value}</p>
         </div>
     )
+}
+
+function HomeWorkflowProof({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
+    return (
+        <section
+            className='overflow-hidden rounded-xl border border-[#d9e2ef] bg-white/95 shadow-sm backdrop-blur dark:border-[#26364f] dark:bg-[#101927]/95'
+            data-home-workflow-proof='true'
+            data-home-workflow-proof-ready-rows={scoreboard.readyRows}
+            data-home-workflow-proof-total-rows={scoreboard.totalRows}
+        >
+            <div className='grid gap-2 border-b border-[#eef1f5] px-4 py-4 dark:border-[#26364f] md:grid-cols-[1fr_auto] md:items-end'>
+                <div>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9db6ff]'>Customer workflow proof</p>
+                    <h2 className='mt-1 text-xl font-semibold text-[#171a21] dark:text-white'>What is backed by loaded readiness data</h2>
+                </div>
+                <Link
+                    href={`/readiness?q=${encodeURIComponent(scoreboard.query)}`}
+                    className='inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-[#d9e2ef] px-3 py-2 text-sm font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
+                >
+                    Inspect readiness
+                    <ArrowRight className='h-4 w-4' />
+                </Link>
+            </div>
+            <div className='min-w-0 overflow-x-auto'>
+                <div className='min-w-[52rem]'>
+                    <div className='grid grid-cols-[1.1fr_8rem_1.5fr_8rem] gap-3 border-b border-[#eef1f5] px-4 py-2 text-[0.68rem] font-semibold uppercase text-[#667085] dark:border-[#26364f] dark:text-[#97a6bd]'>
+                        <span>Workflow</span>
+                        <span>State</span>
+                        <span>Current proof</span>
+                        <span className='text-right'>Action</span>
+                    </div>
+                    <div className='divide-y divide-[#eef1f5] dark:divide-[#26364f]'>
+                        {scoreboard.direction.map(item => (
+                            <div
+                                key={item.id}
+                                className='grid grid-cols-[1.1fr_8rem_1.5fr_8rem] items-center gap-3 px-4 py-3 text-sm'
+                                data-home-direction-id={item.id}
+                                data-home-direction-state={item.state}
+                                data-home-direction-backed-rows={item.backedRowIds.join(',')}
+                                data-home-direction-owner-lanes={item.ownerLanes.join(',')}
+                            >
+                                <div className='min-w-0'>
+                                    <p className='truncate font-semibold text-[#171a21] dark:text-white'>{item.label}</p>
+                                    <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#97a6bd]'>{item.ownerLanes.join(', ') || 'owner not loaded'}</p>
+                                </div>
+                                <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${homeStateTone(item.state)}`}>
+                                    {homeStateLabel(item.state)}
+                                </span>
+                                <p className='min-w-0 truncate text-[#596170] dark:text-[#b9c4d6]' title={item.blocker || item.proofSummary}>
+                                    {item.state === 'ready' ? item.proofSummary : item.blocker || item.detail}
+                                </p>
+                                <Link href={item.href} className='justify-self-end text-sm font-semibold text-[#3056d3] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white'>
+                                    Open
+                                </Link>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+function homeStateTone(state: ProductNorthStarScoreboard['rows'][number]['state']) {
+    if (state === 'ready') return 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
+    if (state === 'blocked') return 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+    if (state === 'needs_action') return 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
+    return 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+}
+
+function homeStateLabel(state: ProductNorthStarScoreboard['rows'][number]['state']) {
+    return state === 'needs_action' ? 'needs action' : state
 }
 
 async function loadProductReadiness(requestHeaders: Headers, query: string): Promise<ProductNorthStarScoreboard | null> {
