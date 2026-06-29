@@ -1430,6 +1430,23 @@ export type OrganizationDwmAlertReference = {
         terms: string[]
     }
     organization: OrganizationBridgeContext
+    ownerContext: {
+        schemaVersion: 'organization.alert_reference_owner_context.v1'
+        organizationId: string
+        tenantId: string
+        ownerOrganizationId: string
+        watchlistItemId: string
+        watchlistId: string
+        watchlistKind: WatchlistKind
+        createdBy: string
+        updatedBy: string | null
+        visibilityPolicy: OrganizationAlertVisibilityPolicy
+        allowedViewerRoles: OrganizationRole[]
+        alertGeneratorKey: string
+        webhookDestinationOrgField: 'destination.org_id'
+        casePath: string
+        crossTenantCollisionAllowed: false
+    }
     alert: {
         id: string
         organizationId: string
@@ -1460,6 +1477,14 @@ export type OrganizationDwmAlertReference = {
         casePath: string
         dedupeKey: string
         alertOwnership: OrganizationDwmAlertReference['alertOwnership']
+        workflowContext: {
+            organizationId: string
+            tenantId: string
+            ownerOrganizationId: string
+            watchlistItemIds: string[]
+            alertGeneratorKeys: string[]
+            ownerContext: OrganizationDwmAlertReference['ownerContext']
+        }
     }
     alertOwnership: {
         schemaVersion: 'organization.alert_ownership.v1'
@@ -5134,6 +5159,23 @@ export function buildOrganizationDwmAlertReference(
         ],
         crossTenantCollisionAllowed: false,
     }
+    const ownerContext: OrganizationDwmAlertReference['ownerContext'] = {
+        schemaVersion: 'organization.alert_reference_owner_context.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        ownerOrganizationId: organization.id,
+        watchlistItemId: item.id,
+        watchlistId: item.id,
+        watchlistKind: item.kind,
+        createdBy: item.created_by,
+        updatedBy: item.updated_by ?? null,
+        visibilityPolicy: bridgeContext.alertVisibilityPolicy,
+        allowedViewerRoles: bridgeContext.allowedViewerRoles,
+        alertGeneratorKey: dedupeKey,
+        webhookDestinationOrgField: 'destination.org_id',
+        casePath,
+        crossTenantCollisionAllowed: false,
+    }
 
     return {
         schemaVersion: 'organization.dwm_alert_bridge.v1',
@@ -5144,6 +5186,7 @@ export function buildOrganizationDwmAlertReference(
         matchedTerm,
         watchlist,
         organization: bridgeContext,
+        ownerContext,
         alertOwnership,
         alert: {
             id: dedupeKey,
@@ -5171,6 +5214,14 @@ export function buildOrganizationDwmAlertReference(
             casePath,
             dedupeKey,
             alertOwnership,
+            workflowContext: {
+                organizationId: organization.id,
+                tenantId: organization.id,
+                ownerOrganizationId: organization.id,
+                watchlistItemIds: [item.id],
+                alertGeneratorKeys: [dedupeKey],
+                ownerContext,
+            },
         },
         webhookContract: {
             orgId: organization.id,
