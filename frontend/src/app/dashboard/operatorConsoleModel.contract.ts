@@ -1,5 +1,5 @@
 import { PUBLIC_TI_HANDOFF_ACTIONS, PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_HANDOFF_SOURCE, validatePublicTiHandoffPayload, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
-import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductReadinessExternalState } from './operatorConsoleModel'
+import { applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductProgressReadinessPayload, type ProductReadinessExternalState } from './operatorConsoleModel'
 import type { OperatorActionRailRow, WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchProductReadinessItem, WorkbenchPublicTiHandoff, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
@@ -231,6 +231,98 @@ const missingWorkerExternalReadiness = {
     ...externalReadiness,
     sourceGrowth: missingWorkerSourceProof,
 } satisfies ProductReadinessExternalState
+const productProgressPayload = {
+    schemaVersion: 'product.progress.readiness.v1',
+    generatedAt: '2026-06-28T10:20:00.000Z',
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    routes: {
+        productProgress: '/api/product-progress',
+        publicTiProvenance: '/api/public-ti/provenance/readiness',
+        helpdeskAudit: '/api/admin/support/readiness',
+        deployProbe: '/api/product-progress',
+        sourceProxy: '/api/ti/scraper/control?q=LockBit',
+        orgAlertExport: '/api/organizations/org_acme/watchlist-alert-terms',
+        webhookHealth: '/api/dwm/webhooks',
+        dashboardAlerts: '/dashboard',
+    },
+    publicTiProvenance: externalReadiness.publicTiProvenance,
+    helpdeskAudit: externalReadiness.helpdeskAudit,
+    sourceProxy: sourceProofProxyPayload,
+    orgAlertExport: {
+        schemaVersion: 'organization.watchlist_alert_terms_export.v1',
+        status: 'ready',
+        organizationId: 'org_acme',
+        activeTermCount: 1,
+        pausedCount: 0,
+        archivedCount: 0,
+        canGenerateAlerts: true,
+        exportedAt: '2026-06-28T10:18:00.000Z',
+        source: '/api/organizations/org_acme/watchlist-alert-terms',
+    },
+    webhookHealth: {
+        schemaVersion: 'dwm.webhook_health.readiness.v1',
+        status: 'ready',
+        destinationCount: 1,
+        activeDestinationCount: 1,
+        deliveryReadyCount: 1,
+        latestDeliveryAt: '2026-06-28T10:12:00.000Z',
+        latestAuditEventAt: '2026-06-28T10:12:10.000Z',
+        source: '/api/dwm/webhooks',
+    },
+    dashboardEvidence: {
+        schemaVersion: 'dashboard.alert_evidence.readiness.v1',
+        status: 'ready',
+        alertId: 'alert_acme_1',
+        deliveryId: 'deliv_acme_1',
+        visibleInDashboard: true,
+        deliveryEvidenceMatched: true,
+        sourceProxyReady: true,
+        deployProbeFresh: true,
+        dashboardPath: '/dashboard?case=alert_acme_1',
+        source: '/dashboard',
+    },
+    deployProbe: {
+        schemaVersion: 'product.deploy_probe.readiness.v1',
+        status: 'ready',
+        deployedCommit: 'a4ebed05',
+        frontendHealthy: true,
+        apiHealthy: true,
+        scraperHealthy: true,
+        latestProbeAt: '2026-06-28T10:19:00.000Z',
+        source: '/api/product-progress',
+    },
+} satisfies ProductProgressReadinessPayload
+const productProgressExternalReadiness = buildProductProgressExternalState(productProgressPayload, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const staleDeployProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    deployProbe: {
+        ...productProgressPayload.deployProbe,
+        latestProbeAt: '2026-06-28T07:00:00.000Z',
+    },
+    dashboardEvidence: {
+        ...productProgressPayload.dashboardEvidence,
+        deployProbeFresh: false,
+    },
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const missingDashboardProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    dashboardEvidence: {
+        ...productProgressPayload.dashboardEvidence,
+        visibleInDashboard: false,
+        deliveryEvidenceMatched: false,
+        sourceProxyReady: false,
+        deployProbeFresh: true,
+    },
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
 
 const cases = buildReadinessCases({
     backendConfigured: true,
@@ -323,6 +415,39 @@ const sourceProofOrgContext = buildOrgOperatingContext({
     liveAlertCount: 1,
     liveAlertIds: ['alert_acme_1'],
     externalReadiness: operatorReachableExternalReadiness,
+})
+const productProgressOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: productProgressExternalReadiness,
+})
+const staleDeployOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: staleDeployProductProgress,
+})
+const missingDashboardEvidenceOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: missingDashboardProductProgress,
 })
 const staleWorkerOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
@@ -739,6 +864,17 @@ void (orgContext.readiness.fullChainReady satisfies boolean)
 void (orgContext.readiness.productReadiness[0]?.status satisfies string | undefined)
 void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
+void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')
+void expectProductReadinessStatus(productProgressOrgContext, 'org_alert_export', 'ready')
+void expectProductReadinessStatus(productProgressOrgContext, 'webhook_health', 'ready')
+void expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready')
+void expectProductReadinessStatus(productProgressOrgContext, 'deploy_probe', 'ready')
+void (productProgressOrgContext.readiness.fullChainReady satisfies boolean)
+void expectProductReadinessStatus(staleDeployOrgContext, 'deploy_probe', 'needs_action')
+void (staleDeployOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void expectProductReadinessStatus(missingDashboardEvidenceOrgContext, 'dashboard_evidence', 'needs_action')
+void expectProductReadinessStatus(missingDashboardEvidenceOrgContext, 'deploy_probe', 'needs_action')
+void (missingDashboardEvidenceOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(staleWorkerOrgContext, 'source_inventory_probe', 'needs_action')
 void (staleWorkerOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(missingWorkerOrgContext, 'source_inventory_probe', 'needs_action')

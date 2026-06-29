@@ -149,6 +149,37 @@ export type DeployProbeReadiness = ProductReadinessSnapshotBase & {
     ledgerPath?: string
 }
 
+export type OrganizationAlertExportReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'organization.watchlist_alert_terms_export.v1' | string
+    organizationId?: string
+    activeTermCount?: number
+    pausedCount?: number
+    archivedCount?: number
+    canGenerateAlerts?: boolean
+    exportedAt?: string
+    requestId?: string
+}
+
+export type WebhookHealthReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'dwm.webhook_health.readiness.v1' | string
+    destinationCount?: number
+    activeDestinationCount?: number
+    deliveryReadyCount?: number
+    latestDeliveryAt?: string
+    latestAuditEventAt?: string
+}
+
+export type DashboardAlertEvidenceReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'dashboard.alert_evidence.readiness.v1' | string
+    alertId?: string
+    deliveryId?: string
+    visibleInDashboard?: boolean
+    deliveryEvidenceMatched?: boolean
+    sourceProxyReady?: boolean
+    deployProbeFresh?: boolean
+    dashboardPath?: string
+}
+
 export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     schemaVersion: 'dwm.source_inventory.v1' | string
     proxyExposed?: boolean
@@ -176,6 +207,9 @@ export type ProductReadinessExternalState = {
     helpdeskAudit?: HelpdeskAuditReadiness
     deployProbe?: DeployProbeReadiness
     sourceGrowth?: SourceGrowthReadiness
+    orgAlertExport?: OrganizationAlertExportReadiness
+    webhookHealth?: WebhookHealthReadiness
+    dashboardEvidence?: DashboardAlertEvidenceReadiness
 }
 
 export type DashboardSourceProofProxyPayload = {
@@ -218,6 +252,242 @@ export type SourcePackWorkerReadinessSnapshot = {
     validatingJobs?: number
     activeSourceRows?: number
     collectionReadyRows?: number
+}
+
+export type ProductProgressReadinessPayload = {
+    schemaVersion: 'product.progress.readiness.v1' | string
+    generatedAt?: string
+    checkedAt?: string
+    routes?: {
+        productProgress?: string
+        publicTiProvenance?: string
+        helpdeskAudit?: string
+        deployProbe?: string
+        sourceProxy?: string
+        orgAlertExport?: string
+        webhookHealth?: string
+        dashboardAlerts?: string
+    }
+    publicTiProvenance?: PublicTiProvenanceReadiness
+    helpdeskAudit?: HelpdeskAuditReadiness
+    deployProbe?: DeployProbeReadiness
+    sourceProxy?: DashboardSourceProofProxyPayload
+    orgAlertExport?: OrganizationAlertExportReadiness
+    webhookHealth?: WebhookHealthReadiness
+    dashboardEvidence?: DashboardAlertEvidenceReadiness
+}
+
+export function buildProductProgressExternalState(input: ProductProgressReadinessPayload | null | undefined, options: {
+    checkedAt: string
+    staleAfterMinutes?: number
+}): ProductReadinessExternalState {
+    const routes = input?.routes
+    const route = routes?.productProgress || 'Missing /api/product-progress contract'
+    if (!input) {
+        return {
+            publicTiProvenance: unavailablePublicTi(route, options.checkedAt),
+            helpdeskAudit: unavailableHelpdesk(route, options.checkedAt),
+            deployProbe: unavailableDeployProbe(route, options.checkedAt),
+            sourceGrowth: buildSourceProofReadinessFromProxy(null, {
+                route: routes?.sourceProxy || '/api/ti/scraper/control',
+                checkedAt: options.checkedAt,
+                staleAfterMinutes: options.staleAfterMinutes,
+            }),
+            orgAlertExport: unavailableOrgAlertExport(route, options.checkedAt),
+            webhookHealth: unavailableWebhookHealth(route, options.checkedAt),
+            dashboardEvidence: unavailableDashboardEvidence(route, options.checkedAt),
+        }
+    }
+
+    const sourceGrowth = buildSourceProofReadinessFromProxy(input.sourceProxy, {
+        route: input.routes?.sourceProxy || '/api/ti/scraper/control',
+        checkedAt: options.checkedAt,
+        staleAfterMinutes: options.staleAfterMinutes,
+    })
+    const dashboardEvidence = normalizeDashboardEvidenceReadiness(input.dashboardEvidence, {
+        checkedAt: input.checkedAt || input.generatedAt || options.checkedAt,
+        sourceGrowthReady: sourceGrowthReady(sourceGrowth),
+    })
+    const deployProbe = normalizeDeployProbeReadiness(input.deployProbe, {
+        checkedAt: input.checkedAt || input.generatedAt || options.checkedAt,
+        staleAfterMinutes: options.staleAfterMinutes ?? 120,
+        dashboardEvidence,
+        route: input.routes?.deployProbe || input.routes?.productProgress || '/api/product-progress',
+    })
+
+    return {
+        publicTiProvenance: input.publicTiProvenance || unavailablePublicTi(input.routes?.publicTiProvenance || route, options.checkedAt),
+        helpdeskAudit: input.helpdeskAudit || unavailableHelpdesk(input.routes?.helpdeskAudit || route, options.checkedAt),
+        deployProbe,
+        sourceGrowth,
+        orgAlertExport: normalizeOrgAlertExportReadiness(input.orgAlertExport, input.routes?.orgAlertExport || route, options.checkedAt),
+        webhookHealth: normalizeWebhookHealthReadiness(input.webhookHealth, input.routes?.webhookHealth || route, options.checkedAt),
+        dashboardEvidence,
+    }
+}
+
+function unavailablePublicTi(source: string, checkedAt: string): PublicTiProvenanceReadiness {
+    return {
+        schemaVersion: 'ti.public_provenance.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/ti',
+        detail: 'Public TI provenance readiness is not loaded by product progress.',
+        blockers: ['Public TI provenance readiness is not loaded by product progress.'],
+    }
+}
+
+function unavailableHelpdesk(source: string, checkedAt: string): HelpdeskAuditReadiness {
+    return {
+        schemaVersion: 'support.audit.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard/system/impersonation',
+        detail: 'Helpdesk and structured audit readiness is not loaded by product progress.',
+        blockers: ['Helpdesk and structured audit readiness is not loaded by product progress.'],
+    }
+}
+
+function unavailableDeployProbe(source: string, checkedAt: string): DeployProbeReadiness {
+    return {
+        schemaVersion: 'product.deploy_probe.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/status',
+        detail: 'Deploy probe recency is not loaded by product progress.',
+        blockers: ['Deploy probe recency is not loaded by product progress.'],
+    }
+}
+
+function unavailableOrgAlertExport(source: string, checkedAt: string): OrganizationAlertExportReadiness {
+    return {
+        schemaVersion: 'organization.watchlist_alert_terms_export.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard/dwm',
+        detail: 'Organization alert-term export readiness is not loaded by product progress.',
+        blockers: ['Organization alert-term export readiness is not loaded by product progress.'],
+    }
+}
+
+function unavailableWebhookHealth(source: string, checkedAt: string): WebhookHealthReadiness {
+    return {
+        schemaVersion: 'dwm.webhook_health.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard/automations?setup=dwm',
+        detail: 'Webhook health readiness is not loaded by product progress.',
+        blockers: ['Webhook health readiness is not loaded by product progress.'],
+    }
+}
+
+function unavailableDashboardEvidence(source: string, checkedAt: string): DashboardAlertEvidenceReadiness {
+    return {
+        schemaVersion: 'dashboard.alert_evidence.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard',
+        detail: 'Dashboard alert and delivery proof is not loaded by product progress.',
+        blockers: ['Dashboard alert and delivery proof is not loaded by product progress.'],
+    }
+}
+
+function normalizeDashboardEvidenceReadiness(input: DashboardAlertEvidenceReadiness | undefined, context: {
+    checkedAt: string
+    sourceGrowthReady: boolean
+}): DashboardAlertEvidenceReadiness {
+    if (!input) return unavailableDashboardEvidence('/api/product-progress dashboardEvidence', context.checkedAt)
+    const blockers = [
+        input.visibleInDashboard ? '' : 'No product-progress proof that the alert is visible in the dashboard.',
+        input.deliveryEvidenceMatched ? '' : 'No product-progress proof that delivery evidence matches the dashboard alert.',
+        context.sourceGrowthReady || input.sourceProxyReady ? '' : 'No product-progress proof that the source proxy is operator-reachable.',
+        input.deployProbeFresh ? '' : 'No product-progress proof that the deploy probe is fresh.',
+        ...(input.blockers || []),
+    ].filter(Boolean)
+    return {
+        ...input,
+        status: blockers.length ? 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
+        checkedAt: input.checkedAt || context.checkedAt,
+        href: input.href || input.dashboardPath || '/dashboard',
+        blockers,
+        detail: input.detail || (blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alertId} matches delivery ${input.deliveryId}.`),
+    }
+}
+
+function normalizeDeployProbeReadiness(input: DeployProbeReadiness | undefined, context: {
+    checkedAt: string
+    staleAfterMinutes: number
+    dashboardEvidence: DashboardAlertEvidenceReadiness
+    route: string
+}): DeployProbeReadiness {
+    if (!input) return unavailableDeployProbe(context.route, context.checkedAt)
+    const latestProbeAt = input.latestProbeAt || input.checkedAt
+    const fresh = latestProbeAt ? minutesBetween(latestProbeAt, context.checkedAt) <= context.staleAfterMinutes : false
+    const servicesReady = input.frontendHealthy === true && input.apiHealthy === true && input.scraperHealthy === true
+    const proofMatched = Boolean(context.dashboardEvidence.status === 'ready' && context.dashboardEvidence.alertId && context.dashboardEvidence.deliveryId)
+    const blockers = [
+        fresh ? '' : latestProbeAt ? `Deploy probe is stale; latest probe ${latestProbeAt}.` : 'Deploy probe timestamp is missing.',
+        servicesReady ? '' : 'Frontend, API, and scraper health are not all ready in the deploy probe.',
+        proofMatched ? '' : 'Deploy probe is not tied to a dashboard-visible alert and matching delivery proof.',
+        ...(input.blockers || []),
+    ].filter(Boolean)
+    const next: DeployProbeReadiness = {
+        ...input,
+        status: blockers.length ? 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
+        checkedAt: input.checkedAt || context.checkedAt,
+        latestProbeAt,
+        source: input.source || context.route,
+        href: input.href || '/status',
+        dashboardAlertId: input.dashboardAlertId || context.dashboardEvidence.alertId,
+        deliveryId: input.deliveryId || context.dashboardEvidence.deliveryId,
+        blockers,
+    }
+    return {
+        ...next,
+        detail: input.detail || (blockers.length ? blockers.join('; ') : deployProbeDetail(next)),
+    }
+}
+
+function normalizeOrgAlertExportReadiness(input: OrganizationAlertExportReadiness | undefined, source: string, checkedAt: string): OrganizationAlertExportReadiness {
+    if (!input) return unavailableOrgAlertExport(source, checkedAt)
+    const blockers = [
+        input.canGenerateAlerts ? '' : 'Organization alert-term export cannot generate alerts.',
+        typeof input.activeTermCount === 'number' && input.activeTermCount > 0 ? '' : 'Organization alert-term export has no active terms.',
+        ...(input.blockers || []),
+    ].filter(Boolean)
+    return {
+        ...input,
+        status: blockers.length ? 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
+        checkedAt: input.checkedAt || input.exportedAt || checkedAt,
+        source: input.source || source,
+        href: input.href || '/dashboard/dwm',
+        blockers,
+        detail: input.detail || (blockers.length ? blockers.join('; ') : `${input.activeTermCount} active alert term${input.activeTermCount === 1 ? '' : 's'} exported for alert generation.`),
+    }
+}
+
+function normalizeWebhookHealthReadiness(input: WebhookHealthReadiness | undefined, source: string, checkedAt: string): WebhookHealthReadiness {
+    if (!input) return unavailableWebhookHealth(source, checkedAt)
+    const blockers = [
+        typeof input.activeDestinationCount === 'number' && input.activeDestinationCount > 0 ? '' : 'No active webhook destination is loaded.',
+        typeof input.deliveryReadyCount === 'number' && input.deliveryReadyCount > 0 ? '' : 'No webhook destination has delivery-ready evidence.',
+        ...(input.blockers || []),
+    ].filter(Boolean)
+    return {
+        ...input,
+        status: blockers.length ? 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
+        checkedAt: input.checkedAt || input.latestDeliveryAt || input.latestAuditEventAt || checkedAt,
+        source: input.source || source,
+        href: input.href || '/dashboard/automations?setup=dwm',
+        blockers,
+        detail: input.detail || (blockers.length ? blockers.join('; ') : `${input.activeDestinationCount} active webhook destination${input.activeDestinationCount === 1 ? '' : 's'} with ${input.deliveryReadyCount} delivery-ready route${input.deliveryReadyCount === 1 ? '' : 's'}.`),
+    }
 }
 
 export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofProxyPayload | null | undefined, options: {
@@ -569,7 +839,7 @@ export function buildOrgOperatingContext(input: {
         latestDelivery,
         externalReadiness: input.externalReadiness,
     })
-    const fullChainGateIds = ['org_members', 'shared_watchlists', 'source_coverage', 'source_inventory_probe', 'dashboard_alert', 'webhook_delivery']
+    const fullChainGateIds = ['org_members', 'shared_watchlists', 'source_coverage', 'source_inventory_probe', 'dashboard_alert', 'webhook_delivery', 'deploy_probe']
     const fullChainBlockedBy = productReadiness
         .filter(item => item.status !== 'ready' && fullChainGateIds.includes(item.id))
         .map(item => `${item.label}: ${item.detail}`)
@@ -676,6 +946,9 @@ function buildProductReadiness(input: {
     const helpdeskAudit = input.externalReadiness?.helpdeskAudit
     const deployProbe = input.externalReadiness?.deployProbe
     const sourceGrowth = input.externalReadiness?.sourceGrowth
+    const orgAlertExport = input.externalReadiness?.orgAlertExport
+    const webhookHealth = input.externalReadiness?.webhookHealth
+    const dashboardEvidence = input.externalReadiness?.dashboardEvidence
     const sourceGrowthStatus: WorkbenchProductReadinessItem['status'] = sourceGrowthReady(sourceGrowth)
         ? 'ready'
         : sourceGrowth ? sourceGrowth.status === 'blocked' ? 'blocked' : 'needs_action' : 'unavailable'
@@ -731,6 +1004,39 @@ function buildProductReadiness(input: {
             source: 'GET /api/dwm/webhooks/deliveries',
             href: '/dashboard/automations?setup=dwm',
             checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.latestDelivery?.attemptedAt,
+        },
+        {
+            id: 'org_alert_export',
+            label: 'Org alert export',
+            status: orgAlertExport?.status || 'unavailable',
+            detail: orgAlertExport
+                ? orgAlertExport.detail || orgAlertExportDetail(orgAlertExport)
+                : 'Organization alert-term export readiness is not loaded by product progress.',
+            source: orgAlertExport?.source || 'Missing organization watchlist alert-term export contract',
+            href: orgAlertExport?.href || '/dashboard/dwm',
+            checkedAt: orgAlertExport?.checkedAt || orgAlertExport?.exportedAt,
+        },
+        {
+            id: 'webhook_health',
+            label: 'Webhook health',
+            status: webhookHealth?.status || 'unavailable',
+            detail: webhookHealth
+                ? webhookHealth.detail || webhookHealthDetail(webhookHealth)
+                : 'Webhook health readiness is not loaded by product progress.',
+            source: webhookHealth?.source || 'Missing DWM webhook health readiness contract',
+            href: webhookHealth?.href || '/dashboard/automations?setup=dwm',
+            checkedAt: webhookHealth?.checkedAt || webhookHealth?.latestDeliveryAt || webhookHealth?.latestAuditEventAt,
+        },
+        {
+            id: 'dashboard_evidence',
+            label: 'Dashboard evidence',
+            status: dashboardEvidence?.status || 'unavailable',
+            detail: dashboardEvidence
+                ? dashboardEvidence.detail || dashboardEvidenceDetail(dashboardEvidence)
+                : 'Product progress has not provided dashboard-visible alert and matching delivery proof.',
+            source: dashboardEvidence?.source || 'Missing dashboard alert evidence contract',
+            href: dashboardEvidence?.href || dashboardEvidence?.dashboardPath || '/dashboard',
+            checkedAt: dashboardEvidence?.checkedAt,
         },
         {
             id: 'source_inventory_probe',
@@ -811,6 +1117,29 @@ function deployProbeDetail(input: DeployProbeReadiness) {
     ].filter(Boolean)
     const proof = input.dashboardAlertId && input.deliveryId ? `dashboard alert ${input.dashboardAlertId} matched delivery ${input.deliveryId}` : 'dashboard alert plus delivery proof not loaded'
     return `${input.deployedCommit ? `Commit ${input.deployedCommit}; ` : ''}${services.length ? `${services.join(', ')}; ` : ''}${proof}.`
+}
+
+function orgAlertExportDetail(input: OrganizationAlertExportReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    if (typeof input.activeTermCount === 'number') {
+        return `${input.activeTermCount} active alert term${input.activeTermCount === 1 ? '' : 's'} exported; ${input.pausedCount || 0} paused, ${input.archivedCount || 0} archived.`
+    }
+    return 'Organization alert-term export snapshot loaded.'
+}
+
+function webhookHealthDetail(input: WebhookHealthReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    const counts = [
+        typeof input.activeDestinationCount === 'number' && typeof input.destinationCount === 'number' ? `${input.activeDestinationCount}/${input.destinationCount} active destinations` : '',
+        typeof input.deliveryReadyCount === 'number' ? `${input.deliveryReadyCount} delivery-ready` : '',
+    ].filter(Boolean)
+    return counts.length ? counts.join(', ') + '.' : 'Webhook health snapshot loaded.'
+}
+
+function dashboardEvidenceDetail(input: DashboardAlertEvidenceReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    if (input.alertId && input.deliveryId) return `Dashboard alert ${input.alertId} matches delivery ${input.deliveryId}.`
+    return 'Dashboard evidence snapshot loaded.'
 }
 
 function sourceGrowthDetail(input: SourceGrowthReadiness) {
