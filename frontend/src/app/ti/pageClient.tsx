@@ -2637,10 +2637,13 @@ function SourceHealthPanel({ queue, intake, payload }: { queue: TiActionabilityM
                         ) : null}
                         <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
                             <p className='min-w-0 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
-                            <a href={row.route} className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
-                                <ExternalLink className='h-3.5 w-3.5' />
-                                Open
-                            </a>
+                            <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                                <CopyPayloadButton label='Enrichment request' payload={sourceRefreshPayloadFor(row)} />
+                                <a href={row.route} className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                    <ExternalLink className='h-3.5 w-3.5' />
+                                    Open
+                                </a>
+                            </div>
                         </div>
                     </div>
                 )) : (
@@ -2649,6 +2652,35 @@ function SourceHealthPanel({ queue, intake, payload }: { queue: TiActionabilityM
             </div>
         </Panel>
     )
+}
+
+function sourceRefreshPayloadFor(row: SourceHealthRow) {
+    return {
+        schemaVersion: 'ti.public_actor.source_refresh_request.v1',
+        rowId: row.id,
+        sourceName: row.sourceName,
+        sourceFamily: row.sourceFamily,
+        state: row.state,
+        route: row.route,
+        ownerLane: row.ownerLane,
+        sourceId: row.sourceId,
+        sourceRequestId: row.sourceRequestId,
+        captureId: row.captureId,
+        requestedFields: row.requestedFields,
+        evidence: {
+            provenance: row.provenance,
+            timestamp: row.timestamp,
+            confidence: row.confidence,
+            parserStatus: row.parserStatus,
+        },
+        blockers: row.requestedFields.map(field => ({
+            code: 'missing_field',
+            field,
+            label: sourceHealthFieldLabel(field),
+        })),
+        recommendedAction: row.captureId ? 'inspect_capture' : row.sourceRequestId ? 'track_source_request' : 'queue_enrichment',
+        nextAction: row.nextAction,
+    }
 }
 
 function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNoteChange, onDecision, onRelevance, onStage }: {
