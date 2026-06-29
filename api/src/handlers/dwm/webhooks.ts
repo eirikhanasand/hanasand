@@ -11,6 +11,7 @@ import {
     archiveDwmWebhookDestination,
     buildDwmOrgAlertWebhookDeliveryContract,
     buildDwmWebhookAuditEventContracts,
+    buildDwmWebhookDestinationAdminProof,
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
@@ -82,6 +83,20 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
         destinationContracts: buildDwmWebhookDestinationContracts({ destinations, deliveries, auditEvents }),
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents }),
         destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries, auditEvents, ...lifecycleAccess }),
+        destinationAdminProof: buildDwmWebhookDestinationAdminProof({
+            destinations,
+            deliveries,
+            auditEvents,
+            ...lifecycleAccess,
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: membership?.role,
+                    status: membership?.status,
+                    userActive: membership?.user_active,
+                    alertVisibilityPolicy: membership?.alert_visibility_policy,
+                }
+                : null,
+        }),
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations }),
     })
@@ -105,6 +120,7 @@ export async function postDwmWebhookDestination(req: FastifyRequest<{ Body: DwmW
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], auditEvents })[0],
             destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], auditEvents })[0],
             destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], auditEvents, viewerRole: 'owner', canManage: true })[0],
+            destinationAdminProof: buildDwmWebhookDestinationAdminProof({ destinations: [destination], auditEvents, viewerRole: 'owner', canManage: true }),
             auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, destinations: [destination] }),
         })
     } catch (error) {
@@ -139,6 +155,7 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
             destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0],
             destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0],
+            destinationAdminProof: buildDwmWebhookDestinationAdminProof({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true }),
             auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations: [destination] }),
         })
     } catch (error) {
@@ -171,6 +188,7 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
         destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0],
         destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0],
+        destinationAdminProof: buildDwmWebhookDestinationAdminProof({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations: [destination] }),
     })
 }
@@ -208,6 +226,9 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
             : null,
         destinationLifecycle: destination
             ? buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0]
+            : null,
+        destinationAdminProof: destination
+            ? buildDwmWebhookDestinationAdminProof({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })
             : null,
         auditEventContracts: buildDwmWebhookAuditEventContracts({
             auditEvents,
@@ -307,6 +328,20 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
             auditEvents,
             ...destinationLifecycleAccess(orgId, userId, visibility),
         }),
+        destinationAdminProof: buildDwmWebhookDestinationAdminProof({
+            destinations,
+            deliveries,
+            auditEvents,
+            ...destinationLifecycleAccess(orgId, userId, visibility),
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: visibility?.role,
+                    status: visibility?.status,
+                    userActive: visibility?.user_active,
+                    alertVisibilityPolicy: visibility?.alert_visibility_policy,
+                }
+                : null,
+        }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({
             auditEvents,
             deliveries,
@@ -350,6 +385,13 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
         }),
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations, deliveries: ledgerDeliveries, auditEvents }),
         destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries: ledgerDeliveries, auditEvents, viewerRole: 'admin', canManage: true }),
+        destinationAdminProof: buildDwmWebhookDestinationAdminProof({
+            destinations,
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            viewerRole: 'admin',
+            canManage: true,
+        }),
         deliveryOperations: buildDwmWebhookDeliveryOperations({
             deliveries: ledgerDeliveries,
             auditEvents,

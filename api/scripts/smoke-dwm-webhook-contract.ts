@@ -4,6 +4,7 @@ import {
     buildDwmAlertWebhookDispatchPlan,
     buildDwmOrgAlertWebhookDeliveryContract,
     buildDwmWebhookAuditEventContracts,
+    buildDwmWebhookDestinationAdminProof,
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
@@ -1496,6 +1497,44 @@ const readOnlyRetryContract = buildDwmWebhookDeliveryRetryContract({
         live: false,
     },
 })
+const destinationAdminProof = buildDwmWebhookDestinationAdminProof({
+    liveDeliveryEnabled: false,
+    viewerRole: 'admin',
+    canManage: true,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const destinationAdminProofDetail = {
+    ...destinationAdminProof,
+    destinations: destinationAdminProof.destinations.filter(item => item.destinationId === 'destination_replay_contract'),
+}
+const memberDestinationAdminProof = buildDwmWebhookDestinationAdminProof({
+    liveDeliveryEnabled: false,
+    viewerRole: 'member',
+    canManage: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberDestinationAdminProof = buildDwmWebhookDestinationAdminProof({
+    liveDeliveryEnabled: false,
+    viewerRole: null,
+    canManage: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
+})
+const replayDestinationProof = destinationAdminProof.destinations.find(item => item.destinationId === 'destination_replay_contract')
+const retryDestinationProof = destinationAdminProof.destinations.find(item => item.destinationId === 'destination_live_contract')
+const disabledDestinationProof = destinationAdminProof.destinations.find(item => item.destinationId === 'destination_disabled_contract')
+const skippedDestinationProof = destinationAdminProof.destinations.find(item => item.destinationId === 'destination_skipped_contract')
+const sentDestinationProof = destinationAdminProof.destinations.find(item => item.destinationId === 'destination_sent_contract')
+const missingUrlDestinationProof = destinationAdminProof.destinations.find(item => item.destinationId === 'destination_missing_url_contract')
+const memberReplayDestinationProof = memberDestinationAdminProof.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const replayReadiness = readiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const retryReadiness = readiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const disabledReadiness = readiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
@@ -1577,6 +1616,22 @@ expect(liveDisabledRetryContract.externalSendEnabled === false && liveDisabledRe
 expect(missingAlertRetryContract.canRetry === false && missingAlertRetryContract.blockers.some(item => item.code === 'missing_alert_context'), 'Retry contract should require alert context.', missingAlertRetryContract)
 expect(readOnlyRetryContract.canRetry === false && readOnlyRetryContract.access.canManage === false, 'Retry contract should require owner/admin management access.', readOnlyRetryContract)
 expect(!JSON.stringify(deliveryOperations).includes(secret) && !JSON.stringify(retryEligibleContract).includes(secret), 'Delivery operations and retry contract should not leak endpoint secrets.', { deliveryOperations, retryEligibleContract })
+expect(destinationAdminProof.schemaVersion === 'dwm.webhook.destination_admin_proof.v1' && destinationAdminProof.summary.destinationCount === operationDestinations.length, 'Destination admin proof should list destination health rows.', destinationAdminProof)
+expect(destinationAdminProof.productProgress.schemaVersion === 'dwm.webhook.destination_admin_product_progress.v1' && destinationAdminProof.productProgress.href === '/dashboard/automations?setup=dwm', 'Destination admin proof should expose product-progress fields.', destinationAdminProof.productProgress)
+expect(destinationAdminProof.productProgress.destinationCount === operationDestinations.length && destinationAdminProof.productProgress.activeDestinationCount >= 1 && destinationAdminProof.productProgress.deliveryReadyCount >= 1, 'Destination admin proof should expose destination readiness counts for probes.', destinationAdminProof.productProgress)
+expect(replayDestinationProof?.redactedEndpoint.endpointHash === 'endpoint_replay_hash' && replayDestinationProof.deliveryOperations.latestOrgAlert?.requestId === 'delivery_replay_duplicate_contract', 'Destination admin proof should expose redacted endpoint and latest org alert context.', replayDestinationProof)
+expect(replayDestinationProof?.replay.latestReplayRequestId === 'delivery_replay_duplicate_contract' && replayDestinationProof.dedupe.duplicateKeyCount === 1, 'Destination admin proof should expose replay and dedupe state.', replayDestinationProof)
+expect(retryDestinationProof?.retry.retryable === true && retryDestinationProof.retry.lastErrorCategory === 'upstream_5xx' && retryDestinationProof.health.adminProofBlockers.some(item => item.code === 'destination_unhealthy' && item.retryable === true), 'Destination admin proof should expose retry eligibility and failure categories.', retryDestinationProof)
+expect(disabledDestinationProof?.health.adminProofBlockers.some(item => item.code === 'destination_disabled') && disabledDestinationProof.health.adminProofBlockers.some(item => item.code === 'no_verified_dry_run'), 'Destination admin proof should expose disabled and no dry-run blockers.', disabledDestinationProof)
+expect(missingUrlDestinationProof?.health.adminProofBlockers.some(item => item.code === 'no_live_endpoint') && missingUrlDestinationProof.health.adminProofBlockers.some(item => item.code === 'missing_org_alert_context') && missingUrlDestinationProof.health.adminProofBlockers.some(item => item.code === 'audit_missing'), 'Destination admin proof should expose missing endpoint, org-alert-context, and audit blockers.', missingUrlDestinationProof)
+expect(sentDestinationProof?.dedupe.alreadyDelivered === true && sentDestinationProof.health.adminProofBlockers.some(item => item.code === 'dedupe_already_delivered'), 'Destination admin proof should expose dedupe already delivered blockers.', sentDestinationProof)
+expect(skippedDestinationProof?.health.adminProofBlockers.some(item => item.code === 'retry_not_eligible'), 'Destination admin proof should expose retry-not-eligible blockers for nonretryable skipped attempts.', skippedDestinationProof)
+expect(destinationAdminProof.blockers.some(item => item.code === 'audit_missing') && destinationAdminProof.blockers.some(item => item.code === 'retry_not_eligible'), 'Destination admin proof should roll up audit and retry blocker codes.', destinationAdminProof.blockers)
+expect(destinationAdminProofDetail.destinations.length === 1 && destinationAdminProofDetail.destinations[0]?.destinationId === 'destination_replay_contract', 'Destination admin proof should support destination detail filtering for consumers.', destinationAdminProofDetail)
+expect(memberDestinationAdminProof.access.memberSafe === true && memberReplayDestinationProof?.access.canManage === false && memberReplayDestinationProof.audit.auditEventContracts.length === 0, 'Destination admin proof should expose member-safe read views without admin audit contracts.', memberDestinationAdminProof)
+expect(nonmemberDestinationAdminProof.visibility.allowed === false && nonmemberDestinationAdminProof.destinations.length === 0 && nonmemberDestinationAdminProof.blockers.some(item => item.code === 'permission_denied'), 'Destination admin proof should deny nonmembers without leaking destination metadata.', nonmemberDestinationAdminProof)
+expect(orgAlertDeliveryContract.destinationAdminProof.schemaVersion === 'dwm.webhook.destination_admin_proof.v1' && orgAlertDeliveryContract.destinationAdminProof.destinations.length === auditDestinationRows.length, 'Org alert delivery contract should include destination admin proof.', orgAlertDeliveryContract.destinationAdminProof)
+expect(!JSON.stringify(destinationAdminProof).includes(secret) && !JSON.stringify(memberDestinationAdminProof).includes(secret), 'Destination admin proof should not leak endpoint secrets.', { destinationAdminProof, memberDestinationAdminProof })
 expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'created' && auditCreated.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Audit contract should expose destination create events with redacted endpoint refs.', auditCreated)
 expect(auditUpdated?.outcome === 'updated' && (auditUpdated.metadata as Record<string, unknown>).token === '[redacted]', 'Audit contract should expose destination update events without secrets.', auditUpdated)
 expect(auditArchived?.outcome === 'disabled' && auditArchived.severity === 'warning' && auditArchived.destination?.enabled === false, 'Audit contract should expose destination disable/archive events.', auditArchived)
@@ -1640,6 +1695,16 @@ console.log(JSON.stringify({
         'delivery retry typed blockers',
         'delivery retry role gate',
         'delivery operations secret redaction',
+        'destination admin proof list/detail',
+        'destination admin proof product-progress fields',
+        'destination admin proof role gates',
+        'destination admin proof retry/failure categories',
+        'destination admin proof typed blockers',
+        'destination admin proof audit-missing blocker',
+        'destination admin proof retry-not-eligible blocker',
+        'destination admin proof replay/dedupe state',
+        'destination admin proof audit linkage',
+        'destination admin proof secret redaction',
         'delivery evidence secret redaction',
         'delivery ledger secret redaction',
         'destination readiness secret redaction',
@@ -1657,4 +1722,23 @@ console.log(JSON.stringify({
         'delivery evidence replay/live/dry-run distinction',
         'secret-free payload',
     ],
+    worker3Probe: {
+        route: 'GET /api/dwm/webhooks?orgId=<org_id>',
+        followUpRoute: 'GET /api/dwm/webhook-deliveries?orgId=<org_id>&destinationId=<destination_id>',
+        expectedFields: [
+            'destinationAdminProof.schemaVersion',
+            'destinationAdminProof.productProgress.status',
+            'destinationAdminProof.productProgress.destinationCount',
+            'destinationAdminProof.productProgress.activeDestinationCount',
+            'destinationAdminProof.productProgress.deliveryReadyCount',
+            'destinationAdminProof.productProgress.blockerCodes',
+            'destinationAdminProof.destinations[].redactedEndpoint.endpointHash',
+            'destinationAdminProof.destinations[].retry.lastErrorCategory',
+            'destinationAdminProof.destinations[].replay.latestReplayRequestId',
+            'destinationAdminProof.destinations[].dedupe.latestDedupeKey',
+            'destinationAdminProof.destinations[].audit.latestAuditEventId',
+        ],
+        expectedNoSecretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
+        expectedNoNetwork: true,
+    },
 }, null, 2))

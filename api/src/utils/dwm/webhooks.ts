@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import run from '#db'
-import { organizationVisibilityDecision, type OrganizationVisibilityDecisionInput } from '#utils/organizations.ts'
+import { organizationVisibilityDecision, type OrganizationRole, type OrganizationVisibilityDecisionInput } from '#utils/organizations.ts'
 
 export type DwmWebhookKind = 'webhook' | 'discord'
 export type DwmWebhookStatus = 'active' | 'paused' | 'archived'
@@ -147,6 +147,16 @@ export type DwmWebhookDeliveryOperationBlockerCode =
     | 'retry_not_eligible'
     | 'live_delivery_disabled'
     | 'not_found'
+export type DwmWebhookDestinationAdminProofBlockerCode =
+    | 'destination_disabled'
+    | 'no_verified_dry_run'
+    | 'no_live_endpoint'
+    | 'destination_unhealthy'
+    | 'missing_org_alert_context'
+    | 'permission_denied'
+    | 'dedupe_already_delivered'
+    | 'audit_missing'
+    | 'retry_not_eligible'
 
 export type DwmWebhookEvidenceVisibilityInput = OrganizationVisibilityDecisionInput
 
@@ -1350,6 +1360,166 @@ export function buildDwmWebhookDestinationLifecycle({
     })
 }
 
+export function buildDwmWebhookDestinationAdminProof({
+    destinations,
+    deliveries = [],
+    auditEvents = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    viewerRole = null,
+    canManage = false,
+    visibility = null,
+}: {
+    destinations: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    liveDeliveryEnabled?: boolean
+    viewerRole?: string | null
+    canManage?: boolean
+    visibility?: DwmWebhookEvidenceVisibilityInput | null
+}) {
+    const decision = visibility
+        ? organizationVisibilityDecision(visibility)
+        : {
+            allowed: true,
+            reason: null,
+            alertVisibilityPolicy: 'members' as const,
+            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+        }
+    const access = {
+        role: clean(viewerRole) || null,
+        canRead: decision.allowed,
+        canManage: decision.allowed && canManage,
+        canTest: decision.allowed && canManage,
+        canRetry: decision.allowed && canManage,
+        memberSafe: decision.allowed && !canManage,
+    }
+
+    if (!decision.allowed) {
+        const blocker = adminProofBlocker('permission_denied', 'Webhook destination health is not visible for this organization membership.')
+        return {
+            schemaVersion: 'dwm.webhook.destination_admin_proof.v1',
+            liveDeliveryEnabled,
+            visibility: decision,
+            access,
+            productProgress: webhookProductProgressSummary([], liveDeliveryEnabled, [blocker]),
+            summary: destinationAdminProofSummary([], [], liveDeliveryEnabled),
+            blockers: [blocker],
+            destinations: [],
+        }
+    }
+
+    const healthRows = buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
+    const lifecycleRows = buildDwmWebhookDestinationLifecycle({
+        destinations,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+    })
+    const operations = buildDwmWebhookDeliveryOperations({ deliveries, auditEvents, destinations, liveDeliveryEnabled })
+    const lifecycleByDestination = new Map(lifecycleRows.map(row => [row.destinationId, row]))
+    const operationsByDestination = new Map<string, typeof operations.recentDeliveries>()
+    for (const operation of operations.recentDeliveries) {
+        if (!operation.destinationId) continue
+        const rows = operationsByDestination.get(operation.destinationId) || []
+        rows.push(operation)
+        operationsByDestination.set(operation.destinationId, rows)
+    }
+
+    const proofs = healthRows.map((health) => {
+        const lifecycle = lifecycleByDestination.get(health.destinationId) || null
+        const destinationOperations = (operationsByDestination.get(health.destinationId) || [])
+            .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
+        const latestOrgAlert = destinationOperations.find(operation => operation.eventType !== 'dwm.alert.test') || null
+        const latestReplay = destinationOperations.find(operation => operation.replay) || null
+        const latestSent = destinationOperations.find(operation => operation.status === 'sent') || null
+        const latestFailedOrSkipped = destinationOperations.find(operation => operation.status === 'failed' || operation.status === 'skipped') || null
+        const blockers = destinationAdminProofBlockers({
+            health,
+            latestOrgAlert,
+            latestSent,
+            latestFailedOrSkipped,
+        })
+
+        return {
+            schemaVersion: 'dwm.webhook.destination_admin_proof_row.v1',
+            orgId: health.orgId,
+            destinationId: health.destinationId,
+            type: health.type,
+            label: health.label,
+            status: health.status,
+            enabled: health.enabled,
+            redactedEndpoint: health.redactedEndpoint,
+            access: lifecycle?.access || access,
+            health: {
+                status: health.health,
+                ready: health.ready,
+                blockers: health.blockers,
+                adminProofBlockers: blockers,
+                liveDeliveryEnabled: health.liveDeliveryEnabled,
+            },
+            lifecycle: {
+                created: lifecycle?.lifecycle.created || null,
+                updated: lifecycle?.lifecycle.updated || null,
+                disabled: lifecycle?.lifecycle.disabled || null,
+                lastDryRun: health.lastDryRun,
+                lastTest: health.lastTest,
+                lastLiveDelivery: health.lastDelivery,
+                lastFailure: health.lastFailure,
+                lastLiveDisabled: health.lastLiveDisabled,
+            },
+            retry: {
+                retryable: health.retry.retryable,
+                eligible: access.canRetry && blockers.every(blocker => !['destination_disabled', 'no_live_endpoint', 'no_verified_dry_run', 'permission_denied', 'retry_not_eligible'].includes(blocker.code)),
+                nextRetryAt: health.retry.nextRetryAt,
+                attemptCount: health.retry.attemptCount,
+                lastErrorCategory: health.retry.errorClass,
+                reason: health.retry.reason,
+                requestId: lifecycle?.retry.requestId || health.lastFailure?.requestId || health.latestAttempt?.requestId || null,
+                deliveryId: lifecycle?.retry.deliveryId || health.lastFailure?.deliveryId || health.latestAttempt?.deliveryId || null,
+                dedupeKey: lifecycle?.retry.dedupeKey || health.lastFailure?.dedupeKey || health.latestAttempt?.dedupeKey || null,
+            },
+            deliveryOperations: {
+                total: destinationOperations.length,
+                recent: destinationOperations.slice(0, 5),
+                latestOrgAlert,
+            },
+            dedupe: {
+                duplicateKeyCount: health.idempotencyCoverage.duplicateKeyCount,
+                covered: health.idempotencyCoverage.covered,
+                latestDedupeKey: latestOrgAlert?.dedupeKey || health.latestAttempt?.dedupeKey || null,
+                alreadyDelivered: Boolean(latestSent),
+                deliveredRequestId: latestSent?.requestId || null,
+            },
+            replay: {
+                latestReplayRequestId: latestReplay?.requestId || null,
+                latestReplayDedupeKey: latestReplay?.dedupeKey || null,
+                replayAttemptCount: destinationOperations.filter(operation => operation.replay).length,
+            },
+            audit: {
+                latestAuditEventId: health.latestAuditEventId,
+                auditEventIds: health.auditEventIds,
+                auditEventContracts: access.canManage ? health.auditEventContracts : [],
+            },
+            updatedAt: health.updatedAt,
+            createdAt: health.createdAt,
+        }
+    })
+    const blockers = uniqueAdminProofBlockers(proofs.flatMap(proof => proof.health.adminProofBlockers))
+
+    return {
+        schemaVersion: 'dwm.webhook.destination_admin_proof.v1',
+        liveDeliveryEnabled,
+        visibility: decision,
+        access,
+        productProgress: webhookProductProgressSummary(proofs, liveDeliveryEnabled, blockers),
+        summary: destinationAdminProofSummary(proofs, operations.recentDeliveries, liveDeliveryEnabled),
+        blockers,
+        destinations: proofs,
+    }
+}
+
 export function buildDwmOrgAlertWebhookDeliveryContract({
     ownerId,
     input,
@@ -1387,6 +1557,14 @@ export function buildDwmOrgAlertWebhookDeliveryContract({
     })
     const destinationHealth = buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
     const destinationLifecycle = buildDwmWebhookDestinationLifecycle({
+        destinations,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+    })
+    const destinationAdminProof = buildDwmWebhookDestinationAdminProof({
         destinations,
         deliveries,
         auditEvents,
@@ -1442,6 +1620,7 @@ export function buildDwmOrgAlertWebhookDeliveryContract({
         deliveryLedger,
         destinationHealth,
         destinationLifecycle,
+        destinationAdminProof,
         auditEventContracts,
     }
 }
@@ -2504,6 +2683,117 @@ function uniqueOperationBlockers(blockers: ReturnType<typeof operationBlocker>[]
         unique.push(blocker)
     }
     return unique
+}
+
+function adminProofBlocker(
+    code: DwmWebhookDestinationAdminProofBlockerCode,
+    message: string,
+    destinationId: string | null = null,
+    retryable = false
+) {
+    return { code, message, destinationId, retryable }
+}
+
+function destinationAdminProofBlockers({
+    health,
+    latestOrgAlert,
+    latestSent,
+    latestFailedOrSkipped,
+}: {
+    health: ReturnType<typeof buildDwmWebhookDestinationHealth>[number]
+    latestOrgAlert: ReturnType<typeof buildDwmWebhookDeliveryOperations>['recentDeliveries'][number] | null
+    latestSent: ReturnType<typeof buildDwmWebhookDeliveryOperations>['recentDeliveries'][number] | null
+    latestFailedOrSkipped: ReturnType<typeof buildDwmWebhookDeliveryOperations>['recentDeliveries'][number] | null
+}) {
+    const blockers: ReturnType<typeof adminProofBlocker>[] = []
+    if (!health.enabled) {
+        blockers.push(adminProofBlocker('destination_disabled', 'Destination is disabled.', health.destinationId))
+    }
+    if (!health.lastTest.requestId || (health.lastTest.status !== 'dry_run' && health.lastTest.status !== 'delivered')) {
+        blockers.push(adminProofBlocker('no_verified_dry_run', 'Destination has no successful dry-run/test delivery.', health.destinationId))
+    }
+    if (!health.redactedEndpoint.endpointHash || !health.redactedEndpoint.endpointHint) {
+        blockers.push(adminProofBlocker('no_live_endpoint', 'Destination has no stored webhook endpoint reference.', health.destinationId))
+    }
+    if (!health.latestAuditEventId && health.auditEventIds.length === 0) {
+        blockers.push(adminProofBlocker('audit_missing', 'Destination has no linked webhook audit event.', health.destinationId))
+    }
+    if (!health.ready && health.enabled) {
+        blockers.push(adminProofBlocker('destination_unhealthy', 'Destination health is blocked or retrying.', health.destinationId, health.retry.retryable))
+    }
+    if (!latestOrgAlert) {
+        blockers.push(adminProofBlocker('missing_org_alert_context', 'No org alert delivery or replay has been recorded for this destination.', health.destinationId))
+    }
+    if (latestSent) {
+        blockers.push(adminProofBlocker('dedupe_already_delivered', 'A delivery has already been sent for the latest destination dedupe context.', health.destinationId))
+    }
+    if (latestFailedOrSkipped && !latestFailedOrSkipped.attempts.retryable && latestFailedOrSkipped.status !== 'queued') {
+        blockers.push(adminProofBlocker('retry_not_eligible', 'Latest failed or skipped delivery attempt is not eligible for retry.', health.destinationId))
+    }
+    return uniqueAdminProofBlockers(blockers)
+}
+
+function uniqueAdminProofBlockers(blockers: ReturnType<typeof adminProofBlocker>[]) {
+    const seen = new Set<string>()
+    const unique: ReturnType<typeof adminProofBlocker>[] = []
+    for (const blocker of blockers) {
+        const key = `${blocker.code}:${blocker.destinationId || ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(blocker)
+    }
+    return unique
+}
+
+function destinationAdminProofSummary(
+    proofs: Array<{
+        enabled: boolean
+        health: { ready: boolean }
+        retry: { retryable: boolean }
+        dedupe: { duplicateKeyCount: number, alreadyDelivered: boolean }
+        replay: { replayAttemptCount: number }
+    }>,
+    operations: ReturnType<typeof buildDwmWebhookDeliveryOperations>['recentDeliveries'],
+    liveDeliveryEnabled: boolean
+) {
+    return {
+        destinationCount: proofs.length,
+        activeDestinationCount: proofs.filter(proof => proof.enabled).length,
+        readyDestinationCount: proofs.filter(proof => proof.health.ready).length,
+        blockedDestinationCount: proofs.filter(proof => !proof.health.ready).length,
+        retryEligibleCount: proofs.filter(proof => proof.retry.retryable).length,
+        replayDestinationCount: proofs.filter(proof => proof.replay.replayAttemptCount > 0).length,
+        dedupeDeliveredCount: proofs.filter(proof => proof.dedupe.alreadyDelivered).length,
+        duplicateDedupeDestinationCount: proofs.filter(proof => proof.dedupe.duplicateKeyCount > 0).length,
+        recentDeliveryCount: operations.length,
+        liveDeliveryEnabled,
+    }
+}
+
+function webhookProductProgressSummary(
+    proofs: Array<{
+        enabled: boolean
+        health: { ready: boolean, adminProofBlockers: ReturnType<typeof adminProofBlocker>[] }
+        retry: { retryable: boolean }
+        deliveryOperations: { latestOrgAlert: unknown }
+    }>,
+    liveDeliveryEnabled: boolean,
+    blockers: ReturnType<typeof adminProofBlocker>[]
+) {
+    const activeDestinationCount = proofs.filter(proof => proof.enabled).length
+    const deliveryReadyCount = proofs.filter(proof => proof.enabled && proof.health.ready && proof.deliveryOperations.latestOrgAlert).length
+    const blockerCodes = [...new Set(blockers.map(blocker => blocker.code))]
+    return {
+        schemaVersion: 'dwm.webhook.destination_admin_product_progress.v1',
+        status: activeDestinationCount > 0 && deliveryReadyCount > 0 && !blockerCodes.includes('permission_denied') ? 'ready' : 'needs_action',
+        destinationCount: proofs.length,
+        activeDestinationCount,
+        deliveryReadyCount,
+        retryEligibleCount: proofs.filter(proof => proof.retry.retryable).length,
+        liveDeliveryEnabled,
+        blockerCodes,
+        href: '/dashboard/automations?setup=dwm',
+    }
 }
 
 function firstClean(...values: unknown[]) {
