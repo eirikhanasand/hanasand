@@ -9,11 +9,13 @@ import {
   DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION,
   DWM_WEBHOOK_DESTINATION_ACTION_REQUEST_SCHEMA_VERSION,
   DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION,
+  DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
   buildWebhookDestinationActionRequest,
   buildWebhookDestinationLifecycleProof,
+  buildWebhookDeliveryPersistenceProof,
   buildWebhookDispatchReadiness,
   buildWebhookDispatchReplayHistory,
   buildWebhookDispatchReplayRequest,
@@ -675,6 +677,185 @@ describe("webhook event contract", () => {
     expect(JSON.stringify(history)).not.toContain("delivery_other_org");
     expect(JSON.stringify(history)).not.toContain("endpoint_hash_acme");
     expect(JSON.stringify(history)).not.toContain("payloadBody");
+  });
+
+  test("builds delivery persistence proof with redacted payload preview audit and retry metadata", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: alertFixture(),
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:20:00.000Z"
+    });
+    const replay = buildWebhookDispatchReplayRequest({
+      readiness,
+      requestId: "req_webhook_dispatch_replay",
+      generatedAt: "2026-06-29T12:24:00.000Z"
+    });
+    const deliveries = [
+      {
+        ...deliveryFixture(),
+        id: "delivery_replay_retry",
+        status: "failed",
+        dryRun: true,
+        replay: true,
+        attemptedAt: "2026-06-29T12:23:00.000Z",
+        createdAt: "2026-06-29T12:22:59.000Z",
+        updatedAt: "2026-06-29T12:23:01.000Z",
+        nextRetryAt: "2026-06-29T12:28:00.000Z",
+        errorCategory: "upstream_5xx",
+        responseSummary: "Discord rejected https://discord.com/api/webhooks/123/token token=secret",
+        payloadPreview: "Lumma alert for org_acme via https://discord.com/api/webhooks/123/token secret=supersecret",
+        auditEventId: "audit_retry_scheduled",
+        idempotencyKey: replay.request.body.idempotencyKey
+      },
+      {
+        ...deliveryFixture(),
+        id: "delivery_replay_delivered",
+        status: "delivered",
+        dryRun: false,
+        replay: true,
+        attemptedAt: "2026-06-29T12:22:00.000Z",
+        payloadPreview: "Lumma delivered to Discord channel #alerts",
+        auditEventId: "audit_delivery_delivered",
+        idempotencyKey: "prior_replay_idem"
+      },
+      {
+        ...deliveryFixture(),
+        id: "delivery_other_org",
+        organizationId: "org_other",
+        webhookDestinationId: "webhook_other",
+        payloadPreview: "Other org should not leak"
+      }
+    ];
+    const history = buildWebhookDispatchReplayHistory({
+      readiness,
+      replayRequest: replay,
+      generatedAt: "2026-06-29T12:25:00.000Z",
+      deliveries
+    });
+    const proof = buildWebhookDeliveryPersistenceProof({
+      history,
+      deliveries,
+      generatedAt: "2026-06-29T12:27:00.000Z"
+    });
+
+    expect(proof).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION,
+      generatedAt: "2026-06-29T12:27:00.000Z",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      redacted: true,
+      ledger: {
+        redacted: true,
+        rowCount: 2,
+        persistedCount: 1,
+        failedCount: 1,
+        retryScheduledCount: 1,
+        rows: [
+          expect.objectContaining({
+            deliveryId: "delivery_replay_retry",
+            destinationId: "webhook_discord",
+            organizationId: "org_acme",
+            alertId: "alert_acme_lumma",
+            caseId: "case_acme_lumma",
+            status: "failed",
+            dryRun: true,
+            replay: true,
+            dedupeKey: "dedupe_acme_lumma",
+            idempotencyKey: replay.request.body.idempotencyKey,
+            payloadHash: "payload_hash_acme",
+            payloadPreview: "Lumma alert for org_acme via https://discord.com/api/webhooks/[redacted] secret=[redacted]",
+            errorCategory: "upstream_5xx",
+            responseSummary: "Discord rejected https://discord.com/api/webhooks/[redacted] token=[redacted]",
+            retry: {
+              eligible: true,
+              attemptCount: 1,
+              nextRetryAt: "2026-06-29T12:28:00.000Z"
+            },
+            audit: {
+              eventType: "dwm.webhook.delivery_persisted",
+              outcome: "retry_scheduled",
+              auditEventId: "audit_retry_scheduled"
+            },
+            timestamps: {
+              createdAt: "2026-06-29T12:22:59.000Z",
+              updatedAt: "2026-06-29T12:23:01.000Z",
+              attemptedAt: "2026-06-29T12:23:00.000Z"
+            }
+          }),
+          expect.objectContaining({
+            deliveryId: "delivery_replay_delivered",
+            status: "delivered",
+            dryRun: false,
+            replay: true,
+            payloadPreview: "Lumma delivered to Discord channel #alerts",
+            retry: {
+              eligible: false,
+              attemptCount: 2
+            },
+            audit: {
+              eventType: "dwm.webhook.delivery_persisted",
+              outcome: "persisted",
+              auditEventId: "audit_delivery_delivered"
+            }
+          })
+        ]
+      },
+      auditPreview: {
+        eventType: "dwm.webhook.delivery_persistence_checked",
+        outcome: "ready",
+        blockerCodes: [],
+        auditEventIds: ["audit_retry_scheduled", "audit_delivery_delivered"]
+      },
+      blockers: []
+    });
+    expect(JSON.stringify(proof)).not.toContain("https://discord.com/api/webhooks/123/token");
+    expect(JSON.stringify(proof)).not.toContain("supersecret");
+    expect(JSON.stringify(proof)).not.toContain("delivery_other_org");
+    expect(JSON.stringify(proof)).not.toContain("Other org should not leak");
+  });
+
+  test("blocks delivery persistence proof when no attempt rows were persisted", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: alertFixture(),
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:20:00.000Z"
+    });
+    const replay = buildWebhookDispatchReplayRequest({
+      readiness,
+      requestId: "req_webhook_dispatch_replay",
+      generatedAt: "2026-06-29T12:24:00.000Z"
+    });
+    const history = buildWebhookDispatchReplayHistory({
+      readiness,
+      replayRequest: replay,
+      deliveries: []
+    });
+    const proof = buildWebhookDeliveryPersistenceProof({ history });
+
+    expect(proof).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION,
+      ok: false,
+      ledger: {
+        rowCount: 0,
+        persistedCount: 0,
+        failedCount: 0,
+        retryScheduledCount: 0,
+        rows: []
+      },
+      auditPreview: {
+        outcome: "blocked",
+        blockerCodes: ["missing_delivery_attempt"],
+        auditEventIds: []
+      },
+      blockers: [expect.objectContaining({
+        code: "missing_delivery_attempt",
+        ownerLane: "webhook",
+        path: "history.attempts"
+      })]
+    });
   });
 
   test("builds no-network retry audit request from replay history", () => {

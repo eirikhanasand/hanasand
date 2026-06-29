@@ -12,6 +12,7 @@ export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION = "ti.so
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION = "ti.source_provenance_actor_profile_gap_source_plan.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION = "ti.source_provenance_actor_profile_source_update_workflow.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_request.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -763,6 +764,54 @@ export type TiSourceProvenanceSourcePackIntakeCandidate = {
   };
 };
 
+export type TiSourceProvenanceSourcePackIntakeReceipt = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  sourcePackIntakeRequestId: string;
+  rows: TiSourceProvenanceSourcePackIntakeReceiptRow[];
+  sourceHealth: {
+    queuedForReview: number;
+    blockedByPolicy: number;
+    retryScheduled: number;
+    parserReady: number;
+    families: Array<{
+      family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+      queuedForReview: number;
+      blockedByPolicy: number;
+      retryScheduled: number;
+      parserReady: number;
+    }>;
+    nextRetryAt?: string;
+  };
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceSourcePackIntakeReceiptRow = {
+  candidateId: string;
+  sourceId?: string;
+  family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  field: TiSourceProvenanceActorProfileFieldName;
+  targetRef: string;
+  status: "queued_for_review" | "blocked_by_policy" | "retry_scheduled";
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  activationState: TiSourceProvenanceActorProfileSourceUpdateTask["activationState"];
+  testJobId?: string;
+  failureReason?: string;
+  nextRetryAt?: string;
+  policyBoundary: TiSourceProvenanceActorProfileGapSourceCandidate["policyBoundary"];
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -1485,6 +1534,48 @@ export function buildSourceProvenanceSourcePackIntakeRequest(input: {
   };
 }
 
+export function buildSourceProvenanceSourcePackIntakeReceipt(input: {
+  request: TiSourceProvenanceSourcePackIntakeRequest;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackIntakeReceipt {
+  const generatedAt = input.generatedAt ?? input.request.generatedAt;
+  const rows = [
+    ...input.request.acceptedCandidates.map((candidate) => sourcePackIntakeReceiptRow(candidate, "queued_for_review")),
+    ...input.request.blockedCandidates
+      .filter((candidate) => !candidate.validation.nextRetryAt)
+      .map((candidate) => sourcePackIntakeReceiptRow(candidate, "blocked_by_policy")),
+    ...input.request.retryCandidates.map((candidate) => sourcePackIntakeReceiptRow(candidate, "retry_scheduled"))
+  ];
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_intake_receipt", `${input.request.id}:${generatedAt}:${rows.map((row) => `${row.candidateId}:${row.status}`).join(",")}`),
+    generatedAt,
+    ok: input.request.ok && rows.some((row) => row.status === "queued_for_review"),
+    tenantId: input.request.tenantId,
+    organizationId: input.request.organizationId,
+    actor: input.request.actor,
+    sourcePackIntakeRequestId: input.request.id,
+    rows,
+    sourceHealth: sourcePackIntakeReceiptHealth(rows),
+    payloadShape: [
+      "rows[].candidateId",
+      "rows[].sourceId",
+      "rows[].status",
+      "rows[].parserStatus",
+      "rows[].activationState",
+      "rows[].nextRetryAt",
+      "sourceHealth.families[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -2026,6 +2117,53 @@ function sourcePackIntakePolicyBoundary(
     noRepliesOrReactions: true,
     noMediaDownloads: true,
     liveNetworkFetch: false
+  };
+}
+
+function sourcePackIntakeReceiptRow(
+  candidate: TiSourceProvenanceSourcePackIntakeCandidate,
+  status: TiSourceProvenanceSourcePackIntakeReceiptRow["status"]
+): TiSourceProvenanceSourcePackIntakeReceiptRow {
+  return {
+    candidateId: candidate.candidateId,
+    sourceId: status === "queued_for_review" ? stableId("ti_source_candidate_source", `${candidate.candidateId}:${candidate.targetRef}`) : undefined,
+    family: candidate.family,
+    field: candidate.field,
+    targetRef: candidate.targetRef,
+    status,
+    parserStatus: candidate.parserStatus,
+    activationState: candidate.activationState,
+    testJobId: status === "queued_for_review" ? stableId("ti_source_candidate_test_job", `${candidate.candidateId}:${candidate.parserProfile}`) : undefined,
+    failureReason: candidate.validation.failureReason ?? (!candidate.validation.allowed ? candidate.validation.reason : undefined),
+    nextRetryAt: candidate.validation.nextRetryAt,
+    policyBoundary: candidate.policyBoundary
+  };
+}
+
+function sourcePackIntakeReceiptHealth(
+  rows: TiSourceProvenanceSourcePackIntakeReceiptRow[]
+): TiSourceProvenanceSourcePackIntakeReceipt["sourceHealth"] {
+  const families = rows.reduce<Array<TiSourceProvenanceActorProfileGapSourceCandidate["family"]>>((items, row) => {
+    if (!items.includes(row.family)) items.push(row.family);
+    return items;
+  }, []).map((family) => {
+    const familyRows = rows.filter((row) => row.family === family);
+    return {
+      family,
+      queuedForReview: familyRows.filter((row) => row.status === "queued_for_review").length,
+      blockedByPolicy: familyRows.filter((row) => row.status === "blocked_by_policy").length,
+      retryScheduled: familyRows.filter((row) => row.status === "retry_scheduled").length,
+      parserReady: familyRows.filter((row) => row.parserStatus === "ready").length
+    };
+  });
+
+  return {
+    queuedForReview: rows.filter((row) => row.status === "queued_for_review").length,
+    blockedByPolicy: rows.filter((row) => row.status === "blocked_by_policy").length,
+    retryScheduled: rows.filter((row) => row.status === "retry_scheduled").length,
+    parserReady: rows.filter((row) => row.parserStatus === "ready").length,
+    families,
+    nextRetryAt: earliestTimestamp(rows.map((row) => row.nextRetryAt))
   };
 }
 

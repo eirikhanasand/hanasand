@@ -11,6 +11,7 @@ export const DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION = "dwm.webhook_d
 export const DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION = "dwm.webhook_dispatch_retry_audit.v1" as const;
 export const DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION = "dwm.webhook_destination_lifecycle_proof.v1" as const;
 export const DWM_WEBHOOK_DESTINATION_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_destination_action_request.v1" as const;
+export const DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION = "dwm.webhook_delivery_persistence_proof.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -388,6 +389,7 @@ export type DwmWebhookDispatchReplayHistory = {
       retryable: boolean;
       errorCategory?: string;
       responseSummary?: string;
+      payloadPreview?: string;
     }>;
   };
   retry: {
@@ -404,6 +406,68 @@ export type DwmWebhookDispatchReplayHistory = {
   };
   blockers: DwmWebhookDispatchReplayRequest["blockers"];
   nextActions: DwmWebhookDispatchReadiness["nextActions"];
+};
+
+export type DwmWebhookDeliveryPersistenceProof = {
+  schemaVersion: typeof DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  ledger: {
+    redacted: true;
+    rowCount: number;
+    persistedCount: number;
+    failedCount: number;
+    retryScheduledCount: number;
+    rows: Array<{
+      deliveryId?: string;
+      destinationId?: string;
+      organizationId?: string;
+      alertId: string;
+      caseId?: string;
+      status?: string;
+      dryRun: boolean;
+      replay: boolean;
+      dedupeKey?: string;
+      idempotencyKey?: string;
+      payloadHash?: string;
+      payloadPreview?: string;
+      errorCategory?: string;
+      responseSummary?: string;
+      retry: {
+        eligible: boolean;
+        attemptCount: number;
+        nextRetryAt?: string;
+      };
+      audit: {
+        eventType: "dwm.webhook.delivery_persisted";
+        outcome: "persisted" | "failed" | "retry_scheduled" | "skipped";
+        auditEventId?: string;
+      };
+      timestamps: {
+        createdAt?: string;
+        updatedAt?: string;
+        attemptedAt?: string;
+      };
+    }>;
+  };
+  auditPreview: {
+    eventType: "dwm.webhook.delivery_persistence_checked";
+    outcome: "ready" | "blocked";
+    blockerCodes: Array<"missing_delivery_attempt" | DwmWebhookDispatchReplayRequest["blockers"][number]["code"]>;
+    auditEventIds: string[];
+  };
+  blockers: Array<DwmWebhookDispatchReplayRequest["blockers"][number] | {
+    code: "missing_delivery_attempt";
+    ownerLane: "webhook";
+    path: string;
+    message: string;
+  }>;
 };
 
 export type DwmWebhookDispatchRetryAudit = {
@@ -1074,7 +1138,8 @@ export function buildWebhookDispatchReplayHistory(input: {
       nextRetryAt,
       retryable,
       errorCategory: stringValue(delivery.errorCategory ?? delivery.errorClass),
-      responseSummary: redactedSummary(delivery.responseSummary ?? delivery.error)
+      responseSummary: redactedSummary(delivery.responseSummary ?? delivery.error),
+      payloadPreview: redactedSummary(delivery.payloadPreview ?? delivery.discordBody ?? delivery.payloadBody ?? delivery.body)
     };
   });
   const latestAttempt = attempts[0];
@@ -1129,6 +1194,90 @@ export function buildWebhookDispatchReplayHistory(input: {
     },
     blockers,
     nextActions: replayRequest.nextActions
+  };
+}
+
+export function buildWebhookDeliveryPersistenceProof(input: {
+  history: DwmWebhookDispatchReplayHistory;
+  deliveries?: Array<Record<string, any>>;
+  generatedAt?: string;
+}): DwmWebhookDeliveryPersistenceProof {
+  const history = input.history;
+  const rawDeliveriesById = new Map((input.deliveries ?? [])
+    .map((delivery) => [stringValue(delivery.id ?? delivery.deliveryId), delivery] as const)
+    .filter((entry): entry is [string, Record<string, any>] => Boolean(entry[0])));
+  const blockers: DwmWebhookDeliveryPersistenceProof["blockers"] = [...history.blockers];
+  if (history.history.attemptCount === 0) {
+    blockers.push({
+      code: "missing_delivery_attempt",
+      ownerLane: "webhook",
+      path: "history.attempts",
+      message: "Webhook delivery persistence proof requires at least one persisted delivery attempt."
+    });
+  }
+  const rows = history.history.attempts.map((attempt, index) => {
+    const rawDelivery = attempt.deliveryId ? rawDeliveriesById.get(attempt.deliveryId) : undefined;
+    const retryEligible = attempt.retryable || Boolean(attempt.nextRetryAt);
+    return {
+      deliveryId: attempt.deliveryId,
+      destinationId: attempt.destinationId,
+      organizationId: history.organizationId,
+      alertId: history.alertId,
+      caseId: history.caseId,
+      status: attempt.status,
+      dryRun: attempt.dryRun,
+      replay: attempt.replay,
+      dedupeKey: attempt.dedupeKey ?? history.target.dedupeKey,
+      idempotencyKey: attempt.idempotencyKey,
+      payloadHash: attempt.payloadHash,
+      payloadPreview: attempt.payloadPreview ?? redactedSummary(rawDelivery?.payloadPreview ?? rawDelivery?.discordBody ?? rawDelivery?.payloadBody ?? rawDelivery?.body),
+      errorCategory: attempt.errorCategory,
+      responseSummary: attempt.responseSummary,
+      retry: {
+        eligible: retryEligible,
+        attemptCount: index + 1,
+        nextRetryAt: attempt.nextRetryAt
+      },
+      audit: {
+        eventType: "dwm.webhook.delivery_persisted" as const,
+        outcome: deliveryPersistenceOutcome(attempt),
+        auditEventId: stringValue(rawDelivery?.auditEventId ?? rawDelivery?.audit_event_id)
+      },
+      timestamps: {
+        createdAt: stringValue(rawDelivery?.createdAt ?? attempt.attemptedAt),
+        updatedAt: stringValue(rawDelivery?.updatedAt ?? rawDelivery?.attemptedAt ?? attempt.attemptedAt),
+        attemptedAt: attempt.attemptedAt
+      }
+    };
+  });
+  const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmWebhookDeliveryPersistenceProof["auditPreview"]["blockerCodes"];
+  const auditEventIds = uniqueStrings(rows.map((row) => row.audit.auditEventId).filter(Boolean).map(String));
+
+  return {
+    schemaVersion: DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_delivery_persistence_proof", `${history.id}:${rows.map((row) => row.deliveryId ?? "").join(",")}`),
+    generatedAt: input.generatedAt ?? history.generatedAt,
+    ok: blockers.length === 0,
+    tenantId: history.tenantId,
+    organizationId: history.organizationId,
+    alertId: history.alertId,
+    caseId: history.caseId,
+    redacted: true,
+    ledger: {
+      redacted: true,
+      rowCount: rows.length,
+      persistedCount: rows.filter((row) => row.audit.outcome === "persisted").length,
+      failedCount: rows.filter((row) => row.audit.outcome === "failed" || row.audit.outcome === "retry_scheduled").length,
+      retryScheduledCount: rows.filter((row) => row.retry.eligible).length,
+      rows
+    },
+    auditPreview: {
+      eventType: "dwm.webhook.delivery_persistence_checked",
+      outcome: blockers.length === 0 ? "ready" : "blocked",
+      blockerCodes,
+      auditEventIds
+    },
+    blockers
   };
 }
 
@@ -1488,6 +1637,13 @@ function uniqueDestinationActionBlockers(blockers: DwmWebhookDestinationActionRe
     seen.add(key);
     return true;
   });
+}
+
+function deliveryPersistenceOutcome(attempt: DwmWebhookDispatchReplayHistory["history"]["attempts"][number]): DwmWebhookDeliveryPersistenceProof["ledger"]["rows"][number]["audit"]["outcome"] {
+  if (attempt.status === "skipped") return "skipped";
+  if (attempt.retryable || attempt.nextRetryAt) return "retry_scheduled";
+  if (attempt.status === "failed") return "failed";
+  return "persisted";
 }
 
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {

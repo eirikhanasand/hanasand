@@ -8,6 +8,7 @@ import {
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
@@ -19,6 +20,7 @@ import {
   buildSourceProvenanceAlertRebuildReadiness,
   buildSourceProvenanceAlertRebuildRequest,
   buildSourceProvenanceSourcePackIntakeRequest,
+  buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceWatchlistAlertBridgePacket,
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
@@ -1242,6 +1244,114 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(request)).not.toContain("rawText");
     expect(JSON.stringify(request)).not.toContain("password");
+  });
+
+  test("builds source-pack intake receipt with actionable source health", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({ profile });
+    const campaignCandidate = plan.candidates.find((candidate) => candidate.field === "campaigns");
+    const sectorCandidate = plan.candidates.find((candidate) => candidate.field === "sectors");
+    expect(campaignCandidate).toBeDefined();
+    expect(sectorCandidate).toBeDefined();
+    const workflow = buildSourceProvenanceActorProfileSourceUpdateWorkflow({
+      plan,
+      health: [{
+        candidateId: campaignCandidate!.candidateId,
+        parserStatus: "retry_scheduled",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        failureReason: "fixture parser found no campaign timestamp"
+      }, {
+        candidateId: sectorCandidate!.candidateId,
+        parserStatus: "ready"
+      }]
+    });
+    const request = buildSourceProvenanceSourcePackIntakeRequest({ workflow });
+    const receipt = buildSourceProvenanceSourcePackIntakeReceipt({
+      request,
+      generatedAt: "2026-06-29T12:20:00.000Z"
+    });
+
+    expect(receipt).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      sourcePackIntakeRequestId: request.id,
+      sourceHealth: {
+        queuedForReview: request.acceptedCandidates.length,
+        blockedByPolicy: request.blockedCandidates.length - request.retryCandidates.length,
+        retryScheduled: request.retryCandidates.length,
+        parserReady: 1,
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        families: expect.arrayContaining([
+          expect.objectContaining({ family: "public_advisory", queuedForReview: expect.any(Number), parserReady: 1 }),
+          expect.objectContaining({ family: "telegram_public", retryScheduled: 1 }),
+          expect.objectContaining({ family: "darkweb_metadata", blockedByPolicy: 1 })
+        ])
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(receipt.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        candidateId: sectorCandidate!.candidateId,
+        family: "public_advisory",
+        status: "queued_for_review",
+        parserStatus: "ready",
+        activationState: "ready_to_test",
+        sourceId: expect.stringMatching(/^ti_source_candidate_source_/),
+        testJobId: expect.stringMatching(/^ti_source_candidate_test_job_/)
+      }),
+      expect.objectContaining({
+        candidateId: campaignCandidate!.candidateId,
+        family: "telegram_public",
+        status: "retry_scheduled",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        failureReason: "fixture parser found no campaign timestamp"
+      }),
+      expect.objectContaining({
+        family: "darkweb_metadata",
+        status: "blocked_by_policy",
+        parserStatus: "blocked",
+        failureReason: "Candidate requires policy approval before intake.",
+        policyBoundary: expect.objectContaining({
+          metadataOnly: true,
+          requiresGovernance: true,
+          liveNetworkFetch: false
+        })
+      })
+    ]));
+    expect(receipt.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].status",
+      "rows[].nextRetryAt",
+      "sourceHealth.families[]"
+    ]));
+    expect(JSON.stringify(receipt)).not.toContain("rawText");
+    expect(JSON.stringify(receipt)).not.toContain("password");
   });
 
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {
