@@ -947,7 +947,15 @@ assert.equal(memberSharedWatchlistContract.lifecycle.activeCount, 1)
 assert.equal(memberSharedWatchlistContract.lifecycle.cleanupRequired, false)
 assert.equal(memberSharedWatchlistContract.alertExportBridge.route, 'GET /api/organizations/:id/watchlists/alert-terms')
 assert.deepEqual(memberSharedWatchlistContract.alertExportBridge.watchlistItemIds, [ownerWatchlistItem.id])
+assert.ok(memberSharedWatchlistContract.alertExportBridge.requiredFields.includes('ownerOrganizationId'))
+assert.ok(memberSharedWatchlistContract.alertExportBridge.requiredFields.includes('activeTerms[].ownerOrganizationId'))
+assert.ok(memberSharedWatchlistContract.alertExportBridge.requiredFields.includes('activeTerms[].matchedTerm.termFamily'))
 assert.ok(memberSharedWatchlistContract.alertExportBridge.requiredFields.includes('activeTerms[].alertGenerationRef'))
+assert.ok(memberSharedWatchlistContract.alertExportBridge.ownerContextFields.includes('activeTerms[].createdBy'))
+assert.equal(memberSharedWatchlistContract.alertExportBridge.webhookOwnership.schemaVersion, 'organization.shared_watchlist_webhook_ownership_hint.v1')
+assert.equal(memberSharedWatchlistContract.alertExportBridge.webhookOwnership.requiredDestinationOrgId, organization.id)
+assert.equal(memberSharedWatchlistContract.alertExportBridge.webhookOwnership.selectedDestinationOrgField, 'destination.org_id')
+assert.equal(memberSharedWatchlistContract.alertExportBridge.webhookOwnership.nonmemberDestinationEnumeration, false)
 
 const viewerWatchlistResponse = await app.inject({
     method: 'GET',
@@ -1226,6 +1234,9 @@ assert.equal(ownerSharedWatchlistContract.lifecycle.cleanupRoute, 'POST /api/org
 assert.equal(ownerSharedWatchlistContract.lifecycle.archiveRoute, 'DELETE /api/organizations/:organizationId/watchlists/:itemId')
 assert.deepEqual(ownerSharedWatchlistContract.alertExportBridge.watchlistItemIds.sort(), ownerSharedWatchlistContract.ownership.activeItemIds.sort())
 assert.deepEqual(ownerSharedWatchlistContract.alertExportBridge.termFamilies, ['actor', 'company', 'domain', 'keyword', 'vendor'])
+assert.ok(ownerSharedWatchlistContract.alertExportBridge.ownerContextFields.includes('activeTerms[].lifecycleRequestId'))
+assert.ok(ownerSharedWatchlistContract.alertExportBridge.webhookOwnership.requiredAlertFields.includes('alert.ownerOrganizationId'))
+assert.ok(ownerSharedWatchlistContract.alertExportBridge.webhookOwnership.redactedFields.includes('destination.secret'))
 assert.deepEqual(ownerSharedWatchlistContract.alertExportBridge.blockedReasons, [])
 
 const readinessResponse = await app.inject({
