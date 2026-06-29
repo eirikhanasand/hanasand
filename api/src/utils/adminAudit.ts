@@ -32,6 +32,21 @@ export function requireAuditReason(value: unknown, label = 'Reason') {
     return reason
 }
 
+const sensitiveAuditKeyPattern = /(password|token|secret|authorization|cookie|apikey|api_key|session|credential|webhook|endpoint|url|source_url|sourceurl|private_url|privateurl)/i
+
+export function redactAuditValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        return value.map(item => redactAuditValue(item))
+    }
+    if (!value || typeof value !== 'object') {
+        return value
+    }
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        sensitiveAuditKeyPattern.test(key) ? '[redacted]' : redactAuditValue(item),
+    ]))
+}
+
 export async function actorHasAdminSupportAccess(actorId: string) {
     const result = await run(`
         SELECT r.id, r.name

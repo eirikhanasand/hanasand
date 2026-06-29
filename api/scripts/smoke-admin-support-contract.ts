@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { requireAuditReason, cleanAuditReason } from '../src/utils/adminAudit.ts'
+import { requireAuditReason, cleanAuditReason, redactAuditValue } from '../src/utils/adminAudit.ts'
 
 assert.equal(cleanAuditReason('  Customer   owner locked out  '), 'Customer owner locked out')
 assert.equal(requireAuditReason('Customer owner locked out'), 'Customer owner locked out')
 assert.throws(() => requireAuditReason('too short'), /at least 10 characters/)
+assert.deepEqual(redactAuditValue({
+    password: 'secret',
+    nested: { apiToken: 'tok', safe: 'kept', privateSourceUrl: 'https://private.example/source' },
+    list: [{ authorization: 'bearer', webhookUrl: 'https://discord.example/hook', value: 1 }],
+}), {
+    password: '[redacted]',
+    nested: { apiToken: '[redacted]', safe: 'kept', privateSourceUrl: '[redacted]' },
+    list: [{ authorization: '[redacted]', webhookUrl: '[redacted]', value: 1 }],
+})
 
 const routes = await readFile(new URL('../src/routes.ts', import.meta.url), 'utf8')
 assert.match(routes, /fastify\.get\('\/admin\/audit-events'/)
@@ -179,6 +188,16 @@ assert.match(adminSupport, /e\.service ILIKE/)
 assert.match(adminSupport, /e\.request_id ILIKE/)
 assert.match(adminSupport, /e\.outcome =/)
 assert.match(adminSupport, /toAdminAuditEvent/)
+assert.match(adminSupport, /redactAuditValue/)
+assert.match(adminSupport, /admin\.audit\.timeline_event\.v1/)
+assert.match(adminSupport, /auditTimelineSummary/)
+assert.match(adminSupport, /auditEventScope/)
+assert.match(adminSupport, /organizationIds/)
+assert.match(adminSupport, /actorIds/)
+assert.match(adminSupport, /entityIds/)
+assert.match(adminSupport, /durationMinutes/)
+assert.match(adminSupport, /supportContext/)
+assert.match(adminSupport, /timeline/)
 
 const impersonation = await readFile(new URL('../src/handlers/impersonation.ts', import.meta.url), 'utf8')
 assert.match(impersonation, /requireAuditReason\(body\?\.reason/)

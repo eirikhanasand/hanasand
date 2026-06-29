@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { randomUUID } from 'crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { actorHasAdminSupportAccess, recordAdminAuditEvent, requireAuditReason } from '#utils/adminAudit.ts'
+import { actorHasAdminSupportAccess, recordAdminAuditEvent, redactAuditValue, requireAuditReason } from '#utils/adminAudit.ts'
 import {
     buildOrganizationDwmAlertReference,
     normalizeInviteInput,
@@ -260,6 +260,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     `, values)
 
     const events = result.rows.map(toAdminAuditEvent)
+    const timeline = events.map(event => event.detail.timelineEvent)
     return res.send({
         events,
         filters: { q, org, actor: actorFilter, target, action, severity, source, service, entity, request, outcome, from, to, limit },
@@ -267,6 +268,8 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             schemaVersion: 'admin.audit.timeline.v1',
             generatedAt: new Date().toISOString(),
             filters: { q, org, actor: actorFilter, target, action, severity, source, service, entity, request, outcome, from, to, limit },
+            summary: auditTimelineSummary(timeline),
+            timeline,
             copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
         },
     })
@@ -1976,10 +1979,44 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
 
 function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
     const event = row as Record<string, any>
-    const context = event.context || {}
+    const context = redactAuditValue(event.context || {}) as Record<string, unknown>
     const beforeAfter = auditBeforeAfter(context)
+    const timelineEvent = {
+        schemaVersion: 'admin.audit.timeline_event.v1',
+        id: Number(event.id),
+        timestamp: event.created_at,
+        actionType: event.action_type,
+        severity: event.severity,
+        outcome: event.outcome,
+        source: event.source,
+        service: event.service,
+        actor: {
+            id: event.actor_id,
+            name: event.actor_name || null,
+        },
+        target: {
+            type: event.target_type || null,
+            id: event.target_id || null,
+            name: event.target_name || null,
+        },
+        organization: {
+            id: event.organization_id || null,
+            name: event.organization_name || null,
+        },
+        entity: {
+            id: event.entity_id || event.target_id || event.organization_id || null,
+            type: event.target_type || 'admin_audit_event',
+        },
+        requestId: event.request_id || null,
+        reason: event.reason || '',
+        scope: auditEventScope(context),
+        before: beforeAfter.before,
+        after: beforeAfter.after,
+        context,
+    }
     return {
         ...event,
+        context,
         detail: {
             schemaVersion: 'admin.audit.event_detail.v1',
             actionType: event.action_type,
@@ -1997,8 +2034,38 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             before: beforeAfter.before,
             after: beforeAfter.after,
             context,
+            timelineEvent,
             copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
         },
+    }
+}
+
+function auditTimelineSummary(timeline: Array<Record<string, any>>) {
+    return {
+        eventCount: timeline.length,
+        actionTypes: uniqueTimelineValues(timeline.map(event => event.actionType)),
+        outcomes: uniqueTimelineValues(timeline.map(event => event.outcome)),
+        severities: uniqueTimelineValues(timeline.map(event => event.severity)),
+        requestIds: uniqueTimelineValues(timeline.map(event => event.requestId)),
+        organizationIds: uniqueTimelineValues(timeline.map(event => event.organization?.id)),
+        actorIds: uniqueTimelineValues(timeline.map(event => event.actor?.id)),
+        entityIds: uniqueTimelineValues(timeline.map(event => event.entity?.id)),
+    }
+}
+
+function uniqueTimelineValues(values: unknown[]) {
+    return Array.from(new Set(values.map(value => text(value)).filter(Boolean))).slice(0, 50)
+}
+
+function auditEventScope(context: Record<string, unknown>) {
+    return {
+        durationMinutes: context.durationMinutes ?? null,
+        scope: context.scope ?? null,
+        targetUserId: context.targetUserId ?? null,
+        organizationId: context.organizationId ?? null,
+        expiresAt: context.expiresAt ?? null,
+        requestId: context.requestId ?? null,
+        supportContext: context.supportContext ?? null,
     }
 }
 
