@@ -3,8 +3,10 @@ import {
   DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION,
+  DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION,
   DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION,
+  buildOrgAlertOperatorReadinessPacket,
   buildOrgAlertWebhookFixtureContract,
   buildOrgAlertSourceEvidenceReport,
   buildOrgAlertWorkflowBridgeReport,
@@ -170,6 +172,95 @@ describe("org alert workflow bridge", () => {
       }]
     });
     expect(JSON.stringify(reconciliation)).not.toContain("https://discord.com");
+  });
+
+  test("builds one operator readiness packet for alert source and webhook workflow", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const sourceEvidence = buildOrgAlertSourceEvidenceReport({
+      bridge,
+      sources: sourceRefs(),
+      captures: [],
+      sourceProvenanceSummaries: [sourceProvenanceSummary()],
+      checkedAt: "2026-06-29T15:00:00.000Z"
+    });
+    const webhookFixture = buildOrgAlertWebhookFixtureContract({
+      bridge,
+      destinations: [webhookDestination()],
+      destinationIdsByWatchlistId: { watch_acme_domains: ["webhook_discord"] }
+    });
+    const webhookReconciliation = reconcileOrgAlertWebhookDeliveries({
+      fixture: webhookFixture,
+      attempts: [webhookAttemptFixture(webhookFixture.deliveries[0].payload.idempotencyKey)],
+      checkedAt: "2026-06-29T15:01:00.000Z"
+    });
+    const packet = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      sourceEvidence,
+      webhookFixture,
+      webhookReconciliation,
+      requireWebhookReconciliation: true
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      blockers: [],
+      requiredReports: {
+        sourceEvidence: true,
+        webhookFixture: true,
+        webhookReconciliation: true
+      },
+      rows: [{
+        watchlistId: "watch_acme_domains",
+        watchlistItemId: "watch_item_acme_com",
+        alertIds: ["alert_acme_lumma"],
+        sourceFamilies: ["telegram_public", "darkweb_metadata"],
+        captureIds: ["cap_acme_initial", "cap_acme_followup"],
+        webhookDestinationIds: ["webhook_discord"],
+        matchedDeliveryIds: ["delivery_acme_lumma"],
+        stages: {
+          workflowBridge: true,
+          sourceEvidence: true,
+          webhookFixture: true,
+          webhookReconciliation: true
+        },
+        ready: true,
+        blockerCodes: []
+      }]
+    });
+  });
+
+  test("keeps missing operator readiness reports as owner-coded blockers", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const packet = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      requireWebhookReconciliation: true,
+      checkedAt: "2026-06-29T15:02:00.000Z"
+    });
+
+    expect(packet.ok).toBe(false);
+    expect(packet.rows[0]).toMatchObject({
+      watchlistItemId: "watch_item_acme_com",
+      stages: {
+        workflowBridge: true,
+        sourceEvidence: false,
+        webhookFixture: false,
+        webhookReconciliation: false
+      },
+      ready: false,
+      blockerCodes: expect.arrayContaining([
+        "missing_source_evidence_report",
+        "missing_webhook_fixture_report",
+        "missing_webhook_reconciliation_report"
+      ])
+    });
+    expect(packet.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_source_evidence_report", ownerLane: "source", stage: "source_evidence" }),
+      expect.objectContaining({ code: "missing_webhook_fixture_report", ownerLane: "webhook", stage: "webhook_fixture" }),
+      expect.objectContaining({ code: "missing_webhook_reconciliation_report", ownerLane: "webhook", stage: "webhook_reconciliation" })
+    ]));
   });
 
   test("proves bridge rows are backed by fresh source evidence", () => {

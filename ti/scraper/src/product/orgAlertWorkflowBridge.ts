@@ -11,6 +11,7 @@ export const DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION = "dwm.org_alert_webho
 export const DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION = "dwm.org_alert_webhook_delivery_payload.v1" as const;
 export const DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION = "dwm.org_alert_source_evidence.v1" as const;
 export const DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION = "dwm.org_alert_webhook_reconciliation.v1" as const;
+export const DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION = "dwm.org_alert_operator_readiness.v1" as const;
 
 export type OrgAlertWorkflowWatchlistRef = {
   watchlistId: string;
@@ -319,6 +320,61 @@ export type OrgAlertWebhookDeliveryReconciliationBlocker = {
   message: string;
 };
 
+export type OrgAlertOperatorReadinessPacket = {
+  schemaVersion: typeof DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId: string;
+  rows: OrgAlertOperatorReadinessRow[];
+  blockers: OrgAlertOperatorReadinessBlocker[];
+  requiredReports: {
+    sourceEvidence: boolean;
+    webhookFixture: boolean;
+    webhookReconciliation: boolean;
+  };
+};
+
+export type OrgAlertOperatorReadinessRow = {
+  rowId: string;
+  watchlistId: string;
+  watchlistItemId?: string;
+  alertIds: string[];
+  alertDetailPaths: string[];
+  casePaths: string[];
+  sourceFamilies: string[];
+  captureIds: string[];
+  webhookDestinationIds: string[];
+  matchedDeliveryIds: string[];
+  stages: {
+    workflowBridge: boolean;
+    sourceEvidence: boolean;
+    webhookFixture: boolean;
+    webhookReconciliation: boolean | "not_required";
+  };
+  ready: boolean;
+  blockerCodes: string[];
+};
+
+export type OrgAlertOperatorReadinessBlocker = {
+  code:
+    | "missing_source_evidence_report"
+    | "missing_webhook_fixture_report"
+    | "missing_webhook_reconciliation_report"
+    | OrgAlertWorkflowBridgeBlocker["code"]
+    | OrgAlertSourceEvidenceBlocker["code"]
+    | OrgAlertWebhookFixtureBlocker["code"]
+    | OrgAlertWebhookDeliveryReconciliationBlocker["code"];
+  ownerLane: "watchlist" | "alert" | "case" | "source" | "webhook";
+  stage: "workflow_bridge" | "source_evidence" | "webhook_fixture" | "webhook_reconciliation";
+  rowId?: string;
+  alertId?: string;
+  watchlistId?: string;
+  watchlistItemId?: string;
+  path: string;
+  message: string;
+};
+
 export function buildOrgAlertWorkflowBridgeReport(input: {
   tenantId: string;
   organizationId: string;
@@ -435,6 +491,53 @@ export function buildOrgAlertSourceEvidenceReport(input: {
   };
 }
 
+export function buildOrgAlertOperatorReadinessPacket(input: {
+  bridge: OrgAlertWorkflowBridgeReport;
+  sourceEvidence?: OrgAlertSourceEvidenceReport;
+  webhookFixture?: OrgAlertWebhookFixtureContract;
+  webhookReconciliation?: OrgAlertWebhookDeliveryReconciliation;
+  checkedAt?: string;
+  requireSourceEvidence?: boolean;
+  requireWebhookFixture?: boolean;
+  requireWebhookReconciliation?: boolean;
+}): OrgAlertOperatorReadinessPacket {
+  const requireSourceEvidence = input.requireSourceEvidence !== false;
+  const requireWebhookFixture = input.requireWebhookFixture !== false;
+  const requireWebhookReconciliation = input.requireWebhookReconciliation === true;
+  const rows = input.bridge.rows.map((row) => operatorReadinessRow({
+    row,
+    sourceEvidence: input.sourceEvidence,
+    webhookFixture: input.webhookFixture,
+    webhookReconciliation: input.webhookReconciliation,
+    requireSourceEvidence,
+    requireWebhookFixture,
+    requireWebhookReconciliation
+  }));
+  const blockers = [
+    ...(requireSourceEvidence && !input.sourceEvidence ? input.bridge.rows.map((row) => missingOperatorReportBlocker("missing_source_evidence_report", "source_evidence", "source", row)) : []),
+    ...(requireWebhookFixture && !input.webhookFixture ? input.bridge.rows.map((row) => missingOperatorReportBlocker("missing_webhook_fixture_report", "webhook_fixture", "webhook", row)) : []),
+    ...(requireWebhookReconciliation && !input.webhookReconciliation ? input.bridge.rows.map((row) => missingOperatorReportBlocker("missing_webhook_reconciliation_report", "webhook_reconciliation", "webhook", row)) : []),
+    ...input.bridge.blockers.map((blocker) => operatorBlocker("workflow_bridge", blocker)),
+    ...(input.sourceEvidence?.blockers.map((blocker) => operatorBlocker("source_evidence", blocker)) ?? []),
+    ...(input.webhookFixture?.blockers.map((blocker) => operatorBlocker("webhook_fixture", blocker)) ?? []),
+    ...(input.webhookReconciliation?.blockers.map((blocker) => operatorBlocker("webhook_reconciliation", blocker)) ?? [])
+  ];
+  return {
+    schemaVersion: DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION,
+    checkedAt: input.checkedAt ?? input.webhookReconciliation?.checkedAt ?? input.webhookFixture?.checkedAt ?? input.sourceEvidence?.checkedAt ?? input.bridge.checkedAt,
+    ok: blockers.length === 0 && rows.every((row) => row.ready),
+    tenantId: input.bridge.tenantId,
+    organizationId: input.bridge.organizationId,
+    rows,
+    blockers,
+    requiredReports: {
+      sourceEvidence: requireSourceEvidence,
+      webhookFixture: requireWebhookFixture,
+      webhookReconciliation: requireWebhookReconciliation
+    }
+  };
+}
+
 function sourceEvidenceRow(input: {
   row: OrgAlertWorkflowBridgeRow;
   sourceById: Map<string, OrgAlertSourceRef>;
@@ -524,6 +627,111 @@ function sourceEvidenceRow(input: {
     ready: blockerCodes.length === 0,
     blockerCodes
   };
+}
+
+function operatorReadinessRow(input: {
+  row: OrgAlertWorkflowBridgeRow;
+  sourceEvidence?: OrgAlertSourceEvidenceReport;
+  webhookFixture?: OrgAlertWebhookFixtureContract;
+  webhookReconciliation?: OrgAlertWebhookDeliveryReconciliation;
+  requireSourceEvidence: boolean;
+  requireWebhookFixture: boolean;
+  requireWebhookReconciliation: boolean;
+}): OrgAlertOperatorReadinessRow {
+  const sourceRow = input.sourceEvidence?.rows.find((row) => row.rowId === input.row.rowId);
+  const fixtureDeliveries = input.webhookFixture?.deliveries.filter((delivery) => delivery.rowId === input.row.rowId) ?? [];
+  const reconciliationRows = input.webhookReconciliation?.rows.filter((row) => fixtureDeliveries.some((delivery) => delivery.deliveryId === row.plannedDeliveryId)) ?? [];
+  const sourceReady = input.requireSourceEvidence ? sourceRow?.ready === true : (sourceRow?.ready ?? true);
+  const fixtureReady = input.requireWebhookFixture ? fixtureDeliveries.length > 0 && fixtureDeliveries.every((delivery) => delivery.ready) : (fixtureDeliveries.length ? fixtureDeliveries.every((delivery) => delivery.ready) : true);
+  const reconciliationReady = input.requireWebhookReconciliation
+    ? reconciliationRows.length > 0 && reconciliationRows.every((row) => row.ready)
+    : (input.webhookReconciliation ? reconciliationRows.length > 0 && reconciliationRows.every((row) => row.ready) : "not_required");
+  const blockerCodes = uniqueStrings([
+    ...input.row.blockerCodes,
+    ...(sourceRow?.blockerCodes ?? []),
+    ...fixtureDeliveries.flatMap((delivery) => delivery.blockerCodes),
+    ...reconciliationRows.flatMap((row) => row.blockerCodes),
+    input.requireSourceEvidence && !sourceRow ? "missing_source_evidence_report" : undefined,
+    input.requireWebhookFixture && fixtureDeliveries.length === 0 ? "missing_webhook_fixture_report" : undefined,
+    input.requireWebhookReconciliation && reconciliationRows.length === 0 ? "missing_webhook_reconciliation_report" : undefined
+  ].filter(Boolean).map(String));
+
+  return {
+    rowId: input.row.rowId,
+    watchlistId: input.row.watchlistId,
+    watchlistItemId: input.row.watchlistItemId,
+    alertIds: input.row.matchedAlertIds,
+    alertDetailPaths: input.row.alertDetailPaths,
+    casePaths: input.row.casePaths,
+    sourceFamilies: sourceRow?.sourceFamilies ?? input.row.sourceFamilies,
+    captureIds: sourceRow?.captureIds ?? input.row.provenance.captureIds,
+    webhookDestinationIds: uniqueStrings(fixtureDeliveries.flatMap((delivery) => delivery.destinationIds)),
+    matchedDeliveryIds: uniqueStrings(reconciliationRows.flatMap((row) => row.matchedDeliveryIds)),
+    stages: {
+      workflowBridge: input.row.ready,
+      sourceEvidence: sourceReady,
+      webhookFixture: fixtureReady,
+      webhookReconciliation: reconciliationReady
+    },
+    ready: input.row.ready
+      && sourceReady === true
+      && fixtureReady === true
+      && (reconciliationReady === true || reconciliationReady === "not_required")
+      && blockerCodes.length === 0,
+    blockerCodes
+  };
+}
+
+function operatorBlocker(
+  stage: OrgAlertOperatorReadinessBlocker["stage"],
+  blocker: {
+    code: OrgAlertOperatorReadinessBlocker["code"];
+    ownerLane: OrgAlertOperatorReadinessBlocker["ownerLane"];
+    rowId?: string;
+    alertId?: string;
+    watchlistId?: string;
+    watchlistItemId?: string;
+    path: string;
+    message: string;
+  }
+): OrgAlertOperatorReadinessBlocker {
+  return {
+    code: blocker.code,
+    ownerLane: blocker.ownerLane,
+    stage,
+    rowId: blocker.rowId,
+    alertId: blocker.alertId,
+    watchlistId: blocker.watchlistId,
+    watchlistItemId: blocker.watchlistItemId,
+    path: blocker.path,
+    message: blocker.message
+  };
+}
+
+function missingOperatorReportBlocker(
+  code: Extract<OrgAlertOperatorReadinessBlocker["code"], "missing_source_evidence_report" | "missing_webhook_fixture_report" | "missing_webhook_reconciliation_report">,
+  stage: OrgAlertOperatorReadinessBlocker["stage"],
+  ownerLane: OrgAlertOperatorReadinessBlocker["ownerLane"],
+  row: OrgAlertWorkflowBridgeRow
+): OrgAlertOperatorReadinessBlocker {
+  return {
+    code,
+    ownerLane,
+    stage,
+    rowId: row.rowId,
+    alertId: row.matchedAlertIds[0],
+    watchlistId: row.watchlistId,
+    watchlistItemId: row.watchlistItemId,
+    path: stage,
+    message: operatorMissingReportMessage(code)
+  };
+}
+
+function operatorMissingReportMessage(code: OrgAlertOperatorReadinessBlocker["code"]): string {
+  if (code === "missing_source_evidence_report") return "Source evidence report is required for operator readiness.";
+  if (code === "missing_webhook_fixture_report") return "Webhook fixture report is required for operator readiness.";
+  if (code === "missing_webhook_reconciliation_report") return "Webhook delivery reconciliation is required for operator readiness.";
+  return "Required operator readiness report is missing.";
 }
 
 function sourceEvidenceBlockers(row: OrgAlertSourceEvidenceRow): OrgAlertSourceEvidenceBlocker[] {
