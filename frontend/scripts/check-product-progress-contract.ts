@@ -246,6 +246,84 @@ const readyContext = buildOrgOperatingContext({
 })
 assert.equal(readyContext.readiness.fullChainReady, true)
 
+const degradedSourceProxy = {
+    ...sourceProxy,
+    ok: false,
+    endpoints: {
+        sourceInventory: { ok: false, status: 503, error: 'source policy blocked' },
+        sourcePacks: { ok: false, status: 503, error: 'source worker unavailable' },
+    },
+    sourcePacks: {
+        schemaVersion: 'dwm.source_packs.v1',
+        generatedAt,
+        counts: { packCount: 0, candidateCount: 0 },
+    },
+}
+const degradedPayload = {
+    ...buildProductProgressPayload({
+        generatedAt,
+        checkedAt: generatedAt,
+        query: 'acme-security-global-incident-response-and-threat-intelligence.example',
+        routes,
+        sourceProxy: degradedSourceProxy,
+        alerts: [],
+        deliveries: [],
+        deploy: {
+            status: 'needs_action',
+            latestProbeAt: '2026-06-29T07:00:00.000Z',
+            frontendHealthy: true,
+            apiHealthy: false,
+            scraperHealthy: false,
+        },
+    }),
+    entitlement: {
+        schemaVersion: 'dwm.entitlement.readiness.v1',
+        status: 'blocked' as const,
+        checkedAt: generatedAt,
+        source: routes.entitlement,
+        href: '/dashboard/dwm',
+        organizationId: 'org_acme',
+        policy: 'shared_watchlist',
+        allowed: false,
+        checkedRole: 'viewer',
+        blockers: ['DWM entitlement policy blocks alert delivery for viewer role.'],
+        detail: 'DWM entitlement policy blocks alert delivery for viewer role.',
+    },
+}
+const degradedContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists: longLabelWatchlists,
+    organizationState: longLabelOrganizationState,
+    operations: {
+        ...operations,
+        counts: { sourceCount: 12, activeSourceCount: 0, captureCount: 0, watchlistMatchCount: 0 },
+        latestRun: { status: 'blocked_by_source_policy', updatedAt: generatedAt, captureCount: 0 },
+    },
+    deliveries: [],
+    liveAlertCount: 0,
+    liveAlertIds: [],
+    externalReadiness: buildProductProgressExternalState(degradedPayload, { checkedAt: generatedAt, staleAfterMinutes: 10 }),
+})
+assert.equal(degradedContext.readiness.fullChainReady, false)
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.status, 'blocked')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'source_coverage')?.status, 'blocked')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.status, 'needs_action')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'dashboard_alert')?.status, 'blocked')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.status, 'needs_action')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.status, 'needs_action')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'public_ti_provenance')?.status, 'unavailable')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.status, 'unavailable')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.status, 'needs_action')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.status, 'needs_action')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'deploy_probe')?.status, 'needs_action')
+assert.ok(degradedContext.readiness.productReadiness.every(item => item.ownerLane && item.operatorAction))
+assert.ok(degradedContext.readiness.productReadiness.every(item => typeof item.blockerCount === 'number'))
+assert.ok((degradedContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.blockerCount || 0) >= 3)
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.operatorAction, 'Resolve DWM entitlement')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.operatorAction, 'Open helpdesk workbench')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'public_ti_provenance')?.operatorAction, 'Open public TI handoff')
+
 for (const dependency of [
     readyPayload.publicTiProvenance,
     readyPayload.helpdeskAudit,
@@ -302,6 +380,10 @@ for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria'
     assert.equal(workbenchSource.toLowerCase().includes(bannedCopy), false, `Dashboard workbench includes banned copy: ${bannedCopy}`)
     assert.equal(dashboardModelSource.toLowerCase().includes(bannedCopy), false, `Dashboard model includes banned copy: ${bannedCopy}`)
     assert.equal(dashboardPageSource.toLowerCase().includes(bannedCopy), false, `Dashboard page includes banned copy: ${bannedCopy}`)
+}
+
+for (const bannedClass of ['border-white/', 'bg-white/10', 'bg-white/15']) {
+    assert.equal(workbenchSource.includes(bannedClass), false, `Dashboard workbench includes high-contrast dark-mode class: ${bannedClass}`)
 }
 
 assert.ok(workbenchSource.includes('return item.href ? <Link key={item.id} href={item.href}>'), 'Readiness rows should deep-link through the backed href.')
