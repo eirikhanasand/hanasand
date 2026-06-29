@@ -125,6 +125,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
           darkwebMetadata: catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length
         },
         workerReadiness: sourcePackWorker.workerReadiness,
+        sourceHealth: sourcePackWorker.sourceHealth,
         lastRun: sourcePackWorker.lastRun,
         sourceGrowthCounters: sourcePackWorker.counters,
         parserSourceFamilyCounts: sourcePackWorker.parserSourceFamilyCounts,

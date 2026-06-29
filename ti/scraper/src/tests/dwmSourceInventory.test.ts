@@ -148,6 +148,12 @@ describe("dwm source inventory", () => {
       proxyVerification: {
         schemaVersion: "dwm.source_pack_worker_proxy_verification.v1",
         state: "missing"
+      },
+      sourceHealth: {
+        schemaVersion: "dwm.source_health_operations.v1",
+        candidateStates: { accepted: 0, rejected: 0, duplicate: 0, retryable: 0, unretryable: 0 },
+        sourcePackGrowthDeltas: { packCount: 0, candidateCount: 0, activeSourceRows: 0 },
+        safeOutput: { liveNetworkScrapeStarted: false }
       }
     });
     expect(inventoryBody.sourcePackWorker.proxyVerification.requiredJsonPaths).toEqual(expect.arrayContaining([
@@ -163,8 +169,133 @@ describe("dwm source inventory", () => {
     expect(packsBody).toMatchObject({
       readiness: { state: "missing" },
       proxyVerification: { state: "missing" },
+      sourceHealth: {
+        schemaVersion: "dwm.source_health_operations.v1",
+        safeOutput: { liveNetworkScrapeStarted: false }
+      },
       safeOutput: { liveNetworkScrapeStarted: false }
     });
+  });
+
+  test("exposes source health operations blockers and retry state without live scraping", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "source-health-ops-"));
+    try {
+      const store = new InMemoryScraperStore();
+      const sourcePackRegistry = new InMemoryDwmSourcePackRegistryAdapter();
+      const workerState = new FileBackedDwmSourcePackWorkerStateAdapter({ snapshotPath: join(tmp, "worker-state.json") });
+      const options = {
+        store,
+        frontier: new FocusedFrontier(),
+        sourcePackRegistry,
+        sourcePackValidationQueue: workerState.validationQueue,
+        sourcePackActiveSourceStore: workerState.activeSources,
+        sourcePackWorkerRunStore: workerState.workerRuns,
+        sourcePackCollectionReceiptStore: workerState.collectionReceipts
+      };
+
+      const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          sourcePackId: "pack_source_health_ops",
+          sourcePackLabel: "Source health operations pack",
+          tenantId: "tenant_source_health",
+          scope: "APT29",
+          requestedBy: "source-health-worker",
+          candidates: [
+            { target: "@source_health_active_public", type: "telegram_channel", family: "telegram" },
+            { target: "@source_health_retry_public", type: "telegram_channel", family: "telegram", parserExpectation: "retry_fixture" },
+            { target: "@source_health_active_public", type: "telegram_channel", family: "telegram" },
+            { target: "metadata://darkweb/password-dump", type: "restricted_metadata", family: "darkweb_onion" }
+          ]
+        })
+      }), options);
+      const createdBody = await created.json() as any;
+      expect(created.status).toBe(201);
+      expect(createdBody.summary).toMatchObject({ acceptedCount: 2, rejectedCount: 1, duplicateCount: 1 });
+
+      const run = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+        method: "POST",
+        body: JSON.stringify({ action: "pack_worker_run", sourcePackId: "pack_source_health_ops", chunkSize: 10 })
+      }), options);
+      const runBody = await run.json() as any;
+      expect(run.status).toBe(200);
+      expect(runBody.collectionQueue.summary).toMatchObject({ queuedCount: 1, duplicateCount: 0, taskCount: 1 });
+
+      const reloadedWorkerState = new FileBackedDwmSourcePackWorkerStateAdapter({ snapshotPath: join(tmp, "worker-state.json") });
+      const reloadedOptions = {
+        store,
+        frontier: new FocusedFrontier(),
+        sourcePackRegistry,
+        sourcePackValidationQueue: reloadedWorkerState.validationQueue,
+        sourcePackActiveSourceStore: reloadedWorkerState.activeSources,
+        sourcePackWorkerRunStore: reloadedWorkerState.workerRuns,
+        sourcePackCollectionReceiptStore: reloadedWorkerState.collectionReceipts
+      };
+      const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?full=true&watchlist=APT29"), reloadedOptions);
+      const inventoryBody = await inventory.json() as any;
+      const packs = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-packs?terms=APT29"), reloadedOptions);
+      const packsBody = await packs.json() as any;
+      const health = inventoryBody.sourcePackWorker.sourceHealth;
+
+      expect(inventory.status).toBe(200);
+      expect(health).toMatchObject({
+        schemaVersion: "dwm.source_health_operations.v1",
+        candidateStates: {
+          duplicate: 1,
+          retryable: 1
+        },
+        sourcePackGrowthDeltas: {
+          packCount: 1,
+          candidateCount: 4,
+          activeSourceRows: 1,
+          queuedCollectionReceipts: 1
+        },
+        safeOutput: {
+          privateTelegramContentExposed: false,
+          restrictedMetadataLeaked: false,
+          liveNetworkScrapeStarted: false,
+          restrictedPayloadDownloadAllowed: false
+        }
+      });
+      expect(health.family.telegram).toMatchObject({
+        candidateCount: 3,
+        activeCount: 1,
+        duplicateCount: 1,
+        retryableCount: 1,
+        parserStatusCounts: expect.objectContaining({
+          telegram_public_parser_ready: 1,
+          parser_retry_scheduled: 1,
+          duplicate_skipped: 1
+        }),
+        lastWorkerReceipt: expect.objectContaining({ targetRawStored: false, status: "queued" })
+      });
+      expect(health.family.darkweb_onion).toMatchObject({
+        candidateCount: 1,
+        activeCount: 0,
+        unretryableCount: 1,
+        rejectionReasons: expect.arrayContaining([
+          expect.objectContaining({ status: "disabled", retryable: false })
+        ])
+      });
+      expect(health.typedBlockers).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "parser_failure", family: "telegram", retryable: true }),
+        expect.objectContaining({ code: "duplicate_source", family: "telegram", retryable: false }),
+        expect.objectContaining({ code: "parser_failure", family: "darkweb_onion", retryable: false }),
+        expect.objectContaining({ code: "no_active_source_family", family: "darkweb_onion", retryable: true })
+      ]));
+      expect(inventoryBody.sourcePackWorker.proxyVerification.checks).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "source_health_present", status: "pass" }),
+        expect.objectContaining({ id: "source_health_blockers_typed", status: "pass" })
+      ]));
+      expect(packsBody.sourceHealth).toMatchObject({
+        schemaVersion: "dwm.source_health_operations.v1",
+        sourcePackGrowthDeltas: { queuedCollectionReceipts: 1 },
+        safeOutput: { liveNetworkScrapeStarted: false }
+      });
+      expect(JSON.stringify(health)).not.toContain("password-dump");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   test("exposes restart-safe source-pack worker readiness for dashboard proxy consumption", async () => {
@@ -297,6 +428,11 @@ describe("dwm source inventory", () => {
         proxyVerification: {
           schemaVersion: "dwm.source_pack_worker_proxy_verification.v1",
           state: "ready"
+        },
+        sourceHealth: {
+          schemaVersion: "dwm.source_health_operations.v1",
+          sourcePackGrowthDeltas: { activeSourceRows: 2, queuedCollectionReceipts: 2 },
+          safeOutput: { liveNetworkScrapeStarted: false }
         },
         safeOutput: { rawTargetsExposed: false }
       });
