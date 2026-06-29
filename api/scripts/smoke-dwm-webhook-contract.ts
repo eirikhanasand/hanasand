@@ -1,5 +1,6 @@
 import {
     buildDwmAlertDeliveryPayload,
+    buildDwmAlertWebhookReadinessHandoff,
     buildDwmAlertWebhookNotificationInput,
     buildDwmAlertWebhookDispatchPlan,
     buildDwmOrgAlertWebhookDeliveryContract,
@@ -380,6 +381,231 @@ const duplicateReplayPayload = buildDwmAlertDeliveryPayload({
 }) as Record<string, unknown>
 const duplicateReplayContext = duplicateReplayPayload._hanasand as Record<string, unknown>
 expect(duplicateReplayContext.idempotencyKey === replayContext.idempotencyKey, 'Duplicate replay payloads should keep the same alert/dedupe idempotency key.', duplicateReplayPayload)
+
+const overlappingOrgDestinations = [
+    {
+        id: 'destination_overlap_org_a',
+        ownerId: 'owner_contract',
+        orgId: 'org_overlap_a',
+        name: 'Org A Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/111111111/${secret}`,
+        endpointHash: 'endpoint_overlap_a_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:00:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:00:00.000Z',
+    },
+    {
+        id: 'destination_overlap_org_b',
+        ownerId: 'owner_contract',
+        orgId: 'org_overlap_b',
+        name: 'Org B Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`,
+        endpointHash: 'endpoint_overlap_b_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:00:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:00:00.000Z',
+    },
+]
+const overlappingOrgAlertA = {
+    id: 'alert_overlap_a',
+    organizationId: 'org_overlap_a',
+    tenantId: 'tenant_overlap_a',
+    title: 'Shared term mention for Org A',
+    severity: 'high',
+    company: 'Org A Customer',
+    domain: 'shared-example.com',
+    sourceFamily: 'telegram_public',
+    claimSummary: 'A public post references the watched shared domain for Org A.',
+    recommendedAction: 'Review the evidence and notify the customer owner.',
+    matchedTerm: { value: 'shared-example.com', kind: 'domain' },
+    evidence: [{ label: 'Telegram capture', detail: 'Shared domain was observed in Org A scoped evidence.' }],
+    dedupeKey: 'dwm_overlap_org_a',
+    recommendedRoute: 'customer_webhook',
+    caseId: 'case_overlap_a',
+    casePath: '/v1/cases/case_overlap_a?alertId=alert_overlap_a',
+    alertUrl: 'https://app.hanasand.local/v1/cases/case_overlap_a?alertId=alert_overlap_a',
+    webhookContext: {
+        organizationId: 'org_overlap_a',
+        watchlistItemIds: ['watchlist_overlap_a'],
+        sourceFamily: 'telegram_public',
+        evidenceCount: 1,
+        dedupeKey: 'dwm_overlap_org_a',
+        recommendedRoute: 'customer_webhook',
+        casePath: '/v1/cases/case_overlap_a?alertId=alert_overlap_a',
+        provenance: { captureIds: ['capture_overlap_a'], sourceIds: ['source_overlap_a'] },
+    },
+    watchlist: {
+        id: 'watchlist_overlap_a',
+        name: 'Org A shared-domain watchlist',
+        terms: ['shared-example.com'],
+    },
+}
+const overlappingOrgAlertB = {
+    ...overlappingOrgAlertA,
+    id: 'alert_overlap_b',
+    organizationId: 'org_overlap_b',
+    tenantId: 'tenant_overlap_b',
+    title: 'Shared term mention for Org B',
+    company: 'Org B Customer',
+    evidence: [{ label: 'Forum capture', detail: 'Shared domain was observed in Org B scoped evidence.' }],
+    dedupeKey: 'dwm_overlap_org_b',
+    caseId: 'case_overlap_b',
+    casePath: '/v1/cases/case_overlap_b?alertId=alert_overlap_b',
+    alertUrl: 'https://app.hanasand.local/v1/cases/case_overlap_b?alertId=alert_overlap_b',
+    webhookContext: {
+        organizationId: 'org_overlap_b',
+        watchlistItemIds: ['watchlist_overlap_b'],
+        sourceFamily: 'telegram_public',
+        evidenceCount: 1,
+        dedupeKey: 'dwm_overlap_org_b',
+        recommendedRoute: 'customer_webhook',
+        casePath: '/v1/cases/case_overlap_b?alertId=alert_overlap_b',
+        provenance: { captureIds: ['capture_overlap_b'], sourceIds: ['source_overlap_b'] },
+    },
+    watchlist: {
+        id: 'watchlist_overlap_b',
+        name: 'Org B shared-domain watchlist',
+        terms: ['shared-example.com'],
+    },
+}
+const overlappingOrgDeliveries = [
+    {
+        id: 'delivery_overlap_a_retry',
+        destinationId: 'destination_overlap_org_a',
+        ownerId: 'owner_contract',
+        orgId: 'org_overlap_a',
+        alertId: 'alert_overlap_a',
+        eventType: 'dwm.alert.created' as const,
+        status: 'failed' as const,
+        dryRun: false,
+        endpointHint: `https://discord.com/api/webhooks/111111111/${secret}`,
+        endpointHash: 'endpoint_overlap_a_hash',
+        payloadHash: 'payload_overlap_a_hash',
+        payload: {},
+        responseStatus: 503,
+        responseBody: `retry token=${secret}`,
+        error: `upstream token=${secret}`,
+        idempotencyKey: 'dwm.alert.created:org_overlap_a:destination_overlap_org_a:dwm_overlap_org_a',
+        watchlistId: 'watchlist_overlap_a',
+        watchlistName: 'Org A shared-domain watchlist',
+        route: 'customer_webhook',
+        casePath: '/v1/cases/case_overlap_a?alertId=alert_overlap_a',
+        attemptedAt: '2026-06-28T12:12:00.000Z',
+        createdAt: '2026-06-28T12:12:00.000Z',
+    },
+    {
+        id: 'delivery_overlap_b_replay',
+        destinationId: 'destination_overlap_org_b',
+        ownerId: 'owner_contract',
+        orgId: 'org_overlap_b',
+        alertId: 'alert_overlap_b',
+        eventType: 'dwm.alert.replayed' as const,
+        status: 'dry_run' as const,
+        dryRun: true,
+        endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`,
+        endpointHash: 'endpoint_overlap_b_hash',
+        payloadHash: 'payload_overlap_b_hash',
+        payload: {},
+        responseStatus: null,
+        responseBody: null,
+        error: null,
+        idempotencyKey: 'dwm.alert.replayed:org_overlap_b:destination_overlap_org_b:dwm_overlap_org_b',
+        watchlistId: 'watchlist_overlap_b',
+        watchlistName: 'Org B shared-domain watchlist',
+        route: 'customer_webhook',
+        casePath: '/v1/cases/case_overlap_b?alertId=alert_overlap_b',
+        attemptedAt: '2026-06-28T12:13:00.000Z',
+        createdAt: '2026-06-28T12:13:00.000Z',
+    },
+]
+const overlappingOrgAudits = [
+    {
+        id: 'audit_overlap_a_retry',
+        ownerId: 'owner_contract',
+        actorId: 'owner_contract',
+        orgId: 'org_overlap_a',
+        destinationId: 'destination_overlap_org_a',
+        deliveryId: 'delivery_overlap_a_retry',
+        action: 'delivery.failed',
+        metadata: { status: 'failed', token: secret },
+        createdAt: '2026-06-28T12:12:01.000Z',
+    },
+    {
+        id: 'audit_overlap_b_replay',
+        ownerId: 'owner_contract',
+        actorId: 'owner_contract',
+        orgId: 'org_overlap_b',
+        destinationId: 'destination_overlap_org_b',
+        deliveryId: 'delivery_overlap_b_replay',
+        action: 'delivery.replayed',
+        metadata: { status: 'dry_run', token: secret },
+        createdAt: '2026-06-28T12:13:01.000Z',
+    },
+]
+const overlappingOrgAReadiness = buildDwmAlertWebhookReadinessHandoff({
+    ownerId: 'owner_contract',
+    input: buildDwmAlertWebhookNotificationInput(overlappingOrgAlertA, { eventType: 'dwm.alert.created', dryRun: true, live: false }),
+    destinations: overlappingOrgDestinations,
+    deliveries: overlappingOrgDeliveries,
+    auditEvents: overlappingOrgAudits,
+    liveDeliveryEnabled: false,
+})
+const overlappingOrgBReadiness = buildDwmAlertWebhookReadinessHandoff({
+    ownerId: 'owner_contract',
+    input: buildDwmAlertWebhookNotificationInput(overlappingOrgAlertB, { eventType: 'dwm.alert.replayed', dryRun: true, live: false }),
+    destinations: overlappingOrgDestinations,
+    deliveries: overlappingOrgDeliveries,
+    auditEvents: overlappingOrgAudits,
+    liveDeliveryEnabled: false,
+})
+const overlappingOrgAPayload = buildDwmAlertDeliveryPayload({
+    destination: {
+        id: 'destination_overlap_org_a',
+        kind: 'discord',
+        name: 'Org A Discord',
+        org_id: 'org_overlap_a',
+    },
+    eventType: 'dwm.alert.created',
+    deliveryId: 'delivery_overlap_a_payload',
+    alert: buildDwmAlertWebhookNotificationInput(overlappingOrgAlertA).alert || {},
+}) as Record<string, unknown>
+const overlappingOrgBPayload = buildDwmAlertDeliveryPayload({
+    destination: {
+        id: 'destination_overlap_org_b',
+        kind: 'discord',
+        name: 'Org B Discord',
+        org_id: 'org_overlap_b',
+    },
+    eventType: 'dwm.alert.replayed',
+    deliveryId: 'delivery_overlap_b_payload',
+    alert: buildDwmAlertWebhookNotificationInput(overlappingOrgAlertB).alert || {},
+}) as Record<string, unknown>
+expect(overlappingOrgAReadiness.schemaVersion === 'dwm.webhook.alert_readiness_handoff.v1' && overlappingOrgAReadiness.orgId === 'org_overlap_a', 'Alert readiness handoff should expose org A readiness.', overlappingOrgAReadiness)
+expect(overlappingOrgAReadiness.destinationSelection.selectedDestinationIds.join(',') === 'destination_overlap_org_a', 'Alert readiness handoff should select only org A destination for overlapping term.', overlappingOrgAReadiness)
+expect(overlappingOrgBReadiness.destinationSelection.selectedDestinationIds.join(',') === 'destination_overlap_org_b', 'Alert readiness handoff should select only org B destination for overlapping term.', overlappingOrgBReadiness)
+expect(overlappingOrgAReadiness.deliveryRetryPersistence.deliveryKeys.every(item => item.orgId === 'org_overlap_a' && item.destinationId !== 'destination_overlap_org_b'), 'Alert readiness retry proof should not leak org B deliveries into org A.', overlappingOrgAReadiness.deliveryRetryPersistence)
+expect(overlappingOrgBReadiness.deliveryRetryPersistence.deliveryKeys.every(item => item.orgId === 'org_overlap_b' && item.destinationId !== 'destination_overlap_org_a'), 'Alert readiness retry proof should not leak org A deliveries into org B.', overlappingOrgBReadiness.deliveryRetryPersistence)
+expect(overlappingOrgAReadiness.deliveryRetryPersistence.counts.retryable === 1 && overlappingOrgAReadiness.blockers.some(item => item.code === 'retry_scheduled' && item.blocking === false), 'Alert readiness should expose retry/backoff without blocking dry-run customer proof.', overlappingOrgAReadiness)
+expect(overlappingOrgBReadiness.deliveryRetryPersistence.counts.replay === 1 && overlappingOrgBReadiness.deliveryRetryPersistence.counts.duplicateDedupe === 0, 'Alert readiness should expose replay attempts without inventing duplicate replay state.', overlappingOrgBReadiness)
+expect(JSON.stringify(overlappingOrgAPayload).includes('Org A Customer') && !JSON.stringify(overlappingOrgAPayload).includes('Org B Customer'), 'Org A Discord payload should not leak org B customer context.', overlappingOrgAPayload)
+expect(JSON.stringify(overlappingOrgBPayload).includes('Org B Customer') && !JSON.stringify(overlappingOrgBPayload).includes('Org A Customer'), 'Org B Discord payload should not leak org A customer context.', overlappingOrgBPayload)
+expect(!JSON.stringify([overlappingOrgAReadiness, overlappingOrgBReadiness, overlappingOrgAPayload, overlappingOrgBPayload]).includes(secret), 'Overlapping org readiness and payloads should redact webhook secrets.', { overlappingOrgAReadiness, overlappingOrgBReadiness })
 
 const evidenceAttempts = buildDwmWebhookDeliveryEvidence({
     deliveries: [
@@ -1842,6 +2068,7 @@ expect(orgAlertDeliveryContract.alert.id === 'alert_replay_contract' && orgAlert
 expect(orgAlertDeliveryContract.watchlist.id === 'watchlist_item_replay_contract' && orgAlertDeliveryContract.watchlist.terms.includes('acme-security.com'), 'Org alert delivery contract should expose watchlist identity.', orgAlertDeliveryContract)
 expect(orgAlertDeliveryContract.destinationSelection.selectedDestinations.some(item => item.id === 'destination_replay_contract' && item.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract'), 'Org alert delivery contract should expose destination idempotency keys.', orgAlertDeliveryContract)
 expect(orgAlertDeliveryContract.destinationSelection.skippedDestinations.some(item => item.id === 'destination_disabled_contract' && item.reason === 'disabled'), 'Org alert delivery contract should expose disabled destination skips.', orgAlertDeliveryContract)
+expect(orgAlertDeliveryContract.alertDestinationReadiness.schemaVersion === 'dwm.webhook.alert_readiness_handoff.v1' && orgAlertDeliveryContract.alertDestinationReadiness.orgId === 'org_contract', 'Org alert delivery contract should include destination readiness handoff.', orgAlertDeliveryContract.alertDestinationReadiness)
 expect(orgAlertReplayHealth?.lastDryRun?.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertReplayHealth.idempotencyCoverage.duplicateKeyCount === 1, 'Org alert delivery contract should derive dry-run health mutation and replay dedupe.', orgAlertReplayHealth)
 expect(orgAlertRetryLifecycle?.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && orgAlertRetryLifecycle.retry.lastErrorCategory === 'upstream_5xx', 'Org alert delivery contract should expose retry/backoff state.', orgAlertRetryLifecycle)
 expect(orgAlertDeliveryContract.auditEventContracts.some(item => item.auditEventId === 'audit_replay_duplicate_contract') && orgAlertDeliveryContract.deliveryLedger.some(item => item.deliveryId === 'delivery_replay_duplicate_contract'), 'Org alert delivery contract should link audit ids and delivery ledger rows.', orgAlertDeliveryContract)
@@ -1956,8 +2183,12 @@ console.log(JSON.stringify({
         'org alert delivery watchlist/provenance context',
         'org alert delivery destination selection',
         'org alert delivery health/lifecycle linkage',
+        'org alert delivery destination readiness handoff',
         'org alert delivery audit/ledger linkage',
         'org alert delivery secret redaction',
+        'two-org overlapping watchlist destination isolation',
+        'two-org overlapping watchlist delivery isolation',
+        'two-org overlapping watchlist Discord payload isolation',
         'delivery operations list/detail filters',
         'delivery operations retry/backoff summary',
         'delivery operations replay/audit linkage',
@@ -2032,6 +2263,9 @@ console.log(JSON.stringify({
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',
             'deliveryRetryPersistence.deliveryKeys[].dedupe.duplicateAttemptCount',
+            'orgAlertDelivery.alertDestinationReadiness.schemaVersion',
+            'orgAlertDelivery.alertDestinationReadiness.destinationSelection.selectedDestinationIds',
+            'orgAlertDelivery.alertDestinationReadiness.deliveryRetryPersistence.deliveryKeys[]',
         ],
         expectedNoSecretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
         expectedNoNetwork: true,
