@@ -1450,6 +1450,7 @@ function buildDwmAlertQueueVisibility(input: {
       readyForCustomerDelivery: generationReadiness.readyForCustomerDelivery,
       blockerCodes: generationReadiness.blockerCodes,
       sourceFamilyCoverage: generationReadiness.sourceFamilyCoverage,
+      sourceFamilyGaps: generationReadiness.sourceFamilyGaps,
       zeroAlertProof: generationReadiness.zeroAlertProof
     },
     zeroAlertProof: generationReadiness.zeroAlertProof,
@@ -1470,7 +1471,8 @@ function buildDwmAlertQueueVisibility(input: {
         "alerts[].provenanceFreshness",
         "alertQueueVisibility.orgAlertWorkflowBridge",
         "alertQueueVisibility.zeroAlertProof",
-        "alertQueueVisibility.generationReadiness.sourceFamilyCoverage"
+        "alertQueueVisibility.generationReadiness.sourceFamilyCoverage",
+        "alertQueueVisibility.generationReadiness.sourceFamilyGaps"
       ],
       filters: ["organizationId", "status", "sourceFamily", "eventType", "hasUpdatedEvent", "watchlistId", "watchlistItemId", "captureId", "caseId"],
       zeroAlertContract: "dwm.zero_alert_proof.v1"

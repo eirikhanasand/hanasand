@@ -1029,6 +1029,28 @@ describe("dwm workflow persistence", () => {
         sourceFamilyCoverage: expect.arrayContaining([
           expect.objectContaining({ sourceFamily: "darkweb_metadata", captureRefCount: 2 }),
           expect.objectContaining({ sourceFamily: "telegram_public", captureRefCount: 1 })
+        ]),
+        sourceFamilyGaps: expect.arrayContaining([
+          expect.objectContaining({
+            schemaVersion: "dwm.alert_source_family_gap.v1",
+            sourceFamily: "darkweb_metadata",
+            state: "matched",
+            active: true,
+            captureRefCount: 2
+          }),
+          expect.objectContaining({
+            schemaVersion: "dwm.alert_source_family_gap.v1",
+            sourceFamily: "telegram_public",
+            state: "matched",
+            active: true,
+            captureRefCount: 1
+          }),
+          expect.objectContaining({
+            schemaVersion: "dwm.alert_source_family_gap.v1",
+            sourceFamily: "clear_web",
+            state: "inactive_or_unconfigured",
+            blockerCode: "source_family_inactive"
+          })
         ])
       }
     });
@@ -1040,7 +1062,8 @@ describe("dwm workflow persistence", () => {
       "alerts[].evidenceFreshness",
       "alertQueueVisibility.orgAlertWorkflowBridge",
       "alertQueueVisibility.zeroAlertProof",
-      "alertQueueVisibility.generationReadiness.sourceFamilyCoverage"
+      "alertQueueVisibility.generationReadiness.sourceFamilyCoverage",
+      "alertQueueVisibility.generationReadiness.sourceFamilyGaps"
     ]));
 
     const alphaUpdatedDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}?organizationId=${alphaOrg.id}`, {
@@ -1408,6 +1431,29 @@ describe("dwm workflow persistence", () => {
           captureRefCount: 0,
           watchlistIds: ["watch_workflow_quiet_nomatch"]
         }],
+        sourceFamilyGaps: expect.arrayContaining([
+          expect.objectContaining({
+            schemaVersion: "dwm.alert_source_family_gap.v1",
+            sourceFamily: "telegram_public",
+            state: "active_no_match",
+            active: true,
+            blockerCode: "no_matching_captures",
+            watchlistIds: ["watch_workflow_quiet_nomatch"]
+          }),
+          expect.objectContaining({
+            schemaVersion: "dwm.alert_source_family_gap.v1",
+            sourceFamily: "darkweb_metadata",
+            state: "active_no_match",
+            active: true,
+            blockerCode: "no_matching_captures"
+          }),
+          expect.objectContaining({
+            schemaVersion: "dwm.alert_source_family_gap.v1",
+            sourceFamily: "public_advisory",
+            state: "inactive_or_unconfigured",
+            blockerCode: "source_family_inactive"
+          })
+        ]),
         zeroAlertProof: {
           schemaVersion: "dwm.zero_alert_proof.v1",
           zeroAlert: true,
@@ -1430,7 +1476,8 @@ describe("dwm workflow persistence", () => {
         stableFields: expect.arrayContaining([
           "alerts[].workflowSummary",
           "alerts[].alertEventSummary",
-          "alertQueueVisibility.zeroAlertProof"
+          "alertQueueVisibility.zeroAlertProof",
+          "alertQueueVisibility.generationReadiness.sourceFamilyGaps"
         ]),
         filters: expect.arrayContaining(["organizationId", "watchlistItemId", "captureId"]),
         zeroAlertContract: "dwm.zero_alert_proof.v1"
