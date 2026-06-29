@@ -7,9 +7,11 @@ import {
   DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION,
   DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION,
   DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION,
+  DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
+  buildWebhookDestinationLifecycleProof,
   buildWebhookDispatchReadiness,
   buildWebhookDispatchReplayHistory,
   buildWebhookDispatchReplayRequest,
@@ -233,6 +235,102 @@ describe("webhook event contract", () => {
     expect(readiness.dispatch.idempotencyKey).toMatch(/^dwm_webhook_dispatch_/);
     expect(JSON.stringify(readiness)).not.toContain("https://discord.com");
     expect(JSON.stringify(readiness)).not.toContain("payloadBody");
+  });
+
+  test("builds org-scoped destination lifecycle proof with test and retry state", () => {
+    const proof = buildWebhookDestinationLifecycleProof({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      generatedAt: "2026-06-29T12:18:00.000Z",
+      destinations: [
+        { ...destinationFixture(), label: "SOC Discord", channelLabel: "#alerts", endpointHint: "https://discord.com/api/webhooks/123/secret" },
+        { id: "webhook_disabled", tenantId: "tenant_acme", organizationId: "org_acme", status: "disabled", deliveryKind: "discord" },
+        { ...destinationFixture(), id: "webhook_other", organizationId: "org_other", endpointHint: "https://discord.com/api/webhooks/999/secret" }
+      ],
+      deliveries: [
+        { ...deliveryFixture(), id: "delivery_test", eventType: "dwm.alert.test", dryRun: true, status: "dry_run", attemptedAt: "2026-06-29T12:10:00.000Z" },
+        { ...deliveryFixture(), id: "delivery_retry", status: "failed", replay: true, attemptedAt: "2026-06-29T12:12:00.000Z", nextRetryAt: "2026-06-29T12:20:00.000Z", errorClass: "upstream_5xx", responseSummary: "token=secret" },
+        { ...deliveryFixture(), id: "delivery_other", organizationId: "org_other", webhookDestinationId: "webhook_other" }
+      ]
+    });
+
+    expect(proof).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION,
+      generatedAt: "2026-06-29T12:18:00.000Z",
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      redacted: true,
+      summary: {
+        destinationCount: 2,
+        enabledCount: 1,
+        disabledCount: 1,
+        verifiedTestCount: 1,
+        retryScheduledCount: 1,
+        blockedCount: 1
+      },
+      blockers: []
+    });
+    const active = proof.destinations.find((item) => item.id === "webhook_discord");
+    const disabled = proof.destinations.find((item) => item.id === "webhook_disabled");
+    expect(active).toMatchObject({
+      label: "SOC Discord",
+      channelLabel: "#alerts",
+      enabled: true,
+      redactedEndpoint: {
+        endpointHash: "endpoint_hash_acme",
+        endpointHint: "https://discord.com/api/webhooks/123/...",
+        endpointExposed: false
+      },
+      lastTest: {
+        deliveryId: "delivery_test",
+        status: "dry_run",
+        dryRun: true,
+        payloadHash: "payload_hash_acme"
+      },
+      lastDelivery: {
+        deliveryId: "delivery_retry",
+        status: "failed",
+        replay: true,
+        responseSummary: "token=[redacted]"
+      },
+      retry: {
+        retryable: true,
+        nextRetryAt: "2026-06-29T12:20:00.000Z",
+        attemptCount: 2,
+        lastErrorCategory: "upstream_5xx"
+      }
+    });
+    expect(active?.routes.test).toBe("/v1/dwm/webhook-destinations/webhook_discord/test");
+    expect(disabled?.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "destination_disabled", blocking: true }),
+      expect.objectContaining({ code: "missing_endpoint", blocking: true })
+    ]));
+    expect(proof.destinations.map((item) => item.id)).not.toContain("webhook_other");
+    expect(JSON.stringify(proof)).not.toContain("https://discord.com/api/webhooks/123/secret");
+    expect(JSON.stringify(proof)).not.toContain("delivery_other");
+    expect(JSON.stringify(proof)).not.toContain("secret");
+  });
+
+  test("blocks destination lifecycle proof when no destination matches org scope", () => {
+    const proof = buildWebhookDestinationLifecycleProof({
+      tenantId: "tenant_acme",
+      organizationId: "org_missing",
+      destinations: [destinationFixture()],
+      deliveries: [deliveryFixture()]
+    });
+
+    expect(proof).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION,
+      ok: false,
+      summary: {
+        destinationCount: 0,
+        enabledCount: 0,
+        disabledCount: 0
+      },
+      blockers: [expect.objectContaining({ code: "org_scope_empty", ownerLane: "webhook", path: "destinations[].organizationId" })]
+    });
+    expect(proof.destinations).toEqual([]);
   });
 
   test("packages webhook dispatch readiness for admin support inspection", () => {

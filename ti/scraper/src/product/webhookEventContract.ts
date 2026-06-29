@@ -9,6 +9,7 @@ export const DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION = "dwm.webhook_d
 export const DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION = "dwm.webhook_dispatch_replay_request.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION = "dwm.webhook_dispatch_replay_history.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION = "dwm.webhook_dispatch_retry_audit.v1" as const;
+export const DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION = "dwm.webhook_destination_lifecycle_proof.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -452,6 +453,76 @@ export type DwmWebhookDispatchRetryAudit = {
     message: string;
   }>;
   nextActions: DwmWebhookDispatchReadiness["nextActions"];
+};
+
+export type DwmWebhookDestinationLifecycleProof = {
+  schemaVersion: typeof DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  redacted: true;
+  summary: {
+    destinationCount: number;
+    enabledCount: number;
+    disabledCount: number;
+    verifiedTestCount: number;
+    retryScheduledCount: number;
+    blockedCount: number;
+  };
+  destinations: Array<{
+    id: string;
+    tenantId?: string;
+    organizationId?: string;
+    kind?: string;
+    label?: string;
+    channelLabel?: string;
+    enabled: boolean;
+    status?: string;
+    redactedEndpoint: {
+      endpointHash?: string;
+      endpointHint?: string;
+      endpointExposed: false;
+    };
+    lastTest?: {
+      deliveryId?: string;
+      status?: string;
+      dryRun: boolean;
+      attemptedAt?: string;
+      payloadHash?: string;
+    };
+    lastDelivery?: {
+      deliveryId?: string;
+      status?: string;
+      dryRun: boolean;
+      replay: boolean;
+      attemptedAt?: string;
+      payloadHash?: string;
+      responseSummary?: string;
+    };
+    retry: {
+      retryable: boolean;
+      nextRetryAt?: string;
+      attemptCount: number;
+      lastErrorCategory?: string;
+    };
+    blockers: Array<{
+      code: "destination_disabled" | "missing_endpoint" | "test_missing" | "test_failed" | "retry_scheduled" | "delivery_failed";
+      message: string;
+      blocking: boolean;
+    }>;
+    routes: {
+      test: string;
+      deliveries: string;
+    };
+  }>;
+  blockers: Array<{
+    code: "missing_destination" | "org_scope_empty";
+    ownerLane: "webhook";
+    path: string;
+    message: string;
+  }>;
 };
 
 export function buildWebhookDeliveryEventContract(input: {
@@ -1078,6 +1149,104 @@ export function buildWebhookDispatchRetryAudit(input: {
   };
 }
 
+export function buildWebhookDestinationLifecycleProof(input: {
+  tenantId: string;
+  organizationId?: string;
+  destinations?: Array<Record<string, any>>;
+  deliveries?: Array<Record<string, any>>;
+  generatedAt?: string;
+}): DwmWebhookDestinationLifecycleProof {
+  const tenantId = input.tenantId;
+  const organizationId = stringValue(input.organizationId);
+  const scopedDestinations = (input.destinations ?? []).filter((destination) => {
+    const destinationTenantId = stringValue(destination.tenantId);
+    const destinationOrgId = stringValue(destination.organizationId ?? destination.orgId);
+    return (!tenantId || !destinationTenantId || destinationTenantId === tenantId)
+      && (!organizationId || !destinationOrgId || destinationOrgId === organizationId);
+  });
+  const scopedDeliveries = (input.deliveries ?? []).filter((delivery) => {
+    const deliveryTenantId = stringValue(delivery.tenantId);
+    const deliveryOrgId = stringValue(delivery.organizationId ?? delivery.orgId);
+    return (!tenantId || !deliveryTenantId || deliveryTenantId === tenantId)
+      && (!organizationId || !deliveryOrgId || deliveryOrgId === organizationId);
+  });
+  const destinations = scopedDestinations.map((destination) => {
+    const id = stringValue(destination.id ?? destination.destinationId ?? destination.webhookDestinationId) ?? "";
+    const status = stringValue(destination.status) ?? "active";
+    const enabled = ["active", "verified"].includes(status.toLowerCase());
+    const destinationDeliveries = scopedDeliveries
+      .filter((delivery) => stringValue(delivery.webhookDestinationId ?? delivery.destinationId) === id)
+      .sort((a, b) => String(b.attemptedAt ?? b.createdAt ?? "").localeCompare(String(a.attemptedAt ?? a.createdAt ?? "")));
+    const testDeliveries = destinationDeliveries.filter((delivery) => Boolean(delivery.test) || stringValue(delivery.eventType) === "dwm.alert.test" || stringValue(delivery.reason) === "webhook_dispatch_dry_run");
+    const lastTest = testDeliveries[0];
+    const lastDelivery = destinationDeliveries.find((delivery) => !testDeliveries.includes(delivery));
+    const retryableDelivery = destinationDeliveries.find((delivery) => Boolean(delivery.retryable ?? delivery.nextRetryAt ?? delivery.next_retry_at));
+    const blockers: DwmWebhookDestinationLifecycleProof["destinations"][number]["blockers"] = [];
+    if (!enabled) blockers.push({ code: "destination_disabled", message: "Webhook destination is disabled.", blocking: true });
+    if (!stringValue(destination.endpointHash) && !stringValue(destination.endpointHint)) blockers.push({ code: "missing_endpoint", message: "Webhook destination has no stored endpoint reference.", blocking: true });
+    if (!lastTest) blockers.push({ code: "test_missing", message: "Webhook destination has no recorded dry-run test.", blocking: false });
+    if (lastTest && stringValue(lastTest.status) === "failed") blockers.push({ code: "test_failed", message: "Latest webhook destination test failed.", blocking: true });
+    if (retryableDelivery) blockers.push({ code: "retry_scheduled", message: "Latest failed delivery has retry/backoff metadata.", blocking: false });
+    if (lastDelivery && stringValue(lastDelivery.status) === "failed" && !retryableDelivery) blockers.push({ code: "delivery_failed", message: "Latest webhook delivery failed without retry eligibility.", blocking: true });
+
+    return {
+      id,
+      tenantId: stringValue(destination.tenantId),
+      organizationId: stringValue(destination.organizationId ?? destination.orgId),
+      kind: stringValue(destination.deliveryKind ?? destination.kind ?? destination.type),
+      label: stringValue(destination.label ?? destination.name),
+      channelLabel: stringValue(destination.channelLabel ?? destination.label ?? destination.name),
+      enabled,
+      status,
+      redactedEndpoint: {
+        endpointHash: stringValue(destination.endpointHash),
+        endpointHint: redactEndpointHint(destination.endpointHint),
+        endpointExposed: false as const
+      },
+      lastTest: lastTest ? lifecycleAttempt(lastTest) : undefined,
+      lastDelivery: lastDelivery ? {
+        ...lifecycleAttempt(lastDelivery),
+        replay: Boolean(lastDelivery.replay) || stringValue(lastDelivery.eventType) === "dwm.alert.replayed",
+        responseSummary: redactedSummary(lastDelivery.responseSummary ?? lastDelivery.error)
+      } : undefined,
+      retry: {
+        retryable: Boolean(retryableDelivery),
+        nextRetryAt: stringValue(retryableDelivery?.nextRetryAt ?? retryableDelivery?.next_retry_at),
+        attemptCount: destinationDeliveries.length,
+        lastErrorCategory: stringValue(retryableDelivery?.errorCategory ?? retryableDelivery?.errorClass)
+      },
+      blockers,
+      routes: {
+        test: `/v1/dwm/webhook-destinations/${encodeURIComponent(id)}/test`,
+        deliveries: `/v1/dwm/webhook-deliveries?organizationId=${encodeURIComponent(organizationId ?? "")}&destinationId=${encodeURIComponent(id)}`
+      }
+    };
+  });
+  const blockers: DwmWebhookDestinationLifecycleProof["blockers"] = [];
+  if (!(input.destinations ?? []).length) blockers.push({ code: "missing_destination", ownerLane: "webhook", path: "destinations", message: "No webhook destinations were provided." });
+  if ((input.destinations ?? []).length > 0 && destinations.length === 0) blockers.push({ code: "org_scope_empty", ownerLane: "webhook", path: "destinations[].organizationId", message: "No webhook destinations matched the requested organization scope." });
+
+  return {
+    schemaVersion: DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_destination_lifecycle_proof", `${tenantId}:${organizationId ?? ""}:${destinations.map((destination) => destination.id).join(",")}`),
+    generatedAt: input.generatedAt ?? new Date(0).toISOString(),
+    ok: blockers.length === 0 && destinations.every((destination) => !destination.blockers.some((blocker) => blocker.blocking)),
+    tenantId,
+    organizationId,
+    redacted: true,
+    summary: {
+      destinationCount: destinations.length,
+      enabledCount: destinations.filter((destination) => destination.enabled).length,
+      disabledCount: destinations.filter((destination) => !destination.enabled).length,
+      verifiedTestCount: destinations.filter((destination) => destination.lastTest && destination.lastTest.status !== "failed").length,
+      retryScheduledCount: destinations.filter((destination) => destination.retry.retryable).length,
+      blockedCount: destinations.filter((destination) => destination.blockers.some((blocker) => blocker.blocking)).length
+    },
+    destinations,
+    blockers
+  };
+}
+
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
   return {
@@ -1273,6 +1442,22 @@ function blocker(code: DwmWebhookEventChainBlocker["code"], ownerLane: DwmWebhoo
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+function lifecycleAttempt(delivery: Record<string, any>) {
+  return {
+    deliveryId: stringValue(delivery.id ?? delivery.deliveryId),
+    status: stringValue(delivery.status),
+    dryRun: Boolean(delivery.dryRun),
+    attemptedAt: stringValue(delivery.attemptedAt ?? delivery.createdAt),
+    payloadHash: stringValue(delivery.payloadHash)
+  };
+}
+
+function redactEndpointHint(value: unknown): string | undefined {
+  const text = stringValue(value);
+  if (!text) return undefined;
+  return text.replace(/https:\/\/discord\.com\/api\/webhooks\/([^/\s"']+)\/[^\s"']+/g, "https://discord.com/api/webhooks/$1/...");
 }
 
 function redactedSummary(value: unknown): string | undefined {
