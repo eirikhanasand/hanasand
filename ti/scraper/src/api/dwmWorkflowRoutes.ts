@@ -151,13 +151,22 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
+  const visibleAlerts = alerts
+    .filter((row: any) => row.tenantId === tenantId)
+    .filter((alert: any) => alertMatchesDwmAlertFilters(alert, url));
   return json({
     organization: scope.organization,
     visibilityDecision: access.visibilityDecision,
-    alerts: alerts
-      .filter((row: any) => row.tenantId === tenantId)
-      .filter((alert: any) => alertMatchesDwmAlertFilters(alert, url))
-      .map((alert: any) => buildDwmAlertListItem(alert, options))
+    alertQueueVisibility: buildDwmAlertQueueVisibility({
+      organizationId: scope.organizationId,
+      tenantId,
+      organization: scope.organization,
+      access,
+      alerts: visibleAlerts,
+      options,
+      url
+    }),
+    alerts: visibleAlerts.map((alert: any) => buildDwmAlertListItem(alert, options))
   });
 }
 
@@ -1110,6 +1119,115 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
     evidenceFreshness: buildDwmAlertEvidenceFreshness(alert),
     provenanceFreshness: buildDwmAlertProvenanceFreshness(alert)
   };
+}
+
+function buildDwmAlertQueueVisibility(input: {
+  organizationId?: string;
+  tenantId: string;
+  organization?: unknown;
+  access: DwmWorkflowAccessResult;
+  alerts: any[];
+  options: ApiServerOptions;
+  url: URL;
+}) {
+  const role = String(input.access.member?.role ?? "nonmember").trim().toLowerCase() || "nonmember";
+  const lifecycleStatus = organizationLifecycleStatus(input.organization);
+  const lifecycleBlocker = lifecycleStatus === "archived" ? "org_archived" : lifecycleStatus === "deleted" ? "org_deleted" : undefined;
+  const workflowSummaries = input.alerts.map(buildDwmAlertWorkflowSummary);
+  const lifecycleBlockers = uniqueAlertStrings([
+    lifecycleBlocker,
+    ...workflowSummaries.flatMap((summary: any) => summary.membershipContext?.alertGenerationBlockerCodes ?? summary.membershipContext?.blockedReasons ?? []),
+    ...input.alerts.flatMap((alert: any) => buildDwmAlertDownstreamHandoff({
+      alert,
+      deliveries: ((input.options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id),
+      ...downstreamLifecycleForAlert(input.options, alert, { organization: input.organization, organizationId: input.organizationId })
+    }).blockerCodes),
+    ...input.alerts.flatMap((alert: any) => [
+      ...(alert.workflowContext?.membershipContext?.alertGenerationBlockerCodes ?? []),
+      ...(alert.workflowContext?.membershipContext?.blockedReasons ?? [])
+    ])
+  ].filter(Boolean));
+  const watchlistItemIds = uniqueAlertStrings(input.alerts.flatMap((alert: any) => alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? []));
+  const alertGeneratorKeys = uniqueAlertStrings(input.alerts.flatMap((alert: any) => alert.workflowContext?.alertGeneratorKeys ?? alert.webhookContext?.alertGeneratorKeys ?? []));
+  return {
+    schemaVersion: "dwm.org_alert_queue_visibility.v1",
+    organizationId: input.organizationId,
+    tenantId: input.tenantId,
+    organizationLifecycleState: lifecycleStatus,
+    visibilityDecision: input.access.visibilityDecision,
+    member: input.access.member ? {
+      id: input.access.member.id,
+      userId: input.access.member.userId,
+      email: input.access.member.email,
+      role,
+      status: input.access.member.status,
+      readOnly: input.access.readOnly
+    } : null,
+    allowedActions: dwmAlertQueueAllowedActions(role, input.access.readOnly),
+    actionGates: {
+      acknowledge_alert: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst", "member"]),
+      assign_case: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst"]),
+      link_case: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst"]),
+      replay_alert: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst"]),
+      deliver_webhook: dwmAlertQueueActionGate(role, input.access.readOnly, ["owner", "admin", "analyst"])
+    },
+    counts: {
+      visibleAlertCount: input.alerts.length,
+      openAlertCount: input.alerts.filter((alert: any) => !["closed", "suppressed"].includes(String(alert.workflowStatus ?? "new"))).length,
+      caseLinkedCount: input.alerts.filter((alert: any) => Boolean(alert.caseId || alert.casePath)).length,
+      watchlistItemCount: watchlistItemIds.length,
+      alertGeneratorKeyCount: alertGeneratorKeys.length
+    },
+    watchlistScope: {
+      watchlistItemIds,
+      alertGeneratorKeys,
+      activeOnly: true,
+      blockedLifecycleCodes: lifecycleBlockers
+    },
+    blockers: lifecycleBlockers.map((code) => ({
+      code,
+      field: code.startsWith("org_")
+        ? "organization.status"
+        : code.startsWith("member_") || code === "role_not_allowed" ? "membershipContext" : "alertQueue.lifecycle",
+      recoverable: code !== "org_deleted"
+    })),
+    routes: {
+      list: "/v1/dwm/alerts",
+      detail: "/v1/dwm/alerts/:id",
+      mutate: "/v1/dwm/alerts/:id",
+      replay: "/v1/dwm/alerts/:id/replay",
+      deliver: "/v1/dwm/webhooks/deliver"
+    },
+    filters: {
+      status: input.url.searchParams.get("status") ?? input.url.searchParams.get("workflowStatus") ?? null,
+      category: input.url.searchParams.get("category") ?? input.url.searchParams.get("termCategory") ?? null,
+      watchlistItemId: input.url.searchParams.get("watchlistItemId"),
+      alertGeneratorKey: input.url.searchParams.get("alertGeneratorKey") ?? input.url.searchParams.get("generationRef")
+    },
+    safeForDashboard: true,
+    nonmemberEnumeration: false
+  };
+}
+
+function dwmAlertQueueAllowedActions(role: string, readOnly: boolean): string[] {
+  if (readOnly || role === "viewer" || role === "support" || role === "nonmember") return [];
+  if (role === "owner" || role === "admin" || role === "analyst") return ["acknowledge_alert", "assign_case", "link_case", "replay_alert", "deliver_webhook"];
+  if (role === "member") return ["acknowledge_alert"];
+  return [];
+}
+
+function dwmAlertQueueActionGate(role: string, readOnly: boolean, allowedRoles: string[]) {
+  const allowed = !readOnly && allowedRoles.includes(role);
+  return {
+    allowed,
+    allowedRoles,
+    denialReason: allowed ? null : readOnly ? "read_only_member" : role === "nonmember" ? "not_member" : "role_not_allowed"
+  };
+}
+
+function organizationLifecycleStatus(organization: unknown): "active" | "archived" | "deleted" {
+  const status = String((organization as any)?.status ?? (organization as any)?.lifecycleStatus ?? "active").trim().toLowerCase();
+  return status === "archived" || status === "deleted" ? status : "active";
 }
 
 function downstreamLifecycleForAlert(options: ApiServerOptions, alert: any, scope?: { organization?: unknown; organizationId?: string }) {

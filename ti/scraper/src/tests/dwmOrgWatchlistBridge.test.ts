@@ -236,6 +236,16 @@ describe("DWM org watchlist bridge", () => {
       createdAt: "2026-06-28T18:00:00.000Z",
       updatedAt: "2026-06-28T18:00:00.000Z"
     });
+    (store as any).saveOrganizationMember({
+      id: "viewer-org-bridge",
+      organizationId,
+      email: "viewer@org-bridge.example",
+      userId: "viewer-org-bridge",
+      role: "viewer",
+      status: "active",
+      createdAt: "2026-06-28T18:00:00.000Z",
+      updatedAt: "2026-06-28T18:00:00.000Z"
+    });
 
     for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
       schemaVersion: "organization.watchlist_alert_generation.v1",
@@ -395,11 +405,76 @@ describe("DWM org watchlist bridge", () => {
     const memberList = await memberListResponse.json() as any;
     expect(memberListResponse.status).toBe(200);
     expect(memberList.alerts).toHaveLength(3);
+    expect(memberList.alertQueueVisibility).toMatchObject({
+      schemaVersion: "dwm.org_alert_queue_visibility.v1",
+      organizationId,
+      tenantId: organizationId,
+      organizationLifecycleState: "active",
+      visibilityDecision: {
+        allowed: true,
+        alertVisibilityPolicy: "members",
+        allowedRoles: ["owner", "admin", "analyst", "member", "viewer"]
+      },
+      member: {
+        userId: "member-org-bridge",
+        role: "member",
+        status: "active",
+        readOnly: false
+      },
+      allowedActions: ["acknowledge_alert"],
+      actionGates: {
+        acknowledge_alert: { allowed: true },
+        assign_case: { allowed: false, denialReason: "role_not_allowed" },
+        replay_alert: { allowed: false, denialReason: "role_not_allowed" },
+        deliver_webhook: { allowed: false, denialReason: "role_not_allowed" }
+      },
+      counts: {
+        visibleAlertCount: 3,
+        watchlistItemCount: 1,
+        alertGeneratorKeyCount: 1
+      },
+      watchlistScope: {
+        watchlistItemIds: ["org_item_acme_domain"],
+        alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
+        activeOnly: true,
+        blockedLifecycleCodes: ["destination_unavailable"]
+      },
+      blockers: [expect.objectContaining({ code: "destination_unavailable", field: "alertQueue.lifecycle" })],
+      routes: {
+        list: "/v1/dwm/alerts",
+        detail: "/v1/dwm/alerts/:id",
+        mutate: "/v1/dwm/alerts/:id",
+        replay: "/v1/dwm/alerts/:id/replay",
+        deliver: "/v1/dwm/webhooks/deliver"
+      },
+      filters: {
+        category: "domain",
+        watchlistItemId: "org_item_acme_domain"
+      },
+      safeForDashboard: true,
+      nonmemberEnumeration: false
+    });
     expect(memberList.alerts[0].workflowSummary).toMatchObject({
       matchedTermCategory: "domain",
       watchlistTermContexts: [{ watchlistItemId: "org_item_acme_domain" }],
       alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
       membershipContext: { visibilityPolicy: "members" }
+    });
+
+    const viewerListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
+      headers: { "x-user-email": "viewer@org-bridge.example" }
+    }), options);
+    const viewerList = await viewerListResponse.json() as any;
+    expect(viewerListResponse.status).toBe(200);
+    expect(viewerList.alertQueueVisibility.member).toMatchObject({
+      role: "viewer",
+      status: "active",
+      readOnly: true
+    });
+    expect(viewerList.alertQueueVisibility.allowedActions).toEqual([]);
+    expect(viewerList.alertQueueVisibility.actionGates.acknowledge_alert).toMatchObject({
+      allowed: false,
+      denialReason: "read_only_member"
     });
 
     const outsiderListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
@@ -759,6 +834,23 @@ describe("DWM org watchlist bridge", () => {
       retentionState: "active_monitoring",
       reasonCodes: expect.arrayContaining(["has_evidence", "customer_proof_required"])
     });
+    expect(activeList.alertQueueVisibility).toMatchObject({
+      schemaVersion: "dwm.org_alert_queue_visibility.v1",
+      organizationId: activeOrgId,
+      organizationLifecycleState: "active",
+      counts: {
+        visibleAlertCount: 1,
+        openAlertCount: 1,
+        watchlistItemCount: 1,
+        alertGeneratorKeyCount: 1
+      },
+      watchlistScope: {
+        watchlistItemIds: ["watch_item_lifecycle_active"],
+        activeOnly: true,
+        blockedLifecycleCodes: []
+      },
+      blockers: []
+    });
 
     store.saveDwmWatchlist({ ...store.getDwmWatchlist("watch_lifecycle_active"), status: "paused", lifecycleStatus: "archived", updatedAt: "2026-06-28T19:10:00.000Z" });
     store.saveWebhookDestination({ ...store.getWebhookDestination("webhook_lifecycle_active"), status: "paused", updatedAt: "2026-06-28T19:10:00.000Z" });
@@ -818,6 +910,17 @@ describe("DWM org watchlist bridge", () => {
         auditRoute: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}`
       }
     });
+    const lifecycleListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${activeOrgId}`, {
+      headers: { "x-user-email": "owner-active@lifecycle.example" }
+    }), options);
+    const lifecycleList = await lifecycleListResponse.json() as any;
+    expect(lifecycleListResponse.status).toBe(200);
+    expect(lifecycleList.alertQueueVisibility.watchlistScope.blockedLifecycleCodes).toEqual(expect.arrayContaining(["retired_watchlist", "disabled_destination", "no_active_source_match"]));
+    expect(lifecycleList.alertQueueVisibility.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "retired_watchlist", field: "alertQueue.lifecycle" }),
+      expect.objectContaining({ code: "disabled_destination", field: "alertQueue.lifecycle" }),
+      expect.objectContaining({ code: "no_active_source_match", field: "alertQueue.lifecycle" })
+    ]));
 
     const replayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
       method: "POST",
