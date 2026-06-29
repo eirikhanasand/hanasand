@@ -6511,6 +6511,7 @@ function supportRecentAuditTimeline(filters: Record<string, unknown>, rows: Reco
         summary: auditTimelineSummary(timeline),
         filterContract: supportAuditFilterContract(filters, timeline),
         exportProof: supportAuditExportProof(filters, timeline),
+        compliancePacket: supportAuditCompliancePacket(filters, timeline),
         workflowRollup: supportAuditWorkflowRollup(filters, timeline),
         events,
         redacted: true,
@@ -6699,6 +6700,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
         redacted: true,
         filterContract: supportAuditFilterContract(filters, [timelineEvent]),
         exportProof: supportAuditExportProof(filters, [timelineEvent]),
+        compliancePacket: supportAuditCompliancePacket(filters, [timelineEvent]),
         bridgeAdapter: supportAuditBridgeAdapterContract(filters),
         workflowProof: supportAuditEventWorkflowProof({ detail, timelineEvent, filters }),
         workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
@@ -6709,6 +6711,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
             summary: auditTimelineSummary(relatedTimeline),
             filterContract: supportAuditFilterContract(filters, relatedTimeline),
             exportProof: supportAuditExportProof(filters, relatedTimeline),
+            compliancePacket: supportAuditCompliancePacket(filters, relatedTimeline),
             workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline),
             timeline: relatedTimeline,
             redacted: true,
@@ -7147,6 +7150,66 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
                 'detail.exportProof.redacted = true',
             ],
         },
+    }
+}
+
+function supportAuditCompliancePacket(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const replayQuery = auditFilterQuery(filters)
+    const eventIds = timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    const summary = supportAuditRedactedSummary(timeline)
+    const actions = uniqueTimelineValues(timeline.map(event => event.actionType || event.action))
+    const reasonsPresent = timeline.filter(event => Boolean(text(event.reason))).length
+    const blockers = [
+        timeline.length ? '' : 'audit_unavailable',
+        eventIds.length === timeline.length ? '' : 'event_id_unavailable',
+        reasonsPresent === timeline.length ? '' : 'missing_reason_on_some_events',
+    ].filter(Boolean)
+    return {
+        schemaVersion: 'support.audit.compliance_packet.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        purpose: 'customer_support_evidence_review',
+        route: '/api/admin/audit-events',
+        replay: {
+            query: replayQuery,
+            filters,
+            immutableEventIds: eventIds,
+            detailRoutes: timeline.map(event => event.links?.detail).filter(Boolean),
+        },
+        evidence: {
+            eventCount: timeline.length,
+            actions,
+            outcomes: summary.outcomes,
+            severities: summary.severities,
+            actorIds: summary.actorIds,
+            targetIds: summary.targetIds,
+            entityIds: summary.entityIds,
+            requestIds: summary.requestIds,
+            reasonsPresent,
+            entityLinks: supportAuditEntityLinkRollup(timeline),
+        },
+        redactionAttestation: {
+            contextRedacted: true,
+            beforeAfterRedacted: true,
+            secretsExcluded: true,
+            sensitiveFields: ['password', 'token', 'secret', 'authorization', 'cookie', 'apiKey', 'session', 'credential', 'webhookUrl', 'privateSourceUrl'],
+        },
+        blockerCatalog: [
+            'audit_unavailable',
+            'event_id_unavailable',
+            'missing_reason_on_some_events',
+            'redaction_required',
+        ],
+        blockers,
+        copyText: [
+            'Support audit compliance packet',
+            `Replay: ${replayQuery}`,
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Actions: ${actions.join(', ') || 'none'}`,
+            `Outcomes: ${summary.outcomes.join(', ') || 'none'}`,
+            `Reasons present: ${reasonsPresent}/${timeline.length}`,
+            'Redacted: true',
+        ].join('\n'),
     }
 }
 
