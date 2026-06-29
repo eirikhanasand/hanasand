@@ -14,8 +14,43 @@ describe("api regression sentinel", () => {
       "/v1/intel/search",
       "/api/ti/search",
       "/v1/darkweb/search",
-      "/v1/ops/product-slo"
+      "/v1/ops/product-slo",
+      "/v1/dwm/org-alert-case-actions"
     ]));
     expect(contract.semantics.noCredentialCollection).toBe(true);
+  });
+
+  test("publishes the org alert case action ledger contract for workflow consumers", async () => {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    });
+    const contract = await response.json() as any;
+    const ledgerSurface = contract.surfaces.find((surface: any) => surface.id === "org_alert_case_action_ledger");
+
+    expect(contract.schemaVersion).toBe("ti.api_contract_index.compact.v4");
+    expect(contract.routeInventory.routes).toEqual(expect.arrayContaining([
+      { method: "GET", path: "/v1/dwm/org-alert-case-actions" },
+      { method: "POST", path: "/v1/dwm/org-alert-case-actions" }
+    ]));
+    expect(ledgerSurface).toMatchObject({
+      ownerLane: "case",
+      schemas: {
+        list: "dwm.org_alert_case_action_ledger_api_list.v1",
+        write: "dwm.org_alert_case_action_ledger_api_write.v1"
+      },
+      scopeFields: ["tenantId", "organizationId"],
+      queryFields: ["receiptId", "alertId", "casePath"],
+      recordFields: expect.arrayContaining(["receiptId", "watchlistId", "alertIds", "casePaths", "auditEventId"]),
+      blockerCodes: expect.arrayContaining(["missing_tenant_scope", "missing_organization_scope", "organization_scope_mismatch"]),
+      routeErrorCodes: expect.arrayContaining(["missing_receipt", "method_not_allowed"]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false
+      }
+    });
+    expect(JSON.stringify(contract)).not.toContain("https://discord.com");
+    expect(JSON.stringify(contract)).not.toContain("authorization:");
   });
 });
