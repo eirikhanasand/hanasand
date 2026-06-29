@@ -88,6 +88,13 @@ type SupportInspectionQuery = {
 type SupportInviteBody = InviteInput & {
     reason?: unknown
     context?: unknown
+    scope?: unknown
+    correlationId?: unknown
+    correlation_id?: unknown
+    idempotencyKey?: unknown
+    idempotency_key?: unknown
+    handoffExpiresAt?: unknown
+    handoff_expires_at?: unknown
 }
 
 type SupportInviteActionParams = OrganizationParams & {
@@ -782,6 +789,121 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const requestId = input.requestId || supportRequestId(req)
+    const controls = supportInviteAssistExecutorControls(req, req.body, requestId)
+    if (controls.error) {
+        await recordSupportInviteAssistExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            requestId,
+            reason,
+            blocker: controls.error.code,
+            input,
+            controls: controls.value,
+            supportContext: cleanContext(req.body?.context),
+        })
+        return res.status(controls.error.status).send(supportError(controls.error.code, controls.error.message, {
+            executorBlocker: supportInviteAssistExecutorBlocker({
+                organizationId: organization.id,
+                requestId,
+                reason,
+                controls: controls.value,
+                input,
+                blockers: [controls.error.code],
+            }),
+        }))
+    }
+    const executorControls = controls.value
+    const duplicate = await loadSupportInviteAssistByIdempotencyKey({
+        organizationId: organization.id,
+        idempotencyKey: executorControls.idempotencyKey,
+    })
+    if (duplicate) {
+        const duplicateInviteIds = auditContextInviteIds(duplicate.context)
+        const duplicateInvites = await loadOrganizationInvitesByIds(organization.id, duplicateInviteIds)
+        return res.send({
+            invites: duplicateInvites.map(toInvite),
+            inviteAssistance: {
+                schemaVersion: 'support.invite_assist.v1',
+                requestId: duplicate.request_id,
+                actorId: actor.id,
+                organization: toOrganization(organization),
+                invites: duplicateInvites.map(toInvite),
+                reason,
+                scope: {
+                    organizationId: organization.id,
+                    inviteIds: duplicateInviteIds,
+                    role: duplicateInvites[0]?.role || input.role,
+                    expiresAt: duplicateInvites[0]?.expires_at || input.expiresAt,
+                },
+                outcome: 'success',
+                idempotentReplay: true,
+                blockers: ['duplicate_idempotency_key'],
+                auditEventIds: [Number(duplicate.id)].filter(id => Number.isFinite(id)),
+                noSilentMembershipMutation: true,
+                controlledExecutor: supportInviteAssistExecutorDetail({
+                    organizationId: organization.id,
+                    requestId: duplicate.request_id,
+                    reason,
+                    controls: executorControls,
+                    input,
+                    inviteIds: duplicateInviteIds,
+                    outcome: 'success',
+                    blockers: ['duplicate_idempotency_key'],
+                }),
+                audit: {
+                    actionType: 'support.organization.invite_assist',
+                    source: 'admin',
+                    service: 'hanasand-api',
+                    outcome: 'success',
+                    severity: 'notice',
+                    eventIds: [Number(duplicate.id)].filter(id => Number.isFinite(id)),
+                    query: supportInviteAssistAuditQuery({
+                        requestId: duplicate.request_id,
+                        organizationId: organization.id,
+                        entityId: duplicate.entity_id || duplicateInviteIds.join(','),
+                        correlationId: executorControls.correlationId,
+                        idempotencyKey: executorControls.idempotencyKey,
+                        reason,
+                    }),
+                },
+                copyText: [
+                    `Support invite assistance already executed for ${duplicateInvites.map(row => row.email).join(', ') || input.emails.join(', ')}`,
+                    `Org: ${organization.name} (${organization.id})`,
+                    `Request: ${duplicate.request_id}`,
+                    `Idempotency: ${executorControls.idempotencyKey}`,
+                    `Audit events: ${duplicate.id}`,
+                    `Reason: ${reason}`,
+                ].join('\n'),
+            },
+        })
+    }
+
+    const availability = await loadOrganizationAvailability([organization.id])
+    const hasAvailableAdmin = availability[0]?.hasAvailableAdmin === true
+    if (hasAvailableAdmin) {
+        await recordSupportInviteAssistExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            requestId,
+            reason,
+            blocker: 'active_admin_available',
+            input,
+            controls: executorControls,
+            supportContext: cleanContext(req.body?.context),
+        })
+        return res.status(409).send(supportError('active_admin_available', 'An active organization admin is available; support invite assistance requires unavailable org administration.', {
+            executorBlocker: supportInviteAssistExecutorBlocker({
+                organizationId: organization.id,
+                requestId,
+                reason,
+                controls: executorControls,
+                input,
+                blockers: ['active_admin_available'],
+            }),
+        }))
+    }
+
     const rows: OrganizationInviteRow[] = []
     for (const email of input.emails) {
         const invite = await run(`
@@ -800,7 +922,6 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
         rows.push(invite.rows[0] as OrganizationInviteRow)
     }
 
-    const requestId = input.requestId || supportRequestId(req)
     const inviteIds = rows.map(row => row.id)
     const entityId = inviteIds.join(',')
     await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
@@ -823,6 +944,20 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
             role: input.role,
             expiresAt: input.expiresAt,
             inviteIds,
+            correlationId: executorControls.correlationId,
+            idempotencyKey: executorControls.idempotencyKey,
+            scope: executorControls.scope,
+            handoffExpiresAt: executorControls.handoffExpiresAt,
+            executor: supportInviteAssistExecutorDetail({
+                organizationId: organization.id,
+                requestId,
+                reason,
+                controls: executorControls,
+                input,
+                inviteIds,
+                outcome: 'success',
+                blockers: [],
+            }),
             noSilentMembershipMutation: true,
             mutation: 'invite_row_only',
             supportContext: cleanContext(req.body?.context),
@@ -843,13 +978,26 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
             organization: toOrganization(organization),
             invites: rows.map(toInvite),
             reason,
+            controlledExecutor: supportInviteAssistExecutorDetail({
+                organizationId: organization.id,
+                requestId,
+                reason,
+                controls: executorControls,
+                input,
+                inviteIds,
+                outcome: 'success',
+                blockers: [],
+            }),
             scope: {
                 organizationId: organization.id,
                 inviteIds,
                 role: input.role,
                 expiresAt: input.expiresAt,
+                supportScope: executorControls.scope,
             },
             outcome: 'success',
+            idempotencyKey: executorControls.idempotencyKey,
+            correlationId: executorControls.correlationId,
             auditEventIds,
             noSilentMembershipMutation: true,
             audit: {
@@ -859,7 +1007,14 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
                 outcome: 'success',
                 severity: 'notice',
                 eventIds: auditEventIds,
-                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&action=invite_assist&outcome=success&source=admin&service=hanasand-api`,
+                query: supportInviteAssistAuditQuery({
+                    requestId,
+                    organizationId: organization.id,
+                    entityId,
+                    correlationId: executorControls.correlationId,
+                    idempotencyKey: executorControls.idempotencyKey,
+                    reason,
+                }),
             },
             copyText: [
                 `Support invite assistance for ${rows.map(row => row.email).join(', ')}`,
@@ -867,6 +1022,7 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
                 `Role: ${input.role}`,
                 `Expires: ${input.expiresAt}`,
                 `Request: ${requestId}`,
+                `Idempotency: ${executorControls.idempotencyKey}`,
                 `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
                 `Reason: ${reason}`,
             ].join('\n'),
@@ -1920,6 +2076,37 @@ async function loadAdminAuditEventIds(input: { requestId: string, actionType: st
     return result.rows.map((row: Record<string, unknown>) => Number(row.id)).filter(id => Number.isFinite(id))
 }
 
+async function loadSupportInviteAssistByIdempotencyKey(input: { organizationId: string, idempotencyKey: string }) {
+    const result = await run(`
+        SELECT id, request_id, entity_id, context
+        FROM admin_audit_events
+        WHERE action_type = 'support.organization.invite_assist'
+          AND organization_id = $1
+          AND outcome = 'success'
+          AND context->>'idempotencyKey' = $2
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+    `, [input.organizationId, input.idempotencyKey])
+    return result.rows[0] as { id: number, request_id: string, entity_id: string | null, context: Record<string, unknown> } | undefined
+}
+
+async function loadOrganizationInvitesByIds(organizationId: string, inviteIds: string[]) {
+    if (!inviteIds.length) return []
+    const result = await run(`
+        SELECT *
+        FROM organization_invites
+        WHERE organization_id = $1
+          AND id = ANY($2::text[])
+        ORDER BY created_at DESC
+    `, [organizationId, inviteIds])
+    return result.rows as OrganizationInviteRow[]
+}
+
+function auditContextInviteIds(context: Record<string, unknown>) {
+    const direct = Array.isArray(context.inviteIds) ? context.inviteIds : []
+    return direct.map(id => text(id)).filter(Boolean)
+}
+
 async function loadSupportMemberDetail(organizationId: string, userId: string) {
     const result = await run(`
         SELECT
@@ -2854,6 +3041,216 @@ function supportActionIdempotencyKey(value: unknown, action: string) {
     return cleaned || `support-${action}-${randomUUID()}`
 }
 
+function supportInviteAssistExecutorControls(
+    req: FastifyRequest,
+    body: SupportInviteBody | undefined,
+    requestId: string,
+): {
+    value: {
+        schemaVersion: string
+        requestId: string
+        correlationId: string
+        idempotencyKey: string
+        scope: string[]
+        handoffExpiresAt: string | null
+        staleBlocker: string
+        duplicateBlocker: string
+    },
+    error: { code: string, message: string, status: number } | null,
+} {
+    const idempotencyKey = supportActionIdempotencyKey(
+        headerText(req.headers['x-idempotency-key']) || body?.idempotencyKey || body?.idempotency_key || requestId,
+        'invite_assist',
+    )
+    const correlationId = text(headerText(req.headers['x-correlation-id']) || body?.correlationId || body?.correlation_id || requestId) || requestId
+    const scopeResult = normalizeSupportPreparationScope(body?.scope || 'invite:create', 'invite_assist')
+    const base = {
+        schemaVersion: 'support.action_execute.controls.v1',
+        requestId,
+        correlationId,
+        idempotencyKey,
+        scope: scopeResult.value,
+        handoffExpiresAt: null as string | null,
+        staleBlocker: 'stale_prepare_payload',
+        duplicateBlocker: 'duplicate_idempotency_key',
+    }
+    if (scopeResult.error) {
+        return { value: base, error: { code: 'invalid_scope', message: 'Invite assistance execution requires invite:create scope.', status: 400 } }
+    }
+    if (!scopeResult.value.includes('invite:create')) {
+        return { value: base, error: { code: 'invalid_scope', message: 'Invite assistance execution requires invite:create scope.', status: 400 } }
+    }
+
+    const handoffExpiresAt = text(headerText(req.headers['x-support-handoff-expires-at']) || body?.handoffExpiresAt || body?.handoff_expires_at)
+    if (!handoffExpiresAt) {
+        return { value: base, error: null }
+    }
+    const timestamp = Date.parse(handoffExpiresAt)
+    if (Number.isNaN(timestamp)) {
+        return { value: base, error: { code: 'invalid_expiry', message: 'Support invite assistance handoff expiry must be a valid timestamp.', status: 400 } }
+    }
+    const normalized = new Date(timestamp).toISOString()
+    const value = { ...base, handoffExpiresAt: normalized }
+    if (timestamp <= Date.now()) {
+        return { value, error: { code: 'stale_prepare_payload', message: 'Support invite assistance handoff has expired; prepare a fresh action before executing.', status: 409 } }
+    }
+    return { value, error: null }
+}
+
+async function recordSupportInviteAssistExecutorBlock(req: FastifyRequest, input: {
+    actorId: string
+    organizationId: string
+    requestId: string
+    reason: string
+    blocker: string
+    input: ReturnType<typeof normalizeInviteInput>
+    controls: ReturnType<typeof supportInviteAssistExecutorControls>['value']
+    supportContext: string
+}) {
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.organization.invite_assist',
+        actorId: input.actorId,
+        targetType: 'organization',
+        targetId: input.organizationId,
+        organizationId: input.organizationId,
+        entityId: input.input.emails.join(','),
+        requestId: input.requestId,
+        severity: 'notice',
+        outcome: 'denied',
+        reason: input.reason,
+        context: {
+            schemaVersion: 'support.action_executor_blocker.v1',
+            action: 'invite_assist',
+            blocker: input.blocker,
+            blockerCode: input.blocker,
+            requestId: input.requestId,
+            correlationId: input.controls.correlationId,
+            idempotencyKey: input.controls.idempotencyKey,
+            targetOrganizationId: input.organizationId,
+            emails: input.input.emails,
+            role: input.input.role,
+            expiresAt: input.input.expiresAt,
+            scope: input.controls.scope,
+            handoffExpiresAt: input.controls.handoffExpiresAt,
+            noSilentMembershipMutation: true,
+            mutation: 'none',
+            redactionRequired: true,
+            supportContext: input.supportContext,
+        },
+    })
+}
+
+function supportInviteAssistExecutorBlocker(input: {
+    organizationId: string
+    requestId: string
+    reason: string
+    controls: ReturnType<typeof supportInviteAssistExecutorControls>['value']
+    input: ReturnType<typeof normalizeInviteInput>
+    blockers: string[]
+}) {
+    return supportInviteAssistExecutorDetail({
+        organizationId: input.organizationId,
+        requestId: input.requestId,
+        reason: input.reason,
+        controls: input.controls,
+        input: input.input,
+        inviteIds: [],
+        outcome: 'denied',
+        blockers: input.blockers,
+    })
+}
+
+function supportInviteAssistExecutorDetail(input: {
+    organizationId: string
+    requestId: string
+    reason: string
+    controls: ReturnType<typeof supportInviteAssistExecutorControls>['value']
+    input: ReturnType<typeof normalizeInviteInput>
+    inviteIds: string[]
+    outcome: 'success' | 'denied'
+    blockers: string[]
+}) {
+    return {
+        schemaVersion: 'support.action_execute.invite_assist.v1',
+        mutationMode: 'controlled_invite_row_only',
+        action: 'invite_assist',
+        supportRoleRequired: true,
+        reasonRequired: true,
+        contextRequired: true,
+        scopeRequired: true,
+        expiryRequired: true,
+        noSilentMembershipMutation: true,
+        requestId: input.requestId,
+        correlationId: input.controls.correlationId,
+        idempotencyKey: input.controls.idempotencyKey,
+        staleBlocker: input.controls.staleBlocker,
+        duplicateBlocker: input.controls.duplicateBlocker,
+        target: {
+            organizationId: input.organizationId,
+            emails: input.input.emails,
+            inviteIds: input.inviteIds,
+        },
+        scope: input.controls.scope,
+        expiresAt: input.input.expiresAt,
+        handoffExpiresAt: input.controls.handoffExpiresAt,
+        outcome: input.outcome,
+        blockers: input.blockers,
+        blockerCatalog: [
+            'support_role_required',
+            'missing_support_reason',
+            'stale_prepare_payload',
+            'duplicate_idempotency_key',
+            'ambiguous_target',
+            'active_admin_available',
+            'invite_unavailable',
+            'mutation_unavailable',
+            'audit_unavailable',
+            'redaction_required',
+            'unsafe_impersonation',
+        ],
+        redactedAuditPreview: redactAuditValue({
+            schemaVersion: 'support.action_execute.audit_preview.v1',
+            actionType: 'support.organization.invite_assist',
+            source: 'admin',
+            service: 'hanasand-api',
+            requestId: input.requestId,
+            correlationId: input.controls.correlationId,
+            idempotencyKey: input.controls.idempotencyKey,
+            organizationId: input.organizationId,
+            emails: input.input.emails,
+            inviteIds: input.inviteIds,
+            reason: input.reason,
+            scope: input.controls.scope,
+            expiresAt: input.input.expiresAt,
+            outcome: input.outcome,
+            blockerCode: input.blockers[0] || null,
+            redactionRequired: true,
+        }),
+    }
+}
+
+function supportInviteAssistAuditQuery(input: {
+    requestId: string
+    organizationId: string
+    entityId: string
+    correlationId: string
+    idempotencyKey: string
+    reason: string
+}) {
+    const params = new URLSearchParams()
+    params.set('request', input.requestId)
+    params.set('correlation', input.correlationId)
+    params.set('idempotency', input.idempotencyKey)
+    params.set('org', input.organizationId)
+    if (input.entityId) params.set('entity', input.entityId)
+    params.set('reason', input.reason)
+    params.set('action', 'support.organization.invite_assist')
+    params.set('outcome', 'success')
+    params.set('source', 'admin')
+    params.set('service', 'hanasand-api')
+    return `/api/admin/audit-events?${params.toString()}`
+}
+
 function normalizeSupportPreparationScope(value: unknown, action: string): { value: string[], error: Record<string, unknown> | null } {
     const allowedByAction: Record<string, Set<string>> = {
         invite_assist: new Set(['invite:create', 'invite:resend', 'invite:revoke']),
@@ -3377,6 +3774,10 @@ function supportRequestId(req: FastifyRequest) {
     const header = req.headers['x-request-id']
     if (Array.isArray(header)) return header[0] || req.id
     return header || req.id
+}
+
+function headerText(value: string | string[] | undefined) {
+    return Array.isArray(value) ? text(value[0]) : text(value)
 }
 
 function text(value: unknown) {
