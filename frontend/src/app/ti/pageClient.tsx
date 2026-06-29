@@ -161,7 +161,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
     const actorArtifacts = useMemo(() => buildActorArtifacts(result, actorIntel, victimObservations, actionability), [result, actorIntel, victimObservations, actionability])
-    const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById), [result, victimObservations, sourceUrlById])
+    const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById, actionability), [result, victimObservations, sourceUrlById, actionability])
     const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources, actorIntel, actionability), [result, victimObservations, sources, actorIntel, actionability])
     const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
     const [selectedArtifactId, setSelectedArtifactId] = useState(actorArtifacts[0]?.id ?? '')
@@ -291,6 +291,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <span className='flex flex-wrap gap-2 text-[11px] text-[#667085]'>
                                             <span>{item.timestamp}</span>
                                             <span>{Math.round(item.confidence * 100)}% confidence</span>
+                                            {item.priority ? <span>{item.priority.score}/100 priority</span> : null}
                                         </span>
                                     </button>
                                 )
@@ -345,6 +346,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='Confidence' value={`${Math.round(selected.confidence * 100)}%`} />
                                         <EvidenceMetric label='Provenance' value={selected.provenance} />
                                     </div>
+
+                                    {selected.priority ? <EvidencePriorityPanel priority={selected.priority} /> : null}
 
                                     <CustomerAlertFit selected={selected} watchlist={watchlist} alertPacket={alertPacket} />
 
@@ -491,6 +494,7 @@ type AnalystWorkItem = {
     href?: string
     evidence: string[]
     nextActions: string[]
+    priority?: TiActionabilityModel['evidencePriority'][number]
 }
 
 type LocalDecision = {
@@ -846,12 +850,56 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
     )
 }
 
-function analystWorkItemsFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sourceUrlById: Map<string, string | undefined>): AnalystWorkItem[] {
+function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWorkItem['priority']> }) {
+    const ids = [
+        ...priority.sourceIds.slice(0, 3).map(id => `source ${id}`),
+        ...priority.captureIds.slice(0, 2).map(id => `capture ${id}`),
+        ...priority.alertIds.slice(0, 2).map(id => `alert ${id}`),
+    ]
+    return (
+        <div data-ti-evidence-priority='true' className='mt-4 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Evidence priority</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{priority.nextAction}</p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(priority.state)}>{decisionStepStatusLabel(priority.state)}</span>
+                    <span className='rounded-md bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3] dark:bg-[#17244a] dark:text-[#9ab3ff]'>{priority.score}/100</span>
+                    <CopyPayloadButton label='Evidence priority' payload={priority} />
+                </div>
+            </div>
+            <div className='mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]'>
+                <EvidencePanel title='Priority basis'>
+                    {priority.reasons.map(reason => <li key={reason}>{reason}</li>)}
+                </EvidencePanel>
+                <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Backed references</p>
+                    <div className='mt-2 flex flex-wrap gap-1.5'>
+                        {ids.length ? ids.map(id => (
+                            <span key={id} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#131c29] dark:text-[#d8e2f2]'>{id}</span>
+                        )) : <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No backed IDs attached.</span>}
+                    </div>
+                    {priority.blockers.length ? (
+                        <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>
+                            {priority.blockers.slice(0, 3).map(blocker => <li key={`${blocker.code}-${blocker.field}`}>{blocker.detail}</li>)}
+                        </ul>
+                    ) : null}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function analystWorkItemsFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sourceUrlById: Map<string, string | undefined>, actionability: TiActionabilityModel): AnalystWorkItem[] {
+    const priorityByRow = new Map(actionability.evidencePriority.map(priority => [priority.rowId, priority]))
     const activityItems: AnalystWorkItem[] = result.recentActivity.map((item, index) => {
         const href = item.url || item.sourceIds.map(id => sourceUrlById.get(id)).find(Boolean)
         const exposure = item.victimName || item.claimType === 'victim_claim' || /victim|leak|claim|stolen|exfiltrat|credential/i.test(`${item.title} ${item.detail}`)
+        const id = `activity-${index}-${item.date}-${item.title}`.toLowerCase()
+        const priority = priorityByRow.get(id)
         return {
-            id: `activity-${index}-${item.date}-${item.title}`.toLowerCase(),
+            id,
             kind: exposure ? 'exposure' : 'activity',
             severity: exposure ? 'high' : item.confidence >= 0.75 ? 'medium' : 'low',
             status: exposure ? 'needs review' : 'monitor',
@@ -872,29 +920,34 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
             nextActions: exposure
                 ? ['Review the source context before customer alerting.', 'Check whether the victim/domain is in a watched portfolio.', 'Escalate if the claim is fresh, corroborated, or customer-relevant.']
                 : ['Review for relevance to the selected actor or company.', 'Open the source when available.', 'Close if it is duplicate background reporting.'],
+            priority,
         }
     })
 
-    const victimItems: AnalystWorkItem[] = victimObservations.map((item, index) => ({
-        id: `victim-${index}-${item.victim}`.toLowerCase(),
-        kind: 'victim',
-        severity: /microsoft|solarwinds|federal|government|diplomatic/i.test(`${item.victim} ${item.sector}`) ? 'high' : 'medium',
-        status: 'profile evidence',
-        title: item.victim,
-        subtitle: `${item.country} · ${item.sector}`,
-        detail: item.incident,
-        timestamp: item.timeframe,
-        source: item.source,
-        provenance: 'Country-level actor profile evidence',
-        confidence: 0.76,
-        evidence: [
-            `Country: ${item.country}`,
-            `Sector: ${item.sector}`,
-            `Timeframe: ${item.timeframe}`,
-            item.incident,
-        ],
-        nextActions: ['Use as actor profile context, not as a current alert by itself.', 'Corroborate with source links before notifying a customer.', 'Keep broad regions and alliance buckets out of the country map.'],
-    }))
+    const victimItems: AnalystWorkItem[] = victimObservations.map((item, index) => {
+        const id = `victim-${index}-${item.victim}`.toLowerCase()
+        return {
+            id,
+            kind: 'victim',
+            severity: /microsoft|solarwinds|federal|government|diplomatic/i.test(`${item.victim} ${item.sector}`) ? 'high' : 'medium',
+            status: 'profile evidence',
+            title: item.victim,
+            subtitle: `${item.country} · ${item.sector}`,
+            detail: item.incident,
+            timestamp: item.timeframe,
+            source: item.source,
+            provenance: 'Country-level actor profile evidence',
+            confidence: 0.76,
+            evidence: [
+                `Country: ${item.country}`,
+                `Sector: ${item.sector}`,
+                `Timeframe: ${item.timeframe}`,
+                item.incident,
+            ],
+            nextActions: ['Use as actor profile context, not as a current alert by itself.', 'Corroborate with source links before notifying a customer.', 'Keep broad regions and alliance buckets out of the country map.'],
+            priority: priorityByRow.get(id),
+        }
+    })
 
     const tradecraftItems: AnalystWorkItem[] = result.ttps.slice(0, 4).map((item, index) => ({
         id: `ttp-${index}-${item.attackId || item.name}`.toLowerCase(),
@@ -934,7 +987,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
     })) ?? []
 
     const items = [...reviewItems, ...activityItems, ...victimItems, ...tradecraftItems]
-    if (items.length) return items.sort((a, b) => severityWeight(b.severity) - severityWeight(a.severity) || b.confidence - a.confidence)
+    if (items.length) return items.sort((a, b) => (b.priority?.score ?? 0) - (a.priority?.score ?? 0) || severityWeight(b.severity) - severityWeight(a.severity) || b.confidence - a.confidence)
 
     return [{
         id: 'collection-searching',
@@ -950,6 +1003,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         confidence: result.confidence,
         evidence: result.notes.length ? result.notes : ['No evidence rows returned yet.'],
         nextActions: ['Leave this query open while polling continues.', 'Try an alias, domain, company name, CVE, or supplier term.', 'Open the customer console for persisted queue work.'],
+        priority: priorityByRow.get('collection-searching'),
     }]
 }
 
