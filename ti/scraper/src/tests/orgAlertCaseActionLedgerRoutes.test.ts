@@ -1,0 +1,227 @@
+import { describe, expect, test } from "bun:test";
+import {
+  handleOrgAlertCaseActionLedgerRequest,
+  ORG_ALERT_CASE_ACTION_LEDGER_ROUTE
+} from "../api/orgAlertCaseActionLedgerRoutes.ts";
+import {
+  buildOrgAlertCaseActionPacket,
+  buildOrgAlertCaseActionReceipt,
+  buildOrgAlertOperatorReadinessPacket,
+  buildOrgAlertSourceEvidenceReport,
+  buildOrgAlertWebhookFixtureContract,
+  buildOrgAlertWorkflowBridgeReport
+} from "../product/orgAlertWorkflowBridge.ts";
+import { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
+import fixture from "./fixtures/org-alert-workflow-bridge-happy.json";
+
+describe("org alert case action ledger route contract", () => {
+  test("records a case action receipt and exposes scoped audit fields", async () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const response = await route(new Request(routeUrl(), {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        receipt: readyActionReceipt(),
+        recordedAt: "2026-06-29T15:05:00.000Z"
+      })
+    }), repository);
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(201);
+    expect(body).toMatchObject({
+      schemaVersion: "dwm.org_alert_case_action_ledger_api_write.v1",
+      ok: true,
+      created: true,
+      record: {
+        receiptId: readyActionReceipt().id,
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        watchlistId: "watch_acme_domains",
+        watchlistItemId: "watch_item_acme_com",
+        alertIds: ["alert_acme_lumma"],
+        casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"],
+        action: "open_case",
+        execution: "ready",
+        ownerLane: "case",
+        route: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+        method: "GET",
+        analystId: "analyst_acme",
+        receiptOk: true,
+        blockedByCodes: [],
+        auditEventId: expect.stringMatching(/^org_alert_case_action_audit_/)
+      },
+      blockers: []
+    });
+    expect(JSON.stringify(body)).not.toContain("hash_acme_initial");
+    expect(JSON.stringify(body)).not.toContain("https://discord.com");
+  });
+
+  test("dedupes POST receipt replay and lists by alert or receipt", async () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const receipt = readyActionReceipt();
+    const body = JSON.stringify({ tenantId: "tenant_acme", organizationId: "org_acme", receipt });
+    const created = await route(new Request(routeUrl(), { method: "POST", body }), repository);
+    const duplicate = await route(new Request(routeUrl(), { method: "POST", body }), repository);
+    const byAlert = await route(new Request(routeUrl("?tenantId=tenant_acme&organizationId=org_acme&alertId=alert_acme_lumma")), repository);
+    const byReceipt = await route(new Request(routeUrl(`?tenantId=tenant_acme&organizationId=org_acme&receiptId=${receipt.id}`)), repository);
+
+    expect(created.status).toBe(201);
+    expect(duplicate.status).toBe(200);
+    expect(await duplicate.json()).toMatchObject({ ok: true, created: false, record: { receiptId: receipt.id } });
+    expect(await byAlert.json()).toMatchObject({
+      schemaVersion: "dwm.org_alert_case_action_ledger_api_list.v1",
+      ok: true,
+      query: { alertId: "alert_acme_lumma" },
+      records: [expect.objectContaining({ receiptId: receipt.id, organizationId: "org_acme" })],
+      blockers: []
+    });
+    expect((await byReceipt.json() as any).records).toHaveLength(1);
+  });
+
+  test("honors tenant and organization headers for scoped reads", async () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const receipt = readyActionReceipt();
+    await route(new Request(routeUrl(), {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", organizationId: "org_acme", receipt })
+    }), repository);
+    const response = await route(new Request(routeUrl("?casePath=/v1/cases/case_acme_lumma%3FalertId%3Dalert_acme_lumma"), {
+      headers: {
+        "x-tenant-id": "tenant_acme",
+        "x-organization-id": "org_acme"
+      }
+    }), repository);
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(body.records).toEqual([expect.objectContaining({ receiptId: receipt.id })]);
+  });
+
+  test("blocks missing receipt, missing scope, and organization mismatch", async () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const missingReceipt = await route(new Request(routeUrl(), {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", organizationId: "org_acme" })
+    }), repository);
+    const missingScope = await route(new Request(routeUrl("?tenantId=tenant_acme")), repository);
+    const orgMismatch = await route(new Request(routeUrl(), {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: "tenant_acme",
+        organizationId: "org_other",
+        receipt: readyActionReceipt()
+      })
+    }), repository);
+
+    expect(missingReceipt.status).toBe(400);
+    expect(await missingReceipt.json()).toMatchObject({ error: { code: "missing_receipt" } });
+    expect(missingScope.status).toBe(400);
+    expect(await missingScope.json()).toMatchObject({
+      ok: false,
+      blockers: [expect.objectContaining({ code: "missing_organization_scope", ownerLane: "case" })]
+    });
+    expect(orgMismatch.status).toBe(400);
+    expect(await orgMismatch.json()).toMatchObject({
+      ok: false,
+      blockers: [expect.objectContaining({ code: "organization_scope_mismatch", path: "receipt.organizationId" })]
+    });
+  });
+
+  test("returns undefined for unrelated routes and rejects unsupported methods", async () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    expect(await handleOrgAlertCaseActionLedgerRequest(new Request("http://127.0.0.1/v1/health"), { repository })).toBeUndefined();
+
+    const response = await route(new Request(routeUrl(), { method: "DELETE" }), repository);
+    expect(response.status).toBe(405);
+    expect(await response.json()).toMatchObject({ error: { code: "method_not_allowed" } });
+  });
+});
+
+async function route(request: Request, repository: InMemoryOrgAlertCaseActionLedgerRepository): Promise<Response> {
+  const response = await handleOrgAlertCaseActionLedgerRequest(request, { repository });
+  if (!response) throw new Error("Expected org alert case action ledger route to handle request.");
+  return response;
+}
+
+function routeUrl(query = ""): string {
+  return `http://127.0.0.1${ORG_ALERT_CASE_ACTION_LEDGER_ROUTE}${query}`;
+}
+
+function readyActionReceipt() {
+  const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+  const sourceEvidence = buildOrgAlertSourceEvidenceReport({
+    bridge,
+    sources: sourceRefs(),
+    captures: [],
+    sourceProvenanceSummaries: [sourceProvenanceSummary()],
+    checkedAt: "2026-06-29T15:00:00.000Z"
+  });
+  const webhookFixture = buildOrgAlertWebhookFixtureContract({
+    bridge,
+    destinations: [webhookDestination()],
+    destinationIdsByWatchlistId: { watch_acme_domains: ["webhook_discord"] }
+  });
+  const readiness = buildOrgAlertOperatorReadinessPacket({
+    bridge,
+    sourceEvidence,
+    webhookFixture
+  });
+  const packet = buildOrgAlertCaseActionPacket({ readiness, checkedAt: "2026-06-29T15:03:00.000Z" });
+  return buildOrgAlertCaseActionReceipt({
+    packet,
+    action: "open_case",
+    analystId: "analyst_acme",
+    checkedAt: "2026-06-29T15:04:00.000Z"
+  });
+}
+
+function webhookDestination() {
+  return {
+    destinationId: "webhook_discord",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    kind: "discord",
+    status: "active",
+    verified: true,
+    endpointUrl: "https://discord.com/api/webhooks/acme/token"
+  };
+}
+
+function sourceRefs() {
+  return [{
+    sourceId: "src_acme_tg",
+    sourceFamily: "telegram_public",
+    status: "active",
+    lastCollectedAt: "2026-06-29T14:10:00.000Z"
+  }, {
+    sourceId: "src_acme_forum",
+    sourceFamily: "darkweb_metadata",
+    status: "active",
+    lastCollectedAt: "2026-06-29T14:30:00.000Z"
+  }];
+}
+
+function sourceProvenanceSummary() {
+  return {
+    schemaVersion: "dwm.alert_source_provenance.v1",
+    alertId: "alert_acme_lumma",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    sourceFamily: "telegram_public",
+    sourceFamilies: ["telegram_public", "darkweb_metadata"],
+    captureIds: ["cap_acme_initial", "cap_acme_followup"],
+    sourceIds: ["src_acme_tg", "src_acme_forum"],
+    contentHashes: ["hash_acme_initial", "hash_acme_followup"],
+    evidenceCount: 2,
+    firstObservedAt: "2026-06-29T14:05:00.000Z",
+    lastObservedAt: "2026-06-29T14:30:00.000Z",
+    generationEvidenceWindow: {
+      captureIds: ["cap_acme_initial", "cap_acme_followup"],
+      sourceFamilies: ["telegram_public", "darkweb_metadata"],
+      contentHashes: ["hash_acme_initial", "hash_acme_followup"],
+      firstObservedAt: "2026-06-29T14:05:00.000Z",
+      lastObservedAt: "2026-06-29T14:30:00.000Z"
+    }
+  };
+}
