@@ -4586,6 +4586,60 @@ export function toInvite(row: OrganizationInviteRow) {
     }
 }
 
+export function organizationInviteAcceptanceDenial(input: {
+    invite?: OrganizationInviteRow | null
+    organizationStatus?: OrganizationLifecycleStatus | null
+    requestId?: string | null
+}) {
+    const status = input.invite?.status ?? null
+    const organizationStatus = input.organizationStatus ?? 'active'
+    const blockerCode = !input.invite
+        ? 'invite_not_found'
+        : organizationStatus === 'archived'
+            ? 'org_archived'
+            : organizationStatus === 'deleted'
+                ? 'org_deleted'
+                : status === 'accepted'
+                    ? 'invite_already_accepted'
+                    : status === 'revoked'
+                        ? 'member_revoked'
+                        : Date.parse(input.invite.expires_at) <= Date.now()
+                            ? 'invite_expired'
+                            : 'invite_not_pending'
+
+    return {
+        schemaVersion: 'organization.invite_acceptance_denial.v1' as const,
+        organizationId: input.invite?.organization_id ?? null,
+        tenantId: input.invite?.organization_id ?? null,
+        inviteId: input.invite?.id ?? null,
+        acceptanceToken: input.invite?.id ?? null,
+        inviteStatus: status,
+        organizationStatus,
+        blockerCode,
+        statusCode: input.invite ? 409 : 404,
+        nonmemberEnumeration: false as const,
+        safeFields: [
+            'schemaVersion',
+            'organizationId',
+            'tenantId',
+            'inviteId',
+            'inviteStatus',
+            'organizationStatus',
+            'blockerCode',
+            'requestId',
+        ],
+        noLeakFields: [
+            'invite.email',
+            'otherOrg.invites',
+            'otherOrg.members',
+            'acceptanceToken.email',
+        ],
+        serviceLogAction: 'organization_invite_acceptance_denied' as const,
+        requestId: input.requestId ?? null,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+    }
+}
+
 export function toMember(row: OrganizationMemberRow) {
     return {
         organizationId: row.organization_id,

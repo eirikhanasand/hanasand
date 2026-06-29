@@ -18,6 +18,7 @@ import {
     normalizeWatchlistRequestId,
     organizationAnalystPortalVisibilityAdapter,
     organizationAlertCaseWorkflowState,
+    organizationInviteAcceptanceDenial,
     organizationLifecycleReadiness,
     organizationDownstreamAuthorizationExport,
     organizationMemberAccessContract,
@@ -897,7 +898,38 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
     `, [req.params.inviteId, userId])
 
     if (!result.rows.length) {
-        return res.status(404).send({ error: 'Pending invite not found.' })
+        const inviteResult = await run(`
+            SELECT *
+            FROM organization_invites
+            WHERE id = $1
+            LIMIT 1
+        `, [req.params.inviteId])
+        const invite = inviteResult.rows[0] as OrganizationInviteRow | undefined
+        const organizationStatusResult = invite
+            ? await run(`
+                SELECT COALESCE(status, 'active') AS status
+                FROM organizations
+                WHERE id = $1
+                LIMIT 1
+            `, [invite.organization_id])
+            : { rows: [] }
+        const denial = organizationInviteAcceptanceDenial({
+            invite,
+            organizationStatus: organizationStatusResult.rows[0]?.status,
+            requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
+        })
+        if (invite) {
+            logOrganizationEvent(req, denial.serviceLogAction, invite.organization_id, userId, {
+                inviteId: invite.id,
+                inviteStatus: invite.status,
+                blockerCode: denial.blockerCode,
+                requestId: denial.requestId,
+            })
+        }
+        return res.status(denial.statusCode).send({
+            error: invite ? 'Invite cannot be accepted.' : 'Pending invite not found.',
+            inviteAcceptanceDenial: denial,
+        })
     }
 
     const row = result.rows[0] as {

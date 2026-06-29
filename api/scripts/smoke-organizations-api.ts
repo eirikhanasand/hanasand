@@ -184,7 +184,21 @@ const reusedInviteResponse = await app.inject({
     url: `/api/organizations/invites/${invite.id}/accept`,
     headers: authHeaders('org_smoke_member', 'member-token'),
 })
-assert.equal(reusedInviteResponse.statusCode, 404, reusedInviteResponse.body)
+assert.equal(reusedInviteResponse.statusCode, 409, reusedInviteResponse.body)
+const reusedInviteDenial = parseBody(reusedInviteResponse.body).inviteAcceptanceDenial
+assert.equal(reusedInviteDenial.schemaVersion, 'organization.invite_acceptance_denial.v1')
+assert.equal(reusedInviteDenial.organizationId, organization.id)
+assert.equal(reusedInviteDenial.tenantId, organization.id)
+assert.equal(reusedInviteDenial.inviteId, invite.id)
+assert.equal(reusedInviteDenial.acceptanceToken, invite.id)
+assert.equal(reusedInviteDenial.inviteStatus, 'accepted')
+assert.equal(reusedInviteDenial.blockerCode, 'invite_already_accepted')
+assert.equal(reusedInviteDenial.statusCode, 409)
+assert.equal(reusedInviteDenial.nonmemberEnumeration, false)
+assert.ok(reusedInviteDenial.safeFields.includes('blockerCode'))
+assert.ok(reusedInviteDenial.noLeakFields.includes('invite.email'))
+assert.equal(reusedInviteDenial.serviceLogAction, 'organization_invite_acceptance_denied')
+assert.equal(reusedInviteDenial.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 
 const pendingInvitesResponse = await app.inject({
     method: 'GET',
@@ -439,7 +453,14 @@ const revokedInviteAcceptResponse = await app.inject({
     url: `/api/organizations/invites/${pendingOpsInvite.id}/accept`,
     headers: authHeaders('org_smoke_outsider', 'outsider-token'),
 })
-assert.equal(revokedInviteAcceptResponse.statusCode, 404, revokedInviteAcceptResponse.body)
+assert.equal(revokedInviteAcceptResponse.statusCode, 409, revokedInviteAcceptResponse.body)
+const revokedInviteAcceptDenial = parseBody(revokedInviteAcceptResponse.body).inviteAcceptanceDenial
+assert.equal(revokedInviteAcceptDenial.schemaVersion, 'organization.invite_acceptance_denial.v1')
+assert.equal(revokedInviteAcceptDenial.organizationId, organization.id)
+assert.equal(revokedInviteAcceptDenial.inviteId, pendingOpsInvite.id)
+assert.equal(revokedInviteAcceptDenial.inviteStatus, 'revoked')
+assert.equal(revokedInviteAcceptDenial.blockerCode, 'member_revoked')
+assert.equal(revokedInviteAcceptDenial.nonmemberEnumeration, false)
 
 const resendPendingInviteResponse = await app.inject({
     method: 'POST',
@@ -555,7 +576,14 @@ const expiredAcceptResponse = await app.inject({
     url: `/api/organizations/invites/${expiredInvite.id}/accept`,
     headers: authHeaders('org_smoke_expired', 'expired-token'),
 })
-assert.equal(expiredAcceptResponse.statusCode, 404, expiredAcceptResponse.body)
+assert.equal(expiredAcceptResponse.statusCode, 409, expiredAcceptResponse.body)
+const expiredAcceptDenial = parseBody(expiredAcceptResponse.body).inviteAcceptanceDenial
+assert.equal(expiredAcceptDenial.schemaVersion, 'organization.invite_acceptance_denial.v1')
+assert.equal(expiredAcceptDenial.organizationId, organization.id)
+assert.equal(expiredAcceptDenial.inviteId, expiredInvite.id)
+assert.equal(expiredAcceptDenial.inviteStatus, 'pending')
+assert.equal(expiredAcceptDenial.blockerCode, 'invite_expired')
+assert.equal(expiredAcceptDenial.nonmemberEnumeration, false)
 
 const membersResponse = await app.inject({
     method: 'GET',
@@ -2493,7 +2521,15 @@ const deletedInviteAcceptDeniedResponse = await app.inject({
     url: `/api/organizations/invites/${bulkInviteWorkflow.results[2].inviteId}/accept`,
     headers: authHeaders('org_smoke_outsider', 'outsider-token'),
 })
-assert.equal(deletedInviteAcceptDeniedResponse.statusCode, 404, deletedInviteAcceptDeniedResponse.body)
+assert.equal(deletedInviteAcceptDeniedResponse.statusCode, 409, deletedInviteAcceptDeniedResponse.body)
+const deletedInviteAcceptDenial = parseBody(deletedInviteAcceptDeniedResponse.body).inviteAcceptanceDenial
+assert.equal(deletedInviteAcceptDenial.schemaVersion, 'organization.invite_acceptance_denial.v1')
+assert.equal(deletedInviteAcceptDenial.organizationId, organization.id)
+assert.equal(deletedInviteAcceptDenial.inviteId, bulkInviteWorkflow.results[2].inviteId)
+assert.equal(deletedInviteAcceptDenial.inviteStatus, 'pending')
+assert.equal(deletedInviteAcceptDenial.organizationStatus, 'deleted')
+assert.equal(deletedInviteAcceptDenial.blockerCode, 'org_deleted')
+assert.equal(deletedInviteAcceptDenial.nonmemberEnumeration, false)
 
 const deletedWatchlistCreateDeniedResponse = await app.inject({
     method: 'POST',
@@ -3212,6 +3248,9 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_cleanup_archived' && log.metadata.requestId === 'smoke-proof-cleanup'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === invite.id && log.metadata.blockerCode === 'invite_already_accepted'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === pendingOpsInvite.id && log.metadata.blockerCode === 'member_revoked'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === expiredInvite.id && log.metadata.blockerCode === 'invite_expired'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_revoked' && log.metadata.requestId === 'smoke-revoke-pending-ops'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_resent' && log.metadata.requestId === 'smoke-resend-pending-ops'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated' && log.metadata.fields.includes('defaultWebhookPolicy')))
@@ -3289,7 +3328,15 @@ async function fakeRun(query: string, params: any[] = []) {
     if (compact.startsWith('SELECT * FROM organization_invites WHERE id = $1')) {
         const [inviteId, organizationId] = params
         const invite = invites.get(inviteId)
-        return rows(invite && invite.organization_id === organizationId ? [invite] : [])
+        if (!invite) return rows([])
+        if (organizationId && invite.organization_id !== organizationId) return rows([])
+        return rows([invite])
+    }
+
+    if (compact.startsWith('SELECT COALESCE(status')) {
+        const [organizationId] = params
+        const organization = organizations.get(organizationId)
+        return rows(organization ? [{ status: organization.status ?? 'active' }] : [])
     }
 
     if (compact.startsWith('SELECT * FROM organization_invites WHERE organization_id')) {
