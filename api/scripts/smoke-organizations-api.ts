@@ -83,6 +83,18 @@ assert.equal(organization.settings.defaultWebhookPolicy, 'active_destinations')
 assert.equal(organization.settings.alertVisibilityPolicy, 'members')
 assert.equal(organization.settings.retentionDays, 365)
 
+const ownerReadOrganizationResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(ownerReadOrganizationResponse.statusCode, 200, ownerReadOrganizationResponse.body)
+const ownerReadOrganization = parseBody(ownerReadOrganizationResponse.body).organization
+assert.equal(ownerReadOrganization.id, organization.id)
+assert.equal(ownerReadOrganization.role, 'owner')
+assert.equal(ownerReadOrganization.memberCount, 1)
+assert.equal(ownerReadOrganization.settings.defaultWebhookPolicy, 'active_destinations')
+
 const ownerDefaultSettingsResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/settings`,
@@ -258,6 +270,19 @@ assert.equal(adminSettings.settings.retentionDays, 180)
 assert.deepEqual(adminSettings.settings.auditSafeMetadata, { region: 'EU', plan: 'team' })
 assert.equal(adminSettings.permissions.canEdit, true)
 
+const memberReadUpdatedOrganizationResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(memberReadUpdatedOrganizationResponse.statusCode, 200, memberReadUpdatedOrganizationResponse.body)
+const memberReadUpdatedOrganization = parseBody(memberReadUpdatedOrganizationResponse.body).organization
+assert.equal(memberReadUpdatedOrganization.name, 'Smoke Shared Operations')
+assert.equal(memberReadUpdatedOrganization.slug, 'shared-ops')
+assert.equal(memberReadUpdatedOrganization.role, 'member')
+assert.equal(memberReadUpdatedOrganization.settings.defaultWebhookPolicy, 'manual_selection')
+assert.equal(memberReadUpdatedOrganization.settings.alertVisibilityPolicy, 'admins')
+
 for (const [userId, token, canEdit] of [
     ['org_smoke_member', 'member-token', false],
     ['org_smoke_viewer', 'viewer-token', false],
@@ -314,6 +339,22 @@ assert.equal(revokedInviteAction.status, 'revoked')
 assert.equal(revokedInviteAction.previousStatus, 'pending')
 assert.equal(revokedInviteAction.requestId, 'smoke-revoke-pending-ops')
 assert.equal(revokedInviteAction.acceptanceToken, pendingOpsInvite.id)
+assert.equal(revokedInviteAction.actorId, 'org_smoke_admin')
+assert.equal(revokedInviteAction.actorRole, 'admin')
+assert.equal(revokedInviteAction.reason, 'Duplicate operator invite cleanup.')
+assert.equal(revokedInviteAction.serviceLogAction, 'organization_invite_revoked')
+
+const revokePendingInviteRepeatResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites/${pendingOpsInvite.id}/actions`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { action: 'revoke', reason: 'Repeat revoke should be safe.', requestId: 'smoke-revoke-pending-ops-repeat' },
+})
+assert.equal(revokePendingInviteRepeatResponse.statusCode, 200, revokePendingInviteRepeatResponse.body)
+const repeatRevokedInviteAction = parseBody(revokePendingInviteRepeatResponse.body).inviteAction
+assert.equal(repeatRevokedInviteAction.previousStatus, 'revoked')
+assert.equal(repeatRevokedInviteAction.status, 'revoked')
+assert.equal(repeatRevokedInviteAction.requestId, 'smoke-revoke-pending-ops-repeat')
 
 const revokedInviteAcceptResponse = await app.inject({
     method: 'POST',
@@ -339,7 +380,27 @@ assert.equal(resentInviteAction.action, 'resend')
 assert.equal(resentInviteAction.previousStatus, 'revoked')
 assert.equal(resentInviteAction.status, 'pending')
 assert.equal(resentInviteAction.requestId, 'smoke-resend-pending-ops')
+assert.equal(resentInviteAction.actorId, 'org_smoke_owner')
+assert.equal(resentInviteAction.actorRole, 'owner')
+assert.equal(resentInviteAction.reason, 'Restore pending operator invite for rollout.')
+assert.equal(resentInviteAction.serviceLogAction, 'organization_invite_resent')
 assert.equal(parseBody(resendPendingInviteResponse.body).invite.acceptancePath, `/api/organizations/invites/${pendingOpsInvite.id}/accept`)
+
+const resendPendingInviteRepeatResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites/${pendingOpsInvite.id}/actions`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: {
+        action: 'resend',
+        reason: 'Repeat resend should keep access pending.',
+        requestId: 'smoke-resend-pending-ops-repeat',
+    },
+})
+assert.equal(resendPendingInviteRepeatResponse.statusCode, 200, resendPendingInviteRepeatResponse.body)
+const repeatResentInviteAction = parseBody(resendPendingInviteRepeatResponse.body).inviteAction
+assert.equal(repeatResentInviteAction.previousStatus, 'pending')
+assert.equal(repeatResentInviteAction.status, 'pending')
+assert.equal(repeatResentInviteAction.requestId, 'smoke-resend-pending-ops-repeat')
 
 const acceptedInviteRevokeResponse = await app.inject({
     method: 'POST',
@@ -370,7 +431,10 @@ assert.equal(bulkInviteWorkflow.organizationId, organization.id)
 assert.equal(bulkInviteWorkflow.recipientCount, 10)
 assert.equal(bulkInviteWorkflow.invitedCount, 10)
 assert.equal(bulkInviteWorkflow.skippedCount, 0)
+assert.equal(bulkInviteWorkflow.expiresAt, parseBody(bulkInviteResponse.body).invites[0].expiresAt)
 assert.deepEqual(bulkInviteWorkflow.results.map((result: Row) => result.outcome), Array(10).fill('invited'))
+assert.ok(bulkInviteWorkflow.results.every((result: Row) => result.acceptanceToken === result.inviteId))
+assert.ok(bulkInviteWorkflow.results.every((result: Row) => result.acceptancePath === `/api/organizations/invites/${result.inviteId}/accept`))
 
 const duplicateBulkInviteResponse = await app.inject({
     method: 'POST',
@@ -454,9 +518,15 @@ const ownerUpdatesViewerRoleResponse = await app.inject({
 assert.equal(ownerUpdatesViewerRoleResponse.statusCode, 200, ownerUpdatesViewerRoleResponse.body)
 const ownerRoleChange = parseBody(ownerUpdatesViewerRoleResponse.body).roleChange
 assert.equal(ownerRoleChange.schemaVersion, 'organization.member_role_change.v1')
+assert.equal(ownerRoleChange.organizationId, organization.id)
+assert.equal(ownerRoleChange.tenantId, organization.id)
+assert.equal(ownerRoleChange.actorId, 'org_smoke_owner')
+assert.equal(ownerRoleChange.targetUserId, 'org_smoke_viewer')
 assert.equal(ownerRoleChange.previousRole, 'viewer')
 assert.equal(ownerRoleChange.newRole, 'member')
+assert.equal(ownerRoleChange.reason, 'Temporary rollout support.')
 assert.equal(ownerRoleChange.requestId, 'smoke-viewer-role-member')
+assert.equal(ownerRoleChange.serviceLogAction, 'organization_member_role_updated')
 
 const ownerRestoresViewerRoleResponse = await app.inject({
     method: 'PATCH',
@@ -466,6 +536,11 @@ const ownerRestoresViewerRoleResponse = await app.inject({
 })
 assert.equal(ownerRestoresViewerRoleResponse.statusCode, 200, ownerRestoresViewerRoleResponse.body)
 assert.equal(parseBody(ownerRestoresViewerRoleResponse.body).member.role, 'viewer')
+const restoreRoleChange = parseBody(ownerRestoresViewerRoleResponse.body).roleChange
+assert.equal(restoreRoleChange.previousRole, 'member')
+assert.equal(restoreRoleChange.newRole, 'viewer')
+assert.equal(restoreRoleChange.reason, 'Restore least privilege after rollout.')
+assert.equal(restoreRoleChange.requestId, 'smoke-viewer-role-restore')
 
 const ownerWatchlistResponse = await app.inject({
     method: 'POST',
@@ -482,6 +557,10 @@ assert.equal(ownerWatchlistItem.lifecycleReason, 'Live proof domain seed.')
 assert.equal(ownerWatchlistItem.lifecycleRequestId, 'smoke-domain-create')
 assert.equal(ownerWatchlistItem.alertGenerationReference.watchlistItemId, ownerWatchlistItem.id)
 assert.equal(ownerWatchlistItem.alertGenerationReference.category, 'domain')
+const ownerWatchlistOperation = parseBody(ownerWatchlistResponse.body).operation
+assert.equal(ownerWatchlistOperation.actorId, 'org_smoke_owner')
+assert.equal(ownerWatchlistOperation.requestId, 'smoke-domain-create')
+assert.equal(ownerWatchlistOperation.serviceLogAction, 'organization_watchlist_upserted')
 
 const memberWatchlistResponse = await app.inject({
     method: 'GET',
@@ -758,6 +837,20 @@ assert.deepEqual(
     alertTermsExport.activeWatchlistTerms,
     readiness.alertGenerationBridge.activeWatchlistTerms
 )
+
+const memberAlertTermsReadyResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-member-alert-terms-ready`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(memberAlertTermsReadyResponse.statusCode, 200, memberAlertTermsReadyResponse.body)
+const memberAlertTermsExport = parseBody(memberAlertTermsReadyResponse.body).alertTermsExport
+assert.equal(memberAlertTermsExport.member.userId, 'org_smoke_member')
+assert.equal(memberAlertTermsExport.member.role, 'member')
+assert.equal(memberAlertTermsExport.canGenerateAlerts, true)
+assert.equal(memberAlertTermsExport.activeTerms.length, 5)
+assert.ok(memberAlertTermsExport.activeTerms.every((term: Row) => term.alertGenerationRef.dedupe.key === term.alertGeneratorKey))
+
 assert.equal(readiness.generatedAlertReferences.length, 5)
 const domainReference = readiness.generatedAlertReferences.find((reference: Row) => reference.matchedTerm.value === 'acme-shared.example')
 assert.ok(domainReference)
@@ -888,10 +981,13 @@ const cleanupArchive = parseBody(cleanupArchiveResponse.body).cleanup
 assert.equal(cleanupArchive.schemaVersion, 'organization.watchlist_cleanup.v1')
 assert.equal(cleanupArchive.organizationId, organization.id)
 assert.equal(cleanupArchive.actorId, 'org_smoke_owner')
+assert.equal(cleanupArchive.actorRole, 'owner')
 assert.equal(cleanupArchive.archivedCount, 2)
 assert.deepEqual(cleanupArchive.archivedItemIds.sort(), [cleanupCompanyItem.id, cleanupKeywordItem.id].sort())
 assert.deepEqual(cleanupArchive.skippedItemIds, ['missing-cleanup-item'])
+assert.equal(cleanupArchive.reason, 'Archive disposable live proof watchlists.')
 assert.equal(cleanupArchive.requestId, 'smoke-proof-cleanup')
+assert.equal(cleanupArchive.serviceLogAction, 'organization_watchlist_cleanup_archived')
 assert.equal(parseBody(cleanupArchiveResponse.body).archivedItems[0].status, 'archived')
 
 const cleanupArchiveRepeatResponse = await app.inject({
@@ -903,6 +999,7 @@ const cleanupArchiveRepeatResponse = await app.inject({
 assert.equal(cleanupArchiveRepeatResponse.statusCode, 200, cleanupArchiveRepeatResponse.body)
 assert.equal(parseBody(cleanupArchiveRepeatResponse.body).cleanup.archivedCount, 0)
 assert.deepEqual(parseBody(cleanupArchiveRepeatResponse.body).cleanup.skippedItemIds, [cleanupCompanyItem.id])
+assert.equal(parseBody(cleanupArchiveRepeatResponse.body).cleanup.requestId, 'smoke-proof-cleanup-repeat')
 
 const cleanupArchivedListResponse = await app.inject({
     method: 'GET',
