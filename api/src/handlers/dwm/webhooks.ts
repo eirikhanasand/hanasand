@@ -13,6 +13,7 @@ import {
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDeliveryActionPlan,
     buildDwmWebhookDeliveryAuditTrail,
+    buildDwmWebhookDeliveryAttemptContract,
     buildDwmWebhookDashboardReadinessAdapter,
     buildDwmWebhookCustomerSetupProof,
     buildDwmWebhookDestinationCrudContract,
@@ -959,6 +960,12 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
                 casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
                 dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
             },
+        }),
+        deliveryAttemptContract: buildDwmWebhookDeliveryAttemptContract({
+            ownerId: userId,
+            input: { ...input, orgId },
+            destinations,
+            deliveries: ledgerDeliveries,
         }),
         deliveryReceipts: buildDwmWebhookDeliveryReceipts({
             deliveries: ledgerDeliveries,

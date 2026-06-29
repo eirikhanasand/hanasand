@@ -5529,14 +5529,15 @@ export function buildDwmWebhookDeliveryAttemptContract({
 }: {
     ownerId: string
     input: DwmAlertNotificationInput
-    destinations: DwmWebhookDispatchDestination[]
+    destinations: Array<DwmWebhookDispatchDestination | DwmWebhookDestinationPublic>
     deliveries?: DwmWebhookDeliveryPublic[]
     liveDeliveryEnabled?: boolean
 }) {
     const normalizedInput = buildDwmWebhookDeliveryRequestInput(input)
     const dryRun = parseBoolean(normalizedInput.dryRun ?? normalizedInput.dry_run, true)
     const live = parseBoolean(normalizedInput.live, false)
-    const plan = buildDwmAlertWebhookDispatchPlan({ ownerId, input: normalizedInput, destinations })
+    const dispatchDestinations = destinations.map(toDwmWebhookDispatchDestinationForContract)
+    const plan = buildDwmAlertWebhookDispatchPlan({ ownerId, input: normalizedInput, destinations: dispatchDestinations })
     const alert = normalizeAlert(plan.alert)
     const watchlist = normalizeWatchlist(plan.alert.watchlist)
     const requiredBlockers = deliveryAttemptContractBlockers({ input: normalizedInput, plan, alert, watchlist })
@@ -5703,6 +5704,19 @@ export function buildDwmWebhookDeliveryAttemptContract({
         },
         attempts,
         blockers: requiredBlockers,
+    }
+}
+
+function toDwmWebhookDispatchDestinationForContract(destination: DwmWebhookDispatchDestination | DwmWebhookDestinationPublic): DwmWebhookDispatchDestination {
+    const dispatchDestination = destination as DwmWebhookDispatchDestination
+    const publicDestination = destination as DwmWebhookDestinationPublic
+    return {
+        id: destination.id,
+        org_id: clean(dispatchDestination.org_id) || clean(publicDestination.orgId) || '',
+        name: destination.name,
+        kind: destination.kind,
+        status: destination.status,
+        events: Array.isArray(destination.events) ? destination.events : [],
     }
 }
 
