@@ -8,6 +8,7 @@ import {
   createActorOrgRelevanceWebhookTriggerRequest,
   materializeActorOrgRelevanceWatchlist,
   summarizeActorOrgRelevanceReview,
+  updateActorOrgRelevanceEvidenceReview,
   updateActorOrgRelevanceReviewWorkflow,
   type ActorOrgRelevanceReviewRecord
 } from "../product/actorOrgRelevanceQueue.ts";
@@ -97,6 +98,36 @@ export async function updateActorOrgRelevanceReview(request: Request, options: A
   return json({
     record: update.record,
     summary: summarizeActorOrgRelevanceReview(update.record)
+  });
+}
+
+export async function updateActorOrgRelevanceReviewEvidence(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
+  if (!id) return error("missing_review_id", "Actor relevance review id is required.", 400);
+  const url = new URL(request.url);
+  const scope = actorOrgScope(url, request);
+  if (!scope.organizationId) return error("missing_org", "organizationId is required to review actor relevance evidence.", 400);
+  const record = (options.store as any).getActorOrgRelevanceReview?.(id) as ActorOrgRelevanceReviewRecord | undefined;
+  if (!actorOrgRelevanceRecordBelongsTo(record, scope)) return error("not_found", "Actor relevance review not found.", 404);
+  const body = await readJson<any>(request);
+  const result = updateActorOrgRelevanceEvidenceReview(record!, {
+    sourceId: body.sourceId,
+    captureId: body.captureId,
+    provenance: body.provenance,
+    status: body.status,
+    actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+    rationale: body.rationale,
+    generatedAt: body.generatedAt || nowIso()
+  });
+  if (!result.ok) {
+    const status = result.code === "evidence_not_found" ? 404 : 400;
+    return error(result.code, result.message, status);
+  }
+  (options.store as any).saveActorOrgRelevanceReview(result.record);
+  return json({
+    changed: result.changed,
+    review: result.review,
+    record: result.record,
+    summary: summarizeActorOrgRelevanceReview(result.record)
   });
 }
 

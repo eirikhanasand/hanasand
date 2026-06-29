@@ -168,6 +168,100 @@ describe("actor org relevance API", () => {
     expect(forbidden.status).toBe(404);
   });
 
+  test("reviews actor relevance source evidence with provenance and audit state", async () => {
+    const store = new InMemoryScraperStore();
+    const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+
+    const missingRef = await reviewEvidence(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      status: "reviewed",
+      generatedAt: "2026-06-29T10:12:00.000Z"
+    });
+    expect(missingRef.status).toBe(400);
+    expect(await missingRef.json()).toMatchObject({ error: { code: "missing_evidence_ref" } });
+
+    const missingRationale = await reviewEvidence(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      captureId: "capture_microsoft_apt29",
+      status: "needs_collection",
+      generatedAt: "2026-06-29T10:13:00.000Z"
+    });
+    expect(missingRationale.status).toBe(400);
+    expect(await missingRationale.json()).toMatchObject({ error: { code: "missing_rationale" } });
+
+    const reviewedResponse = await reviewEvidence(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      captureId: "capture_microsoft_apt29",
+      status: "reviewed",
+      generatedAt: "2026-06-29T10:14:00.000Z"
+    });
+    const reviewed = await reviewedResponse.json() as any;
+    expect(reviewedResponse.status).toBe(200);
+    expect(reviewed.changed).toBe(true);
+    expect(reviewed.review).toMatchObject({
+      status: "reviewed",
+      reviewedAt: "2026-06-29T10:14:00.000Z",
+      reviewedBy: "user_ti",
+      sourceId: "microsoft",
+      sourceName: "Microsoft",
+      captureId: "capture_microsoft_apt29",
+      provenance: "https://www.microsoft.com/en-us/security/blog/",
+      confidence: 0.84,
+      supportsTerms: ["Microsoft"]
+    });
+    expect(reviewed.summary.evidenceReviewCounts).toEqual({
+      total: 1,
+      reviewed: 1,
+      disputed: 0,
+      needsCollection: 0
+    });
+    expect(reviewed.summary.workflow).toMatchObject({ status: "reviewing", updatedBy: "user_ti" });
+    expect(reviewed.record.timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({ eventType: "evidence_reviewed", actorId: "user_ti" })
+    ]));
+
+    const duplicateResponse = await reviewEvidence(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      sourceId: "microsoft",
+      status: "reviewed",
+      generatedAt: "2026-06-29T10:15:00.000Z"
+    });
+    const duplicate = await duplicateResponse.json() as any;
+    expect(duplicateResponse.status).toBe(200);
+    expect(duplicate.changed).toBe(false);
+    expect(duplicate.review.id).toBe(reviewed.review.id);
+    expect(duplicate.record.timeline.filter((event: any) => event.eventType === "evidence_reviewed")).toHaveLength(1);
+
+    const needsCollectionResponse = await reviewEvidence(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      provenance: "https://www.microsoft.com/en-us/security/blog/",
+      status: "needs_collection",
+      rationale: "Need a fresh capture before customer escalation.",
+      generatedAt: "2026-06-29T10:16:00.000Z"
+    });
+    const needsCollection = await needsCollectionResponse.json() as any;
+    expect(needsCollection.changed).toBe(true);
+    expect(needsCollection.review).toMatchObject({
+      id: reviewed.review.id,
+      status: "needs_collection",
+      rationale: "Need a fresh capture before customer escalation."
+    });
+    expect(needsCollection.summary.evidenceReviewCounts).toEqual({
+      total: 1,
+      reviewed: 0,
+      disputed: 0,
+      needsCollection: 1
+    });
+
+    const unknown = await reviewEvidence(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      captureId: "capture_missing",
+      status: "reviewed"
+    });
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ error: { code: "evidence_not_found" } });
+
+    const forbidden = await reviewEvidence(store, created.record.id, "tenant_other", "org_other", {
+      captureId: "capture_microsoft_apt29",
+      status: "reviewed"
+    });
+    expect(forbidden.status).toBe(404);
+  });
+
   test("materializes a ready actor relevance review into an org DWM watchlist with provenance", async () => {
     const store = new InMemoryScraperStore();
     const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
@@ -788,6 +882,14 @@ async function patchWorkflow(store: InMemoryScraperStore | FileBackedScraperStor
 
 async function cancelPreparedHandoff(store: InMemoryScraperStore | FileBackedScraperStore, id: string, tenantId: string, organizationId: string, body: Record<string, unknown>) {
   return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${id}/cancel-prepared-handoff?tenantId=${tenantId}&organizationId=${organizationId}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+    body: JSON.stringify(body)
+  }), { store, frontier: new FocusedFrontier() });
+}
+
+async function reviewEvidence(store: InMemoryScraperStore | FileBackedScraperStore, id: string, tenantId: string, organizationId: string, body: Record<string, unknown>) {
+  return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${id}/evidence-review?tenantId=${tenantId}&organizationId=${organizationId}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
     body: JSON.stringify(body)

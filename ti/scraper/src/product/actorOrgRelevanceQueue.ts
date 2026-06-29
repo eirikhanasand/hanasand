@@ -29,6 +29,7 @@ export type ActorOrgRelevanceReviewRecord = {
   partialHandoff?: Partial<ActorOrgRelevanceHandoffValue>;
   workflow: ActorOrgRelevanceWorkflowState;
   notes: ActorOrgRelevanceNote[];
+  evidenceReviews: ActorOrgRelevanceEvidenceReview[];
   alertGenerationReceipts: ActorOrgRelevanceAlertGenerationReceipt[];
   caseHandoffReceipts: ActorOrgRelevanceCaseHandoffReceipt[];
   webhookTriggerReceipts: ActorOrgRelevanceWebhookTriggerReceipt[];
@@ -56,6 +57,12 @@ export type ActorOrgRelevanceReviewSummary = {
   handoffs: ActorOrgRelevanceReadinessRow["handoffs"];
   blockerCodes: string[];
   workflow: ActorOrgRelevanceWorkflowState;
+  evidenceReviewCounts: {
+    total: number;
+    reviewed: number;
+    disputed: number;
+    needsCollection: number;
+  };
   latestAlertGeneration?: ActorOrgRelevanceAlertGenerationReceipt;
   latestCaseHandoff?: ActorOrgRelevanceCaseHandoffReceipt;
   latestWebhookTrigger?: ActorOrgRelevanceWebhookTriggerReceipt;
@@ -81,7 +88,7 @@ export type ActorOrgRelevanceTimelineEvent = {
   id: string;
   occurredAt: string;
   actorId?: string;
-  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested" | "case_handoff_requested" | "webhook_trigger_prepared" | "alert_generation_cancelled" | "case_handoff_cancelled" | "webhook_trigger_cancelled";
+  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested" | "case_handoff_requested" | "webhook_trigger_prepared" | "alert_generation_cancelled" | "case_handoff_cancelled" | "webhook_trigger_cancelled" | "evidence_reviewed";
   summary: string;
   blockerCodes: string[];
 };
@@ -110,6 +117,37 @@ export type ActorOrgRelevanceNote = {
   createdAt: string;
   body: string;
 };
+
+export type ActorOrgRelevanceEvidenceReviewStatus = "reviewed" | "disputed" | "needs_collection";
+
+export type ActorOrgRelevanceEvidenceReview = {
+  id: string;
+  evidenceKey: string;
+  status: ActorOrgRelevanceEvidenceReviewStatus;
+  reviewedAt: string;
+  reviewedBy?: string;
+  rationale?: string;
+  sourceId?: string;
+  sourceName: string;
+  captureId?: string;
+  provenance: string;
+  confidence?: number;
+  supportsTerms: string[];
+};
+
+export type ActorOrgRelevanceEvidenceReviewInput = {
+  sourceId?: string;
+  captureId?: string;
+  provenance?: string;
+  status: ActorOrgRelevanceEvidenceReviewStatus;
+  actorId?: string;
+  rationale?: string;
+  generatedAt?: string;
+};
+
+export type ActorOrgRelevanceEvidenceReviewResult =
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; review: ActorOrgRelevanceEvidenceReview; changed: boolean }
+  | { ok: false; code: string; message: string };
 
 export type ActorOrgRelevanceWorkflowUpdateInput = {
   action: "assign" | "review" | "escalate" | "suppress" | "close" | "reopen" | "note";
@@ -395,6 +433,7 @@ export function buildActorOrgRelevanceReviewRecord(input: {
     partialHandoff: handoff.ok ? undefined : partialHandoff(handoff),
     workflow: input.existing?.workflow ?? { status: "new", updatedAt: generatedAt },
     notes: input.existing?.notes ?? [],
+    evidenceReviews: input.existing?.evidenceReviews ?? [],
     alertGenerationReceipts: input.existing?.alertGenerationReceipts ?? [],
     caseHandoffReceipts: input.existing?.caseHandoffReceipts ?? [],
     webhookTriggerReceipts: input.existing?.webhookTriggerReceipts ?? [],
@@ -424,6 +463,7 @@ export function summarizeActorOrgRelevanceReview(record: ActorOrgRelevanceReview
     handoffs: record.readiness.handoffs,
     blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code)),
     workflow: record.workflow,
+    evidenceReviewCounts: evidenceReviewCounts(record.evidenceReviews),
     latestAlertGeneration: latestActiveReceipt(record.alertGenerationReceipts),
     latestCaseHandoff: latestActiveReceipt(record.caseHandoffReceipts),
     latestWebhookTrigger: latestActiveReceipt(record.webhookTriggerReceipts),
@@ -553,6 +593,77 @@ export function updateActorOrgRelevanceReviewWorkflow(
         actorId,
         eventType,
         summary: workflowSummary(input.action, nextWorkflow, assignedTo, Boolean(note)),
+        blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
+      }]
+    }
+  };
+}
+
+export function updateActorOrgRelevanceEvidenceReview(
+  record: ActorOrgRelevanceReviewRecord,
+  input: ActorOrgRelevanceEvidenceReviewInput
+): ActorOrgRelevanceEvidenceReviewResult {
+  const generatedAt = input.generatedAt || nowIso();
+  const actorId = input.actorId?.trim() || undefined;
+  const rationale = cleanNote(input.rationale);
+  if (!["reviewed", "disputed", "needs_collection"].includes(input.status)) {
+    return { ok: false, code: "invalid_evidence_status", message: "Unsupported evidence review status." };
+  }
+  if ((input.status === "disputed" || input.status === "needs_collection") && !rationale) {
+    return { ok: false, code: "missing_rationale", message: "Disputed evidence and collection requests require rationale." };
+  }
+  if (!input.sourceId && !input.captureId && !input.provenance) {
+    return { ok: false, code: "missing_evidence_ref", message: "Evidence review requires sourceId, captureId, or provenance." };
+  }
+
+  const evidence = findSourceEvidence(record, input);
+  if (!evidence) return { ok: false, code: "evidence_not_found", message: "Source evidence was not found on this actor relevance review." };
+
+  const evidenceKey = actorOrgEvidenceKey(evidence);
+  const existing = record.evidenceReviews.find((review) => review.evidenceKey === evidenceKey);
+  const review: ActorOrgRelevanceEvidenceReview = {
+    id: existing?.id || stableId("actor_org_relevance_evidence_review", `${record.id}:${evidenceKey}`),
+    evidenceKey,
+    status: input.status,
+    reviewedAt: generatedAt,
+    reviewedBy: actorId,
+    rationale,
+    sourceId: evidence.sourceId,
+    sourceName: evidence.sourceName,
+    captureId: evidence.captureId,
+    provenance: evidence.provenance,
+    confidence: evidence.confidence,
+    supportsTerms: uniqueStrings(evidence.supportsTerms ?? [])
+  };
+  const changed = !existing
+    || existing.status !== review.status
+    || existing.rationale !== review.rationale
+    || existing.reviewedBy !== review.reviewedBy;
+  if (!changed) return { ok: true, changed: false, review: existing, record };
+
+  const reviews = existing
+    ? record.evidenceReviews.map((row) => row.evidenceKey === evidenceKey ? review : row)
+    : [...record.evidenceReviews, review];
+  return {
+    ok: true,
+    changed: true,
+    review,
+    record: {
+      ...record,
+      updatedAt: generatedAt,
+      workflow: {
+        ...record.workflow,
+        status: record.workflow.status === "new" ? "reviewing" : record.workflow.status,
+        updatedBy: actorId || record.workflow.updatedBy,
+        updatedAt: generatedAt
+      },
+      evidenceReviews: reviews,
+      timeline: [...record.timeline, {
+        id: stableId("actor_org_relevance_timeline", `${record.id}:${generatedAt}:evidence_reviewed:${evidenceKey}:${input.status}`),
+        occurredAt: generatedAt,
+        actorId,
+        eventType: "evidence_reviewed",
+        summary: `Marked evidence ${evidenceKey} as ${input.status}.`,
         blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
       }]
     }
@@ -1020,6 +1131,48 @@ function findReceipt<T extends { id: string; cancellation?: ActorOrgRelevancePre
 
 function latestActiveReceipt<T extends { cancellation?: ActorOrgRelevancePreparedHandoffCancellation }>(receipts: T[]) {
   return [...receipts].reverse().find((receipt) => !receipt.cancellation);
+}
+
+function evidenceReviewCounts(reviews: ActorOrgRelevanceEvidenceReview[]) {
+  return {
+    total: reviews.length,
+    reviewed: reviews.filter((review) => review.status === "reviewed").length,
+    disputed: reviews.filter((review) => review.status === "disputed").length,
+    needsCollection: reviews.filter((review) => review.status === "needs_collection").length
+  };
+}
+
+function findSourceEvidence(record: ActorOrgRelevanceReviewRecord, input: ActorOrgRelevanceEvidenceReviewInput) {
+  return sourceEvidenceRows(record).find((evidence) => {
+    if (input.sourceId && evidence.sourceId === input.sourceId) return true;
+    if (input.captureId && evidence.captureId === input.captureId) return true;
+    if (input.provenance && evidence.provenance === input.provenance) return true;
+    return false;
+  });
+}
+
+function sourceEvidenceRows(record: ActorOrgRelevanceReviewRecord): Array<{
+  sourceId?: string;
+  sourceName: string;
+  captureId?: string;
+  provenance: string;
+  confidence?: number;
+  supportsTerms?: string[];
+}> {
+  return ((record.orgRelevance as any).sourceEvidence ?? [])
+    .filter((row: any) => row && row.sourceName && row.provenance)
+    .map((row: any) => ({
+      sourceId: row.sourceId ? String(row.sourceId) : undefined,
+      sourceName: String(row.sourceName),
+      captureId: row.captureId ? String(row.captureId) : undefined,
+      provenance: String(row.provenance),
+      confidence: typeof row.confidence === "number" ? row.confidence : undefined,
+      supportsTerms: Array.isArray(row.supportsTerms) ? row.supportsTerms.map((term: unknown) => String(term)) : []
+    }));
+}
+
+function actorOrgEvidenceKey(evidence: { sourceId?: string; captureId?: string; provenance: string }) {
+  return stableId("actor_org_relevance_evidence", `${evidence.sourceId || ""}:${evidence.captureId || ""}:${evidence.provenance}`);
 }
 
 function orgTenantId(orgRelevance: PublicTiOrgRelevanceProofLike) {
