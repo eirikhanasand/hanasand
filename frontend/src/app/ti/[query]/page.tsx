@@ -2,6 +2,7 @@ import searchThreatIntel from '@/utils/ti/search'
 import TiPageClient from '../pageClient'
 import { sanitizeTiResultForPublicPage } from '../publicResult'
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import { buildRouteMetadata, humanizeSlug } from '../../seo'
 import ConsoleRouteShell from '@/components/dashboard/consoleRouteShell'
 
@@ -25,6 +26,10 @@ export async function generateMetadata({ params }: TiQueryPageProps): Promise<Me
 export default async function TiQueryPage({ params }: TiQueryPageProps) {
     const { query: rawQuery } = await params
     const query = decodeURIComponent(rawQuery || '').trim()
+    const canonicalQuery = canonicalTiQuery(query)
+    if (query && canonicalQuery !== query) {
+        redirect(`/ti/${encodeURIComponent(canonicalQuery)}`)
+    }
     const initialResult = query ? sanitizeTiResultForPublicPage(await searchThreatIntel(query)) : null
 
     return (
@@ -34,4 +39,8 @@ export default async function TiQueryPage({ params }: TiQueryPageProps) {
             </main>
         </ConsoleRouteShell>
     )
+}
+
+function canonicalTiQuery(query: string) {
+    return /^[a-z0-9._-]+$/i.test(query) ? query.toLowerCase() : query
 }

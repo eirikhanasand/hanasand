@@ -173,6 +173,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedNote = selected ? notes[selected.id] ?? '' : ''
     const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
+    const reviewHandoff = selected && alertPacket ? selectedReviewHandoffFor(result, selected, watchlist, alertPacket, actionability, selectedDecision, selectedNote) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
@@ -412,6 +413,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <ActionPanel
                                 note={selectedNote}
                                 decision={selectedDecision}
+                                reviewHandoff={reviewHandoff}
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={applyDecision}
                             />
@@ -528,6 +530,39 @@ type AlertPacket = {
     evidenceBasis: string[]
     routing: string
     blockedUntil: string[]
+}
+
+type SelectedReviewHandoff = {
+    schemaVersion: 'ti.public_actor.selected_review_handoff.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItem: Pick<AnalystWorkItem, 'id' | 'kind' | 'severity' | 'title' | 'timestamp' | 'source' | 'provenance' | 'confidence' | 'href' | 'evidence' | 'nextActions'>
+    localReview: {
+        status: LocalDecision['status'] | 'not_recorded'
+        rationale: string
+        decidedAt?: string
+    }
+    watchlist: {
+        terms: string[]
+        matchedTerms: string[]
+        organizations: string[]
+    }
+    caseHandoff: {
+        ready: boolean
+        endpoint: string
+        backedRoute?: string
+        missing: string[]
+    }
+    alertHandoff: {
+        ready: boolean
+        endpoint: string
+        backedRoute?: string
+        missing: string[]
+    }
+    evidenceBasis: string[]
+    blockers: string[]
 }
 
 type EnrichmentTask = {
@@ -2187,12 +2222,15 @@ function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     )
 }
 
-function ActionPanel({ note, decision, onNoteChange, onDecision }: {
+function ActionPanel({ note, decision, reviewHandoff, onNoteChange, onDecision }: {
     note: string
     decision?: LocalDecision
+    reviewHandoff: SelectedReviewHandoff | null
     onNoteChange: (value: string) => void
     onDecision: (status: LocalDecision['status']) => void
 }) {
+    const readyForCase = Boolean(reviewHandoff?.caseHandoff.ready)
+    const readyForAlert = Boolean(reviewHandoff?.alertHandoff.ready)
     return (
         <Panel title='Session Notes' description='These controls are local to this browser session. Use them for scratch triage only; persisted ownership, delivery, and audit history live in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
             <div className='grid gap-3'>
@@ -2219,6 +2257,33 @@ function ActionPanel({ note, decision, onNoteChange, onDecision }: {
                     <ActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={() => onDecision('closed')}>Close</ActionButton>
                     <ActionButton icon={<XCircle className='h-3.5 w-3.5' />} onClick={() => onDecision('reopened')}>Reopen</ActionButton>
                 </div>
+                {reviewHandoff ? (
+                    <div data-ti-selected-review-handoff='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected review package</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                    Copyable evidence, rationale, and handoff state for authenticated case review. This does not save public-page notes.
+                                </p>
+                            </div>
+                            <CopyPayloadButton label='Selected review package' payload={reviewHandoff} />
+                        </div>
+                        <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                            <span className={readyForAlert ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
+                                alert {readyForAlert ? 'ready' : 'blocked'}
+                            </span>
+                            <span className={readyForCase ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
+                                case {readyForCase ? 'ready' : 'blocked'}
+                            </span>
+                            <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                {reviewHandoff.evidenceBasis.length} evidence rows
+                            </span>
+                        </div>
+                        {reviewHandoff.blockers.length ? (
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{reviewHandoff.blockers.slice(0, 2).join('; ')}</p>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </Panel>
     )
@@ -2417,6 +2482,62 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
                 ? 'Route to actor-profile enrichment and watchlist expansion.'
                 : 'Route to alert review, source verification, and customer delivery only after the console workflow persists it.',
         blockedUntil,
+    }
+}
+
+function selectedReviewHandoffFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    watchlist: WatchlistRelevance,
+    alertPacket: AlertPacket,
+    actionability: TiActionabilityModel,
+    decision: LocalDecision | undefined,
+    note: string
+): SelectedReviewHandoff {
+    const rationale = note.trim() || decision?.reason || 'No session rationale recorded.'
+    return {
+        schemaVersion: 'ti.public_actor.selected_review_handoff.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: result.generatedAt,
+        selectedItem: {
+            id: selected.id,
+            kind: selected.kind,
+            severity: selected.severity,
+            title: selected.title,
+            timestamp: selected.timestamp,
+            source: selected.source,
+            provenance: selected.provenance,
+            confidence: selected.confidence,
+            href: selected.href,
+            evidence: selected.evidence,
+            nextActions: selected.nextActions,
+        },
+        localReview: {
+            status: decision?.status ?? 'not_recorded',
+            rationale,
+            decidedAt: decision?.decidedAt,
+        },
+        watchlist: {
+            terms: alertPacket.watchTerms,
+            matchedTerms: watchlist.matchedTerms,
+            organizations: watchlist.organizations,
+        },
+        caseHandoff: {
+            ready: actionability.caseHandoff.ready,
+            endpoint: actionability.caseHandoff.endpoint,
+            backedRoute: actionability.caseHandoff.backedRoute,
+            missing: actionability.caseHandoff.missing,
+        },
+        alertHandoff: {
+            ready: actionability.createAlertHandoff.ready,
+            endpoint: actionability.createAlertHandoff.endpoint,
+            backedRoute: actionability.createAlertHandoff.backedRoute,
+            missing: actionability.createAlertHandoff.missing,
+        },
+        evidenceBasis: alertPacket.evidenceBasis,
+        blockers: alertPacket.blockedUntil,
     }
 }
 
