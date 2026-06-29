@@ -494,18 +494,46 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
         return res.status(404).send({ error: 'Organization member not found.' })
     }
 
+    const revokedInvites = await run(`
+        UPDATE organization_invites
+        SET status = 'revoked',
+            accepted_at = NULL,
+            accepted_by = NULL
+        FROM users
+        WHERE organization_invites.organization_id = $1
+          AND users.id = $2
+          AND lower(organization_invites.email) = lower(users.email)
+          AND organization_invites.status = 'pending'
+        RETURNING organization_invites.*
+    `, [req.params.id, req.params.userId])
+
     await touchOrganization(req.params.id)
     logOrganizationEvent(req, 'organization_member_removed', req.params.id, userId, {
         targetUserId: req.params.userId,
         targetRole: target.role,
         actorRole: organization.role,
         ownerCountBefore: ownerCount,
+        revokedInviteIds: revokedInvites.rows.map((invite: OrganizationInviteRow) => invite.id),
+        revokedInviteCount: revokedInvites.rows.length,
     })
 
     const updated = await loadOrganizationForMember(req.params.id, userId)
     return res.send({
         organization: updated ? toOrganization(updated) : null,
         member: toMember(removed.rows[0] as OrganizationMemberRow),
+        memberRemovalCleanup: {
+            schemaVersion: 'organization.member_removal_cleanup.v1',
+            organizationId: req.params.id,
+            tenantId: req.params.id,
+            targetUserId: req.params.userId,
+            targetRole: target.role,
+            revokedInviteIds: revokedInvites.rows.map((invite: OrganizationInviteRow) => invite.id),
+            revokedInviteCount: revokedInvites.rows.length,
+            revokedInviteStatus: 'revoked' as const,
+            staleInviteAcceptanceBlocker: 'member_revoked' as const,
+            noOrphanedInviteTokens: true,
+            serviceLogAction: 'organization_member_removed' as const,
+        },
     })
 }
 

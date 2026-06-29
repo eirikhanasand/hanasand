@@ -3778,6 +3778,18 @@ assert.equal(lastOwnerRemoveGuard.destructiveMutationBlocked, true)
 assert.equal(lastOwnerRemoveGuard.noOrphanedOrganization, true)
 assert.equal(lastOwnerRemoveGuard.serviceLogAction, 'organization_last_owner_guard_blocked')
 
+const viewerPendingInviteBeforeRemoval = nowRow({
+    id: 'viewer-pending-before-removal',
+    organization_id: organization.id,
+    email: 'viewer@example.test',
+    role: 'viewer',
+    invited_by: 'org_smoke_owner',
+    status: 'pending',
+    accepted_at: null,
+    accepted_by: null,
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+})
+invites.set(viewerPendingInviteBeforeRemoval.id, viewerPendingInviteBeforeRemoval)
 const removeViewerResponse = await app.inject({
     method: 'DELETE',
     url: `/api/organizations/${organization.id}/members/org_smoke_viewer`,
@@ -3785,6 +3797,18 @@ const removeViewerResponse = await app.inject({
 })
 assert.equal(removeViewerResponse.statusCode, 200, removeViewerResponse.body)
 assert.equal(parseBody(removeViewerResponse.body).member.status, 'removed')
+const removeViewerCleanup = parseBody(removeViewerResponse.body).memberRemovalCleanup
+assert.equal(removeViewerCleanup.schemaVersion, 'organization.member_removal_cleanup.v1')
+assert.equal(removeViewerCleanup.organizationId, organization.id)
+assert.equal(removeViewerCleanup.tenantId, organization.id)
+assert.equal(removeViewerCleanup.targetUserId, 'org_smoke_viewer')
+assert.equal(removeViewerCleanup.targetRole, 'viewer')
+assert.deepEqual(removeViewerCleanup.revokedInviteIds, [viewerPendingInviteBeforeRemoval.id])
+assert.equal(removeViewerCleanup.revokedInviteCount, 1)
+assert.equal(removeViewerCleanup.revokedInviteStatus, 'revoked')
+assert.equal(removeViewerCleanup.staleInviteAcceptanceBlocker, 'member_revoked')
+assert.equal(removeViewerCleanup.noOrphanedInviteTokens, true)
+assert.equal(invites.get(viewerPendingInviteBeforeRemoval.id)?.status, 'revoked')
 
 const staleRemovedViewerInvite = nowRow({
     id: 'stale-removed-viewer-invite',
@@ -3915,6 +3939,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_settings_mutatio
 assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated' && log.metadata.fields.includes('defaultWebhookPolicy')))
 assert.ok(serviceLogs.some(log => log.message === 'organization_ownership_transferred' && log.metadata.targetUserId === 'org_smoke_admin'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_removed' && log.metadata.targetUserId === 'org_smoke_viewer'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_member_removed' && log.metadata.targetUserId === 'org_smoke_viewer' && log.metadata.revokedInviteCount === 1 && log.metadata.revokedInviteIds.includes(viewerPendingInviteBeforeRemoval.id)))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_role_updated' && log.metadata.requestId === 'smoke-viewer-role-member'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_mutation_denied' && log.metadata.requestId === 'smoke-member-role-denied' && log.metadata.action === 'change_member_role'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_mutation_denied' && log.metadata.requestId === 'smoke-admin-promote-denied' && log.metadata.requestedRole === 'admin'))
@@ -4030,6 +4055,20 @@ async function fakeRun(query: string, params: any[] = []) {
         const updated = { ...existing, status: 'pending', accepted_at: null, accepted_by: null, expires_at: expiresAt, created_at: iso() }
         invites.set(inviteId, updated)
         return rows([updated])
+    }
+
+    if (compact.startsWith('UPDATE organization_invites SET status = \'revoked\'') && compact.includes('FROM users')) {
+        const [organizationId, userId] = params
+        const user = users.get(userId)
+        if (!user?.email) return rows([])
+        const revoked: Row[] = []
+        for (const invite of invites.values()) {
+            if (invite.organization_id !== organizationId || invite.status !== 'pending' || invite.email.toLowerCase() !== user.email.toLowerCase()) continue
+            const updated = { ...invite, status: 'revoked', accepted_at: null, accepted_by: null }
+            invites.set(invite.id, updated)
+            revoked.push(updated)
+        }
+        return rows(revoked)
     }
 
     if (compact.startsWith('UPDATE organization_invites SET status = \'revoked\'')) {
