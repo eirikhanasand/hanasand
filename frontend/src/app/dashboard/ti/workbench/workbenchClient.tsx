@@ -315,8 +315,9 @@ type WorkbenchApiPayload = {
     savedAlertCount?: number
     testedAt?: string
     invites?: Array<{ id?: string, email?: string, role?: string }>
-    delivery?: { id?: string, status?: string }
-    deliveries?: Array<{ id?: string, status?: string }>
+    deliveredAt?: string
+    delivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
+    deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
     case?: { id?: string, status?: string, organizationId?: string }
     watchlist?: { id?: string, status?: string }
 }
@@ -334,6 +335,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [caseDetails, setCaseDetails] = useState<Record<string, CaseDetailState>>({})
     const [alertDetails, setAlertDetails] = useState<Record<string, AlertDetailState>>({})
+    const [actionDeliveries, setActionDeliveries] = useState<Record<string, WorkbenchDeliveryEvidence[]>>({})
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<WorkbenchActionOutcome | null>(null)
     const cases = useMemo(() => filterCases(initialCases, filter, query), [initialCases, filter, query])
@@ -342,6 +344,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedCaseDetail = selected ? caseDetails[selected.id] : undefined
     const selectedAlertDetail = selected ? alertDetails[selected.id] : undefined
+    const selectedActionDeliveries = selected ? actionDeliveries[selected.id] || [] : []
 
     const focusQueueIndex = useCallback((nextIndex: number) => {
         const next = cases[nextIndex]
@@ -439,6 +442,13 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
 
     async function refreshBackedSelection(item: WorkbenchCase, payload?: WorkbenchApiPayload, action?: WorkbenchAction) {
         if (item.kind === 'dwm_alert' && item.persistent) await refreshAlertDetail(item.id, { loading: false })
+        const deliveryEvidence = deliveryEvidenceFromPayload(payload, item.id)
+        if (deliveryEvidence.length) {
+            setActionDeliveries(current => ({
+                ...current,
+                [item.id]: mergeDeliveryEvidence(deliveryEvidence, current[item.id] || []),
+            }))
+        }
         const caseHref = item.caseDetailHref || caseDetailHrefFromPayload(payload, action, orgContext)
         if (caseHref) await refreshCaseDetail(item.id, caseHref, { loading: false })
     }
@@ -748,6 +758,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 compact={compact}
                                 caseDetail={selectedCaseDetail}
                                 alertDetail={selectedAlertDetail}
+                                actionDeliveries={selectedActionDeliveries}
                                 orgContext={orgContext}
                                 actionMessage={message}
                                 onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
@@ -769,6 +780,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 orgContext={orgContext}
                                 selected={selected}
                                 caseDetail={selectedCaseDetail}
+                                actionDeliveries={selectedActionDeliveries}
                                 busyAction={busyAction}
                                 inviteEmail={inviteEmail}
                                 inviteRole={inviteRole}
@@ -817,10 +829,11 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     )
 }
 
-function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, inviteEmail, inviteRole, onInviteEmailChange, onInviteRoleChange, onInvite, onCreateSharedWatchlistTerm, onUpdateWatchlist }: {
+function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries, busyAction, inviteEmail, inviteRole, onInviteEmailChange, onInviteRoleChange, onInvite, onCreateSharedWatchlistTerm, onUpdateWatchlist }: {
     orgContext?: WorkbenchOrgContext
     selected?: WorkbenchCase
     caseDetail?: CaseDetailState
+    actionDeliveries: WorkbenchDeliveryEvidence[]
     busyAction: string | null
     inviteEmail: string
     inviteRole: string
@@ -855,7 +868,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, busyAction, invit
                     <OperatorRow label='Org' value={orgContext?.organization ? `${orgContext.organization.name} · ${orgContext.organization.id}` : 'missing'} tone={orgContext?.organization ? 'ready' : 'blocked'} />
                     <OperatorRow label='Members' value={`${orgContext?.readiness.activeMemberCount ?? 0} active · ${orgContext?.readiness.pendingInviteCount ?? 0} pending`} tone={orgContext?.readiness.activeMemberCount ? 'ready' : 'blocked'} />
                     <OperatorRow label='Watchlists' value={`${orgContext?.readiness.activeWatchlistCount ?? 0} active · ${orgContext?.readiness.termCount ?? 0} terms`} tone={orgContext?.readiness.activeWatchlistCount ? 'ready' : 'needs_action'} />
-                    <OperatorReadinessRows orgContext={orgContext} selected={selected} caseDetail={caseDetail} />
+                    <OperatorReadinessRows orgContext={orgContext} selected={selected} caseDetail={caseDetail} actionDeliveries={actionDeliveries} />
                     <OperatorRow label='Visibility' value={visibility ? `${visibility.alertVisibilityPolicy} · ${visibility.allowed ? 'visible' : visibility.reason || 'blocked'}` : `${orgContext?.readiness.alertVisibilityPolicy || 'members'} policy`} tone={visibility?.allowed === false ? 'blocked' : 'ready'} />
                     <OperatorRow label='Case role' value={access?.role ? `${access.role}${access.readOnly ? ' · read only' : ' · can mutate'}` : 'no case access response'} tone={access ? access.readOnly ? 'needs_action' : 'ready' : 'needs_action'} />
                 </div>
@@ -1595,9 +1608,9 @@ function productReadinessTone(status: WorkbenchProductReadinessItem['status']): 
     return 'blocked'
 }
 
-function OperatorReadinessRows({ orgContext, selected, caseDetail }: { orgContext?: WorkbenchOrgContext, selected?: WorkbenchCase, caseDetail?: CaseDetailState }) {
+function OperatorReadinessRows({ orgContext, selected, caseDetail, actionDeliveries }: { orgContext?: WorkbenchOrgContext, selected?: WorkbenchCase, caseDetail?: CaseDetailState, actionDeliveries?: WorkbenchDeliveryEvidence[] }) {
     const latestDetailDelivery = caseDetail?.status === 'ready' ? caseDetail.detail.deliveryContext?.latestDelivery : undefined
-    const latestDelivery = latestDetailDelivery || selected?.deliveryEvidence?.[0] || orgContext?.readiness.latestDelivery
+    const latestDelivery = latestDetailDelivery || actionDeliveries?.[0] || selected?.deliveryEvidence?.[0] || orgContext?.readiness.latestDelivery
     const destination = (orgContext?.webhookDestinations || []).find(item => item.id === latestDelivery?.webhookDestinationId) || orgContext?.webhookDestinations[0]
     const sourceCoverage = orgContext?.readiness.sourceCoverage
     const detailAlert = caseDetail?.status === 'ready' ? caseDetail.detail.alert : undefined
@@ -1653,10 +1666,10 @@ function EmptyWorkspace() {
     )
 }
 
-function BackedInspection({ item, caseDetail, alertDetail, compact }: { item: WorkbenchCase, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, compact: boolean }) {
+function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, compact }: { item: WorkbenchCase, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, actionDeliveries: WorkbenchDeliveryEvidence[], compact: boolean }) {
     const localDeliveries = item.deliveryEvidence || []
     const detailDeliveries = caseDetail?.status === 'ready' ? caseDetail.detail.deliveries || [] : []
-    const deliveries = detailDeliveries.length ? detailDeliveries : localDeliveries
+    const deliveries = detailDeliveries.length ? detailDeliveries : mergeDeliveryEvidence(actionDeliveries, localDeliveries)
     const blockedDependency = item.missingDependency || (!item.caseDetailHref && item.kind === 'dwm_alert' ? 'No backed case ID is available for this selected alert. Use Open case after live alerts load; fallback alerts cannot load /api/cases/:id.' : '')
     const alertRecord = alertDetail?.status === 'ready' ? alertDetail.detail.alert : undefined
     const alertEvidence = alertRecord?.evidence || []
@@ -2028,7 +2041,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
     )
 }
 
-function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, alertDetail, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
+function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, alertDetail, actionDeliveries, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
@@ -2037,6 +2050,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     compact: boolean
     caseDetail?: CaseDetailState
     alertDetail?: AlertDetailState
+    actionDeliveries: WorkbenchDeliveryEvidence[]
     orgContext?: WorkbenchOrgContext
     actionMessage: WorkbenchActionOutcome | null
     onNoteChange: (value: string) => void
@@ -2198,7 +2212,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 </section>
             ) : null}
 
-            <BackedInspection item={item} caseDetail={caseDetail} alertDetail={alertDetail} compact={compact} />
+            <BackedInspection item={item} caseDetail={caseDetail} alertDetail={alertDetail} actionDeliveries={actionDeliveries} compact={compact} />
 
             <section className='grid gap-4 lg:grid-cols-[1fr_0.78fr]'>
                 <div className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -2575,6 +2589,41 @@ async function readJson(response: Response) {
     } catch {
         return {}
     }
+}
+
+function deliveryEvidenceFromPayload(payload: WorkbenchApiPayload | undefined, fallbackAlertId: string) {
+    const attemptedAt = payload?.deliveredAt || payload?.testedAt || new Date().toISOString()
+    return [payload?.delivery, ...(payload?.deliveries || [])]
+        .map(delivery => normalizeDeliveryEvidence(delivery, fallbackAlertId, attemptedAt))
+        .filter((delivery): delivery is WorkbenchDeliveryEvidence => Boolean(delivery))
+}
+
+function normalizeDeliveryEvidence(delivery: WorkbenchApiPayload['delivery'] | undefined, fallbackAlertId: string, fallbackAttemptedAt: string): WorkbenchDeliveryEvidence | undefined {
+    const id = stringValue(delivery?.id)
+    if (!id) return undefined
+    return {
+        id,
+        alertId: stringValue(delivery?.alertId) || fallbackAlertId,
+        status: stringValue(delivery?.status) || 'recorded',
+        deliveryKind: stringValue(delivery?.deliveryKind),
+        attemptedAt: stringValue(delivery?.attemptedAt) || fallbackAttemptedAt,
+        webhookDestinationId: stringValue(delivery?.webhookDestinationId),
+        endpointHash: stringValue(delivery?.endpointHash) || 'endpoint_hash_not_returned',
+        payloadHash: stringValue(delivery?.payloadHash) || 'payload_hash_not_returned',
+        httpStatus: typeof delivery?.httpStatus === 'number' ? delivery.httpStatus : undefined,
+        error: stringValue(delivery?.error),
+    }
+}
+
+function mergeDeliveryEvidence(nextDeliveries: WorkbenchDeliveryEvidence[], existingDeliveries: WorkbenchDeliveryEvidence[]) {
+    const seen = new Set<string>()
+    const merged: WorkbenchDeliveryEvidence[] = []
+    for (const delivery of [...nextDeliveries, ...existingDeliveries]) {
+        if (seen.has(delivery.id)) continue
+        seen.add(delivery.id)
+        merged.push(delivery)
+    }
+    return merged
 }
 
 function caseDetailHrefFromPayload(payload: WorkbenchApiPayload | undefined, action: WorkbenchAction | undefined, orgContext: WorkbenchOrgContext | undefined) {
