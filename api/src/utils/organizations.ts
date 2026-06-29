@@ -718,6 +718,33 @@ export type OrganizationReadinessProof = {
         expectedAlertFields: string[]
         testCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
+    alertQueueProof: {
+        schemaVersion: 'organization.alert_queue_visibility_proof.v1'
+        visibilitySchema: 'dwm.org_alert_queue_visibility.v1'
+        routes: {
+            list: 'GET /v1/dwm/alerts'
+            detail: 'GET /v1/dwm/alerts/:id'
+            mutate: 'PATCH /v1/dwm/alerts/:id'
+            replay: 'POST /v1/dwm/alerts/:id/replay'
+        }
+        requiredQueryFields: ['organizationId']
+        expectedVisibilityFields: string[]
+        allowedActions: OrganizationAlertCaseAction[]
+        blockerCodes: string[]
+        nonmemberEnumeration: false
+    }
+    webhookDeliveryProof: {
+        schemaVersion: 'organization.webhook_delivery_visibility_proof.v1'
+        deliveryContractSchema: 'dwm.webhook.org_alert_delivery.v1'
+        route: 'POST /dwm/webhook-deliveries'
+        defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
+        canUseDefaultDestinations: boolean
+        ownerAdminManualTriggerRequired: true
+        memberManualTriggerAllowed: false
+        nonmemberDestinationEnumeration: false
+        expectedDeliveryFields: string[]
+        blockerCodes: string[]
+    }
     uiProof: {
         safeFields: string[]
         redactedFields: string[]
@@ -1313,6 +1340,54 @@ export function organizationReadinessProof(input: {
             ],
             testCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         },
+        alertQueueProof: {
+            schemaVersion: 'organization.alert_queue_visibility_proof.v1',
+            visibilitySchema: 'dwm.org_alert_queue_visibility.v1',
+            routes: {
+                list: 'GET /v1/dwm/alerts',
+                detail: 'GET /v1/dwm/alerts/:id',
+                mutate: 'PATCH /v1/dwm/alerts/:id',
+                replay: 'POST /v1/dwm/alerts/:id/replay',
+            },
+            requiredQueryFields: ['organizationId'],
+            expectedVisibilityFields: [
+                'alertQueueVisibility.organizationId',
+                'alertQueueVisibility.tenantId',
+                'alertQueueVisibility.member.role',
+                'alertQueueVisibility.allowedActions',
+                'alertQueueVisibility.actionGates',
+                'alertQueueVisibility.watchlistScope.watchlistItemIds',
+                'alertQueueVisibility.watchlistScope.alertGeneratorKeys',
+                'alertQueueVisibility.blockers',
+            ],
+            allowedActions: input.downstreamAuthorization.allowedActions,
+            blockerCodes: blockers,
+            nonmemberEnumeration: false,
+        },
+        webhookDeliveryProof: {
+            schemaVersion: 'organization.webhook_delivery_visibility_proof.v1',
+            deliveryContractSchema: 'dwm.webhook.org_alert_delivery.v1',
+            route: 'POST /dwm/webhook-deliveries',
+            defaultWebhookPolicy: input.downstreamAuthorization.downstream.webhook.defaultPolicy,
+            canUseDefaultDestinations: input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations,
+            ownerAdminManualTriggerRequired: true,
+            memberManualTriggerAllowed: false,
+            nonmemberDestinationEnumeration: false,
+            expectedDeliveryFields: [
+                'orgAlertDelivery.organization.id',
+                'orgAlertDelivery.alert.id',
+                'orgAlertDelivery.watchlist.watchlistItemIds',
+                'orgAlertDelivery.destinationSelection.selectedDestinations',
+                'orgAlertDelivery.destinationSelection.skippedDestinations',
+                'orgAlertDelivery.ledger.deliveries',
+                'orgAlertDelivery.auditEventContracts',
+            ],
+            blockerCodes: [
+                ...input.downstreamAuthorization.downstream.alertGeneration.blockerCodes,
+                input.downstreamAuthorization.downstream.webhook.denialReason,
+                input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations ? undefined : 'manual_webhook_selection_required',
+            ].filter(Boolean).map(String),
+        },
         uiProof: {
             safeFields: [
                 'organizationId',
@@ -1320,6 +1395,8 @@ export function organizationReadinessProof(input: {
                 'counts',
                 'readiness',
                 'routes',
+                'alertQueueProof',
+                'webhookDeliveryProof',
                 'blockers',
                 'uiProof.nonmemberEnumeration',
             ],
