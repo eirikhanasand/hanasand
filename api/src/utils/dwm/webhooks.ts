@@ -2300,6 +2300,8 @@ export function buildDwmWebhookDestinationDeliveryMatrix({
             routes: {
                 detail: `GET /api/dwm/webhook-deliveries?orgId=${encodeURIComponent(destination.orgId)}&destinationId=${encodeURIComponent(destination.id)}`,
                 test: `POST /api/dwm/webhook-destinations/${encodeURIComponent(destination.id)}/test`,
+                delete: `DELETE /api/dwm/webhook-destinations/${encodeURIComponent(destination.id)}`,
+                archive: `DELETE /api/dwm/webhook-destinations/${encodeURIComponent(destination.id)}`,
                 trigger: 'POST /api/dwm/webhook-deliveries',
             },
             updatedAt: destination.updatedAt,
@@ -2961,6 +2963,7 @@ export function buildDwmWebhookCustomerSetupProof({
         canCreate: decision.allowed && canManage,
         canUpdate: decision.allowed && canManage,
         canTest: decision.allowed && canManage,
+        canDelete: decision.allowed && canManage,
         canDeliver: decision.allowed && canManage,
         memberSafe: decision.allowed && !canManage,
     }
@@ -6450,6 +6453,8 @@ function webhookSetupRoutes(destinationId = '<destination_id>') {
         create: 'POST /api/dwm/webhooks',
         update: `PUT /api/dwm/webhook-destinations/${destinationId}`,
         disable: `DELETE /api/dwm/webhook-destinations/${destinationId}`,
+        delete: `DELETE /api/dwm/webhook-destinations/${destinationId}`,
+        archive: `DELETE /api/dwm/webhook-destinations/${destinationId}`,
         test: `POST /api/dwm/webhook-destinations/${destinationId}/test`,
         deliver: 'POST /api/dwm/webhook-deliveries',
         deliveryHistory: 'GET /api/dwm/webhook-deliveries?orgId=<org_id>&destinationId=<destination_id>',

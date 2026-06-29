@@ -2774,7 +2774,7 @@ expect(memberReplayDestinationTest.access.memberSafe === true && memberReplayDes
 expect(!JSON.stringify([replayDestinationTest, memberReplayDestinationTest, disabledDestinationTest, failedDestinationTest]).includes(secret), 'Destination test contract should redact endpoint and delivery secrets.', { replayDestinationTest, memberReplayDestinationTest, disabledDestinationTest, failedDestinationTest })
 expect(destinationDeliveryMatrix.schemaVersion === 'dwm.webhook.destination_delivery_matrix.v1' && destinationDeliveryMatrix.summary.destinationCount === operationDestinations.length, 'Destination delivery matrix should summarize org destinations.', destinationDeliveryMatrix)
 expect(matrixReplayDestination?.eventCoverage.replayed === true && matrixReplayDestination.deliveryProof.lastReplayed?.requestId === 'delivery_replay_duplicate_contract', 'Destination delivery matrix should expose replay delivery proof by destination.', matrixReplayDestination)
-expect(matrixReplayDestination?.routes.test === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && matrixReplayDestination.audit.auditEventContracts.length > 0, 'Destination delivery matrix should expose route hints and admin audit contracts.', matrixReplayDestination)
+expect(matrixReplayDestination?.routes.test === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && matrixReplayDestination.routes.delete === 'DELETE /api/dwm/webhook-destinations/destination_replay_contract' && matrixReplayDestination.audit.auditEventContracts.length > 0, 'Destination delivery matrix should expose route hints and admin audit contracts.', matrixReplayDestination)
 expect(matrixRetryDestination?.retry.ready === true && matrixRetryDestination.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && matrixRetryDestination.blockers.some(item => item.code === 'retry_scheduled' && item.blocking === false), 'Destination delivery matrix should expose retry-ready destination state.', matrixRetryDestination)
 expect(matrixDisabledDestination?.enabled === false && matrixDisabledDestination.blockers.some(item => item.code === 'destination_disabled'), 'Destination delivery matrix should expose disabled destination blockers.', matrixDisabledDestination)
 expect(memberDestinationDeliveryMatrix.access.memberSafe === true && memberDestinationDeliveryMatrix.destinations.some(item => item.audit.auditEventContracts.length === 0), 'Destination delivery matrix should keep member views audit-safe.', memberDestinationDeliveryMatrix)
@@ -2902,7 +2902,7 @@ expect(archivedOrgDashboardReadiness.destinations.every(item => item.healthState
 expect(retiredWatchlistDashboardReadiness.destinations.every(item => item.healthStates.includes('policy_blocked')) && retiredWatchlistDashboardReadiness.blockers.some(item => item.reason === 'watchlist_retired'), 'Dashboard readiness should expose retired watchlist policy blockers.', retiredWatchlistDashboardReadiness)
 expect(!JSON.stringify(dashboardReadiness).includes(secret), 'Dashboard readiness should not leak endpoint secrets.', dashboardReadiness)
 expect(customerSetup.schemaVersion === 'dwm.webhook.customer_setup.v1' && customerSetup.summary.destinationCount === operationDestinations.length, 'Customer setup proof should summarize org destinations.', customerSetup)
-expect(customerSetup.access.canCreate === true && customerSetup.access.canTest === true && customerSetup.routes.test.includes('/api/dwm/webhook-destinations/'), 'Customer setup proof should expose owner/admin setup routes.', customerSetup)
+expect(customerSetup.access.canCreate === true && customerSetup.access.canTest === true && customerSetup.access.canDelete === true && customerSetup.routes.test.includes('/api/dwm/webhook-destinations/') && customerSetup.routes.delete === customerSetup.routes.archive, 'Customer setup proof should expose owner/admin setup routes.', customerSetup)
 expect(customerSetupDryRunStep?.status === 'complete' && customerSetup.dryRunTestRequest?.noNetwork === true && customerSetup.dryRunTestRequest.externalSendEnabled === false, 'Customer setup proof should expose no-network dry-run test request.', customerSetup)
 expect(customerSetupDeliveryStep?.route === 'POST /api/dwm/webhook-deliveries' && customerSetup.blockers.some(item => item.code === 'live_delivery_disabled'), 'Customer setup proof should expose delivery route and live-disabled blocker.', customerSetup)
 expect(customerSetup.summary.retryScheduledCount >= 1 && customerSetup.summary.terminalFailureCount >= 1, 'Customer setup proof should surface retry and terminal failure counts.', customerSetup)
@@ -3082,6 +3082,7 @@ console.log(JSON.stringify({
         'destination test contract disabled/failed blockers',
         'destination test contract member-safe redaction',
         'destination delivery matrix route hints',
+        'destination delivery matrix delete/archive route hints',
         'destination delivery matrix replay/test proof',
         'destination delivery matrix retry/disabled blockers',
         'destination delivery matrix member/nonmember gates',
@@ -3096,6 +3097,7 @@ console.log(JSON.stringify({
         'dashboard readiness secret redaction',
         'customer setup proof summary',
         'customer setup proof setup routes',
+        'customer setup proof delete/archive routes',
         'customer setup proof dry-run request',
         'customer setup proof live-disabled blocker',
         'customer setup proof retry/terminal counts',
@@ -3238,6 +3240,8 @@ console.log(JSON.stringify({
             'destinationTests[].blockers[].code',
             'destinationDeliveryMatrix.schemaVersion',
             'destinationDeliveryMatrix.routes.deliveryList',
+            'destinationDeliveryMatrix.destinations[].routes.delete',
+            'destinationDeliveryMatrix.destinations[].routes.archive',
             'destinationDeliveryMatrix.destinations[].deliveryProof.lastReplayed.requestId',
             'destinationDeliveryMatrix.destinations[].retry.nextRetryAt',
             'destinationDeliveryMatrix.destinations[].blockers[].code',
@@ -3250,6 +3254,8 @@ console.log(JSON.stringify({
             'customerSetup.setupSteps[].status',
             'customerSetup.dryRunTestRequest.noNetwork',
             'customerSetup.routes.test',
+            'customerSetup.routes.delete',
+            'customerSetup.routes.archive',
             'customerSetup.blockers[].code',
             'orgAlertDelivery.alertDestinationReadiness.schemaVersion',
             'orgAlertDelivery.alertDestinationReadiness.destinationSelection.selectedDestinationIds',
