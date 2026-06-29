@@ -68,6 +68,10 @@ const fixture: TiSearchResponse = {
             sourceName: 'Microsoft',
             provenance: 'https://www.microsoft.com/en-us/security/blog/',
             reportDate: '2024-01-25',
+            sourceRequestId: 'src_req_microsoft_2024_01',
+            sourceFamily: 'vendor_disclosure',
+            parserStatus: 'partial',
+            lastCollectedAt: '2024-01-26',
             confidence: 0.82,
             shownBecause: 'Microsoft disclosure is the source basis for the returned activity and watchlist relevance.',
         }],
@@ -82,7 +86,7 @@ const fixture: TiSearchResponse = {
             { kind: 'vendor', value: 'SolarWinds', reason: 'Public reporting includes SolarWinds supply-chain campaign context.', confidence: 0.78 },
         ],
         sourceProvenance: [
-            { sourceId: 'microsoft', sourceName: 'Microsoft', provenance: 'https://www.microsoft.com/en-us/security/blog/', confidence: 0.82 },
+            { sourceId: 'microsoft', sourceName: 'Microsoft', provenance: 'https://www.microsoft.com/en-us/security/blog/', confidence: 0.82, sourceRequestId: 'src_req_microsoft_2024_01', sourceFamily: 'vendor_disclosure', parserStatus: 'partial', lastCollectedAt: '2024-01-26', reportDate: '2024-01-25' },
         ],
         relatedAlerts: [],
         relatedCases: [],
@@ -169,6 +173,7 @@ assert(profile.techniqueCoverage.every(item => item.name && item.tactic && item.
 assert(profile.targetSectors.some(item => /Government/i.test(item)), 'APT29 should include government targeting context.')
 assert(profile.sourceProvenance.length >= 2, 'APT29 should expose source provenance.')
 assert(profile.provenanceRows.some(item => item.sourceName === 'Microsoft' && item.reportDate === '2024-01-25' && item.shownBecause), 'APT29 should expose structured source/date/confidence provenance.')
+assert(profile.provenanceRows.some(item => item.sourceRequestId === 'src_req_microsoft_2024_01' && item.parserStatus === 'partial' && item.lastCollectedAt === '2024-01-26'), 'Actor provenance should preserve source request and parser metadata from upstream enrichment.')
 assert(profile.provenanceRows.every(item => item.sourceName && item.provenance && item.shownBecause), 'Every actor provenance row should explain why it is shown.')
 assert(profile.sourceCoverage.totalRows >= profile.provenanceRows.length, 'APT29 source coverage should account for provenance rows.')
 assert(profile.sourceCoverage.datedRows >= 1, 'APT29 source coverage should count dated provenance rows.')
@@ -187,6 +192,7 @@ assert(actionability.orgRelevance.actorIdentity.aliases.includes('Midnight Blizz
 assert(actionability.orgRelevance.actorIdentity.sectors.some(item => /Government/i.test(item)), 'Org relevance should carry source-backed sectors.')
 assert(actionability.orgRelevance.actorIdentity.regions.includes('United States'), 'Org relevance should carry source-backed regions.')
 assert(actionability.orgRelevance.sourceCoverage.some(item => item.sourceName === 'Microsoft' && item.sourceFamily === 'vendor_disclosure'), 'Org relevance should carry source family coverage.')
+assert(actionability.orgRelevance.sourceCoverage.some(item => item.sourceRequestId === 'src_req_microsoft_2024_01' && item.parserStatus === 'partial' && item.lastCollectedAt === '2024-01-26'), 'Org relevance source coverage should preserve source request, parser, and collection metadata.')
 assert(actionability.orgRelevance.sourceCoverage.some(item => item.status === 'missing_capture'), 'Org relevance should expose source coverage capture gaps.')
 assert(actionability.orgRelevance.enrichmentGaps.some(item => item.code === 'stale_evidence'), 'Org relevance should expose stale evidence gaps.')
 assert(actionability.orgRelevance.handoffRows.some(row => row.rowId === 'org-gap:stale_evidence:freshness.lastSeen'), 'Org relevance gaps should be visible as handoff rows.')

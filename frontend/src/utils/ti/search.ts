@@ -89,6 +89,10 @@ export interface TiActorIntelligenceContract {
         provenance: string
         reportDate?: string
         captureId?: string
+        sourceRequestId?: string
+        sourceFamily?: 'actor_profile' | 'source_capture' | 'watchlist' | 'alert' | 'case' | 'geography' | 'indicator' | 'vendor_disclosure' | 'webhook' | 'public_ti'
+        parserStatus?: 'parsed' | 'partial' | 'queued' | 'failed' | 'missing_capture' | 'public_reference'
+        lastCollectedAt?: string
         confidence?: number
         shownBecause: string
     }>
@@ -162,6 +166,11 @@ export interface TiActionabilityContract {
         sourceName: string
         provenance: string
         captureId?: string
+        sourceRequestId?: string
+        sourceFamily?: 'actor_profile' | 'source_capture' | 'watchlist' | 'alert' | 'case' | 'geography' | 'indicator' | 'vendor_disclosure' | 'webhook' | 'public_ti'
+        parserStatus?: 'parsed' | 'partial' | 'queued' | 'failed' | 'missing_capture' | 'public_reference'
+        reportDate?: string
+        lastCollectedAt?: string
         confidence?: number
     }>
     enrichmentGaps?: Array<{

@@ -703,6 +703,7 @@ type SourceHealthRow = {
     state: 'ready' | 'review' | 'blocked'
     confidence?: number
     captureId?: string
+    sourceRequestId?: string
     sourceId?: string
     route: string
     requestedFields: string[]
@@ -2542,6 +2543,7 @@ function SourceHealthPanel({ rows, payload }: { rows: SourceHealthRow[]; payload
                         </div>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             {row.sourceId ? <span className={sourceHealthChipClass('review')}>source {row.sourceId}</span> : null}
+                            {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request {row.sourceRequestId}</span> : null}
                             <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'capture linked' : 'capture needed'}</span>
                             {typeof row.confidence === 'number' ? <span className={sourceHealthChipClass('review')}>{Math.round(row.confidence * 100)}% confidence</span> : null}
                             <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
@@ -3328,15 +3330,21 @@ function sourceHealthRowsFor(result: TiSearchResponse, actor: TiActorIntelligenc
         )
         const requestedFields = unique([
             ...matchingGaps.map(gap => gap.field),
-            ...(!source.captureId ? ['sourceProvenance[].captureId', 'sourceProvenance[].sourceRequestId'] : []),
+            ...(!source.captureId ? ['sourceProvenance[].captureId'] : []),
+            ...(!source.sourceRequestId && !source.captureId ? ['sourceProvenance[].sourceRequestId'] : []),
             ...(!matchingProvenance?.reportDate && !source.lastCollectedAt ? ['actorIntelligence.structuredProvenance[].reportDate'] : []),
         ])
         const timestamp = source.lastCollectedAt || matchingProvenance?.reportDate || actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt
         const stale = actor.freshness.stale || actor.sourceCoverage.stale
+        const parserStatus = source.parserStatus || (source.status === 'capture_ready'
+            ? stale ? 'capture linked; freshness review' : 'capture linked'
+            : source.status === 'missing_capture'
+                ? source.sourceRequestId ? 'source request queued' : 'capture needed'
+                : stale ? 'public reference; freshness review' : 'public reference')
         const state: SourceHealthRow['state'] = source.status === 'capture_ready'
             ? stale ? 'review' : 'ready'
             : source.status === 'missing_capture'
-                ? 'blocked'
+                ? source.sourceRequestId ? 'review' : 'blocked'
                 : stale || requestedFields.length ? 'review' : 'ready'
         return {
             id: `source-health:${source.sourceId ?? source.sourceName}:${source.provenance}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
@@ -3344,14 +3352,11 @@ function sourceHealthRowsFor(result: TiSearchResponse, actor: TiActorIntelligenc
             sourceFamily: source.sourceFamily,
             provenance: source.provenance,
             timestamp,
-            parserStatus: source.status === 'capture_ready'
-                ? stale ? 'capture linked; freshness review' : 'capture linked'
-                : source.status === 'missing_capture'
-                    ? 'capture needed'
-                    : stale ? 'public reference; freshness review' : 'public reference',
+            parserStatus,
             state,
             confidence: source.confidence,
             captureId: source.captureId,
+            sourceRequestId: source.sourceRequestId,
             sourceId: source.sourceId,
             route: matchingGaps[0]?.route || actionability.exportPayloads.enrichment.backedRoute || '/dashboard/ti/enrichment',
             requestedFields,
@@ -3359,7 +3364,7 @@ function sourceHealthRowsFor(result: TiSearchResponse, actor: TiActorIntelligenc
             nextAction: source.status === 'capture_ready'
                 ? stale ? 'Refresh this source before using it as customer-facing evidence.' : 'Inspect this capture and attach it to the selected case draft when relevant.'
                 : source.status === 'missing_capture'
-                    ? 'Attach a capture ID or source request ID in source enrichment.'
+                    ? source.sourceRequestId ? 'Track the source request and attach the resulting capture ID when collection completes.' : 'Attach a capture ID or source request ID in source enrichment.'
                     : 'Verify report date and source capture before routing to alert or case work.',
         }
     })

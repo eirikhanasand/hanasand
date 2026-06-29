@@ -162,6 +162,10 @@ export type PublicTiOrgRelevanceProof = {
         provenance: string
         reportDate?: string
         captureId?: string
+        sourceRequestId?: string
+        sourceFamily?: PublicTiOrgSourceFamily
+        parserStatus?: string
+        lastCollectedAt?: string
         confidence?: number
         supportsTerms: string[]
         shownBecause: string
@@ -207,6 +211,8 @@ export type PublicTiOrgSourceCoverage = {
     sourceFamily: PublicTiOrgSourceFamily
     provenance: string
     captureId?: string
+    sourceRequestId?: string
+    parserStatus?: string
     confidence?: number
     status: 'capture_ready' | 'public_reference' | 'missing_capture'
     lastCollectedAt?: string
@@ -261,6 +267,10 @@ export type PublicTiOrgRelevanceEvidence = {
     provenance?: string
     reportDate?: string
     captureId?: string
+    sourceRequestId?: string
+    sourceFamily?: PublicTiOrgSourceFamily
+    parserStatus?: string
+    lastCollectedAt?: string
     confidence?: number
     summary: string
 }
@@ -899,6 +909,10 @@ function buildOrgRelevanceProof(input: {
             provenance: source.provenance,
             reportDate: actorEvidence?.reportDate,
             captureId: source.captureId,
+            sourceRequestId: source.sourceRequestId,
+            sourceFamily: source.sourceFamily,
+            parserStatus: source.parserStatus,
+            lastCollectedAt: source.lastCollectedAt,
             confidence: source.confidence,
             supportsTerms: uniqueStrings(terms.length ? terms : readTermArray(input.exportPayloads.watchlist.body.terms).map(term => String(term.value))),
             shownBecause: actorEvidence?.shownBecause ?? 'Returned as evidence for watchlist, alert, or case handoff.',
@@ -1142,9 +1156,11 @@ function sourceCoverageForOrgRelevance(sourceEvidence: PublicTiOrgRelevanceProof
         sourceFamily: sourceFamilyForEvidence(source),
         provenance: source.provenance,
         captureId: source.captureId,
+        sourceRequestId: source.sourceRequestId,
+        parserStatus: source.parserStatus,
         confidence: source.confidence,
         status: source.captureId ? 'capture_ready' : missingCapture ? 'missing_capture' : 'public_reference',
-        lastCollectedAt: source.reportDate,
+        lastCollectedAt: source.lastCollectedAt || source.reportDate,
         supportsTerms: uniqueStrings(source.supportsTerms),
     }))
 }
@@ -1449,6 +1465,7 @@ function rowEvidenceFor(refs: string[], sources: PublicTiOrgRelevanceProof['sour
 }
 
 function sourceFamilyForEvidence(source: PublicTiOrgRelevanceProof['sourceEvidence'][number]): PublicTiOrgSourceFamily {
+    if (source.sourceFamily) return source.sourceFamily
     const text = `${source.sourceId ?? ''} ${source.sourceName} ${source.provenance}`.toLowerCase()
     if (/microsoft|google|cisa|mandiant|crowdstrike|proofpoint|sentinelone|palo alto|unit 42|recorded future|secureworks/.test(text)) return 'vendor_disclosure'
     if (source.captureId) return 'source_capture'

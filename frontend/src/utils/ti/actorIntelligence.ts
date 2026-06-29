@@ -7,6 +7,10 @@ export type TiActorSourceProvenance = {
     provenance: string
     reportDate?: string
     captureId?: string
+    sourceRequestId?: string
+    sourceFamily?: string
+    parserStatus?: string
+    lastCollectedAt?: string
     confidence?: number
     shownBecause: string
 }
@@ -215,7 +219,12 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
             sourceId: source.sourceId,
             sourceName: source.sourceName,
             provenance: source.provenance,
+            reportDate: source.reportDate,
             captureId: source.captureId,
+            sourceRequestId: source.sourceRequestId,
+            sourceFamily: source.sourceFamily,
+            parserStatus: source.parserStatus,
+            lastCollectedAt: source.lastCollectedAt,
             confidence: source.confidence,
             shownBecause: 'Returned as evidence for watchlist, alert, or case handoff.',
         })),
@@ -333,7 +342,8 @@ function buildCampaignTimeline(result: TiSearchResponse, provenanceRows: TiActor
 
 function sourceFamilyFor(row: TiActorSourceProvenance) {
     const value = `${row.sourceId ?? ''} ${row.sourceName} ${row.provenance}`.toLowerCase()
-    if (row.captureId) return 'source_capture'
+    if (row.sourceFamily) return row.sourceFamily
+    if (row.captureId || row.sourceRequestId) return 'source_capture'
     if (/cisa|government|advisory|allied|cert|ncsc|fbi|nsa|svr/.test(value)) return 'government_advisory'
     if (/microsoft|google|mandiant|crowdstrike|proofpoint|sentinelone|palo alto|unit 42|recorded future|secureworks|hpe|solarwinds/.test(value)) return 'vendor_disclosure'
     if (/actor profile reference/.test(value)) return 'actor_profile'
