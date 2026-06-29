@@ -64,6 +64,12 @@ export default async function Page({
     const publicTiHandoff = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
         ? decodePublicTiHandoffPayload(firstParam(params?.payload), firstParam(params?.intent))
         : null
+    const externalReadiness = {
+        ...productProgressReadiness,
+        sourceGrowth: productProgressReadiness.sourceGrowth?.status !== 'unavailable'
+            ? productProgressReadiness.sourceGrowth
+            : sourceProofReadiness,
+    }
     const readinessCases = buildReadinessCases({
         backendConfigured: Boolean(process.env.TI_SCRAPER_API_BASE),
         scope,
@@ -74,6 +80,7 @@ export default async function Page({
         liveAlertCount: liveAlerts.length,
         renderedAlertCount: alerts.length,
         alertAccessState: alertLoad.accessState,
+        externalReadiness,
     })
     const orgContext = buildOrgOperatingContext({
         backendConfigured: Boolean(process.env.TI_SCRAPER_API_BASE),
@@ -84,12 +91,7 @@ export default async function Page({
         deliveries,
         liveAlertCount: liveAlerts.length,
         liveAlertIds: liveAlerts.map(alert => alert.id),
-        externalReadiness: {
-            ...productProgressReadiness,
-            sourceGrowth: productProgressReadiness.sourceGrowth?.status !== 'unavailable'
-                ? productProgressReadiness.sourceGrowth
-                : sourceProofReadiness,
-        },
+        externalReadiness,
     })
     const handoffCases = buildPublicTiHandoffCase({
         decode: publicTiHandoff,

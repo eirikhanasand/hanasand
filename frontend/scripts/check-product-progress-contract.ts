@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS, PRODUCT_READINESS_PROOF_ROW_IDS, buildOrgOperatingContext, buildProductProgressExternalState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from '../src/app/dashboard/operatorConsoleModel'
+import { PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS, PRODUCT_READINESS_PROOF_ROW_IDS, buildOrgOperatingContext, buildProductProgressExternalState, buildReadinessCases, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from '../src/app/dashboard/operatorConsoleModel'
 import { buildProductNorthStarScoreboard } from '../src/utils/productProgress/northStar'
 import { buildProductProgressPayload } from '../src/utils/productProgress/readiness'
 
@@ -248,6 +248,26 @@ assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/dashboard/automations?setup=dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.href, '/dashboard/system/impersonation')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'deploy_probe')?.href, '/status')
+
+const degradedReadinessCases = buildReadinessCases({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    renderedAlertCount: 1,
+    externalReadiness: partialExternal,
+})
+const supportReadinessCase = degradedReadinessCases.find(item => item.id === 'support_admin_readiness')
+assert.equal(supportReadinessCase?.kind, 'support_readiness')
+assert.equal(supportReadinessCase?.queue, 'Support readiness')
+assert.equal(supportReadinessCase?.relatedLinks.some(link => link.href === '/dashboard/system/impersonation'), true)
+assert.equal(supportReadinessCase?.relatedLinks.some(link => link.href === '/api/backend/admin/support/access-recovery'), true)
+assert.equal(supportReadinessCase?.relatedLinks.some(link => link.href === '/api/backend/admin/audit-events?limit=50'), true)
+assert.ok(supportReadinessCase?.missingDependency, 'Support readiness case should expose unavailable proof as a blocker.')
+assert.equal(supportReadinessCase?.actions?.[0]?.href, '/dashboard/system/impersonation')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'public_ti_provenance')?.href, '/ti')
 
 const readyPayload = {
