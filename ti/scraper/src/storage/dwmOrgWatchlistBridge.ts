@@ -138,6 +138,7 @@ export function orgWatchlistContractToRuntimeDwmWatchlists(contract: OrgWatchlis
       id: context.watchlistId,
       tenantId: context.tenantId,
       organizationId: context.organizationId,
+      lifecycleStatus: context.status,
       terms: [{
         id: context.watchlistItemId,
         value: context.value,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertGenerationPlan, buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationPlan, buildDwmAlertGenerationReadiness, buildDwmAlertWorkflowExecutionReadiness, buildDwmOrgAlertCaseRoleGate, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -94,6 +94,55 @@ const darkwebCapture: RawCapture = {
       captureMode: "metadata_only"
     }
   }
+} as RawCapture;
+
+const actorSource: SourceRecord = {
+  id: "src_repo_actor",
+  name: "Repository actor-page metadata",
+  type: "actor_page",
+  url: "https://threat.example/actors/repo-actor",
+  accessMethod: "public_http_metadata",
+  status: "active",
+  trustScore: 0.73,
+  legalNotes: "Public actor-page metadata only.",
+  createdAt: "2026-06-28T13:00:00.000Z",
+  updatedAt: "2026-06-28T13:00:00.000Z"
+} as SourceRecord;
+
+const overlapTelegramCapture: RawCapture = {
+  ...telegramCapture,
+  id: "cap_repo_overlap_acme",
+  contentHash: "hash-repo-overlap-acme",
+  body: "acme.com appears in public Telegram chatter with fresh Okta session-cookie resale.",
+  metadata: { adapter: "telegram_public", channel: "repo_public", messageId: 201 }
+} as RawCapture;
+
+const orgADarkwebCapture: RawCapture = {
+  ...darkwebCapture,
+  id: "cap_repo_darkweb_alpha",
+  contentHash: "hash-repo-darkweb-alpha",
+  metadata: {
+    adapter: "darknet_metadata",
+    leakSite: {
+      actorName: "Akira",
+      victimName: "alpha-payments.example",
+      description: "Actor-page metadata claims alpha-payments.example finance contracts.",
+      captureMode: "metadata_only"
+    }
+  }
+} as RawCapture;
+
+const orgBActorCapture: RawCapture = {
+  id: "cap_repo_actor_beta",
+  sourceId: actorSource.id,
+  url: "https://threat.example/actors/repo-actor/beta",
+  collectedAt: "2026-06-28T13:22:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "metadata_only",
+  contentHash: "hash-repo-actor-beta",
+  sensitive: false,
+  body: "Actor profile lists beta-payments.example as a target with active credential broker interest.",
+  metadata: { adapter: "actor_page_metadata", actor: "RepoActor", victimName: "beta-payments.example" }
 } as RawCapture;
 
 describe("dwm alert repository", () => {
@@ -264,6 +313,11 @@ describe("dwm alert repository", () => {
       visibilityPolicy: "admins",
       watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
       watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+      actor: "Repo Public",
+      entity: {
+        company: "acme",
+        artifactType: "nhi_exposure_hint"
+      },
       sourceFamily: "telegram_public",
       primaryCaptureId: "cap_repo_tg_acme",
       evidenceCount: 1,
@@ -274,6 +328,9 @@ describe("dwm alert repository", () => {
       organizationId: "org_repo_acme",
       visibilityPolicy: "admins",
       watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+      entity: {
+        company: "acme"
+      },
       captureIds: ["cap_repo_tg_acme"],
       evidenceCount: 1,
       recommendedRoute: "identity_response"
@@ -354,6 +411,188 @@ describe("dwm alert repository", () => {
       selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
       deliveryHistoryRefs: []
     });
+  });
+
+  test("isolates overlapping org watchlist terms across tenants, dedupe, workflow, and case handoff", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveCapture(telegramCapture);
+
+    for (const watchlist of [
+      ...orgWatchlistContractToRuntimeDwmWatchlists({
+        schemaVersion: "organization.watchlist_alert_generation.v1",
+        organizationId: "org_overlap_alpha",
+        tenantId: "org_overlap_alpha",
+        ownerOrganizationId: "org_overlap_alpha",
+        visibilityPolicy: "admins",
+        canGenerateAlerts: true,
+        activeTerms: [{
+          watchlistId: "watch_overlap_alpha",
+          watchlistItemId: "watch_item_overlap_alpha",
+          organizationId: "org_overlap_alpha",
+          tenantId: "org_overlap_alpha",
+          kind: "domain",
+          termFamily: "domain",
+          term: "acme.com",
+          status: "active",
+          alertGeneratorKey: "org:org_overlap_alpha:watchlist:watch_item_overlap_alpha:domain:acme.com"
+        }],
+        watchlistTerms: [{
+          watchlistId: "watch_overlap_alpha_archived",
+          watchlistItemId: "watch_item_overlap_alpha_archived",
+          organizationId: "org_overlap_alpha",
+          tenantId: "org_overlap_alpha",
+          kind: "domain",
+          term: "acme.com",
+          status: "archived"
+        }]
+      }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_overlap_alpha" })),
+      ...orgWatchlistContractToRuntimeDwmWatchlists({
+        schemaVersion: "organization.watchlist_alert_generation.v1",
+        organizationId: "org_overlap_beta",
+        tenantId: "org_overlap_beta",
+        ownerOrganizationId: "org_overlap_beta",
+        visibilityPolicy: "members",
+        canGenerateAlerts: true,
+        activeTerms: [{
+          watchlistId: "watch_overlap_beta",
+          watchlistItemId: "watch_item_overlap_beta",
+          organizationId: "org_overlap_beta",
+          tenantId: "org_overlap_beta",
+          kind: "domain",
+          termFamily: "domain",
+          term: "acme.com",
+          status: "active",
+          alertGeneratorKey: "org:org_overlap_beta:watchlist:watch_item_overlap_beta:domain:acme.com"
+        }]
+      }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_overlap_beta" }))
+    ]) {
+      (store as any).saveDwmWatchlist(watchlist);
+    }
+
+    const alphaPlan = buildDwmAlertGenerationPlan({
+      watchlists: (store as any).listDwmWatchlists(),
+      tenantId: "org_overlap_alpha",
+      organizationId: "org_overlap_alpha",
+      visibilityPolicy: "admins",
+      sources: store.listSources(),
+      captures: store.listCaptures()
+    });
+    expect(alphaPlan.candidates).toHaveLength(1);
+    expect(alphaPlan.blockedWatchlists).toEqual([]);
+    expect(alphaPlan.skippedWatchlists).toEqual([
+      { watchlistId: "watch_overlap_alpha_archived", reason: "archived" },
+      { watchlistId: "watch_overlap_beta", reason: "tenant_mismatch" }
+    ]);
+    expect(alphaPlan.candidates[0]).toMatchObject({
+      organizationId: "org_overlap_alpha",
+      watchlistIds: ["watch_overlap_alpha"],
+      watchlistItemIds: ["watch_item_overlap_alpha"],
+      alertGeneratorKeys: ["org:org_overlap_alpha:watchlist:watch_item_overlap_alpha:domain:acme.com"]
+    });
+
+    const alpha = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "org_overlap_alpha", organizationId: "org_overlap_alpha", visibilityPolicy: "admins" });
+    const beta = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "org_overlap_beta", organizationId: "org_overlap_beta", visibilityPolicy: "members" });
+    expect(alpha.savedAlertCount).toBe(1);
+    expect(beta.savedAlertCount).toBe(1);
+    const alphaAlert = alpha.alerts[0];
+    const betaAlert = beta.alerts[0];
+    expect(alphaAlert.organizationId).toBe("org_overlap_alpha");
+    expect(betaAlert.organizationId).toBe("org_overlap_beta");
+    expect(alphaAlert.id).not.toBe(betaAlert.id);
+    expect(alphaAlert.dedupeKey).not.toBe(betaAlert.dedupeKey);
+    expect(alphaAlert.workflowContext).toMatchObject({
+      organizationId: "org_overlap_alpha",
+      visibilityPolicy: "admins",
+      watchlistIds: ["watch_overlap_alpha"],
+      watchlistItemIds: ["watch_item_overlap_alpha"],
+      alertGeneratorKeys: ["org:org_overlap_alpha:watchlist:watch_item_overlap_alpha:domain:acme.com"],
+      sourceFamily: "telegram_public"
+    });
+    expect(betaAlert.workflowContext).toMatchObject({
+      organizationId: "org_overlap_beta",
+      visibilityPolicy: "members",
+      watchlistIds: ["watch_overlap_beta"],
+      watchlistItemIds: ["watch_item_overlap_beta"],
+      alertGeneratorKeys: ["org:org_overlap_beta:watchlist:watch_item_overlap_beta:domain:acme.com"],
+      sourceFamily: "telegram_public"
+    });
+    expect(alphaAlert.workflowContext.watchlistProvenance[0]).toMatchObject({
+      organizationId: "org_overlap_alpha",
+      watchlistItemId: "watch_item_overlap_alpha",
+      status: "active"
+    });
+    expect(JSON.stringify(alphaAlert)).not.toContain("watch_item_overlap_beta");
+    expect(JSON.stringify(betaAlert)).not.toContain("watch_item_overlap_alpha");
+    expect((store as any).listDwmAlerts().map((alert: any) => alert.organizationId).sort()).toEqual(["org_overlap_alpha", "org_overlap_beta"]);
+
+    const alphaProof = buildDwmAlertCustomerProofHandoffRow({ alert: alphaAlert, generatedAt: "2026-06-28T13:40:00.000Z" });
+    expect(alphaProof.consumerAdapter).toMatchObject({
+      schemaVersion: "dwm.org_alert_case_consumer_adapter.v1",
+      organizationId: "org_overlap_alpha",
+      tenantId: "org_overlap_alpha",
+      watchlistItemIds: ["watch_item_overlap_alpha"],
+      publicTI: {
+        canConsume: true
+      },
+      helpdesk: {
+        redacted: true
+      },
+      roleGates: {
+        create_watchlist: ["owner", "admin"],
+        acknowledge_alert: ["owner", "admin", "analyst"],
+        assign_case: ["owner", "admin", "analyst"],
+        manage_invites: ["owner", "admin"]
+      }
+    });
+    const alphaDownstreamHandoff = buildDwmAlertDownstreamHandoff({
+      alert: alphaAlert,
+      organizationId: "org_overlap_alpha",
+      generatedAt: "2026-06-28T13:41:00.000Z"
+    });
+    expect(alphaDownstreamHandoff).toMatchObject({
+      schemaVersion: "dwm.alert_downstream_handoff.v1",
+      ready: true,
+      organizationId: "org_overlap_alpha",
+      watchlist: {
+        watchlistIds: ["watch_overlap_alpha"],
+        watchlistItemIds: ["watch_item_overlap_alpha"],
+        alertGeneratorKeys: ["org:org_overlap_alpha:watchlist:watch_item_overlap_alpha:domain:acme.com"]
+      },
+      caseReadiness: {
+        ready: true,
+        route: "/v1/cases"
+      },
+      deliveryReadiness: {
+        ready: true,
+        webhookDestinationIds: ["webhook_overlap_alpha"]
+      },
+      replay: {
+        idempotent: true,
+        duplicate: false,
+        canReplay: true
+      },
+      blockerCodes: []
+    });
+
+    expect(buildDwmOrgAlertCaseRoleGate({ role: "owner", capability: "manage_invites" }).allowed).toBe(true);
+    expect(buildDwmOrgAlertCaseRoleGate({ role: "admin", capability: "edit_watchlist_terms" }).allowed).toBe(true);
+    expect(buildDwmOrgAlertCaseRoleGate({ role: "analyst", capability: "acknowledge_alert" }).allowed).toBe(true);
+    expect(buildDwmOrgAlertCaseRoleGate({ role: "analyst", capability: "manage_invites" })).toMatchObject({ allowed: false, deniedReason: "insufficient_role" });
+    expect(buildDwmOrgAlertCaseRoleGate({ role: "viewer", capability: "assign_case" })).toMatchObject({ allowed: false, deniedReason: "insufficient_role" });
+    expect(buildDwmOrgAlertCaseRoleGate({ role: "nonmember", capability: "acknowledge_alert" })).toMatchObject({ allowed: false, deniedReason: "not_member" });
+    expect(buildDwmAlertWorkflowExecutionReadiness({
+      alert: alphaAlert,
+      organizationId: "org_overlap_alpha",
+      action: "assign",
+      actorRole: "viewer"
+    }).blockerCodes).toContain("role_not_allowed");
+    expect(buildDwmAlertWorkflowExecutionReadiness({
+      alert: alphaAlert,
+      organizationId: "org_overlap_alpha",
+      action: "assign",
+      actorRole: "analyst"
+    }).ready).toBe(true);
   });
 
   test("matching probe reports blockers and preserves zero mutation for no match, inactive source, and entitlement denial", () => {
@@ -501,7 +740,7 @@ describe("dwm alert repository", () => {
     expect(first.savedAlertCount).toBe(1);
     expect(first.generationPlan.skippedWatchlists).toEqual([
       { watchlistId: "watch_repo_customer_paused", reason: "paused" },
-      { watchlistId: "watch_repo_customer_archived", reason: "paused" }
+      { watchlistId: "watch_repo_customer_archived", reason: "archived" }
     ]);
     const alert = first.alerts[0];
     expect(alert).toMatchObject({
@@ -596,10 +835,187 @@ describe("dwm alert repository", () => {
         webhook: { canConsume: true },
         helpdesk: { canConsume: true, supportOnlyRedactionNeeded: false },
         publicTI: { canConsume: true, alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"] }
+      },
+      consumerAdapter: {
+        schemaVersion: "dwm.org_alert_case_consumer_adapter.v1",
+        organizationId: "org_repo_customer",
+        watchlistItemIds: ["watch_item_customer"],
+        alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"],
+        dashboard: { route: "organization_watchlist" },
+        helpdesk: { redacted: true },
+        publicTI: { canConsume: true }
       }
     });
     expect(proof.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(proof.blockerCodes).toEqual(expect.arrayContaining(["duplicate_delivered_dedupe", "webhook_destination_not_verified"]));
+  });
+
+  test("builds isolated downstream handoff records for overlapping org watchlist terms across Telegram, darkweb, and actor captures", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveSource(darkwebSource);
+    store.saveSource(actorSource);
+    store.saveCapture(overlapTelegramCapture);
+    store.saveCapture(orgADarkwebCapture);
+    store.saveCapture(orgBActorCapture);
+
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_repo_alpha",
+      tenantId: "tenant_repo_shared",
+      ownerOrganizationId: "org_repo_alpha",
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_repo_alpha_overlap",
+        watchlistItemId: "watch_item_alpha_overlap_acme",
+        organizationId: "org_repo_alpha",
+        tenantId: "tenant_repo_shared",
+        kind: "domain",
+        termFamily: "domain",
+        term: "acme.com",
+        category: "domain",
+        status: "active",
+        alertGeneratorKey: "org:org_repo_alpha:watchlist:watch_item_alpha_overlap_acme:domain:acme.com"
+      }, {
+        watchlistId: "watch_repo_alpha_unique",
+        watchlistItemId: "watch_item_alpha_unique",
+        organizationId: "org_repo_alpha",
+        tenantId: "tenant_repo_shared",
+        kind: "domain",
+        termFamily: "domain",
+        term: "alpha-payments.example",
+        category: "domain",
+        status: "active",
+        alertGeneratorKey: "org:org_repo_alpha:watchlist:watch_item_alpha_unique:domain:alpha-payments.example"
+      }]
+    }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_alpha_ops" }))) {
+      (store as any).saveDwmWatchlist(watchlist);
+    }
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_repo_beta",
+      tenantId: "tenant_repo_shared",
+      ownerOrganizationId: "org_repo_beta",
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_repo_beta_overlap",
+        watchlistItemId: "watch_item_beta_overlap_acme",
+        organizationId: "org_repo_beta",
+        tenantId: "tenant_repo_shared",
+        kind: "domain",
+        termFamily: "domain",
+        term: "acme.com",
+        category: "domain",
+        status: "active",
+        alertGeneratorKey: "org:org_repo_beta:watchlist:watch_item_beta_overlap_acme:domain:acme.com"
+      }, {
+        watchlistId: "watch_repo_beta_unique",
+        watchlistItemId: "watch_item_beta_unique",
+        organizationId: "org_repo_beta",
+        tenantId: "tenant_repo_shared",
+        kind: "domain",
+        termFamily: "domain",
+        term: "beta-payments.example",
+        category: "domain",
+        status: "active",
+        alertGeneratorKey: "org:org_repo_beta:watchlist:watch_item_beta_unique:domain:beta-payments.example"
+      }]
+    }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_beta_ops" }))) {
+      (store as any).saveDwmWatchlist(watchlist);
+    }
+
+    const alpha = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_shared", organizationId: "org_repo_alpha" });
+    const beta = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_shared", organizationId: "org_repo_beta" });
+    expect(alpha.savedAlertCount).toBe(2);
+    expect(beta.savedAlertCount).toBe(2);
+    expect(alpha.alerts.map((alert) => alert.sourceFamily).sort()).toEqual(["darkweb_metadata", "telegram_public"]);
+    expect(beta.alerts.map((alert) => alert.sourceFamily).sort()).toEqual(["actor_page", "telegram_public"]);
+
+    const alphaTelegram = alpha.alerts.find((alert) => alert.sourceFamily === "telegram_public");
+    const betaTelegram = beta.alerts.find((alert) => alert.sourceFamily === "telegram_public");
+    expect(alphaTelegram?.id).not.toBe(betaTelegram?.id);
+    expect(alphaTelegram?.dedupeKey).not.toBe(betaTelegram?.dedupeKey);
+
+    const alphaHandoff = buildDwmAlertDownstreamHandoff({ alert: alphaTelegram });
+    const betaHandoff = buildDwmAlertDownstreamHandoff({ alert: betaTelegram });
+    expect(alphaHandoff).toMatchObject({
+      schemaVersion: "dwm.alert_downstream_handoff.v1",
+      ready: true,
+      organizationId: "org_repo_alpha",
+      sourceFamily: "telegram_public",
+      watchlist: {
+        watchlistIds: ["watch_repo_alpha_overlap"],
+        watchlistItemIds: ["watch_item_alpha_overlap_acme"],
+        alertGeneratorKeys: ["org:org_repo_alpha:watchlist:watch_item_alpha_overlap_acme:domain:acme.com"]
+      },
+      deliveryReadiness: {
+        webhookDestinationIds: ["webhook_alpha_ops"],
+        destinationReady: true
+      }
+    });
+    expect(betaHandoff).toMatchObject({
+      ready: true,
+      organizationId: "org_repo_beta",
+      sourceFamily: "telegram_public",
+      watchlist: {
+        watchlistIds: ["watch_repo_beta_overlap"],
+        watchlistItemIds: ["watch_item_beta_overlap_acme"],
+        alertGeneratorKeys: ["org:org_repo_beta:watchlist:watch_item_beta_overlap_acme:domain:acme.com"]
+      },
+      deliveryReadiness: {
+        webhookDestinationIds: ["webhook_beta_ops"],
+        destinationReady: true
+      }
+    });
+    expect(JSON.stringify(alphaHandoff)).not.toContain("webhook_beta_ops");
+    expect(JSON.stringify(betaHandoff)).not.toContain("webhook_alpha_ops");
+    expect(alphaHandoff.evidence.selectedCaptureIds).toEqual(["cap_repo_overlap_acme"]);
+    expect(betaHandoff.evidence.selectedCaptureIds).toEqual(["cap_repo_overlap_acme"]);
+    expect(alpha.alerts.flatMap((alert) => alert.deliveryReadinessContext.selectedCaptureIds)).not.toContain("cap_repo_actor_beta");
+    expect(beta.alerts.flatMap((alert) => alert.deliveryReadinessContext.selectedCaptureIds)).not.toContain("cap_repo_darkweb_alpha");
+
+    store.saveDwmAlert({
+      ...alphaTelegram,
+      workflowStatus: "investigating",
+      assignedOwner: "alpha-analyst",
+      caseId: "case_alpha_overlap",
+      casePath: `/v1/cases/case_alpha_overlap?alertId=${alphaTelegram?.id}`,
+      workflowEvents: [{ id: "evt_alpha_case_link", at: "2026-06-28T13:32:00.000Z", toWorkflowStatus: "investigating", toCaseId: "case_alpha_overlap" }],
+      replayCount: 1
+    });
+    const alphaDelivery = (store as any).saveDwmWebhookDelivery({
+      id: "delivery_alpha_overlap",
+      tenantId: "tenant_repo_shared",
+      organizationId: "org_repo_alpha",
+      alertId: alphaTelegram?.id,
+      webhookDestinationId: "webhook_alpha_ops",
+      dedupeKey: alphaTelegram?.dedupeKey,
+      attemptedAt: "2026-06-28T13:33:00.000Z",
+      status: "delivered",
+      httpStatus: 202
+    });
+    const preservedAlpha = buildDwmAlertDownstreamHandoff({
+      alert: (store as any).getDwmAlert(alphaTelegram?.id),
+      deliveries: [alphaDelivery],
+      organizationId: "org_repo_alpha"
+    });
+    const betaAfterAlphaWorkflow = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_shared", organizationId: "org_repo_beta" });
+    const betaTelegramAfterAlphaWorkflow = betaAfterAlphaWorkflow.alerts.find((alert) => alert.sourceFamily === "telegram_public");
+    expect(preservedAlpha).toMatchObject({
+      blockerCodes: ["duplicate_replay"],
+      replay: { duplicate: true, canReplay: false },
+      caseReadiness: { caseId: "case_alpha_overlap" },
+      deliveryReadiness: { deliveryHistoryRefs: ["delivery_alpha_overlap"] }
+    });
+    expect(betaTelegramAfterAlphaWorkflow?.workflowEvents ?? []).toHaveLength(0);
+    expect(betaTelegramAfterAlphaWorkflow?.assignedOwner).toBeUndefined();
+    expect(betaTelegramAfterAlphaWorkflow?.deliveryReadinessContext.deliveryHistoryRefs).toEqual([]);
+    expect(JSON.stringify(betaTelegramAfterAlphaWorkflow)).not.toContain("case_alpha_overlap");
+    expect(JSON.stringify(betaTelegramAfterAlphaWorkflow)).not.toContain("delivery_alpha_overlap");
   });
 
   test("API rebuild and list expose generated alerts in product-ready shape", async () => {
