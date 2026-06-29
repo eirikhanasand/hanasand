@@ -545,6 +545,98 @@ export async function postSupportSession(req: FastifyRequest<{ Body: SupportSess
     })
 }
 
+export async function getSupportSession(req: FastifyRequest<{ Params: SupportSessionParams }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    const supportSessionId = text(req.params.sessionId)
+    const requestId = supportRequestId(req)
+    const state = await loadSupportSessionState(supportSessionId)
+    if (!state) {
+        await recordAdminAuditEvent(req, {
+            actionType: 'support.session.inspect',
+            actorId: actor.id,
+            targetType: 'support_session',
+            targetId: supportSessionId,
+            entityId: supportSessionId,
+            requestId,
+            severity: 'notice',
+            outcome: 'failed',
+            context: {
+                schemaVersion: 'support.scoped_session.detail.v1',
+                supportSessionId,
+                blockerCode: 'support_session_not_found',
+                redactionRequired: true,
+            },
+        })
+        return res.status(404).send(supportError('support_session_not_found', 'Support session not found.', { supportSessionId }))
+    }
+
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.session.inspect',
+        actorId: actor.id,
+        targetType: state.targetUserId ? 'user' : 'support_session',
+        targetId: state.targetUserId || supportSessionId,
+        organizationId: state.organizationId || null,
+        entityId: supportSessionId,
+        requestId,
+        severity: 'info',
+        outcome: 'success',
+        context: {
+            schemaVersion: 'support.scoped_session.detail.v1',
+            supportSessionId,
+            status: state.status,
+            targetOrganizationId: state.organizationId || null,
+            targetUserId: state.targetUserId || null,
+            allowedActions: state.allowedActions,
+            scope: state.scope,
+            expiresAt: state.expiresAt,
+            redactionRequired: true,
+        },
+    })
+
+    const timeline = await loadSupportSessionTimeline(supportSessionId)
+    const response = supportSessionResponse({
+        ...state,
+        actorId: state.actorId,
+        reason: state.reason,
+        requestId: state.requestId,
+        auditEventIds: state.auditEventIds,
+    })
+    const workflowRoutes = supportSessionWorkflowRoutes(state)
+    return res.send({
+        supportSession: response,
+        detail: {
+            schemaVersion: 'support.scoped_session.detail.v1',
+            generatedAt: new Date().toISOString(),
+            supportSession: response,
+            timeline,
+            readinessProof: {
+                schemaVersion: 'support.scoped_session.readiness_proof.v1',
+                route: '/api/admin/support/sessions/:sessionId',
+                auditRoute: `/api/admin/audit-events?supportSession=${encodeURIComponent(supportSessionId)}&source=admin&service=hanasand-api`,
+                revokeRoute: `/api/admin/support/sessions/${encodeURIComponent(supportSessionId)}/revoke`,
+                availableActions: state.allowedActions,
+                scope: state.scope,
+                blockers: state.status === 'active' ? [] : [state.status === 'revoked' ? 'support_session_revoked' : 'support_session_expired'],
+                workflowRoutes,
+                auditFields: ['actorId', 'targetId', 'organizationId', 'entityId', 'requestId', 'actionType', 'severity', 'outcome', 'createdAt'],
+                testCommand: 'cd api && bun run smoke:admin-support-unit',
+            },
+            copyText: [
+                `Support session ${state.status}: ${supportSessionId}`,
+                `Actor: ${state.actorId}`,
+                `Org: ${state.organizationId || '*'}`,
+                `User: ${state.targetUserId || '*'}`,
+                `Actions: ${state.allowedActions.join(', ') || 'none'}`,
+                `Scope: ${state.scope.join(', ') || 'none'}`,
+                `Expires: ${state.expiresAt}`,
+                `Audit events: ${timeline.map(event => event.id).join(', ') || 'none'}`,
+            ].join('\n'),
+        },
+    })
+}
+
 export async function postSupportSessionRevoke(req: FastifyRequest<{ Params: SupportSessionParams, Body: SupportSessionBody }>, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
@@ -2947,6 +3039,41 @@ async function loadSupportSessionState(supportSessionId: string) {
     }
 }
 
+async function loadSupportSessionTimeline(supportSessionId: string) {
+    const result = await run(`
+        SELECT
+            e.id,
+            e.action_type,
+            e.severity,
+            e.source,
+            e.service,
+            e.actor_id,
+            actor.name AS actor_name,
+            e.target_type,
+            e.target_id,
+            target_user.name AS target_name,
+            e.organization_id,
+            organization.name AS organization_name,
+            e.entity_id,
+            e.request_id,
+            e.outcome,
+            e.reason,
+            e.context,
+            e.ip,
+            e.user_agent,
+            e.created_at
+        FROM admin_audit_events e
+        LEFT JOIN users actor ON actor.id = e.actor_id
+        LEFT JOIN users target_user ON target_user.id = e.target_id
+        LEFT JOIN organizations organization ON organization.id = e.organization_id
+        WHERE e.entity_id = $1
+           OR e.context->>'supportSessionId' = $1
+        ORDER BY e.created_at ASC, e.id ASC
+        LIMIT 250
+    `, [supportSessionId])
+    return result.rows.map(toAdminAuditEvent).map(event => event.detail.timelineEvent)
+}
+
 async function validateSupportSessionForAction(input: {
     actorId: string
     supportSessionId?: string | null
@@ -3074,6 +3201,45 @@ function supportSessionResponse(input: {
             `Audit events: ${input.auditEventIds.join(', ') || 'pending index refresh'}`,
             `Reason: ${input.reason}`,
         ].join('\n'),
+    }
+}
+
+function supportSessionWorkflowRoutes(input: {
+    supportSessionId: string
+    organizationId?: string | null
+    targetUserId?: string | null
+    allowedActions?: string[]
+    scope?: string[]
+}) {
+    const organizationId = input.organizationId ? encodeURIComponent(input.organizationId) : ':organizationId'
+    const targetUserId = input.targetUserId ? encodeURIComponent(input.targetUserId) : ':userId'
+    const actions = new Set(input.allowedActions || [])
+    const scope = new Set(input.scope || [])
+    return {
+        detail: `/api/admin/support/sessions/${encodeURIComponent(input.supportSessionId)}`,
+        revoke: `/api/admin/support/sessions/${encodeURIComponent(input.supportSessionId)}/revoke`,
+        audit: `/api/admin/audit-events?supportSession=${encodeURIComponent(input.supportSessionId)}&source=admin&service=hanasand-api`,
+        inviteAssistance: actions.has('invite_assist') && scope.has('invite:create')
+            ? `/api/admin/support/organizations/${organizationId}/invites`
+            : null,
+        inviteResend: actions.has('invite_resend') && scope.has('invite:resend')
+            ? `/api/admin/support/organizations/${organizationId}/invites/:inviteId/actions`
+            : null,
+        inviteRevoke: actions.has('invite_revoke') && scope.has('invite:revoke')
+            ? `/api/admin/support/organizations/${organizationId}/invites/:inviteId/actions`
+            : null,
+        accessRecovery: actions.has('access_recovery') && scope.has('recovery:invite')
+            ? `/api/admin/support/organizations/${organizationId}/access-recovery`
+            : null,
+        accessRecoveryApproval: actions.has('access_recovery') && (scope.has('recovery:approve') || scope.has('recovery:deny'))
+            ? '/api/admin/support/access-recovery/:requestId/:decision'
+            : null,
+        memberRoleRecovery: actions.has('member_role_recovery') && scope.has('member:role_recovery')
+            ? `/api/admin/support/organizations/${organizationId}/members/${targetUserId}/role-recovery`
+            : null,
+        impersonation: actions.has('impersonation')
+            ? '/api/impersonation/start'
+            : null,
     }
 }
 
