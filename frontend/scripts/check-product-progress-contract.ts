@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildOrgOperatingContext, buildProductProgressExternalState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from '../src/app/dashboard/operatorConsoleModel'
+import { PRODUCT_READINESS_PROOF_ROW_IDS, buildOrgOperatingContext, buildProductProgressExternalState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from '../src/app/dashboard/operatorConsoleModel'
 import { buildProductProgressPayload } from '../src/utils/productProgress/readiness'
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
@@ -150,6 +150,17 @@ const partialContext = buildOrgOperatingContext({
 })
 assert.equal(partialContext.readiness.fullChainReady, false)
 assert.ok(partialContext.readiness.fullChainBlockedBy.some(item => item.includes('Deploy and live probes')))
+for (const rowId of PRODUCT_READINESS_PROOF_ROW_IDS) {
+    const row = partialContext.readiness.productReadiness.find(item => item.id === rowId)
+    assert.ok(row, `Missing product-readiness row ${rowId}`)
+    assert.ok(row.href, `Missing deep link for product-readiness row ${rowId}`)
+}
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.href, '/dashboard')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.href, '/dashboard/ti/sources')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.href, '/dashboard/dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/dashboard/automations?setup=dwm')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.href, '/dashboard/system/impersonation')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'deploy_probe')?.href, '/status')
 
 const readyPayload = {
     ...partialPayload,

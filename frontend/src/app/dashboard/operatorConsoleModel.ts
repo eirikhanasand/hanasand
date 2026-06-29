@@ -212,6 +212,12 @@ export type ProductReadinessExternalState = {
     dashboardEvidence?: DashboardAlertEvidenceReadiness
 }
 
+export const PRODUCT_PROGRESS_SCHEMA_VERSION = 'product.progress.readiness.v1'
+
+export const PRODUCT_READINESS_FULL_CHAIN_GATE_IDS = ['org_members', 'shared_watchlists', 'source_coverage', 'source_inventory_probe', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'helpdesk_audit', 'deploy_probe'] as const
+
+export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe'] as const
+
 export type DashboardSourceProofProxyPayload = {
     ok?: boolean
     generatedAt?: string
@@ -255,7 +261,7 @@ export type SourcePackWorkerReadinessSnapshot = {
 }
 
 export type ProductProgressReadinessPayload = {
-    schemaVersion: 'product.progress.readiness.v1' | string
+    schemaVersion: typeof PRODUCT_PROGRESS_SCHEMA_VERSION | string
     generatedAt?: string
     checkedAt?: string
     routes?: {
@@ -275,6 +281,14 @@ export type ProductProgressReadinessPayload = {
     orgAlertExport?: OrganizationAlertExportReadiness
     webhookHealth?: WebhookHealthReadiness
     dashboardEvidence?: DashboardAlertEvidenceReadiness
+}
+
+export function parseProductProgressReadinessPayload(input: unknown): ProductProgressReadinessPayload | null {
+    if (!input || typeof input !== 'object') return null
+    const payload = input as Partial<ProductProgressReadinessPayload>
+    if (payload.schemaVersion !== PRODUCT_PROGRESS_SCHEMA_VERSION) return null
+    if (payload.routes && typeof payload.routes !== 'object') return null
+    return payload as ProductProgressReadinessPayload
 }
 
 export function buildProductProgressExternalState(input: ProductProgressReadinessPayload | null | undefined, options: {
@@ -839,9 +853,8 @@ export function buildOrgOperatingContext(input: {
         latestDelivery,
         externalReadiness: input.externalReadiness,
     })
-    const fullChainGateIds = ['org_members', 'shared_watchlists', 'source_coverage', 'source_inventory_probe', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'helpdesk_audit', 'deploy_probe']
     const fullChainBlockedBy = productReadiness
-        .filter(item => item.status !== 'ready' && fullChainGateIds.includes(item.id))
+        .filter(item => item.status !== 'ready' && PRODUCT_READINESS_FULL_CHAIN_GATE_IDS.includes(item.id as typeof PRODUCT_READINESS_FULL_CHAIN_GATE_IDS[number]))
         .map(item => `${item.label}: ${item.detail}`)
     const fullChainReady = fullChainBlockedBy.length === 0
 

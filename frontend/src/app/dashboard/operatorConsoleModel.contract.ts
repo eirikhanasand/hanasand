@@ -1,5 +1,5 @@
 import { PUBLIC_TI_HANDOFF_ACTIONS, PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_HANDOFF_SOURCE, validatePublicTiHandoffPayload, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
-import { applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductProgressReadinessPayload, type ProductReadinessExternalState } from './operatorConsoleModel'
+import { PRODUCT_PROGRESS_SCHEMA_VERSION, PRODUCT_READINESS_PROOF_ROW_IDS, applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, parseProductProgressReadinessPayload, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductProgressReadinessPayload, type ProductReadinessExternalState } from './operatorConsoleModel'
 import type { OperatorActionRailRow, WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchProductReadinessItem, WorkbenchPublicTiHandoff, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
@@ -232,7 +232,7 @@ const missingWorkerExternalReadiness = {
     sourceGrowth: missingWorkerSourceProof,
 } satisfies ProductReadinessExternalState
 const productProgressPayload = {
-    schemaVersion: 'product.progress.readiness.v1',
+    schemaVersion: PRODUCT_PROGRESS_SCHEMA_VERSION,
     generatedAt: '2026-06-28T10:20:00.000Z',
     checkedAt: '2026-06-28T10:20:00.000Z',
     routes: {
@@ -292,7 +292,20 @@ const productProgressPayload = {
         source: '/api/product-progress',
     },
 } satisfies ProductProgressReadinessPayload
+const parsedProductProgressPayload = parseProductProgressReadinessPayload(productProgressPayload)
+const malformedProductProgressPayload = parseProductProgressReadinessPayload({
+    schemaVersion: 'product.progress.readiness.v0',
+    deployProbe: productProgressPayload.deployProbe,
+})
 const productProgressExternalReadiness = buildProductProgressExternalState(productProgressPayload, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const absentProductProgressExternalReadiness = buildProductProgressExternalState(null, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const malformedProductProgressExternalReadiness = buildProductProgressExternalState(malformedProductProgressPayload, {
     checkedAt: '2026-06-28T10:20:00.000Z',
     staleAfterMinutes: 120,
 })
@@ -340,6 +353,20 @@ const missingOrgExportProductProgress = buildProductProgressExternalState({
 const missingHelpdeskProductProgress = buildProductProgressExternalState({
     ...productProgressPayload,
     helpdeskAudit: undefined,
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const missingSourceWorkerProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    sourceProxy: {
+        ...sourceProofProxyPayload,
+        sourcePacks: {
+            schemaVersion: 'dwm.source_packs.v1',
+            generatedAt: '2026-06-28T10:19:00.000Z',
+            counts: { packCount: 2, candidateCount: 8000 },
+        },
+    },
 }, {
     checkedAt: '2026-06-28T10:20:00.000Z',
     staleAfterMinutes: 120,
@@ -448,6 +475,28 @@ const productProgressOrgContext = buildOrgOperatingContext({
     liveAlertIds: ['alert_acme_1'],
     externalReadiness: productProgressExternalReadiness,
 })
+const absentProductProgressOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: absentProductProgressExternalReadiness,
+})
+const malformedProductProgressOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: malformedProductProgressExternalReadiness,
+})
 const staleDeployOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -502,6 +551,17 @@ const missingHelpdeskOrgContext = buildOrgOperatingContext({
     liveAlertCount: 1,
     liveAlertIds: ['alert_acme_1'],
     externalReadiness: missingHelpdeskProductProgress,
+})
+const missingSourceWorkerProductProgressOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: missingSourceWorkerProductProgress,
 })
 const staleWorkerOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
@@ -916,6 +976,14 @@ void (orgContext.readiness.sourceCoverage?.activeSourceCount satisfies number | 
 void (orgContext.readiness.latestDelivery satisfies WorkbenchDeliveryEvidence | undefined)
 void (orgContext.readiness.fullChainReady satisfies boolean)
 void (orgContext.readiness.productReadiness[0]?.status satisfies string | undefined)
+void (parsedProductProgressPayload satisfies ProductProgressReadinessPayload | null)
+void (malformedProductProgressPayload satisfies ProductProgressReadinessPayload | null)
+void (PRODUCT_READINESS_PROOF_ROW_IDS satisfies readonly string[])
+void expectProductReadinessStatus(absentProductProgressOrgContext, 'dashboard_evidence', 'unavailable')
+void expectProductReadinessStatus(absentProductProgressOrgContext, 'source_inventory_probe', 'needs_action')
+void expectProductReadinessStatus(absentProductProgressOrgContext, 'webhook_health', 'unavailable')
+void expectProductReadinessStatus(malformedProductProgressOrgContext, 'dashboard_evidence', 'unavailable')
+void expectProductReadinessStatus(malformedProductProgressOrgContext, 'deploy_probe', 'unavailable')
 void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')
@@ -935,6 +1003,9 @@ void expectProductReadinessStatus(missingOrgExportOrgContext, 'org_alert_export'
 void (missingOrgExportOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(missingHelpdeskOrgContext, 'helpdesk_audit', 'unavailable')
 void (missingHelpdeskOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void expectProductReadinessStatus(missingSourceWorkerProductProgressOrgContext, 'source_inventory_probe', 'needs_action')
+void expectProductReadinessStatus(missingSourceWorkerProductProgressOrgContext, 'dashboard_evidence', 'needs_action')
+void (missingSourceWorkerProductProgressOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(staleWorkerOrgContext, 'source_inventory_probe', 'needs_action')
 void (staleWorkerOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(missingWorkerOrgContext, 'source_inventory_probe', 'needs_action')
