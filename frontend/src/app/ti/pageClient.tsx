@@ -174,6 +174,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedNote = selected ? notes[selected.id] ?? '' : ''
     const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
     const reviewHandoff = selected && alertPacket ? selectedReviewHandoffFor(result, selected, watchlist, alertPacket, actionability, selectedDecision, selectedNote) : null
+    const selectedSourceDrilldown = selected ? selectedSourceDrilldownFor(result, selected, actionability, actorIntel) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
@@ -350,6 +351,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     </div>
 
                                     {selected.priority ? <EvidencePriorityPanel priority={selected.priority} /> : null}
+                                    {selectedSourceDrilldown ? <SelectedSourceDrilldownPanel drilldown={selectedSourceDrilldown} /> : null}
 
                                     <CustomerAlertFit selected={selected} watchlist={watchlist} alertPacket={alertPacket} />
 
@@ -563,6 +565,45 @@ type SelectedReviewHandoff = {
     }
     evidenceBasis: string[]
     blockers: string[]
+}
+
+type SelectedSourceDrilldown = {
+    schemaVersion: 'ti.public_actor.selected_source_drilldown.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItem: Pick<AnalystWorkItem, 'id' | 'kind' | 'title' | 'timestamp' | 'source' | 'provenance' | 'confidence' | 'href'>
+    rows: SelectedSourceDrilldownRow[]
+    alertHandoff: {
+        ready: boolean
+        endpoint: string
+        route?: string
+        missing: string[]
+    }
+    caseHandoff: {
+        ready: boolean
+        endpoint: string
+        route?: string
+        missing: string[]
+    }
+    blockers: string[]
+}
+
+type SelectedSourceDrilldownRow = {
+    rowId: string
+    sourceName: string
+    sourceId?: string
+    provenance: string
+    href?: string
+    captureId?: string
+    reportDate?: string
+    confidence?: number
+    state: 'ready' | 'needs_capture' | 'needs_source'
+    ownerLane: 'source' | 'public-ti' | 'alert' | 'case'
+    route: string
+    missing: string[]
+    handoff: string
 }
 
 type EnrichmentTask = {
@@ -1117,6 +1158,93 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
                     ) : null}
                 </div>
             </div>
+        </div>
+    )
+}
+
+function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSourceDrilldown }) {
+    const readyRows = drilldown.rows.filter(row => row.state === 'ready').length
+    const state: DecisionStep['status'] = readyRows === drilldown.rows.length && drilldown.rows.length ? 'ready' : drilldown.rows.length ? 'review' : 'blocked'
+    return (
+        <div data-ti-selected-source-drilldown='true' className='mt-4 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source drilldown</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Source rows, capture status, and handoff blockers for the selected queue item.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(state)}>{readyRows}/{drilldown.rows.length} ready</span>
+                    <CopyPayloadButton label='Source drilldown' payload={drilldown} />
+                </div>
+            </div>
+
+            <div className='mt-3 grid min-w-0 gap-2 md:grid-cols-2'>
+                {drilldown.rows.length ? drilldown.rows.slice(0, 4).map(row => (
+                    <div key={row.rowId} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                    {[row.sourceId ? `source ${row.sourceId}` : '', row.reportDate ? formatDate(row.reportDate) : '', typeof row.confidence === 'number' ? `${Math.round(row.confidence * 100)}%` : ''].filter(Boolean).join(' · ') || 'Source metadata incomplete'}
+                                </p>
+                            </div>
+                            <span className={row.state === 'ready' ? decisionStepStatusClass('ready') : row.state === 'needs_capture' ? decisionStepStatusClass('review') : decisionStepStatusClass('blocked')}>
+                                {row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'capture needed' : 'source needed'}
+                            </span>
+                        </div>
+                        <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.captureId ? `capture ${row.captureId}` : row.provenance}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.handoff}</p>
+                        <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                            <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#131c29] dark:text-[#d8e2f2]'>
+                                {readinessOwnerLabel(row.ownerLane === 'public-ti' ? 'public-ti' : row.ownerLane)}
+                            </span>
+                            <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#131c29] dark:text-[#d8e2f2]'>
+                                {sourceRequestRouteLabel(row.route)}
+                            </span>
+                            {row.href ? (
+                                <a href={row.href} target='_blank' rel='noopener noreferrer' className='inline-flex min-h-7 max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-[#d8dee9] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                    <ExternalLink className='h-3 w-3' />
+                                    Open source
+                                </a>
+                            ) : null}
+                        </div>
+                        {row.missing.length ? (
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{row.missing.slice(0, 2).join('; ')}</p>
+                        ) : null}
+                    </div>
+                )) : (
+                    <div className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
+                        No source rows are attached to this queue item yet.
+                    </div>
+                )}
+            </div>
+
+            <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                <SourceDrilldownHandoff label='Alert handoff' ready={drilldown.alertHandoff.ready} endpoint={drilldown.alertHandoff.route || drilldown.alertHandoff.endpoint} missing={drilldown.alertHandoff.missing} />
+                <SourceDrilldownHandoff label='Case handoff' ready={drilldown.caseHandoff.ready} endpoint={drilldown.caseHandoff.route || drilldown.caseHandoff.endpoint} missing={drilldown.caseHandoff.missing} />
+            </div>
+            {drilldown.blockers.length ? (
+                <p className='mt-3 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{drilldown.blockers.slice(0, 3).join('; ')}</p>
+            ) : null}
+        </div>
+    )
+}
+
+function SourceDrilldownHandoff({ label, ready, endpoint, missing }: { label: string; ready: boolean; endpoint: string; missing: string[] }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{label}</p>
+                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{endpoint}</p>
+                </div>
+                <span className={ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{ready ? 'ready' : 'blocked'}</span>
+            </div>
+            <p className={ready ? 'mt-1 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]' : 'mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'}>
+                {ready ? 'Required source and routing context is present.' : missing.slice(0, 2).join('; ') || 'Required source and routing context is not attached.'}
+            </p>
         </div>
     )
 }
@@ -2541,6 +2669,153 @@ function selectedReviewHandoffFor(
     }
 }
 
+function selectedSourceDrilldownFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    actor: TiActorIntelligenceProfile
+): SelectedSourceDrilldown {
+    const sourceById = new Map(result.sources.map(source => [source.id, source]))
+    const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const selectedSources = selectedSourceIds
+        .map(sourceId => sourceById.get(sourceId))
+        .filter((source): source is TiSearchResponse['sources'][number] => Boolean(source))
+    const actorRows = actor.provenanceRows.filter(row =>
+        selectedSourceIds.includes(row.sourceId ?? '')
+        || selected.source.toLowerCase().includes(row.sourceName.toLowerCase())
+        || selected.provenance.toLowerCase().includes(row.sourceName.toLowerCase())
+        || selected.evidence.some(line => line.toLowerCase().includes(row.sourceName.toLowerCase()))
+    )
+    const sourceRows = actionability.sourceProvenance.filter(row =>
+        selectedSourceIds.includes(row.sourceId ?? '')
+        || selected.source.toLowerCase().includes(row.sourceName.toLowerCase())
+        || selected.evidence.some(line => line.toLowerCase().includes(row.sourceName.toLowerCase()))
+    )
+    const clusterRows = actionability.sourceClusters.filter(row =>
+        selected.provenance.toLowerCase().includes(row.sourceName.toLowerCase())
+        || selected.evidence.some(line => line.toLowerCase().includes(row.sourceName.toLowerCase()))
+    )
+    const candidates: SelectedSourceDrilldownRow[] = [
+        ...selectedSources.map(source => drilldownRow({
+            sourceId: source.id,
+            sourceName: source.name,
+            provenance: source.url || source.provenance || selected.provenance,
+            href: source.url || linkFromText(source.provenance),
+            confidence: selected.confidence,
+            handoff: 'Open the returned source and attach capture evidence before case replay if no capture ID is present.',
+        })),
+        ...actorRows.map(row => drilldownRow({
+            sourceId: row.sourceId,
+            sourceName: row.sourceName,
+            provenance: row.provenance,
+            href: linkFromText(row.provenance),
+            captureId: row.captureId,
+            reportDate: row.reportDate,
+            confidence: row.confidence,
+            handoff: row.shownBecause,
+        })),
+        ...sourceRows.map(row => drilldownRow({
+            sourceId: row.sourceId,
+            sourceName: row.sourceName,
+            provenance: row.provenance,
+            href: linkFromText(row.provenance),
+            captureId: row.captureId,
+            confidence: row.confidence,
+            handoff: row.captureId ? `Use capture ${row.captureId} as replayable case evidence.` : `Attach capture ID or source hash for ${row.sourceName} before case replay.`,
+        })),
+        ...clusterRows.map(row => drilldownRow({
+            sourceName: row.sourceName,
+            provenance: row.provenance,
+            href: linkFromText(row.provenance),
+            captureId: row.captureId,
+            confidence: row.confidence,
+            handoff: row.enrichmentTask,
+        })),
+    ]
+    if (!candidates.length) {
+        candidates.push(drilldownRow({
+            sourceName: selected.source || 'Source collection',
+            provenance: selected.href || selected.provenance || selected.source,
+            href: selected.href,
+            confidence: selected.confidence,
+            handoff: 'Attach source ID, provenance URL, capture ID, or source hash before this queue item can support stronger handoff.',
+        }))
+    }
+    const rows = uniqueBy(candidates, row => `${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? ''}`).slice(0, 6)
+    const blockers = unique([
+        ...rows.flatMap(row => row.missing),
+        ...actionability.readiness.blockers
+            .filter(blocker => blocker.ownerLane === 'source' || blocker.ownerLane === 'public-ti')
+            .map(blocker => blocker.handoff),
+    ]).slice(0, 6)
+
+    return {
+        schemaVersion: 'ti.public_actor.selected_source_drilldown.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: result.generatedAt,
+        selectedItem: {
+            id: selected.id,
+            kind: selected.kind,
+            title: selected.title,
+            timestamp: selected.timestamp,
+            source: selected.source,
+            provenance: selected.provenance,
+            confidence: selected.confidence,
+            href: selected.href,
+        },
+        rows,
+        alertHandoff: {
+            ready: actionability.createAlertHandoff.ready,
+            endpoint: actionability.createAlertHandoff.endpoint,
+            route: actionability.createAlertHandoff.backedRoute,
+            missing: actionability.createAlertHandoff.missing,
+        },
+        caseHandoff: {
+            ready: actionability.caseHandoff.ready,
+            endpoint: actionability.caseHandoff.endpoint,
+            route: actionability.caseHandoff.backedRoute,
+            missing: actionability.caseHandoff.missing,
+        },
+        blockers,
+    }
+}
+
+function drilldownRow(input: {
+    sourceId?: string
+    sourceName: string
+    provenance: string
+    href?: string
+    captureId?: string
+    reportDate?: string
+    confidence?: number
+    handoff: string
+}): SelectedSourceDrilldownRow {
+    const hasSource = Boolean(input.sourceId || input.provenance || input.href)
+    const state: SelectedSourceDrilldownRow['state'] = input.captureId ? 'ready' : hasSource ? 'needs_capture' : 'needs_source'
+    const missing = [
+        hasSource ? '' : 'Source ID or provenance URL is required.',
+        input.captureId ? '' : 'Capture ID or source hash is required before replayable case evidence.',
+    ].filter(Boolean)
+    const provenance = input.provenance || input.href || input.sourceName
+    return {
+        rowId: `source-drilldown:${input.sourceId ?? input.sourceName}:${provenance}:${input.captureId ?? 'missing-capture'}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+        sourceName: input.sourceName,
+        sourceId: input.sourceId,
+        provenance,
+        href: input.href,
+        captureId: input.captureId,
+        reportDate: input.reportDate,
+        confidence: input.confidence,
+        state,
+        ownerLane: state === 'ready' ? 'case' : state === 'needs_capture' ? 'source' : 'public-ti',
+        route: state === 'ready' ? '/v1/cases' : '/dashboard/ti/enrichment',
+        missing,
+        handoff: input.handoff,
+    }
+}
+
 function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem | undefined, watchlist: WatchlistRelevance, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel): EnrichmentTask[] {
     const hasReviewInbox = Boolean(result.analystLoop?.metadataReviewInbox.length)
     const hasSourceUrls = sources.some(source => source.url || linkFromText(source.provenance))
@@ -2604,6 +2879,16 @@ function unique(values: string[]) {
     const seen = new Set<string>()
     return values.map(value => value.trim()).filter(value => {
         const key = value.toLowerCase()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+    })
+}
+
+function uniqueBy<T>(values: T[], keyFor: (value: T) => string) {
+    const seen = new Set<string>()
+    return values.filter(value => {
+        const key = keyFor(value)
         if (!key || seen.has(key)) return false
         seen.add(key)
         return true
