@@ -612,6 +612,11 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     }
 
     async function sendDwmAlert(item: WorkbenchCase) {
+        const disabledReason = sendDeliveryDisabledReason(item, orgContext)
+        if (disabledReason) {
+            setMessage({ ok: false, text: disabledReason })
+            return
+        }
         await runPersistentAction(`send:${item.id}`, async () => {
             const action = item.actions?.find(candidate => candidate.id === 'send_alert')
             const response = await fetch(action?.href || '/api/dwm/webhooks/deliver', {
@@ -1319,8 +1324,8 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
     const sendAction = selected.actions?.find(action => action.id === 'send_alert')
     if (sendAction) {
-        const sendDestinationReady = Boolean(activeWebhook || stringValue(sendAction.body?.webhookDestinationId) || stringValue(sendAction.body?.webhookUrl))
-        const sendDisabledReason = sendAction.disabledReason || (!sendDestinationReady ? 'Send delivery requires an active organization webhook destination or action-scoped webhook target.' : undefined)
+        const sendDestinationReady = hasSendDeliveryDestination(sendAction, orgContext)
+        const sendDisabledReason = sendDeliveryDisabledReason(selected, orgContext)
         rows.push({
             id: 'send_alert',
             label: 'Send delivery',
@@ -2199,13 +2204,14 @@ function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
     )
 }
 
-function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDetail, onDecision, onBackedCaseMutation, onCustomerNotification, onReplay, onSend }: {
+function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDetail, sendDisabledReason, onDecision, onBackedCaseMutation, onCustomerNotification, onReplay, onSend }: {
     item: WorkbenchCase
     note: string
     owner: string
     effectiveStatus: string
     busyAction: string | null
     caseDetail?: CaseDetailState
+    sendDisabledReason?: string
     onDecision: (decision: LocalDecision) => void | Promise<void>
     onBackedCaseMutation: (mutation: CaseMutationInput) => void | Promise<void>
     onCustomerNotification: () => void | Promise<void>
@@ -2239,7 +2245,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                     {item.kind === 'dwm_alert' && (
                         <>
                             <DecisionButton busy={busy || busyAction === `replay:${item.id}`} disabledReason={hasBackedAlertWorkflow ? undefined : 'Replay requires a persistent /api/dwm/alerts/:id alert.'} onClick={onReplay}>Replay</DecisionButton>
-                            <DecisionButton busy={busy || busyAction === `send:${item.id}`} disabledReason={hasBackedAlertWorkflow ? undefined : 'Send requires a persistent alert and webhook delivery route.'} onClick={onSend}>Send</DecisionButton>
+                            <DecisionButton busy={busy || busyAction === `send:${item.id}`} disabledReason={sendDisabledReason || (hasBackedAlertWorkflow ? undefined : 'Send requires a persistent alert and webhook delivery route.')} onClick={onSend}>Send</DecisionButton>
                         </>
                     )}
                 </div>
@@ -2318,7 +2324,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                 {item.kind === 'dwm_alert' && (
                     <>
                         <DecisionButton busy={busy || busyAction === `replay:${item.id}`} onClick={onReplay}>Replay</DecisionButton>
-                        <DecisionButton busy={busy || busyAction === `send:${item.id}`} onClick={onSend}>Send</DecisionButton>
+                        <DecisionButton busy={busy || busyAction === `send:${item.id}`} disabledReason={sendDisabledReason} onClick={onSend}>Send</DecisionButton>
                     </>
                 )}
             </div>
@@ -2382,6 +2388,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     const ownerValue = ownerDraft ?? (effectiveOwner === 'unassigned' ? '' : effectiveOwner)
     const assignableMembers = orgContext?.members.filter(member => member.status === 'active' && member.role !== 'viewer') || []
     const readOnly = caseDetail?.status === 'ready' && caseDetail.detail.access?.readOnly === true
+    const sendDisabledReason = sendDeliveryDisabledReason(item, orgContext)
     const timeline = decision?.status ? [
         {
             id: `${item.id}_session_decision`,
@@ -2462,6 +2469,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                     effectiveStatus={effectiveStatus}
                     busyAction={busyAction}
                     caseDetail={caseDetail}
+                    sendDisabledReason={sendDisabledReason}
                     onDecision={onDecision}
                     onBackedCaseMutation={onBackedCaseMutation}
                     onCustomerNotification={onCustomerNotification}
@@ -3023,6 +3031,20 @@ function latestDeliveryForActionRail(selected: WorkbenchCase, caseDetail: CaseDe
     return [...detailDeliveries, ...actionDeliveries, ...(selected.deliveryEvidence || []), orgContext?.readiness.latestDelivery]
         .filter((delivery): delivery is WorkbenchDeliveryEvidence | CaseDelivery => Boolean(delivery?.id))
         .sort((a, b) => String(b.attemptedAt ?? '').localeCompare(String(a.attemptedAt ?? '')))[0]
+}
+
+function hasSendDeliveryDestination(action: WorkbenchAction | undefined, orgContext: WorkbenchOrgContext | undefined) {
+    const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
+    return Boolean(activeWebhook || stringValue(action?.body?.webhookDestinationId) || stringValue(action?.body?.webhookUrl))
+}
+
+function sendDeliveryDisabledReason(item: WorkbenchCase, orgContext: WorkbenchOrgContext | undefined) {
+    if (item.kind !== 'dwm_alert') return undefined
+    if (!item.persistent) return 'Send requires a persistent alert and webhook delivery route.'
+    const action = item.actions?.find(candidate => candidate.id === 'send_alert')
+    if (action?.disabledReason) return action.disabledReason
+    if (!hasSendDeliveryDestination(action, orgContext)) return 'Send delivery requires an active organization webhook destination or action-scoped webhook target.'
+    return undefined
 }
 
 function caseDetailHrefFromPayload(payload: WorkbenchApiPayload | undefined, action: WorkbenchAction | undefined, orgContext: WorkbenchOrgContext | undefined) {
