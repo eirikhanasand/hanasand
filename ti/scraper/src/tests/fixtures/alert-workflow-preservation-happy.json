@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "dwm.alert_workflow_preservation.v1",
+  "checkedAt": "2026-06-29T13:06:00.000Z",
+  "ok": true,
+  "preserved": {
+    "tenant": true,
+    "organization": true,
+    "caseRoute": true,
+    "owner": true,
+    "reviewState": true,
+    "deliveryState": true,
+    "eventCountMonotonic": true,
+    "provenance": true
+  },
+  "blockers": [],
+  "before": {
+    "schemaVersion": "dwm.alert_workflow_contract.v1",
+    "id": "dwm_alert_workflow_contract_fixture_before",
+    "checkedAt": "2026-06-29T13:00:00.000Z",
+    "tenantId": "tenant_acme",
+    "organizationId": "org_acme",
+    "alertId": "alert_acme_lumma",
+    "reviewState": "route_to_customer",
+    "deliveryState": "ready_to_send",
+    "workflowStatus": "triaged",
+    "assignedOwner": "ir-lead",
+    "severityOverride": "high",
+    "caseId": "case_acme_lumma",
+    "caseIdCandidate": "case_acme_lumma",
+    "casePath": "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+    "dedupeKey": "dedupe_acme_lumma",
+    "workflowEventCount": 2,
+    "latestWorkflowEventId": "event_escalate",
+    "provenance": {
+      "evidenceCount": 1,
+      "captureIds": ["cap_acme_initial"],
+      "sourceIds": ["src_acme_tg"],
+      "contentHashes": ["hash_acme_initial"]
+    }
+  },
+  "after": {
+    "schemaVersion": "dwm.alert_workflow_contract.v1",
+    "id": "dwm_alert_workflow_contract_fixture_after",
+    "checkedAt": "2026-06-29T13:05:00.000Z",
+    "tenantId": "tenant_acme",
+    "organizationId": "org_acme",
+    "alertId": "alert_acme_lumma",
+    "reviewState": "route_to_customer",
+    "deliveryState": "ready_to_send",
+    "workflowStatus": "triaged",
+    "assignedOwner": "ir-lead",
+    "severityOverride": "high",
+    "caseId": "case_acme_lumma",
+    "caseIdCandidate": "case_acme_lumma",
+    "casePath": "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+    "dedupeKey": "dedupe_acme_lumma",
+    "workflowEventCount": 2,
+    "latestWorkflowEventId": "event_escalate",
+    "provenance": {
+      "evidenceCount": 2,
+      "captureIds": ["cap_acme_initial", "cap_acme_followup"],
+      "sourceIds": ["src_acme_tg"],
+      "contentHashes": ["hash_acme_initial", "hash_acme_followup"]
+    }
+  }
+}
