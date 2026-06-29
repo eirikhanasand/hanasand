@@ -7243,12 +7243,14 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
         .filter(key => filterText(key))
     const actionFilters = ['action', 'severity', 'outcome', 'source', 'service', 'workflow']
         .filter(key => filterText(key))
+    const textQueryFilters = ['q']
+        .filter(key => filterText(key))
     const reasonContextFilters = ['reason', 'context']
         .filter(key => filterText(key))
     const from = filterText('from')
     const to = filterText('to')
     const timeRangeValid = (!from || !Number.isNaN(Date.parse(from))) && (!to || !Number.isNaN(Date.parse(to)))
-    const targetBounded = Boolean(targetFilters.length || reasonContextFilters.length)
+    const targetBounded = Boolean(targetFilters.length || textQueryFilters.length || reasonContextFilters.length)
     const blockers = [
         timeRangeValid ? '' : 'invalid_time_range',
         !targetBounded && (actionFilters.length || from || to) ? 'overbroad_audit_query' : '',
@@ -7260,6 +7262,7 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
         targetBounded,
         targetFilters,
         actionFilters,
+        textQueryFilters,
         reasonContextFilters,
         timeRange: {
             from: from || null,
@@ -7267,6 +7270,7 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
             valid: timeRangeValid,
         },
         supportedAliases: {
+            query: ['q'],
             organization: ['org', 'orgId', 'organizationId'],
             actor: ['actor', 'actorId', 'supportActor', 'supportActorId'],
             target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
@@ -7286,6 +7290,7 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
         copyText: [
             `Audit filters: ${Object.keys(appliedFilters).join(', ') || 'none'}`,
             `Target bounded: ${targetBounded}`,
+            `Text query: ${textQueryFilters.join(', ') || 'none'}`,
             `Time range: ${from || '*'} to ${to || '*'}`,
             `Replay: ${auditFilterQuery(filters)}`,
         ].join('\n'),
