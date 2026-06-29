@@ -1829,6 +1829,83 @@ export function organizationAlertCaseRoleActionContract(member: { userId: string
     }
 }
 
+export function organizationMemberAccessContract(
+    organization: Pick<OrganizationRow, 'id' | 'role' | 'status' | 'alert_visibility_policy'>,
+    members: Array<Pick<OrganizationMemberRow, 'user_id' | 'role' | 'status'>>
+) {
+    const activeMembers = members.filter(member => member.status === 'active')
+    const roleCounts = activeMembers.reduce((counts, member) => {
+        counts[member.role] += 1
+        return counts
+    }, {
+        owner: 0,
+        admin: 0,
+        member: 0,
+        viewer: 0,
+    } satisfies Record<OrganizationRole, number>)
+    const actorRole = organization.role ?? 'viewer'
+    const roleActionContract = organizationAlertCaseRoleActionContract({
+        userId: 'organization_member_read',
+        role: actorRole,
+    })
+    const visibility = organizationVisibilityDecision({
+        role: actorRole,
+        status: 'active',
+        userActive: true,
+        alertVisibilityPolicy: organization.alert_visibility_policy,
+    })
+
+    return {
+        schemaVersion: 'organization.member_access_contract.v1' as const,
+        organizationId: organization.id,
+        tenantId: organization.id,
+        actor: {
+            role: actorRole,
+            status: organization.status ?? 'active',
+            canManageInvites: roleCanManageOrganization(actorRole),
+            canManageMembers: roleCanManageOrganization(actorRole),
+            canManageWatchlists: roleCanWriteWatchlist(actorRole),
+            canReadSharedWatchlists: true,
+            canExportAlertTerms: visibility.allowed,
+            allowedAlertCaseActions: organizationAlertCaseRoleActions(actorRole),
+        },
+        counts: {
+            activeMemberCount: activeMembers.length,
+            ownerCount: roleCounts.owner,
+            adminCount: roleCounts.admin,
+            memberCount: roleCounts.member,
+            viewerCount: roleCounts.viewer,
+            activeAdminCount: roleCounts.owner + roleCounts.admin,
+        },
+        roleGates: {
+            createWatchlist: ['owner', 'admin'],
+            updateWatchlist: ['owner', 'admin'],
+            pauseWatchlist: ['owner', 'admin'],
+            archiveWatchlist: ['owner', 'admin'],
+            manageInvites: ['owner', 'admin'],
+            manageMembers: ['owner', 'admin'],
+            readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+            exportAlertTerms: visibility.allowedRoles,
+            acknowledgeAlert: roleActionContract.roleGates.acknowledge_alert,
+            assignCase: roleActionContract.roleGates.assign_case,
+            linkCase: roleActionContract.roleGates.link_case,
+        },
+        lifecycleDenials: {
+            inactiveOrganization: organization.status === 'archived' ? 'org_archived' : organization.status === 'deleted' ? 'org_deleted' : null,
+            revokedMember: 'member_revoked',
+            expiredInvite: 'invite_expired',
+            nonmember: 'nonmember_denied',
+            pausedWatchlist: 'watchlist_paused',
+            archivedWatchlist: 'watchlist_archived',
+        },
+        downstreamConsumers: {
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+            alertCaseVisibility: 'GET /api/organizations/:id/alert-case-visibility',
+            sharedWatchlists: 'GET /api/organizations/:id/watchlists',
+        },
+    }
+}
+
 export function organizationDownstreamAuthorizationExport(
     organization: Pick<OrganizationRow, 'id' | 'status' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
     items: OrganizationWatchlistRow[],

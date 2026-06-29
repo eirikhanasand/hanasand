@@ -542,13 +542,36 @@ const membersResponse = await app.inject({
     headers: authHeaders('org_smoke_owner', 'owner-token'),
 })
 assert.equal(membersResponse.statusCode, 200, membersResponse.body)
-const memberships = parseBody(membersResponse.body).members
+const membersBody = parseBody(membersResponse.body)
+const memberships = membersBody.members
 assert.deepEqual(
     memberships.map((member: Row) => member.userId).sort(),
     ['org_smoke_admin', 'org_smoke_member', 'org_smoke_owner', 'org_smoke_viewer'].sort()
 )
 assert.equal(memberships.find((member: Row) => member.userId === 'org_smoke_admin').role, 'admin')
 assert.equal(memberships.find((member: Row) => member.userId === 'org_smoke_viewer').role, 'viewer')
+assert.equal(membersBody.memberAccessContract.schemaVersion, 'organization.member_access_contract.v1')
+assert.equal(membersBody.memberAccessContract.organizationId, organization.id)
+assert.equal(membersBody.memberAccessContract.tenantId, organization.id)
+assert.equal(membersBody.memberAccessContract.actor.role, 'owner')
+assert.equal(membersBody.memberAccessContract.actor.canManageInvites, true)
+assert.equal(membersBody.memberAccessContract.actor.canManageMembers, true)
+assert.equal(membersBody.memberAccessContract.actor.canManageWatchlists, true)
+assert.equal(membersBody.memberAccessContract.actor.canReadSharedWatchlists, true)
+assert.equal(membersBody.memberAccessContract.actor.canExportAlertTerms, true)
+assert.equal(membersBody.memberAccessContract.counts.activeMemberCount, 4)
+assert.equal(membersBody.memberAccessContract.counts.ownerCount, 1)
+assert.equal(membersBody.memberAccessContract.counts.adminCount, 1)
+assert.equal(membersBody.memberAccessContract.counts.memberCount, 1)
+assert.equal(membersBody.memberAccessContract.counts.viewerCount, 1)
+assert.equal(membersBody.memberAccessContract.counts.activeAdminCount, 2)
+assert.deepEqual(membersBody.memberAccessContract.roleGates.createWatchlist, ['owner', 'admin'])
+assert.deepEqual(membersBody.memberAccessContract.roleGates.readSharedWatchlists, ['owner', 'admin', 'member', 'viewer'])
+assert.deepEqual(membersBody.memberAccessContract.roleGates.assignCase, ['owner', 'admin', 'analyst'])
+assert.equal(membersBody.memberAccessContract.lifecycleDenials.revokedMember, 'member_revoked')
+assert.equal(membersBody.memberAccessContract.lifecycleDenials.expiredInvite, 'invite_expired')
+assert.equal(membersBody.memberAccessContract.lifecycleDenials.nonmember, 'nonmember_denied')
+assert.equal(membersBody.memberAccessContract.downstreamConsumers.alertTermsExport, 'GET /api/organizations/:id/watchlists/alert-terms')
 
 const memberRoleUpdateDeniedResponse = await app.inject({
     method: 'PATCH',

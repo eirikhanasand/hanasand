@@ -19,6 +19,7 @@ import {
     organizationAnalystPortalVisibilityAdapter,
     organizationLifecycleReadiness,
     organizationDownstreamAuthorizationExport,
+    organizationMemberAccessContract,
     organizationReadinessProof,
     organizationSettingsFromRow,
     organizationSharedWatchlistDownstreamProof,
@@ -365,9 +366,12 @@ export async function getOrganizationMembers(req: FastifyRequest<{ Params: Organ
             om.user_id ASC
     `, [req.params.id])
 
+    const members = result.rows as OrganizationMemberRow[]
+
     return res.send({
         organization: toOrganization(organization),
-        members: (result.rows as OrganizationMemberRow[]).map(toMember),
+        members: members.map(toMember),
+        memberAccessContract: organizationMemberAccessContract(organization, members),
     })
 }
 
