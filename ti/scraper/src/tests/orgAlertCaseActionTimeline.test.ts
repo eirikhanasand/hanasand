@@ -33,6 +33,12 @@ describe("org alert case action timeline adapter", () => {
           alertIds: ["alert_acme_lumma"],
           casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"]
         },
+        replay: {
+          replayState: "recorded",
+          idempotencyKey: "receipt_acme_open_case",
+          dedupeKey: expect.stringMatching(/^org_alert_case_action_replay_/),
+          duplicate: false
+        },
         provenance: {
           source: "org_alert_case_action_ledger",
           recordId: "ledger_acme_open_case",
@@ -44,7 +50,7 @@ describe("org alert case action timeline adapter", () => {
       })],
       blockers: []
     });
-    expect(report.payloadShape).toEqual(expect.arrayContaining(["rows[].provenance.auditEventId", "blockers[]"]));
+    expect(report.payloadShape).toEqual(expect.arrayContaining(["rows[].replay.dedupeKey", "rows[].provenance.auditEventId", "blockers[]"]));
     expect(JSON.stringify(report)).not.toContain("https://discord.com");
   });
 

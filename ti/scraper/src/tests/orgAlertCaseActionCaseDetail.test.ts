@@ -41,7 +41,17 @@ describe("org alert case action ledger in case detail", () => {
         watchlistIds: ["watch_acme_domains"],
         watchlistItemIds: ["watch_item_acme_com"],
         caseActionReceiptId: "receipt_acme_open_case",
-        caseActionAuditEventId: expect.stringMatching(/^org_alert_case_action_audit_/)
+        caseActionAuditEventId: expect.stringMatching(/^org_alert_case_action_audit_/),
+        caseActionReplayState: "recorded",
+        caseActionIdempotencyKey: "receipt_acme_open_case",
+        caseActionDedupeKey: expect.stringMatching(/^org_alert_case_action_replay_/)
+      },
+      workflowState: {
+        action: "open_case",
+        execution: "ready",
+        replayState: "recorded",
+        idempotencyKey: "receipt_acme_open_case",
+        dedupeKey: expect.stringMatching(/^org_alert_case_action_replay_/)
       },
       provenance: {
         source: "org_alert_case_action_ledger",
@@ -81,7 +91,17 @@ describe("org alert case action ledger in case detail", () => {
         eventType: "case.action_recorded",
         related: {
           caseActionReceiptId: "receipt_acme_open_case",
-          caseActionAuditEventId: expect.stringMatching(/^org_alert_case_action_audit_/)
+          caseActionAuditEventId: expect.stringMatching(/^org_alert_case_action_audit_/),
+          caseActionReplayState: "recorded",
+          caseActionIdempotencyKey: "receipt_acme_open_case",
+          caseActionDedupeKey: expect.stringMatching(/^org_alert_case_action_replay_/)
+        },
+        workflowState: {
+          action: "open_case",
+          execution: "ready",
+          replayState: "recorded",
+          idempotencyKey: "receipt_acme_open_case",
+          dedupeKey: expect.stringMatching(/^org_alert_case_action_replay_/)
         },
         provenance: {
           source: "org_alert_case_action_ledger",
@@ -106,7 +126,9 @@ describe("org alert case action ledger in case detail", () => {
     const byAudit = await listCases(options, "q=org_alert_case_action_audit");
     const byReceiptFilter = await listCases(options, "caseActionReceiptId=receipt_acme_open_case");
     const auditId = byReceiptFilter.payload.items[0].latestCaseAction.related.caseActionAuditEventId;
+    const replayDedupeKey = byReceiptFilter.payload.items[0].latestCaseAction.related.caseActionDedupeKey;
     const byAuditFilter = await listCases(options, `caseActionAuditEventId=${encodeURIComponent(auditId)}`);
+    const byReplayDedupe = await listCases(options, `q=${encodeURIComponent(replayDedupeKey)}`);
     const byWindow = await listCases(options, `from=${encodeURIComponent("2026-06-29T15:05:00.000Z")}&to=${encodeURIComponent("2026-06-29T15:07:00.000Z")}`);
     const outsideWindow = await listCases(options, `from=${encodeURIComponent("2026-06-29T16:00:00.000Z")}&to=${encodeURIComponent("2026-06-29T17:00:00.000Z")}`);
     const unrelatedQuery = await listCases(options, "q=receipt_other_open_case");
@@ -118,6 +140,7 @@ describe("org alert case action ledger in case detail", () => {
     expect(byAudit.payload.items).toHaveLength(1);
     expect(byReceiptFilter.payload.items).toHaveLength(1);
     expect(byAuditFilter.payload.items).toHaveLength(1);
+    expect(byReplayDedupe.payload.items).toHaveLength(1);
     expect(byWindow.payload.items).toHaveLength(1);
     expect(outsideWindow.payload.items).toEqual([]);
     expect(unrelatedQuery.payload.items).toEqual([]);

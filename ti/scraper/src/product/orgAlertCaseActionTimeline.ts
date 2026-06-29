@@ -35,6 +35,12 @@ export type OrgAlertCaseActionTimelineRow = {
     alertIds: string[];
     casePaths: string[];
   };
+  replay: {
+    replayState: "recorded" | "blocked";
+    idempotencyKey: string;
+    dedupeKey: string;
+    duplicate: false;
+  };
   provenance: {
     source: "org_alert_case_action_ledger";
     recordId: string;
@@ -114,6 +120,8 @@ function report(
     payloadShape: [
       "rows[].related.alertIds",
       "rows[].related.casePaths",
+      "rows[].replay.dedupeKey",
+      "rows[].replay.idempotencyKey",
       "rows[].provenance.recordId",
       "rows[].provenance.auditEventId",
       "blockers[]"
@@ -141,6 +149,7 @@ function timelineRow(record: OrgAlertCaseActionLedgerApiRecord): OrgAlertCaseAct
       alertIds: uniqueStrings(record.alertIds),
       casePaths: uniqueStrings(record.casePaths)
     },
+    replay: replayStateFor(record),
     provenance: {
       source: "org_alert_case_action_ledger",
       recordId: record.id,
@@ -149,6 +158,15 @@ function timelineRow(record: OrgAlertCaseActionLedgerApiRecord): OrgAlertCaseAct
       receiptOk: record.receiptOk,
       blockedByCodes: uniqueStrings(record.blockedByCodes)
     }
+  };
+}
+
+function replayStateFor(record: OrgAlertCaseActionLedgerApiRecord): OrgAlertCaseActionTimelineRow["replay"] {
+  return {
+    replayState: record.receiptOk && record.blockedByCodes.length === 0 ? "recorded" : "blocked",
+    idempotencyKey: record.receiptId,
+    dedupeKey: stableId("org_alert_case_action_replay", `${record.tenantId}:${record.organizationId}:${record.receiptId}`),
+    duplicate: false
   };
 }
 
