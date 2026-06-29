@@ -909,7 +909,8 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
     }
 
     await touchOrganization(row.organization_id)
-    logOrganizationEvent(req, 'organization_invite_accepted', row.organization_id, userId, {
+    const serviceLogAction = 'organization_invite_accepted'
+    logOrganizationEvent(req, serviceLogAction, row.organization_id, userId, {
         inviteId: row.invite_id,
         role: row.member_role,
     })
@@ -934,6 +935,26 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
             status: row.member_status,
             joinedAt: row.joined_at,
             createdAt: row.member_created_at,
+        },
+        inviteAcceptance: {
+            schemaVersion: 'organization.invite_acceptance.v1',
+            organizationId: row.organization_id,
+            tenantId: row.organization_id,
+            inviteId: row.invite_id,
+            acceptanceToken: row.invite_id,
+            acceptancePath: `/api/organizations/invites/${encodeURIComponent(row.invite_id)}/accept`,
+            acceptedBy: userId,
+            invitedBy: row.invited_by,
+            inviteRole: row.invite_role,
+            appliedRole: row.member_role,
+            membershipStatus: row.member_status,
+            acceptedAt: row.accepted_at,
+            expiresAt: row.expires_at,
+            serviceLogAction,
+            auditMetadataFields: ['inviteId', 'role', 'acceptedBy', 'organizationId'],
+            reusedInviteBlocked: true,
+            expiredInviteDenied: 'invite_expired',
+            revokedInviteDenied: 'member_revoked',
         },
         organization: organization ? toOrganization(organization) : null,
     })

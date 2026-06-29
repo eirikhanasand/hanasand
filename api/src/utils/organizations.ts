@@ -841,6 +841,27 @@ export type OrganizationSharedWatchlistDownstreamProof = {
             state: 'ready' | 'needs_source_coverage'
             blockerCodes: Array<'source_coverage_required' | 'capture_provenance_missing'>
         }
+        sourceHealth: {
+            schemaVersion: 'organization.shared_watchlist_source_coverage_health.v1'
+            expectedAdapter: 'organizationSharedWatchlistSourceCoverageHealth'
+            route: 'GET /v1/dwm/sources/health'
+            ownerLane: 'source_operations'
+            state: 'ready' | 'needs_source_coverage'
+            rows: Array<{
+                sourceFamily: OrganizationSharedWatchlistProvenanceSourceFamily
+                required: boolean
+                active: boolean
+                status: 'covered' | 'optional' | 'missing'
+                requiredEvidenceFields: Array<'sourceFamily' | 'captureIds' | 'sourceIds' | 'capturedAt' | 'contentHash'>
+                blockerCodes: Array<'source_coverage_required' | 'capture_provenance_missing'>
+            }>
+            redaction: {
+                containsRawContent: false
+                safeFields: Array<'sourceFamily' | 'active' | 'status' | 'captureIds' | 'sourceIds' | 'contentHash'>
+                redactedFields: Array<'rawContent' | 'activeTerms[].term' | 'destination.secret'>
+            }
+            blockerCodes: Array<'source_coverage_required' | 'capture_provenance_missing'>
+        }
         provenanceFields: {
             alert: Array<'provenance.captureIds' | 'provenance.sourceIds' | 'provenance.generatedAt' | 'provenance.matchBasis' | 'sourceFamily'>
             workflowContext: Array<'captureIds' | 'selectedCaptureIds' | 'sourceFamily' | 'alertGeneratorKeys' | 'watchlistTermContexts'>
@@ -2979,6 +3000,12 @@ function organizationSharedWatchlistEnrichmentProvenance(input: {
             state: blockerCodes.length === 0 ? 'ready' : 'needs_source_coverage',
             blockerCodes,
         },
+        sourceHealth: organizationSharedWatchlistSourceCoverageHealth({
+            requiredFamilies,
+            activeFamilies,
+            optionalFamilies,
+            blockerCodes,
+        }),
         provenanceFields: {
             alert: ['provenance.captureIds', 'provenance.sourceIds', 'provenance.generatedAt', 'provenance.matchBasis', 'sourceFamily'],
             workflowContext: ['captureIds', 'selectedCaptureIds', 'sourceFamily', 'alertGeneratorKeys', 'watchlistTermContexts'],
@@ -3002,6 +3029,47 @@ function organizationSharedWatchlistEnrichmentProvenance(input: {
             crossTenantCollisionAllowed: false,
         },
         blockerCodes,
+    }
+}
+
+function organizationSharedWatchlistSourceCoverageHealth(input: {
+    requiredFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[]
+    activeFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[]
+    optionalFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[]
+    blockerCodes: OrganizationSharedWatchlistDownstreamProof['enrichmentProvenance']['blockerCodes']
+}): OrganizationSharedWatchlistDownstreamProof['enrichmentProvenance']['sourceHealth'] {
+    const requiredEvidenceFields: OrganizationSharedWatchlistDownstreamProof['enrichmentProvenance']['sourceHealth']['rows'][number]['requiredEvidenceFields'] = [
+        'sourceFamily',
+        'captureIds',
+        'sourceIds',
+        'capturedAt',
+        'contentHash',
+    ]
+    const families = [...new Set([...input.requiredFamilies, ...input.optionalFamilies])]
+    return {
+        schemaVersion: 'organization.shared_watchlist_source_coverage_health.v1',
+        expectedAdapter: 'organizationSharedWatchlistSourceCoverageHealth',
+        route: 'GET /v1/dwm/sources/health',
+        ownerLane: 'source_operations',
+        state: input.blockerCodes.length === 0 ? 'ready' : 'needs_source_coverage',
+        rows: families.map(sourceFamily => {
+            const required = input.requiredFamilies.includes(sourceFamily)
+            const active = input.activeFamilies.includes(sourceFamily)
+            return {
+                sourceFamily,
+                required,
+                active,
+                status: active ? 'covered' : required ? 'missing' : 'optional',
+                requiredEvidenceFields,
+                blockerCodes: active || !required ? [] : input.blockerCodes,
+            }
+        }),
+        redaction: {
+            containsRawContent: false,
+            safeFields: ['sourceFamily', 'active', 'status', 'captureIds', 'sourceIds', 'contentHash'],
+            redactedFields: ['rawContent', 'activeTerms[].term', 'destination.secret'],
+        },
+        blockerCodes: input.blockerCodes,
     }
 }
 
