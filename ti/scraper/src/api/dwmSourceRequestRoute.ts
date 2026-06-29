@@ -6379,10 +6379,84 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
     lastRunTime: lastRun?.completedAt,
     lastRunStatus: lastRun?.status,
     parserSourceFamilyCounts,
+    fixtureLoadReadiness: sourcePackFixtureLoadReadiness(candidates),
     sourceFamilyCounts: sourceFamilyCoverage({ sources, registry: packs[0] }),
     activeSourceRows: activeRows.length,
     queuedCollectionTasks: queuedTaskIds.size,
     safeOutput: sourcePackSafeOutput()
+  };
+}
+
+function sourcePackFixtureLoadReadiness(candidates: Array<Record<string, any>>) {
+  const rows = SOURCE_GROWTH_FAMILIES.map((family) => {
+    const familyCandidates = candidates.filter((candidate) => candidate.declaredFamily === family);
+    const fixtureReadyCandidates = familyCandidates.filter((candidate) => {
+      const parserExpectation = candidate.parserExpectation ?? parserProfileForFamily(family);
+      return Boolean(parserExpectation) && !["rejected", "duplicate", "suppressed", "disabled"].includes(String(candidate.status));
+    });
+    const blockedCandidates = familyCandidates.filter((candidate) => {
+      return ["rejected", "failed", "disabled"].includes(String(candidate.status)) || Boolean(candidate.failure);
+    });
+    return {
+      schemaVersion: "dwm.source_pack_fixture_load_readiness_row.v1",
+      family,
+      totalCandidates: familyCandidates.length,
+      fixtureReadyCandidates: fixtureReadyCandidates.length,
+      blockedCandidates: blockedCandidates.length,
+      parserProfile: parserProfileForFamily(family),
+      expectedCaptureType: expectedCaptureTypeForFamily(family),
+      fixtureKeys: uniqueSourceReadinessStrings(fixtureReadyCandidates.map((candidate) => sourcePackCandidateFixtureKey(candidate))),
+      policyBoundary: sourcePackFixturePolicyBoundaryForFamily(family),
+      loadPlan: {
+        mode: "no_network_fixture",
+        action: "pack_worker_run",
+        liveNetworkFetch: false,
+        rawRestrictedPayloadStorage: false
+      },
+      blockers: dedupeBlockers(blockedCandidates.map((candidate) => ({
+        code: candidate.failure?.code ?? "candidate_not_fixture_ready",
+        severity: "warning",
+        family,
+        retryable: candidate.status !== "rejected"
+      }))),
+      safeOutput: sourcePackSafeOutput()
+    };
+  });
+  return {
+    schemaVersion: "dwm.source_pack_fixture_load_readiness.v1",
+    rows,
+    summary: {
+      totalFixtures: rows.reduce((sum, row) => sum + row.fixtureReadyCandidates, 0),
+      familiesWithFixtures: uniqueSourceReadinessStrings(rows.filter((row) => row.fixtureReadyCandidates > 0).map((row) => row.family)),
+      blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.blockedCandidates > 0).map((row) => row.family)),
+      parserProfiles: uniqueSourceReadinessStrings(rows.filter((row) => row.fixtureReadyCandidates > 0).map((row) => row.parserProfile)),
+      expectedCaptureTypes: uniqueSourceReadinessStrings(rows.filter((row) => row.fixtureReadyCandidates > 0).map((row) => row.expectedCaptureType))
+    },
+    policyBoundary: {
+      liveNetworkFetch: false,
+      rawRestrictedPayloadStorage: false,
+      metadataOnlyRestrictedSources: true,
+      publicTelegramOnly: true
+    },
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
+function sourcePackCandidateFixtureKey(candidate: Record<string, any>) {
+  const requestedFamily = String(candidate.declaredFamily ?? candidate.family ?? "");
+  const family = (SOURCE_GROWTH_FAMILIES.includes(requestedFamily as SourceGrowthFamily) ? requestedFamily : "clear_web") as SourceGrowthFamily;
+  const parserProfile = parserProfileForFamily(family);
+  const ref = String(candidate.refLabel ?? candidate.targetRef ?? candidate.id ?? family).toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "candidate";
+  return `fixture://source-pack/${family}/${parserProfile}/${ref}`;
+}
+
+function sourcePackFixturePolicyBoundaryForFamily(family: SourceGrowthFamily) {
+  return {
+    publicTelegramOnly: family === "telegram",
+    metadataOnlyRestrictedSource: family === "darkweb_onion" || family === "darkweb_metadata",
+    publicMetadataOnly: family === "actor_page" || family === "public_advisory" || family === "clear_web",
+    liveNetworkFetch: false,
+    rawRestrictedPayloadStorage: false
   };
 }
 
