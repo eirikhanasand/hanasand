@@ -258,6 +258,13 @@ describe("dwm alert repository", () => {
     });
     expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId).sort()).toEqual(["cap_repo_darkweb_acme", "cap_repo_public_ti_acme", "cap_repo_tg_acme"].sort());
     expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId)).not.toContain("cap_repo_tg_notacme_false_positive");
+    expect(generationPlan.candidates[0].evidenceWindow).toMatchObject({
+      captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_darkweb_acme", "cap_repo_public_ti_acme"]),
+      sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"],
+      contentHashes: expect.arrayContaining(["hash-repo-tg-acme", "hash-repo-darkweb-acme", "hash-repo-public-ti-acme"]),
+      firstObservedAt: "2026-06-28T13:04:00.000Z",
+      lastObservedAt: "2026-06-28T13:11:00.000Z"
+    });
     expect(generationPlan.candidates[0].dedupeKeyCandidate).toMatch(/^dwm_dedupe_candidate_/);
 
     const readiness = buildDwmAlertGenerationReadiness({
@@ -383,6 +390,11 @@ describe("dwm alert repository", () => {
       sourceFamily: "telegram_public",
       primaryCaptureId: "cap_repo_tg_acme",
       evidenceCount: 1,
+      generationEvidenceWindow: {
+        firstObservedAt: "2026-06-28T13:04:00.000Z",
+        lastObservedAt: "2026-06-28T13:11:00.000Z",
+        sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"]
+      },
       recommendedRoute: "identity_response",
       hasWebhookRoute: true
     });
@@ -414,6 +426,10 @@ describe("dwm alert repository", () => {
       },
       captureIds: ["cap_repo_tg_acme"],
       evidenceCount: 1,
+      generationEvidenceWindow: {
+        firstObservedAt: "2026-06-28T13:04:00.000Z",
+        lastObservedAt: "2026-06-28T13:11:00.000Z"
+      },
       recommendedRoute: "identity_response"
     });
     const telegramAlert = first.alerts.find((alert) => alert.sourceFamily === "telegram_public");
@@ -540,6 +556,15 @@ describe("dwm alert repository", () => {
     expect(preserved?.sourceCount).toBe(2);
     expect(preserved?.workflowContext.evidenceCount).toBe(2);
     expect(preserved?.webhookContext.evidenceCount).toBe(2);
+    expect(preserved?.workflowContext.generationEvidenceWindow).toMatchObject({
+      firstObservedAt: "2026-06-28T13:04:00.000Z",
+      lastObservedAt: "2026-06-28T13:16:00.000Z",
+      captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"])
+    });
+    expect(preserved?.webhookContext.generationEvidenceWindow).toMatchObject({
+      lastObservedAt: "2026-06-28T13:16:00.000Z",
+      contentHashes: expect.arrayContaining(["hash-repo-tg-acme-followup"])
+    });
     expect(preserved?.evidence.map((item: any) => item.id)).toContain("cap_repo_tg_acme_followup");
     expect(preserved?.evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_acme_duplicate");
     expect(preserved?.evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_quiet");

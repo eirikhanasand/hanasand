@@ -548,6 +548,13 @@ export type DwmAlertGenerationCandidate = {
   membershipContext?: RuntimeOrgMembershipContext;
   sourceFamilies: string[];
   captureRefs: DwmAlertGenerationCaptureRef[];
+  evidenceWindow: {
+    captureIds: string[];
+    sourceFamilies: string[];
+    contentHashes: string[];
+    firstObservedAt?: string;
+    lastObservedAt?: string;
+  };
   watchlistTermContexts: RuntimeOrgWatchlistTermContext[];
   alertGeneratorKeys: string[];
   alertGenerationRefs: RuntimeOrgWatchlistTermContext["alertGenerationRef"][];
@@ -919,6 +926,7 @@ export function buildDwmAlertGenerationPlan(input: {
         existing.hasWebhookRoute = existing.hasWebhookRoute || Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl);
         existing.captureRefs = mergeCaptureRefs(existing.captureRefs, captureRefs);
         existing.sourceFamilies = uniqueStrings([...existing.sourceFamilies, ...sourceFamilies]);
+        existing.evidenceWindow = evidenceWindowForCaptureRefs(existing.captureRefs);
         existing.watchlistTermContexts = mergeWatchlistTermContexts(existing.watchlistTermContexts, watchlistTermContexts);
         existing.alertGeneratorKeys = uniqueStrings([...existing.alertGeneratorKeys, ...watchlistTermContexts.map((term) => term.alertGeneratorKey)]);
         existing.alertGenerationRefs = mergeAlertGenerationRefs(existing.alertGenerationRefs, watchlistTermContexts.map((term) => term.alertGenerationRef));
@@ -941,6 +949,7 @@ export function buildDwmAlertGenerationPlan(input: {
         membershipContext: watchlist.orgMembershipContext,
         sourceFamilies,
         captureRefs,
+        evidenceWindow: evidenceWindowForCaptureRefs(captureRefs),
         watchlistTermContexts,
         alertGeneratorKeys: uniqueStrings(watchlistTermContexts.map((term) => term.alertGeneratorKey)),
         alertGenerationRefs: mergeAlertGenerationRefs([], watchlistTermContexts.map((term) => term.alertGenerationRef)),
@@ -1829,6 +1838,7 @@ export function buildDwmAlertWorkflowContext(input: {
       matchedTerm: input.alert.matchedTerm
     },
     provenance: input.alert.provenance,
+    generationEvidenceWindow: input.generationCandidate?.evidenceWindow,
     watchlistProvenance: input.generationCandidate?.watchlistTermContexts?.map((term) => ({
       watchlistId: term.watchlistId,
       watchlistItemId: term.watchlistItemId,
@@ -1881,6 +1891,7 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     confidence: alert.confidence,
     confidenceReasoning: alert.confidenceReasoning ?? [],
     provenance: alert.provenance,
+    generationEvidenceWindow: workflowContext.generationEvidenceWindow,
     claimSummary: alert.claimSummary
   };
 }
@@ -1993,6 +2004,17 @@ function mergeCaptureRefs(existing: DwmAlertGenerationCaptureRef[], next: DwmAle
   const byId = new Map(existing.map((ref) => [ref.captureId, ref]));
   for (const ref of next) byId.set(ref.captureId, byId.get(ref.captureId) ?? ref);
   return [...byId.values()];
+}
+
+function evidenceWindowForCaptureRefs(refs: DwmAlertGenerationCaptureRef[]) {
+  const observed = refs.map((ref) => ref.observedAt).filter(Boolean).map(String).sort();
+  return {
+    captureIds: uniqueStrings(refs.map((ref) => ref.captureId).filter(Boolean)),
+    sourceFamilies: uniqueStrings(refs.map((ref) => ref.sourceFamily).filter(Boolean)),
+    contentHashes: uniqueStrings(refs.map((ref) => ref.contentHash).filter(Boolean) as string[]),
+    firstObservedAt: observed[0],
+    lastObservedAt: observed.at(-1)
+  };
 }
 
 function mergeWatchlistTermContexts(existing: RuntimeOrgWatchlistTermContext[], next: RuntimeOrgWatchlistTermContext[]): RuntimeOrgWatchlistTermContext[] {
