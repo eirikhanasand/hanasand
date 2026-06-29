@@ -12,6 +12,7 @@ const readinessPageSource = readFileSync(new URL('../src/app/readiness/page.tsx'
 const productProgressRouteSource = readFileSync(new URL('../src/app/api/product-progress/route.ts', here), 'utf8')
 const productReadinessRouteSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
 const organizationAlertReadinessRouteSource = readFileSync(new URL('../src/app/api/organizations/[id]/alert-readiness/route.ts', here), 'utf8')
+const caseCustomerNotificationProxySource = readFileSync(new URL('../src/app/api/cases/[id]/customer-notification/route.ts', here), 'utf8')
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
@@ -758,6 +759,11 @@ assert.ok(workbenchSource.includes('alert?.workflowContext?.caseIdCandidate'), '
 assert.ok(workbenchSource.includes('deliveryEvidenceFromPayload'), 'Webhook test/send responses should become inspectable delivery evidence in the selected workbench item.')
 assert.ok(workbenchSource.includes('mergeDeliveryEvidence(actionDeliveries'), 'Action-returned delivery evidence should be shown in the backed inspection panel before case detail reloads.')
 assert.ok(workbenchSource.includes('endpoint_hash_not_returned'), 'Delivery evidence from partial webhook responses should mark missing hashes honestly.')
+assert.ok(workbenchSource.includes('recordCustomerNotification'), 'Selected backed cases should record customer notification receipts from the dashboard.')
+assert.ok(workbenchSource.includes('caseCustomerNotificationHref'), 'Customer notification receipts should use the scoped /api/cases/:id/customer-notification proxy.')
+assert.ok(workbenchSource.includes('Customer notification receipt requires decision rationale.'), 'Customer notification receipts should require analyst rationale before mutation.')
+assert.ok(workbenchSource.includes('customerNotificationContext'), 'Case continuity should expose backed customer notification receipt state.')
+assert.ok(caseCustomerNotificationProxySource.includes('/v1/cases/${encodeURIComponent(id)}/customer-notification'), 'Dashboard case notification proxy should forward to the TI case notification contract.')
 assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
 assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
 assert.ok(dashboardModelSource.includes('open_alert_generation_readiness'), 'Alert readiness case should expose the backed generation-readiness proof.')

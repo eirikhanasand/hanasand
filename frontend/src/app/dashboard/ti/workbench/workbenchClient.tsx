@@ -319,6 +319,7 @@ type WorkbenchApiPayload = {
     delivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
     deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
     case?: { id?: string, status?: string, organizationId?: string }
+    receipt?: { id?: string, deliveryMode?: string, webhookDeliveryId?: string }
     watchlist?: { id?: string, status?: string }
 }
 
@@ -602,6 +603,40 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         })
     }
 
+    async function recordCustomerNotification(item: WorkbenchCase, note: string, caseDetail?: CaseDetailState) {
+        if (!item.caseDetailHref || caseDetail?.status !== 'ready') {
+            setMessage({ ok: false, text: item.missingDependency || 'Recording customer notification requires a backed /api/cases/:id detail response.' })
+            return
+        }
+        const delivery = deliveredCaseDelivery(caseDetail.detail)
+        if (!delivery) {
+            setMessage({ ok: false, text: 'Recording a webhook customer notification requires a delivered webhook row from /api/cases/:id.' })
+            return
+        }
+        const rationale = note.trim()
+        if (!rationale) {
+            setMessage({ ok: false, text: 'Customer notification receipt requires decision rationale.' })
+            return
+        }
+        await runPersistentAction(`case:${item.id}:customer_notification`, async () => {
+            const response = await fetch(caseCustomerNotificationHref(item.caseDetailHref as string), {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    ...scopeBody(orgContext),
+                    deliveryMode: 'webhook_delivery',
+                    webhookDeliveryId: delivery.id,
+                    rationale,
+                    actor: 'dashboard',
+                }),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            await refreshCaseDetail(item.id, item.caseDetailHref as string, { loading: false })
+            return payload.receipt?.id ? `Customer notification ${payload.receipt.id} recorded.` : 'Customer notification receipt recorded.'
+        })
+    }
+
     async function createSharedWatchlistTerm(item: WorkbenchCase) {
         const term = suggestedWatchTerm(item)
         if (!term) {
@@ -783,6 +818,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 onOwnerDraftChange={value => setOwnerDrafts(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={(decision) => applyDecision(selected, decision)}
                                 onBackedCaseMutation={(mutation) => runBackedCaseMutation(selected, mutation)}
+                                onCustomerNotification={() => recordCustomerNotification(selected, notes[selected.id] ?? '', selectedCaseDetail)}
                                 onReplay={() => replayDwmAlert(selected)}
                                 onSend={() => sendDwmAlert(selected)}
                                 onAction={(action) => runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
@@ -1920,7 +1956,7 @@ function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
     )
 }
 
-function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDetail, onDecision, onBackedCaseMutation, onReplay, onSend }: {
+function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDetail, onDecision, onBackedCaseMutation, onCustomerNotification, onReplay, onSend }: {
     item: WorkbenchCase
     note: string
     owner: string
@@ -1929,6 +1965,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
     caseDetail?: CaseDetailState
     onDecision: (decision: LocalDecision) => void | Promise<void>
     onBackedCaseMutation: (mutation: CaseMutationInput) => void | Promise<void>
+    onCustomerNotification: () => void | Promise<void>
     onReplay: () => void | Promise<void>
     onSend: () => void | Promise<void>
 }) {
@@ -1964,6 +2001,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
 
     const hasOwner = owner.trim() && owner.trim() !== 'unassigned'
     const noteText = note.trim()
+    const notificationState = customerNotificationActionState(caseDetail)
     return (
         <div className='grid gap-2 rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3'>
             <div>
@@ -2021,6 +2059,13 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                     disabledReason={closeAction === 'close' && !noteText ? 'Closing requires rationale.' : undefined}
                     onClick={() => onBackedCaseMutation({ action: closeAction, assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText || (closeAction === 'reopen' ? 'Reopened for review.' : 'Closed from analyst workbench.') })}
                 />
+                <DecisionButton
+                    busy={busy || busyAction === `case:${item.id}:customer_notification`}
+                    onClick={onCustomerNotification}
+                    disabledReason={notificationState.disabledReason || (!noteText ? 'Customer notification receipt requires decision rationale.' : undefined)}
+                >
+                    Record notification
+                </DecisionButton>
                 {item.kind === 'dwm_alert' && (
                     <>
                         <DecisionButton busy={busy || busyAction === `replay:${item.id}`} onClick={onReplay}>Replay</DecisionButton>
@@ -2059,7 +2104,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
     )
 }
 
-function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, alertDetail, actionDeliveries, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
+function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, alertDetail, actionDeliveries, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onCustomerNotification, onReplay, onSend, onAction }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
@@ -2075,6 +2120,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     onOwnerDraftChange: (value: string) => void
     onDecision: (decision: LocalDecision) => void | Promise<void>
     onBackedCaseMutation: (mutation: CaseMutationInput) => void | Promise<void>
+    onCustomerNotification: () => void | Promise<void>
     onReplay: () => void | Promise<void>
     onSend: () => void | Promise<void>
     onAction: (action: WorkbenchAction) => void | Promise<void>
@@ -2169,6 +2215,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                     caseDetail={caseDetail}
                     onDecision={onDecision}
                     onBackedCaseMutation={onBackedCaseMutation}
+                    onCustomerNotification={onCustomerNotification}
                     onReplay={onReplay}
                     onSend={onSend}
                 />
@@ -2345,6 +2392,7 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage }: { it
         .reverse()
     const visibility = detail?.access?.visibilityDecision
     const allowedActions = detail?.nextAllowedActions || []
+    const notificationContext = detail?.customerNotificationContext
     const latestTimeline = (detail?.timeline || [])
         .filter(row => row.rationale || row.toOwner || row.toStatus || row.eventType)
         .slice(-5)
@@ -2408,6 +2456,14 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage }: { it
                             ))}
                             {!allowedActions.length && <span className='text-xs text-[#667085]'>No backed action matrix returned.</span>}
                         </div>
+                    </ContinuityBlock>
+                    <ContinuityBlock title='Customer notification'>
+                        <p className='text-xs leading-5 text-[#667085]'>
+                            {notificationContext?.notified
+                                ? `Recorded ${notificationContext.notificationCount} notification${notificationContext.notificationCount === 1 ? '' : 's'}; latest ${notificationContext.latest?.id || 'receipt'} via ${label(notificationContext.latest?.deliveryMode || notificationContext.modes?.[0] || 'webhook_delivery')}.`
+                                : detail ? 'No customer notification receipt recorded yet.' : 'Receipt state requires case detail.'}
+                        </p>
+                        {notificationContext?.latest?.webhookDeliveryId ? <p className='mt-2 break-all text-xs text-[#667085]'>Delivery: {notificationContext.latest.webhookDeliveryId}</p> : null}
                     </ContinuityBlock>
                     <ContinuityBlock title='Recent audit'>
                         <div className='grid gap-2'>
@@ -2503,6 +2559,12 @@ type CaseDetailPayload = {
         retryable?: boolean
         failed?: CaseDelivery[]
     }
+    customerNotificationContext?: {
+        notificationCount: number
+        notified: boolean
+        latest?: CaseCustomerNotificationReceipt
+        modes?: string[]
+    }
     deliveries?: CaseDelivery[]
     evidence?: CaseEvidence[]
     timeline?: CaseTimelineItem[]
@@ -2543,6 +2605,17 @@ type CaseDelivery = WorkbenchDeliveryEvidence & {
     dryRun?: boolean
 }
 
+type CaseCustomerNotificationReceipt = {
+    id: string
+    at: string
+    deliveryMode: 'webhook_delivery' | 'manual_handoff'
+    rationale?: string
+    webhookDeliveryId?: string
+    webhookDestinationId?: string
+    webhookStatus?: string
+    externalReference?: string
+}
+
 type CaseEvidence = {
     id: string
     sourceName?: string
@@ -2577,9 +2650,10 @@ type CaseWorkflowEvent = {
     note?: string
 }
 
-function DecisionButton({ busy = false, onClick, children }: { busy?: boolean, onClick: () => void | Promise<void>, children: string }) {
+function DecisionButton({ busy = false, disabledReason, onClick, children }: { busy?: boolean, disabledReason?: string, onClick: () => void | Promise<void>, children: string }) {
+    const disabled = busy || Boolean(disabledReason)
     return (
-        <button type='button' onClick={onClick} disabled={busy} className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'>
+        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason} className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'>
             {children}
         </button>
     )
@@ -2642,6 +2716,25 @@ function mergeDeliveryEvidence(nextDeliveries: WorkbenchDeliveryEvidence[], exis
         merged.push(delivery)
     }
     return merged
+}
+
+function customerNotificationActionState(caseDetail: CaseDetailState | undefined) {
+    if (caseDetail?.status !== 'ready') return { disabledReason: 'Customer notification receipt requires a backed /api/cases/:id detail response.' }
+    if (caseDetail.detail.customerNotificationContext?.notified) return { disabledReason: 'Customer notification receipt is already recorded.' }
+    if (!deliveredCaseDelivery(caseDetail.detail)) return { disabledReason: 'Customer notification receipt requires a delivered webhook row.' }
+    if (caseDetail.detail.access?.readOnly) return { disabledReason: 'Read-only case members cannot record customer notifications.' }
+    return {}
+}
+
+function deliveredCaseDelivery(detail: CaseDetailPayload) {
+    const latest = detail.deliveryContext?.latestDelivery
+    if (latest?.status === 'delivered') return latest
+    return (detail.deliveries || []).find(delivery => delivery.status === 'delivered')
+}
+
+function caseCustomerNotificationHref(caseDetailHref: string) {
+    const [path, query] = caseDetailHref.split('?')
+    return `${path.replace(/\/$/, '')}/customer-notification${query ? `?${query}` : ''}`
 }
 
 function caseDetailHrefFromPayload(payload: WorkbenchApiPayload | undefined, action: WorkbenchAction | undefined, orgContext: WorkbenchOrgContext | undefined) {
