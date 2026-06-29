@@ -2219,6 +2219,157 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
     })
 }
 
+export async function getSupportOrganizationInvite(req: FastifyRequest<{ Params: SupportInviteActionParams }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    const inspectionAudit = supportInspectionAuditMetadata(req)
+    const organization = await loadOrganizationSupportDetail(req.params.id)
+    if (!organization) {
+        await recordAdminAuditEvent(req, {
+            actionType: 'support.organization.invite.inspect',
+            actorId: actor.id,
+            targetType: 'invite',
+            targetId: req.params.inviteId,
+            organizationId: req.params.id,
+            entityId: req.params.inviteId,
+            requestId: inspectionAudit.requestId,
+            severity: 'notice',
+            outcome: 'failed',
+            reason: inspectionAudit.reason || undefined,
+            context: supportInspectionAuditContext(inspectionAudit, { error: 'organization_not_found', inviteId: req.params.inviteId }),
+        })
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const inviteResult = await run(`
+        SELECT invite.*, organization.name AS organization_name, organization.slug AS organization_slug
+        FROM organization_invites invite
+        JOIN organizations organization ON organization.id = invite.organization_id
+        WHERE invite.id = $1
+          AND invite.organization_id = $2
+        LIMIT 1
+    `, [req.params.inviteId, organization.id])
+    const invite = inviteResult.rows[0] as OrganizationInviteRow | undefined
+    if (!invite) {
+        await recordAdminAuditEvent(req, {
+            actionType: 'support.organization.invite.inspect',
+            actorId: actor.id,
+            targetType: 'invite',
+            targetId: req.params.inviteId,
+            organizationId: organization.id,
+            entityId: req.params.inviteId,
+            requestId: inspectionAudit.requestId,
+            severity: 'notice',
+            outcome: 'failed',
+            reason: inspectionAudit.reason || undefined,
+            context: supportInspectionAuditContext(inspectionAudit, { error: 'invite_not_found', inviteId: req.params.inviteId }),
+        })
+        return res.status(404).send({ error: 'Invite not found for organization.' })
+    }
+
+    const auditRows = await run(`
+        SELECT
+            event.id,
+            event.action_type,
+            event.severity,
+            event.source,
+            event.service,
+            event.actor_id,
+            actor.name AS actor_name,
+            event.target_type,
+            event.target_id,
+            target_user.name AS target_name,
+            event.organization_id,
+            organization.name AS organization_name,
+            event.entity_id,
+            event.request_id,
+            event.outcome,
+            event.reason,
+            event.context,
+            event.created_at
+        FROM admin_audit_events event
+        LEFT JOIN users actor ON actor.id = event.actor_id
+        LEFT JOIN users target_user ON target_user.id = event.target_id
+        LEFT JOIN organizations organization ON organization.id = event.organization_id
+        WHERE event.organization_id = $1
+          AND (
+              event.entity_id = $2
+              OR event.target_id = $2
+              OR event.context->>'inviteId' = $2
+              OR event.context->'inviteIds' ? $2
+          )
+        ORDER BY event.created_at DESC
+        LIMIT 25
+    `, [organization.id, invite.id])
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.organization.invite.inspect',
+        actorId: actor.id,
+        targetType: 'invite',
+        targetId: invite.email,
+        organizationId: organization.id,
+        entityId: invite.id,
+        requestId: inspectionAudit.requestId,
+        severity: 'info',
+        outcome: 'success',
+        reason: inspectionAudit.reason || undefined,
+        context: supportInspectionAuditContext(inspectionAudit, {
+            inviteId: invite.id,
+            email: invite.email,
+            status: invite.status,
+            role: invite.role,
+        }),
+    })
+    const recentAuditTimeline = supportRecentAuditTimeline({
+        org: organization.id,
+        target: invite.email,
+        entity: invite.id,
+        entityType: 'invite',
+        request: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
+        action: 'support.organization.invite',
+    }, auditRows.rows as Record<string, unknown>[])
+    const authorization = buildSupportInspectionAuthorization({
+        actorId: actor.id,
+        requestedOrg: req.params.id,
+        requestedUser: '',
+        effectiveOrg: organization.id,
+        effectiveUser: '',
+        email: invite.email,
+        request: inspectionAudit.requestId,
+        entity: invite.id,
+        supportSession: '',
+        sessionState: null,
+        organizationIds: [organization.id],
+    })
+    return res.send({
+        invite: toSupportInvite(invite),
+        inviteInspection: {
+            schemaVersion: 'support.invite_inspection.v1',
+            organization: toOrganization(organization),
+            invite: toSupportInvite(invite),
+            snapshot: inviteSnapshot(invite),
+            authorization,
+            auditEventIds: recentAuditTimeline.eventIds,
+            auditTimeline: recentAuditTimeline,
+            links: {
+                action: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/invites/${encodeURIComponent(invite.id)}/actions`,
+                accessRecovery: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/access-recovery`,
+                audit: auditFilterQuery({ org: organization.id, entity: invite.id, entityType: 'invite' }),
+            },
+            noMutation: true,
+            redacted: true,
+            copyText: [
+                `Support invite inspection ${invite.id}`,
+                `Organization: ${organization.name} (${organization.id})`,
+                `Email: ${invite.email}`,
+                `Status: ${invite.status}`,
+                `Audit events: ${recentAuditTimeline.eventIds.join(', ') || 'none'}`,
+            ].join('\n'),
+        },
+    })
+}
+
 export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequest<{ Params: OrganizationMemberParams, Body: SupportMemberRoleRecoveryBody }>, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
