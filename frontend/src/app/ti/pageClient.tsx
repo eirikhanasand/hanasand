@@ -568,6 +568,7 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 <DossierList title='Geographies' values={actor.geographies} artifactKind='country' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Infrastructure' values={actor.infrastructure} artifactKind='infrastructure' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <TechniqueCoveragePanel techniques={actor.techniqueCoverage} />
+                <CampaignTimelinePanel timeline={actor.campaignTimeline} />
             </div>
 
             <div className='mt-4 grid gap-3 xl:grid-cols-3'>
@@ -691,6 +692,40 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
                         </p>
                     </div>
                 )) : <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Queue technique enrichment before detection or case routing.</p>}
+            </div>
+        </div>
+    )
+}
+
+function CampaignTimelinePanel({ timeline }: { timeline: TiActorIntelligenceProfile['campaignTimeline'] }) {
+    return (
+        <div data-ti-campaign-timeline='true' className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Activity timeline</p>
+                    <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {timeline.length ? `${timeline.length} dated campaign or activity row${timeline.length === 1 ? '' : 's'} with provenance.` : 'No dated campaign rows returned.'}
+                    </p>
+                </div>
+                <span className={timeline.some(item => item.freshness === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(timeline.length ? 'review' : 'blocked')}>
+                    {timeline.some(item => item.freshness === 'ready') ? 'ready' : timeline.length ? 'review' : 'blocked'}
+                </span>
+            </div>
+            <div className='mt-2 grid gap-2'>
+                {timeline.length ? timeline.slice(0, 4).map(item => (
+                    <div key={`${item.firstReportedAt}-${item.title}`} className='rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                            <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
+                            <span className='shrink-0 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatDate(item.firstReportedAt)}</span>
+                        </div>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {item.affectedSectors.slice(0, 2).join(', ') || 'Sector not returned'} · {item.countries.slice(0, 2).join(', ') || 'Country not returned'} · {Math.round(item.confidence * 100)}%
+                        </p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                            {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'source reference needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'provenance attached'}
+                        </p>
+                    </div>
+                )) : <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Queue campaign enrichment before trend or case review.</p>}
             </div>
         </div>
     )
@@ -2688,6 +2723,8 @@ function coverageMissingLabel(value: string) {
     if (value.includes('reportDate')) return 'report dates'
     if (value.includes('sourceId')) return 'source identifiers'
     if (value.includes('structuredProvenance')) return 'structured provenance'
+    if (value.includes('datedActivityRow')) return 'dated activity rows'
+    if (value.includes('provenanceRefs')) return 'provenance references'
     return formatLabel(value)
 }
 

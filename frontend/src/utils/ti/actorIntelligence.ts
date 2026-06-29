@@ -38,6 +38,18 @@ export type TiActorTechniqueCoverage = {
     missing: string[]
 }
 
+export type TiActorCampaignTimelineItem = {
+    title: string
+    firstReportedAt: string
+    sourceIds: string[]
+    provenanceRefs: string[]
+    affectedSectors: string[]
+    countries: string[]
+    confidence: number
+    freshness: 'ready' | 'review'
+    missing: string[]
+}
+
 export type TiActorIntelligenceProfile = {
     actorClass: string
     attribution: string
@@ -46,6 +58,7 @@ export type TiActorIntelligenceProfile = {
     motivation: string[]
     malwareTools: string[]
     campaigns: string[]
+    campaignTimeline: TiActorCampaignTimelineItem[]
     infrastructure: string[]
     indicators: string[]
     techniqueCoverage: TiActorTechniqueCoverage[]
@@ -87,6 +100,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
     const provenanceRows = buildProvenanceRows(result, fallback)
     const sourceCoverage = buildSourceCoverage(provenanceRows, result.generatedAt)
     const techniqueCoverage = buildTechniqueCoverage(result, provenanceRows)
+    const campaignTimeline = buildCampaignTimeline(result, provenanceRows, fallback)
     const indicators = unique([
         ...(contract?.indicators ?? []),
         ...fallback.indicators,
@@ -102,6 +116,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
         motivation: unique([...(contract?.motivation ?? []), ...fallback.motivation]).slice(0, 6),
         malwareTools: unique([...(contract?.malwareTools ?? []), ...fallback.malwareTools]).slice(0, 10),
         campaigns: unique([...(contract?.campaigns ?? []), ...fallback.campaigns]).slice(0, 10),
+        campaignTimeline,
         infrastructure: unique([...(contract?.infrastructure ?? []), ...fallback.infrastructure]).slice(0, 10),
         indicators,
         techniqueCoverage,
@@ -116,7 +131,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
     }
 }
 
-type TiActorIntelligenceFallback = Omit<TiActorIntelligenceProfile, 'provenanceRows' | 'sourceCoverage' | 'techniqueCoverage' | 'freshness'>
+type TiActorIntelligenceFallback = Omit<TiActorIntelligenceProfile, 'provenanceRows' | 'sourceCoverage' | 'techniqueCoverage' | 'campaignTimeline' | 'freshness'>
 
 function fallbackActorIntelligence(result: TiSearchResponse, victimObservations: VictimObservation[]): TiActorIntelligenceFallback {
     if (isApt29(result)) {
@@ -267,6 +282,52 @@ function buildTechniqueCoverage(result: TiSearchResponse, provenanceRows: TiActo
             freshness,
             missing,
         }
+    }).slice(0, 10)
+}
+
+function buildCampaignTimeline(result: TiSearchResponse, provenanceRows: TiActorSourceProvenance[], fallback: TiActorIntelligenceFallback): TiActorCampaignTimelineItem[] {
+    const provenanceRefs = unique(provenanceRows.map(row => row.provenance)).slice(0, 6)
+    const sourceIds = unique(provenanceRows.map(row => row.sourceId).filter((value): value is string => Boolean(value)))
+    const rows = result.recentActivity.map(item => {
+        const firstReportedAt = item.firstReportedAt || item.date || result.generatedAt
+        const rowSourceIds = unique([...item.sourceIds, ...sourceIds])
+        const affectedSectors = unique(item.affectedSectors ?? [])
+        const countries = unique(item.countries ?? [])
+        const missing = [
+            rowSourceIds.length ? '' : 'sourceIds',
+            provenanceRefs.length ? '' : 'provenanceRefs',
+            Date.parse(firstReportedAt) || /\b(19|20)\d{2}\b/.test(firstReportedAt) ? '' : 'firstReportedAt',
+        ].filter(Boolean)
+        const freshness: TiActorCampaignTimelineItem['freshness'] = missing.length || item.confidence < 0.7 ? 'review' : 'ready'
+        return {
+            title: item.title,
+            firstReportedAt,
+            sourceIds: rowSourceIds,
+            provenanceRefs,
+            affectedSectors,
+            countries,
+            confidence: item.confidence,
+            freshness,
+            missing,
+        }
+    })
+
+    const fallbackRows = rows.length ? [] : fallback.campaigns.slice(0, 4).map(title => ({
+        title,
+        firstReportedAt: fallback.firstSeen,
+        sourceIds,
+        provenanceRefs,
+        affectedSectors: fallback.targetSectors,
+        countries: fallback.geographies,
+        confidence: fallback.confidence,
+        freshness: 'review' as const,
+        missing: ['datedActivityRow'],
+    }))
+
+    return [...rows, ...fallbackRows].sort((a, b) => {
+        const parsedA = parseSourceDate(a.firstReportedAt) ?? 0
+        const parsedB = parseSourceDate(b.firstReportedAt) ?? 0
+        return parsedB - parsedA || b.confidence - a.confidence
     }).slice(0, 10)
 }
 
