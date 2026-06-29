@@ -17,6 +17,7 @@ export const DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION = "dwm.org_alert_sourc
 export const DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION = "dwm.org_alert_webhook_reconciliation.v1" as const;
 export const DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION = "dwm.org_alert_operator_readiness.v1" as const;
 export const DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION = "dwm.org_alert_case_action_packet.v1" as const;
+export const DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION = "dwm.org_alert_case_action_receipt.v1" as const;
 
 export type OrgAlertWorkflowWatchlistRef = {
   watchlistId: string;
@@ -432,6 +433,40 @@ export type OrgAlertCaseActionBlocker = {
   message: string;
 };
 
+export type OrgAlertCaseActionReceipt = {
+  schemaVersion: typeof DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION;
+  id: string;
+  checkedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId: string;
+  rowId?: string;
+  watchlistId?: string;
+  watchlistItemId?: string;
+  alertIds: string[];
+  casePaths: string[];
+  action: OrgAlertCaseAction["action"];
+  execution: "ready" | "repair_required" | "blocked";
+  ownerLane?: OrgAlertCaseAction["ownerLane"];
+  route?: string;
+  method?: OrgAlertCaseAction["method"];
+  analyst?: {
+    analystId?: string;
+    rationale?: string;
+  };
+  blockedByCodes: string[];
+  blockers: OrgAlertCaseActionReceiptBlocker[];
+  payloadShape: string[];
+};
+
+export type OrgAlertCaseActionReceiptBlocker = {
+  code: "row_not_found" | "action_not_available" | "missing_rationale";
+  ownerLane: "case" | "alert" | "source" | "webhook";
+  rowId?: string;
+  path: string;
+  message: string;
+};
+
 export function buildOrgAlertWorkflowBridgeReport(input: {
   tenantId: string;
   organizationId: string;
@@ -627,6 +662,52 @@ export function buildOrgAlertCaseActionPacket(input: {
     rows,
     blockers,
     payloadShape: ["rows[].allowedActions", "rows[].blockedActions", "blockers[]"]
+  };
+}
+
+export function buildOrgAlertCaseActionReceipt(input: {
+  packet: OrgAlertCaseActionPacket;
+  action: OrgAlertCaseAction["action"];
+  rowId?: string;
+  analystId?: string;
+  rationale?: string;
+  checkedAt?: string;
+}): OrgAlertCaseActionReceipt {
+  const checkedAt = input.checkedAt ?? input.packet.checkedAt;
+  const row = input.rowId ? input.packet.rows.find((candidate) => candidate.rowId === input.rowId) : input.packet.rows[0];
+  const selectedAllowedAction = row?.allowedActions.find((action) => action.action === input.action);
+  const selectedRepairAction = row?.blockedActions.find((action) => action.action === input.action);
+  const selectedAction = selectedAllowedAction ?? selectedRepairAction;
+  const blockers = caseActionReceiptBlockers({
+    row,
+    action: input.action,
+    selectedAction,
+    rationale: input.rationale
+  });
+  return {
+    schemaVersion: DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
+    id: stableId("org_alert_case_action_receipt", `${input.packet.tenantId}:${input.packet.organizationId}:${row?.rowId ?? input.rowId ?? ""}:${input.action}:${checkedAt}`),
+    checkedAt,
+    ok: blockers.length === 0,
+    tenantId: input.packet.tenantId,
+    organizationId: input.packet.organizationId,
+    rowId: row?.rowId ?? input.rowId,
+    watchlistId: row?.watchlistId,
+    watchlistItemId: row?.watchlistItemId,
+    alertIds: row?.alertIds ?? [],
+    casePaths: row?.casePaths ?? [],
+    action: input.action,
+    execution: selectedAllowedAction ? "ready" : (selectedRepairAction ? "repair_required" : "blocked"),
+    ownerLane: selectedAction?.ownerLane,
+    route: selectedAction?.route,
+    method: selectedAction?.method,
+    analyst: {
+      analystId: input.analystId,
+      rationale: input.rationale
+    },
+    blockedByCodes: selectedAction?.blockerCodes ?? [],
+    blockers,
+    payloadShape: ["action", "execution", "route", "blockedByCodes", "blockers[]"]
   };
 }
 
@@ -875,6 +956,28 @@ function caseBlockedActions(row: OrgAlertOperatorReadinessRow): OrgAlertCaseActi
     });
   }
   return actions;
+}
+
+function caseActionReceiptBlockers(input: {
+  row?: OrgAlertCaseActionRow;
+  action: OrgAlertCaseAction["action"];
+  selectedAction?: OrgAlertCaseAction;
+  rationale?: string;
+}): OrgAlertCaseActionReceiptBlocker[] {
+  return [
+    !input.row ? caseActionReceiptBlocker("row_not_found", "case", "rowId", "Case action receipt requires a readiness row.") : undefined,
+    input.row && !input.selectedAction ? caseActionReceiptBlocker("action_not_available", "case", "action", "Requested action is not available for this readiness row.") : undefined,
+    input.selectedAction?.method === "POST" && !input.rationale?.trim() ? caseActionReceiptBlocker("missing_rationale", input.selectedAction.ownerLane, "rationale", "Repair actions require an analyst rationale.") : undefined
+  ].filter(Boolean) as OrgAlertCaseActionReceiptBlocker[];
+}
+
+function caseActionReceiptBlocker(
+  code: OrgAlertCaseActionReceiptBlocker["code"],
+  ownerLane: OrgAlertCaseActionReceiptBlocker["ownerLane"],
+  path: string,
+  message: string
+): OrgAlertCaseActionReceiptBlocker {
+  return { code, ownerLane, path, message };
 }
 
 function operatorBlocker(

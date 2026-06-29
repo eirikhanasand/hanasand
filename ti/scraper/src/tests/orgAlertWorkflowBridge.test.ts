@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION,
+  DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION,
@@ -8,6 +9,7 @@ import {
   DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION,
   buildOrgAlertCaseActionPacket,
+  buildOrgAlertCaseActionReceipt,
   buildOrgAlertOperatorReadinessPacket,
   buildOrgAlertWebhookFixtureContract,
   buildOrgAlertSourceEvidenceReport,
@@ -354,6 +356,55 @@ describe("org alert workflow bridge", () => {
     expect(JSON.stringify(packet)).not.toContain("https://discord.com");
   });
 
+  test("records selected case action as an analyst receipt", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const sourceEvidence = buildOrgAlertSourceEvidenceReport({
+      bridge,
+      sources: sourceRefs(),
+      captures: [],
+      sourceProvenanceSummaries: [sourceProvenanceSummary()],
+      checkedAt: "2026-06-29T15:00:00.000Z"
+    });
+    const webhookFixture = buildOrgAlertWebhookFixtureContract({
+      bridge,
+      destinations: [webhookDestination()],
+      destinationIdsByWatchlistId: { watch_acme_domains: ["webhook_discord"] }
+    });
+    const readiness = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      sourceEvidence,
+      webhookFixture
+    });
+    const packet = buildOrgAlertCaseActionPacket({ readiness, checkedAt: "2026-06-29T15:03:00.000Z" });
+    const receipt = buildOrgAlertCaseActionReceipt({
+      packet,
+      action: "open_case",
+      analystId: "analyst_acme",
+      checkedAt: "2026-06-29T15:04:00.000Z"
+    });
+
+    expect(receipt).toMatchObject({
+      schemaVersion: DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
+      checkedAt: "2026-06-29T15:04:00.000Z",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      watchlistId: "watch_acme_domains",
+      watchlistItemId: "watch_item_acme_com",
+      alertIds: ["alert_acme_lumma"],
+      casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"],
+      action: "open_case",
+      execution: "ready",
+      ownerLane: "case",
+      route: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+      method: "GET",
+      analyst: { analystId: "analyst_acme" },
+      blockedByCodes: [],
+      blockers: []
+    });
+    expect(receipt.payloadShape).toEqual(expect.arrayContaining(["action", "execution", "route", "blockedByCodes", "blockers[]"]));
+  });
+
   test("requires source rebuild receipts when operator readiness depends on alert creation proof", () => {
     const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
     const packet = buildOrgAlertOperatorReadinessPacket({
@@ -451,6 +502,52 @@ describe("org alert workflow bridge", () => {
     ]));
     expect(JSON.stringify(packet)).not.toContain("hash_acme_initial");
     expect(JSON.stringify(packet)).not.toContain("https://discord.com");
+  });
+
+  test("requires rationale when an analyst prepares a repair action receipt", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const readiness = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      requireWebhookReconciliation: true,
+      checkedAt: "2026-06-29T15:02:00.000Z"
+    });
+    const packet = buildOrgAlertCaseActionPacket({ readiness });
+    const blockedReceipt = buildOrgAlertCaseActionReceipt({
+      packet,
+      action: "restore_source_evidence",
+      analystId: "analyst_acme",
+      checkedAt: "2026-06-29T15:04:00.000Z"
+    });
+    const repairReceipt = buildOrgAlertCaseActionReceipt({
+      packet,
+      action: "restore_source_evidence",
+      analystId: "analyst_acme",
+      rationale: "Source evidence report is required before closing the alert case.",
+      checkedAt: "2026-06-29T15:05:00.000Z"
+    });
+
+    expect(blockedReceipt).toMatchObject({
+      ok: false,
+      action: "restore_source_evidence",
+      execution: "repair_required",
+      ownerLane: "source",
+      method: "POST",
+      blockedByCodes: ["missing_source_evidence_report"],
+      blockers: [expect.objectContaining({ code: "missing_rationale", ownerLane: "source", path: "rationale" })]
+    });
+    expect(repairReceipt).toMatchObject({
+      ok: true,
+      action: "restore_source_evidence",
+      execution: "repair_required",
+      ownerLane: "source",
+      route: "/v1/dwm/source-requests",
+      analyst: {
+        analystId: "analyst_acme",
+        rationale: "Source evidence report is required before closing the alert case."
+      },
+      blockedByCodes: ["missing_source_evidence_report"],
+      blockers: []
+    });
   });
 
   test("proves bridge rows are backed by fresh source evidence", () => {
