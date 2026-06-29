@@ -1225,6 +1225,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     analystWorkflowContract: buildDwmAlertAnalystWorkflowContract(alert),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries }),
     downstreamHandoff,
+    orgAlertWorkflowBridge: buildDwmAlertDetailOrgWorkflowBridge(alert, options),
     alertCreatedDispatch: downstreamHandoff.createdEventDispatch,
     retentionAudit: buildDwmAlertRetentionAudit({ alert, deliveries, downstreamHandoff }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
@@ -1262,6 +1263,7 @@ function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) 
       "alertEventSummary",
       "customerProofHandoff",
       "downstreamHandoff",
+      "orgAlertWorkflowBridge",
       "caseHandoff",
       "deliveryReadiness",
       "evidenceFreshness",
@@ -1508,6 +1510,22 @@ function orgAlertWorkflowBridgeRefs(input: {
       };
     }))
     .filter((row: any) => row.term.length > 0);
+}
+
+function buildDwmAlertDetailOrgWorkflowBridge(alert: any, options: ApiServerOptions) {
+  const tenantId = String(alert.tenantId ?? alert.workflowContext?.tenantId ?? alert.webhookContext?.tenantId ?? "");
+  const organizationId = String(alert.organizationId ?? alert.workflowContext?.organizationId ?? alert.webhookContext?.organizationId ?? tenantId);
+  return buildOrgAlertWorkflowBridgeReport({
+    tenantId,
+    organizationId,
+    watchlists: orgAlertWorkflowBridgeRefs({
+      watchlists: (options.store as any).listDwmWatchlists?.() ?? [],
+      tenantId,
+      organizationId
+    }),
+    alerts: [alert],
+    checkedAt: nowIso()
+  });
 }
 
 function dwmAlertQueueAllowedActions(role: string, readOnly: boolean): string[] {

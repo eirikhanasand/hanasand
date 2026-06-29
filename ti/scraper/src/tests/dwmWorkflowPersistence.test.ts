@@ -1024,10 +1024,31 @@ describe("dwm workflow persistence", () => {
         supportSafe: true
       }
     });
+    expect(alphaUpdatedDetail.orgAlertWorkflowBridge).toMatchObject({
+      schemaVersion: "dwm.org_alert_workflow_bridge.v1",
+      ok: true,
+      organizationId: alphaOrg.id,
+      rows: [expect.objectContaining({
+        watchlistId: "watch_workflow_alpha_acme",
+        watchlistItemId: "watch_item_workflow_alpha_acme",
+        matchedAlertIds: [alphaDarkweb.id],
+        alertDetailPaths: [alphaDarkweb.alertDetailPath],
+        sourceFamilies: ["darkweb_metadata"],
+        eventPayloads: [expect.objectContaining({
+          alertId: alphaDarkweb.id,
+          organizationId: alphaOrg.id,
+          watchlistItemId: "watch_item_workflow_alpha_acme",
+          alertDetailPath: alphaDarkweb.alertDetailPath,
+          captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"])
+        })],
+        blockerCodes: []
+      })]
+    });
     expect(alphaUpdatedDetail.consumerContract.stableFields).toEqual(expect.arrayContaining([
       "alert.alertDetailPath",
       "workflowSummary",
       "alertEventSummary",
+      "orgAlertWorkflowBridge",
       "evidenceReplay",
       "sourceExplanations",
       "provenanceFreshness"
