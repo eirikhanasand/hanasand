@@ -822,6 +822,14 @@ export type OrganizationSharedWatchlistAlertQueueVisibility = {
         requiredStorageBinding: 'workflowContext.organizationId'
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
+    auditContract: {
+        source: 'service_logs'
+        requiredEventActions: string[]
+        requiredMetadataFields: string[]
+        requestIdFields: string[]
+        downstreamCorrelationFields: string[]
+        proofLogQuery: 'GET /api/logs?service=api&message=organization_watchlist'
+    }
     support: {
         mode: 'redacted_summary_only'
         redactionRequired: true
@@ -2227,6 +2235,18 @@ export function organizationSharedWatchlistAlertQueueVisibility(
             requiredRouteBinding: 'organizationId_query_and_workflow_context',
             requiredStorageBinding: 'workflowContext.organizationId',
             proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        },
+        auditContract: {
+            source: proof.audit.source,
+            requiredEventActions: [
+                'organization_watchlist_alert_terms_exported',
+                'organization_watchlist_upserted',
+                'organization_watchlist_updated',
+            ],
+            requiredMetadataFields: proof.audit.requiredMetadataFields,
+            requestIdFields: proof.audit.requestIdFields,
+            downstreamCorrelationFields: proof.audit.downstreamCorrelationFields,
+            proofLogQuery: proof.audit.proofLogQuery,
         },
         support: {
             mode: 'redacted_summary_only',
