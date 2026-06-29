@@ -548,7 +548,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
       continue;
     }
-    const payload = buildWebhookPayload(alert, watchlist, generatedAt, destination);
+    const payload = buildWebhookPayload(alert, watchlist, generatedAt, destination, downstreamHandoff);
     const requestBody = buildWebhookRequestBody(deliveryKind, payload);
     const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${destination?.id ?? watchlist.id}:${alert.webhookDelivery?.dedupeKey ?? ""}`);
     const baseDelivery = {
@@ -663,7 +663,8 @@ export function storedWatchlistTerms(options: ApiServerOptions, tenantId: string
     .flatMap((row: DwmWatchlist) => row.terms);
 }
 
-function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: string, destination?: WebhookDestination) {
+function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: string, destination?: WebhookDestination, downstreamHandoff?: ReturnType<typeof buildDwmAlertDownstreamHandoff>) {
+  const alertCreatedDispatch = buildWebhookPayloadAlertCreatedDispatch(alert, watchlist, destination, downstreamHandoff);
   return {
     eventType: alert.eventType,
     alertId: alert.id,
@@ -688,6 +689,7 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     alertCreatedEvent: alert.alertCreatedEvent,
     alertCreatedEventId: alert.alertCreatedEvent?.id ?? alert.deliveryReadinessContext?.alertCreatedEventId,
     alertCreatedAt: alert.alertCreatedEvent?.at ?? alert.deliveryReadinessContext?.alertCreatedAt,
+    alertCreatedDispatch,
     generationEvidenceWindow: alert.deliveryReadinessContext?.generationEvidenceWindow ?? alert.workflowContext?.generationEvidenceWindow ?? alert.webhookContext?.generationEvidenceWindow,
     deliveryReadinessContext: alert.deliveryReadinessContext,
     deliveryDedupeKey: alert.deliveryReadinessContext?.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey,
@@ -722,6 +724,25 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
       provenance: item.provenance
     })),
     delivery: alert.webhookDelivery
+  };
+}
+
+function buildWebhookPayloadAlertCreatedDispatch(alert: any, watchlist: DwmWatchlist, destination?: WebhookDestination, downstreamHandoff?: ReturnType<typeof buildDwmAlertDownstreamHandoff>) {
+  const dispatch = downstreamHandoff?.createdEventDispatch;
+  if (!dispatch) return undefined;
+  const hasSelectedWebhookRoute = Boolean(destination?.id ?? normalizeWebhookUrl(destination?.url) ?? normalizeWebhookUrl(watchlist.webhookUrl));
+  const hasOrgContext = Boolean(dispatch.organizationId ?? alert.organizationId ?? watchlist.organizationId);
+  const blockerCodes = (dispatch.blockerCodes ?? []).filter((code: string) => {
+    if (hasSelectedWebhookRoute && ["destination_unavailable", "delivery_disabled"].includes(code)) return false;
+    if (hasOrgContext && code === "missing_org_ref") return false;
+    if (!hasOrgContext && code === "missing_org_ref" && !alert.organizationId && !watchlist.organizationId) return false;
+    return true;
+  });
+  return {
+    ...dispatch,
+    organizationId: dispatch.organizationId ?? alert.organizationId ?? watchlist.organizationId,
+    blockerCodes,
+    ready: Boolean(dispatch.eventId) && blockerCodes.length === 0
   };
 }
 

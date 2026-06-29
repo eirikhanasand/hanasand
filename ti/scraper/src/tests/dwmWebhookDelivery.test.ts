@@ -105,6 +105,21 @@ describe("dwm webhook delivery", () => {
     expect(seen[0].body.alertCreatedEvent.id).toMatch(/^dwm_alert_created_event_/);
     expect(seen[0].body.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
     expect(seen[0].body.alertCreatedAt).toBe(seen[0].body.alertCreatedEvent.at);
+    expect(seen[0].body.alertCreatedDispatch).toMatchObject({
+      schemaVersion: "dwm.alert_created_event_dispatch.v1",
+      ready: true,
+      eventId: seen[0].body.alertCreatedEvent.id,
+      eventType: "dwm.alert.created",
+      alertId: expect.any(String),
+      tenantId: "tenant_acme",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_webhook_acme"],
+      selectedCaptureIds: ["cap_webhook_acme"],
+      deliveryDedupeKey: expect.any(String),
+      workflowEventCount: 0,
+      blockerCodes: []
+    });
+    expect(seen[0].body.alertCreatedDispatch.idempotencyKey).toMatch(/^dwm_alert_created_dispatch_/);
     expect(seen[0].body.deliveryReadinessContext.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
     expect(seen[0].body.deliveryReadinessContext.alertCreatedAt).toBe(seen[0].body.alertCreatedEvent.at);
     expect(seen[0].body.caseIdCandidate).toMatch(/^case_/);
@@ -248,6 +263,15 @@ describe("dwm webhook delivery", () => {
       sourceFamily: "telegram_public",
       watchlistIds: [rebuild.alerts[0].watchlistIds[0]],
       captureIds: ["cap_webhook_acme"]
+    });
+    expect(seen[0].body.alertCreatedDispatch).toMatchObject({
+      schemaVersion: "dwm.alert_created_event_dispatch.v1",
+      ready: true,
+      eventId: seen[0].body.alertCreatedEvent.id,
+      organizationId: "org_webhook_selection",
+      sourceFamily: "telegram_public",
+      selectedCaptureIds: ["cap_webhook_acme"],
+      blockerCodes: []
     });
     expect(seen[0].body.deliveryReadinessContext.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
   });
