@@ -704,6 +704,11 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
         { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : 'Ready to open with this selected artifact.' },
         { id: 'enrichment', label: 'Enrichment item', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
     ]
+    const workflowRows = payloadRows.map(row => ({
+        ...row,
+        missing: row.payload.missing,
+        endpoint: row.payload.selectedPayload.endpoint ?? row.payload.selectedPayload.backedRoute ?? row.route,
+    }))
 
     return (
         <section data-ti-selected-artifact='true' className='rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4'>
@@ -761,6 +766,35 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                         <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.blocked} />
                     ))}
                     <CopyPayloadButton label='console handoff bundle' payload={bridge} />
+                </div>
+            </div>
+            <div data-ti-artifact-workflow-readiness='true' className='mt-4 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected handoff readiness</p>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            Selected artifact handoff state for watchlist, alert, case, and enrichment work.
+                        </p>
+                    </div>
+                    <span className={workflowRows.every(row => !row.blocked) ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
+                        {workflowRows.filter(row => !row.blocked).length}/{workflowRows.length} ready
+                    </span>
+                </div>
+                <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                    {workflowRows.map(row => (
+                        <div key={`workflow-${row.id}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</p>
+                                <span className={row.blocked ? decisionStepStatusClass('blocked') : decisionStepStatusClass('ready')}>
+                                    {row.blocked ? 'blocked' : 'ready'}
+                                </span>
+                            </div>
+                            <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.endpoint}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                {row.missing.length ? row.missing.slice(0, 2).join('; ') : 'Required artifact context is present.'}
+                            </p>
+                        </div>
+                    ))}
                 </div>
             </div>
         </section>

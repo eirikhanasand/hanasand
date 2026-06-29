@@ -248,6 +248,9 @@ assert(usHandoffs?.authBridge.links.watchlist.href.includes('/dashboard/dwm?hand
 assert(usHandoffs?.authBridge.links.watchlist.intent === PUBLIC_TI_HANDOFF_ACTIONS.watchlist, 'Watchlist bridge should use a stable action name.')
 assert(usHandoffs?.authBridge.payload.schemaVersion === PUBLIC_TI_HANDOFF_SCHEMA_VERSION, 'Default bridge payload should carry the exported schema version.')
 assert(usHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case].selectedPayload.route === 'case', 'Case bridge payload should select the case export payload.')
+assert(usHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild].selectedPayload.route === 'alert_rebuild', 'Alert bridge payload should select the alert rebuild export payload.')
+assert(usHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case].missing.some(item => /DWM alert ID/i.test(item)), 'Artifact case readiness should expose the alert dependency.')
+assert(usHandoffs?.authBridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild].missing.some(item => /organization/i.test(item)), 'Artifact alert rebuild readiness should expose the organization dependency.')
 const decodedWatchlist = usHandoffs ? decodePublicTiHandoffFromUrl(usHandoffs.authBridge.links.watchlist.href) : null
 assert(decodedWatchlist?.ok, 'Watchlist deep-link payload should decode through the exported contract parser.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.artifact.label === 'United States', 'Deep-link payload should decode selected artifact context.')
@@ -507,6 +510,7 @@ assert(!pageClientSource.includes('API work'), 'Public TI enrichment labels shou
 assert(pageClientSource.includes('whitespace-nowrap'), 'Public TI action buttons should prevent stacked action text.')
 assert(pageClientSource.includes('break-all font-mono'), 'Public TI source/provenance rows should wrap long technical values.')
 assert(pageClientSource.includes('data-ti-geo-provenance'), 'Public TI map rows should expose geography provenance for render checks.')
+assert(pageClientSource.includes('data-ti-artifact-workflow-readiness'), 'Selected artifacts should expose workflow readiness for alert/case handoff checks.')
 assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
 assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')
 assert(pageClientSource.includes('flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'), 'Public TI action clusters should wrap complete controls on narrow widths.')
