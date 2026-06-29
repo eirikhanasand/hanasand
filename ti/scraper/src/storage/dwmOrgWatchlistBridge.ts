@@ -1,5 +1,5 @@
 import type { DwmWatchTerm } from "../product/dwmProduct.ts";
-import { stableId } from "../utils.ts";
+import { stableId, uniqueStrings } from "../utils.ts";
 import type { RuntimeDwmWatchlist } from "./dwmAlertRepository.ts";
 
 export type OrgWatchlistTermFamily = "company" | "domain" | "vendor" | "actor" | "keyword";
@@ -78,6 +78,27 @@ export type OrgWatchlistAlertGenerationContractLike = {
   organizationId: string;
   tenantId?: string;
   ownerOrganizationId?: string;
+  downstreamAuthorization?: {
+    schemaVersion?: string;
+    organizationLifecycleState?: "active" | "archived" | "deleted" | string;
+    visibility?: {
+      allowed?: boolean;
+      reason?: string | null;
+      allowedRoles?: string[];
+    };
+    downstream?: {
+      alertGeneration?: {
+        canExportActiveTerms?: boolean;
+        blockerCodes?: string[];
+      };
+    };
+    watchlists?: {
+      activeIds?: string[];
+      pausedIds?: string[];
+      archivedIds?: string[];
+    };
+    lifecycleDenials?: Record<string, string>;
+  };
   entitlementStatus?: "active" | "suspended" | string;
   visibilityPolicy?: OrgAlertVisibilityPolicy;
   allowedViewerRoles?: string[];
@@ -128,11 +149,27 @@ export type RuntimeOrgMembershipContext = {
   allowedViewerRoles: string[];
   canGenerateAlerts: boolean;
   blockedReasons: string[];
+  organizationLifecycleState: "active" | "archived" | "deleted";
+  alertGenerationBlockerCodes: string[];
 };
 
 export function orgWatchlistContractToRuntimeDwmWatchlists(contract: OrgWatchlistAlertGenerationContractLike): RuntimeDwmWatchlist[] {
   const membershipContext = orgMembershipContext(contract);
-  return orgWatchlistTermsFromContract(contract).map((term) => {
+  const terms = orgWatchlistTermsFromContract(contract);
+  if (!terms.length && membershipContext.alertGenerationBlockerCodes.length) {
+    return [{
+      id: `org_export_blocked:${membershipContext.organizationId}`,
+      tenantId: membershipContext.tenantId,
+      organizationId: membershipContext.organizationId,
+      lifecycleStatus: membershipContext.organizationLifecycleState === "active" ? "paused" : "archived",
+      terms: [],
+      status: "paused",
+      orgWatchlistTerms: [],
+      orgMembershipContext: membershipContext
+    } as RuntimeDwmWatchlist];
+  }
+
+  return terms.map((term) => {
     const context = orgWatchlistTermContext(term, membershipContext);
     return {
       id: context.watchlistId,
@@ -170,6 +207,15 @@ export function orgWatchlistTermsFromContract(contract: OrgWatchlistAlertGenerat
 function orgMembershipContext(contract: OrgWatchlistAlertGenerationContractLike): RuntimeOrgMembershipContext {
   const organizationId = String(contract.organizationId);
   const tenantId = String(contract.tenantId ?? contract.organizationId);
+  const organizationLifecycleState = normalizeOrgLifecycleState(contract.downstreamAuthorization?.organizationLifecycleState);
+  const downstreamBlockers = contract.downstreamAuthorization?.downstream?.alertGeneration?.blockerCodes?.map(String).filter(Boolean) ?? [];
+  const blockedReasons = uniqueStrings([
+    ...(contract.blockedReasons ?? []).map(String),
+    ...downstreamBlockers,
+    organizationLifecycleState !== "active" ? `org_${organizationLifecycleState}` : undefined,
+    contract.downstreamAuthorization?.visibility?.allowed === false ? String(contract.downstreamAuthorization.visibility.reason ?? "role_not_allowed") : undefined
+  ].filter(Boolean).map(String));
+  const downstreamCanExport = contract.downstreamAuthorization?.downstream?.alertGeneration?.canExportActiveTerms;
   return {
     schemaVersion: "organization.watchlist_alert_generation.v1",
     organizationId,
@@ -177,9 +223,13 @@ function orgMembershipContext(contract: OrgWatchlistAlertGenerationContractLike)
     ownerOrganizationId: String(contract.ownerOrganizationId ?? organizationId),
     entitlementStatus: normalizeEntitlementStatus(contract.entitlementStatus),
     visibilityPolicy: normalizeVisibilityPolicy(contract.visibilityPolicy),
-    allowedViewerRoles: contract.allowedViewerRoles?.map((role) => String(role)).filter(Boolean) ?? ["owner", "admin", "member", "viewer"],
-    canGenerateAlerts: contract.canGenerateAlerts !== false,
-    blockedReasons: (contract.blockedReasons ?? []).map(String)
+    allowedViewerRoles: contract.allowedViewerRoles?.map((role) => String(role)).filter(Boolean)
+      ?? contract.downstreamAuthorization?.visibility?.allowedRoles?.map(String).filter(Boolean)
+      ?? ["owner", "admin", "member", "viewer"],
+    canGenerateAlerts: contract.canGenerateAlerts !== false && downstreamCanExport !== false && organizationLifecycleState === "active",
+    blockedReasons,
+    organizationLifecycleState,
+    alertGenerationBlockerCodes: blockedReasons
   };
 }
 
@@ -276,6 +326,11 @@ function normalizeVisibilityPolicy(value: unknown): OrgAlertVisibilityPolicy {
 
 function normalizeEntitlementStatus(value: unknown): "active" | "suspended" {
   return String(value ?? "").trim().toLowerCase() === "suspended" ? "suspended" : "active";
+}
+
+function normalizeOrgLifecycleState(value: unknown): "active" | "archived" | "deleted" {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "archived" || normalized === "deleted" ? normalized : "active";
 }
 
 function dwmWatchKindForOrgTerm(kind: OrgWatchlistTermFamily): DwmWatchTerm["kind"] {

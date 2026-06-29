@@ -4,7 +4,7 @@ import type { RawCapture, SourceRecord } from "../types.ts";
 import type { RuntimeOrgMembershipContext, RuntimeOrgWatchlistTermContext } from "./dwmOrgWatchlistBridge.ts";
 
 type DwmAlertVisibilityPolicy = "members" | "admins" | "owners";
-type DwmDeliveryReadinessBlockerCode =
+export type DwmDeliveryReadinessBlockerCode =
   | "missing_org_ref"
   | "missing_capture_evidence"
   | "case_route_unavailable"
@@ -16,6 +16,10 @@ type DwmDeliveryReadinessBlockerCode =
 export type DwmAlertGenerationBlockerCode =
   | "blocked_watchlist_scope"
   | "no_org_export"
+  | "org_archived"
+  | "org_deleted"
+  | "member_revoked"
+  | "role_not_allowed"
   | "org_export_unavailable"
   | "no_active_watchlist_terms"
   | "no_matching_captures"
@@ -242,6 +246,19 @@ export type DwmAlertDownstreamHandoff = {
     lastDeliveryStatus?: string;
     lastDeliveryAt?: string;
     idempotencyKey?: string;
+  };
+  deliverySelection: {
+    schemaVersion: "dwm.alert_delivery_selection.v1";
+    ready: boolean;
+    selectedWebhookDestinationId?: string;
+    webhookDestinationIds: string[];
+    enabledWebhookDestinationIds: string[];
+    disabledWebhookDestinationIds: string[];
+    selectedCaptureIds: string[];
+    sourceFamily?: string;
+    deliveryDedupeKey?: string;
+    idempotencyKey?: string;
+    blockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
   };
   lifecycle: {
     organizationStatus?: string;
@@ -1157,6 +1174,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const destinationReady = input.destinationAvailable !== false && enabledWebhookDestinationIds.length > 0 && selectedCaptureIds.length > 0;
   const caseReady = input.caseAvailable !== false && Boolean(casePath && caseIdCandidate);
   const entitlementDenied = input.entitlementAllowed === false || context.entitlement?.status === "suspended" || (context.entitlement?.blockedReasons ?? []).length > 0 || workflow.membershipContext?.canGenerateAlerts === false;
+  const evidenceCount = Number(context.evidenceCount ?? workflow.evidenceCount ?? webhook.evidenceCount ?? alert?.evidence?.length ?? 0);
   const blockers = [
     !alert ? downstreamHandoffBlocker("missing_alert", "alertId", "Persisted alert is required for downstream handoff.", true) : undefined,
     alert && input.organizationId && orgId && input.organizationId !== orgId ? downstreamHandoffBlocker("org_mismatch", "organizationId", "Alert organization does not match the downstream handoff scope.", false) : undefined,
@@ -1176,6 +1194,26 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmAlertDownstreamHandoffBlockerCode[];
   const alertId = alert?.id ? String(alert.id) : undefined;
   const tenantId = alert?.tenantId ?? workflow.tenantId ?? webhook.tenantId;
+  const deliverySelectionBlockerCodes = uniqueStrings([
+    ...blockerCodes.filter((code) => [
+      "org_mismatch",
+      "archived_org",
+      "retired_watchlist",
+      "disabled_destination",
+      "destination_unavailable",
+      "entitlement_denied",
+      "stale_workflow",
+      "duplicate_replay",
+      "closed_alert",
+      "suppressed_alert",
+      "revoked_actor",
+      "no_active_source_match"
+    ].includes(code)),
+    !selectedCaptureIds.length || evidenceCount === 0 ? "missing_capture_evidence" : undefined,
+    webhookDestinationIds.length === 0 ? "delivery_disabled" : undefined
+  ].filter(Boolean).map(String)) as Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
+  const deliverySelectionReady = deliverySelectionBlockerCodes.length === 0 && enabledWebhookDestinationIds.length > 0;
+  const deliveryIdempotencyKey = alertId && deliveryDedupeKey ? stableId("dwm_delivery_handoff", `${orgId ?? tenantId}:${alertId}:${deliveryDedupeKey}`) : undefined;
   return {
     schemaVersion: "dwm.alert_downstream_handoff.v1",
     handoffId: stableId("dwm_downstream_handoff", `${tenantId ?? "missing"}:${orgId ?? "missing"}:${alertId ?? "missing"}:${deliveryDedupeKey}:${eventCount}`),
@@ -1190,7 +1228,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
       alertGeneratorKeys
     },
     evidence: {
-      evidenceCount: Number(context.evidenceCount ?? workflow.evidenceCount ?? webhook.evidenceCount ?? alert?.evidence?.length ?? 0),
+      evidenceCount,
       selectedCaptureIds,
       captureIds,
       sourceIds,
@@ -1224,7 +1262,20 @@ export function buildDwmAlertDownstreamHandoff(input: {
       deliveryHistoryRefs,
       lastDeliveryStatus: context.lastDeliveryStatus ?? lastDelivery?.status,
       lastDeliveryAt: context.lastDeliveryAt ?? lastDelivery?.attemptedAt,
-      idempotencyKey: alertId && deliveryDedupeKey ? stableId("dwm_delivery_handoff", `${orgId ?? tenantId}:${alertId}:${deliveryDedupeKey}`) : undefined
+      idempotencyKey: deliveryIdempotencyKey
+    },
+    deliverySelection: {
+      schemaVersion: "dwm.alert_delivery_selection.v1",
+      ready: deliverySelectionReady,
+      selectedWebhookDestinationId: deliverySelectionReady ? enabledWebhookDestinationIds[0] : undefined,
+      webhookDestinationIds,
+      enabledWebhookDestinationIds,
+      disabledWebhookDestinationIds: disabledDestinationIds.filter((id) => webhookDestinationIds.includes(id)),
+      selectedCaptureIds,
+      sourceFamily: context.sourceFamily ?? alert?.sourceFamily ?? workflow.sourceFamily ?? webhook.sourceFamily,
+      deliveryDedupeKey,
+      idempotencyKey: deliveryIdempotencyKey,
+      blockerCodes: deliverySelectionBlockerCodes
     },
     lifecycle: {
       organizationStatus,
@@ -1412,6 +1463,21 @@ function buildGenerationReadinessBlockers(input: {
   const entitlementDeniedWatchlists = input.watchlists
     .filter((watchlist) => watchlist.organizationId === input.organizationId && watchlist.orgMembershipContext?.canGenerateAlerts === false)
     .map((watchlist) => watchlist.id);
+  const orgLifecycleBlockedWatchlists = input.watchlists
+    .filter((watchlist) => watchlist.organizationId === input.organizationId && watchlist.orgMembershipContext)
+    .flatMap((watchlist) => (watchlist.orgMembershipContext?.alertGenerationBlockerCodes ?? [])
+      .filter((code) => code === "org_archived" || code === "org_deleted" || code === "member_revoked" || code === "role_not_allowed")
+      .map((code) => ({ code: code as "org_archived" | "org_deleted" | "member_revoked" | "role_not_allowed", watchlistId: watchlist.id })));
+  for (const code of uniqueStrings(orgLifecycleBlockedWatchlists.map((row) => row.code))) {
+    const lifecycleCode = code as "org_archived" | "org_deleted" | "member_revoked" | "role_not_allowed";
+    blockers.push(generationBlocker({
+      code: lifecycleCode,
+      field: lifecycleCode.startsWith("org_") ? "organization.status" : "orgMembershipContext.visibility",
+      detail: generationLifecycleBlockerDetail(lifecycleCode),
+      recoverable: lifecycleCode !== "org_deleted",
+      watchlistIds: orgLifecycleBlockedWatchlists.filter((row) => row.code === lifecycleCode).map((row) => row.watchlistId)
+    }));
+  }
   if (entitlementDeniedWatchlists.length) {
     blockers.push(generationBlocker({
       code: "entitlement_denied",
@@ -1488,6 +1554,13 @@ function buildGenerationReadinessBlockers(input: {
 
 function generationBlocker(input: DwmAlertGenerationBlocker): DwmAlertGenerationBlocker {
   return input;
+}
+
+function generationLifecycleBlockerDetail(code: "org_archived" | "org_deleted" | "member_revoked" | "role_not_allowed"): string {
+  if (code === "org_archived") return "Organization lifecycle is archived; org watchlist exports remain auditable but must not generate new alerts.";
+  if (code === "org_deleted") return "Organization lifecycle is deleted; org watchlist exports must not generate new alerts.";
+  if (code === "member_revoked") return "Member access was revoked; org watchlist export cannot be used for member-scoped alert generation.";
+  return "Member role is not allowed to export org watchlist terms for alert generation.";
 }
 
 function orgExportExpected(watchlists: RuntimeDwmWatchlist[]): boolean {

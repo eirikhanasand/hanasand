@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
+import { buildDwmAlertGenerationReadiness } from "../storage/dwmAlertRepository.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -110,6 +111,108 @@ const nonmatchCapture: RawCapture = {
 } as RawCapture;
 
 describe("DWM org watchlist bridge", () => {
+  test("preserves inactive organization blockers from API exports before alert matching", () => {
+    const archivedOrgWatchlists = orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_archived_bridge",
+      tenantId: "org_archived_bridge",
+      ownerOrganizationId: "org_archived_bridge",
+      visibilityPolicy: "members",
+      allowedViewerRoles: ["owner", "admin", "member"],
+      canGenerateAlerts: false,
+      blockedReasons: ["org_archived"],
+      downstreamAuthorization: {
+        schemaVersion: "organization.downstream_authorization_export.v1",
+        organizationLifecycleState: "archived",
+        visibility: { allowed: true, allowedRoles: ["owner", "admin", "member"] },
+        downstream: { alertGeneration: { canExportActiveTerms: false, blockerCodes: ["org_archived"] } },
+        watchlists: { activeIds: ["archived_item_acme"], pausedIds: [], archivedIds: [] }
+      },
+      activeTerms: [{
+        watchlistId: "archived_watch_acme",
+        watchlistItemId: "archived_item_acme",
+        organizationId: "org_archived_bridge",
+        tenantId: "org_archived_bridge",
+        kind: "domain",
+        termFamily: "domain",
+        term: "acme.com",
+        status: "active",
+        alertGeneratorKey: "org:org_archived_bridge:watchlist:archived_item_acme:domain:acme.com"
+      }]
+    });
+    expect(archivedOrgWatchlists).toHaveLength(1);
+    expect(archivedOrgWatchlists[0]).toMatchObject({
+      id: "archived_watch_acme",
+      tenantId: "org_archived_bridge",
+      organizationId: "org_archived_bridge",
+      status: "paused",
+      lifecycleStatus: "active",
+      orgMembershipContext: {
+        organizationLifecycleState: "archived",
+        canGenerateAlerts: false,
+        blockedReasons: ["org_archived"],
+        alertGenerationBlockerCodes: ["org_archived"]
+      }
+    });
+
+    const archivedReadiness = buildDwmAlertGenerationReadiness({
+      watchlists: archivedOrgWatchlists,
+      tenantId: "org_archived_bridge",
+      organizationId: "org_archived_bridge",
+      sources: [telegramSource],
+      captures: [telegramCapture]
+    });
+    expect(archivedReadiness.readyForRebuild).toBe(false);
+    expect(archivedReadiness.blockerCodes).toEqual(expect.arrayContaining(["org_archived", "entitlement_denied", "no_active_watchlist_terms"]));
+    expect(archivedReadiness.typedBlockers.find((blocker: any) => blocker.code === "org_archived")).toMatchObject({
+      field: "organization.status",
+      recoverable: true,
+      watchlistIds: ["archived_watch_acme"]
+    });
+
+    const deletedOrgWatchlists = orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_deleted_bridge",
+      tenantId: "org_deleted_bridge",
+      canGenerateAlerts: false,
+      blockedReasons: ["org_deleted"],
+      downstreamAuthorization: {
+        schemaVersion: "organization.downstream_authorization_export.v1",
+        organizationLifecycleState: "deleted",
+        visibility: { allowed: false, reason: "member_revoked", allowedRoles: ["owner", "admin"] },
+        downstream: { alertGeneration: { canExportActiveTerms: false, blockerCodes: ["org_deleted", "member_revoked"] } },
+        watchlists: { activeIds: [], pausedIds: [], archivedIds: [] }
+      },
+      activeTerms: []
+    });
+    expect(deletedOrgWatchlists).toEqual([expect.objectContaining({
+      id: "org_export_blocked:org_deleted_bridge",
+      organizationId: "org_deleted_bridge",
+      tenantId: "org_deleted_bridge",
+      status: "paused",
+      lifecycleStatus: "archived",
+      terms: [],
+      orgMembershipContext: expect.objectContaining({
+        organizationLifecycleState: "deleted",
+        canGenerateAlerts: false,
+        blockedReasons: ["org_deleted", "member_revoked"],
+        alertGenerationBlockerCodes: ["org_deleted", "member_revoked"]
+      })
+    })]);
+    const deletedReadiness = buildDwmAlertGenerationReadiness({
+      watchlists: deletedOrgWatchlists,
+      tenantId: "org_deleted_bridge",
+      organizationId: "org_deleted_bridge",
+      sources: [telegramSource],
+      captures: [telegramCapture]
+    });
+    expect(deletedReadiness.blockerCodes).toEqual(expect.arrayContaining(["org_deleted", "member_revoked", "no_active_watchlist_terms"]));
+    expect(deletedReadiness.typedBlockers.find((blocker: any) => blocker.code === "org_deleted")).toMatchObject({
+      recoverable: false,
+      watchlistIds: ["org_export_blocked:org_deleted_bridge"]
+    });
+  });
+
   test("generates member-visible org alerts from shared watchlist contract rows without leaking paused or archived rows", async () => {
     const store = new InMemoryScraperStore();
     for (const source of [telegramSource, darkwebSource, actorPageSource]) store.saveSource(source);
@@ -613,6 +716,14 @@ describe("DWM org watchlist bridge", () => {
       deliveryReadiness: {
         destinationReady: true,
         webhookDestinationIds: ["webhook_lifecycle_active"]
+      },
+      deliverySelection: {
+        schemaVersion: "dwm.alert_delivery_selection.v1",
+        ready: true,
+        selectedWebhookDestinationId: "webhook_lifecycle_active",
+        enabledWebhookDestinationIds: ["webhook_lifecycle_active"],
+        disabledWebhookDestinationIds: [],
+        selectedCaptureIds: ["cap_org_bridge_tg_acme"]
       }
     });
     expect(activeDetail.retentionAudit).toMatchObject({
@@ -675,8 +786,15 @@ describe("DWM org watchlist bridge", () => {
         activeSourceMatch: false
       },
       replay: { canReplay: false },
-      deliveryReadiness: { destinationReady: false }
+      deliveryReadiness: { destinationReady: false },
+      deliverySelection: {
+        ready: false,
+        enabledWebhookDestinationIds: [],
+        disabledWebhookDestinationIds: ["webhook_lifecycle_active"],
+        blockerCodes: expect.arrayContaining(["retired_watchlist", "disabled_destination", "destination_unavailable", "no_active_source_match"])
+      }
     });
+    expect(lifecycleDetail.downstreamHandoff.deliverySelection).not.toHaveProperty("selectedWebhookDestinationId");
     expect(lifecycleDetail.retentionAudit).toMatchObject({
       schemaVersion: "dwm.alert_retention_audit.v1",
       retentionState: "lifecycle_blocked_retained",
