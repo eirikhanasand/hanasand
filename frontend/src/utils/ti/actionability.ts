@@ -22,6 +22,7 @@ export type TiActionabilityModel = {
     geographyHandoffs: GeographyHandoff[]
     sourceClusters: SourceCluster[]
     watchlistRelevance: WatchlistRelevanceContract
+    orgRelevance: PublicTiOrgRelevanceProof
     createAlertHandoff: WorkflowHandoffContract
     caseHandoff: WorkflowHandoffContract
     webhookDeliveryHandoff: WorkflowHandoffContract
@@ -119,6 +120,55 @@ export type WatchlistRelevanceContract = {
     terms: Array<{ kind: WatchlistCandidate['kind']; value: string; notes: string; matched: boolean }>
     blockers: string[]
     provenance: TiHandoffExportPayload['provenance']
+}
+
+export type PublicTiOrgRelevanceProof = {
+    schemaVersion: 'ti.public_actor.org_relevance.v1'
+    state: 'ready' | 'review' | 'blocked'
+    actorId: string
+    query: string
+    generatedAt: string
+    organizationRefs: Array<{
+        tenantId?: string
+        organizationId?: string
+        watchlistId?: string
+        watchlistItemId?: string
+        kind: 'company' | 'domain' | 'vendor'
+        value: string
+        route?: string
+        casePath?: string
+    }>
+    candidateTerms: Array<{
+        kind: 'company' | 'domain' | 'vendor'
+        value: string
+        notes: string
+        matched: boolean
+        sourceEvidenceRefs: string[]
+    }>
+    sourceEvidence: Array<{
+        sourceId?: string
+        sourceName: string
+        provenance: string
+        captureId?: string
+        confidence?: number
+        supportsTerms: string[]
+    }>
+    alertCaseRefs: Array<{
+        alertId: string
+        casePath?: string
+        caseIdCandidate?: string
+        organizationId?: string
+        tenantId?: string
+        captureIds: string[]
+        webhookDestinationIds: string[]
+    }>
+    handoffRoutes: {
+        watchlist: '/v1/dwm/watchlists'
+        alertRebuild: '/v1/dwm/alerts/rebuild'
+        case: '/v1/cases'
+        webhookDelivery: '/v1/dwm/webhooks/deliver'
+    }
+    blockers: PublicTiReadinessBlocker[]
 }
 
 export type WorkflowHandoffContract = {
@@ -301,12 +351,22 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         exportPayloads,
         consumerReadiness,
     })
+    const orgRelevance = buildOrgRelevanceProof({
+        result,
+        actor,
+        matches,
+        relatedAlerts,
+        sourceProvenance,
+        exportPayloads,
+        readiness,
+    })
     const actionPayloads = buildPublicTiActionPayloads({
         result,
         actor,
         exportPayloads,
         consumerReadiness,
         readiness,
+        orgRelevance,
         sourceProvenance,
         enrichmentGapQueue,
     })
@@ -339,6 +399,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
             blockers: watchlistBlockers,
             provenance: exportPayloads.watchlist.provenance,
         }),
+        orgRelevance,
         createAlertHandoff: buildCreateAlertHandoff(exportPayloads.alertRebuild),
         caseHandoff: buildCaseHandoff(exportPayloads.case),
         webhookDeliveryHandoff: buildWebhookDeliveryHandoff(exportPayloads.webhookDelivery),
@@ -363,6 +424,7 @@ function buildPublicTiActionPayloads(input: {
     exportPayloads: TiActionabilityModel['exportPayloads']
     consumerReadiness: ConsumerReadinessContract
     readiness: PublicTiReadinessContract
+    orgRelevance: PublicTiOrgRelevanceProof
     sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
     enrichmentGapQueue: EnrichmentGapQueueItem[]
 }): PublicTiActionPayloadSet {
@@ -383,6 +445,7 @@ function buildPublicTiActionPayloads(input: {
         generatedAt: input.result.generatedAt,
         readinessState: input.readiness.state,
         backedIds: input.readiness.backedIds,
+        orgRelevance: input.orgRelevance,
         sourceIds,
         provenanceIds,
     }
@@ -527,6 +590,101 @@ function blockersForAction(readiness: PublicTiReadinessContract, codes: PublicTi
 
 function actorIdForQuery(query: string) {
     return `actor:${query.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown'}`
+}
+
+function buildOrgRelevanceProof(input: {
+    result: TiSearchResponse
+    actor: TiActorIntelligenceProfile
+    matches: NonNullable<TiActionabilityContract['watchlistMatches']>
+    relatedAlerts: NonNullable<TiActionabilityContract['relatedAlerts']>
+    sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
+    exportPayloads: TiActionabilityModel['exportPayloads']
+    readiness: PublicTiReadinessContract
+}): PublicTiOrgRelevanceProof {
+    const actorId = actorIdForQuery(input.result.query)
+    const sourceEvidence = input.sourceProvenance.map(source => {
+        const terms = readTermArray(input.exportPayloads.watchlist.body.terms)
+            .filter(term => sourceSupportsTerm(source, term))
+            .map(term => String(term.value))
+        return {
+            sourceId: source.sourceId,
+            sourceName: source.sourceName,
+            provenance: source.provenance,
+            captureId: source.captureId,
+            confidence: source.confidence,
+            supportsTerms: uniqueStrings(terms.length ? terms : readTermArray(input.exportPayloads.watchlist.body.terms).map(term => String(term.value))),
+        }
+    })
+    const evidenceRefs = sourceEvidence.flatMap(source => [
+        source.sourceId,
+        source.captureId,
+        source.provenance,
+    ]).filter((value): value is string => Boolean(value))
+    const candidateTerms = readTermArray(input.exportPayloads.watchlist.body.terms).map(term => {
+        const value = String(term.value)
+        return {
+            kind: normalizeKind(String(term.kind)),
+            value,
+            notes: typeof term.notes === 'string' ? term.notes : '',
+            matched: input.matches.some(match => match.kind === normalizeKind(String(term.kind)) && match.value.toLowerCase() === value.toLowerCase()),
+            sourceEvidenceRefs: uniqueStrings(evidenceRefs),
+        }
+    })
+    const alertCaseRefs = input.relatedAlerts.map(alert => ({
+        alertId: alert.id,
+        casePath: alert.casePath ?? alert.deliveryReadinessContext?.casePath,
+        caseIdCandidate: alert.caseIdCandidate,
+        organizationId: alert.organizationId,
+        tenantId: alert.tenantId,
+        captureIds: uniqueStrings([...(alert.captureIds ?? []), ...(alert.deliveryReadinessContext?.selectedCaptureIds ?? [])]),
+        webhookDestinationIds: uniqueStrings([...(alert.webhookDestinationIds ?? []), ...(alert.deliveryReadinessContext?.webhookDestinationIds ?? [])]),
+    }))
+    const blockers = input.readiness.blockers.filter(blocker => [
+        'missing_org',
+        'missing_org_watchlist',
+        'missing_source_provenance',
+        'missing_alert',
+        'missing_capture',
+        'missing_case_route',
+        'stale_provenance',
+    ].includes(blocker.code))
+    const state: PublicTiOrgRelevanceProof['state'] = blockers.length === 0
+        ? 'ready'
+        : sourceEvidence.length || candidateTerms.length || input.matches.length || alertCaseRefs.length ? 'review' : 'blocked'
+
+    return {
+        schemaVersion: 'ti.public_actor.org_relevance.v1',
+        state,
+        actorId,
+        query: input.result.query,
+        generatedAt: input.result.generatedAt,
+        organizationRefs: input.matches.map(match => ({
+            tenantId: match.tenantId,
+            organizationId: match.organizationId,
+            watchlistId: match.watchlistId,
+            watchlistItemId: match.watchlistItemId,
+            kind: match.kind,
+            value: match.value,
+            route: match.route,
+            casePath: match.casePath,
+        })),
+        candidateTerms,
+        sourceEvidence,
+        alertCaseRefs,
+        handoffRoutes: {
+            watchlist: '/v1/dwm/watchlists',
+            alertRebuild: '/v1/dwm/alerts/rebuild',
+            case: '/v1/cases',
+            webhookDelivery: '/v1/dwm/webhooks/deliver',
+        },
+        blockers,
+    }
+}
+
+function sourceSupportsTerm(source: NonNullable<TiActionabilityContract['sourceProvenance']>[number], term: Record<string, unknown>) {
+    const haystack = `${source.sourceId ?? ''} ${source.sourceName} ${source.provenance}`.toLowerCase()
+    const value = typeof term.value === 'string' ? term.value.toLowerCase() : ''
+    return Boolean(value && haystack.includes(value.toLowerCase()))
 }
 
 function buildPublicTiReadiness(input: {
