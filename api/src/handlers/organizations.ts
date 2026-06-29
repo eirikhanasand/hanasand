@@ -340,7 +340,7 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
     })
 }
 
-export async function getOrganizationInvites(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
+export async function getOrganizationInvites(req: FastifyRequest<{ Params: OrganizationParams, Querystring: { requestId?: string, request_id?: string } }>, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
     if (!valid || !userId) {
         return res.status(401).send({ error: 'Unauthorized.' })
@@ -354,6 +354,7 @@ export async function getOrganizationInvites(req: FastifyRequest<{ Params: Organ
     if (!roleCanManageOrganization(organization.role)) {
         return sendInviteManagementDenial(req, res, organization, userId, {
             action: 'list_invites',
+            requestId: typeof req.query?.requestId === 'string' ? req.query.requestId : typeof req.query?.request_id === 'string' ? req.query.request_id : null,
             message: 'Only organization owners and admins can view invites.',
         })
     }
