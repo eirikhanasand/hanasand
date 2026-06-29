@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
+  buildSourceProvenanceAlertRebuildReceipt,
   buildSourceProvenanceAlertRebuildReadiness,
   buildSourceProvenanceAlertRebuildRequest,
   buildSourceProvenanceOrgWatchlistCandidate,
@@ -452,6 +454,133 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(readiness)).not.toContain("rawText");
     expect(JSON.stringify(readiness)).not.toContain("password");
+  });
+
+  test("proves alert rebuild response preserves source provenance and case handoff", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow()]
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract, includeSourceFamilies: false, includeRelationships: false });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({
+      bridge,
+      watchlistId: "watch_public_ti_apt29",
+      requestId: "req_source_rebuild_receipt"
+    });
+    const request = buildSourceProvenanceAlertRebuildRequest({ candidate, sourceContractId: contract.id });
+    const receipt = buildSourceProvenanceAlertRebuildReceipt({
+      request,
+      response: {
+        rebuiltAt: "2026-06-29T12:03:00.000Z",
+        savedAlertCount: 1,
+        dryRun: true,
+        alerts: [{
+          id: "alert_apt29_source_provenance",
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          workflowContext: {
+            watchlistItemIds: [candidate.activeTerms[0].watchlistItemId],
+            alertGeneratorKeys: [candidate.activeTerms[0].alertGeneratorKey],
+            sourceBridgeId: bridge.id,
+            caseId: "case_apt29_source_provenance",
+            casePath: "/dashboard/dwm/cases/case_apt29_source_provenance"
+          }
+        }]
+      }
+    });
+
+    expect(receipt).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      sourceCandidateId: candidate.id,
+      sourceBridgeId: bridge.id,
+      alertRebuildRequestId: request.id,
+      response: {
+        source: "dwm_alert_rebuild",
+        rebuiltAt: "2026-06-29T12:03:00.000Z",
+        savedAlertCount: 1,
+        dryRun: true
+      },
+      matches: {
+        alertIds: ["alert_apt29_source_provenance"],
+        watchlistItemIds: [candidate.activeTerms[0].watchlistItemId],
+        alertGeneratorKeys: [candidate.activeTerms[0].alertGeneratorKey],
+        sourceBridgeIds: [bridge.id]
+      },
+      caseHandoffRows: [{
+        alertId: "alert_apt29_source_provenance",
+        caseId: "case_apt29_source_provenance",
+        casePath: "/dashboard/dwm/cases/case_apt29_source_provenance",
+        ready: true
+      }],
+      blockers: []
+    });
+    expect(receipt.payloadShape).toEqual(expect.arrayContaining([
+      "matches.alertIds",
+      "matches.watchlistItemIds",
+      "matches.alertGeneratorKeys",
+      "caseHandoffRows[]",
+      "blockers[]"
+    ]));
+    expect(JSON.stringify(receipt)).not.toContain("rawText");
+    expect(JSON.stringify(receipt)).not.toContain("password");
+  });
+
+  test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow()]
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract, includeSourceFamilies: false, includeRelationships: false });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({
+      bridge,
+      watchlistId: "watch_public_ti_apt29"
+    });
+    const request = buildSourceProvenanceAlertRebuildRequest({ candidate, sourceContractId: contract.id });
+    const receipt = buildSourceProvenanceAlertRebuildReceipt({
+      request,
+      response: {
+        rebuiltAt: "2026-06-29T12:03:00.000Z",
+        savedAlertCount: 1,
+        dryRun: true,
+        alerts: [{
+          id: "alert_unmatched",
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          watchlistItemIds: ["org_watchlist_item_other"],
+          alertGeneratorKeys: ["org:org_acme:watchlist:other"],
+          sourceBridgeId: "ti_source_provenance_alertability_other"
+        }]
+      }
+    });
+
+    expect(receipt.ok).toBe(false);
+    expect(receipt.matches).toMatchObject({
+      alertIds: ["alert_unmatched"],
+      watchlistItemIds: [],
+      alertGeneratorKeys: [],
+      sourceBridgeIds: []
+    });
+    expect(receipt.caseHandoffRows).toEqual([
+      expect.objectContaining({
+        alertId: "alert_unmatched",
+        ready: false
+      })
+    ]);
+    expect(receipt.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_watchlist_item_match", ownerLane: "org", path: "response.alerts[].watchlistItemIds" }),
+      expect.objectContaining({ code: "missing_alert_generation_ref_match", ownerLane: "alert", path: "response.alerts[].alertGeneratorKeys" }),
+      expect.objectContaining({ code: "missing_source_bridge_match", ownerLane: "alert", path: "response.alerts[].sourceBridgeId" }),
+      expect.objectContaining({ code: "missing_case_handoff", ownerLane: "case", path: "response.alerts[].caseId" })
+    ]));
   });
 
   test("blocks alertability when source provenance is not ready or org scope is absent", () => {

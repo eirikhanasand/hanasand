@@ -5,6 +5,7 @@ export const TI_SOURCE_PROVENANCE_ALERTABILITY_BRIDGE_SCHEMA_VERSION = "ti.sourc
 export const TI_SOURCE_PROVENANCE_ORG_WATCHLIST_CANDIDATE_SCHEMA_VERSION = "organization.watchlist_alert_terms_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_readiness.v1" as const;
+export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -290,6 +291,96 @@ export type TiSourceProvenanceAlertRebuildReadiness = {
   };
 };
 
+export type TiSourceProvenanceAlertRebuildReceipt = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  sourceCandidateId: string;
+  sourceBridgeId: string;
+  alertRebuildRequestId: string;
+  response: {
+    source: "dwm_alert_rebuild";
+    rebuiltAt?: string;
+    savedAlertCount: number;
+    dryRun: boolean;
+  };
+  matches: {
+    alertIds: string[];
+    watchlistItemIds: string[];
+    alertGeneratorKeys: string[];
+    sourceBridgeIds: string[];
+  };
+  caseHandoffRows: Array<{
+    alertId: string;
+    caseId?: string;
+    casePath?: string;
+    ready: boolean;
+  }>;
+  blockers: TiSourceProvenanceAlertRebuildReceiptBlocker[];
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceAlertRebuildReceiptBlocker = {
+  code:
+    | "request_blocked"
+    | "missing_rebuild_response"
+    | "tenant_mismatch"
+    | "organization_mismatch"
+    | "no_alerts_saved"
+    | "missing_watchlist_item_match"
+    | "missing_alert_generation_ref_match"
+    | "missing_source_bridge_match"
+    | "missing_case_handoff";
+  ownerLane: "publicTI" | "org" | "source" | "alert" | "case";
+  path: string;
+  message: string;
+};
+
+export type TiSourceProvenanceAlertRebuildResponse = {
+  rebuiltAt?: string;
+  savedAlertCount?: number;
+  dryRun?: boolean;
+  alerts?: TiSourceProvenanceAlertRebuildResponseAlert[];
+};
+
+export type TiSourceProvenanceAlertRebuildResponseAlert = {
+  id?: string;
+  alertId?: string;
+  tenantId?: string;
+  organizationId?: string;
+  watchlistItemIds?: string[];
+  alertGeneratorKeys?: string[];
+  sourceBridgeId?: string;
+  sourceBridgeIds?: string[];
+  caseId?: string;
+  casePath?: string;
+  workflowContext?: {
+    watchlistItemIds?: string[];
+    alertGeneratorKeys?: string[];
+    sourceBridgeId?: string;
+    sourceBridgeIds?: string[];
+    caseId?: string;
+    casePath?: string;
+  };
+  routingContext?: {
+    caseId?: string;
+    casePath?: string;
+  };
+  evidenceSummary?: {
+    sourceBridgeId?: string;
+    sourceBridgeIds?: string[];
+  };
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -552,6 +643,86 @@ export function buildSourceProvenanceAlertRebuildReadiness(input: {
   };
 }
 
+export function buildSourceProvenanceAlertRebuildReceipt(input: {
+  request: TiSourceProvenanceAlertRebuildRequest;
+  response?: TiSourceProvenanceAlertRebuildResponse;
+  generatedAt?: string;
+}): TiSourceProvenanceAlertRebuildReceipt {
+  const generatedAt = input.generatedAt ?? input.response?.rebuiltAt ?? input.request.generatedAt;
+  const responseAlerts = input.response?.alerts ?? [];
+  const savedAlertIds = uniqueStrings(responseAlerts.map((alert) => alert.id ?? alert.alertId).filter(Boolean).map(String));
+  const responseWatchlistItemIds = uniqueStrings(responseAlerts.flatMap(alertWatchlistItemIds));
+  const responseAlertGeneratorKeys = uniqueStrings(responseAlerts.flatMap(alertGeneratorKeys));
+  const responseSourceBridgeIds = uniqueStrings(responseAlerts.flatMap(alertSourceBridgeIds));
+  const expectedWatchlistItemIds = input.request.request.body.watchlistItemIds;
+  const expectedAlertGeneratorKeys = input.request.request.body.alertGeneratorKeys;
+  const expectedSourceBridgeId = input.request.request.body.sourceBridgeId;
+  const matchedWatchlistItemIds = expectedWatchlistItemIds.filter((id) => responseWatchlistItemIds.includes(id));
+  const matchedAlertGeneratorKeys = expectedAlertGeneratorKeys.filter((key) => responseAlertGeneratorKeys.includes(key));
+  const matchedSourceBridgeIds = responseSourceBridgeIds.includes(expectedSourceBridgeId) ? [expectedSourceBridgeId] : [];
+  const caseHandoffRows = responseAlerts.map((alert) => {
+    const alertId = String(alert.id ?? alert.alertId ?? "");
+    const caseId = alert.caseId ?? alert.workflowContext?.caseId ?? alert.routingContext?.caseId;
+    const casePath = alert.casePath ?? alert.workflowContext?.casePath ?? alert.routingContext?.casePath;
+    return {
+      alertId,
+      caseId,
+      casePath,
+      ready: Boolean(alertId && caseId && casePath)
+    };
+  }).filter((row) => row.alertId);
+  const blockers = alertRebuildReceiptBlockers({
+    request: input.request,
+    response: input.response,
+    savedAlertIds,
+    matchedWatchlistItemIds,
+    matchedAlertGeneratorKeys,
+    matchedSourceBridgeIds,
+    caseHandoffRows
+  });
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_alert_rebuild_receipt", `${input.request.id}:${generatedAt}:${savedAlertIds.join(",")}`),
+    generatedAt,
+    ok: blockers.length === 0,
+    tenantId: input.request.tenantId,
+    organizationId: input.request.organizationId,
+    sourceCandidateId: input.request.sourceCandidateId,
+    sourceBridgeId: expectedSourceBridgeId,
+    alertRebuildRequestId: input.request.id,
+    response: {
+      source: "dwm_alert_rebuild",
+      rebuiltAt: input.response?.rebuiltAt,
+      savedAlertCount: input.response?.savedAlertCount ?? savedAlertIds.length,
+      dryRun: input.response?.dryRun ?? input.request.request.body.dryRun
+    },
+    matches: {
+      alertIds: savedAlertIds,
+      watchlistItemIds: matchedWatchlistItemIds,
+      alertGeneratorKeys: matchedAlertGeneratorKeys,
+      sourceBridgeIds: matchedSourceBridgeIds
+    },
+    caseHandoffRows,
+    blockers,
+    payloadShape: [
+      "response.savedAlertCount",
+      "matches.alertIds",
+      "matches.watchlistItemIds",
+      "matches.alertGeneratorKeys",
+      "matches.sourceBridgeIds",
+      "caseHandoffRows[]",
+      "blockers[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -777,6 +948,72 @@ function alertRebuildBlocker(
   message: string
 ): TiSourceProvenanceAlertRebuildRequestBlocker {
   return { code, ownerLane, path, message };
+}
+
+function alertRebuildReceiptBlockers(input: {
+  request: TiSourceProvenanceAlertRebuildRequest;
+  response?: TiSourceProvenanceAlertRebuildResponse;
+  savedAlertIds: string[];
+  matchedWatchlistItemIds: string[];
+  matchedAlertGeneratorKeys: string[];
+  matchedSourceBridgeIds: string[];
+  caseHandoffRows: TiSourceProvenanceAlertRebuildReceipt["caseHandoffRows"];
+}): TiSourceProvenanceAlertRebuildReceiptBlocker[] {
+  return [
+    !input.request.ok ? alertRebuildReceiptBlocker("request_blocked", "publicTI", "request.ok", "Alert rebuild receipt requires an unblocked rebuild request.") : undefined,
+    !input.response ? alertRebuildReceiptBlocker("missing_rebuild_response", "alert", "response", "Alert rebuild receipt requires a rebuild response.") : undefined,
+    input.response?.alerts?.some((alert) => alert.tenantId && alert.tenantId !== input.request.tenantId)
+      ? alertRebuildReceiptBlocker("tenant_mismatch", "alert", "response.alerts[].tenantId", "Alert response includes a tenant mismatch.")
+      : undefined,
+    input.response?.alerts?.some((alert) => alert.organizationId && alert.organizationId !== input.request.organizationId)
+      ? alertRebuildReceiptBlocker("organization_mismatch", "org", "response.alerts[].organizationId", "Alert response includes an organization mismatch.")
+      : undefined,
+    input.savedAlertIds.length === 0 ? alertRebuildReceiptBlocker("no_alerts_saved", "alert", "response.alerts[].id", "Alert rebuild did not return saved alert ids.") : undefined,
+    input.request.request.body.watchlistItemIds.length > 0 && input.matchedWatchlistItemIds.length === 0
+      ? alertRebuildReceiptBlocker("missing_watchlist_item_match", "org", "response.alerts[].watchlistItemIds", "Alert rebuild response did not match requested watchlist item ids.")
+      : undefined,
+    input.request.request.body.alertGeneratorKeys.length > 0 && input.matchedAlertGeneratorKeys.length === 0
+      ? alertRebuildReceiptBlocker("missing_alert_generation_ref_match", "alert", "response.alerts[].alertGeneratorKeys", "Alert rebuild response did not match requested alert generation refs.")
+      : undefined,
+    input.matchedSourceBridgeIds.length === 0 ? alertRebuildReceiptBlocker("missing_source_bridge_match", "alert", "response.alerts[].sourceBridgeId", "Alert rebuild response did not preserve source bridge provenance.") : undefined,
+    input.savedAlertIds.length > 0 && !input.caseHandoffRows.some((row) => row.ready)
+      ? alertRebuildReceiptBlocker("missing_case_handoff", "case", "response.alerts[].caseId", "Saved alerts need case handoff ids and paths before analyst workflow can continue.")
+      : undefined
+  ].filter(Boolean) as TiSourceProvenanceAlertRebuildReceiptBlocker[];
+}
+
+function alertRebuildReceiptBlocker(
+  code: TiSourceProvenanceAlertRebuildReceiptBlocker["code"],
+  ownerLane: TiSourceProvenanceAlertRebuildReceiptBlocker["ownerLane"],
+  path: string,
+  message: string
+): TiSourceProvenanceAlertRebuildReceiptBlocker {
+  return { code, ownerLane, path, message };
+}
+
+function alertWatchlistItemIds(alert: TiSourceProvenanceAlertRebuildResponseAlert): string[] {
+  return uniqueStrings([
+    ...(alert.watchlistItemIds ?? []),
+    ...(alert.workflowContext?.watchlistItemIds ?? [])
+  ]);
+}
+
+function alertGeneratorKeys(alert: TiSourceProvenanceAlertRebuildResponseAlert): string[] {
+  return uniqueStrings([
+    ...(alert.alertGeneratorKeys ?? []),
+    ...(alert.workflowContext?.alertGeneratorKeys ?? [])
+  ]);
+}
+
+function alertSourceBridgeIds(alert: TiSourceProvenanceAlertRebuildResponseAlert): string[] {
+  return uniqueStrings([
+    alert.sourceBridgeId,
+    ...(alert.sourceBridgeIds ?? []),
+    alert.workflowContext?.sourceBridgeId,
+    ...(alert.workflowContext?.sourceBridgeIds ?? []),
+    alert.evidenceSummary?.sourceBridgeId,
+    ...(alert.evidenceSummary?.sourceBridgeIds ?? [])
+  ].filter(Boolean).map(String));
 }
 
 function sourceProvenanceAlertRebuildActions(
