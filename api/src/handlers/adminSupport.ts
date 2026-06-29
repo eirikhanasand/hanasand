@@ -1538,6 +1538,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
                 filterContract: supportAuditFilterContract(auditTimelineFilters, timeline),
                 exportProof: supportAuditExportProof(auditTimelineFilters, timeline),
                 workflowRollup: supportAuditWorkflowRollup(auditTimelineFilters, timeline),
+                supportWorkflowPacket: supportAuditSupportWorkflowPacket(auditTimelineFilters, timeline),
                 searchProof,
                 events: timeline,
                 links: {
@@ -7150,6 +7151,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
         workflowProof: supportAuditEventWorkflowProof({ detail, timelineEvent, filters }),
         integrationFixture: supportAuditEventIntegrationFixture({ detail, timelineEvent, relatedTimeline, filters }),
         timelineReplayContract: supportAuditTimelineReplayContract(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
+        supportWorkflowPacket: supportAuditSupportWorkflowPacket(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         relatedTimeline: {
             schemaVersion: 'admin.audit.event_related_timeline.v1',
@@ -7160,6 +7162,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
             exportProof: supportAuditExportProof(filters, relatedTimeline),
             compliancePacket: supportAuditCompliancePacket(filters, relatedTimeline),
             timelineReplayContract: supportAuditTimelineReplayContract(filters, relatedTimeline),
+            supportWorkflowPacket: supportAuditSupportWorkflowPacket(filters, relatedTimeline),
             workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline),
             timeline: relatedTimeline,
             redacted: true,
@@ -7216,7 +7219,7 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
         },
         timelineShape: {
             requiredFields: ['id', 'timestamp', 'actionType', 'severity', 'outcome', 'actor.id', 'target.id', 'organization.id', 'entity.id', 'requestId', 'reason', 'actionEvidence'],
-            detailPayloads: ['filterContract', 'exportProof', 'compliancePacket', 'workflowProof', 'integrationFixture', 'timelineReplayContract', 'actionEvidenceRollup'],
+            detailPayloads: ['filterContract', 'exportProof', 'compliancePacket', 'workflowProof', 'integrationFixture', 'timelineReplayContract', 'supportWorkflowPacket', 'actionEvidenceRollup'],
             redactionRequired: true,
         },
         exampleQueries: {
@@ -7960,6 +7963,58 @@ function supportAuditRedactedSummary(timeline: Array<Record<string, any>>) {
     }
 }
 
+function supportAuditSupportWorkflowPacket(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const actionEvidenceRollup = supportAuditActionEvidenceRollup(timeline)
+    const entityLinks = supportAuditEntityLinkRollup(timeline)
+    const eventIds = timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    const blockers = uniqueTimelineValues([
+        timeline.length ? '' : 'missing_audit_events',
+        ...actionEvidenceRollup.blockers,
+    ].filter(Boolean))
+    return {
+        schemaVersion: 'support.audit.support_workflow_packet.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        ok: !blockers.some(blocker => blocker !== 'redaction_required'),
+        customerVisible: false,
+        route: '/api/admin/support/inspect',
+        auditRoute: auditFilterQuery(filters),
+        detailRouteTemplate: '/api/admin/audit-events/:id',
+        filters,
+        evidence: {
+            eventCount: timeline.length,
+            eventIds,
+            actionEvidenceRollup,
+            entityLinks,
+        },
+        operatorContract: {
+            requiredInputs: ['reason', 'context'],
+            scopedInputs: ['scope', 'supportSessionId', 'durationMinutes', 'expiresAt', 'idempotencyKey'],
+            guardedActions: ['invite_assist', 'invite_action', 'member_role_recovery', 'access_recovery', 'impersonation'],
+            noSilentMutation: true,
+            redactionRequired: true,
+        },
+        routes: {
+            inspect: '/api/admin/support/inspect',
+            audit: auditFilterQuery(filters),
+            details: timeline.map(event => event.links?.detail).filter(Boolean),
+            inviteActions: entityLinks.inviteAction,
+            memberRoleRecovery: entityLinks.memberRoleRecovery,
+            accessRecovery: entityLinks.accessRecovery,
+            supportSessions: entityLinks.supportSession,
+            impersonation: entityLinks.impersonation,
+        },
+        blockers,
+        nextActions: supportAuditWorkflowNextActions(blockers, filters),
+        copyText: [
+            'Support workflow packet',
+            `Audit route: ${auditFilterQuery(filters)}`,
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Blockers: ${blockers.join(', ') || 'none'}`,
+        ].join('\n'),
+    }
+}
+
 function supportAuditActionEvidenceRollup(timeline: Array<Record<string, any>>) {
     const evidence = timeline
         .map(event => event.actionEvidence)
@@ -8019,6 +8074,43 @@ function supportAuditActionEvidenceRollup(timeline: Array<Record<string, any>>) 
             `Missing duration/expiry: ${durationMissingEventIds.join(', ') || 'none'}`,
         ].join('\n'),
     }
+}
+
+function supportAuditWorkflowNextActions(blockers: string[], filters: Record<string, unknown>) {
+    const actions = []
+    if (blockers.includes('missing_audit_events')) {
+        actions.push({
+            ownerLane: 'support',
+            action: 'inspect_support_filters',
+            blockerCode: 'missing_audit_events',
+            route: '/api/admin/support/inspect',
+        })
+    }
+    if (blockers.includes('missing_action_evidence')) {
+        actions.push({
+            ownerLane: 'support',
+            action: 'open_audit_timeline',
+            blockerCode: 'missing_action_evidence',
+            route: auditFilterQuery(filters),
+        })
+    }
+    if (blockers.includes('missing_reason_on_source_event')) {
+        actions.push({
+            ownerLane: 'support',
+            action: 'review_operator_rationale',
+            blockerCode: 'missing_reason_on_source_event',
+            route: auditFilterQuery({ ...filters, reason: '' }),
+        })
+    }
+    if (blockers.includes('missing_scope_on_source_event') || blockers.includes('missing_duration_or_expiry_on_source_event')) {
+        actions.push({
+            ownerLane: 'support',
+            action: 'review_scoped_session',
+            blockerCode: blockers.includes('missing_scope_on_source_event') ? 'missing_scope_on_source_event' : 'missing_duration_or_expiry_on_source_event',
+            route: auditFilterQuery(filters),
+        })
+    }
+    return actions
 }
 
 function supportAuditEntityLinkRollup(timeline: Array<Record<string, any>>) {
