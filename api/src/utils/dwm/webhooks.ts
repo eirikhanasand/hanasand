@@ -142,6 +142,16 @@ export type DwmAlertWebhookDispatchPlan = {
     }>
 }
 
+export type DwmAlertWebhookSkippedDeliveryIntent = {
+    destinationId: string
+    orgId: string
+    status: DwmWebhookStatus
+    reason: 'disabled' | 'event_not_subscribed'
+    idempotencyKey: string
+    error: string
+    persistable: true
+}
+
 export type DwmWebhookDeliveryEvidenceFilters = {
     orgId?: unknown
     destinationId?: unknown
@@ -4858,6 +4868,20 @@ export async function deliverDwmAlertNotification(ownerId: string, input: DwmAle
     })
 
     const deliveries = []
+    const persistableSkipped = buildDwmAlertWebhookSkippedDeliveryIntents(plan)
+    const destinationsById = new Map(candidateDestinations.map(destination => [destination.id, destination as DwmWebhookDestinationRow]))
+    for (const skipped of persistableSkipped) {
+        const destination = destinationsById.get(skipped.destinationId)
+        if (!destination) continue
+        deliveries.push(await recordSkippedSelectionDwmWebhookDelivery({
+            ownerId,
+            destination,
+            eventType: plan.eventType,
+            alert: plan.alert,
+            dryRun,
+            intent: skipped,
+        }))
+    }
     for (const destination of plan.selectedDestinations) {
         const normalizedAlert = normalizeAlert(plan.alert)
         const idempotencyKey = buildIdempotencyKey(plan.eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
@@ -5058,6 +5082,29 @@ export function buildDwmAlertWebhookDispatchPlan({
         selectedDestinations,
         skippedDestinations,
     }
+}
+
+export function buildDwmAlertWebhookSkippedDeliveryIntents(
+    plan: DwmAlertWebhookDispatchPlan
+): DwmAlertWebhookSkippedDeliveryIntent[] {
+    const normalizedAlert = normalizeAlert(plan.alert)
+    const alertDedupe = normalizedAlert.dedupeKey || normalizedAlert.id
+    return plan.skippedDestinations
+        .filter(skipped => skipped.reason !== 'org_mismatch')
+        .map(skipped => {
+            const reason = skipped.reason as DwmAlertWebhookSkippedDeliveryIntent['reason']
+            return {
+                destinationId: skipped.id,
+                orgId: skipped.orgId,
+                status: skipped.status,
+                reason,
+                idempotencyKey: buildIdempotencyKey(plan.eventType, plan.orgId, skipped.id, alertDedupe),
+                error: reason === 'disabled'
+                    ? 'Delivery selection skipped because this destination is disabled.'
+                    : `Delivery selection skipped because this destination is not subscribed to ${plan.eventType}.`,
+                persistable: true as const,
+            }
+        })
 }
 
 export function buildDwmAlertDeliveryPayload({
@@ -5440,6 +5487,110 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
             priorDeliveryId: priorDelivery.id,
             priorDeliveredAt: priorDelivery.attempted_at,
             reason: 'duplicate_delivered_idempotency_key',
+            watchlistId: delivery.watchlist_id,
+            route: delivery.route,
+            casePath: delivery.case_path,
+        },
+    })
+
+    return toDwmWebhookDelivery(delivery)
+}
+
+async function recordSkippedSelectionDwmWebhookDelivery({
+    ownerId,
+    destination,
+    eventType,
+    alert,
+    dryRun,
+    intent,
+}: {
+    ownerId: string
+    destination: DwmWebhookDestinationRow
+    eventType: DwmAlertEventType
+    alert: Record<string, unknown>
+    dryRun: boolean
+    intent: DwmAlertWebhookSkippedDeliveryIntent
+}) {
+    const deliveryId = crypto.randomUUID()
+    const payload = buildDwmAlertDeliveryPayload({ destination, alert, eventType, deliveryId })
+    const normalizedAlert = normalizeAlert(alert)
+    const watchlist = normalizeWatchlist(alert.watchlist)
+    const payloadHash = hashValue('payload', JSON.stringify(payload))
+    const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, destination.org_id, destination.id, intent.idempotencyKey) + 1
+    const errorClass = classifyDeliveryError({ status: 'skipped', dryRun, error: intent.error })
+    const result = await run(`
+        INSERT INTO dwm_webhook_deliveries (
+            id,
+            destination_id,
+            owner_id,
+            org_id,
+            alert_id,
+            event_type,
+            status,
+            dry_run,
+            endpoint_hint,
+            endpoint_hash,
+            payload_hash,
+            payload,
+            response_status,
+            response_body,
+            error,
+            error_class,
+            attempt_count,
+            next_retry_at,
+            idempotency_key,
+            watchlist_id,
+            watchlist_name,
+            route,
+            case_path,
+            attempted_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, 'skipped', $7, $8, $9, $10, $11::JSONB, NULL, NULL, $12, $13, $14, NULL, $15, $16, $17, $18, $19, NOW())
+        RETURNING *
+    `, [
+        deliveryId,
+        destination.id,
+        ownerId,
+        destination.org_id,
+        normalizedAlert.id,
+        eventType,
+        dryRun,
+        destination.endpoint_hint,
+        destination.endpoint_hash,
+        payloadHash,
+        JSON.stringify(payload),
+        intent.error,
+        errorClass,
+        attemptCount,
+        intent.idempotencyKey,
+        watchlist.id,
+        watchlist.name,
+        normalizedAlert.route,
+        normalizedAlert.casePath,
+    ])
+
+    const delivery = result.rows[0] as DwmWebhookDeliveryRow
+    await recordDwmWebhookAudit({
+        ownerId,
+        actorId: ownerId,
+        orgId: delivery.org_id,
+        destinationId: destination.id,
+        deliveryId: delivery.id,
+        action: 'delivery.skipped',
+        metadata: {
+            alertId: delivery.alert_id,
+            eventType: delivery.event_type,
+            status: delivery.status,
+            endpointHint: delivery.endpoint_hint,
+            endpointHash: delivery.endpoint_hash,
+            payloadHash: delivery.payload_hash,
+            dryRun: delivery.dry_run,
+            error: delivery.error,
+            errorClass: delivery.error_class,
+            attemptCount: delivery.attempt_count,
+            nextRetryAt: delivery.next_retry_at,
+            idempotencyKey: delivery.idempotency_key,
+            reason: intent.reason,
             watchlistId: delivery.watchlist_id,
             route: delivery.route,
             casePath: delivery.case_path,

@@ -3,6 +3,7 @@ import {
     buildDwmAlertWebhookReadinessHandoff,
     buildDwmAlertWebhookNotificationInput,
     buildDwmAlertWebhookDispatchPlan,
+    buildDwmAlertWebhookSkippedDeliveryIntents,
     buildDwmOrgAlertWebhookDeliveryContract,
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDeliveryActionPlan,
@@ -233,6 +234,11 @@ expect(dispatchPlan.selectedDestinations.map(item => item.id).join(',') === 'des
 expect(dispatchPlan.skippedDestinations.some(item => item.id === 'destination_paused' && item.reason === 'disabled'), 'Dispatch should skip disabled destinations.', dispatchPlan)
 expect(dispatchPlan.skippedDestinations.some(item => item.id === 'destination_created_only' && item.reason === 'event_not_subscribed'), 'Dispatch should skip destinations not subscribed to replay.', dispatchPlan)
 expect(dispatchPlan.skippedDestinations.some(item => item.id === 'destination_foreign_org' && item.reason === 'org_mismatch'), 'Dispatch should skip foreign org destinations.', dispatchPlan)
+const skippedDeliveryIntents = buildDwmAlertWebhookSkippedDeliveryIntents(dispatchPlan)
+expect(skippedDeliveryIntents.map(item => item.destinationId).sort().join(',') === 'destination_created_only,destination_paused', 'Dispatch should create persistable skipped delivery intents only for same-org destinations.', skippedDeliveryIntents)
+expect(skippedDeliveryIntents.every(item => item.persistable === true && item.idempotencyKey.includes(`:${item.orgId}:${item.destinationId}:`)), 'Skipped delivery intents should carry durable idempotency keys.', skippedDeliveryIntents)
+expect(skippedDeliveryIntents.some(item => item.reason === 'disabled' && item.error.includes('disabled')), 'Skipped delivery intents should explain disabled destinations.', skippedDeliveryIntents)
+expect(!JSON.stringify(skippedDeliveryIntents).includes('destination_foreign_org'), 'Skipped delivery intents must not persist foreign-org destination leakage.', skippedDeliveryIntents)
 
 const bridgePayload = buildDwmAlertDeliveryPayload({
     destination: {
@@ -2849,6 +2855,7 @@ console.log(JSON.stringify({
         'Discord payload truncation limits',
         'destination selection',
         'disabled destination skip',
+        'persistable skipped destination intents',
         'org/watchlist context propagation',
         'route/dedupe/case context',
         'alert replay trigger adapter',
