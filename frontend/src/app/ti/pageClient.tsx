@@ -177,6 +177,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
     const reviewHandoff = selected && alertPacket ? selectedReviewHandoffFor(result, selected, watchlist, alertPacket, actionability, selectedDecision, selectedRelevance, selectedNote) : null
     const selectedSourceDrilldown = selected ? selectedSourceDrilldownFor(result, selected, actionability, actorIntel) : null
+    const selectedCaseDraft = selected && alertPacket && selectedSourceDrilldown ? selectedCaseDraftFor(result, selected, watchlist, alertPacket, actionability, selectedSourceDrilldown, selectedRelevance, selectedNote) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
@@ -428,6 +429,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 decision={selectedDecision}
                                 relevance={selectedRelevance}
                                 reviewHandoff={reviewHandoff}
+                                caseDraft={selectedCaseDraft}
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={applyDecision}
                                 onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
@@ -632,6 +634,25 @@ type SelectedSourceDrilldownRow = {
     route: string
     missing: string[]
     handoff: string
+}
+
+type SelectedCaseDraft = {
+    schemaVersion: 'ti.public_actor.selected_case_draft.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    priority: 'critical' | 'high' | 'medium' | 'low'
+    caseIntent: LocalRelevanceMark['caseIntent'] | 'not_set'
+    ready: boolean
+    endpoint: string
+    route?: string
+    missing: string[]
+    watchTerms: string[]
+    sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'state' | 'missing'>>
+    body: Record<string, unknown>
 }
 
 type EnrichmentTask = {
@@ -2378,11 +2399,12 @@ function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     )
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, onNoteChange, onDecision, onRelevance }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNoteChange, onDecision, onRelevance }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
     reviewHandoff: SelectedReviewHandoff | null
+    caseDraft: SelectedCaseDraft | null
     onNoteChange: (value: string) => void
     onDecision: (status: LocalDecision['status']) => void
     onRelevance: (state: LocalRelevanceMark['state']) => void
@@ -2439,6 +2461,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, onNoteChange, o
                         <ActionButton icon={<XCircle className='h-3.5 w-3.5' />} onClick={() => onRelevance('not_relevant')}>Not relevant</ActionButton>
                     </div>
                 </div>
+                {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
                 {reviewHandoff ? (
                     <div data-ti-selected-review-handoff='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
@@ -2468,6 +2491,41 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, onNoteChange, o
                 ) : null}
             </div>
         </Panel>
+    )
+}
+
+function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
+    return (
+        <div data-ti-selected-case-draft='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case draft</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Session-local draft for authenticated case review.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={draft.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{draft.ready ? 'ready' : 'blocked'}</span>
+                    <CopyPayloadButton label='Case draft' payload={draft} />
+                </div>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                <EvidenceMetric label='Intent' value={formatLabel(draft.caseIntent)} />
+                <EvidenceMetric label='Sources' value={`${draft.sourceRows.length} row${draft.sourceRows.length === 1 ? '' : 's'}`} />
+            </div>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{draft.route || draft.endpoint}</p>
+            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                {draft.watchTerms.slice(0, 4).map(term => (
+                    <span key={term} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{term}</span>
+                ))}
+                {!draft.watchTerms.length ? <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>No watch terms attached.</span> : null}
+            </div>
+            {draft.missing.length ? (
+                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{draft.missing.slice(0, 3).join('; ')}</p>
+            ) : (
+                <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Required case identifiers and evidence context are present.</p>
+            )}
+        </div>
     )
 }
 
@@ -2728,6 +2786,74 @@ function selectedReviewHandoffFor(
         },
         evidenceBasis: alertPacket.evidenceBasis,
         blockers: alertPacket.blockedUntil,
+    }
+}
+
+function selectedCaseDraftFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    watchlist: WatchlistRelevance,
+    alertPacket: AlertPacket,
+    actionability: TiActionabilityModel,
+    drilldown: SelectedSourceDrilldown,
+    relevance: LocalRelevanceMark | undefined,
+    note: string
+): SelectedCaseDraft {
+    const sourceRows = drilldown.rows.map(row => ({
+        sourceName: row.sourceName,
+        sourceId: row.sourceId,
+        provenance: row.provenance,
+        captureId: row.captureId,
+        state: row.state,
+        missing: row.missing,
+    }))
+    const sourceMissing = unique(drilldown.rows.flatMap(row => row.missing))
+    const watchTerms = unique([
+        ...(relevance?.watchTerms ?? []),
+        ...alertPacket.watchTerms,
+        ...watchlist.matchedTerms,
+    ]).slice(0, 10)
+    const missing = unique([
+        ...actionability.caseHandoff.missing,
+        ...sourceMissing,
+        ...(watchTerms.length ? [] : ['Watchlist term or customer relevance mark is required before case review.']),
+        ...(relevance?.state === 'not_relevant' ? ['Selected evidence is marked not relevant for current case work.'] : []),
+    ]).slice(0, 8)
+    const caseIntent = relevance?.caseIntent ?? (selected.kind === 'exposure' ? 'case_candidate' : 'watchlist_context')
+    const titlePrefix = caseIntent === 'case_candidate' ? 'Case review' : caseIntent === 'source_review' ? 'Source review' : 'Actor context'
+    const body = {
+        title: `${titlePrefix}: ${selected.title}`.slice(0, 180),
+        query: result.query,
+        selectedItemId: selected.id,
+        priority: selected.severity,
+        rationale: note.trim() || relevance?.rationale || alertPacket.customerValue,
+        caseIntent,
+        watchTerms,
+        evidence: selected.evidence,
+        sourceRows,
+        alertId: actionability.readiness.backedIds.alertIds[0],
+        captureIds: unique(sourceRows.map(row => row.captureId).filter((value): value is string => Boolean(value))),
+        provenance: drilldown.rows.map(row => ({ sourceName: row.sourceName, sourceId: row.sourceId, provenance: row.provenance, captureId: row.captureId, confidence: row.confidence })),
+        requiredBeforePost: missing,
+    }
+
+    return {
+        schemaVersion: 'ti.public_actor.selected_case_draft.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: result.generatedAt,
+        selectedItemId: selected.id,
+        title: body.title,
+        priority: selected.severity,
+        caseIntent,
+        ready: actionability.caseHandoff.ready && missing.length === 0,
+        endpoint: actionability.caseHandoff.endpoint,
+        route: actionability.caseHandoff.backedRoute,
+        missing,
+        watchTerms,
+        sourceRows,
+        body,
     }
 }
 
