@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { requireAuditReason, cleanAuditReason, redactAuditValue } from '../src/utils/adminAudit.ts'
+import { requireAuditReason, cleanAuditReason, redactAuditValue, supportTimelineAuditBridgeEvent } from '../src/utils/adminAudit.ts'
 
 assert.equal(cleanAuditReason('  Customer   owner locked out  '), 'Customer owner locked out')
 assert.equal(requireAuditReason('Customer owner locked out'), 'Customer owner locked out')
@@ -14,6 +14,35 @@ assert.deepEqual(redactAuditValue({
     nested: { apiToken: '[redacted]', safe: 'kept', privateSourceUrl: '[redacted]' },
     list: [{ authorization: '[redacted]', webhookUrl: '[redacted]', value: 1 }],
 })
+const bridgedAudit = supportTimelineAuditBridgeEvent({
+    workflow: 'watchlist',
+    action: 'organization.watchlist.updated',
+    actorId: 'support-admin-1',
+    targetType: 'watchlist',
+    targetId: 'watchlist-item-1',
+    organizationId: 'org-1',
+    entityId: 'watchlist-item-1',
+    requestId: 'req-1',
+    severity: 'notice',
+    outcome: 'success',
+    reason: 'Support inspected org watchlist update.',
+    source: 'organization',
+    service: 'hanasand-api',
+    before: { status: 'paused', webhookUrl: 'https://private.example/hook' },
+    after: { status: 'active', privateSourceUrl: 'https://private.example/source' },
+    correlationId: 'corr-1',
+    idempotencyKey: 'idem-1',
+})
+assert.equal(bridgedAudit.actionType, 'organization.watchlist.updated')
+assert.equal(bridgedAudit.organizationId, 'org-1')
+assert.equal(bridgedAudit.entityId, 'watchlist-item-1')
+assert.equal(bridgedAudit.requestId, 'req-1')
+assert.equal(bridgedAudit.source, 'organization')
+assert.equal(bridgedAudit.context?.schemaVersion, 'support.audit.bridge_event.v1')
+assert.deepEqual((bridgedAudit.context?.before as Record<string, unknown>), { status: 'paused', webhookUrl: '[redacted]' })
+assert.deepEqual((bridgedAudit.context?.after as Record<string, unknown>), { status: 'active', privateSourceUrl: '[redacted]' })
+assert.equal((bridgedAudit.context?.supportTimeline as Record<string, any>)?.filters?.action, 'organization.watchlist.updated')
+assert.equal((bridgedAudit.context?.supportTimeline as Record<string, any>)?.detailRouteTemplate, '/api/admin/audit-events/:id')
 
 const routes = await readFile(new URL('../src/routes.ts', import.meta.url), 'utf8')
 assert.match(routes, /fastify\.get\('\/admin\/audit-events'/)
