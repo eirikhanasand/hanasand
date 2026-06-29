@@ -81,7 +81,7 @@ export type ActorOrgRelevanceTimelineEvent = {
   id: string;
   occurredAt: string;
   actorId?: string;
-  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested" | "case_handoff_requested" | "webhook_trigger_prepared";
+  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested" | "case_handoff_requested" | "webhook_trigger_prepared" | "alert_generation_cancelled" | "case_handoff_cancelled" | "webhook_trigger_cancelled";
   summary: string;
   blockerCodes: string[];
 };
@@ -160,6 +160,12 @@ export type ActorOrgRelevanceMaterializeWatchlistResult =
   | { ok: true; record: ActorOrgRelevanceReviewRecord; watchlist: ActorOrgRelevanceMaterializedWatchlist; created: boolean; changed: boolean }
   | { ok: false; code: string; message: string };
 
+export type ActorOrgRelevancePreparedHandoffCancellation = {
+  cancelledAt: string;
+  cancelledBy?: string;
+  rationale: string;
+};
+
 export type ActorOrgRelevanceAlertGenerationReceipt = {
   schemaVersion: "hanasand.actor_org_relevance.alert_generation_receipt.v1";
   id: string;
@@ -195,6 +201,7 @@ export type ActorOrgRelevanceAlertGenerationReceipt = {
     sourceIds: string[];
   };
   provenance: ActorOrgRelevanceMaterializedWatchlist["provenance"];
+  cancellation?: ActorOrgRelevancePreparedHandoffCancellation;
 };
 
 export type ActorOrgRelevanceAlertGenerationRequestInput = {
@@ -238,6 +245,7 @@ export type ActorOrgRelevanceCaseHandoffReceipt = {
     sourceFamilies: string[];
     evidenceCount: number;
   };
+  cancellation?: ActorOrgRelevancePreparedHandoffCancellation;
 };
 
 export type ActorOrgRelevanceCaseHandoffRequestInput = {
@@ -282,6 +290,7 @@ export type ActorOrgRelevanceWebhookTriggerReceipt = {
     sourceIds: string[];
     sourceFamilies: string[];
   };
+  cancellation?: ActorOrgRelevancePreparedHandoffCancellation;
 };
 
 export type ActorOrgRelevanceWebhookTriggerRequestInput = {
@@ -292,6 +301,24 @@ export type ActorOrgRelevanceWebhookTriggerRequestInput = {
 
 export type ActorOrgRelevanceWebhookTriggerRequestResult =
   | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceWebhookTriggerReceipt; created: boolean }
+  | { ok: false; code: string; message: string };
+
+export type ActorOrgRelevanceCancelPreparedHandoffInput = {
+  target: "alert_generation" | "case_handoff" | "webhook_trigger";
+  receiptId?: string;
+  actorId?: string;
+  rationale?: string;
+  generatedAt?: string;
+};
+
+export type ActorOrgRelevanceCancelPreparedHandoffResult =
+  | {
+    ok: true;
+    record: ActorOrgRelevanceReviewRecord;
+    target: ActorOrgRelevanceCancelPreparedHandoffInput["target"];
+    receipt: ActorOrgRelevanceAlertGenerationReceipt | ActorOrgRelevanceCaseHandoffReceipt | ActorOrgRelevanceWebhookTriggerReceipt;
+    cancelled: boolean;
+  }
   | { ok: false; code: string; message: string };
 
 export type ActorOrgRelevanceQueue = {
@@ -397,9 +424,9 @@ export function summarizeActorOrgRelevanceReview(record: ActorOrgRelevanceReview
     handoffs: record.readiness.handoffs,
     blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code)),
     workflow: record.workflow,
-    latestAlertGeneration: record.alertGenerationReceipts.at(-1),
-    latestCaseHandoff: record.caseHandoffReceipts.at(-1),
-    latestWebhookTrigger: record.webhookTriggerReceipts.at(-1),
+    latestAlertGeneration: latestActiveReceipt(record.alertGenerationReceipts),
+    latestCaseHandoff: latestActiveReceipt(record.caseHandoffReceipts),
+    latestWebhookTrigger: latestActiveReceipt(record.webhookTriggerReceipts),
     nextActions: record.nextActions,
     routes: {
       publicTi: `/ti/${encodeURIComponent(record.query)}`,
@@ -654,7 +681,7 @@ export function createActorOrgRelevanceAlertGenerationRequest(input: {
     actorOrgRelevanceReviewId: record.id
   };
   const idempotencyKey = stableId("actor_org_relevance_alert_generation_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${expectedWatchlistId}`);
-  const existingReceipt = record.alertGenerationReceipts.find((receipt) => receipt.idempotencyKey === idempotencyKey);
+  const existingReceipt = record.alertGenerationReceipts.find((receipt) => !receipt.cancellation && receipt.idempotencyKey === idempotencyKey);
   if (existingReceipt) {
     return { ok: true, created: false, receipt: existingReceipt, record };
   }
@@ -721,7 +748,7 @@ export function createActorOrgRelevanceCaseHandoffRequest(input: {
   if (record.state !== "ready" || !record.handoff) {
     return { ok: false, code: "review_not_ready", message: "Actor relevance review must be ready before requesting case handoff." };
   }
-  const alertGenerationReceipt = record.alertGenerationReceipts.at(-1);
+  const alertGenerationReceipt = latestActiveReceipt(record.alertGenerationReceipts);
   if (!alertGenerationReceipt) {
     return { ok: false, code: "missing_alert_generation_receipt", message: "Prepare the alert generation request before creating a case handoff." };
   }
@@ -733,7 +760,7 @@ export function createActorOrgRelevanceCaseHandoffRequest(input: {
   };
   const sourceIds = uniqueStrings(alertGenerationReceipt.downstream.sourceIds);
   const idempotencyKey = stableId("actor_org_relevance_case_handoff_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${alertGenerationReceipt.id}`);
-  const existingReceipt = record.caseHandoffReceipts.find((receipt) => receipt.idempotencyKey === idempotencyKey);
+  const existingReceipt = record.caseHandoffReceipts.find((receipt) => !receipt.cancellation && receipt.idempotencyKey === idempotencyKey);
   if (existingReceipt) {
     return { ok: true, created: false, receipt: existingReceipt, record };
   }
@@ -801,7 +828,7 @@ export function createActorOrgRelevanceWebhookTriggerRequest(input: {
   if (record.state !== "ready" || !record.handoff) {
     return { ok: false, code: "review_not_ready", message: "Actor relevance review must be ready before preparing webhook delivery." };
   }
-  const caseHandoffReceipt = record.caseHandoffReceipts.at(-1);
+  const caseHandoffReceipt = latestActiveReceipt(record.caseHandoffReceipts);
   if (!caseHandoffReceipt) {
     return { ok: false, code: "missing_case_handoff_receipt", message: "Prepare the case handoff before preparing webhook delivery." };
   }
@@ -814,7 +841,7 @@ export function createActorOrgRelevanceWebhookTriggerRequest(input: {
     caseHandoffReceiptId: caseHandoffReceipt.id
   };
   const idempotencyKey = stableId("actor_org_relevance_webhook_trigger_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${caseHandoffReceipt.id}:${dryRun ? "dry_run" : "live"}`);
-  const existingReceipt = record.webhookTriggerReceipts.find((receipt) => receipt.idempotencyKey === idempotencyKey);
+  const existingReceipt = record.webhookTriggerReceipts.find((receipt) => !receipt.cancellation && receipt.idempotencyKey === idempotencyKey);
   if (existingReceipt) {
     return { ok: true, created: false, receipt: existingReceipt, record };
   }
@@ -873,6 +900,126 @@ export function createActorOrgRelevanceWebhookTriggerRequest(input: {
       }]
     }
   };
+}
+
+export function cancelActorOrgRelevancePreparedHandoff(
+  record: ActorOrgRelevanceReviewRecord,
+  input: ActorOrgRelevanceCancelPreparedHandoffInput
+): ActorOrgRelevanceCancelPreparedHandoffResult {
+  const rationale = cleanNote(input.rationale);
+  if (!rationale) return { ok: false, code: "missing_rationale", message: "Cancelling a prepared handoff requires rationale." };
+
+  if (input.target === "alert_generation") {
+    const receipt = findReceipt(record.alertGenerationReceipts, input.receiptId);
+    if (!receipt) return { ok: false, code: "receipt_not_found", message: "Alert generation receipt not found." };
+    if (record.caseHandoffReceipts.some((caseReceipt) => !caseReceipt.cancellation && caseReceipt.alertGenerationReceiptId === receipt.id)) {
+      return { ok: false, code: "dependent_case_handoff_active", message: "Cancel the dependent case handoff before cancelling alert generation." };
+    }
+    return cancelReceipt(record, "alert_generation", receipt, input, rationale);
+  }
+
+  if (input.target === "case_handoff") {
+    const receipt = findReceipt(record.caseHandoffReceipts, input.receiptId);
+    if (!receipt) return { ok: false, code: "receipt_not_found", message: "Case handoff receipt not found." };
+    if (record.webhookTriggerReceipts.some((webhookReceipt) => !webhookReceipt.cancellation && webhookReceipt.caseHandoffReceiptId === receipt.id)) {
+      return { ok: false, code: "dependent_webhook_trigger_active", message: "Cancel the dependent webhook trigger before cancelling case handoff." };
+    }
+    return cancelReceipt(record, "case_handoff", receipt, input, rationale);
+  }
+
+  if (input.target === "webhook_trigger") {
+    const receipt = findReceipt(record.webhookTriggerReceipts, input.receiptId);
+    if (!receipt) return { ok: false, code: "receipt_not_found", message: "Webhook trigger receipt not found." };
+    return cancelReceipt(record, "webhook_trigger", receipt, input, rationale);
+  }
+
+  return { ok: false, code: "invalid_target", message: "Unsupported prepared handoff target." };
+}
+
+function cancelReceipt(
+  record: ActorOrgRelevanceReviewRecord,
+  target: ActorOrgRelevanceCancelPreparedHandoffInput["target"],
+  receipt: ActorOrgRelevanceAlertGenerationReceipt | ActorOrgRelevanceCaseHandoffReceipt | ActorOrgRelevanceWebhookTriggerReceipt,
+  input: ActorOrgRelevanceCancelPreparedHandoffInput,
+  rationale: string
+): ActorOrgRelevanceCancelPreparedHandoffResult {
+  if (receipt.cancellation) {
+    return {
+      ok: true,
+      cancelled: false,
+      target,
+      receipt,
+      record
+    };
+  }
+  const generatedAt = input.generatedAt || nowIso();
+  const cancellation: ActorOrgRelevancePreparedHandoffCancellation = {
+    cancelledAt: generatedAt,
+    cancelledBy: input.actorId,
+    rationale
+  };
+  const cancelledReceipt = { ...receipt, cancellation };
+  const eventType = target === "alert_generation"
+    ? "alert_generation_cancelled"
+    : target === "case_handoff"
+      ? "case_handoff_cancelled"
+      : "webhook_trigger_cancelled";
+  const recordWithReceipt = replaceCancelledReceipt(record, target, cancelledReceipt);
+  return {
+    ok: true,
+    cancelled: true,
+    target,
+    receipt: cancelledReceipt,
+    record: {
+      ...recordWithReceipt,
+      updatedAt: generatedAt,
+      workflow: {
+        ...record.workflow,
+        status: record.workflow.status === "new" ? "reviewing" : record.workflow.status,
+        updatedBy: input.actorId || record.workflow.updatedBy,
+        updatedAt: generatedAt
+      },
+      timeline: [...record.timeline, {
+        id: stableId("actor_org_relevance_timeline", `${record.id}:${generatedAt}:${eventType}:${receipt.id}`),
+        occurredAt: generatedAt,
+        actorId: input.actorId,
+        eventType,
+        summary: `Cancelled prepared ${target.replace("_", " ")} ${receipt.id}.`,
+        blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
+      }]
+    }
+  };
+}
+
+function replaceCancelledReceipt(
+  record: ActorOrgRelevanceReviewRecord,
+  target: ActorOrgRelevanceCancelPreparedHandoffInput["target"],
+  receipt: ActorOrgRelevanceAlertGenerationReceipt | ActorOrgRelevanceCaseHandoffReceipt | ActorOrgRelevanceWebhookTriggerReceipt
+): ActorOrgRelevanceReviewRecord {
+  if (target === "alert_generation") {
+    return {
+      ...record,
+      alertGenerationReceipts: record.alertGenerationReceipts.map((row) => row.id === receipt.id ? receipt as ActorOrgRelevanceAlertGenerationReceipt : row)
+    };
+  }
+  if (target === "case_handoff") {
+    return {
+      ...record,
+      caseHandoffReceipts: record.caseHandoffReceipts.map((row) => row.id === receipt.id ? receipt as ActorOrgRelevanceCaseHandoffReceipt : row)
+    };
+  }
+  return {
+    ...record,
+    webhookTriggerReceipts: record.webhookTriggerReceipts.map((row) => row.id === receipt.id ? receipt as ActorOrgRelevanceWebhookTriggerReceipt : row)
+  };
+}
+
+function findReceipt<T extends { id: string; cancellation?: ActorOrgRelevancePreparedHandoffCancellation }>(receipts: T[], receiptId: string | undefined) {
+  return receiptId ? receipts.find((receipt) => receipt.id === receiptId) : latestActiveReceipt(receipts);
+}
+
+function latestActiveReceipt<T extends { cancellation?: ActorOrgRelevancePreparedHandoffCancellation }>(receipts: T[]) {
+  return [...receipts].reverse().find((receipt) => !receipt.cancellation);
 }
 
 function orgTenantId(orgRelevance: PublicTiOrgRelevanceProofLike) {

@@ -568,6 +568,129 @@ describe("actor org relevance API", () => {
     expect(crossOrgResponse.status).toBe(404);
   });
 
+  test("cancels prepared handoffs in dependency order with audit metadata", async () => {
+    const store = new InMemoryScraperStore();
+    const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+    await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/watchlist?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ webhookDestinationId: "webhook_soc", generatedAt: "2026-06-29T10:40:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const alertResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/alert-generation-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:41:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const alert = await alertResponse.json() as any;
+    const caseResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/case-handoff-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:42:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const caseHandoff = await caseResponse.json() as any;
+    const webhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ dryRun: true, generatedAt: "2026-06-29T10:43:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const webhook = await webhookResponse.json() as any;
+
+    const missingRationale = await cancelPreparedHandoff(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      target: "webhook_trigger",
+      receiptId: webhook.receipt.id
+    });
+    expect(missingRationale.status).toBe(400);
+    expect(await missingRationale.json()).toMatchObject({ error: { code: "missing_rationale" } });
+
+    const activeCaseBlock = await cancelPreparedHandoff(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      target: "alert_generation",
+      receiptId: alert.receipt.id,
+      rationale: "Wrong organization route.",
+      generatedAt: "2026-06-29T10:44:00.000Z"
+    });
+    expect(activeCaseBlock.status).toBe(409);
+    expect(await activeCaseBlock.json()).toMatchObject({ error: { code: "dependent_case_handoff_active" } });
+
+    const activeWebhookBlock = await cancelPreparedHandoff(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      target: "case_handoff",
+      receiptId: caseHandoff.receipt.id,
+      rationale: "Wrong organization route.",
+      generatedAt: "2026-06-29T10:45:00.000Z"
+    });
+    expect(activeWebhookBlock.status).toBe(409);
+    expect(await activeWebhookBlock.json()).toMatchObject({ error: { code: "dependent_webhook_trigger_active" } });
+
+    const cancelledWebhookResponse = await cancelPreparedHandoff(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      target: "webhook_trigger",
+      receiptId: webhook.receipt.id,
+      rationale: "Wrong destination for this customer.",
+      generatedAt: "2026-06-29T10:46:00.000Z"
+    });
+    const cancelledWebhook = await cancelledWebhookResponse.json() as any;
+    expect(cancelledWebhookResponse.status).toBe(200);
+    expect(cancelledWebhook.cancelled).toBe(true);
+    expect(cancelledWebhook.receipt.cancellation).toMatchObject({
+      cancelledAt: "2026-06-29T10:46:00.000Z",
+      cancelledBy: "user_ti",
+      rationale: "Wrong destination for this customer."
+    });
+    expect(cancelledWebhook.summary.latestWebhookTrigger).toBeUndefined();
+    expect(cancelledWebhook.record.timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({ eventType: "webhook_trigger_cancelled", actorId: "user_ti" })
+    ]));
+
+    const duplicateCancelResponse = await cancelPreparedHandoff(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      target: "webhook_trigger",
+      receiptId: webhook.receipt.id,
+      rationale: "Wrong destination for this customer.",
+      generatedAt: "2026-06-29T10:47:00.000Z"
+    });
+    const duplicateCancel = await duplicateCancelResponse.json() as any;
+    expect(duplicateCancelResponse.status).toBe(200);
+    expect(duplicateCancel.cancelled).toBe(false);
+    expect(duplicateCancel.record.timeline.filter((event: any) => event.eventType === "webhook_trigger_cancelled")).toHaveLength(1);
+
+    const cancelledCaseResponse = await cancelPreparedHandoff(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      target: "case_handoff",
+      receiptId: caseHandoff.receipt.id,
+      rationale: "Case owner requested a new handoff.",
+      generatedAt: "2026-06-29T10:48:00.000Z"
+    });
+    const cancelledCase = await cancelledCaseResponse.json() as any;
+    expect(cancelledCase.summary.latestCaseHandoff).toBeUndefined();
+    expect(cancelledCase.record.caseHandoffReceipts[0].cancellation.rationale).toBe("Case owner requested a new handoff.");
+
+    const cancelledAlertResponse = await cancelPreparedHandoff(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      target: "alert_generation",
+      receiptId: alert.receipt.id,
+      rationale: "Watchlist term was replaced.",
+      generatedAt: "2026-06-29T10:49:00.000Z"
+    });
+    const cancelledAlert = await cancelledAlertResponse.json() as any;
+    expect(cancelledAlert.summary.latestAlertGeneration).toBeUndefined();
+    expect(cancelledAlert.record.alertGenerationReceipts[0].cancellation.rationale).toBe("Watchlist term was replaced.");
+
+    const rebuiltAlertResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/alert-generation-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:50:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const rebuiltAlert = await rebuiltAlertResponse.json() as any;
+    expect(rebuiltAlertResponse.status).toBe(201);
+    expect(rebuiltAlert.created).toBe(true);
+    expect(rebuiltAlert.receipt.id).not.toBe(alert.receipt.id);
+    expect(rebuiltAlert.summary.latestAlertGeneration.id).toBe(rebuiltAlert.receipt.id);
+    expect(rebuiltAlert.record.alertGenerationReceipts).toHaveLength(2);
+    expect(rebuiltAlert.record.alertGenerationReceipts[0].cancellation.rationale).toBe("Watchlist term was replaced.");
+
+    const crossOrgResponse = await cancelPreparedHandoff(store, created.record.id, "tenant_other", "org_other", {
+      target: "webhook_trigger",
+      receiptId: webhook.receipt.id,
+      rationale: "Cross-org cancellation must not work."
+    });
+    expect(crossOrgResponse.status).toBe(404);
+  });
+
   test("turns missing evidence into owner actions instead of a generic teaser state", async () => {
     const store = new InMemoryScraperStore();
     const payload = await submit(store, {
@@ -661,6 +784,14 @@ async function patchWorkflow(store: InMemoryScraperStore | FileBackedScraperStor
   }), { store, frontier: new FocusedFrontier() });
   expect(response.status).toBe(200);
   return await response.json() as any;
+}
+
+async function cancelPreparedHandoff(store: InMemoryScraperStore | FileBackedScraperStore, id: string, tenantId: string, organizationId: string, body: Record<string, unknown>) {
+  return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${id}/cancel-prepared-handoff?tenantId=${tenantId}&organizationId=${organizationId}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+    body: JSON.stringify(body)
+  }), { store, frontier: new FocusedFrontier() });
 }
 
 function readyRelevance(): PublicTiOrgRelevanceProofLike {
