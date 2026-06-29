@@ -39,6 +39,34 @@ export type DwmAlertGenerationBlocker = {
 
 export type DwmCustomerProofBlockerCode = DwmAlertGenerationBlockerCode | DwmDeliveryReadinessBlockerCode;
 
+export type DwmAlertWorkflowExecutionBlockerCode =
+  | "missing_alert"
+  | "org_mismatch"
+  | "revoked_nonmember_actor"
+  | "invalid_transition"
+  | "stale_workflow_version"
+  | "case_unavailable"
+  | "delivery_unavailable"
+  | "entitlement_denied"
+  | "duplicate_replay"
+  | "support_redaction_only";
+
+export type DwmAlertWorkflowExecutionReadiness = {
+  schemaVersion: "dwm.alert_workflow_execution_readiness.v1";
+  alertId?: string;
+  organizationId?: string;
+  ready: boolean;
+  action: "assign" | "note" | "transition" | "case_link" | "replay" | "close" | "reopen" | "suppress" | "deliver";
+  expectedWorkflowEventCount?: number;
+  currentWorkflowEventCount?: number;
+  expectedUpdatedAt?: string;
+  currentUpdatedAt?: string;
+  blockerCodes: DwmAlertWorkflowExecutionBlockerCode[];
+  blockers: Array<{ code: DwmAlertWorkflowExecutionBlockerCode; field: string; detail: string; recoverable: boolean }>;
+  requiredBody: string[];
+  idempotencyKey?: string;
+};
+
 export type DwmAlertCustomerProofHandoffRow = {
   schemaVersion: "dwm.customer_alert_proof.v1";
   alertId: string;
@@ -97,6 +125,59 @@ export type DwmAlertCustomerProofHandoffRow = {
   typedBlockers: Array<{ code: DwmCustomerProofBlockerCode; field: string; detail: string; recoverable: boolean }>;
   generatedAt: string;
 };
+
+export function buildDwmAlertWorkflowExecutionReadiness(input: {
+  alert?: any;
+  organizationId?: string;
+  action?: DwmAlertWorkflowExecutionReadiness["action"];
+  expectedWorkflowEventCount?: number;
+  expectedUpdatedAt?: string;
+  actorAllowed?: boolean;
+  actorDenyReason?: string;
+  transitionValid?: boolean;
+  caseAvailable?: boolean;
+  deliveryAvailable?: boolean;
+  entitlementAllowed?: boolean;
+  duplicateReplay?: boolean;
+  supportOnlyRedactionNeeded?: boolean;
+}): DwmAlertWorkflowExecutionReadiness {
+  const alert = input.alert;
+  const action = input.action ?? "transition";
+  const currentWorkflowEventCount = alert ? (alert.workflowEvents ?? []).length : undefined;
+  const currentUpdatedAt = alert?.updatedAt;
+  const blockers = [
+    !alert ? workflowExecutionBlocker("missing_alert", "alertId", "Persisted alert is required for analyst workflow execution.", true) : undefined,
+    alert && input.organizationId && alert.organizationId && alert.organizationId !== input.organizationId ? workflowExecutionBlocker("org_mismatch", "organizationId", "Alert organization does not match the requested workflow scope.", false) : undefined,
+    input.actorAllowed === false ? workflowExecutionBlocker("revoked_nonmember_actor", "actor", input.actorDenyReason ?? "Actor is not an active authorized organization member.", false) : undefined,
+    input.transitionValid === false ? workflowExecutionBlocker("invalid_transition", "status", "Requested workflow transition is not valid for this alert.", true) : undefined,
+    input.expectedWorkflowEventCount !== undefined && currentWorkflowEventCount !== undefined && input.expectedWorkflowEventCount !== currentWorkflowEventCount ? workflowExecutionBlocker("stale_workflow_version", "expectedWorkflowEventCount", "Workflow event count changed; reload before mutating this alert.", true) : undefined,
+    input.expectedUpdatedAt && currentUpdatedAt && input.expectedUpdatedAt !== currentUpdatedAt ? workflowExecutionBlocker("stale_workflow_version", "expectedUpdatedAt", "Alert updated timestamp changed; reload before mutating this alert.", true) : undefined,
+    input.caseAvailable === false ? workflowExecutionBlocker("case_unavailable", "caseId", "Case route or case record is unavailable for this transition.", true) : undefined,
+    input.deliveryAvailable === false ? workflowExecutionBlocker("delivery_unavailable", "deliveryReadinessContext", "Delivery context is unavailable for this transition.", true) : undefined,
+    input.entitlementAllowed === false ? workflowExecutionBlocker("entitlement_denied", "entitlement", "Entitlement policy blocks this alert workflow action.", true) : undefined,
+    input.duplicateReplay === true ? workflowExecutionBlocker("duplicate_replay", "replayMarker", "Replay has already been recorded for this delivered dedupe key.", false) : undefined,
+    input.supportOnlyRedactionNeeded === true ? workflowExecutionBlocker("support_redaction_only", "support.redactionRequired", "Actor can only consume redacted support context for this alert.", true) : undefined
+  ].filter(Boolean) as DwmAlertWorkflowExecutionReadiness["blockers"];
+  return {
+    schemaVersion: "dwm.alert_workflow_execution_readiness.v1",
+    alertId: alert?.id,
+    organizationId: input.organizationId ?? alert?.organizationId,
+    ready: blockers.length === 0,
+    action,
+    expectedWorkflowEventCount: input.expectedWorkflowEventCount,
+    currentWorkflowEventCount,
+    expectedUpdatedAt: input.expectedUpdatedAt,
+    currentUpdatedAt,
+    blockerCodes: uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmAlertWorkflowExecutionBlockerCode[],
+    blockers,
+    requiredBody: ["organizationId", "status|action|note|assignedOwner|severityOverride|caseId", "expectedWorkflowEventCount?"],
+    idempotencyKey: alert ? stableId("dwm_workflow_execution", `${alert.id}:${currentWorkflowEventCount ?? 0}:${action}`) : undefined
+  };
+}
+
+function workflowExecutionBlocker(code: DwmAlertWorkflowExecutionBlockerCode, field: string, detail: string, recoverable: boolean): DwmAlertWorkflowExecutionReadiness["blockers"][number] {
+  return { code, field, detail, recoverable };
+}
 
 export type RuntimeDwmWatchlist = {
   id: string;

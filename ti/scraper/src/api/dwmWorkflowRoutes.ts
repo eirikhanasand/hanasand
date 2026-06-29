@@ -1,5 +1,5 @@
 import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
-import { buildDwmAlertGenerationReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertGenerationReadiness, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
@@ -182,9 +182,14 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
   const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
   if (access.error) return access.error;
   if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
+  const staleReadiness = workflowVersionReadiness(existing, body, scope.organizationId);
+  if (!staleReadiness.ready) return json({ error: { code: "stale_workflow_version", message: "Alert workflow changed; reload before mutating." }, workflowExecutionReadiness: staleReadiness }, 409);
   const generatedAt = nowIso();
   const workflowTransition = resolveAlertWorkflowTransition(existing, body);
-  if (workflowTransition.error) return workflowTransition.error;
+  if (workflowTransition.error) return json({
+    error: { code: "invalid_transition", message: "Requested alert workflow transition is invalid." },
+    workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert: existing, organizationId: scope.organizationId, action: workflowActionFromBody(body), transitionValid: false })
+  }, 400);
   const reviewState = workflowTransition.reviewState;
   const deliveryState = workflowTransition.deliveryState;
   const assignedOwner = body.assignedOwner === undefined && body.owner === undefined ? existing.assignedOwner : normalizeOwner(body.assignedOwner ?? body.owner);
@@ -222,7 +227,7 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
     note,
     rationale
   };
-  const alert = (options.store as any).saveDwmAlert({
+  const nextAlert = {
     ...existing,
     workflowStatus: workflowTransition.workflowStatus,
     reviewState,
@@ -238,8 +243,26 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
     reopenedAt: workflowTransition.workflowStatus === "reopened" ? generatedAt : existing.reopenedAt,
     updatedAt: generatedAt,
     workflowEvents: [...(existing.workflowEvents ?? []), event]
+  };
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === nextAlert.id);
+  const alert = (options.store as any).saveDwmAlert({
+    ...nextAlert,
+    deliveryReadinessContext: buildDwmPersistedDeliveryReadinessContext({
+      alert: nextAlert,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      workflowContext: nextAlert.workflowContext,
+      existing: nextAlert,
+      deliveries,
+      generatedAt
+    })
   });
-  return json({ visibilityDecision: access.visibilityDecision, alert: buildDwmAlertListItem(alert, options), event });
+  return json({
+    visibilityDecision: access.visibilityDecision,
+    workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: workflowActionFromBody(body) }),
+    alert: buildDwmAlertListItem(alert, options, deliveries),
+    event
+  });
 }
 
 export async function replayDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
@@ -251,6 +274,8 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
   const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
   if (access.error) return access.error;
   if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
+  const staleReadiness = workflowVersionReadiness(existing, body, scope.organizationId, "replay");
+  if (!staleReadiness.ready) return json({ error: { code: "stale_workflow_version", message: "Alert workflow changed; reload before replaying." }, workflowExecutionReadiness: staleReadiness }, 409);
   const entitlement = enforceDwmAlertRebuildEntitlement({ options, request, body, scope, access, action: "replay_dwm_alert" });
   if (entitlement.error) return entitlement.error;
   const generatedAt = nowIso();
@@ -284,7 +309,7 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
     })
   });
   const usageEvent = recordDwmEntitlementUsageEvent(options, { organizationId: scope.organizationId, tenantId: scope.tenantId, action: "alert_rebuild", actor: entitlement.actor, requestId: entitlement.requestId, metadata: { route: "replay_dwm_alert", alertId: alert.id }, at: generatedAt });
-  return json({ ...buildDwmAlertDetail(alert, options, access), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
+  return json({ ...buildDwmAlertDetail(alert, options, access), workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: "replay" }), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
 }
 
 export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, request?: Request): Response {
@@ -902,6 +927,32 @@ function normalizeCaseValue(value: unknown): string | undefined {
   return normalized || undefined;
 }
 
+function workflowVersionReadiness(alert: any, body: any, organizationId?: string, action?: ReturnType<typeof workflowActionFromBody>) {
+  const expectedWorkflowEventCount = body.expectedWorkflowEventCount === undefined && body.workflowEventCount === undefined ? undefined : Number(body.expectedWorkflowEventCount ?? body.workflowEventCount);
+  const normalizedEventCount = Number.isFinite(expectedWorkflowEventCount) ? expectedWorkflowEventCount : undefined;
+  const expectedUpdatedAt = String(body.expectedUpdatedAt ?? body.ifUnmodifiedSince ?? "").trim() || undefined;
+  return buildDwmAlertWorkflowExecutionReadiness({
+    alert,
+    organizationId,
+    action: action ?? workflowActionFromBody(body),
+    expectedWorkflowEventCount: normalizedEventCount,
+    expectedUpdatedAt
+  });
+}
+
+function workflowActionFromBody(body: any): "assign" | "note" | "transition" | "case_link" | "replay" | "close" | "reopen" | "suppress" | "deliver" {
+  const action = String(body.action ?? body.status ?? body.workflowStatus ?? "").trim().toLowerCase();
+  if (action === "replay") return "replay";
+  if (action === "close" || action === "closed") return "close";
+  if (action === "reopen" || action === "reopened") return "reopen";
+  if (action === "suppress" || action === "suppressed") return "suppress";
+  if (body.caseId !== undefined || body.casePath !== undefined) return "case_link";
+  if (body.assignedOwner !== undefined || body.owner !== undefined) return "assign";
+  if (body.severityOverride !== undefined || body.severity !== undefined) return "transition";
+  if (body.note !== undefined || body.rationale !== undefined || body.reason !== undefined) return "note";
+  return "transition";
+}
+
 function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: DwmWorkflowAccessResult) {
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
   const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
@@ -947,6 +998,8 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     visibilityDecision: access?.visibilityDecision,
     alert: buildDwmAlertListItem(alert, options, deliveries),
     workflowSummary: buildDwmAlertWorkflowSummary(alert),
+    workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
+    customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, deliveries),
     deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, deliveries),
@@ -970,6 +1023,8 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
   return {
     ...alert,
     workflowSummary,
+    workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
+    customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries: alertDeliveries }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, alertDeliveries),
     deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, alertDeliveries),

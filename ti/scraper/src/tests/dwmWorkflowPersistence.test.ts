@@ -230,6 +230,34 @@ describe("dwm workflow persistence", () => {
     const triage = await triageResponse.json() as any;
     expect(triageResponse.status).toBe(200);
     expect(triage.alert.workflowSummary).toMatchObject({ status: "triaged", assignedOwner: "owner-workflow", severityOverride: "critical", caseId: "case_workflow_live", eventCount: 1 });
+    expect(triage.workflowExecutionReadiness).toMatchObject({
+      schemaVersion: "dwm.alert_workflow_execution_readiness.v1",
+      ready: true,
+      action: "case_link",
+      alertId: alert.id,
+      currentWorkflowEventCount: 1
+    });
+    expect(triage.alert.workflowExecutionReadiness).toMatchObject({ ready: true, currentWorkflowEventCount: 1 });
+    expect(triage.alert.customerProofHandoff).toMatchObject({
+      schemaVersion: "dwm.customer_alert_proof.v1",
+      alertId: alert.id,
+      organizationId,
+      workflow: {
+        status: "triaged",
+        assignedOwner: "owner-workflow",
+        severityOverride: "critical",
+        note: "Triage accepted.",
+        rationale: "Live capture matches owned domain.",
+        eventCount: 1
+      },
+      caseHandoff: {
+        ready: true,
+        caseId: "case_workflow_live",
+        casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`
+      }
+    });
+    expect(triage.alert.customerProofHandoff.selectedCaptureIds).toEqual(["cap_workflow_acme"]);
+    expect(triage.alert.customerProofHandoff.deliveryDedupeKey).toBe(alert.dedupeKey);
     expect(triage.alert.caseHandoff.payload.body).toMatchObject({
       organizationId,
       alertId: alert.id,
@@ -246,8 +274,37 @@ describe("dwm workflow persistence", () => {
       selectedCaptureIds: ["cap_workflow_acme"],
       blockerCodes: expect.arrayContaining(["missing_org_ref", "delivery_disabled"])
     });
+    expect(triage.alert.deliveryReadiness.persistedContext).toMatchObject({
+      caseId: "case_workflow_live",
+      casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`
+    });
     expect(triage.alert.evidenceFreshness).toMatchObject({ newestEvidenceAt: "2026-06-27T21:02:00.000Z", evidenceCount: 1, captureIds: ["cap_workflow_acme"] });
     expect(triage.alert.provenanceFreshness).toMatchObject({ matchBasis: "watchlist_capture_text", captureIds: ["cap_workflow_acme"], dedupeKey: alert.dedupeKey });
+
+    const staleMutationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId, status: "investigating", expectedWorkflowEventCount: 0, note: "Stale analyst tab should not append." })
+    }), options);
+    const staleMutation = await staleMutationResponse.json() as any;
+    expect(staleMutationResponse.status).toBe(409);
+    expect(staleMutation.workflowExecutionReadiness).toMatchObject({
+      ready: false,
+      blockerCodes: ["stale_workflow_version"],
+      expectedWorkflowEventCount: 0,
+      currentWorkflowEventCount: 1
+    });
+    expect((store as any).getDwmAlert(alert.id).workflowEvents).toHaveLength(1);
+
+    const invalidTransitionResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner@workflow.example" },
+      body: JSON.stringify({ organizationId, status: "not_a_real_status", note: "Invalid status." })
+    }), options);
+    const invalidTransition = await invalidTransitionResponse.json() as any;
+    expect(invalidTransitionResponse.status).toBe(400);
+    expect(invalidTransition.workflowExecutionReadiness).toMatchObject({ ready: false, blockerCodes: ["invalid_transition"] });
+    expect((store as any).getDwmAlert(alert.id).workflowEvents).toHaveLength(1);
 
     const filteredTriageResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}&status=triaged&assignee=owner-workflow&severity=critical&sourceFamily=telegram_public&q=acme.com`, {
       headers: { "x-user-email": "owner@workflow.example" }
@@ -308,6 +365,17 @@ describe("dwm workflow persistence", () => {
     const reopened = await reopenedResponse.json() as any;
     expect(reopenedResponse.status).toBe(200);
     expect(reopened.alert.workflowSummary).toMatchObject({ status: "reopened", eventCount: 4 });
+    expect(reopened.alert.customerProofHandoff).toMatchObject({
+      workflow: {
+        status: "reopened",
+        assignedOwner: "owner-workflow",
+        eventCount: 4
+      },
+      caseHandoff: {
+        ready: true,
+        caseId: "case_workflow_live"
+      }
+    });
 
     store.saveCapture(duplicateCapture);
     const duplicateRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
@@ -329,6 +397,10 @@ describe("dwm workflow persistence", () => {
     expect(preserved.workflowEvents).toHaveLength(4);
     expect(preserved.evidence).toHaveLength(1);
     expect(preserved.provenance.captureIds).toEqual(["cap_workflow_acme"]);
+    expect(preserved.deliveryReadinessContext).toMatchObject({
+      caseId: "case_workflow_live",
+      selectedCaptureIds: ["cap_workflow_acme"]
+    });
 
     const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}?organizationId=${organizationId}`, {
       headers: { "x-user-email": "owner@workflow.example" }
@@ -340,6 +412,25 @@ describe("dwm workflow persistence", () => {
       casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
       eventCount: 4,
       evidenceCount: 1
+    });
+    expect(detail.workflowExecutionReadiness).toMatchObject({
+      ready: true,
+      currentWorkflowEventCount: 4
+    });
+    expect(detail.customerProofHandoff).toMatchObject({
+      schemaVersion: "dwm.customer_alert_proof.v1",
+      workflow: {
+        status: "reopened",
+        eventCount: 4,
+        replayCount: 0
+      },
+      caseHandoff: {
+        ready: true,
+        caseId: "case_workflow_live"
+      },
+      delivery: {
+        state: "blocked"
+      }
     });
     expect(detail.caseHandoff.payload.body).toMatchObject({
       organizationId,
