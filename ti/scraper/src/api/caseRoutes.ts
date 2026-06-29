@@ -1019,9 +1019,7 @@ function uniqueCaseStrings(values: unknown[]): string[] {
 }
 
 function latestCaseCustomerNotification(caseRecord: AnalystCase) {
-  return (caseRecord.customerNotifications ?? [])
-    .map((receipt, index) => ({ receipt, index }))
-    .sort((a, b) => String(b.receipt.at ?? "").localeCompare(String(a.receipt.at ?? "")) || b.index - a.index)[0]?.receipt;
+  return [...(caseRecord.customerNotifications ?? [])].reverse()[0];
 }
 
 function customerNotificationContext(caseRecord: AnalystCase) {
