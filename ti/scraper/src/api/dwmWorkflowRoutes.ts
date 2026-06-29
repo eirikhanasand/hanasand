@@ -1232,12 +1232,57 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     deliveries,
     timeline,
     evidenceReplay,
+    consumerContract: buildDwmAlertDetailConsumerContract(alert, evidenceReplay),
     sourceExplanations: evidenceReplay.map((item: any) => ({
       evidenceId: item.id,
       sourceName: item.sourceName,
       explanation: `${String(item.sourceFamily).replaceAll("_", " ")} evidence is shown as ${String(item.redactionState).replaceAll("_", " ")} with hash ${item.contentHash}; capture ${item.provenance?.captureId ?? item.id} was observed at ${item.observedAt}.`
     })),
     nextActions: nextActionsForAlert(alert, deliveries)
+  };
+}
+
+function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) {
+  const sourceFamilies = uniqueAlertStrings(evidenceReplay.map((item: any) => item.sourceFamily).filter(Boolean).map(String));
+  return {
+    schemaVersion: "dwm.alert_detail_consumer_contract.v1",
+    route: "/v1/dwm/alerts/:id",
+    stableFields: [
+      "alert.id",
+      "alert.organizationId",
+      "alert.watchlistIds",
+      "alert.watchlistItemIds",
+      "workflowSummary",
+      "alertEventSummary",
+      "customerProofHandoff",
+      "downstreamHandoff",
+      "caseHandoff",
+      "deliveryReadiness",
+      "evidenceFreshness",
+      "provenanceFreshness",
+      "evidenceReplay",
+      "sourceExplanations"
+    ],
+    eventShapes: {
+      created: "dwm.alert_created_event.v1",
+      updated: alert.alertUpdatedEvent ? "dwm.alert_updated_event.v1" : undefined
+    },
+    evidence: {
+      sourceFamilies,
+      evidenceCount: evidenceReplay.length,
+      metadataOnly: evidenceReplay.some((item: any) => item.redactionState === "metadata_only"),
+      safeToShowCount: evidenceReplay.filter((item: any) => item.safeToShow).length,
+      captureIds: uniqueAlertStrings(evidenceReplay.map((item: any) => item.provenance?.captureId ?? item.id).filter(Boolean).map(String)),
+      contentHashes: uniqueAlertStrings(evidenceReplay.map((item: any) => item.contentHash).filter(Boolean).map(String))
+    },
+    filters: {
+      listRoute: "/v1/dwm/alerts",
+      equivalentFilters: ["organizationId", "sourceFamily", "eventType", "hasUpdatedEvent", "watchlistId", "watchlistItemId", "captureId", "caseId"]
+    },
+    redaction: {
+      rawSensitiveEvidenceIncluded: false,
+      supportSafe: true
+    }
   };
 }
 

@@ -947,6 +947,37 @@ describe("dwm workflow persistence", () => {
       title: "Alert updated"
     });
     expect(alphaUpdatedDetail.evidenceReplay.map((item: any) => item.id)).toEqual(expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]));
+    expect(alphaUpdatedDetail.consumerContract).toMatchObject({
+      schemaVersion: "dwm.alert_detail_consumer_contract.v1",
+      route: "/v1/dwm/alerts/:id",
+      eventShapes: {
+        created: "dwm.alert_created_event.v1",
+        updated: "dwm.alert_updated_event.v1"
+      },
+      evidence: {
+        sourceFamilies: ["darkweb_metadata"],
+        evidenceCount: 2,
+        metadataOnly: true,
+        safeToShowCount: 2,
+        captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+        contentHashes: expect.arrayContaining(["hash-workflow-onion-acme", "hash-workflow-onion-acme-followup"])
+      },
+      filters: {
+        listRoute: "/v1/dwm/alerts",
+        equivalentFilters: expect.arrayContaining(["organizationId", "sourceFamily", "eventType", "hasUpdatedEvent", "captureId"])
+      },
+      redaction: {
+        rawSensitiveEvidenceIncluded: false,
+        supportSafe: true
+      }
+    });
+    expect(alphaUpdatedDetail.consumerContract.stableFields).toEqual(expect.arrayContaining([
+      "workflowSummary",
+      "alertEventSummary",
+      "evidenceReplay",
+      "sourceExplanations",
+      "provenanceFreshness"
+    ]));
     expect(alphaUpdatedDetail.workflowSummary).toMatchObject({
       status: "investigating",
       assignedOwner: "owner-alpha-workflow",
