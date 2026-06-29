@@ -712,6 +712,10 @@ assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationReference.statu
 assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.status, 'active')
 assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.lifecycle.status, 'active')
 assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.dedupe.scope, 'organization_watchlist_term')
+assert.equal(alertTermsWhilePaused.downstreamAuthorization.watchlists.activeCount, 1)
+assert.equal(alertTermsWhilePaused.downstreamAuthorization.watchlists.pausedCount, 1)
+assert.deepEqual(alertTermsWhilePaused.downstreamAuthorization.downstream.alertGeneration.blockerCodes, ['watchlist_paused'])
+assert.equal(alertTermsWhilePaused.downstreamAuthorization.lifecycleDenials.pausedWatchlist, 'watchlist_paused')
 
 const ownerResumesCompanyResponse = await app.inject({
     method: 'POST',
@@ -831,6 +835,42 @@ assert.equal(readiness.alertGenerationBridge.activeWatchlistTerms.length, 5)
 assert.equal(readiness.alertGenerationBridge.activeWatchlistTerms.find((term: Row) => term.term === 'credential reset lures').family, 'keyword')
 assert.equal(readiness.alertGenerationBridge.canGenerateAlerts, true)
 assert.deepEqual(readiness.alertGenerationBridge.blockedReasons, [])
+assert.equal(readiness.downstreamAuthorization.schemaVersion, 'organization.downstream_authorization_export.v1')
+assert.equal(readiness.downstreamAuthorization.organizationId, organization.id)
+assert.equal(readiness.downstreamAuthorization.tenantId, organization.id)
+assert.equal(readiness.downstreamAuthorization.organizationLifecycleState, 'active')
+assert.deepEqual(readiness.downstreamAuthorization.member, {
+    userId: 'org_smoke_member',
+    role: 'member',
+    status: 'active',
+})
+assert.equal(readiness.downstreamAuthorization.visibility.allowed, false)
+assert.equal(readiness.downstreamAuthorization.visibility.reason, 'role_not_allowed')
+assert.deepEqual(readiness.downstreamAuthorization.visibility.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(readiness.downstreamAuthorization.allowedActions, ['acknowledge_alert'])
+assert.equal(readiness.downstreamAuthorization.actionGates.create_watchlist.allowed, false)
+assert.equal(readiness.downstreamAuthorization.actionGates.create_watchlist.denialReason, 'role_not_allowed')
+assert.equal(readiness.downstreamAuthorization.actionGates.acknowledge_alert.allowed, true)
+assert.equal(readiness.downstreamAuthorization.actionGates.acknowledge_alert.denialReason, null)
+assert.equal(readiness.downstreamAuthorization.watchlists.activeCount, 5)
+assert.equal(readiness.downstreamAuthorization.watchlists.pausedCount, 0)
+assert.equal(readiness.downstreamAuthorization.watchlists.archivedCount, 0)
+assert.deepEqual(readiness.downstreamAuthorization.watchlists.activeIds.sort(), readiness.alertGenerationBridge.activeWatchlistTerms.map((term: Row) => term.watchlistItemId).sort())
+assert.equal(readiness.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, false)
+assert.deepEqual(readiness.downstreamAuthorization.downstream.alertGeneration.excludedStatuses, ['paused', 'archived'])
+assert.deepEqual(readiness.downstreamAuthorization.downstream.alertGeneration.blockerCodes, [])
+assert.equal(readiness.downstreamAuthorization.downstream.webhook.defaultPolicy, 'manual_selection')
+assert.equal(readiness.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations, false)
+assert.equal(readiness.downstreamAuthorization.downstream.helpdesk.mode, 'redacted_summary_only')
+assert.equal(readiness.downstreamAuthorization.downstream.helpdesk.supportOnlyDenialReason, 'support_only_access')
+assert.equal(readiness.downstreamAuthorization.downstream.dashboard.readinessFixture, 'organization_watchlist')
+assert.equal(readiness.downstreamAuthorization.downstream.dashboard.nonmemberEnumeration, false)
+assert.equal(readiness.downstreamAuthorization.lifecycleDenials.removedMember, 'member_revoked')
+assert.equal(readiness.downstreamAuthorization.lifecycleDenials.expiredInvite, 'invite_expired')
+assert.equal(readiness.downstreamAuthorization.lifecycleDenials.pausedWatchlist, 'watchlist_paused')
+assert.equal(readiness.downstreamAuthorization.lifecycleDenials.archivedWatchlist, 'watchlist_archived')
+assert.equal(readiness.downstreamAuthorization.lifecycleDenials.nonmember, 'nonmember_denied')
+assert.equal(readiness.downstreamAuthorization.lifecycleDenials.roleNotAllowed, 'role_not_allowed')
 const adapterContract = orgUtils.organizationWatchlistAlertGenerationContract(
     organizationSummary(organization.id, 'member'),
     [...watchlists.values()].filter(item => item.organization_id === organization.id && !item.archived_at)
@@ -849,6 +889,16 @@ assert.equal(alertTermsExport.tenantId, organization.id)
 assert.equal(alertTermsExport.member.userId, 'org_smoke_admin')
 assert.equal(alertTermsExport.member.role, 'admin')
 assert.equal(alertTermsExport.recommendedDownstreamRoute, 'organization_watchlist')
+assert.equal(alertTermsExport.downstreamAuthorization.schemaVersion, 'organization.downstream_authorization_export.v1')
+assert.equal(alertTermsExport.downstreamAuthorization.member.role, 'admin')
+assert.equal(alertTermsExport.downstreamAuthorization.visibility.allowed, true)
+assert.equal(alertTermsExport.downstreamAuthorization.actionGates.create_watchlist.allowed, true)
+assert.equal(alertTermsExport.downstreamAuthorization.actionGates.assign_case.allowed, true)
+assert.equal(alertTermsExport.downstreamAuthorization.watchlists.activeCount, 5)
+assert.equal(alertTermsExport.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, true)
+assert.deepEqual(alertTermsExport.downstreamAuthorization.downstream.alertGeneration.blockerCodes, [])
+assert.equal(alertTermsExport.downstreamAuthorization.downstream.webhook.defaultPolicy, 'manual_selection')
+assert.equal(alertTermsExport.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations, false)
 assert.equal(alertTermsExport.alertBridgeContract.schemaVersion, 'organization.watchlist_alert_bridge_contract.v1')
 assert.equal(alertTermsExport.alertBridgeContract.recommendedDownstreamRoute, 'organization_watchlist')
 assert.deepEqual(alertTermsExport.alertBridgeContract.memberProvenance, {
@@ -913,6 +963,7 @@ assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_alert
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_case_route'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('support_only_access'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('nonmember_denied'))
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('role_not_allowed'))
 assert.deepEqual(alertTermsExport.alertBridgeContract.typedBlockers, [])
 assert.equal(alertTermsExport.alertBridgeContract.lifecycleReadiness.organization.status, 'active')
 assert.equal(alertTermsExport.alertBridgeContract.lifecycleReadiness.organization.deletedBlocker, 'org_deleted')
@@ -1013,6 +1064,10 @@ assert.equal(memberAlertTermsExport.member.userId, 'org_smoke_member')
 assert.equal(memberAlertTermsExport.member.role, 'member')
 assert.equal(memberAlertTermsExport.canGenerateAlerts, true)
 assert.equal(memberAlertTermsExport.activeTerms.length, 5)
+assert.equal(memberAlertTermsExport.downstreamAuthorization.visibility.allowed, false)
+assert.equal(memberAlertTermsExport.downstreamAuthorization.visibility.reason, 'role_not_allowed')
+assert.deepEqual(memberAlertTermsExport.downstreamAuthorization.allowedActions, ['acknowledge_alert'])
+assert.equal(memberAlertTermsExport.downstreamAuthorization.actionGates.edit_watchlist_terms.denialReason, 'role_not_allowed')
 assert.deepEqual(memberAlertTermsExport.alertBridgeContract.memberProvenance, {
     userId: 'org_smoke_member',
     role: 'member',
@@ -1027,6 +1082,56 @@ assert.deepEqual(memberAlertTermsExport.alertBridgeContract.alertCaseProof.membe
     revokedMemberDenial: 'member_revoked',
 })
 assert.ok(memberAlertTermsExport.activeTerms.every((term: Row) => term.alertGenerationRef.dedupe.key === term.alertGeneratorKey))
+
+const secondOrganizationResponse = await app.inject({
+    method: 'POST',
+    url: '/api/organizations',
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { name: 'Smoke Overlap Tenant' },
+})
+assert.equal(secondOrganizationResponse.statusCode, 201, secondOrganizationResponse.body)
+const secondOrganization = parseBody(secondOrganizationResponse.body).organization
+assert.notEqual(secondOrganization.id, organization.id)
+
+const secondOrgWatchlistResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${secondOrganization.id}/watchlists`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { kind: 'domain', value: 'acme-shared.example', notes: 'Overlapping domain in separate tenant.', requestId: 'smoke-overlap-domain-second-org' },
+})
+assert.equal(secondOrgWatchlistResponse.statusCode, 201, secondOrgWatchlistResponse.body)
+const secondOrgWatchlistItem = parseBody(secondOrgWatchlistResponse.body).watchlistItem
+assert.equal(secondOrgWatchlistItem.organizationId, secondOrganization.id)
+assert.equal(secondOrgWatchlistItem.value, 'acme-shared.example')
+
+const secondOrgAlertTermsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${secondOrganization.id}/watchlists/alert-terms?requestId=smoke-overlap-second-org-export`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(secondOrgAlertTermsResponse.statusCode, 200, secondOrgAlertTermsResponse.body)
+const secondOrgAlertTermsExport = parseBody(secondOrgAlertTermsResponse.body).alertTermsExport
+assert.equal(secondOrgAlertTermsExport.organizationId, secondOrganization.id)
+assert.equal(secondOrgAlertTermsExport.tenantId, secondOrganization.id)
+assert.equal(secondOrgAlertTermsExport.member.role, 'owner')
+assert.equal(secondOrgAlertTermsExport.activeTerms.length, 1)
+assert.equal(secondOrgAlertTermsExport.activeTerms[0].term, 'acme-shared.example')
+assert.equal(secondOrgAlertTermsExport.activeTerms[0].alertGenerationRef.organizationId, secondOrganization.id)
+assert.equal(secondOrgAlertTermsExport.activeTerms[0].alertGenerationRef.tenantId, secondOrganization.id)
+assert.notEqual(secondOrgAlertTermsExport.activeTerms[0].alertGeneratorKey, alertTermsExport.activeTerms.find((term: Row) => term.term === 'acme-shared.example').alertGeneratorKey)
+assert.equal(secondOrgAlertTermsExport.downstreamAuthorization.watchlists.activeCount, 1)
+assert.deepEqual(secondOrgAlertTermsExport.downstreamAuthorization.watchlists.activeIds, [secondOrgWatchlistItem.id])
+assert.equal(secondOrgAlertTermsExport.downstreamAuthorization.actionGates.create_watchlist.allowed, true)
+assert.equal(secondOrgAlertTermsExport.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, true)
+
+const secondOrgListResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${secondOrganization.id}/watchlists`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(secondOrgListResponse.statusCode, 200, secondOrgListResponse.body)
+assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.organizationId), [secondOrganization.id])
+assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.id), [secondOrgWatchlistItem.id])
 
 const alertTermsRetryResponse = await app.inject({
     method: 'GET',
@@ -1125,6 +1230,9 @@ assert.equal(alertTermsAfterArchive.excluded.archivedCount, 1)
 assert.deepEqual(alertTermsAfterArchive.alertBridgeContract.typedBlockers.map((blocker: Row) => blocker.code), ['archived_watchlist_excluded'])
 assert.equal(alertTermsAfterArchive.alertBridgeContract.typedBlockers[0].severity, 'notice')
 assert.equal(alertTermsAfterArchive.alertBridgeContract.typedBlockers[0].count, 1)
+assert.equal(alertTermsAfterArchive.downstreamAuthorization.watchlists.archivedCount, 1)
+assert.deepEqual(alertTermsAfterArchive.downstreamAuthorization.downstream.alertGeneration.blockerCodes, ['watchlist_archived'])
+assert.equal(alertTermsAfterArchive.downstreamAuthorization.lifecycleDenials.archivedWatchlist, 'watchlist_archived')
 assert.deepEqual(alertTermsAfterArchive.alertBridgeContract.lifecycleReadiness.typedBlockers.map((blocker: Row) => blocker.code), ['watchlist_archived', 'cleanup_required'])
 assert.equal(alertTermsAfterArchive.alertBridgeContract.lifecycleReadiness.watchlists.archivedCount, 1)
 assert.equal(alertTermsAfterArchive.alertBridgeContract.lifecycleReadiness.watchlists.cleanupRequired, true)
@@ -1234,6 +1342,8 @@ assert.ok(cleanupAfterArchiveExport.alertBridgeContract.lifecycleReadiness.typed
 assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.readyForReplay, true)
 assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.cleanupRequired, true)
 assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.archivedExcludedCount, 3)
+assert.equal(cleanupAfterArchiveExport.downstreamAuthorization.watchlists.archivedCount, 3)
+assert.ok(cleanupAfterArchiveExport.downstreamAuthorization.downstream.alertGeneration.blockerCodes.includes('watchlist_archived'))
 assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationRef.status === 'active'))
 assert.deepEqual(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.roleActionContract.actor.allowedActions, [
     'acknowledge_alert',

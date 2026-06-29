@@ -240,6 +240,7 @@ export type OrganizationWatchlistAlertBridgeBlockerCode =
     | 'no_case_route'
     | 'support_only_access'
     | 'nonmember_denied'
+    | 'role_not_allowed'
 
 export type OrganizationWatchlistAlertBridgeBlocker = {
     code: OrganizationWatchlistAlertBridgeBlockerCode
@@ -384,6 +385,74 @@ export type OrganizationWatchlistAlertBridgeContract = {
     blockerCatalog: OrganizationWatchlistAlertBridgeBlockerCode[]
 }
 
+export type OrganizationDownstreamAuthorizationExport = {
+    schemaVersion: 'organization.downstream_authorization_export.v1'
+    organizationId: string
+    tenantId: string
+    organizationLifecycleState: 'active'
+    member: {
+        userId: string
+        role: OrganizationRole
+        status: 'active'
+    }
+    visibility: OrganizationVisibilityDecision
+    watchlists: {
+        activeIds: string[]
+        pausedIds: string[]
+        archivedIds: string[]
+        activeCount: number
+        pausedCount: number
+        archivedCount: number
+        states: Array<{
+            watchlistItemId: string
+            kind: WatchlistKind
+            status: OrganizationWatchlistStatus
+        }>
+    }
+    allowedActions: OrganizationAlertCaseAction[]
+    actionGates: Record<OrganizationAlertCaseAction, {
+        allowed: boolean
+        allowedRoles: OrganizationAlertCaseRole[]
+        denialReason: OrganizationWatchlistAlertBridgeBlockerCode | null
+    }>
+    downstream: {
+        alertGeneration: {
+            canExportActiveTerms: boolean
+            excludedStatuses: OrganizationWatchlistStatus[]
+            blockerCodes: OrganizationWatchlistAlertBridgeBlockerCode[]
+        }
+        webhook: {
+            defaultPolicy: OrganizationDefaultWebhookPolicy
+            canUseDefaultDestinations: boolean
+            denialReason: OrganizationWatchlistAlertBridgeBlockerCode | null
+        }
+        helpdesk: {
+            mode: 'redacted_summary_only'
+            supportOnlyDenialReason: 'support_only_access'
+            safeFields: string[]
+        }
+        dashboard: {
+            readinessFixture: 'organization_watchlist'
+            safeFields: string[]
+            nonmemberEnumeration: false
+        }
+    }
+    lifecycleDenials: {
+        inactiveOrganization: 'no_active_org'
+        archivedOrganization: 'org_deleted'
+        removedMember: 'member_revoked'
+        revokedMember: 'member_revoked'
+        deactivatedMember: 'revoked_member_denied'
+        expiredInvite: 'invite_expired'
+        revokedInvite: 'member_revoked'
+        pausedWatchlist: 'watchlist_paused'
+        archivedWatchlist: 'watchlist_archived'
+        noActiveTerms: 'no_active_terms'
+        nonmember: 'nonmember_denied'
+        roleNotAllowed: 'role_not_allowed'
+    }
+}
+
 export type OrganizationWatchlistAlertTermsExport = {
     schemaVersion: 'organization.watchlist_alert_terms_export.v1'
     organizationId: string
@@ -398,6 +467,7 @@ export type OrganizationWatchlistAlertTermsExport = {
     allowedViewerRoles: OrganizationRole[]
     recommendedDownstreamRoute: 'organization_watchlist'
     alertBridgeContract: OrganizationWatchlistAlertBridgeContract
+    downstreamAuthorization: OrganizationDownstreamAuthorizationExport
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -863,6 +933,104 @@ export function organizationAlertCaseRoleActionContract(member: { userId: string
     }
 }
 
+export function organizationDownstreamAuthorizationExport(
+    organization: Pick<OrganizationRow, 'id' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
+    items: OrganizationWatchlistRow[],
+    member: { userId: string, role: OrganizationRole }
+): OrganizationDownstreamAuthorizationExport {
+    const visibility = organizationVisibilityDecision({
+        role: member.role,
+        status: 'active',
+        userActive: true,
+        alertVisibilityPolicy: organization.alert_visibility_policy ?? 'members',
+    })
+    const states = organizationWatchlistTerms(items).map(term => ({
+        watchlistItemId: term.watchlistItemId,
+        kind: term.kind,
+        status: term.status,
+    }))
+    const activeIds = states.filter(state => state.status === 'active').map(state => state.watchlistItemId)
+    const pausedIds = states.filter(state => state.status === 'paused').map(state => state.watchlistItemId)
+    const archivedIds = states.filter(state => state.status === 'archived').map(state => state.watchlistItemId)
+    const allowedActions = organizationAlertCaseRoleActions(member.role)
+    const roleContract = organizationAlertCaseRoleActionContract(member)
+    const blockerCodes: OrganizationWatchlistAlertBridgeBlockerCode[] = []
+    if (!activeIds.length) blockerCodes.push('no_active_terms', 'alert_export_unavailable')
+    if (pausedIds.length) blockerCodes.push('watchlist_paused')
+    if (archivedIds.length) blockerCodes.push('watchlist_archived')
+    const canExportActiveTerms = visibility.allowed && activeIds.length > 0
+    const defaultWebhookPolicy = organization.default_webhook_policy ?? 'active_destinations'
+
+    return {
+        schemaVersion: 'organization.downstream_authorization_export.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        organizationLifecycleState: 'active',
+        member: {
+            userId: member.userId,
+            role: member.role,
+            status: 'active',
+        },
+        visibility,
+        watchlists: {
+            activeIds,
+            pausedIds,
+            archivedIds,
+            activeCount: activeIds.length,
+            pausedCount: pausedIds.length,
+            archivedCount: archivedIds.length,
+            states,
+        },
+        allowedActions,
+        actionGates: Object.fromEntries(
+            Object.entries(roleContract.roleGates).map(([action, allowedRoles]) => [
+                action,
+                {
+                    allowed: allowedActions.includes(action as OrganizationAlertCaseAction),
+                    allowedRoles,
+                    denialReason: allowedActions.includes(action as OrganizationAlertCaseAction) ? null : 'role_not_allowed',
+                },
+            ])
+        ) as OrganizationDownstreamAuthorizationExport['actionGates'],
+        downstream: {
+            alertGeneration: {
+                canExportActiveTerms,
+                excludedStatuses: ['paused', 'archived'],
+                blockerCodes,
+            },
+            webhook: {
+                defaultPolicy: defaultWebhookPolicy,
+                canUseDefaultDestinations: canExportActiveTerms && defaultWebhookPolicy === 'active_destinations',
+                denialReason: defaultWebhookPolicy === 'disabled' ? 'alert_bridge_unavailable' : null,
+            },
+            helpdesk: {
+                mode: 'redacted_summary_only',
+                supportOnlyDenialReason: 'support_only_access',
+                safeFields: ['organizationId', 'tenantId', 'member.role', 'watchlists.activeCount', 'watchlists.pausedCount', 'watchlists.archivedCount', 'visibility.allowedRoles'],
+            },
+            dashboard: {
+                readinessFixture: 'organization_watchlist',
+                safeFields: ['organizationId', 'tenantId', 'organizationLifecycleState', 'member.role', 'allowedActions', 'watchlists.states', 'downstream.alertGeneration.blockerCodes'],
+                nonmemberEnumeration: false,
+            },
+        },
+        lifecycleDenials: {
+            inactiveOrganization: 'no_active_org',
+            archivedOrganization: 'org_deleted',
+            removedMember: 'member_revoked',
+            revokedMember: 'member_revoked',
+            deactivatedMember: 'revoked_member_denied',
+            expiredInvite: 'invite_expired',
+            revokedInvite: 'member_revoked',
+            pausedWatchlist: 'watchlist_paused',
+            archivedWatchlist: 'watchlist_archived',
+            noActiveTerms: 'no_active_terms',
+            nonmember: 'nonmember_denied',
+            roleNotAllowed: 'role_not_allowed',
+        },
+    }
+}
+
 export function organizationVisibilityDecision(input: OrganizationVisibilityDecisionInput): OrganizationVisibilityDecision {
     const alertVisibilityPolicy = input.alertVisibilityPolicy ?? 'members'
     const allowedRoles = allowedOrganizationVisibilityRoles(alertVisibilityPolicy)
@@ -1255,6 +1423,7 @@ export function organizationWatchlistAlertTermsExport(
     member: { userId: string, role: OrganizationRole }
 ): OrganizationWatchlistAlertTermsExport {
     const alertGeneration = organizationWatchlistAlertGenerationContract(organization, items)
+    const downstreamAuthorization = organizationDownstreamAuthorizationExport(organization, items, member)
     const activeTerms = alertGeneration.activeWatchlistTerms.map(term => {
         const alertGenerationRef = organizationWatchlistAlertGenerationRef(term)
         return {
@@ -1315,6 +1484,7 @@ export function organizationWatchlistAlertTermsExport(
         visibilityPolicy: alertGeneration.visibilityPolicy,
         allowedViewerRoles: alertGeneration.allowedViewerRoles,
         recommendedDownstreamRoute: 'organization_watchlist',
+        downstreamAuthorization,
         alertBridgeContract: {
             schemaVersion: 'organization.watchlist_alert_bridge_contract.v1',
             recommendedDownstreamRoute: 'organization_watchlist',
@@ -1510,6 +1680,7 @@ export function organizationWatchlistAlertTermsExport(
                 'no_case_route',
                 'support_only_access',
                 'nonmember_denied',
+                'role_not_allowed',
             ],
         },
         activeTerms,

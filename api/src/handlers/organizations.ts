@@ -17,6 +17,7 @@ import {
     normalizeWatchlistInput,
     normalizeWatchlistRequestId,
     organizationLifecycleReadiness,
+    organizationDownstreamAuthorizationExport,
     organizationSettingsFromRow,
     organizationVisibilityDecision,
     organizationWatchlistAlertGenerationContract,
@@ -967,6 +968,10 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
     const generatedAlertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(bridgeOrganization, item))
     const teamOnboardingReadiness = organizationTeamOnboardingReadiness(bridgeContext)
     const alertGenerationBridge = organizationAlertGenerationBridge(bridgeContext, watchlistItems)
+    const downstreamAuthorization = organizationDownstreamAuthorizationExport(bridgeOrganization, watchlistItems, {
+        userId,
+        role: organization.role ?? 'viewer',
+    })
     const lifecycleReadiness = organizationLifecycleReadiness({
         ...organization,
         shared_watchlist_count: bridgeContext.sharedWatchlistCount,
@@ -993,6 +998,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
             teamOnboardingReadiness,
             lifecycleReadiness,
             alertGenerationBridge,
+            downstreamAuthorization,
             watchlistItemCount: generatedAlertReferences.length,
             generatedAlertReferences,
             downstreamFields: [
@@ -1028,6 +1034,11 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'alertGenerationBridge.activeWatchlistTerms.updatedBy',
                 'alertGenerationBridge.termFamilies',
                 'alertGenerationBridge.blockedReasons',
+                'downstreamAuthorization.organizationId',
+                'downstreamAuthorization.member.role',
+                'downstreamAuthorization.watchlists.states',
+                'downstreamAuthorization.allowedActions',
+                'downstreamAuthorization.downstream.alertGeneration.blockerCodes',
             ],
         },
     })
