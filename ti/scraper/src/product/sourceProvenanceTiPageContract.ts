@@ -16,6 +16,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "t
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION = "ti.source_provenance_source_pack_activation_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -1002,6 +1003,71 @@ export type TiSourceProvenanceScraperEnrichmentLifecycleBlocker = {
   candidateId?: string;
   alertId?: string;
   retryAfter?: string;
+};
+
+export type TiSourceProvenanceSourceFreshnessGapPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute?: string;
+  ownerLane: "source";
+  sourcePackActivationReadinessId: string;
+  actorCaseHandoffId?: string;
+  freshness: {
+    state: "fresh" | "stale" | "missing";
+    newestEvidenceAt?: string;
+    maxAgeDays: number;
+    ageDays?: number;
+  };
+  sourceHealth: TiSourceProvenanceScraperEnrichmentLifecycle["sourceHealth"];
+  gaps: TiSourceProvenanceSourceFreshnessGap[];
+  consumers: TiSourceProvenanceSourceFreshnessGapConsumer[];
+  lifecycle: {
+    stages: TiSourceProvenanceScraperEnrichmentLifecycleStage["stage"][];
+    blockedStages: TiSourceProvenanceScraperEnrichmentLifecycleStage["stage"][];
+    nextTransitions: TiSourceProvenanceScraperEnrichmentLifecycleStage["nextAction"][];
+  };
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceSourceFreshnessGap = {
+  code:
+    | "missing_fresh_evidence"
+    | "stale_source_evidence"
+    | TiSourceProvenanceScraperEnrichmentLifecycleBlocker["code"];
+  ownerLane: "source" | "parser" | "case" | "policy" | "publicTI" | "alert";
+  stage?: TiSourceProvenanceScraperEnrichmentLifecycleStage["stage"];
+  path: string;
+  message: string;
+  nextAction: TiSourceProvenanceScraperEnrichmentLifecycleStage["nextAction"];
+  candidateId?: string;
+  alertId?: string;
+  retryAfter?: string;
+};
+
+export type TiSourceProvenanceSourceFreshnessGapConsumer = {
+  consumer: "publicTI" | "dashboard" | "alertRebuild" | "sourceOps";
+  ownerLane: "publicTI" | "dashboard" | "alert" | "source";
+  ready: boolean;
+  reason: string;
+  route: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+  requiredFields: string[];
 };
 
 export type TiSourceProvenancePageAction = {
@@ -1996,6 +2062,72 @@ export function buildSourceProvenanceScraperEnrichmentLifecycle(input: {
   };
 }
 
+export function buildSourceProvenanceSourceFreshnessGapPacket(input: {
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle;
+  generatedAt?: string;
+  maxAgeDays?: number;
+}): TiSourceProvenanceSourceFreshnessGapPacket {
+  const generatedAt = input.generatedAt ?? input.lifecycle.generatedAt;
+  const maxAgeDays = input.maxAgeDays ?? 14;
+  const newestEvidenceAt = input.lifecycle.enrichmentFreshness.newestEvidenceAt;
+  const ageDays = newestEvidenceAt ? daysBetween(newestEvidenceAt, generatedAt) : undefined;
+  const freshnessState = !newestEvidenceAt
+    ? "missing"
+    : (ageDays !== undefined && ageDays > maxAgeDays ? "stale" : "fresh");
+  const gaps = uniqueSourceFreshnessGaps([
+    ...sourceFreshnessEvidenceGaps(input.lifecycle, freshnessState, maxAgeDays, ageDays),
+    ...input.lifecycle.blockers.map((blocker) => sourceFreshnessLifecycleGap(blocker, input.lifecycle))
+  ]);
+  const blockedStages = uniqueStrings(input.lifecycle.stages
+    .filter((stage) => stage.status === "blocked" || stage.status === "retry_scheduled")
+    .map((stage) => stage.stage)) as TiSourceProvenanceScraperEnrichmentLifecycleStage["stage"][];
+  const nextTransitions = uniqueStrings(input.lifecycle.stages
+    .filter((stage) => stage.status !== "complete")
+    .map((stage) => stage.nextAction)) as TiSourceProvenanceScraperEnrichmentLifecycleStage["nextAction"][];
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_freshness_gap_packet", `${input.lifecycle.id}:${generatedAt}:${maxAgeDays}`),
+    generatedAt,
+    ok: gaps.length === 0,
+    tenantId: input.lifecycle.tenantId,
+    organizationId: input.lifecycle.organizationId,
+    actor: input.lifecycle.actor,
+    publicTiRoute: input.lifecycle.publicTiRoute,
+    ownerLane: "source",
+    sourcePackActivationReadinessId: input.lifecycle.sourcePackActivationReadinessId,
+    actorCaseHandoffId: input.lifecycle.actorCaseHandoffId,
+    freshness: {
+      state: freshnessState,
+      newestEvidenceAt,
+      maxAgeDays,
+      ageDays: ageDays === undefined ? undefined : Number(ageDays.toFixed(3))
+    },
+    sourceHealth: input.lifecycle.sourceHealth,
+    gaps,
+    consumers: sourceFreshnessConsumers(input.lifecycle, gaps),
+    lifecycle: {
+      stages: input.lifecycle.stages.map((stage) => stage.stage),
+      blockedStages,
+      nextTransitions
+    },
+    payloadShape: [
+      "freshness.state",
+      "freshness.newestEvidenceAt",
+      "sourceHealth",
+      "gaps[].code",
+      "consumers[].route",
+      "lifecycle.nextTransitions"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -2428,6 +2560,156 @@ function uniqueLifecycleBlockers(
   const seen = new Set<string>();
   return blockers.filter((blocker) => {
     const key = `${blocker.code}:${blocker.path}:${blocker.candidateId ?? ""}:${blocker.alertId ?? ""}:${blocker.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sourceFreshnessEvidenceGaps(
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle,
+  freshnessState: TiSourceProvenanceSourceFreshnessGapPacket["freshness"]["state"],
+  maxAgeDays: number,
+  ageDays?: number
+): TiSourceProvenanceSourceFreshnessGap[] {
+  if (freshnessState === "fresh") return [];
+  if (freshnessState === "missing") {
+    return [{
+      code: "missing_fresh_evidence",
+      ownerLane: "publicTI",
+      stage: "enrichment_freshness",
+      path: "enrichmentFreshness.newestEvidenceAt",
+      message: "No case-ready source evidence is available for this actor.",
+      nextAction: lifecycle.actorCaseHandoffId ? "repair_provenance" : "wait_for_case_handoff"
+    }];
+  }
+  return [{
+    code: "stale_source_evidence",
+    ownerLane: "source",
+    stage: "enrichment_freshness",
+    path: "enrichmentFreshness.newestEvidenceAt",
+    message: `Newest case-ready source evidence is older than ${maxAgeDays} days.`,
+    nextAction: "inspect_source_health",
+    retryAfter: ageDays === undefined ? undefined : `${Number(ageDays.toFixed(3))}d`
+  }];
+}
+
+function sourceFreshnessLifecycleGap(
+  blocker: TiSourceProvenanceScraperEnrichmentLifecycleBlocker,
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle
+): TiSourceProvenanceSourceFreshnessGap {
+  const stage = sourceFreshnessGapStage(blocker.code);
+  const stageRow = lifecycle.stages.find((candidate) => candidate.stage === stage);
+  return {
+    code: blocker.code,
+    ownerLane: blocker.ownerLane,
+    stage,
+    path: blocker.path,
+    message: blocker.message,
+    nextAction: stageRow?.nextAction ?? sourceFreshnessGapNextAction(blocker.code),
+    candidateId: blocker.candidateId,
+    alertId: blocker.alertId,
+    retryAfter: blocker.retryAfter
+  };
+}
+
+function sourceFreshnessGapStage(
+  code: TiSourceProvenanceScraperEnrichmentLifecycleBlocker["code"]
+): TiSourceProvenanceScraperEnrichmentLifecycleStage["stage"] {
+  if (code === "policy_approval_required") return "policy_validation";
+  if (code === "parser_retry_scheduled") return "retry_backoff";
+  if (code === "case_handoff_blocked") return "case_handoff";
+  return "activation_test";
+}
+
+function sourceFreshnessGapNextAction(
+  code: TiSourceProvenanceScraperEnrichmentLifecycleBlocker["code"]
+): TiSourceProvenanceScraperEnrichmentLifecycleStage["nextAction"] {
+  if (code === "policy_approval_required") return "request_policy_approval";
+  if (code === "parser_retry_scheduled") return "retry_parser";
+  if (code === "case_handoff_blocked") return "open_case_handoff";
+  return "test_source";
+}
+
+function sourceFreshnessConsumers(
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle,
+  gaps: TiSourceProvenanceSourceFreshnessGap[]
+): TiSourceProvenanceSourceFreshnessGapConsumer[] {
+  const hasSourceOrPolicyGap = gaps.some((gap) => gap.ownerLane === "source" || gap.ownerLane === "parser" || gap.ownerLane === "policy");
+  const hasEvidenceGap = gaps.some((gap) => gap.code === "missing_fresh_evidence" || gap.code === "stale_source_evidence");
+  const hasCaseGap = gaps.some((gap) => gap.ownerLane === "case");
+  const sourceOpsReady = hasSourceOrPolicyGap
+    || hasEvidenceGap
+    || lifecycle.sourceHealth.queuedForReview > 0
+    || lifecycle.sourceHealth.parserReady > 0
+    || lifecycle.sourceHealth.retryScheduled > 0
+    || lifecycle.sourceHealth.blockedByPolicy > 0;
+  const publicReady = gaps.length === 0;
+  const alertReady = !hasSourceOrPolicyGap && !hasEvidenceGap && !hasCaseGap;
+
+  return [{
+    consumer: "publicTI",
+    ownerLane: "publicTI",
+    ready: publicReady,
+    reason: publicReady ? "Actor page can show source-backed coverage." : "Actor page needs fresh, case-ready source evidence.",
+    route: {
+      method: "GET",
+      path: lifecycle.publicTiRoute ?? `/ti/${encodeURIComponent(lifecycle.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    requiredFields: ["actor", "publicTiRoute", "freshness.newestEvidenceAt", "sourceHealth"]
+  }, {
+    consumer: "dashboard",
+    ownerLane: "dashboard",
+    ready: gaps.length === 0,
+    reason: gaps.length === 0 ? "Operator source status can be rendered without additional gap checks." : "Operator source status should show blocked stages and next actions.",
+    route: {
+      method: "GET",
+      path: `/dashboard/ti/sources?actor=${encodeURIComponent(lifecycle.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    requiredFields: ["gaps[].code", "gaps[].nextAction", "lifecycle.blockedStages", "sourceHealth"]
+  }, {
+    consumer: "alertRebuild",
+    ownerLane: "alert",
+    ready: alertReady,
+    reason: alertReady ? "Alert rebuild can use fresh actor/source evidence." : "Alert rebuild should wait for source freshness and case handoff repair.",
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        actor: lifecycle.actor,
+        organizationId: lifecycle.organizationId,
+        dryRun: true,
+        sourceFreshnessPacketId: stableId("ti_source_provenance_source_freshness_gap_packet_ref", lifecycle.id)
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    requiredFields: ["tenantId", "organizationId", "actor", "freshness.state", "sourcePackActivationReadinessId"]
+  }, {
+    consumer: "sourceOps",
+    ownerLane: "source",
+    ready: sourceOpsReady,
+    reason: sourceOpsReady ? "Source operations have dry-run actions or source health to inspect." : "Source operations needs candidate intake before activation work can continue.",
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    requiredFields: ["sourceHealth", "gaps[].candidateId", "gaps[].retryAfter", "lifecycle.nextTransitions"]
+  }];
+}
+
+function uniqueSourceFreshnessGaps(
+  gaps: TiSourceProvenanceSourceFreshnessGap[]
+): TiSourceProvenanceSourceFreshnessGap[] {
+  const seen = new Set<string>();
+  return gaps.filter((gap) => {
+    const key = `${gap.code}:${gap.path}:${gap.candidateId ?? ""}:${gap.alertId ?? ""}:${gap.nextAction}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
