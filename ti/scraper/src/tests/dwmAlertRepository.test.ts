@@ -416,7 +416,35 @@ describe("dwm alert repository", () => {
       provenance: expect.objectContaining({
         matchBasis: "watchlist_capture_text",
         captureIds: ["cap_repo_tg_acme"]
-      })
+      }),
+      consumerPayload: {
+        schemaVersion: "dwm.alert_event_consumer_payload.v1",
+        eventType: "dwm.alert.created",
+        tenantId: "tenant_repo_acme",
+        organizationId: "org_repo_acme",
+        sourceFamily: "telegram_public",
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+        captureIds: ["cap_repo_tg_acme"],
+        selectedCaptureIds: ["cap_repo_tg_acme"],
+        evidenceCount: 1,
+        dedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
+        deliveryDedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
+        recommendedRoute: "identity_response",
+        alertDetailPath: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.alertDetailPath,
+        caseIdCandidate: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.caseIdCandidate,
+        casePath: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.casePath,
+        workflowEventCount: 0,
+        provenance: {
+          matchBasis: "watchlist_capture_text",
+          captureIds: ["cap_repo_tg_acme"],
+          sourceIds: ["src_repo_tg"]
+        },
+        generationEvidenceWindow: expect.objectContaining({
+          captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_darkweb_acme", "cap_repo_public_ti_acme"]),
+          sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"]
+        })
+      }
     });
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.alertEvents).toHaveLength(1);
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.webhookContext).toMatchObject({
@@ -646,7 +674,37 @@ describe("dwm alert repository", () => {
       previousEvidenceCount: 1,
       dedupeKey: existing.dedupeKey,
       deliveryDedupeKey: existing.dedupeKey,
-      recommendedRoute: "identity_response"
+      recommendedRoute: "identity_response",
+      consumerPayload: {
+        schemaVersion: "dwm.alert_event_consumer_payload.v1",
+        eventType: "dwm.alert.updated",
+        tenantId: "tenant_repo_acme",
+        organizationId: "org_repo_acme",
+        sourceFamily: "telegram_public",
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+        captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        addedCaptureIds: ["cap_repo_tg_acme_followup"],
+        evidenceCount: 2,
+        previousEvidenceCount: 1,
+        dedupeKey: existing.dedupeKey,
+        deliveryDedupeKey: existing.dedupeKey,
+        recommendedRoute: "identity_response",
+        alertDetailPath: existing.alertDetailPath,
+        caseIdCandidate: existing.caseIdCandidate,
+        casePath: existing.casePath,
+        workflowEventCount: 1,
+        provenance: {
+          matchBasis: "watchlist_capture_text",
+          captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+          sourceIds: ["src_repo_tg"]
+        },
+        generationEvidenceWindow: expect.objectContaining({
+          captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+          sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"]
+        })
+      }
     });
     expect(preserved?.alertUpdatedEvent.id).toMatch(/^dwm_alert_updated_event_/);
     expect(preserved?.alertEvents[1]).toEqual(preserved?.alertUpdatedEvent);
