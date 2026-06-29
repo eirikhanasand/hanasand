@@ -238,9 +238,30 @@ const memberInviteResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/invites`,
     headers: authHeaders('org_smoke_member', 'member-token'),
-    payload: { email: 'blocked-by-member@example.test', role: 'member' },
+    payload: { email: 'blocked-by-member@example.test', role: 'member', requestId: 'smoke-member-invite-create-denied' },
 })
 assert.equal(memberInviteResponse.statusCode, 403, memberInviteResponse.body)
+const memberInviteDenied = parseBody(memberInviteResponse.body).inviteManagementDenial
+assert.equal(memberInviteDenied.schemaVersion, 'organization.invite_management_denial.v1')
+assert.equal(memberInviteDenied.organizationId, organization.id)
+assert.equal(memberInviteDenied.tenantId, organization.id)
+assert.equal(memberInviteDenied.actorId, 'org_smoke_member')
+assert.equal(memberInviteDenied.actorRole, 'member')
+assert.equal(memberInviteDenied.action, 'create_invite')
+assert.equal(memberInviteDenied.inviteId, null)
+assert.equal(memberInviteDenied.denialReason, 'role_not_allowed')
+assert.deepEqual(memberInviteDenied.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(memberInviteDenied.readRoles, ['owner', 'admin'])
+assert.equal(memberInviteDenied.memberCanListInvites, false)
+assert.equal(memberInviteDenied.memberCanCreateInvites, false)
+assert.equal(memberInviteDenied.viewerCanListInvites, false)
+assert.equal(memberInviteDenied.viewerCanCreateInvites, false)
+assert.equal(memberInviteDenied.nonmemberEnumeration, false)
+assert.ok(memberInviteDenied.safeFields.includes('actorRole'))
+assert.ok(memberInviteDenied.noLeakFields.includes('pendingInvites[]'))
+assert.equal(memberInviteDenied.serviceLogAction, 'organization_invite_management_denied')
+assert.equal(memberInviteDenied.requestId, 'smoke-member-invite-create-denied')
+assert.equal(memberInviteDenied.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 
 const adminInviteResponse = await app.inject({
     method: 'POST',
@@ -437,6 +458,26 @@ const viewerRevokeInviteDeniedResponse = await app.inject({
     payload: { action: 'revoke', reason: 'Viewer cannot revoke invites.', requestId: 'smoke-viewer-revoke-denied' },
 })
 assert.equal(viewerRevokeInviteDeniedResponse.statusCode, 403, viewerRevokeInviteDeniedResponse.body)
+const viewerRevokeInviteDenied = parseBody(viewerRevokeInviteDeniedResponse.body).inviteManagementDenial
+assert.equal(viewerRevokeInviteDenied.schemaVersion, 'organization.invite_management_denial.v1')
+assert.equal(viewerRevokeInviteDenied.organizationId, organization.id)
+assert.equal(viewerRevokeInviteDenied.tenantId, organization.id)
+assert.equal(viewerRevokeInviteDenied.actorId, 'org_smoke_viewer')
+assert.equal(viewerRevokeInviteDenied.actorRole, 'viewer')
+assert.equal(viewerRevokeInviteDenied.action, 'revoke_invite')
+assert.equal(viewerRevokeInviteDenied.inviteId, pendingOpsInvite.id)
+assert.equal(viewerRevokeInviteDenied.denialReason, 'role_not_allowed')
+assert.deepEqual(viewerRevokeInviteDenied.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(viewerRevokeInviteDenied.readRoles, ['owner', 'admin'])
+assert.equal(viewerRevokeInviteDenied.viewerCanListInvites, false)
+assert.equal(viewerRevokeInviteDenied.viewerCanCreateInvites, false)
+assert.equal(viewerRevokeInviteDenied.nonmemberEnumeration, false)
+assert.ok(viewerRevokeInviteDenied.safeFields.includes('inviteId'))
+assert.ok(viewerRevokeInviteDenied.noLeakFields.includes('invite.email'))
+assert.equal(viewerRevokeInviteDenied.serviceLogAction, 'organization_invite_management_denied')
+assert.equal(viewerRevokeInviteDenied.requestId, 'smoke-viewer-revoke-denied')
+assert.equal(viewerRevokeInviteDenied.reason, 'Viewer cannot revoke invites.')
+assert.equal(viewerRevokeInviteDenied.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 
 const revokePendingInviteResponse = await app.inject({
     method: 'POST',
@@ -3480,6 +3521,8 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptanc
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === pendingOpsInvite.id && log.metadata.blockerCode === 'member_revoked'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === expiredInvite.id && log.metadata.blockerCode === 'invite_expired'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_action_denied' && log.metadata.inviteId === invite.id && log.metadata.requestId === 'smoke-accepted-revoke-denied' && log.metadata.blockerCode === 'invite_already_accepted'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_management_denied' && log.metadata.requestId === 'smoke-member-invite-create-denied' && log.metadata.action === 'create_invite' && log.metadata.actorRole === 'member'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_management_denied' && log.metadata.requestId === 'smoke-viewer-revoke-denied' && log.metadata.action === 'revoke_invite' && log.metadata.actorRole === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_revoked' && log.metadata.requestId === 'smoke-revoke-pending-ops'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_resent' && log.metadata.requestId === 'smoke-resend-pending-ops'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated' && log.metadata.fields.includes('defaultWebhookPolicy')))

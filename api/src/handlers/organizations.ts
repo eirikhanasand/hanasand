@@ -20,6 +20,7 @@ import {
     organizationAlertCaseWorkflowState,
     organizationInviteActionDenial,
     organizationInviteAcceptanceDenial,
+    organizationInviteManagementDenial,
     organizationLastOwnerGuard,
     organizationLifecycleReadiness,
     organizationMemberMutationDenial,
@@ -325,7 +326,10 @@ export async function getOrganizationInvites(req: FastifyRequest<{ Params: Organ
     }
 
     if (!roleCanManageOrganization(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can view invites.' })
+        return sendInviteManagementDenial(req, res, organization, userId, {
+            action: 'list_invites',
+            message: 'Only organization owners and admins can view invites.',
+        })
     }
 
     const result = await run(`
@@ -698,7 +702,11 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
     }
 
     if (!roleCanManageOrganization(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can invite members.' })
+        return sendInviteManagementDenial(req, res, organization, userId, {
+            action: 'create_invite',
+            requestId: typeof req.body?.requestId === 'string' ? req.body.requestId : typeof req.body?.request_id === 'string' ? req.body.request_id : null,
+            message: 'Only organization owners and admins can invite members.',
+        })
     }
 
     const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'invite members')
@@ -829,7 +837,18 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
     }
 
     if (!roleCanManageOrganization(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can manage invites.' })
+        const action = req.body?.action === 'revoke'
+            ? 'revoke_invite'
+            : req.body?.action === 'resend'
+                ? 'resend_invite'
+                : 'manage_invites'
+        return sendInviteManagementDenial(req, res, organization, userId, {
+            action,
+            inviteId: req.params.inviteId,
+            requestId: typeof req.body?.requestId === 'string' ? req.body.requestId : typeof req.body?.request_id === 'string' ? req.body.request_id : null,
+            reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
+            message: 'Only organization owners and admins can manage invites.',
+        })
     }
 
     let input
@@ -2137,6 +2156,36 @@ function organizationSettingsPermissions(role: OrganizationRole | undefined) {
         canEdit,
         editableFields: canEdit ? ['name', 'slug', 'defaultWebhookPolicy', 'alertVisibilityPolicy', 'retentionDays', 'auditSafeMetadata'] : [],
     }
+}
+
+function sendInviteManagementDenial(
+    req: FastifyRequest,
+    res: FastifyReply,
+    organization: OrganizationRow,
+    actorId: string,
+    input: {
+        action: 'list_invites' | 'create_invite' | 'revoke_invite' | 'resend_invite' | 'manage_invites'
+        inviteId?: string | null
+        requestId?: string | null
+        reason?: string | null
+        message: string
+    }
+) {
+    const denial = organizationInviteManagementDenial({
+        organizationId: organization.id,
+        actorId,
+        actorRole: organization.role,
+        ...input,
+    })
+    logOrganizationEvent(req, denial.serviceLogAction, organization.id, actorId, {
+        requestId: denial.requestId,
+        reason: denial.reason,
+        action: denial.action,
+        inviteId: denial.inviteId,
+        actorRole: organization.role,
+        denialReason: denial.denialReason,
+    })
+    return res.status(403).send({ error: input.message, inviteManagementDenial: denial })
 }
 
 function sendWatchlistMutationDenial(
