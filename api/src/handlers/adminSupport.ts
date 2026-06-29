@@ -124,6 +124,13 @@ type SupportMemberRoleRecoveryBody = {
     context?: unknown
     requestId?: unknown
     request_id?: unknown
+    scope?: unknown
+    correlationId?: unknown
+    correlation_id?: unknown
+    idempotencyKey?: unknown
+    idempotency_key?: unknown
+    handoffExpiresAt?: unknown
+    handoff_expires_at?: unknown
 }
 
 type SupportAccessRecoveryBody = InviteInput & {
@@ -1428,13 +1435,164 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const requestId = input.requestId || supportRequestId(req)
+    const actionType = 'support.organization.member_role_recovery'
+    const controls = supportMemberRoleRecoveryExecutorControls(req, req.body, requestId)
+    if (controls.error) {
+        await recordSupportMemberRoleRecoveryExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            userId: req.params.userId,
+            requestId,
+            reason,
+            blocker: controls.error.code,
+            requestedRole: input.role,
+            controls: controls.value,
+            supportContext: cleanContext(req.body?.context),
+        })
+        return res.status(controls.error.status).send(supportError(controls.error.code, controls.error.message, {
+            executorBlocker: supportMemberRoleRecoveryExecutorDetail({
+                organizationId: organization.id,
+                userId: req.params.userId,
+                requestId,
+                reason,
+                requestedRole: input.role,
+                controls: controls.value,
+                member: null,
+                before: null,
+                after: null,
+                outcome: 'denied',
+                blockers: [controls.error.code],
+            }),
+        }))
+    }
+    const executorControls = controls.value
+
     const member = await loadSupportMemberDetail(req.params.id, req.params.userId)
-    if (!member || member.status !== 'active') {
+    if (!member) {
         return res.status(404).send({ error: 'Active organization member not found.' })
     }
 
-    const requestId = input.requestId || supportRequestId(req)
-    const actionType = 'support.organization.member_role_recovery'
+    const duplicate = await loadSupportMemberRoleRecoveryByIdempotencyKey({
+        organizationId: organization.id,
+        userId: req.params.userId,
+        idempotencyKey: executorControls.idempotencyKey,
+    })
+    if (duplicate) {
+        const snapshot = membershipSnapshot(member)
+        return res.send({
+            memberRoleRecovery: {
+                schemaVersion: 'support.member_role_recovery.v1',
+                requestId: duplicate.request_id,
+                actorId: actor.id,
+                organization: toOrganization(organization),
+                member: toSupportMemberDetail(member),
+                before: snapshot,
+                after: snapshot,
+                requestedRole: input.role,
+                reason,
+                outcome: 'success',
+                idempotentReplay: true,
+                blockers: ['duplicate_idempotency_key'],
+                auditEventIds: [Number(duplicate.id)].filter(id => Number.isFinite(id)),
+                noSilentMembershipMutation: true,
+                controlledExecutor: supportMemberRoleRecoveryExecutorDetail({
+                    organizationId: organization.id,
+                    userId: req.params.userId,
+                    requestId: duplicate.request_id,
+                    reason,
+                    requestedRole: input.role,
+                    controls: executorControls,
+                    member,
+                    before: snapshot,
+                    after: snapshot,
+                    outcome: 'success',
+                    blockers: ['duplicate_idempotency_key'],
+                }),
+                audit: {
+                    actionType,
+                    source: 'admin',
+                    service: 'hanasand-api',
+                    outcome: 'success',
+                    severity: input.role === 'admin' || snapshot.role === 'owner' ? 'warning' : 'notice',
+                    eventIds: [Number(duplicate.id)].filter(id => Number.isFinite(id)),
+                    query: supportMemberRoleRecoveryAuditQuery({
+                        requestId: duplicate.request_id,
+                        organizationId: organization.id,
+                        userId: req.params.userId,
+                        correlationId: executorControls.correlationId,
+                        idempotencyKey: executorControls.idempotencyKey,
+                        reason,
+                        outcome: 'success',
+                    }),
+                },
+            },
+        })
+    }
+
+    if (member.status !== 'active') {
+        const snapshot = membershipSnapshot(member)
+        await recordSupportMemberRoleRecoveryExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            userId: req.params.userId,
+            requestId,
+            reason,
+            blocker: 'revoked_member',
+            requestedRole: input.role,
+            controls: executorControls,
+            supportContext: cleanContext(req.body?.context),
+            before: snapshot,
+        })
+        return res.status(409).send(supportError('revoked_member', 'Support role recovery requires an active organization member; inspect removed membership state first.', {
+            executorBlocker: supportMemberRoleRecoveryExecutorDetail({
+                organizationId: organization.id,
+                userId: req.params.userId,
+                requestId,
+                reason,
+                requestedRole: input.role,
+                controls: executorControls,
+                member,
+                before: snapshot,
+                after: snapshot,
+                outcome: 'denied',
+                blockers: ['revoked_member'],
+            }),
+        }))
+    }
+
+    const availability = await loadOrganizationAvailability([organization.id])
+    if (availability[0]?.hasAvailableAdmin === true) {
+        const snapshot = membershipSnapshot(member)
+        await recordSupportMemberRoleRecoveryExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            userId: req.params.userId,
+            requestId,
+            reason,
+            blocker: 'active_admin_available',
+            requestedRole: input.role,
+            controls: executorControls,
+            supportContext: cleanContext(req.body?.context),
+            before: snapshot,
+        })
+        return res.status(409).send(supportError('active_admin_available', 'An active organization admin is available; support member role recovery requires unavailable org administration.', {
+            executorBlocker: supportMemberRoleRecoveryExecutorDetail({
+                organizationId: organization.id,
+                userId: req.params.userId,
+                requestId,
+                reason,
+                requestedRole: input.role,
+                controls: executorControls,
+                member,
+                before: snapshot,
+                after: snapshot,
+                outcome: 'denied',
+                blockers: ['active_admin_available'],
+            }),
+        }))
+    }
+
     const before = membershipSnapshot(member)
     const ownerCount = await activeOwnerCount(req.params.id)
     const permissionError = supportRoleRecoveryPermissionError(String(member.role) as OrganizationRole, input.role, ownerCount)
@@ -1460,6 +1618,23 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
                 ownerCount,
                 before,
                 after: before,
+                correlationId: executorControls.correlationId,
+                idempotencyKey: executorControls.idempotencyKey,
+                scope: executorControls.scope,
+                handoffExpiresAt: executorControls.handoffExpiresAt,
+                executor: supportMemberRoleRecoveryExecutorDetail({
+                    organizationId: organization.id,
+                    userId: req.params.userId,
+                    requestId,
+                    reason,
+                    requestedRole: input.role,
+                    controls: executorControls,
+                    member,
+                    before,
+                    after: before,
+                    outcome: permissionError ? 'denied' : 'failed',
+                    blockers: [error],
+                }),
                 noSilentMembershipMutation: true,
                 mutation: 'none',
                 error,
@@ -1481,6 +1656,19 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
                 outcome: permissionError ? 'denied' : 'failed',
                 auditEventIds,
                 noSilentMembershipMutation: true,
+                controlledExecutor: supportMemberRoleRecoveryExecutorDetail({
+                    organizationId: organization.id,
+                    userId: req.params.userId,
+                    requestId,
+                    reason,
+                    requestedRole: input.role,
+                    controls: executorControls,
+                    member,
+                    before,
+                    after: before,
+                    outcome: permissionError ? 'denied' : 'failed',
+                    blockers: [error],
+                }),
             },
         })
     }
@@ -1523,6 +1711,23 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
             ownerCount,
             before,
             after,
+            correlationId: executorControls.correlationId,
+            idempotencyKey: executorControls.idempotencyKey,
+            scope: executorControls.scope,
+            handoffExpiresAt: executorControls.handoffExpiresAt,
+            executor: supportMemberRoleRecoveryExecutorDetail({
+                organizationId: organization.id,
+                userId: req.params.userId,
+                requestId,
+                reason,
+                requestedRole: input.role,
+                controls: executorControls,
+                member: updatedMember as Record<string, unknown>,
+                before,
+                after,
+                outcome: 'success',
+                blockers: [],
+            }),
             noSilentMembershipMutation: true,
             mutation: 'member_role_only',
             supportContext: cleanContext(req.body?.context),
@@ -1541,8 +1746,23 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
             after,
             reason,
             outcome: 'success',
+            idempotencyKey: executorControls.idempotencyKey,
+            correlationId: executorControls.correlationId,
             auditEventIds,
             noSilentMembershipMutation: true,
+            controlledExecutor: supportMemberRoleRecoveryExecutorDetail({
+                organizationId: organization.id,
+                userId: req.params.userId,
+                requestId,
+                reason,
+                requestedRole: input.role,
+                controls: executorControls,
+                member: updatedMember as Record<string, unknown>,
+                before,
+                after,
+                outcome: 'success',
+                blockers: [],
+            }),
             audit: {
                 actionType,
                 source: 'admin',
@@ -1550,13 +1770,22 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
                 outcome: 'success',
                 severity: input.role === 'admin' || before.role === 'owner' ? 'warning' : 'notice',
                 eventIds: auditEventIds,
-                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&entity=${encodeURIComponent(req.params.userId)}&action=member_role_recovery&outcome=success&source=admin&service=hanasand-api`,
+                query: supportMemberRoleRecoveryAuditQuery({
+                    requestId,
+                    organizationId: organization.id,
+                    userId: req.params.userId,
+                    correlationId: executorControls.correlationId,
+                    idempotencyKey: executorControls.idempotencyKey,
+                    reason,
+                    outcome: 'success',
+                }),
             },
             copyText: [
                 `Support member role recovery for ${req.params.userId}`,
                 `Org: ${organization.name} (${organization.id})`,
                 `Role: ${before.role} -> ${after.role}`,
                 `Request: ${requestId}`,
+                `Idempotency: ${executorControls.idempotencyKey}`,
                 `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
                 `Reason: ${reason}`,
             ].join('\n'),
@@ -2307,6 +2536,21 @@ async function loadSupportInviteActionByIdempotencyKey(input: { organizationId: 
     return result.rows[0] as { id: number, request_id: string, entity_id: string | null, context: Record<string, unknown> } | undefined
 }
 
+async function loadSupportMemberRoleRecoveryByIdempotencyKey(input: { organizationId: string, userId: string, idempotencyKey: string }) {
+    const result = await run(`
+        SELECT id, request_id, entity_id, context
+        FROM admin_audit_events
+        WHERE action_type = 'support.organization.member_role_recovery'
+          AND organization_id = $1
+          AND entity_id = $2
+          AND outcome = 'success'
+          AND context->>'idempotencyKey' = $3
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+    `, [input.organizationId, input.userId, input.idempotencyKey])
+    return result.rows[0] as { id: number, request_id: string, entity_id: string | null, context: Record<string, unknown> } | undefined
+}
+
 async function loadOrganizationInvitesByIds(organizationId: string, inviteIds: string[]) {
     if (!inviteIds.length) return []
     const result = await run(`
@@ -2761,6 +3005,26 @@ function buildSupportWorkbench(input: {
             durationRequiredFor: ['impersonation'],
             expiryRelevantFor: ['invite_assist', 'access_recovery'],
         }
+    const readinessProof = supportWorkbenchReadinessProof({
+        org: input.org,
+        user: input.user,
+        email: input.email,
+        request: input.request,
+        organizationIds: input.organizationIds,
+        activeMembershipCount: activeMemberships.length,
+        pendingInviteCount: pendingInvites.length,
+        noAdminAvailable,
+        inviteAssistAvailable,
+        recoveryAvailable,
+        impersonationEligible,
+        timeline: input.timeline,
+        timelineFilter: input.timelineFilter,
+        blockers,
+        inviteAssistBlockers,
+        accessRecoveryBlockers,
+        impersonationBlockers,
+        actionPreparation,
+    })
 
     return {
         schemaVersion: 'support.workbench.v1',
@@ -2827,6 +3091,7 @@ function buildSupportWorkbench(input: {
             redacted: true,
         },
         actionPreparation,
+        readinessProof,
         blockers,
         copyText: [
             `Support workbench org=${input.org || input.organizationIds.join(',') || '*'} user=${input.user || '*'} email=${input.email || '*'} request=${input.request || '*'}`,
@@ -2835,6 +3100,82 @@ function buildSupportWorkbench(input: {
             `Impersonation: ${impersonationEligible ? 'eligible' : impersonationBlockers.join(',') || 'ineligible'}`,
             `Audit events: ${input.timeline.map(event => event.id).join(', ') || 'none'}`,
         ].join('\n'),
+    }
+}
+
+function supportWorkbenchReadinessProof(input: {
+    org: string
+    user: string
+    email: string
+    request: string
+    organizationIds: string[]
+    activeMembershipCount: number
+    pendingInviteCount: number
+    noAdminAvailable: boolean
+    inviteAssistAvailable: boolean
+    recoveryAvailable: boolean
+    impersonationEligible: boolean
+    timeline: Array<Record<string, any>>
+    timelineFilter: SupportTimelineFilter
+    blockers: string[]
+    inviteAssistBlockers: string[]
+    accessRecoveryBlockers: string[]
+    impersonationBlockers: string[]
+    actionPreparation: Record<string, any>
+}) {
+    const lastProof = input.timeline[0] || null
+    return {
+        schemaVersion: 'support.workbench.readiness_proof.v1',
+        generatedAt: new Date().toISOString(),
+        target: {
+            organizationIds: input.organizationIds,
+            userId: input.user || null,
+            email: input.email || null,
+            requestId: input.request || null,
+        },
+        supportActionsAvailable: {
+            inviteAssistance: input.inviteAssistAvailable && input.noAdminAvailable,
+            inviteResendRevoke: input.pendingInviteCount > 0 && input.noAdminAvailable,
+            memberRoleRecovery: input.activeMembershipCount > 0 && input.noAdminAvailable,
+            accessRecovery: input.recoveryAvailable,
+            impersonation: input.impersonationEligible,
+        },
+        requiredInputs: {
+            reason: true,
+            scope: true,
+            expiryFor: ['inviteAssistance', 'inviteResend', 'accessRecovery'],
+            durationFor: ['impersonation'],
+            idempotencyKey: true,
+        },
+        auditFiltersAvailable: ['org', 'target', 'actor', 'action', 'outcome', 'request', 'entity', 'from', 'to', 'correlation', 'idempotency', 'reason'],
+        timelineFilter: input.timelineFilter,
+        lastProof: lastProof ? {
+            eventId: lastProof.id,
+            action: lastProof.action,
+            outcome: lastProof.outcome,
+            severity: lastProof.severity,
+            requestId: lastProof.requestId || null,
+            organizationId: lastProof.organizationId || null,
+            entityId: lastProof.entityId || null,
+            createdAt: lastProof.createdAt || null,
+        } : null,
+        blockers: uniqueTimelineValues([
+            ...input.blockers,
+            ...input.inviteAssistBlockers,
+            ...input.accessRecoveryBlockers,
+            ...input.impersonationBlockers,
+            input.noAdminAvailable ? '' : 'active_admin_available',
+        ]),
+        actionPreparation: {
+            requested: Boolean(input.actionPreparation?.requested),
+            action: input.actionPreparation?.action || null,
+            outcome: input.actionPreparation?.outcome || null,
+            requestId: input.actionPreparation?.requestId || null,
+            correlationId: input.actionPreparation?.correlationId || null,
+            idempotencyKey: input.actionPreparation?.idempotencyKey || null,
+            blockers: input.actionPreparation?.blockers || [],
+        },
+        redacted: true,
     }
 }
 
@@ -3663,10 +4004,206 @@ function supportInviteActionAuditQuery(input: {
     return `/api/admin/audit-events?${params.toString()}`
 }
 
+function supportMemberRoleRecoveryExecutorControls(
+    req: FastifyRequest,
+    body: SupportMemberRoleRecoveryBody | undefined,
+    requestId: string,
+): {
+    value: {
+        schemaVersion: string
+        requestId: string
+        correlationId: string
+        idempotencyKey: string
+        scope: string[]
+        handoffExpiresAt: string | null
+        staleBlocker: string
+        duplicateBlocker: string
+    },
+    error: { code: string, message: string, status: number } | null,
+} {
+    const idempotencyKey = supportActionIdempotencyKey(
+        headerText(req.headers['x-idempotency-key']) || body?.idempotencyKey || body?.idempotency_key || requestId,
+        'member_role_recovery',
+    )
+    const correlationId = text(headerText(req.headers['x-correlation-id']) || body?.correlationId || body?.correlation_id || requestId) || requestId
+    const scopeResult = normalizeSupportPreparationScope(body?.scope || 'member:role_recovery', 'member_role_recovery')
+    const base = {
+        schemaVersion: 'support.action_execute.controls.v1',
+        requestId,
+        correlationId,
+        idempotencyKey,
+        scope: scopeResult.value,
+        handoffExpiresAt: null as string | null,
+        staleBlocker: 'stale_prepare_payload',
+        duplicateBlocker: 'duplicate_idempotency_key',
+    }
+    if (scopeResult.error || !scopeResult.value.includes('member:role_recovery')) {
+        return { value: base, error: { code: 'invalid_scope', message: 'Member role recovery execution requires member:role_recovery scope.', status: 400 } }
+    }
+
+    const handoffExpiresAt = text(headerText(req.headers['x-support-handoff-expires-at']) || body?.handoffExpiresAt || body?.handoff_expires_at)
+    if (!handoffExpiresAt) {
+        return { value: base, error: null }
+    }
+    const timestamp = Date.parse(handoffExpiresAt)
+    if (Number.isNaN(timestamp)) {
+        return { value: base, error: { code: 'invalid_expiry', message: 'Member role recovery handoff expiry must be a valid timestamp.', status: 400 } }
+    }
+    const value = { ...base, handoffExpiresAt: new Date(timestamp).toISOString() }
+    if (timestamp <= Date.now()) {
+        return { value, error: { code: 'stale_prepare_payload', message: 'Member role recovery handoff has expired; prepare a fresh action before executing.', status: 409 } }
+    }
+    return { value, error: null }
+}
+
+async function recordSupportMemberRoleRecoveryExecutorBlock(req: FastifyRequest, input: {
+    actorId: string
+    organizationId: string
+    userId: string
+    requestId: string
+    reason: string
+    blocker: string
+    requestedRole: string
+    controls: ReturnType<typeof supportMemberRoleRecoveryExecutorControls>['value']
+    supportContext: string
+    before?: Record<string, unknown> | null
+}) {
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.organization.member_role_recovery',
+        actorId: input.actorId,
+        targetType: 'member',
+        targetId: input.userId,
+        organizationId: input.organizationId,
+        entityId: input.userId,
+        requestId: input.requestId,
+        severity: input.requestedRole === 'admin' ? 'warning' : 'notice',
+        outcome: 'denied',
+        reason: input.reason,
+        context: {
+            schemaVersion: 'support.action_executor_blocker.v1',
+            action: 'member_role_recovery',
+            blocker: input.blocker,
+            blockerCode: input.blocker,
+            requestId: input.requestId,
+            correlationId: input.controls.correlationId,
+            idempotencyKey: input.controls.idempotencyKey,
+            targetOrganizationId: input.organizationId,
+            targetUserId: input.userId,
+            requestedRole: input.requestedRole,
+            scope: input.controls.scope,
+            handoffExpiresAt: input.controls.handoffExpiresAt,
+            before: input.before || null,
+            noSilentMembershipMutation: true,
+            mutation: 'none',
+            redactionRequired: true,
+            supportContext: input.supportContext,
+        },
+    })
+}
+
+function supportMemberRoleRecoveryExecutorDetail(input: {
+    organizationId: string
+    userId: string
+    requestId: string
+    reason: string
+    requestedRole: string
+    controls: ReturnType<typeof supportMemberRoleRecoveryExecutorControls>['value']
+    member: Record<string, unknown> | null
+    before: Record<string, unknown> | null
+    after: Record<string, unknown> | null
+    outcome: 'success' | 'denied' | 'failed'
+    blockers: string[]
+}) {
+    return {
+        schemaVersion: 'support.action_execute.member_role_recovery.v1',
+        mutationMode: 'controlled_member_role_only',
+        action: 'member_role_recovery',
+        actionType: 'support.organization.member_role_recovery',
+        supportRoleRequired: true,
+        reasonRequired: true,
+        contextRequired: true,
+        scopeRequired: true,
+        noSilentMembershipMutation: true,
+        requestId: input.requestId,
+        correlationId: input.controls.correlationId,
+        idempotencyKey: input.controls.idempotencyKey,
+        staleBlocker: input.controls.staleBlocker,
+        duplicateBlocker: input.controls.duplicateBlocker,
+        target: {
+            organizationId: input.organizationId,
+            userId: input.userId,
+            currentRole: input.before?.role || input.member?.role || null,
+            requestedRole: input.requestedRole,
+        },
+        scope: input.controls.scope,
+        handoffExpiresAt: input.controls.handoffExpiresAt,
+        before: input.before,
+        after: input.after,
+        outcome: input.outcome,
+        blockers: input.blockers,
+        blockerCatalog: [
+            'support_role_required',
+            'missing_support_reason',
+            'stale_prepare_payload',
+            'duplicate_idempotency_key',
+            'invalid_scope',
+            'active_admin_available',
+            'revoked_member',
+            'member_role_already_set',
+            'last_owner_demote_denied',
+            'owner_grant_denied',
+            'audit_unavailable',
+            'redaction_required',
+        ],
+        redactedAuditPreview: redactAuditValue({
+            schemaVersion: 'support.action_execute.audit_preview.v1',
+            actionType: 'support.organization.member_role_recovery',
+            source: 'admin',
+            service: 'hanasand-api',
+            requestId: input.requestId,
+            correlationId: input.controls.correlationId,
+            idempotencyKey: input.controls.idempotencyKey,
+            organizationId: input.organizationId,
+            targetUserId: input.userId,
+            requestedRole: input.requestedRole,
+            reason: input.reason,
+            scope: input.controls.scope,
+            outcome: input.outcome,
+            blockerCode: input.blockers[0] || null,
+            redactionRequired: true,
+        }),
+    }
+}
+
+function supportMemberRoleRecoveryAuditQuery(input: {
+    requestId: string
+    organizationId: string
+    userId: string
+    correlationId: string
+    idempotencyKey: string
+    reason: string
+    outcome: string
+}) {
+    const params = new URLSearchParams()
+    params.set('request', input.requestId)
+    params.set('correlation', input.correlationId)
+    params.set('idempotency', input.idempotencyKey)
+    params.set('org', input.organizationId)
+    params.set('entity', input.userId)
+    params.set('target', input.userId)
+    params.set('reason', input.reason)
+    params.set('action', 'support.organization.member_role_recovery')
+    params.set('outcome', input.outcome)
+    params.set('source', 'admin')
+    params.set('service', 'hanasand-api')
+    return `/api/admin/audit-events?${params.toString()}`
+}
+
 function normalizeSupportPreparationScope(value: unknown, action: string): { value: string[], error: Record<string, unknown> | null } {
     const allowedByAction: Record<string, Set<string>> = {
         invite_assist: new Set(['invite:create', 'invite:resend', 'invite:revoke']),
         access_recovery: new Set(['recovery:invite', 'recovery:approve', 'recovery:deny']),
+        member_role_recovery: new Set(['member:role_recovery']),
         impersonation: new Set(['read_profile', 'read_org', 'support_debug']),
     }
     const allowed = allowedByAction[action] || new Set<string>()
