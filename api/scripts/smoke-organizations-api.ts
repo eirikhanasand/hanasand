@@ -934,6 +934,37 @@ assert.ok(readiness.readinessProof.uiProof.safeFields.includes('webhookDeliveryP
 assert.ok(readiness.readinessProof.uiProof.redactedFields.includes('activeTerms[].term'))
 assert.equal(readiness.readinessProof.cleanupProof.cleanupIdempotent, true)
 assert.equal(readiness.readinessProof.cleanupProof.cleanupRoute, 'POST /api/organizations/:id/watchlists/cleanup')
+
+const adminReadinessResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-readiness`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(adminReadinessResponse.statusCode, 200, adminReadinessResponse.body)
+const adminReadiness = parseBody(adminReadinessResponse.body).alertReadiness
+assert.equal(adminReadiness.readinessProof.actor.role, 'admin')
+assert.equal(adminReadiness.readinessProof.actor.canExportActiveTerms, true)
+assert.equal(adminReadiness.readinessProof.readiness.organizationCanGenerateAlerts, true)
+assert.equal(adminReadiness.readinessProof.readiness.actorCanExportActiveTerms, true)
+assert.equal(adminReadiness.readinessProof.readiness.readyForWorker3Replay, true)
+assert.equal(adminReadiness.readinessProof.readiness.readyForDashboard, true)
+assert.deepEqual(adminReadiness.readinessProof.blockers, [])
+assert.equal(adminReadiness.readinessProof.counts.activeWatchlistTermCount, 5)
+assert.deepEqual(adminReadiness.readinessProof.alertQueueProof.allowedActions, [
+    'create_watchlist',
+    'edit_watchlist_terms',
+    'archive_watchlist',
+    'restore_watchlist',
+    'acknowledge_alert',
+    'assign_case',
+    'link_case',
+    'manage_invites',
+])
+assert.deepEqual(adminReadiness.readinessProof.alertQueueProof.blockerCodes, [])
+assert.equal(adminReadiness.readinessProof.webhookDeliveryProof.canUseDefaultDestinations, false)
+assert.deepEqual(adminReadiness.readinessProof.webhookDeliveryProof.blockerCodes, ['manual_webhook_selection_required'])
+assert.equal(adminReadiness.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, true)
+assert.deepEqual(adminReadiness.downstreamAuthorization.downstream.alertGeneration.blockerCodes, [])
 const adapterContract = orgUtils.organizationWatchlistAlertGenerationContract(
     organizationSummary(organization.id, 'member'),
     [...watchlists.values()].filter(item => item.organization_id === organization.id && !item.archived_at)
