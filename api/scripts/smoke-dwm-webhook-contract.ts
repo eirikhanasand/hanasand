@@ -2541,6 +2541,10 @@ expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.cont
 expect(deliveryPreview.context.alert.casePath === replayWorkflowAlert.casePath && deliveryPreview.context.links.casePath === replayWorkflowAlert.casePath, 'Test preview should expose case/deep-link context.', deliveryPreview)
 expect(deliveryPreview.context.alert.alertUrl === replayWorkflowAlert.alertUrl && deliveryPreview.context.links.alertUrl === replayWorkflowAlert.alertUrl, 'Test preview should expose alert URL/deep-link context.', deliveryPreview)
 expect(deliveryPreview.timestamps.updatedAt === '2026-06-28T12:00:05.000Z' && deliveryPreview.timestamps.createdAt === '2026-06-28T12:00:00.000Z', 'Test preview should expose persisted delivery created/updated timestamps.', deliveryPreview.timestamps)
+expect(deliveryPreview.sanitizedPayloadPreview.schemaVersion === 'dwm.webhook.sanitized_payload_preview.v1' && deliveryPreview.sanitizedPayloadPreview.payloadHash === 'payload_replay_hash', 'Test preview should expose a stable sanitized payload proof with payload hash.', deliveryPreview.sanitizedPayloadPreview)
+expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Alert URL') && deliveryPreview.sanitizedPayloadPreview.context.watchlistId === 'watchlist_item_replay_contract', 'Sanitized payload preview should expose Discord field names and watchlist context without parsing raw payload.', deliveryPreview.sanitizedPayloadPreview)
+expect(deliveryPreview.sanitizedPayloadPreview.context.casePath === replayWorkflowAlert.casePath && deliveryPreview.sanitizedPayloadPreview.links.includes(replayWorkflowAlert.alertUrl), 'Sanitized payload preview should expose case and alert action links.', deliveryPreview.sanitizedPayloadPreview)
+expect(deliveryPreview.sanitizedPayloadPreview.redaction.safeForCustomerDisplay === true && deliveryPreview.sanitizedPayloadPreview.redaction.endpointExposed === false, 'Sanitized payload preview should prove customer-safe redaction.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.operationLinks.deliveryDetail === 'GET /api/dwm/webhook-deliveries?orgId=org_contract&deliveryId=delivery_replay_contract' && deliveryPreview.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Test preview should expose stable delivery detail and destination test operation links.', deliveryPreview.operationLinks)
 expect(deliveryPreview.operationLinks.dedupeHistory?.includes('dwm_dedupe_replay_contract') && deliveryPreview.operationLinks.casePath === replayWorkflowAlert.casePath, 'Test preview should expose dedupe history and case action links.', deliveryPreview.operationLinks)
 expect(!JSON.stringify(deliveryPreview).includes(secret), 'Test preview should not leak endpoint secrets.', deliveryPreview)
@@ -2702,6 +2706,7 @@ expect(!JSON.stringify(duplicateReplayGuardHistory).includes(secret), 'Duplicate
 expect(deliveryReceipts.schemaVersion === 'dwm.webhook.delivery_receipts.v1' && deliveryReceipts.counts.total === deliveryHistory.total, 'Delivery receipts should provide a stable proof contract for delivery attempts.', deliveryReceipts)
 expect(deliveryReceiptReplay?.proof.auditEventId === 'audit_replay_duplicate_contract' && deliveryReceiptReplay.proof.noNetwork === true, 'Delivery receipts should link replay delivery proof and preserve no-network dry-run status.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.discordPreview?.fieldNames.includes('Workflow') && deliveryReceiptReplay.discordPreview.fieldNames.includes('Alert URL') && deliveryReceiptReplay.casePath === replayWorkflowAlert.casePath, 'Delivery receipts should carry Discord preview and case/deep-link context.', deliveryReceiptReplay)
+expect(deliveryReceiptReplay?.sanitizedPayloadPreview?.schemaVersion === 'dwm.webhook.sanitized_payload_preview.v1' && deliveryReceiptReplay.sanitizedPayloadPreview.context.alertId === 'alert_replay_contract', 'Delivery receipts should carry the sanitized payload preview proof for customer-safe history.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.proof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery receipts should expose persisted delivery updated timestamp.', deliveryReceiptReplay?.proof)
 expect(deliveryReceiptReplay?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && deliveryReceiptReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery receipts should expose stable operation links for customer support and retry proof.', deliveryReceiptReplay)
 expect(deliveryReceiptRetry?.retry.retryable === true && deliveryReceiptRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryReceiptRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery receipts should expose retry/backoff blockers and next retry.', deliveryReceiptRetry)
@@ -2889,6 +2894,7 @@ console.log(JSON.stringify({
         'delivery operations replay/audit linkage',
         'delivery history customer-safe read model',
         'delivery history Discord preview proof',
+        'delivery history sanitized payload preview proof',
         'delivery history retry/terminal failure proof',
         'delivery history duplicate replay live-send guard',
         'delivery history duplicate replay skipped audit proof',
@@ -3030,6 +3036,9 @@ console.log(JSON.stringify({
             'destinationCrud.health.productProgress.status',
             'deliveryHistory.schemaVersion',
             'deliveryHistory.entries[].discordPreview.fieldNames',
+            'deliveryHistory.entries[].sanitizedPayloadPreview.schemaVersion',
+            'deliveryHistory.entries[].sanitizedPayloadPreview.payloadHash',
+            'deliveryHistory.entries[].sanitizedPayloadPreview.context.casePath',
             'deliveryHistory.entries[].deliveryProof.auditEventId',
             'deliveryHistory.entries[].retry.terminalFailure',
             'deliveryHistory.entries[].dedupe.alreadyDelivered',
@@ -3038,6 +3047,8 @@ console.log(JSON.stringify({
             'deliveryReceipts.receipts[].proof.auditEventId',
             'deliveryReceipts.receipts[].proof.noNetwork',
             'deliveryReceipts.receipts[].discordPreview.fieldNames',
+            'deliveryReceipts.receipts[].sanitizedPayloadPreview.schemaVersion',
+            'deliveryReceipts.receipts[].sanitizedPayloadPreview.context.alertId',
             'deliveryReceipts.receipts[].operationLinks.deliveryDetail',
             'deliveryReceipts.receipts[].operationLinks.destinationTest',
             'deliveryReceipts.receipts[].retry.nextRetryAt',

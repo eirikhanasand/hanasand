@@ -881,6 +881,7 @@ export function buildDwmWebhookDeliveryHistory({
                     allowedMentions: preview.discord.allowedMentions,
                 }
                 : null,
+            sanitizedPayloadPreview: preview?.sanitizedPayloadPreview || null,
             operationLinks: preview?.operationLinks || null,
         }
     })
@@ -1028,6 +1029,7 @@ export function buildDwmWebhookDeliveryReceipts({
                 latestDedupeKey: retryKey?.dedupe.latestDedupeKey || entry.alert.dedupeKey,
             },
             discordPreview: entry.discordPreview,
+            sanitizedPayloadPreview: entry.sanitizedPayloadPreview,
             operationLinks: entry.operationLinks,
             blockers: uniqueBlockers,
             blockingCodes,
@@ -4563,6 +4565,7 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
             endpointHash: delivery.endpointHash,
         },
         payload: delivery.payload,
+        sanitizedPayloadPreview: buildSanitizedDwmWebhookPayloadPreview(delivery, context, embeds),
         discord: {
             content: clean((delivery.payload as Record<string, unknown> | undefined)?.content),
             embeds,
@@ -4601,6 +4604,72 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
             attemptedAt: delivery.attemptedAt,
             createdAt: delivery.createdAt,
             updatedAt: delivery.updatedAt || delivery.createdAt,
+        },
+    }
+}
+
+function buildSanitizedDwmWebhookPayloadPreview(
+    delivery: DwmWebhookDeliveryPublic,
+    context: Record<string, unknown>,
+    embeds: unknown
+) {
+    const payload = recordOrEmpty(delivery.payload)
+    const alert = recordOrEmpty(context.alert)
+    const watchlist = recordOrEmpty(context.watchlist)
+    const deliveryContext = recordOrEmpty(context.delivery)
+    const org = recordOrEmpty(context.org)
+    const firstEmbed = Array.isArray(embeds) ? recordOrEmpty(embeds[0]) : {}
+    const fields = Array.isArray(firstEmbed.fields) ? firstEmbed.fields.map(recordOrEmpty) : []
+    const content = redactDeliveryEvidenceText(truncate(clean(payload.content), DISCORD_CONTENT_LIMIT))
+    const description = redactDeliveryEvidenceText(truncate(clean(firstEmbed.description), DISCORD_EMBED_DESCRIPTION_LIMIT))
+    const fieldSummaries = fields.slice(0, 16).map(field => ({
+        name: truncate(redactDeliveryEvidenceText(clean(field.name) || 'Field'), 80),
+        valuePreview: truncate(redactDeliveryEvidenceText(clean(field.value)), 180),
+        inline: field.inline === true,
+    }))
+    const linkCandidates = [
+        clean(deliveryContext.alertUrl),
+        clean(alert.alertUrl),
+        clean(deliveryContext.casePath),
+        clean(alert.casePath),
+        delivery.casePath,
+    ].filter((link): link is string => Boolean(link))
+
+    return {
+        schemaVersion: 'dwm.webhook.sanitized_payload_preview.v1',
+        requestId: delivery.id,
+        payloadHash: delivery.payloadHash,
+        idempotencyKey: delivery.idempotencyKey,
+        status: delivery.status,
+        dryRun: delivery.dryRun,
+        live: !delivery.dryRun && delivery.status !== 'skipped',
+        eventType: delivery.eventType,
+        title: redactDeliveryEvidenceText(truncate(clean(firstEmbed.title) || clean(alert.title) || delivery.alertId, DISCORD_EMBED_TITLE_LIMIT)),
+        contentPreview: content || null,
+        descriptionPreview: description || null,
+        fieldNames: fieldSummaries.map(field => field.name),
+        fields: fieldSummaries,
+        context: {
+            orgId: clean(org.id) || delivery.orgId,
+            orgName: redactDeliveryEvidenceText(truncate(clean(org.name) || delivery.orgId, 120)),
+            alertId: clean(alert.id) || delivery.alertId,
+            alertTitle: redactDeliveryEvidenceText(truncate(clean(alert.title), 160)),
+            severity: clean(alert.severity),
+            sourceFamily: clean(alert.sourceFamily),
+            evidenceCount: parseCount(alert.evidenceCount),
+            watchlistId: clean(watchlist.id) || delivery.watchlistId,
+            watchlistName: redactDeliveryEvidenceText(truncate(clean(watchlist.name) || delivery.watchlistName || '', 120)) || null,
+            route: clean(deliveryContext.route) || delivery.route,
+            casePath: clean(deliveryContext.casePath) || clean(alert.casePath) || delivery.casePath,
+            alertUrl: clean(deliveryContext.alertUrl) || clean(alert.alertUrl),
+            dedupeKey: clean(deliveryContext.dedupeKey) || clean(alert.dedupeKey) || dedupeFromIdempotencyKey(delivery.idempotencyKey),
+            replay: delivery.eventType === 'dwm.alert.replayed' || deliveryContext.replay === true,
+        },
+        links: [...new Set(linkCandidates)].map(link => redactDeliveryEvidenceText(truncate(link, 300))),
+        redaction: {
+            endpointExposed: false,
+            secretFields: [],
+            safeForCustomerDisplay: true,
         },
     }
 }
