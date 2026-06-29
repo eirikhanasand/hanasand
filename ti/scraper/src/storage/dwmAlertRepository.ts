@@ -745,6 +745,76 @@ export type DwmAlertGenerationReadiness = {
   plan: DwmAlertGenerationPlan;
 };
 
+export type DwmOrgAlertPipelineProof = {
+  schemaVersion: "dwm.org_alert_pipeline_proof.v1";
+  tenantId: string;
+  organizationId?: string;
+  generatedAt: string;
+  state:
+    | "blocked_before_rebuild"
+    | "ready_to_generate_alerts"
+    | "generated_partial"
+    | "generated_needs_case_or_delivery"
+    | "ready_for_operator_workflow";
+  routes: {
+    readiness: "/v1/dwm/alerts/generation-readiness";
+    rebuild: "/v1/dwm/alerts/rebuild";
+    alerts: "/v1/dwm/alerts";
+    cases: "/v1/cases";
+    webhookDelivery: "/v1/dwm/webhooks/deliver";
+  };
+  readiness: {
+    schemaVersion: "dwm.alert_generation_readiness.v1";
+    readyForRebuild: boolean;
+    readyForCustomerDelivery: boolean;
+    blockerCodes: DwmAlertGenerationBlockerCode[];
+    counts: DwmAlertGenerationReadiness["counts"];
+    sourceFamilyCoverage: DwmAlertGenerationReadiness["sourceFamilyCoverage"];
+  };
+  candidates: Array<{
+    candidateId: string;
+    normalizedTerm: string;
+    watchlistIds: string[];
+    watchlistItemIds: string[];
+    alertGeneratorKeys: string[];
+    sourceFamilies: string[];
+    captureRefCount: number;
+    webhookDestinationIds: string[];
+    matchedAlertIds: string[];
+    caseReady: boolean;
+    deliveryReady: boolean;
+    delivered: boolean;
+    blockerCodes: string[];
+  }>;
+  alerts: Array<{
+    alertId: string;
+    dedupeKey?: string;
+    sourceFamily?: string;
+    watchlistIds: string[];
+    watchlistItemIds: string[];
+    caseReady: boolean;
+    deliveryReady: boolean;
+    delivered: boolean;
+    downstreamBlockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
+    deliveryHistoryRefs: string[];
+  }>;
+  gaps: Array<{
+    code:
+      | "readiness_blocked"
+      | "alert_not_generated"
+      | "case_handoff_missing"
+      | "webhook_delivery_missing"
+      | "downstream_blocked";
+    ownerLane: "alert_generation" | "case_workflow" | "webhook_delivery" | "source_operations" | "entitlement" | "org_foundation";
+    route: string;
+    candidateId?: string;
+    alertId?: string;
+    blockerCodes: string[];
+    detail: string;
+  }>;
+  proofCommands: string[];
+};
+
 export type RuntimeDwmAlertStore = {
   listDwmWatchlists(): RuntimeDwmWatchlist[];
   listDwmAlerts(): any[];
@@ -1201,6 +1271,224 @@ export function buildDwmAlertGenerationReadiness(input: {
     }),
     plan
   };
+}
+
+export function buildDwmOrgAlertPipelineProof(input: {
+  watchlists: RuntimeDwmWatchlist[];
+  alerts?: any[];
+  deliveries?: Array<Record<string, any>>;
+  tenantId: string;
+  organizationId?: string;
+  visibilityPolicy?: DwmAlertVisibilityPolicy;
+  sources?: SourceRecord[];
+  captures?: RawCapture[];
+  productDedupePatched?: boolean;
+  generatedAt?: string;
+}): DwmOrgAlertPipelineProof {
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const readiness = buildDwmAlertGenerationReadiness(input);
+  const scopedAlerts = (input.alerts ?? []).filter((alert) => alertMatchesPipelineScope(alert, input.tenantId, input.organizationId));
+  const handoffs = scopedAlerts.map((alert) => ({
+    alert,
+    handoff: buildDwmAlertDownstreamHandoff({
+      alert,
+      deliveries: (input.deliveries ?? []).filter((delivery) => delivery.alertId === alert.id),
+      organizationId: input.organizationId,
+      generatedAt
+    })
+  }));
+  const candidates = readiness.plan.candidates.map((candidate) => {
+    const matches = handoffs.filter(({ alert, handoff }) => alertMatchesGenerationCandidate(alert, handoff, candidate));
+    const matchedAlertIds = uniqueStrings(matches.map(({ alert }) => String(alert.id)).filter(Boolean));
+    const caseReady = matches.some(({ handoff }) => handoff.caseReadiness.ready);
+    const deliveryReady = matches.some(({ handoff }) => handoff.deliveryReadiness.ready || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0);
+    const delivered = matches.some(({ handoff }) => handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0);
+    const blockerCodes = uniqueStrings([
+      ...matches.flatMap(({ handoff }) => handoff.blockerCodes),
+      !matchedAlertIds.length ? "alert_not_generated" : undefined,
+      matchedAlertIds.length && !caseReady ? "case_handoff_missing" : undefined,
+      matchedAlertIds.length && !deliveryReady ? "webhook_delivery_missing" : undefined
+    ].filter(Boolean).map(String));
+    return {
+      candidateId: candidate.id,
+      normalizedTerm: candidate.normalizedTerm,
+      watchlistIds: candidate.watchlistIds,
+      watchlistItemIds: candidate.watchlistItemIds,
+      alertGeneratorKeys: candidate.alertGeneratorKeys,
+      sourceFamilies: candidate.sourceFamilies,
+      captureRefCount: candidate.captureRefs.length,
+      webhookDestinationIds: candidate.webhookDestinationIds,
+      matchedAlertIds,
+      caseReady,
+      deliveryReady,
+      delivered,
+      blockerCodes
+    };
+  });
+  const alertRows = handoffs.map(({ alert, handoff }) => ({
+    alertId: String(alert.id),
+    dedupeKey: handoff.dedupe.alertDedupeKey,
+    sourceFamily: handoff.sourceFamily,
+    watchlistIds: handoff.watchlist.watchlistIds,
+    watchlistItemIds: handoff.watchlist.watchlistItemIds,
+    caseReady: handoff.caseReadiness.ready,
+    deliveryReady: handoff.deliveryReadiness.ready,
+    delivered: handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0,
+    downstreamBlockerCodes: handoff.blockerCodes,
+    deliveryHistoryRefs: handoff.deliveryReadiness.deliveryHistoryRefs
+  }));
+  const gaps = buildOrgAlertPipelineGaps({ readiness, candidates, alertRows });
+  const state = orgAlertPipelineState({ readiness, candidates, alertRows, gaps });
+  return {
+    schemaVersion: "dwm.org_alert_pipeline_proof.v1",
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    generatedAt,
+    state,
+    routes: {
+      readiness: "/v1/dwm/alerts/generation-readiness",
+      rebuild: "/v1/dwm/alerts/rebuild",
+      alerts: "/v1/dwm/alerts",
+      cases: "/v1/cases",
+      webhookDelivery: "/v1/dwm/webhooks/deliver"
+    },
+    readiness: {
+      schemaVersion: readiness.schemaVersion,
+      readyForRebuild: readiness.readyForRebuild,
+      readyForCustomerDelivery: readiness.readyForCustomerDelivery,
+      blockerCodes: readiness.blockerCodes,
+      counts: readiness.counts,
+      sourceFamilyCoverage: readiness.sourceFamilyCoverage
+    },
+    candidates,
+    alerts: alertRows,
+    gaps,
+    proofCommands: [
+      "bun test src/tests/dwmAlertRepository.test.ts src/tests/dwmOrgAlertPipelineProof.test.ts",
+      "bun test src/tests/dwmWorkflowPersistence.test.ts"
+    ]
+  };
+}
+
+function alertMatchesPipelineScope(alert: any, tenantId: string, organizationId: string | undefined): boolean {
+  if (String(alert?.tenantId ?? "") !== tenantId) return false;
+  if (!organizationId) return true;
+  return !alert?.organizationId || String(alert.organizationId) === organizationId;
+}
+
+function alertMatchesGenerationCandidate(alert: any, handoff: DwmAlertDownstreamHandoff, candidate: DwmAlertGenerationCandidate): boolean {
+  const alertGeneratorKeys = uniqueStrings([
+    ...handoff.watchlist.alertGeneratorKeys,
+    ...asStringArray(alert?.workflowContext?.alertGeneratorKeys),
+    ...asStringArray(alert?.webhookContext?.alertGeneratorKeys),
+    ...asStringArray(alert?.deliveryReadinessContext?.alertGeneratorKeys)
+  ]);
+  const watchlistIds = uniqueStrings([
+    ...handoff.watchlist.watchlistIds,
+    ...asStringArray(alert?.watchlistIds),
+    ...asStringArray(alert?.workflowContext?.watchlistIds),
+    ...asStringArray(alert?.webhookContext?.watchlistIds)
+  ]);
+  const watchlistItemIds = uniqueStrings([
+    ...handoff.watchlist.watchlistItemIds,
+    ...asStringArray(alert?.watchlistItemIds),
+    ...asStringArray(alert?.workflowContext?.watchlistItemIds),
+    ...asStringArray(alert?.webhookContext?.watchlistItemIds)
+  ]);
+  return intersects(alertGeneratorKeys, candidate.alertGeneratorKeys)
+    || intersects(watchlistIds, candidate.watchlistIds)
+    || intersects(watchlistItemIds, candidate.watchlistItemIds)
+    || handoff.dedupe.alertDedupeKey === candidate.dedupeKeyCandidate;
+}
+
+function buildOrgAlertPipelineGaps(input: {
+  readiness: DwmAlertGenerationReadiness;
+  candidates: DwmOrgAlertPipelineProof["candidates"];
+  alertRows: DwmOrgAlertPipelineProof["alerts"];
+}): DwmOrgAlertPipelineProof["gaps"] {
+  const gaps: DwmOrgAlertPipelineProof["gaps"] = [];
+  if (input.readiness.blockerCodes.length) {
+    gaps.push({
+      code: "readiness_blocked",
+      ownerLane: ownerLaneForPipelineBlockers(input.readiness.blockerCodes),
+      route: "/v1/dwm/alerts/generation-readiness",
+      blockerCodes: input.readiness.blockerCodes,
+      detail: "Alert generation readiness is blocked before rebuild."
+    });
+  }
+  for (const candidate of input.candidates) {
+    if (!candidate.matchedAlertIds.length) {
+      gaps.push({
+        code: "alert_not_generated",
+        ownerLane: "alert_generation",
+        route: "/v1/dwm/alerts/rebuild",
+        candidateId: candidate.candidateId,
+        blockerCodes: candidate.blockerCodes,
+        detail: "Candidate has source-backed watchlist evidence but no persisted alert yet."
+      });
+      continue;
+    }
+    if (!candidate.caseReady) {
+      gaps.push({
+        code: "case_handoff_missing",
+        ownerLane: "case_workflow",
+        route: "/v1/cases",
+        candidateId: candidate.candidateId,
+        alertId: candidate.matchedAlertIds[0],
+        blockerCodes: candidate.blockerCodes,
+        detail: "Persisted alert exists but the case handoff route or case id is not ready."
+      });
+    }
+    if (!candidate.deliveryReady) {
+      gaps.push({
+        code: "webhook_delivery_missing",
+        ownerLane: "webhook_delivery",
+        route: "/v1/dwm/webhooks/deliver",
+        candidateId: candidate.candidateId,
+        alertId: candidate.matchedAlertIds[0],
+        blockerCodes: candidate.blockerCodes,
+        detail: "Persisted alert exists but webhook delivery is not ready or has no delivery receipt."
+      });
+    }
+  }
+  for (const alert of input.alertRows.filter((row) => row.downstreamBlockerCodes.length)) {
+    gaps.push({
+      code: "downstream_blocked",
+      ownerLane: ownerLaneForPipelineBlockers(alert.downstreamBlockerCodes),
+      route: "/v1/dwm/alerts",
+      alertId: alert.alertId,
+      blockerCodes: alert.downstreamBlockerCodes,
+      detail: "Persisted alert has downstream blockers for case, delivery, lifecycle, or entitlement."
+    });
+  }
+  return gaps;
+}
+
+function orgAlertPipelineState(input: {
+  readiness: DwmAlertGenerationReadiness;
+  candidates: DwmOrgAlertPipelineProof["candidates"];
+  alertRows: DwmOrgAlertPipelineProof["alerts"];
+  gaps: DwmOrgAlertPipelineProof["gaps"];
+}): DwmOrgAlertPipelineProof["state"] {
+  if (!input.readiness.readyForRebuild || input.readiness.blockerCodes.length) return "blocked_before_rebuild";
+  if (!input.alertRows.length) return "ready_to_generate_alerts";
+  if (input.candidates.some((candidate) => !candidate.matchedAlertIds.length)) return "generated_partial";
+  if (input.candidates.some((candidate) => !candidate.caseReady || !candidate.deliveryReady)) return "generated_needs_case_or_delivery";
+  return "ready_for_operator_workflow";
+}
+
+function ownerLaneForPipelineBlockers(codes: string[]): DwmOrgAlertPipelineProof["gaps"][number]["ownerLane"] {
+  if (codes.some((code) => code.includes("source") || code === "no_matching_captures" || code === "missing_evidence")) return "source_operations";
+  if (codes.some((code) => code.includes("entitlement"))) return "entitlement";
+  if (codes.some((code) => code.includes("org") || code.includes("member") || code.includes("role") || code.includes("watchlist"))) return "org_foundation";
+  if (codes.some((code) => code.includes("case"))) return "case_workflow";
+  if (codes.some((code) => code.includes("destination") || code.includes("delivery") || code.includes("webhook"))) return "webhook_delivery";
+  return "alert_generation";
+}
+
+function intersects(left: string[], right: string[]): boolean {
+  const rightSet = new Set(right);
+  return left.some((value) => rightSet.has(value));
 }
 
 export function dwmAlertToSqlRecord(alert: any) {
