@@ -4,6 +4,13 @@ import type { RawCapture, SourceRecord } from "../types.ts";
 import type { RuntimeOrgMembershipContext, RuntimeOrgWatchlistTermContext } from "./dwmOrgWatchlistBridge.ts";
 
 type DwmAlertVisibilityPolicy = "members" | "admins" | "owners";
+type DwmDeliveryReadinessBlockerCode =
+  | "missing_org_ref"
+  | "missing_capture_evidence"
+  | "case_route_unavailable"
+  | "delivery_disabled"
+  | "replay_already_delivered"
+  | "entitlement_denied";
 
 export type RuntimeDwmWatchlist = {
   id: string;
@@ -107,6 +114,39 @@ export type RuntimeDwmAlertStore = {
   listCaptures(): any[];
 };
 
+export type DwmPersistedDeliveryReadinessContext = {
+  schemaVersion: "dwm.alert_delivery_persistence.v1";
+  alertId: string;
+  tenantId: string;
+  organizationId?: string;
+  state: "ready" | "blocked" | "closed" | "suppressed" | "delivered";
+  ready: boolean;
+  blockerCodes: DwmDeliveryReadinessBlockerCode[];
+  blockers: Array<{ code: DwmDeliveryReadinessBlockerCode; field: string; detail: string; recoverable: boolean }>;
+  deliveryDedupeKey: string;
+  replayMarker: string;
+  replayCount: number;
+  selectedCaptureIds: string[];
+  sourceFamily: string;
+  evidenceCount: number;
+  recommendedRoute?: string;
+  caseIdCandidate?: string;
+  caseId?: string;
+  casePath?: string;
+  watchlistIds: string[];
+  watchlistItemIds: string[];
+  alertGeneratorKeys: string[];
+  webhookDestinationIds: string[];
+  deliveryHistoryRefs: string[];
+  lastDeliveryStatus?: string;
+  lastDeliveryAt?: string;
+  entitlement: {
+    status?: string;
+    blockedReasons: string[];
+  };
+  generatedAt: string;
+};
+
 export type RebuildDwmRuntimeAlertsInput = {
   store: RuntimeDwmAlertStore;
   tenantId: string;
@@ -158,6 +198,14 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       caseId: existing?.caseId,
       casePath: existing?.casePath ?? generatedWorkflowContext.casePath
     };
+    const deliveryReadinessContext = buildDwmPersistedDeliveryReadinessContext({
+      alert: { ...alert, id: alertId },
+      tenantId: input.tenantId,
+      organizationId: input.organizationId ?? existing?.organizationId,
+      workflowContext,
+      existing,
+      generatedAt: snapshot.generatedAt
+    });
     return input.store.saveDwmAlert({
       ...alert,
       id: alertId,
@@ -167,6 +215,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       watchlistItemIds: workflowContext.watchlistItemIds,
       workflowContext,
       webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
+      deliveryReadinessContext,
       caseIdCandidate: workflowContext.caseIdCandidate,
       caseId: existing?.caseId,
       casePath: existing?.casePath ?? workflowContext.casePath,
@@ -197,6 +246,82 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     generationPlan,
     readiness: snapshot.readiness
   };
+}
+
+export function buildDwmPersistedDeliveryReadinessContext(input: {
+  alert: Pick<DwmAlert, "id" | "sourceFamily" | "recommendedRoute" | "webhookDelivery" | "evidence" | "dedupeKey"> & Record<string, any>;
+  tenantId: string;
+  organizationId?: string;
+  workflowContext: ReturnType<typeof buildDwmAlertWorkflowContext> & Record<string, any>;
+  existing?: Record<string, any>;
+  deliveries?: Array<Record<string, any>>;
+  generatedAt?: string;
+}): DwmPersistedDeliveryReadinessContext {
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const deliveries = input.deliveries ?? [];
+  const previousContext = input.existing?.deliveryReadinessContext ?? {};
+  const selectedCaptureIds = uniqueStrings((input.workflowContext.captureIds ?? input.alert.provenance?.captureIds ?? []).map(String).filter(Boolean));
+  const evidenceCount = Number(input.workflowContext.evidenceCount ?? input.alert.evidence?.length ?? 0);
+  const webhookDestinationIds = uniqueStrings((input.workflowContext.webhookDestinationIds ?? []).map(String).filter(Boolean));
+  const alertGeneratorKeys = uniqueStrings((input.workflowContext.alertGeneratorKeys ?? []).map(String).filter(Boolean));
+  const deliveryDedupeKey = String(input.alert.webhookDelivery?.dedupeKey ?? input.alert.dedupeKey ?? input.workflowContext.dedupeKey ?? input.alert.id);
+  const deliveryHistoryRefs = uniqueStrings([
+    ...(previousContext.deliveryHistoryRefs ?? []),
+    ...deliveries.map((delivery) => delivery.id).filter(Boolean)
+  ].map(String));
+  const lastDelivery = [...deliveries]
+    .sort((a, b) => String(a.attemptedAt ?? "").localeCompare(String(b.attemptedAt ?? "")))
+    .at(-1);
+  const delivered = Boolean(input.existing?.deliveredAt) || input.existing?.deliveryState === "delivered" || deliveries.some((delivery) => delivery.status === "delivered");
+  const suppressed = input.existing?.workflowStatus === "suppressed" || input.existing?.deliveryState === "muted";
+  const closed = input.existing?.workflowStatus === "closed";
+  const blockerInputs: Array<DwmPersistedDeliveryReadinessContext["blockers"][number] | undefined> = [
+    !input.organizationId || alertGeneratorKeys.length === 0 ? readinessBlocker("missing_org_ref", "workflowContext.alertGeneratorKeys", "Org alert generation reference is required before delivery.", true) : undefined,
+    !selectedCaptureIds.length || evidenceCount === 0 ? readinessBlocker("missing_capture_evidence", "workflowContext.captureIds", "Delivery requires selected capture ids and evidence.", true) : undefined,
+    !input.workflowContext.casePath || !input.workflowContext.caseIdCandidate ? readinessBlocker("case_route_unavailable", "workflowContext.casePath", "Case route/id candidate must be available for analyst handoff.", true) : undefined,
+    !input.workflowContext.hasWebhookRoute && webhookDestinationIds.length === 0 ? readinessBlocker("delivery_disabled", "workflowContext.webhookDestinationIds", "No webhook destination or route is configured.", true) : undefined,
+    delivered ? readinessBlocker("replay_already_delivered", "deliveryState", "Alert has already been delivered; replay must preserve delivery history.", false) : undefined,
+    input.workflowContext.membershipContext?.canGenerateAlerts === false ? readinessBlocker("entitlement_denied", "workflowContext.membershipContext", "Org entitlement currently blocks alert generation.", true) : undefined
+  ];
+  const blockers = blockerInputs.filter(Boolean) as DwmPersistedDeliveryReadinessContext["blockers"];
+  const nonTerminalBlockers = blockers.filter((blocker) => blocker.code !== "replay_already_delivered");
+  const ready = !delivered && !closed && !suppressed && nonTerminalBlockers.length === 0;
+  return {
+    schemaVersion: "dwm.alert_delivery_persistence.v1",
+    alertId: input.alert.id,
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    state: delivered ? "delivered" : closed ? "closed" : suppressed ? "suppressed" : ready ? "ready" : "blocked",
+    ready,
+    blockerCodes: blockers.map((blocker) => blocker.code),
+    blockers,
+    deliveryDedupeKey,
+    replayMarker: stableId("dwm_replay_marker", `${input.tenantId}:${input.alert.id}:${deliveryDedupeKey}`),
+    replayCount: Number(input.existing?.replayCount ?? 0),
+    selectedCaptureIds,
+    sourceFamily: String(input.alert.sourceFamily ?? input.workflowContext.sourceFamily ?? "unknown"),
+    evidenceCount,
+    recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute ?? input.workflowContext.recommendedRoute,
+    caseIdCandidate: input.workflowContext.caseIdCandidate,
+    caseId: input.existing?.caseId ?? input.workflowContext.caseId,
+    casePath: input.existing?.casePath ?? input.workflowContext.casePath,
+    watchlistIds: input.workflowContext.watchlistIds ?? [],
+    watchlistItemIds: input.workflowContext.watchlistItemIds ?? [],
+    alertGeneratorKeys,
+    webhookDestinationIds,
+    deliveryHistoryRefs,
+    lastDeliveryStatus: lastDelivery?.status ?? previousContext.lastDeliveryStatus,
+    lastDeliveryAt: lastDelivery?.attemptedAt ?? previousContext.lastDeliveryAt,
+    entitlement: {
+      status: input.workflowContext.membershipContext?.entitlementStatus,
+      blockedReasons: input.workflowContext.membershipContext?.blockedReasons ?? []
+    },
+    generatedAt
+  };
+}
+
+function readinessBlocker(code: DwmDeliveryReadinessBlockerCode, field: string, detail: string, recoverable: boolean): DwmPersistedDeliveryReadinessContext["blockers"][number] {
+  return { code, field, detail, recoverable };
 }
 
 export function buildDwmAlertGenerationPlan(input: {
@@ -391,6 +516,7 @@ export function dwmAlertToSqlRecord(alert: any) {
     recommended_route: String(alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute),
     evidence: alert.evidence ?? [],
     webhook_delivery: alert.webhookDelivery,
+    delivery_readiness_context: alert.deliveryReadinessContext,
     workflow_context: alert.workflowContext,
     webhook_context: alert.webhookContext,
     case_id_candidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate ?? null,

@@ -206,6 +206,15 @@ export type OrganizationWatchlistAlertGenerationRef = {
 }
 
 export type OrganizationWatchlistAlertBridgeBlockerCode =
+    | 'org_deleted'
+    | 'invite_expired'
+    | 'member_revoked'
+    | 'watchlist_archived'
+    | 'watchlist_paused'
+    | 'no_active_terms'
+    | 'cleanup_required'
+    | 'alert_bridge_unavailable'
+    | 'case_route_unavailable'
     | 'no_active_watchlist_terms'
     | 'paused_watchlist_excluded'
     | 'archived_watchlist_excluded'
@@ -261,9 +270,45 @@ export type OrganizationWatchlistAlertBridgeContract = {
         termFamilies: WatchlistKind[]
         pausedCount: number
         archivedCount: number
+        cleanupRequired: boolean
         visibilityPolicy: OrganizationAlertVisibilityPolicy
         allowedViewerRoles: OrganizationRole[]
         containsRawTerms: false
+    }
+    lifecycleReadiness: {
+        schemaVersion: 'organization.watchlist_lifecycle_readiness.v1'
+        organization: {
+            status: 'active'
+            deletedBlocker: 'org_deleted'
+        }
+        member: {
+            status: 'active'
+            revokedBlocker: 'member_revoked'
+        }
+        invites: {
+            expiredInviteBlocker: 'invite_expired'
+            revokedInviteBlocker: 'member_revoked'
+        }
+        watchlists: {
+            activeTermCount: number
+            pausedCount: number
+            archivedCount: number
+            cleanupRequired: boolean
+            cleanupIdempotent: true
+            pausedBlocker: 'watchlist_paused'
+            archivedBlocker: 'watchlist_archived'
+            noActiveTermsBlocker: 'no_active_terms'
+            cleanupRequiredBlocker: 'cleanup_required'
+        }
+        alertReplay: {
+            status: 'ready' | 'blocked'
+            unavailableBlocker: 'alert_bridge_unavailable'
+        }
+        caseRoute: {
+            status: 'expected'
+            unavailableBlocker: 'case_route_unavailable'
+        }
+        typedBlockers: OrganizationWatchlistAlertBridgeBlocker[]
     }
     requiredFields: string[]
     alertGeneratorKeyExpectation: 'alertGenerationRef.dedupe.key'
@@ -951,6 +996,12 @@ export function organizationWatchlistAlertTermsExport(
         archivedCount,
         missingAlertRefCount: 0,
     })
+    const lifecycleTypedBlockers = organizationWatchlistLifecycleBlockers({
+        activeTermCount: activeTerms.length,
+        pausedCount,
+        archivedCount,
+    })
+    const cleanupRequired = pausedCount + archivedCount > 0
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -1019,9 +1070,45 @@ export function organizationWatchlistAlertTermsExport(
                 termFamilies: alertGeneration.termFamilies,
                 pausedCount,
                 archivedCount,
+                cleanupRequired,
                 visibilityPolicy: alertGeneration.visibilityPolicy,
                 allowedViewerRoles: alertGeneration.allowedViewerRoles,
                 containsRawTerms: false,
+            },
+            lifecycleReadiness: {
+                schemaVersion: 'organization.watchlist_lifecycle_readiness.v1',
+                organization: {
+                    status: 'active',
+                    deletedBlocker: 'org_deleted',
+                },
+                member: {
+                    status: 'active',
+                    revokedBlocker: 'member_revoked',
+                },
+                invites: {
+                    expiredInviteBlocker: 'invite_expired',
+                    revokedInviteBlocker: 'member_revoked',
+                },
+                watchlists: {
+                    activeTermCount: activeTerms.length,
+                    pausedCount,
+                    archivedCount,
+                    cleanupRequired,
+                    cleanupIdempotent: true,
+                    pausedBlocker: 'watchlist_paused',
+                    archivedBlocker: 'watchlist_archived',
+                    noActiveTermsBlocker: 'no_active_terms',
+                    cleanupRequiredBlocker: 'cleanup_required',
+                },
+                alertReplay: {
+                    status: activeTerms.length > 0 ? 'ready' : 'blocked',
+                    unavailableBlocker: 'alert_bridge_unavailable',
+                },
+                caseRoute: {
+                    status: 'expected',
+                    unavailableBlocker: 'case_route_unavailable',
+                },
+                typedBlockers: lifecycleTypedBlockers,
             },
             requiredFields: [
                 'organizationId',
@@ -1038,10 +1125,20 @@ export function organizationWatchlistAlertTermsExport(
                 'activeTerms[].alertGeneratorKey',
                 'alertBridgeContract.caseRouteExpectation.pathTemplate',
                 'alertBridgeContract.redactedSummary',
+                'alertBridgeContract.lifecycleReadiness',
             ],
             alertGeneratorKeyExpectation: 'alertGenerationRef.dedupe.key',
             typedBlockers,
             blockerCatalog: [
+                'org_deleted',
+                'invite_expired',
+                'member_revoked',
+                'watchlist_archived',
+                'watchlist_paused',
+                'no_active_terms',
+                'cleanup_required',
+                'alert_bridge_unavailable',
+                'case_route_unavailable',
                 'no_active_watchlist_terms',
                 'paused_watchlist_excluded',
                 'archived_watchlist_excluded',
@@ -1064,6 +1161,55 @@ export function organizationWatchlistAlertTermsExport(
         blockedReasons: alertGeneration.blockedReasons,
         canGenerateAlerts: alertGeneration.canGenerateAlerts,
     }
+}
+
+function organizationWatchlistLifecycleBlockers(input: {
+    activeTermCount: number
+    pausedCount: number
+    archivedCount: number
+}): OrganizationWatchlistAlertBridgeBlocker[] {
+    const blockers: OrganizationWatchlistAlertBridgeBlocker[] = []
+    if (input.activeTermCount === 0) {
+        blockers.push({
+            code: 'no_active_terms',
+            severity: 'blocker',
+            message: 'No active organization watchlist terms are available for alert replay.',
+        })
+        blockers.push({
+            code: 'alert_bridge_unavailable',
+            severity: 'blocker',
+            message: 'Alert replay is unavailable until at least one active org watchlist term is exported.',
+        })
+    }
+
+    if (input.pausedCount > 0) {
+        blockers.push({
+            code: 'watchlist_paused',
+            severity: 'notice',
+            message: 'Paused org watchlist items are excluded from alert replay until resumed.',
+            count: input.pausedCount,
+        })
+    }
+
+    if (input.archivedCount > 0) {
+        blockers.push({
+            code: 'watchlist_archived',
+            severity: 'notice',
+            message: 'Archived org watchlist items are excluded from alert replay and remain available for cleanup audit.',
+            count: input.archivedCount,
+        })
+    }
+
+    if (input.pausedCount + input.archivedCount > 0) {
+        blockers.push({
+            code: 'cleanup_required',
+            severity: 'notice',
+            message: 'Paused or archived org watchlist items exist; repeatable cleanup/list flows should account for them.',
+            count: input.pausedCount + input.archivedCount,
+        })
+    }
+
+    return blockers
 }
 
 function organizationWatchlistAlertBridgeBlockers(input: {
