@@ -130,6 +130,7 @@ import {
     getAdminAuditEvent,
     getAdminAuditEvents,
     getSupportAccessRecoveryApprovals,
+    getSupportAccessRecoveryApproval,
     getSupportInspection,
     getSupportOrganization,
     getSupportOrganizationInvite,
@@ -226,6 +227,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/admin/support/organizations/:id/invites/:inviteId', getSupportOrganizationInvite)
     fastify.get('/admin/support/organizations/:id/members/:userId', getSupportOrganizationMember)
     fastify.get('/admin/support/access-recovery', getSupportAccessRecoveryApprovals)
+    fastify.get('/admin/support/access-recovery/:requestId', getSupportAccessRecoveryApproval)
     fastify.get('/admin/support/sessions/:sessionId', getSupportSession)
     fastify.post('/admin/support/sessions', postSupportSession)
     fastify.post('/admin/support/sessions/:sessionId/revoke', postSupportSessionRevoke)
