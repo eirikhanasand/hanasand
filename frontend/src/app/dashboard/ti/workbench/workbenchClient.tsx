@@ -564,12 +564,12 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             const response = await fetch(action?.href || '/api/dwm/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(action?.body || { tenantId: 'default', alertId: item.id, limit: 1 }),
+                body: JSON.stringify(scopedActionBody(action?.body || { alertId: item.id, limit: 1 }, orgContext)),
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             await refreshBackedSelection(item, payload, action)
-            return payload.attemptedCount ? 'Webhook delivery attempted.' : 'No webhook delivery was attempted.'
+            return webhookDeliveryResultMessage(payload)
         })
     }
 
@@ -581,7 +581,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
         await runPersistentAction(`action:${item.id}:${action.id}`, async () => {
             const body = {
-                ...(action.body || {}),
+                ...scopedActionBody(action.body || {}, orgContext),
                 note: note || action.body?.note,
                 assignedOwner: localDecisions[item.id]?.owner,
                 actor: 'dashboard',
@@ -2860,6 +2860,13 @@ function alertWorkflowMutationBody(item: WorkbenchCase, detail: AlertDetailPaylo
     }
 }
 
+function scopedActionBody(body: Record<string, unknown>, orgContext: WorkbenchOrgContext | undefined) {
+    return {
+        ...scopeBody(orgContext),
+        ...body,
+    }
+}
+
 function stringValue(value: unknown) {
     const normalized = typeof value === 'string' ? value.trim() : ''
     return normalized || undefined
@@ -2885,7 +2892,7 @@ function numberValue(value: unknown) {
 function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnType<typeof readJson>>) {
     if (payload.case?.id) return `Case ${payload.case.id} is ${payload.case.status || 'open'}.`
     if (typeof payload.savedAlertCount === 'number') return `Rebuilt ${payload.savedAlertCount} alert${payload.savedAlertCount === 1 ? '' : 's'}.`
-    if (typeof payload.attemptedCount === 'number') return `Webhook delivery attempted for ${payload.attemptedCount} alert${payload.attemptedCount === 1 ? '' : 's'}.`
+    if (typeof payload.attemptedCount === 'number') return webhookDeliveryResultMessage(payload)
     if (action.id === 'request_source_coverage') {
         const sourcePayload = payload as Record<string, unknown>
         const sourceProofMessage = sourceOperationsActionMessage(sourcePayload)
@@ -2914,6 +2921,20 @@ function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnTyp
     if (payload.deliveries?.[0]?.id) return `Latest delivery ${payload.deliveries[0].id} is ${payload.deliveries[0].status || 'recorded'}.`
     if (payload.testedAt) return `Webhook test recorded at ${payload.testedAt}.`
     return `${action.label} completed.`
+}
+
+function webhookDeliveryResultMessage(payload: Awaited<ReturnType<typeof readJson>>) {
+    const deliveries = deliveryEvidenceFromPayload(payload, 'delivery_result')
+    if (deliveries.length) {
+        const summary = deliveries
+            .slice(0, 3)
+            .map(delivery => `${delivery.id}:${delivery.status}`)
+            .join(', ')
+        const suffix = deliveries.length > 3 ? `, +${deliveries.length - 3} more` : ''
+        return `Webhook delivery result: ${summary}${suffix}.`
+    }
+    if (typeof payload.attemptedCount === 'number') return `Webhook delivery attempted for ${payload.attemptedCount} alert${payload.attemptedCount === 1 ? '' : 's'}.`
+    return 'No webhook delivery was attempted.'
 }
 
 function sourceOperationsActionMessage(payload: Record<string, unknown>) {

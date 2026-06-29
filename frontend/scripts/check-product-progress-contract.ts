@@ -763,6 +763,8 @@ assert.ok(workbenchSource.includes('alert?.workflowContext?.caseIdCandidate'), '
 assert.ok(workbenchSource.includes('deliveryEvidenceFromPayload'), 'Webhook test/send responses should become inspectable delivery evidence in the selected workbench item.')
 assert.ok(workbenchSource.includes('mergeDeliveryEvidence(actionDeliveries'), 'Action-returned delivery evidence should be shown in the backed inspection panel before case detail reloads.')
 assert.ok(workbenchSource.includes('endpoint_hash_not_returned'), 'Delivery evidence from partial webhook responses should mark missing hashes honestly.')
+assert.ok(workbenchSource.includes('scopedActionBody'), 'Workbench POST actions should carry selected org/tenant scope unless the backed action body already supplies it.')
+assert.ok(workbenchSource.includes('webhookDeliveryResultMessage'), 'Webhook send/test actions should report backed delivery ids and statuses.')
 assert.ok(workbenchSource.includes('alertWorkflowMutationBody'), 'Alert workflow mutations should send backend idempotency guards from /api/dwm/alerts/:id.')
 assert.ok(workbenchSource.includes('expectedWorkflowEventCount'), 'Alert workflow mutations should include expectedWorkflowEventCount when alert detail returns it.')
 assert.ok(workbenchSource.includes('expectedUpdatedAt'), 'Alert workflow mutations should include expectedUpdatedAt when alert detail returns it.')
