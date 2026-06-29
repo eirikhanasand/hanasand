@@ -92,6 +92,8 @@ type SupportInviteBody = InviteInput & {
     reason?: unknown
     context?: unknown
     scope?: unknown
+    supportSessionId?: unknown
+    support_session_id?: unknown
     correlationId?: unknown
     correlation_id?: unknown
     idempotencyKey?: unknown
@@ -111,6 +113,8 @@ type SupportInviteActionBody = {
     requestId?: unknown
     request_id?: unknown
     scope?: unknown
+    supportSessionId?: unknown
+    support_session_id?: unknown
     correlationId?: unknown
     correlation_id?: unknown
     idempotencyKey?: unknown
@@ -128,6 +132,8 @@ type SupportMemberRoleRecoveryBody = {
     requestId?: unknown
     request_id?: unknown
     scope?: unknown
+    supportSessionId?: unknown
+    support_session_id?: unknown
     correlationId?: unknown
     correlation_id?: unknown
     idempotencyKey?: unknown
@@ -1024,6 +1030,36 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
         }))
     }
     const executorControls = controls.value
+    const sessionValidation = await validateSupportSessionForAction({
+        actorId: actor.id,
+        supportSessionId: executorControls.supportSessionId,
+        action: 'invite_assist',
+        requiredScope: 'invite:create',
+        organizationId: organization.id,
+    })
+    if (sessionValidation.error) {
+        await recordSupportInviteAssistExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            requestId,
+            reason,
+            blocker: sessionValidation.error.code,
+            input,
+            controls: executorControls,
+            supportContext: cleanContext(req.body?.context),
+        })
+        return res.status(sessionValidation.error.status).send(supportError(sessionValidation.error.code, sessionValidation.error.message, {
+            executorBlocker: supportInviteAssistExecutorBlocker({
+                organizationId: organization.id,
+                requestId,
+                reason,
+                controls: executorControls,
+                input,
+                blockers: [sessionValidation.error.code],
+            }),
+        }))
+    }
+
     const duplicate = await loadSupportInviteAssistByIdempotencyKey({
         organizationId: organization.id,
         idempotencyKey: executorControls.idempotencyKey,
@@ -1156,6 +1192,7 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
             inviteIds,
             correlationId: executorControls.correlationId,
             idempotencyKey: executorControls.idempotencyKey,
+            supportSessionId: executorControls.supportSessionId || null,
             scope: executorControls.scope,
             handoffExpiresAt: executorControls.handoffExpiresAt,
             executor: supportInviteAssistExecutorDetail({
@@ -1308,6 +1345,43 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
         return res.status(404).send({ error: 'Invite not found for organization.' })
     }
 
+    const sessionValidation = await validateSupportSessionForAction({
+        actorId: actor.id,
+        supportSessionId: executorControls.supportSessionId,
+        action: action === 'revoke' ? 'invite_revoke' : 'invite_resend',
+        requiredScope: action === 'revoke' ? 'invite:revoke' : 'invite:resend',
+        organizationId: organization.id,
+    })
+    if (sessionValidation.error) {
+        await recordSupportInviteActionExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            inviteId: invite.id,
+            requestId,
+            action: action as 'revoke' | 'resend',
+            actionType,
+            reason,
+            blocker: sessionValidation.error.code,
+            controls: executorControls,
+            supportContext: cleanContext(req.body?.context),
+        })
+        return res.status(sessionValidation.error.status).send(supportError(sessionValidation.error.code, sessionValidation.error.message, {
+            executorBlocker: supportInviteActionExecutorDetail({
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: executorControls,
+                invite,
+                before: inviteSnapshot(invite),
+                after: inviteSnapshot(invite),
+                outcome: 'denied',
+                blockers: [sessionValidation.error.code],
+            }),
+        }))
+    }
+
     const duplicate = await loadSupportInviteActionByIdempotencyKey({
         organizationId: organization.id,
         inviteId: invite.id,
@@ -1420,6 +1494,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 after: inviteSnapshot(invite),
                 correlationId: executorControls.correlationId,
                 idempotencyKey: executorControls.idempotencyKey,
+                supportSessionId: executorControls.supportSessionId || null,
                 scope: executorControls.scope,
                 handoffExpiresAt: executorControls.handoffExpiresAt,
                 executor: supportInviteActionExecutorDetail({
@@ -1523,6 +1598,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             after,
             correlationId: executorControls.correlationId,
             idempotencyKey: executorControls.idempotencyKey,
+            supportSessionId: executorControls.supportSessionId || null,
             scope: executorControls.scope,
             handoffExpiresAt: executorControls.handoffExpiresAt,
             executor: supportInviteActionExecutorDetail({
@@ -1665,6 +1741,45 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
     const member = await loadSupportMemberDetail(req.params.id, req.params.userId)
     if (!member) {
         return res.status(404).send({ error: 'Active organization member not found.' })
+    }
+
+    const sessionValidation = await validateSupportSessionForAction({
+        actorId: actor.id,
+        supportSessionId: executorControls.supportSessionId,
+        action: 'member_role_recovery',
+        requiredScope: 'member:role_recovery',
+        organizationId: organization.id,
+        targetUserId: req.params.userId,
+    })
+    if (sessionValidation.error) {
+        const snapshot = membershipSnapshot(member)
+        await recordSupportMemberRoleRecoveryExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            userId: req.params.userId,
+            requestId,
+            reason,
+            blocker: sessionValidation.error.code,
+            requestedRole: input.role,
+            controls: executorControls,
+            supportContext: cleanContext(req.body?.context),
+            before: snapshot,
+        })
+        return res.status(sessionValidation.error.status).send(supportError(sessionValidation.error.code, sessionValidation.error.message, {
+            executorBlocker: supportMemberRoleRecoveryExecutorDetail({
+                organizationId: organization.id,
+                userId: req.params.userId,
+                requestId,
+                reason,
+                requestedRole: input.role,
+                controls: executorControls,
+                member,
+                before: snapshot,
+                after: snapshot,
+                outcome: 'denied',
+                blockers: [sessionValidation.error.code],
+            }),
+        }))
     }
 
     const duplicate = await loadSupportMemberRoleRecoveryByIdempotencyKey({
@@ -1814,6 +1929,7 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
                 after: before,
                 correlationId: executorControls.correlationId,
                 idempotencyKey: executorControls.idempotencyKey,
+                supportSessionId: executorControls.supportSessionId || null,
                 scope: executorControls.scope,
                 handoffExpiresAt: executorControls.handoffExpiresAt,
                 executor: supportMemberRoleRecoveryExecutorDetail({
@@ -1907,6 +2023,7 @@ export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequ
             after,
             correlationId: executorControls.correlationId,
             idempotencyKey: executorControls.idempotencyKey,
+            supportSessionId: executorControls.supportSessionId || null,
             scope: executorControls.scope,
             handoffExpiresAt: executorControls.handoffExpiresAt,
             executor: supportMemberRoleRecoveryExecutorDetail({
@@ -2729,6 +2846,46 @@ async function loadSupportSessionState(supportSessionId: string) {
         revokedAt: revoke ? text(revoke.created_at) : null,
         auditEventIds: result.rows.map((row: Record<string, unknown>) => Number(row.id)).filter(id => Number.isFinite(id)),
     }
+}
+
+async function validateSupportSessionForAction(input: {
+    actorId: string
+    supportSessionId?: string | null
+    action: string
+    requiredScope: string
+    organizationId: string
+    targetUserId?: string | null
+}) {
+    if (!input.supportSessionId) {
+        return { state: null, error: null as { code: string, message: string, status: number } | null }
+    }
+
+    const state = await loadSupportSessionState(input.supportSessionId)
+    if (!state) {
+        return { state: null, error: { code: 'support_session_not_found', message: 'Support session not found.', status: 404 } }
+    }
+    if (state.status === 'revoked') {
+        return { state, error: { code: 'support_session_revoked', message: 'Support session has been revoked.', status: 409 } }
+    }
+    if (state.status === 'expired') {
+        return { state, error: { code: 'support_session_expired', message: 'Support session has expired.', status: 409 } }
+    }
+    if (state.actorId && state.actorId !== input.actorId) {
+        return { state, error: { code: 'support_session_actor_mismatch', message: 'Support session belongs to a different support actor.', status: 403 } }
+    }
+    if (state.organizationId && state.organizationId !== input.organizationId) {
+        return { state, error: { code: 'support_session_org_mismatch', message: 'Support session is not scoped to this organization.', status: 403 } }
+    }
+    if (state.targetUserId && input.targetUserId && state.targetUserId !== input.targetUserId) {
+        return { state, error: { code: 'support_session_user_mismatch', message: 'Support session is not scoped to this target user.', status: 403 } }
+    }
+    if (!state.allowedActions.includes(input.action)) {
+        return { state, error: { code: 'support_session_action_denied', message: 'Support session does not allow this support action.', status: 403 } }
+    }
+    if (!state.scope.includes(input.requiredScope)) {
+        return { state, error: { code: 'support_session_scope_denied', message: 'Support session does not include the required action scope.', status: 403 } }
+    }
+    return { state, error: null }
 }
 
 async function recordSupportSessionRevokeAudit(req: FastifyRequest, input: {
@@ -3969,6 +4126,7 @@ function supportInviteAssistExecutorControls(
         requestId: string
         correlationId: string
         idempotencyKey: string
+        supportSessionId: string
         scope: string[]
         handoffExpiresAt: string | null
         staleBlocker: string
@@ -3981,12 +4139,14 @@ function supportInviteAssistExecutorControls(
         'invite_assist',
     )
     const correlationId = text(headerText(req.headers['x-correlation-id']) || body?.correlationId || body?.correlation_id || requestId) || requestId
+    const supportSessionId = supportSessionIdFromRequest(req, body)
     const scopeResult = normalizeSupportPreparationScope(body?.scope || 'invite:create', 'invite_assist')
     const base = {
         schemaVersion: 'support.action_execute.controls.v1',
         requestId,
         correlationId,
         idempotencyKey,
+        supportSessionId,
         scope: scopeResult.value,
         handoffExpiresAt: null as string | null,
         staleBlocker: 'stale_prepare_payload',
@@ -4044,6 +4204,7 @@ async function recordSupportInviteAssistExecutorBlock(req: FastifyRequest, input
             requestId: input.requestId,
             correlationId: input.controls.correlationId,
             idempotencyKey: input.controls.idempotencyKey,
+            supportSessionId: input.controls.supportSessionId || null,
             targetOrganizationId: input.organizationId,
             emails: input.input.emails,
             role: input.input.role,
@@ -4101,6 +4262,7 @@ function supportInviteAssistExecutorDetail(input: {
         requestId: input.requestId,
         correlationId: input.controls.correlationId,
         idempotencyKey: input.controls.idempotencyKey,
+        supportSessionId: input.controls.supportSessionId || null,
         staleBlocker: input.controls.staleBlocker,
         duplicateBlocker: input.controls.duplicateBlocker,
         target: {
@@ -4120,6 +4282,13 @@ function supportInviteAssistExecutorDetail(input: {
             'duplicate_idempotency_key',
             'ambiguous_target',
             'active_admin_available',
+            'support_session_not_found',
+            'support_session_revoked',
+            'support_session_expired',
+            'support_session_actor_mismatch',
+            'support_session_org_mismatch',
+            'support_session_action_denied',
+            'support_session_scope_denied',
             'invite_unavailable',
             'mutation_unavailable',
             'audit_unavailable',
@@ -4134,6 +4303,7 @@ function supportInviteAssistExecutorDetail(input: {
             requestId: input.requestId,
             correlationId: input.controls.correlationId,
             idempotencyKey: input.controls.idempotencyKey,
+            supportSessionId: input.controls.supportSessionId || null,
             organizationId: input.organizationId,
             emails: input.input.emails,
             inviteIds: input.inviteIds,
@@ -4180,6 +4350,7 @@ function supportInviteActionExecutorControls(
         requestId: string
         correlationId: string
         idempotencyKey: string
+        supportSessionId: string
         scope: string[]
         handoffExpiresAt: string | null
         staleBlocker: string
@@ -4193,12 +4364,14 @@ function supportInviteActionExecutorControls(
         `invite_${action}`,
     )
     const correlationId = text(headerText(req.headers['x-correlation-id']) || body?.correlationId || body?.correlation_id || requestId) || requestId
+    const supportSessionId = supportSessionIdFromRequest(req, body)
     const scopeResult = normalizeSupportPreparationScope(body?.scope || requiredScope, 'invite_assist')
     const base = {
         schemaVersion: 'support.action_execute.controls.v1',
         requestId,
         correlationId,
         idempotencyKey,
+        supportSessionId,
         scope: scopeResult.value,
         handoffExpiresAt: null as string | null,
         staleBlocker: 'stale_prepare_payload',
@@ -4254,6 +4427,7 @@ async function recordSupportInviteActionExecutorBlock(req: FastifyRequest, input
             requestId: input.requestId,
             correlationId: input.controls.correlationId,
             idempotencyKey: input.controls.idempotencyKey,
+            supportSessionId: input.controls.supportSessionId || null,
             targetOrganizationId: input.organizationId,
             inviteId: input.inviteId,
             scope: input.controls.scope,
@@ -4293,6 +4467,7 @@ function supportInviteActionExecutorDetail(input: {
         requestId: input.requestId,
         correlationId: input.controls.correlationId,
         idempotencyKey: input.controls.idempotencyKey,
+        supportSessionId: input.controls.supportSessionId || null,
         staleBlocker: input.controls.staleBlocker,
         duplicateBlocker: input.controls.duplicateBlocker,
         target: {
@@ -4313,6 +4488,13 @@ function supportInviteActionExecutorDetail(input: {
             'duplicate_idempotency_key',
             'ambiguous_target',
             'active_admin_available',
+            'support_session_not_found',
+            'support_session_revoked',
+            'support_session_expired',
+            'support_session_actor_mismatch',
+            'support_session_org_mismatch',
+            'support_session_action_denied',
+            'support_session_scope_denied',
             'invite_unavailable',
             'accepted_invite_not_mutable_by_support_action',
             'mutation_unavailable',
@@ -4328,6 +4510,7 @@ function supportInviteActionExecutorDetail(input: {
             requestId: input.requestId,
             correlationId: input.controls.correlationId,
             idempotencyKey: input.controls.idempotencyKey,
+            supportSessionId: input.controls.supportSessionId || null,
             organizationId: input.organizationId,
             inviteId: input.invite?.id || null,
             email: input.invite?.email || null,
@@ -4374,6 +4557,7 @@ function supportMemberRoleRecoveryExecutorControls(
         requestId: string
         correlationId: string
         idempotencyKey: string
+        supportSessionId: string
         scope: string[]
         handoffExpiresAt: string | null
         staleBlocker: string
@@ -4386,12 +4570,14 @@ function supportMemberRoleRecoveryExecutorControls(
         'member_role_recovery',
     )
     const correlationId = text(headerText(req.headers['x-correlation-id']) || body?.correlationId || body?.correlation_id || requestId) || requestId
+    const supportSessionId = supportSessionIdFromRequest(req, body)
     const scopeResult = normalizeSupportPreparationScope(body?.scope || 'member:role_recovery', 'member_role_recovery')
     const base = {
         schemaVersion: 'support.action_execute.controls.v1',
         requestId,
         correlationId,
         idempotencyKey,
+        supportSessionId,
         scope: scopeResult.value,
         handoffExpiresAt: null as string | null,
         staleBlocker: 'stale_prepare_payload',
@@ -4447,6 +4633,7 @@ async function recordSupportMemberRoleRecoveryExecutorBlock(req: FastifyRequest,
             requestId: input.requestId,
             correlationId: input.controls.correlationId,
             idempotencyKey: input.controls.idempotencyKey,
+            supportSessionId: input.controls.supportSessionId || null,
             targetOrganizationId: input.organizationId,
             targetUserId: input.userId,
             requestedRole: input.requestedRole,
@@ -4487,6 +4674,7 @@ function supportMemberRoleRecoveryExecutorDetail(input: {
         requestId: input.requestId,
         correlationId: input.controls.correlationId,
         idempotencyKey: input.controls.idempotencyKey,
+        supportSessionId: input.controls.supportSessionId || null,
         staleBlocker: input.controls.staleBlocker,
         duplicateBlocker: input.controls.duplicateBlocker,
         target: {
@@ -4508,6 +4696,14 @@ function supportMemberRoleRecoveryExecutorDetail(input: {
             'duplicate_idempotency_key',
             'invalid_scope',
             'active_admin_available',
+            'support_session_not_found',
+            'support_session_revoked',
+            'support_session_expired',
+            'support_session_actor_mismatch',
+            'support_session_org_mismatch',
+            'support_session_user_mismatch',
+            'support_session_action_denied',
+            'support_session_scope_denied',
             'revoked_member',
             'member_role_already_set',
             'last_owner_demote_denied',
@@ -4523,6 +4719,7 @@ function supportMemberRoleRecoveryExecutorDetail(input: {
             requestId: input.requestId,
             correlationId: input.controls.correlationId,
             idempotencyKey: input.controls.idempotencyKey,
+            supportSessionId: input.controls.supportSessionId || null,
             organizationId: input.organizationId,
             targetUserId: input.userId,
             requestedRole: input.requestedRole,
@@ -5087,6 +5284,10 @@ function supportRequestId(req: FastifyRequest) {
 
 function headerText(value: string | string[] | undefined) {
     return Array.isArray(value) ? text(value[0]) : text(value)
+}
+
+function supportSessionIdFromRequest(req: FastifyRequest, body: { supportSessionId?: unknown, support_session_id?: unknown } | undefined) {
+    return text(headerText(req.headers['x-support-session-id']) || body?.supportSessionId || body?.support_session_id)
 }
 
 function text(value: unknown) {
