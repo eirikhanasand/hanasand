@@ -938,6 +938,8 @@ function buildDwmSourceReadinessArtifact(
     const canProduceAlert = familyProofs.some((proof: any) => proof.alertability?.canProduceAlert === true);
     return {
       family,
+      candidateIds: uniqueSourceReadinessStrings(familyProofs.map((proof: any) => proof.candidateId).filter(Boolean)),
+      sourceIds: uniqueSourceReadinessStrings(familyProofs.map((proof: any) => proof.sourceId).filter(Boolean)),
       candidateCount: familyProofs.length,
       active: familyProofs.filter((proof: any) => proof.state === "active").length,
       canary: familyProofs.filter((proof: any) => proof.state === "canary").length,
@@ -1159,6 +1161,8 @@ function sourceReadinessLedgerRows(input: {
     scope: input.scope,
     watchlistTerms: input.watchlistTerms,
     family: row.family,
+    candidateIds: row.candidateIds ?? [],
+    sourceIds: row.sourceIds ?? [],
     state: row.active > 0 ? "active" : row.canary > 0 ? "canary" : row.failed > 0 ? "failed" : row.blocked > 0 ? "policy_blocked" : row.paused > 0 ? "paused" : "missing",
     canEnrichActor: row.canEnrichActor,
     canProduceAlert: row.canProduceAlert,
@@ -3053,6 +3057,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       freshness: actorReadiness.freshness,
       sourceCoverage: actorReadiness.sourceCoverage,
       missingDataGaps: actorReadiness.candidateGaps,
+      sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
     },
     dashboardSourceReadiness: {
@@ -3061,6 +3066,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       query,
       activeSourceFamilies: actorReadiness.alertability.activeSourceFamilies,
       sourceCoverage: actorReadiness.sourceCoverage,
+      sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
       blockerCount: [
@@ -3078,6 +3084,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.safeOutput.liveNetworkScrapeStarted == false",
       ".actorReadiness.freshness.captureFreshness.state | IN(\"fresh\",\"needs_capture\",\"stale\")",
       ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
+      ".actorReadiness.sourcePackActionReadiness.schemaVersion == \"dwm.actor_source_pack_action_readiness.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3111,6 +3118,8 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     .filter((row: any) => row.canEnrichActor || row.canProduceAlert || row.lastCaptureAt)
     .map((row: any) => ({
       family: row.family,
+      candidateIds: row.candidateIds ?? [],
+      sourceIds: row.sourceIds ?? [],
       state: row.state,
       lastCaptureAt: row.lastCaptureAt,
       lastEnrichmentAt: row.lastEnrichmentAt,
@@ -3146,6 +3155,12 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
       retryBackoff: row.retryBackoff,
       blockerCodes: row.blockerCodes ?? []
     }));
+  const sourcePackActionReadiness = sourceActorPackActionReadiness({
+    query,
+    sourceCoverage,
+    retryBlockers,
+    candidateGaps
+  });
   return {
     proofId: stableId("dwm_actor_source_readiness", `${query}:${readinessArtifact.generatedAt}:${latestCaptureAt ?? "no_capture"}:${latestEnrichmentAt ?? "no_enrichment"}`),
     query,
@@ -3178,6 +3193,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     },
     candidateGaps,
     retryBlockers,
+    sourcePackActionReadiness,
     alertability,
     alertCaseHandoffReadiness: sourceActorAlertCaseHandoffReadiness({
       query,
@@ -3213,6 +3229,8 @@ function sourceActorMetadata(query: string, provenance: Array<Record<string, any
 function sourceActorCoverageRows(familyRows: Array<Record<string, any>>) {
   return familyRows.map((row) => ({
     family: row.family,
+    candidateIds: row.candidateIds ?? [],
+    sourceIds: row.sourceIds ?? [],
     state: row.active > 0 ? "active" : row.canary > 0 ? "canary" : row.failed > 0 ? "failed" : row.blocked > 0 || row.policyBlocked > 0 ? "policy_blocked" : row.paused > 0 ? "paused" : "missing",
     candidateCount: row.candidateCount ?? 0,
     parserStatuses: row.parserStatuses ?? [],
@@ -3227,6 +3245,89 @@ function sourceActorCoverageRows(familyRows: Array<Record<string, any>>) {
     sourceTrust: row.sourceTrust,
     blockers: row.blockers ?? []
   }));
+}
+
+function sourceActorPackActionReadiness(input: {
+  query: string;
+  sourceCoverage: Array<Record<string, any>>;
+  retryBlockers: Array<Record<string, any>>;
+  candidateGaps: Array<Record<string, any>>;
+}) {
+  const retryFamilies = new Set(input.retryBlockers.map((row) => String(row.family)));
+  const retryActions = input.sourceCoverage
+    .filter((row) => retryFamilies.has(String(row.family)) && ((row.sourceIds ?? []).length > 0 || (row.candidateIds ?? []).length > 0))
+    .map((row) => ({
+      action: "retry",
+      family: row.family,
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      idempotencyKey: stableId("dwm_actor_source_retry", `${input.query}:${row.family}:${(row.sourceIds ?? []).join(",")}:${(row.candidateIds ?? []).join(",")}`),
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          action: "pack_review",
+          packAction: "retry",
+          sourceIds: row.sourceIds ?? [],
+          candidateIds: row.candidateIds ?? [],
+          reason: `retry ${input.query} ${row.family} parser or collection readiness`
+        }
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }));
+  const activationActions = input.sourceCoverage
+    .filter((row) => ["paused", "failed"].includes(String(row.state)) && !retryFamilies.has(String(row.family)) && ((row.sourceIds ?? []).length > 0 || (row.candidateIds ?? []).length > 0))
+    .map((row) => ({
+      action: "activate",
+      family: row.family,
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      idempotencyKey: stableId("dwm_actor_source_activate", `${input.query}:${row.family}:${(row.sourceIds ?? []).join(",")}:${(row.candidateIds ?? []).join(",")}`),
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          action: "pack_review",
+          packAction: "approve",
+          sourceIds: row.sourceIds ?? [],
+          candidateIds: row.candidateIds ?? [],
+          approveMetadataOnly: row.privacyBoundary?.restrictedSource === true ? true : undefined,
+          reason: `activate ${input.query} ${row.family} source readiness`
+        }
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }));
+  const intakeActions = input.candidateGaps.map((gap) => ({
+    action: "request_candidate",
+    family: gap.family,
+    idempotencyKey: stableId("dwm_actor_source_candidate_request", `${input.query}:${gap.family}:${gap.state}`),
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: {
+        sourcePackLabel: `${input.query} ${gap.family} enrichment source`,
+        scope: input.query,
+        candidates: [gap.intakeRecommendation]
+      }
+    },
+    dryRunSupported: true,
+    liveNetworkFetch: false
+  }));
+  return {
+    schemaVersion: "dwm.actor_source_pack_action_readiness.v1",
+    query: input.query,
+    retryActions,
+    activationActions,
+    intakeActions,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
 }
 
 function sourceActorCaptureFreshness(latestCaptureAt: string | undefined, generatedAt: string | undefined) {

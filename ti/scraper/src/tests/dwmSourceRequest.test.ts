@@ -1403,7 +1403,7 @@ describe("dwm source requests", () => {
         },
         state: "ready",
         sourceCoverage: expect.arrayContaining([
-          expect.objectContaining({ family: "telegram", state: "canary", canEnrichActor: true, canProduceAlert: true }),
+          expect.objectContaining({ family: "telegram", state: "canary", canEnrichActor: true, canProduceAlert: true, sourceIds: expect.arrayContaining([expect.any(String)]), candidateIds: expect.arrayContaining([expect.any(String)]) }),
           expect.objectContaining({ family: "darkweb_onion", state: "active", privacyBoundary: expect.objectContaining({ metadataOnly: true }) }),
           expect.objectContaining({ family: "actor_page", state: "canary", matchableFields: expect.arrayContaining(["actorName"]) })
         ]),
@@ -1422,6 +1422,12 @@ describe("dwm source requests", () => {
           caseReady: true,
           canOpenCase: true,
           blockers: []
+        },
+        sourcePackActionReadiness: {
+          schemaVersion: "dwm.actor_source_pack_action_readiness.v1",
+          retryActions: [],
+          activationActions: [],
+          intakeActions: []
         },
         safeOutput: {
           liveNetworkScrapeStarted: false,
@@ -1702,6 +1708,12 @@ describe("dwm source requests", () => {
         sourceCoverage: expect.arrayContaining([
           expect.objectContaining({ family: "darkweb_onion", state: "missing" })
         ]),
+        sourcePackActionReadiness: expect.objectContaining({
+          schemaVersion: "dwm.actor_source_pack_action_readiness.v1",
+          intakeActions: expect.arrayContaining([
+            expect.objectContaining({ action: "request_candidate", family: "darkweb_onion", liveNetworkFetch: false })
+          ])
+        }),
         freshnessState: "needs_capture"
       }
     });
@@ -1749,6 +1761,26 @@ describe("dwm source requests", () => {
           })
         })
       ]),
+      sourcePackActionReadiness: {
+        schemaVersion: "dwm.actor_source_pack_action_readiness.v1",
+        retryActions: expect.arrayContaining([
+          expect.objectContaining({
+            action: "retry",
+            family: "telegram",
+            sourceIds: expect.arrayContaining([expect.any(String)]),
+            candidateIds: expect.arrayContaining([expect.any(String)]),
+            route: expect.objectContaining({
+              method: "POST",
+              path: "/v1/dwm/source-requests",
+              body: expect.objectContaining({ action: "pack_review", packAction: "retry" })
+            }),
+            liveNetworkFetch: false
+          })
+        ]),
+        intakeActions: expect.arrayContaining([
+          expect.objectContaining({ action: "request_candidate", family: "actor_page", liveNetworkFetch: false })
+        ])
+      },
       alertCaseHandoffReadiness: {
         alertReady: false,
         blockers: expect.arrayContaining([
