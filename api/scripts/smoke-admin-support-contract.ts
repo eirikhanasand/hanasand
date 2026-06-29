@@ -108,6 +108,8 @@ for (const expected of ['orgId', 'userId', 'email', 'requestId', 'entityId', 'en
 assert.match(adminSupport, /getSupportInspection/)
 assert.match(adminSupport, /getAdminAuditEvent/)
 assert.match(adminSupport, /supportAuditEventDetailResponse/)
+assert.match(adminSupport, /loadAdminAuditEventRelatedTimeline/)
+assert.match(adminSupport, /admin\.audit\.event_related_timeline\.v1/)
 assert.match(adminSupport, /invalid_audit_event_id/)
 assert.match(adminSupport, /audit_event_not_found/)
 assert.match(adminSupport, /\/api\/admin\/audit-events\/\$\{encodeURIComponent\(String\(event\.id\)\)\}/)

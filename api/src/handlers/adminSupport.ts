@@ -545,9 +545,10 @@ export async function getAdminAuditEvent(req: FastifyRequest<{ Params: AuditEven
     }
 
     const event = toAdminAuditEvent(row)
+    const relatedTimeline = await loadAdminAuditEventRelatedTimeline(event)
     return res.send({
         event,
-        detail: supportAuditEventDetailResponse(event),
+        detail: supportAuditEventDetailResponse(event, relatedTimeline),
     })
 }
 
@@ -3208,6 +3209,60 @@ async function loadSupportSessionTimeline(supportSessionId: string) {
     return result.rows.map(toAdminAuditEvent).map(event => event.detail.timelineEvent)
 }
 
+async function loadAdminAuditEventRelatedTimeline(event: Record<string, any>) {
+    const detail = event.detail || {}
+    const context = detail.context || {}
+    const eventId = Number(event.id)
+    const requestId = text(detail.requestId)
+    const entityId = text(detail.entityId)
+    const supportSessionId = text(context.supportSessionId)
+        || (entityId.startsWith('support_session_') ? entityId : '')
+    const values: Array<string | number> = [eventId]
+    const where = ['e.id = $1']
+    const add = (value: string | number) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    if (requestId) where.push(`e.request_id = ${add(requestId)}`)
+    if (entityId) where.push(`e.entity_id = ${add(entityId)}`)
+    if (supportSessionId) {
+        const placeholder = add(supportSessionId)
+        where.push(`(e.entity_id = ${placeholder} OR e.context->>'supportSessionId' = ${placeholder})`)
+    }
+
+    const result = await run(`
+        SELECT
+            e.id,
+            e.action_type,
+            e.severity,
+            e.source,
+            e.service,
+            e.actor_id,
+            actor.name AS actor_name,
+            e.target_type,
+            e.target_id,
+            target_user.name AS target_name,
+            e.organization_id,
+            organization.name AS organization_name,
+            e.entity_id,
+            e.request_id,
+            e.outcome,
+            e.reason,
+            e.context,
+            e.ip,
+            e.user_agent,
+            e.created_at
+        FROM admin_audit_events e
+        LEFT JOIN users actor ON actor.id = e.actor_id
+        LEFT JOIN users target_user ON target_user.id = e.target_id
+        LEFT JOIN organizations organization ON organization.id = e.organization_id
+        WHERE ${where.join('\n           OR ')}
+        ORDER BY e.created_at DESC, e.id DESC
+        LIMIT 50
+    `, values)
+    return result.rows.map(toAdminAuditEvent).map(row => row.detail.timelineEvent)
+}
+
 async function validateSupportSessionForAction(input: {
     actorId: string
     supportSessionId?: string | null
@@ -5460,7 +5515,7 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
     }
 }
 
-function supportAuditEventDetailResponse(event: Record<string, any>) {
+function supportAuditEventDetailResponse(event: Record<string, any>, relatedTimeline: Array<Record<string, any>> = []) {
     const detail = event.detail || {}
     const context = detail.context || {}
     const timelineEvent = detail.timelineEvent || {}
@@ -5487,6 +5542,14 @@ function supportAuditEventDetailResponse(event: Record<string, any>) {
         redacted: true,
         filterContract: supportAuditFilterContract(filters, [timelineEvent]),
         exportProof: supportAuditExportProof(filters, [timelineEvent]),
+        relatedTimeline: {
+            schemaVersion: 'admin.audit.event_related_timeline.v1',
+            filters,
+            eventIds: relatedTimeline.map(item => item.id),
+            summary: auditTimelineSummary(relatedTimeline),
+            timeline: relatedTimeline,
+            redacted: true,
+        },
         links: {
             self: `/api/admin/audit-events/${encodeURIComponent(String(event.id))}`,
             timeline: auditFilterQuery(filters),
