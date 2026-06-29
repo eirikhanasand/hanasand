@@ -5,10 +5,12 @@ import {
     normalizeOrganizationInput,
     normalizeOrganizationSettingsInput,
     normalizeOwnershipTransferInput,
+    normalizeWatchlistActionInput,
     normalizeWatchlistCleanupInput,
     normalizeWatchlistInput,
     buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
+    organizationAlertCaseRoleActions,
     organizationLifecycleReadiness,
     organizationVisibilityDecision,
     organizationWatchlistAlertTermsExport,
@@ -94,6 +96,28 @@ assert.deepEqual(normalizeWatchlistCleanupInput({
     requestId: 'cleanup-request',
 })
 assert.throws(() => normalizeWatchlistCleanupInput({ itemIds: [] }), /at least one watchlist item id/)
+assert.deepEqual(normalizeWatchlistActionInput({
+    action: 'restore',
+    reason: 'Restore archived watchlist after customer cleanup.',
+    requestId: 'restore-watchlist',
+}), {
+    action: 'restore',
+    reason: 'Restore archived watchlist after customer cleanup.',
+    requestId: 'restore-watchlist',
+})
+assert.throws(() => normalizeWatchlistActionInput({ action: 'delete', reason: 'nope' }), /pause, resume, archive, or restore/)
+assert.deepEqual(organizationAlertCaseRoleActions('owner'), [
+    'create_watchlist',
+    'edit_watchlist_terms',
+    'archive_watchlist',
+    'restore_watchlist',
+    'acknowledge_alert',
+    'assign_case',
+    'link_case',
+    'manage_invites',
+])
+assert.deepEqual(organizationAlertCaseRoleActions('analyst'), ['acknowledge_alert', 'assign_case', 'link_case'])
+assert.deepEqual(organizationAlertCaseRoleActions('viewer'), [])
 
 const alertReference = buildOrganizationDwmAlertReference(
     {
@@ -355,6 +379,15 @@ assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.memberVisib
     nonmemberEnumeration: false,
     revokedMemberDenial: 'member_revoked',
 })
+assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.actor, {
+    userId: 'org_smoke_admin',
+    role: 'admin',
+    status: 'active',
+    allowedActions: organizationAlertCaseRoleActions('admin'),
+})
+assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.roleGates.restore_watchlist, ['owner', 'admin'])
+assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.roleGates.assign_case, ['owner', 'admin', 'analyst'])
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.roleActionContract.lifecycleDenials.archivedWatchlist, 'watchlist_archived')
 assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.supportRedaction.blockerCode, 'support_redaction_required')
 assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.cleanupRequired, true)
 assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.pausedExcludedCount, 1)

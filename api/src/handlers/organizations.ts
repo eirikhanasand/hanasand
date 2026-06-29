@@ -1282,20 +1282,20 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid watchlist action.' })
     }
 
-    const nextStatus = input.action === 'resume' ? 'active' : input.action === 'pause' ? 'paused' : 'archived'
+    const nextStatus = input.action === 'resume' || input.action === 'restore' ? 'active' : input.action === 'pause' ? 'paused' : 'archived'
     const result = await run(`
         UPDATE organization_watchlist_items
         SET status = $3,
-            archived_at = CASE WHEN $3 = 'archived' THEN NOW() ELSE NULL END,
+            archived_at = CASE WHEN $3 = 'archived' THEN NOW() WHEN $7 = 'restore' THEN NULL ELSE archived_at END,
             updated_by = $4,
             lifecycle_reason = $5,
             lifecycle_request_id = $6,
             updated_at = NOW()
         WHERE id = $1
           AND organization_id = $2
-          AND archived_at IS NULL
+          AND ($7 = 'restore' OR archived_at IS NULL)
         RETURNING *
-    `, [req.params.itemId, req.params.organizationId, nextStatus, userId, input.reason ?? null, input.requestId ?? null])
+    `, [req.params.itemId, req.params.organizationId, nextStatus, userId, input.reason ?? null, input.requestId ?? null, input.action])
 
     if (!result.rows.length) {
         return res.status(404).send({ error: 'Watchlist item not found.' })
@@ -1306,7 +1306,9 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
         ? 'organization_watchlist_paused'
         : input.action === 'resume'
             ? 'organization_watchlist_resumed'
-            : 'organization_watchlist_archived'
+            : input.action === 'restore'
+                ? 'organization_watchlist_restored'
+                : 'organization_watchlist_archived'
     logOrganizationEvent(req, serviceLogAction, req.params.organizationId, userId, {
         requestId: input.requestId,
         reason: input.reason,
@@ -1681,7 +1683,7 @@ function organizationAlertGenerationBridge(
 function organizationWatchlistOperation(
     organization: OrganizationRow,
     input: {
-        action: 'created' | 'updated' | 'disabled' | 'pause' | 'resume' | 'archive'
+        action: 'created' | 'updated' | 'disabled' | 'pause' | 'resume' | 'archive' | 'restore'
         actorId: string
         requestId?: string
         reason?: string

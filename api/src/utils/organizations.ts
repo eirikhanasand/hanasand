@@ -1,7 +1,17 @@
 export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer'
+export type OrganizationAlertCaseRole = OrganizationRole | 'analyst' | 'support' | 'nonmember'
+export type OrganizationAlertCaseAction =
+    | 'create_watchlist'
+    | 'edit_watchlist_terms'
+    | 'archive_watchlist'
+    | 'restore_watchlist'
+    | 'acknowledge_alert'
+    | 'assign_case'
+    | 'link_case'
+    | 'manage_invites'
 export type WatchlistKind = 'company' | 'domain' | 'vendor' | 'actor' | 'keyword'
 export type OrganizationWatchlistStatus = 'active' | 'paused' | 'archived'
-export type OrganizationWatchlistAction = 'pause' | 'resume' | 'archive'
+export type OrganizationWatchlistAction = 'pause' | 'resume' | 'archive' | 'restore'
 export type OrganizationDefaultWebhookPolicy = 'active_destinations' | 'manual_selection' | 'disabled'
 export type OrganizationAlertVisibilityPolicy = 'members' | 'admins' | 'owners'
 
@@ -335,6 +345,24 @@ export type OrganizationWatchlistAlertBridgeContract = {
             nonmemberEnumeration: false
             revokedMemberDenial: 'member_revoked'
         }
+        roleActionContract: {
+            schemaVersion: 'organization.alert_case_role_actions.v1'
+            actor: {
+                userId: string
+                role: OrganizationRole
+                status: 'active'
+                allowedActions: OrganizationAlertCaseAction[]
+            }
+            roleGates: Record<OrganizationAlertCaseAction, OrganizationAlertCaseRole[]>
+            lifecycleDenials: {
+                nonmember: 'nonmember_denied'
+                revokedMember: 'member_revoked'
+                expiredInvite: 'invite_expired'
+                pausedWatchlist: 'watchlist_paused'
+                archivedWatchlist: 'watchlist_archived'
+                supportOnlyAccess: 'support_only_access'
+            }
+        }
         supportRedaction: {
             mode: 'redacted_summary_only'
             required: true
@@ -577,7 +605,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin'])
 const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const inviteActions = new Set<OrganizationInviteAction>(['revoke', 'resend'])
-const watchlistActions = new Set<OrganizationWatchlistAction>(['pause', 'resume', 'archive'])
+const watchlistActions = new Set<OrganizationWatchlistAction>(['pause', 'resume', 'archive', 'restore'])
 const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor', 'actor', 'keyword'])
 const memberRoleTargets = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const defaultWebhookPolicies = new Set<OrganizationDefaultWebhookPolicy>(['active_destinations', 'manual_selection', 'disabled'])
@@ -744,7 +772,7 @@ export function normalizeWatchlistInput(body: WatchlistInput | undefined) {
 export function normalizeWatchlistActionInput(body: WatchlistActionInput | undefined) {
     const action = cleanText(body?.action).toLowerCase()
     if (!watchlistActions.has(action as OrganizationWatchlistAction)) {
-        throw new Error('Watchlist action must be pause, resume, or archive.')
+        throw new Error('Watchlist action must be pause, resume, archive, or restore.')
     }
 
     const reason = normalizeWatchlistReason(body?.reason)
@@ -778,6 +806,61 @@ export function roleCanManageOrganization(role: OrganizationRole | undefined) {
 
 export function roleCanWriteWatchlist(role: OrganizationRole | undefined) {
     return watchlistWriteRoles.has(role as OrganizationRole)
+}
+
+export function organizationAlertCaseRoleActions(role: OrganizationAlertCaseRole | undefined): OrganizationAlertCaseAction[] {
+    if (role === 'owner' || role === 'admin') {
+        return [
+            'create_watchlist',
+            'edit_watchlist_terms',
+            'archive_watchlist',
+            'restore_watchlist',
+            'acknowledge_alert',
+            'assign_case',
+            'link_case',
+            'manage_invites',
+        ]
+    }
+
+    if (role === 'analyst') {
+        return ['acknowledge_alert', 'assign_case', 'link_case']
+    }
+
+    if (role === 'member') {
+        return ['acknowledge_alert']
+    }
+
+    return []
+}
+
+export function organizationAlertCaseRoleActionContract(member: { userId: string, role: OrganizationRole }) {
+    return {
+        schemaVersion: 'organization.alert_case_role_actions.v1' as const,
+        actor: {
+            userId: member.userId,
+            role: member.role,
+            status: 'active' as const,
+            allowedActions: organizationAlertCaseRoleActions(member.role),
+        },
+        roleGates: {
+            create_watchlist: ['owner', 'admin'],
+            edit_watchlist_terms: ['owner', 'admin'],
+            archive_watchlist: ['owner', 'admin'],
+            restore_watchlist: ['owner', 'admin'],
+            acknowledge_alert: ['owner', 'admin', 'analyst', 'member'],
+            assign_case: ['owner', 'admin', 'analyst'],
+            link_case: ['owner', 'admin', 'analyst'],
+            manage_invites: ['owner', 'admin'],
+        } satisfies Record<OrganizationAlertCaseAction, OrganizationAlertCaseRole[]>,
+        lifecycleDenials: {
+            nonmember: 'nonmember_denied' as const,
+            revokedMember: 'member_revoked' as const,
+            expiredInvite: 'invite_expired' as const,
+            pausedWatchlist: 'watchlist_paused' as const,
+            archivedWatchlist: 'watchlist_archived' as const,
+            supportOnlyAccess: 'support_only_access' as const,
+        },
+    }
 }
 
 export function organizationVisibilityDecision(input: OrganizationVisibilityDecisionInput): OrganizationVisibilityDecision {
@@ -1367,6 +1450,7 @@ export function organizationWatchlistAlertTermsExport(
                     nonmemberEnumeration: false,
                     revokedMemberDenial: 'member_revoked',
                 },
+                roleActionContract: organizationAlertCaseRoleActionContract(member),
                 supportRedaction: {
                     mode: 'redacted_summary_only',
                     required: true,

@@ -1235,6 +1235,42 @@ assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.readyF
 assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.cleanupRequired, true)
 assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.archivedExcludedCount, 3)
 assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationRef.status === 'active'))
+assert.deepEqual(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.roleActionContract.actor.allowedActions, [
+    'acknowledge_alert',
+])
+assert.deepEqual(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.roleActionContract.roleGates.restore_watchlist, ['owner', 'admin'])
+assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.roleActionContract.lifecycleDenials.archivedWatchlist, 'watchlist_archived')
+
+const restoreArchivedWatchlistResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/${cleanupKeywordItem.id}/actions`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { action: 'restore', reason: 'Restore after cleanup proof.', requestId: 'smoke-restore-cleanup-keyword' },
+})
+assert.equal(restoreArchivedWatchlistResponse.statusCode, 200, restoreArchivedWatchlistResponse.body)
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.status, 'active')
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.archivedAt, null)
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).operation.action, 'restore')
+
+const restoredExportResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-restored-export`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(restoredExportResponse.statusCode, 200, restoredExportResponse.body)
+const restoredExport = parseBody(restoredExportResponse.body).alertTermsExport
+assert.ok(restoredExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupKeywordItem.id))
+assert.equal(restoredExport.activeTerms.find((term: Row) => term.watchlistItemId === cleanupKeywordItem.id).alertGenerationRef.lifecycle.requestId, 'smoke-restore-cleanup-keyword')
+assert.deepEqual(restoredExport.alertBridgeContract.alertCaseProof.roleActionContract.actor.allowedActions, [
+    'create_watchlist',
+    'edit_watchlist_terms',
+    'archive_watchlist',
+    'restore_watchlist',
+    'acknowledge_alert',
+    'assign_case',
+    'link_case',
+    'manage_invites',
+])
 
 const memberRemoveViewerResponse = await app.inject({
     method: 'DELETE',
@@ -1360,6 +1396,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_update
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_paused' && log.metadata.requestId === 'smoke-pause-company'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_resumed' && log.metadata.requestId === 'smoke-resume-company'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archived' && log.metadata.requestId === 'smoke-disable-actor'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_restored' && log.metadata.requestId === 'smoke-restore-cleanup-keyword'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_cleanup_archived' && log.metadata.requestId === 'smoke-proof-cleanup'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
@@ -1656,10 +1693,18 @@ async function fakeRun(query: string, params: any[] = []) {
     }
 
     if (compact.startsWith('UPDATE organization_watchlist_items SET status = $3')) {
-        const [id, organizationId, status, updatedBy, reason, requestId] = params
+        const [id, organizationId, status, updatedBy, reason, requestId, action] = params
         const existing = watchlists.get(id)
-        if (!existing || existing.organization_id !== organizationId || existing.archived_at) return rows([])
-        const updated = { ...existing, status, archived_at: status === 'archived' ? iso() : null, updated_by: updatedBy, lifecycle_reason: reason, lifecycle_request_id: requestId, updated_at: iso() }
+        if (!existing || existing.organization_id !== organizationId || (existing.archived_at && action !== 'restore')) return rows([])
+        const updated = {
+            ...existing,
+            status,
+            archived_at: status === 'archived' ? iso() : action === 'restore' ? null : existing.archived_at,
+            updated_by: updatedBy,
+            lifecycle_reason: reason,
+            lifecycle_request_id: requestId,
+            updated_at: iso(),
+        }
         watchlists.set(id, updated)
         return rows([updated])
     }
