@@ -81,6 +81,9 @@ const payload = buildDwmAlertDeliveryPayload({
         sourceFamily: 'ransomware_leak_site',
         claimSummary: 'A leak-site post references Acme Security domain assets.',
         recommendedAction: 'Validate source provenance and notify the customer owner.',
+        tenantId: 'tenant_contract',
+        confidenceScore: 0.91,
+        confidenceReason: 'Domain and company matched across two independent captures.',
         matchedTerm: { value: 'acme-security.com', kind: 'domain' },
         evidence: [
             { label: 'Victim claim', detail: 'Public leak-site metadata matched the watched domain.' },
@@ -107,6 +110,7 @@ expect(serialized.includes('CRITICAL'), 'Payload should include severity.', payl
 expect(serialized.includes('Acme Security'), 'Payload should include company context.', payload)
 expect(serialized.includes('acme-security.com'), 'Payload should include domain/matched term.', payload)
 expect(serialized.includes('ransomware_leak_site'), 'Payload should include source family.', payload)
+expect(serialized.includes('Confidence') && serialized.includes('91%') && serialized.includes('two independent captures'), 'Payload should include confidence context.', payload)
 expect(serialized.includes('Evidence count'), 'Payload should include evidence count field.', payload)
 expect(serialized.includes('Acme watchlist') && serialized.includes('acme-security.com'), 'Payload should include watchlist context.', payload)
 expect(serialized.includes('customer_discord'), 'Payload should include route.', payload)
@@ -116,6 +120,7 @@ expect(serialized.includes('case_contract'), 'Payload should include case id.', 
 expect(serialized.includes('/dashboard/dwm?alert=alert_contract'), 'Payload should include case path.', payload)
 expect(serialized.includes('Alert URL') && serialized.includes('https://app.hanasand.local/dashboard/dwm?alert=alert_contract'), 'Payload should include alert URL/deep link.', payload)
 expect(serialized.includes('capture_contract') && serialized.includes('source_contract'), 'Payload should include provenance summary.', payload)
+expect(serialized.includes('Workflow') && serialized.includes('replayed') && serialized.includes('tenant_contract'), 'Payload should include workflow and tenant routing context.', payload)
 expect(!serialized.includes(secret), 'Payload should never include webhook secret.', payload)
 
 expect(redactWebhookEndpoint(endpoint) === 'https://discord.com/api/webhooks/987654321/...', 'Redaction helper should hide Discord token.')
@@ -263,6 +268,8 @@ const replayWorkflowAlert = {
     reviewState: 'needs_review',
     deliveryState: 'ready_to_send',
     replayCount: 2,
+    confidenceScore: 87,
+    confidenceReason: 'Replay confidence comes from matched public source and case enrichment.',
     workflowContext: {
         caseIdCandidate: 'case_replay_contract',
         casePath: '/v1/cases/case_replay_contract?alertId=alert_replay_contract&dedupeKey=dwm_dedupe_replay_contract',
@@ -370,6 +377,8 @@ expect(replayDeliveryContext.dedupeKey === 'dwm_dedupe_replay_contract', 'Replay
 expect(replayDeliveryContext.casePath === replayWorkflowAlert.casePath, 'Replay payload should link to the same case path.', replayPayload)
 expect(replayDeliveryContext.alertUrl === replayWorkflowAlert.alertUrl, 'Replay payload should link to the alert URL/deep link.', replayPayload)
 expect(replayAlertContext.deliveryState === 'ready_to_send', 'Replay payload should preserve alert delivery state.', replayPayload)
+expect((replayAlertContext.confidence as Record<string, unknown>).label === '87%' && replaySerialized.includes('Replay confidence comes from matched public source'), 'Replay payload should preserve confidence context.', replayPayload)
+expect((replayDeliveryContext.workflowState as Record<string, unknown>).delivery === 'ready_to_send' && replayDeliveryContext.replayCount === 2 && replaySerialized.includes('Workflow'), 'Replay payload should expose workflow and replay markers.', replayPayload)
 expect(replayWatchlistContext.id === 'watchlist_item_replay_contract', 'Replay payload should preserve watchlist context.', replayPayload)
 expect(replaySerialized.includes('dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract'), 'Replay payload should use event-scoped idempotency for the same dedupe key.', replayPayload)
 expect(replaySerialized.includes('Evidence summary') && replaySerialized.includes('Credential paste'), 'Replay payload should include multi-evidence summary fields.', replayPayload)
@@ -2540,6 +2549,7 @@ console.log(JSON.stringify({
         'HTTPS-only customer endpoint validation',
         'Discord payload formatting',
         'Discord payload alert URL/deep link',
+        'Discord payload confidence/workflow context',
         'Discord payload truncation limits',
         'destination selection',
         'disabled destination skip',
@@ -2550,6 +2560,7 @@ console.log(JSON.stringify({
         'adapter destination dry-run/live selection',
         'API delivery bridge persisted-alert normalization',
         'replay alert/dedupe/case linkage',
+        'replay confidence/workflow context',
         'idempotent duplicate replay key',
         'replay workflow immutability',
         'multi-evidence Discord summary',

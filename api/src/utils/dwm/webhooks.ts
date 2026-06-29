@@ -3526,6 +3526,7 @@ export function buildDwmAlertDeliveryPayload({
         org: {
             id: destination.org_id,
             name: clean(alert.orgName) || clean(alert.organizationName) || destination.org_id,
+            tenantId: normalizedAlert.tenantId,
         },
         destination: {
             id: destination.id,
@@ -3537,11 +3538,20 @@ export function buildDwmAlertDeliveryPayload({
         delivery: {
             id: deliveryId,
             replay: eventType === 'dwm.alert.replayed',
+            eventType,
             dryRunDefault: true,
             route: normalizedAlert.route,
             casePath: normalizedAlert.casePath,
             alertUrl: normalizedAlert.alertUrl,
             dedupeKey: displayDedupeKey,
+            replayCount: normalizedAlert.replayCount,
+            workflowState: normalizedAlert.workflowState,
+        },
+        source: {
+            family: normalizedAlert.sourceFamily,
+            artifactType: normalizedAlert.artifactType,
+            provenanceSummary: normalizedAlert.provenanceSummary,
+            confidence: normalizedAlert.confidence,
         },
     }
 
@@ -3564,9 +3574,11 @@ export function buildDwmAlertDeliveryPayload({
                     discordField('Company / domain', normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value || 'Not provided', true),
                     watchlist.name || watchlist.terms.length ? discordField('Watchlist', [watchlist.name, watchlist.terms[0]].filter(Boolean).join(' | '), true) : null,
                     discordField('Source family', normalizedAlert.sourceFamily || 'Unknown', true),
+                    normalizedAlert.confidence.label ? discordField('Confidence', [normalizedAlert.confidence.label, normalizedAlert.confidence.reason].filter(Boolean).join(' | '), true) : null,
                     discordField('Evidence count', String(normalizedAlert.evidenceCount), true),
                     normalizedAlert.evidenceSummary ? discordField('Evidence summary', normalizedAlert.evidenceSummary, false) : null,
                     discordField('Route', normalizedAlert.route, true),
+                    discordField('Workflow', workflowSummary(normalizedAlert, eventType), false),
                     discordField('Dedupe key', displayDedupeKey, false),
                     normalizedAlert.caseId ? discordField('Case ID', normalizedAlert.caseId, true) : null,
                     normalizedAlert.casePath ? discordField('Case', normalizedAlert.casePath, false) : null,
@@ -4052,6 +4064,8 @@ function normalizeDispatchAlertInput(input: DwmAlertNotificationInput) {
 }
 
 function normalizeAlert(alert: Record<string, unknown>) {
+    const webhookContext = recordOrEmpty(alert.webhookContext)
+    const workflowContext = recordOrEmpty(alert.workflowContext)
     const matchedTerm = normalizeMatchedTerm(alert.matchedTerm)
     const company = clean(alert.company) || clean(alert.organizationName) || clean(alert.orgName)
     const domain = clean(alert.domain) || (matchedTerm.kind === 'domain' ? matchedTerm.value : '')
@@ -4076,33 +4090,49 @@ function normalizeAlert(alert: Record<string, unknown>) {
         || clean(alert.url)
         || clean(alert.caseUrl)
         || (casePath.startsWith('http://') || casePath.startsWith('https://') ? casePath : '')
+    const provenance = alert.provenance || webhookContext.provenance || {
+        captureIds: cleanList(webhookContext.captureIds).length ? cleanList(webhookContext.captureIds) : cleanList(workflowContext.captureIds),
+        sourceIds: cleanList(webhookContext.sourceIds).length ? cleanList(webhookContext.sourceIds) : cleanList(workflowContext.sourceIds),
+        primaryCaptureId: firstClean(webhookContext.primaryCaptureId, workflowContext.primaryCaptureId),
+    }
+    const confidence = normalizeConfidence(
+        firstPresent(alert.confidence, alert.confidenceScore, webhookContext.confidence, webhookContext.confidenceScore, workflowContext.confidence, workflowContext.confidenceScore),
+        firstClean(alert.confidenceReason, alert.confidenceRationale, alert.reasoning, webhookContext.confidenceReason, workflowContext.confidenceReason)
+    )
 
     return {
         id,
         title,
         severity,
+        tenantId: firstClean(alert.tenantId, webhookContext.tenantId, workflowContext.tenantId),
         company,
         domain,
         companyOrDomain: company || domain || matchedTerm.value,
         claimSummary: clean(alert.claimSummary) || clean(alert.summary) || 'A watched organization or asset matched newly collected threat intelligence.',
         recommendedAction: clean(alert.recommendedAction) || 'Review the evidence, validate the match, and contact the affected owner if exposure is confirmed.',
         matchedTerm,
-        sourceFamily: clean(alert.sourceFamily) || clean(alert.source) || 'dark_web',
-        artifactType: clean(alert.artifactType) || clean(alert.type) || 'mention',
+        sourceFamily: firstClean(alert.sourceFamily, alert.source, webhookContext.sourceFamily, workflowContext.sourceFamily) || 'dark_web',
+        artifactType: firstClean(alert.artifactType, alert.type, webhookContext.artifactType, workflowContext.artifactType) || 'mention',
         firstSeenAt: clean(alert.firstSeenAt) || clean(alert.createdAt) || new Date().toISOString(),
         savedAt: clean(alert.savedAt) || null,
         reviewState: clean(alert.reviewState) || 'needs_review',
         deliveryState: clean(alert.deliveryState) || 'pending_review',
+        workflowState: {
+            review: clean(alert.reviewState) || 'needs_review',
+            delivery: clean(alert.deliveryState) || 'pending_review',
+        },
+        replayCount: parseCount(alert.replayCount ?? webhookContext.replayCount ?? workflowContext.replayCount),
+        confidence,
         route,
         casePath,
         alertUrl,
-        caseId: clean(alert.caseId) || clean(alert.caseIdCandidate) || clean((alert.workflowContext as Record<string, unknown> | undefined)?.caseIdCandidate),
+        caseId: clean(alert.caseId) || clean(alert.caseIdCandidate) || clean(workflowContext.caseIdCandidate),
         evidence,
         evidenceCount: evidence.length || evidenceCount,
         evidenceSummary: summarizeEvidence(evidence),
         dedupeKey: clean(alert.dedupeKey) || clean((alert.webhookDelivery as Record<string, unknown> | undefined)?.dedupeKey),
-        provenance: alert.provenance || null,
-        provenanceSummary: provenanceSummary(alert.provenance),
+        provenance,
+        provenanceSummary: provenanceSummary(provenance),
     }
 }
 
@@ -4201,6 +4231,33 @@ function isDiscordWebhookUrl(url: URL) {
 function parseSeverity(value: unknown) {
     const severity = clean(value).toLowerCase()
     return ['critical', 'high', 'medium', 'low', 'info'].includes(severity) ? severity : 'medium'
+}
+
+function normalizeConfidence(value: unknown, reason: unknown) {
+    const raw = typeof value === 'number'
+        ? value
+        : Number(String(clean(value)).replace('%', ''))
+    const score = Number.isFinite(raw)
+        ? Math.max(0, Math.min(100, Math.round(raw <= 1 ? raw * 100 : raw)))
+        : null
+    const label = score === null
+        ? clean(value)
+        : `${score}%`
+    return {
+        score,
+        label,
+        reason: truncate(clean(reason), 180),
+    }
+}
+
+function workflowSummary(alert: ReturnType<typeof normalizeAlert>, eventType: DwmAlertEventType) {
+    const parts = [
+        eventType.replace('dwm.alert.', ''),
+        `review ${alert.reviewState}`,
+        `delivery ${alert.deliveryState}`,
+        alert.replayCount ? `replay ${alert.replayCount}` : '',
+    ].filter(Boolean)
+    return parts.join(' | ')
 }
 
 function severityColor(severity: string) {
@@ -4679,6 +4736,15 @@ function firstClean(...values: unknown[]) {
         if (candidate) return candidate
     }
     return ''
+}
+
+function firstPresent(...values: unknown[]) {
+    for (const value of values) {
+        if (value === null || value === undefined) continue
+        if (typeof value === 'string' && !value.trim()) continue
+        return value
+    }
+    return null
 }
 
 function cleanList(value: unknown) {
