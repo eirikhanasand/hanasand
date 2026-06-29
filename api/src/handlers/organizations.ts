@@ -332,7 +332,12 @@ export async function getOrganizationInvites(req: FastifyRequest<{ Params: Organ
         ORDER BY status ASC, created_at DESC
     `, [req.params.id])
 
-    return res.send({ invites: (result.rows as OrganizationInviteRow[]).map(toInvite) })
+    const invites = result.rows as OrganizationInviteRow[]
+
+    return res.send({
+        invites: invites.map(toInvite),
+        inviteLifecycleContract: organizationInviteListContract(organization, invites),
+    })
 }
 
 export async function getOrganizationMembers(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
@@ -2072,6 +2077,71 @@ function organizationSharedWatchlistContract(organization: OrganizationRow, item
             readRoles: ['owner', 'admin', 'member', 'viewer'],
             nonmemberEnumeration: false,
         },
+    }
+}
+
+function organizationInviteListContract(organization: OrganizationRow, invites: OrganizationInviteRow[]) {
+    const actorRole = organization.role ?? 'viewer'
+    const pendingInvites = invites.filter(invite => invite.status === 'pending')
+    return {
+        schemaVersion: 'organization.invite_list_contract.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        actor: {
+            role: actorRole,
+            canListPendingInvites: roleCanManageOrganization(actorRole),
+            canCreateInvites: roleCanManageOrganization(actorRole),
+            canRevokeInvites: roleCanManageOrganization(actorRole),
+            canResendInvites: roleCanManageOrganization(actorRole),
+        },
+        counts: {
+            pendingInviteCount: pendingInvites.length,
+            pendingAdminCount: pendingInvites.filter(invite => invite.role === 'admin').length,
+            pendingMemberCount: pendingInvites.filter(invite => invite.role === 'member').length,
+            pendingViewerCount: pendingInvites.filter(invite => invite.role === 'viewer').length,
+        },
+        routes: {
+            inviteMembers: 'POST /api/organizations/:id/invites',
+            acceptInvite: 'POST /api/organizations/invites/:inviteId/accept',
+            inviteActions: 'POST /api/organizations/:id/invites/:inviteId/actions',
+        },
+        supportedRoles: ['admin', 'member', 'viewer'],
+        supportedActions: ['revoke', 'resend'],
+        idempotentActions: ['revoke', 'resend'],
+        defaultExpiryDays: 14,
+        acceptanceTokenField: 'invite.acceptanceToken',
+        lifecycleDenials: {
+            expiredInvite: 'invite_expired',
+            revokedInvite: 'member_revoked',
+            acceptedInviteReuse: 'invite_expired',
+            nonManager: 'role_not_allowed',
+            nonmemberEnumeration: false,
+        },
+        audit: {
+            source: 'service_logs',
+            eventActions: [
+                'organization_invites_created',
+                'organization_invite_accepted',
+                'organization_invite_revoked',
+                'organization_invite_resent',
+            ],
+            requiredMetadataFields: [
+                'requestId',
+                'role',
+                'recipientCount',
+                'invitedCount',
+                'skippedCount',
+                'inviteId',
+                'action',
+                'previousStatus',
+                'newStatus',
+            ],
+        },
+        noLeakFields: [
+            'otherOrg.invites',
+            'acceptedInvite.acceptanceToken',
+            'revokedInvite.acceptanceToken',
+        ],
     }
 }
 

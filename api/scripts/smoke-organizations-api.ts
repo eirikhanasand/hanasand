@@ -192,7 +192,20 @@ const pendingInvitesResponse = await app.inject({
     headers: authHeaders('org_smoke_owner', 'owner-token'),
 })
 assert.equal(pendingInvitesResponse.statusCode, 200, pendingInvitesResponse.body)
-assert.deepEqual(parseBody(pendingInvitesResponse.body).invites, [])
+const emptyPendingInvitesBody = parseBody(pendingInvitesResponse.body)
+assert.deepEqual(emptyPendingInvitesBody.invites, [])
+assert.equal(emptyPendingInvitesBody.inviteLifecycleContract.schemaVersion, 'organization.invite_list_contract.v1')
+assert.equal(emptyPendingInvitesBody.inviteLifecycleContract.organizationId, organization.id)
+assert.equal(emptyPendingInvitesBody.inviteLifecycleContract.tenantId, organization.id)
+assert.equal(emptyPendingInvitesBody.inviteLifecycleContract.actor.role, 'owner')
+assert.equal(emptyPendingInvitesBody.inviteLifecycleContract.actor.canCreateInvites, true)
+assert.equal(emptyPendingInvitesBody.inviteLifecycleContract.counts.pendingInviteCount, 0)
+assert.deepEqual(emptyPendingInvitesBody.inviteLifecycleContract.supportedRoles, ['admin', 'member', 'viewer'])
+assert.deepEqual(emptyPendingInvitesBody.inviteLifecycleContract.supportedActions, ['revoke', 'resend'])
+assert.equal(emptyPendingInvitesBody.inviteLifecycleContract.lifecycleDenials.expiredInvite, 'invite_expired')
+assert.equal(emptyPendingInvitesBody.inviteLifecycleContract.lifecycleDenials.nonmemberEnumeration, false)
+assert.ok(emptyPendingInvitesBody.inviteLifecycleContract.audit.eventActions.includes('organization_invite_resent'))
+assert.ok(emptyPendingInvitesBody.inviteLifecycleContract.noLeakFields.includes('otherOrg.invites'))
 
 const existingMemberInviteResponse = await app.inject({
     method: 'POST',
@@ -251,7 +264,15 @@ for (const [userId, token] of [['org_smoke_owner', 'owner-token'], ['org_smoke_a
         headers: authHeaders(userId, token),
     })
     assert.equal(pendingForManager.statusCode, 200, pendingForManager.body)
-    assert.deepEqual(parseBody(pendingForManager.body).invites.map((pendingInvite: Row) => pendingInvite.id), [viewerInvite.id])
+    const pendingForManagerBody = parseBody(pendingForManager.body)
+    assert.deepEqual(pendingForManagerBody.invites.map((pendingInvite: Row) => pendingInvite.id), [viewerInvite.id])
+    assert.equal(pendingForManagerBody.inviteLifecycleContract.actor.role, userId === 'org_smoke_owner' ? 'owner' : 'admin')
+    assert.equal(pendingForManagerBody.inviteLifecycleContract.actor.canListPendingInvites, true)
+    assert.equal(pendingForManagerBody.inviteLifecycleContract.actor.canRevokeInvites, true)
+    assert.equal(pendingForManagerBody.inviteLifecycleContract.counts.pendingInviteCount, 1)
+    assert.equal(pendingForManagerBody.inviteLifecycleContract.counts.pendingViewerCount, 1)
+    assert.equal(pendingForManagerBody.inviteLifecycleContract.routes.acceptInvite, 'POST /api/organizations/invites/:inviteId/accept')
+    assert.equal(pendingForManagerBody.inviteLifecycleContract.acceptanceTokenField, 'invite.acceptanceToken')
 }
 
 const viewerAcceptResponse = await app.inject({
