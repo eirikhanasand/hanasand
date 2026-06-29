@@ -1752,6 +1752,8 @@ describe("dwm source requests", () => {
           summary: expect.objectContaining({
             activeFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
             alertReadyFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
+            recoveryStates: expect.arrayContaining(["monitor"]),
+            recoveryActionFamilies: expect.arrayContaining(["telegram"]),
             averageConfidence: expect.any(Number),
             lastCaptureAt: expect.any(String),
             lastEnrichmentAt: expect.any(String)
@@ -1777,6 +1779,15 @@ describe("dwm source requests", () => {
               nextActions: expect.arrayContaining([
                 expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
               ]),
+              operationalRecovery: expect.objectContaining({
+                state: "monitor",
+                retryable: false,
+                noNetworkSafe: true,
+                nextActionTypes: expect.arrayContaining(["rebuild_alerts"]),
+                primaryAction: "rebuild_alerts",
+                primaryRoute: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
+                liveNetworkFetch: false
+              }),
               safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
             }),
             expect.objectContaining({
@@ -3904,6 +3915,8 @@ describe("dwm source requests", () => {
         summary: expect.objectContaining({
           failedFamilies: expect.arrayContaining(["telegram"]),
           retryFamilies: expect.arrayContaining(["telegram"]),
+          recoveryStates: expect.arrayContaining(["retryable", "candidate_required"]),
+          recoveryActionFamilies: expect.arrayContaining(["telegram", "actor_page"]),
           alertReadyFamilies: []
         }),
         rows: expect.arrayContaining([
@@ -3922,6 +3935,16 @@ describe("dwm source requests", () => {
               expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false }),
               expect.objectContaining({ type: "retry_capture", liveNetworkFetch: false })
             ]),
+            operationalRecovery: expect.objectContaining({
+              state: "retryable",
+              retryable: true,
+              noNetworkSafe: true,
+              nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+              primaryAction: "retry_parser",
+              primaryRoute: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false }),
+              blockerCodes: expect.arrayContaining(["parser_retry_required"]),
+              liveNetworkFetch: false
+            }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           })
         ])

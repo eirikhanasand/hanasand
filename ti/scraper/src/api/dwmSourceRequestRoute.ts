@@ -5736,6 +5736,29 @@ function sourceActorFamilyHealth(input: {
       ...(evidence?.blockers ?? []),
       ...(evidence?.gap ? [{ code: "candidate_gap", severity: "warning", family, retryable: true }] : [])
     ]);
+    const nextActions = queueItems.map((item) => ({
+      id: item.id,
+      type: item.type,
+      priority: item.priority,
+      reasonCode: item.reasonCode,
+      route: item.route,
+      liveNetworkFetch: false
+    }));
+    const recoveryActionTypes = uniqueSourceReadinessStrings(nextActions.map((action) => action.type));
+    const hasRetryAction = recoveryActionTypes.some((type) => String(type).startsWith("retry"));
+    const explicitRetryable = coverage.retryBackoff?.retryable === true
+      || parser?.retryBackoff?.retryable === true
+      || hasRetryAction;
+    const retryable = explicitRetryable || blockers.some((blocker: any) => blocker.retryable === true);
+    const recoveryState = explicitRetryable
+      ? "retryable"
+      : isMissingFamily
+        ? "candidate_required"
+        : (capture?.state && capture.state !== "capture_observed")
+          ? "capture_required"
+          : blockers.length > 0
+            ? "blocked"
+            : "monitor";
     return {
       schemaVersion: "dwm.actor_source_family_health_row.v1",
       proofId: stableId("dwm_actor_source_family_health_row", `${input.query}:${family}:${coverage.state}:${parser?.parserState ?? "unknown"}:${capture?.state ?? "no_capture_row"}:${confidence}`),
@@ -5765,14 +5788,17 @@ function sourceActorFamilyHealth(input: {
       gap: evidence?.gap,
       retryBackoff: coverage.retryBackoff ?? parser?.retryBackoff,
       blockers,
-      nextActions: queueItems.map((item) => ({
-        id: item.id,
-        type: item.type,
-        priority: item.priority,
-        reasonCode: item.reasonCode,
-        route: item.route,
+      nextActions,
+      operationalRecovery: {
+        state: recoveryState,
+        retryable,
+        noNetworkSafe: true,
+        nextActionTypes: recoveryActionTypes,
+        primaryAction: nextActions[0]?.type,
+        primaryRoute: nextActions[0]?.route,
+        blockerCodes: uniqueSourceReadinessStrings(blockers.map((blocker: any) => blocker.code).filter(Boolean)),
         liveNetworkFetch: false
-      })),
+      },
       privacyBoundary: coverage.privacyBoundary,
       sourceTrust: coverage.sourceTrust,
       safeOutput: {
@@ -5798,6 +5824,8 @@ function sourceActorFamilyHealth(input: {
       alertReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.alertability.alertReady === true).map((row) => row.family)),
       gapFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.gap).map((row) => row.family)),
       retryFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.retryBackoff?.retryable === true || row.nextActions.some((action: any) => String(action.type).startsWith("retry"))).map((row) => row.family)),
+      recoveryStates: uniqueSourceReadinessStrings(rows.map((row: any) => row.operationalRecovery?.state).filter(Boolean)),
+      recoveryActionFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.operationalRecovery?.nextActionTypes?.length > 0).map((row) => row.family)),
       lastCaptureAt: latestIso(rows.map((row) => row.timestamps.lastCaptureAt)),
       lastEnrichmentAt: latestIso(rows.map((row) => row.timestamps.lastEnrichmentAt)),
       averageConfidence: confidenceRows.length > 0
