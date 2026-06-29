@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { buildDwmAlertGenerationPlan, buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertGenerationPlan, buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -451,6 +451,155 @@ describe("dwm alert repository", () => {
     const deniedRebuild = rebuildDwmRuntimeAlerts({ store: deniedStore as any, tenantId: "org_repo_denied", organizationId: "org_repo_denied" });
     expect(deniedRebuild.savedAlertCount).toBe(0);
     expect((deniedStore as any).listDwmAlerts()).toEqual([]);
+  });
+
+  test("builds customer proof rows from org export alerts while preserving workflow and delivery replay state", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveCapture(telegramCapture);
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_repo_customer",
+      tenantId: "org_repo_customer",
+      ownerOrganizationId: "org_repo_customer",
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_repo_customer",
+        watchlistItemId: "watch_item_customer",
+        organizationId: "org_repo_customer",
+        tenantId: "org_repo_customer",
+        kind: "domain",
+        termFamily: "domain",
+        term: "acme.com",
+        status: "active",
+        alertGeneratorKey: "org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"
+      }],
+      watchlistTerms: [{
+        watchlistId: "watch_repo_customer_paused",
+        watchlistItemId: "watch_item_customer_paused",
+        organizationId: "org_repo_customer",
+        tenantId: "org_repo_customer",
+        kind: "domain",
+        term: "acme.com",
+        status: "paused"
+      }, {
+        watchlistId: "watch_repo_customer_archived",
+        watchlistItemId: "watch_item_customer_archived",
+        organizationId: "org_repo_customer",
+        tenantId: "org_repo_customer",
+        kind: "domain",
+        term: "acme.com",
+        status: "archived"
+      }]
+    }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_repo_customer" }))) {
+      (store as any).saveDwmWatchlist(watchlist);
+    }
+
+    const first = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "org_repo_customer", organizationId: "org_repo_customer" });
+    expect(first.savedAlertCount).toBe(1);
+    expect(first.generationPlan.skippedWatchlists).toEqual([
+      { watchlistId: "watch_repo_customer_paused", reason: "paused" },
+      { watchlistId: "watch_repo_customer_archived", reason: "paused" }
+    ]);
+    const alert = first.alerts[0];
+    expect(alert).toMatchObject({
+      organizationId: "org_repo_customer",
+      sourceFamily: "telegram_public",
+      watchlistItemIds: ["watch_item_customer"],
+      deliveryReadinessContext: {
+        selectedCaptureIds: ["cap_repo_tg_acme"],
+        alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"],
+        blockerCodes: []
+      }
+    });
+
+    store.saveDwmAlert({
+      ...alert,
+      workflowStatus: "investigating",
+      reviewState: "reviewing",
+      deliveryState: "delivered",
+      assignedOwner: "analyst-customer-proof",
+      severityOverride: "critical",
+      workflowNote: "Customer proof analyst note.",
+      workflowRationale: "Evidence is tied to active org watchlist term.",
+      workflowEvents: [{ id: "evt_customer_proof", at: "2026-06-28T13:20:00.000Z", note: "Customer proof analyst note." }],
+      caseId: "case_customer_proof",
+      casePath: `/v1/cases/case_customer_proof?alertId=${alert.id}`,
+      deliveredAt: "2026-06-28T13:21:00.000Z",
+      replayCount: 3
+    });
+    const delivery = (store as any).saveDwmWebhookDelivery({
+      id: "delivery_customer_proof",
+      tenantId: "org_repo_customer",
+      organizationId: "org_repo_customer",
+      alertId: alert.id,
+      webhookDestinationId: "webhook_repo_customer",
+      dedupeKey: alert.dedupeKey,
+      attemptedAt: "2026-06-28T13:21:00.000Z",
+      status: "delivered",
+      httpStatus: 202
+    });
+    store.saveCapture(telegramFollowupCapture);
+
+    const rebuilt = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "org_repo_customer", organizationId: "org_repo_customer" });
+    const preserved = rebuilt.alerts[0];
+    expect(preserved).toMatchObject({
+      workflowStatus: "investigating",
+      assignedOwner: "analyst-customer-proof",
+      severityOverride: "critical",
+      workflowNote: "Customer proof analyst note.",
+      workflowRationale: "Evidence is tied to active org watchlist term.",
+      caseId: "case_customer_proof",
+      casePath: `/v1/cases/case_customer_proof?alertId=${alert.id}`,
+      replayCount: 3
+    });
+    expect(preserved.workflowEvents).toHaveLength(1);
+    expect(preserved.deliveryReadinessContext).toMatchObject({
+      replayCount: 3,
+      sourceFamily: "telegram_public"
+    });
+    expect(preserved.deliveryReadinessContext.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
+    expect(preserved.deliveryReadinessContext.blockerCodes).toEqual(expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]));
+
+    const proof = buildDwmAlertCustomerProofHandoffRow({
+      alert: preserved,
+      deliveries: [delivery],
+      webhookDestinationLifecycle: { verified: false, destinationId: "webhook_repo_customer" },
+      generatedAt: "2026-06-28T13:30:00.000Z"
+    });
+    expect(proof).toMatchObject({
+      schemaVersion: "dwm.customer_alert_proof.v1",
+      alertId: alert.id,
+      organizationId: "org_repo_customer",
+      sourceFamily: "telegram_public",
+      evidenceCount: 2,
+      workflow: {
+        status: "investigating",
+        assignedOwner: "analyst-customer-proof",
+        severityOverride: "critical",
+        eventCount: 1,
+        replayCount: 3
+      },
+      caseHandoff: {
+        ready: true,
+        caseId: "case_customer_proof",
+        route: "/v1/cases"
+      },
+      delivery: {
+        delivered: true,
+        deliveryHistoryRefs: ["delivery_customer_proof"],
+        lastDeliveryStatus: "delivered"
+      },
+      consumerCompatibility: {
+        webhook: { canConsume: true },
+        helpdesk: { canConsume: true, supportOnlyRedactionNeeded: false },
+        publicTI: { canConsume: true, alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"] }
+      }
+    });
+    expect(proof.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
+    expect(proof.blockerCodes).toEqual(expect.arrayContaining(["duplicate_delivered_dedupe", "webhook_destination_not_verified"]));
   });
 
   test("API rebuild and list expose generated alerts in product-ready shape", async () => {

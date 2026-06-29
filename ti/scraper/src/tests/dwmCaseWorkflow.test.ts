@@ -2,6 +2,7 @@ import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir } from "./api
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
+import { buildDwmAlertCustomerProofHandoffRow } from "../storage/dwmAlertRepository.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
 const source: SourceRecord = {
@@ -562,6 +563,64 @@ describe("dwm case workflow", () => {
       });
       expect(rebuildAfterClose.alerts[0].workflowEvents.length).toBeGreaterThanOrEqual(3);
       expect((store as any).getCase(closed.case.id).workflowEvents).toHaveLength(3);
+
+      const replayAfterDeliveryResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
+        method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({ organizationId })
+      }), options);
+      const replayAfterDelivery = await replayAfterDeliveryResponse.json() as any;
+      expect(replayAfterDeliveryResponse.status).toBe(200);
+      expect(replayAfterDelivery.alert).toMatchObject({
+        id: alert.id,
+        caseId: closed.case.id,
+        casePath: expect.stringContaining(`/v1/cases/${closed.case.id}`),
+        deliveryReadiness: {
+          replayMarker: expect.any(String),
+          deliveryHistoryRefs: [deliveryPayload.deliveries[0].id],
+          blockerCodes: expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"])
+        }
+      });
+      expect(replayAfterDelivery.alert.workflowSummary).toMatchObject({
+        caseId: closed.case.id,
+        assignedOwner: "ir-lead"
+      });
+
+      const replayProof = buildDwmAlertCustomerProofHandoffRow({
+        alert: (store as any).getDwmAlert(alert.id),
+        deliveries: (store as any).listDwmWebhookDeliveries().filter((delivery: any) => delivery.alertId === alert.id),
+        webhookDestinationLifecycle: { verified: true, destinationId: webhookPayload.destination.id },
+        generatedAt: "2026-06-28T13:40:00.000Z"
+      });
+      expect(replayProof).toMatchObject({
+        schemaVersion: "dwm.customer_alert_proof.v1",
+        alertId: alert.id,
+        organizationId,
+        sourceFamily: "telegram_public",
+        selectedCaptureIds: [capture.id],
+        workflow: {
+          assignedOwner: "ir-lead",
+          eventCount: expect.any(Number),
+          replayCount: 1
+        },
+        caseHandoff: {
+          ready: true,
+          caseId: closed.case.id,
+          route: "/v1/cases"
+        },
+        delivery: {
+          delivered: true,
+          deliveryHistoryRefs: [deliveryPayload.deliveries[0].id],
+          lastDeliveryStatus: "delivered"
+        },
+        consumerCompatibility: {
+          webhook: { canConsume: true },
+          helpdesk: { canConsume: true },
+          publicTI: { canConsume: false }
+        },
+        blockerCodes: expect.arrayContaining(["duplicate_delivered_dedupe"])
+      });
+
       (store as any).saveDwmAlert({
         ...(store as any).getDwmAlert(alert.id),
         evidence: [
@@ -579,6 +638,21 @@ describe("dwm case workflow", () => {
             provenance: { captureId: "cap_sensitive_case_export", sourceId: source.id }
           }
         ]
+      });
+      const redactedProof = buildDwmAlertCustomerProofHandoffRow({
+        alert: (store as any).getDwmAlert(alert.id),
+        deliveries: (store as any).listDwmWebhookDeliveries().filter((delivery: any) => delivery.alertId === alert.id),
+        generatedAt: "2026-06-28T13:41:00.000Z"
+      });
+      expect(redactedProof).toMatchObject({
+        support: {
+          redacted: true,
+          redactionRequired: true
+        },
+        consumerCompatibility: {
+          helpdesk: { canConsume: true, supportOnlyRedactionNeeded: true }
+        },
+        blockerCodes: expect.arrayContaining(["support_only_redaction_needed"])
       });
 
       const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${organizationId}`, {

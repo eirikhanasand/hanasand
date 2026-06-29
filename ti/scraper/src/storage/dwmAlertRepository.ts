@@ -15,12 +15,16 @@ type DwmDeliveryReadinessBlockerCode =
 
 export type DwmAlertGenerationBlockerCode =
   | "blocked_watchlist_scope"
+  | "no_org_export"
   | "org_export_unavailable"
+  | "no_active_watchlist_terms"
   | "no_matching_captures"
   | "source_family_inactive"
   | "entitlement_denied"
   | "missing_evidence"
   | "case_route_unavailable"
+  | "webhook_destination_not_verified"
+  | "support_only_redaction_needed"
   | "product_dedupe_pending";
 
 export type DwmAlertGenerationBlocker = {
@@ -31,6 +35,67 @@ export type DwmAlertGenerationBlocker = {
   watchlistIds?: string[];
   candidateIds?: string[];
   sourceFamilies?: string[];
+};
+
+export type DwmCustomerProofBlockerCode = DwmAlertGenerationBlockerCode | DwmDeliveryReadinessBlockerCode;
+
+export type DwmAlertCustomerProofHandoffRow = {
+  schemaVersion: "dwm.customer_alert_proof.v1";
+  alertId: string;
+  tenantId: string;
+  organizationId?: string;
+  dedupeKey: string;
+  deliveryDedupeKey: string;
+  replayMarker?: string;
+  sourceFamily: string;
+  evidenceCount: number;
+  selectedCaptureIds: string[];
+  provenance: {
+    matchBasis?: string;
+    captureIds: string[];
+    sourceIds: string[];
+    generatedAt?: string;
+  };
+  workflow: {
+    status: string;
+    reviewState?: string;
+    deliveryState?: string;
+    assignedOwner?: string;
+    severityOverride?: string;
+    note?: string;
+    rationale?: string;
+    eventCount: number;
+    replayCount: number;
+  };
+  caseHandoff: {
+    ready: boolean;
+    caseIdCandidate?: string;
+    caseId?: string;
+    casePath?: string;
+    route: "/v1/cases";
+  };
+  delivery: {
+    ready: boolean;
+    state?: string;
+    webhookDestinationIds: string[];
+    deliveryHistoryRefs: string[];
+    lastDeliveryStatus?: string;
+    lastDeliveryAt?: string;
+    delivered: boolean;
+  };
+  support: {
+    redacted: boolean;
+    redactionRequired: boolean;
+    guidance: string;
+  };
+  consumerCompatibility: {
+    webhook: { canConsume: boolean; requiredFields: string[] };
+    helpdesk: { canConsume: boolean; supportOnlyRedactionNeeded: boolean };
+    publicTI: { canConsume: boolean; alertGeneratorKeys: string[] };
+  };
+  blockerCodes: DwmCustomerProofBlockerCode[];
+  typedBlockers: Array<{ code: DwmCustomerProofBlockerCode; field: string; detail: string; recoverable: boolean }>;
+  generatedAt: string;
 };
 
 export type RuntimeDwmWatchlist = {
@@ -572,6 +637,114 @@ export function dwmAlertToSqlRecord(alert: any) {
   };
 }
 
+export function buildDwmAlertCustomerProofHandoffRow(input: {
+  alert: any;
+  deliveries?: Array<Record<string, any>>;
+  webhookDestinationLifecycle?: { verified?: boolean; status?: string; destinationId?: string };
+  supportOnlyRedactionNeeded?: boolean;
+  generatedAt?: string;
+}): DwmAlertCustomerProofHandoffRow {
+  const alert = input.alert;
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const deliveries = input.deliveries ?? [];
+  const context = alert.deliveryReadinessContext ?? {};
+  const workflow = alert.workflowContext ?? {};
+  const webhook = alert.webhookContext ?? {};
+  const selectedCaptureIds = uniqueStrings(asStringArray(context.selectedCaptureIds ?? workflow.captureIds ?? webhook.captureIds ?? alert.provenance?.captureIds));
+  const evidenceCount = Number(context.evidenceCount ?? workflow.evidenceCount ?? webhook.evidenceCount ?? alert.evidence?.length ?? 0);
+  const deliveryHistoryRefs = uniqueStrings([
+    ...asStringArray(context.deliveryHistoryRefs),
+    ...deliveries.map((delivery) => delivery.id).filter(Boolean)
+  ].map(String));
+  const webhookDestinationIds = uniqueStrings(asStringArray(context.webhookDestinationIds ?? workflow.webhookDestinationIds ?? webhook.webhookDestinationIds));
+  const alertGeneratorKeys = uniqueStrings(asStringArray(context.alertGeneratorKeys ?? workflow.alertGeneratorKeys ?? webhook.alertGeneratorKeys));
+  const delivered = Boolean(alert.deliveredAt) || alert.deliveryState === "delivered" || deliveries.some((delivery) => delivery.status === "delivered") || context.state === "delivered";
+  const redactionRequired = input.supportOnlyRedactionNeeded === true || (alert.evidence ?? []).some((item: any) => item.redactionState === "raw_sensitive");
+  const hasCaseRoute = Boolean(context.casePath ?? alert.casePath ?? workflow.casePath);
+  const blockers = [
+    ...((context.blockers ?? []) as DwmAlertCustomerProofHandoffRow["typedBlockers"]),
+    !alert.organizationId ? customerProofBlocker("no_org_export", "organizationId", "Org/customer alert proof requires an organization id.", true) : undefined,
+    !alertGeneratorKeys.length ? customerProofBlocker("org_export_unavailable", "workflowContext.alertGeneratorKeys", "Org watchlist export reference is missing from the persisted alert.", true) : undefined,
+    !selectedCaptureIds.length ? customerProofBlocker("no_matching_captures", "selectedCaptureIds", "No matching captures are attached to this alert proof.", true) : undefined,
+    evidenceCount === 0 ? customerProofBlocker("missing_evidence", "evidence", "Customer proof requires persisted evidence.", true) : undefined,
+    !hasCaseRoute ? customerProofBlocker("case_route_unavailable", "casePath", "Case handoff route is unavailable for this alert.", true) : undefined,
+    input.webhookDestinationLifecycle && input.webhookDestinationLifecycle.verified === false ? customerProofBlocker("webhook_destination_not_verified", "webhookDestinationLifecycle.verified", "Webhook destination exists but is not verified for customer delivery.", true) : undefined,
+    redactionRequired ? customerProofBlocker("support_only_redaction_needed", "evidence.redactionState", "Support/helpdesk consumers must use redacted evidence only.", true) : undefined,
+    delivered ? customerProofBlocker("duplicate_delivered_dedupe", "deliveryDedupeKey", "This alert has delivered history; replay must preserve the same dedupe key.", false) : undefined
+  ].filter(Boolean) as DwmAlertCustomerProofHandoffRow["typedBlockers"];
+  const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmCustomerProofBlockerCode[];
+  const deliveryState = String(context.state ?? alert.deliveryState ?? "pending_review");
+  const deliveryReady = Boolean(context.ready) && !blockerCodes.includes("webhook_destination_not_verified") && !blockerCodes.includes("support_only_redaction_needed");
+  return {
+    schemaVersion: "dwm.customer_alert_proof.v1",
+    alertId: String(alert.id),
+    tenantId: String(alert.tenantId ?? workflow.tenantId ?? webhook.tenantId ?? "default"),
+    organizationId: alert.organizationId ?? workflow.organizationId ?? webhook.organizationId,
+    dedupeKey: String(alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey ?? workflow.dedupeKey),
+    deliveryDedupeKey: String(context.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey),
+    replayMarker: context.replayMarker,
+    sourceFamily: String(context.sourceFamily ?? alert.sourceFamily ?? workflow.sourceFamily ?? "unknown"),
+    evidenceCount,
+    selectedCaptureIds,
+    provenance: {
+      matchBasis: alert.provenance?.matchBasis,
+      captureIds: uniqueStrings(asStringArray(alert.provenance?.captureIds ?? selectedCaptureIds)),
+      sourceIds: uniqueStrings(asStringArray(alert.provenance?.sourceIds ?? (alert.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId))),
+      generatedAt: alert.provenance?.generatedAt
+    },
+    workflow: {
+      status: String(alert.workflowStatus ?? "new"),
+      reviewState: alert.reviewState,
+      deliveryState: alert.deliveryState,
+      assignedOwner: alert.assignedOwner,
+      severityOverride: alert.severityOverride,
+      note: alert.workflowNote,
+      rationale: alert.workflowRationale,
+      eventCount: (alert.workflowEvents ?? []).length,
+      replayCount: Number(alert.replayCount ?? 0)
+    },
+    caseHandoff: {
+      ready: hasCaseRoute,
+      caseIdCandidate: context.caseIdCandidate ?? alert.caseIdCandidate ?? workflow.caseIdCandidate,
+      caseId: context.caseId ?? alert.caseId,
+      casePath: context.casePath ?? alert.casePath ?? workflow.casePath,
+      route: "/v1/cases"
+    },
+    delivery: {
+      ready: deliveryReady,
+      state: deliveryState,
+      webhookDestinationIds,
+      deliveryHistoryRefs,
+      lastDeliveryStatus: context.lastDeliveryStatus ?? deliveries.at(-1)?.status,
+      lastDeliveryAt: context.lastDeliveryAt ?? deliveries.at(-1)?.attemptedAt,
+      delivered
+    },
+    support: {
+      redacted: true,
+      redactionRequired,
+      guidance: redactionRequired ? "Use redacted evidence summaries for support-only consumers." : "Customer proof contains no raw sensitive evidence."
+    },
+    consumerCompatibility: {
+      webhook: { canConsume: webhookDestinationIds.length > 0 && evidenceCount > 0, requiredFields: ["alertId", "dedupeKey", "selectedCaptureIds", "deliveryDedupeKey", "replayMarker"] },
+      helpdesk: { canConsume: Boolean(alert.organizationId), supportOnlyRedactionNeeded: redactionRequired },
+      publicTI: { canConsume: alertGeneratorKeys.length > 0, alertGeneratorKeys }
+    },
+    blockerCodes,
+    typedBlockers: blockers,
+    generatedAt
+  };
+}
+
+function customerProofBlocker(code: DwmCustomerProofBlockerCode, field: string, detail: string, recoverable: boolean): DwmAlertCustomerProofHandoffRow["typedBlockers"][number] {
+  return { code, field, detail, recoverable };
+}
+
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value === undefined || value === null || value === "") return [];
+  return [String(value)].filter(Boolean);
+}
+
 function buildGenerationReadinessBlockers(input: {
   watchlists: RuntimeDwmWatchlist[];
   organizationId?: string;
@@ -589,6 +762,14 @@ function buildGenerationReadinessBlockers(input: {
       detail: "Resolve blocked watchlists before rebuild so org-scoped terms cannot leak into tenant-wide alerts.",
       recoverable: true,
       watchlistIds: input.plan.blockedWatchlists.map((watchlist) => watchlist.watchlistId)
+    }));
+  }
+  if (input.organizationId && !input.watchlists.some((watchlist) => watchlist.organizationId === input.organizationId)) {
+    blockers.push(generationBlocker({
+      code: "no_org_export",
+      field: "orgWatchlistTerms",
+      detail: "No org watchlist export is available for customer alert generation.",
+      recoverable: true
     }));
   }
   if (input.organizationId && orgExportExpected(input.watchlists) && !input.plan.candidates.some((candidate) => candidate.alertGeneratorKeys.length > 0)) {
@@ -610,6 +791,14 @@ function buildGenerationReadinessBlockers(input: {
       detail: "Org entitlement currently blocks alert generation; rebuild must not mutate alerts.",
       recoverable: true,
       watchlistIds: entitlementDeniedWatchlists
+    }));
+  }
+  if (!input.watchlists.some((watchlist) => watchlist.organizationId === input.organizationId && watchlist.status === "active" && watchlist.terms.length > 0)) {
+    blockers.push(generationBlocker({
+      code: "no_active_watchlist_terms",
+      field: "watchlists.terms",
+      detail: "No active watchlist terms are available for this org rebuild.",
+      recoverable: true
     }));
   }
   if (input.plan.candidateCount === 0) {
