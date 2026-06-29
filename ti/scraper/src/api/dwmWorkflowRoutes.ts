@@ -1335,9 +1335,27 @@ function buildDwmAlertQueueVisibility(input: {
       readyForRebuild: generationReadiness.readyForRebuild,
       readyForCustomerDelivery: generationReadiness.readyForCustomerDelivery,
       blockerCodes: generationReadiness.blockerCodes,
+      sourceFamilyCoverage: generationReadiness.sourceFamilyCoverage,
       zeroAlertProof: generationReadiness.zeroAlertProof
     },
     zeroAlertProof: generationReadiness.zeroAlertProof,
+    consumerContract: {
+      schemaVersion: "dwm.alert_queue_consumer_contract.v1",
+      route: "/v1/dwm/alerts",
+      stableFields: [
+        "alerts[].id",
+        "alerts[].organizationId",
+        "alerts[].sourceFamily",
+        "alerts[].workflowSummary",
+        "alerts[].alertEventSummary",
+        "alerts[].evidenceFreshness",
+        "alerts[].provenanceFreshness",
+        "alertQueueVisibility.zeroAlertProof",
+        "alertQueueVisibility.generationReadiness.sourceFamilyCoverage"
+      ],
+      filters: ["organizationId", "status", "sourceFamily", "eventType", "hasUpdatedEvent", "watchlistId", "watchlistItemId", "captureId", "caseId"],
+      zeroAlertContract: "dwm.zero_alert_proof.v1"
+    },
     watchlistScope: {
       watchlistItemIds,
       alertGeneratorKeys,

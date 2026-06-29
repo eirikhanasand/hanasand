@@ -905,6 +905,26 @@ describe("dwm workflow persistence", () => {
       }
     });
     expect(alphaUpdatedList.alerts[0].alertEventSummary.updatedEvent.dedupeKey).toBe(alphaDarkweb.dedupeKey);
+    expect(alphaUpdatedList.alertQueueVisibility).toMatchObject({
+      consumerContract: {
+        schemaVersion: "dwm.alert_queue_consumer_contract.v1",
+        route: "/v1/dwm/alerts",
+        filters: expect.arrayContaining(["organizationId", "eventType", "hasUpdatedEvent", "sourceFamily"]),
+        zeroAlertContract: "dwm.zero_alert_proof.v1"
+      },
+      generationReadiness: {
+        sourceFamilyCoverage: expect.arrayContaining([
+          expect.objectContaining({ sourceFamily: "darkweb_metadata", captureRefCount: 2 }),
+          expect.objectContaining({ sourceFamily: "telegram_public", captureRefCount: 1 })
+        ])
+      }
+    });
+    expect(alphaUpdatedList.alertQueueVisibility.consumerContract.stableFields).toEqual(expect.arrayContaining([
+      "alerts[].alertEventSummary",
+      "alerts[].evidenceFreshness",
+      "alertQueueVisibility.zeroAlertProof",
+      "alertQueueVisibility.generationReadiness.sourceFamilyCoverage"
+    ]));
 
     const alphaUpdatedDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}?organizationId=${alphaOrg.id}`, {
       headers: { "x-user-email": "owner-alpha@workflow.example" }
@@ -1185,6 +1205,12 @@ describe("dwm workflow persistence", () => {
         readyForRebuild: true,
         readyForCustomerDelivery: false,
         blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"]),
+        sourceFamilyCoverage: [{
+          sourceFamily: "unknown",
+          candidateCount: 1,
+          captureRefCount: 0,
+          watchlistIds: ["watch_workflow_quiet_nomatch"]
+        }],
         zeroAlertProof: {
           schemaVersion: "dwm.zero_alert_proof.v1",
           zeroAlert: true,
@@ -1201,6 +1227,16 @@ describe("dwm workflow persistence", () => {
           hasMatchingCaptures: false,
           captureRefCount: 0
         }]
+      },
+      consumerContract: {
+        schemaVersion: "dwm.alert_queue_consumer_contract.v1",
+        stableFields: expect.arrayContaining([
+          "alerts[].workflowSummary",
+          "alerts[].alertEventSummary",
+          "alertQueueVisibility.zeroAlertProof"
+        ]),
+        filters: expect.arrayContaining(["organizationId", "watchlistItemId", "captureId"]),
+        zeroAlertContract: "dwm.zero_alert_proof.v1"
       }
     });
   });
