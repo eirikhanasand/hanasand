@@ -26,6 +26,8 @@ type EventQuery = {
     q?: string
     actor?: string
     target?: string
+    action?: string
+    outcome?: string
     method?: string
     path?: string
     session?: string
@@ -444,6 +446,8 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
     const q = String(query.q || '').trim()
     const actorFilter = String(query.actor || '').trim()
     const targetFilter = String(query.target || '').trim()
+    const actionFilter = String(query.action || '').trim().toLowerCase()
+    const outcomeFilter = String(query.outcome || '').trim().toLowerCase()
     const methodFilter = String(query.method || '').trim().toUpperCase()
     const pathFilter = String(query.path || '').trim()
     const sessionFilter = String(query.session || '').trim()
@@ -473,6 +477,20 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
     if (targetFilter) {
         const placeholder = add(`%${targetFilter}%`)
         where.push('(e.target_id ILIKE ' + placeholder + ' OR target.name ILIKE ' + placeholder + ')')
+    }
+    if (actionFilter && !['impersonation.start', 'impersonation.stop', 'start', 'stop'].includes(actionFilter)) {
+        return res.status(400).send(impersonationError('unsupported_impersonation_action_filter', 'Unsupported impersonation action filter.', {
+            supportedValues: ['impersonation.start', 'impersonation.stop'],
+        }))
+    }
+    if (outcomeFilter && outcomeFilter !== 'success') {
+        return res.status(400).send(impersonationError('unsupported_impersonation_outcome_filter', 'Impersonation lifecycle history only stores successful lifecycle events; use admin audit events for denied attempts.', {
+            supportedValues: ['success'],
+            auditRoute: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
+        }))
+    }
+    if (actionFilter) {
+        where.push(`e.path ILIKE ${add(actionFilter.endsWith('stop') ? '%/stop%' : '%/start%')}`)
     }
     if (methodFilter) {
         where.push(`e.method = ${add(methodFilter)}`)
@@ -510,7 +528,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         ORDER BY e.created_at DESC
         LIMIT ${add(limit)}
     `, values)
-    const filters = { q, actor: actorFilter, target: targetFilter, method: methodFilter, path: pathFilter, session: sessionFilter, from: fromFilter, to: toFilter, limit }
+    const filters = { q, actor: actorFilter, target: targetFilter, action: actionFilter, outcome: outcomeFilter || 'success', method: methodFilter, path: pathFilter, session: sessionFilter, from: fromFilter, to: toFilter, limit }
     const timeline = result.rows.map(toImpersonationTimelineEvent)
     return res.send({
         events: result.rows,
