@@ -980,6 +980,14 @@ describe("dwm alert repository", () => {
       captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
       lastObservedAt: "2026-06-28T13:16:00.000Z"
     });
+    expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).workflowDecision).toMatchObject({
+      value: "false_positive",
+      rationale: "Duplicate customer-domain exposure already reviewed.",
+      falsePositiveReason: "Known duplicate alert from the same watchlist term.",
+      suppressionReason: "Do not page customer twice for the same evidence cluster.",
+      decidedAt: "2026-06-28T13:12:30.000Z",
+      decidedBy: "analyst-1"
+    });
     expect(buildDwmAlertCustomerProofHandoffRow({ alert: preserved }).workflow.decision).toMatchObject({
       value: "false_positive",
       rationale: "Duplicate customer-domain exposure already reviewed.",

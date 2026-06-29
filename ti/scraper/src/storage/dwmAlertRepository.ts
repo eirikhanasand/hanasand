@@ -533,6 +533,14 @@ export type DwmAlertDownstreamHandoff = {
     replayCount: number;
     lastReplayedAt?: string;
   };
+  workflowDecision: {
+    value?: string;
+    rationale?: string;
+    falsePositiveReason?: string;
+    suppressionReason?: string;
+    decidedAt?: string;
+    decidedBy?: string;
+  };
   caseReadiness: {
     ready: boolean;
     route: "/v1/cases";
@@ -2202,6 +2210,14 @@ export function buildDwmAlertDownstreamHandoff(input: {
       expectedEventCount: input.expectedWorkflowEventCount,
       replayCount: Number(alert?.replayCount ?? 0),
       lastReplayedAt: alert?.lastReplayedAt
+    },
+    workflowDecision: {
+      value: alert?.workflowDecision,
+      rationale: alert?.decisionRationale ?? alert?.workflowRationale,
+      falsePositiveReason: alert?.falsePositiveReason,
+      suppressionReason: alert?.suppressionReason,
+      decidedAt: alert?.decisionAt,
+      decidedBy: alert?.decisionBy
     },
     caseReadiness: {
       ready: caseReady,
