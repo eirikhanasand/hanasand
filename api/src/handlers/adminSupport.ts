@@ -5287,8 +5287,12 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
     const event = row as Record<string, any>
     const context = redactAuditValue(event.context && typeof event.context === 'object' ? event.context : {}) as Record<string, unknown>
     const beforeAfter = auditBeforeAfter(context)
+    const id = Number(event.id)
+    const entityId = event.entity_id || event.target_id || event.organization_id || null
+    const supportSessionId = text(context.supportSessionId)
+        || (text(entityId).startsWith('support_session_') ? text(entityId) : '')
     return {
-        id: Number(event.id),
+        id,
         actor: {
             id: event.actor_id,
             name: event.actor_name || null,
@@ -5299,7 +5303,7 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
             name: event.target_name || null,
         },
         entityType: event.target_type || 'admin_audit_event',
-        entityId: event.entity_id || event.target_id || event.organization_id || null,
+        entityId,
         organizationId: event.organization_id || null,
         organizationName: event.organization_name || null,
         action: event.action_type,
@@ -5310,6 +5314,12 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
         before: beforeAfter.before,
         after: beforeAfter.after,
         context,
+        links: {
+            detail: `/api/admin/audit-events/${encodeURIComponent(String(id))}`,
+            request: event.request_id ? `/api/admin/audit-events?request=${encodeURIComponent(String(event.request_id))}` : null,
+            entity: entityId ? `/api/admin/audit-events?entity=${encodeURIComponent(String(entityId))}` : null,
+            supportSession: supportSessionId ? `/api/admin/support/sessions/${encodeURIComponent(supportSessionId)}` : null,
+        },
         createdAt: event.created_at,
         copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} entity=${event.entity_id || event.target_id || ''} request=${event.request_id || ''}`,
     }
@@ -5331,9 +5341,13 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
     const event = row as Record<string, any>
     const context = redactAuditValue(event.context || {}) as Record<string, unknown>
     const beforeAfter = auditBeforeAfter(context)
+    const id = Number(event.id)
+    const entityId = event.entity_id || event.target_id || event.organization_id || null
+    const supportSessionId = text(context.supportSessionId)
+        || (text(entityId).startsWith('support_session_') ? text(entityId) : '')
     const timelineEvent = {
         schemaVersion: 'admin.audit.timeline_event.v1',
-        id: Number(event.id),
+        id,
         timestamp: event.created_at,
         actionType: event.action_type,
         severity: event.severity,
@@ -5354,7 +5368,7 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             name: event.organization_name || null,
         },
         entity: {
-            id: event.entity_id || event.target_id || event.organization_id || null,
+            id: entityId,
             type: event.target_type || 'admin_audit_event',
         },
         requestId: event.request_id || null,
@@ -5363,6 +5377,12 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
         before: beforeAfter.before,
         after: beforeAfter.after,
         context,
+        links: {
+            detail: `/api/admin/audit-events/${encodeURIComponent(String(id))}`,
+            request: event.request_id ? `/api/admin/audit-events?request=${encodeURIComponent(String(event.request_id))}` : null,
+            entity: entityId ? `/api/admin/audit-events?entity=${encodeURIComponent(String(entityId))}` : null,
+            supportSession: supportSessionId ? `/api/admin/support/sessions/${encodeURIComponent(supportSessionId)}` : null,
+        },
     }
     return {
         ...event,
@@ -5399,6 +5419,7 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
                 idempotencyKey: text(context.idempotencyKey) || null,
                 reasonPresent: Boolean(event.reason),
                 contextRedacted: true,
+                detailRoute: `/api/admin/audit-events/${encodeURIComponent(String(event.id))}`,
             },
             copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
         },
@@ -5574,6 +5595,10 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
             'after',
             'scope',
             'context',
+            'links.detail',
+            'links.request',
+            'links.entity',
+            'links.supportSession',
         ],
         supportedFilters: Array.from(adminAuditFilters),
         supportWorkflows: [
