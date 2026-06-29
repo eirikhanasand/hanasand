@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { AlertCircle, CheckCircle2, CircleDashed, Clock3, ExternalLink } from 'lucide-react'
-import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarDeployBlocker, type ProductNorthStarDirection, type ProductNorthStarRow, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
+import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarDeployBlocker, type ProductNorthStarDirection, type ProductNorthStarProgressSource, type ProductNorthStarRow, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
 import { buildRouteMetadata } from '../seo'
 
 export const dynamic = 'force-dynamic'
@@ -40,15 +40,17 @@ export default async function Page({
                                 This page reads the same readiness contract used by the console. A row stays non-ready until the named backend contract is loaded, fresh, and tied to a workflow.
                             </p>
                         </div>
-                        <div className='grid gap-2 sm:grid-cols-3 lg:min-w-[460px]'>
+                        <div className='grid gap-2 sm:grid-cols-2 lg:min-w-[560px] lg:grid-cols-4'>
                             <SummaryBox label='Rows ready' value={`${scoreboard.readyRows}/${scoreboard.totalRows}`} />
                             <SummaryBox label='Checked' value={formatChecked(scoreboard.generatedAt)} />
+                            <SummaryBox label='Proof source' value={stateLabel(scoreboard.progressSource.state)} />
                             <div className={`rounded-lg border px-3 py-2 ${stateTone}`}>
                                 <p className='text-[11px] font-semibold uppercase'>Release gate</p>
                                 <p className='mt-1 text-sm font-semibold'>{scoreboard.fullChainReady ? 'ready' : 'blocked'}</p>
                             </div>
                         </div>
                     </div>
+                    <ProgressSourcePanel source={scoreboard.progressSource} />
                     {scoreboard.firstBlocker && (
                         <div className='mt-4 flex items-start gap-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-sm text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
                             <AlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
@@ -83,6 +85,48 @@ export default async function Page({
                 </div>
             </section>
         </main>
+    )
+}
+
+function ProgressSourcePanel({ source }: { source: ProductNorthStarProgressSource }) {
+    const tone = source.state === 'ready'
+        ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
+        : source.state === 'blocked'
+            ? 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+            : source.state === 'needs_action'
+                ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
+                : 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+
+    return (
+        <section
+            className='mt-4 grid gap-3 rounded-lg border border-[#e4eaf2] bg-[#fbfcfe] px-3 py-3 text-sm dark:border-[#26364f] dark:bg-[#0b1422] md:grid-cols-[minmax(0,1fr)_auto]'
+            data-north-star-progress-source='true'
+            data-north-star-progress-source-state={source.state}
+            data-north-star-progress-source-route={source.route}
+            data-north-star-progress-source-status={source.status ?? ''}
+            data-north-star-progress-source-reason={source.unavailableReason || ''}
+            data-north-star-progress-source-contract={source.backendProofContractVersion}
+            data-north-star-progress-source-timestamp={source.proofTimestamp}
+        >
+            <div className='min-w-0'>
+                <p className='text-[11px] font-semibold uppercase tracking-[0.08em] text-[#667085] dark:text-[#97a6bd]'>Readiness source</p>
+                <p className='mt-1 wrap-break-word font-semibold text-[#171a21] dark:text-white'>{source.route}</p>
+                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b9c4d6]'>{source.integrationProbeHint}</p>
+            </div>
+            <div className='grid gap-2 sm:grid-cols-3 md:min-w-[26rem]'>
+                <div className={`rounded-lg border px-3 py-2 ${tone}`}>
+                    <p className='text-[11px] font-semibold uppercase'>State</p>
+                    <p className='mt-1 text-sm font-semibold'>{stateLabel(source.state)}</p>
+                </div>
+                <SummaryBox label='HTTP' value={typeof source.status === 'number' ? String(source.status) : 'not loaded'} />
+                <SummaryBox label='Contract' value={source.backendProofContractVersion} />
+            </div>
+            {source.unavailableReason && (
+                <p className='md:col-span-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
+                    {source.unavailableReason}
+                </p>
+            )}
+        </section>
     )
 }
 
