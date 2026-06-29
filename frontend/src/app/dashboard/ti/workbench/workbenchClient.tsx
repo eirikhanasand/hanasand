@@ -962,8 +962,10 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 caseDetail={selectedCaseDetail}
                                 alertDetail={selectedAlertDetail}
                                 actionDeliveries={selectedActionDeliveries}
+                                note={notes[selected.id] ?? ''}
                                 busyAction={busyAction}
                                 onRunAction={(action) => selected && runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
+                                onCustomerNotification={() => recordCustomerNotification(selected, notes[selected.id] ?? '', selectedCaseDetail)}
                                 onCopyPayload={(payload) => selected && copyHandoffPayload(selected, payload)}
                             />
 
@@ -1202,17 +1204,19 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     )
 }
 
-function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, actionDeliveries = [], busyAction, onRunAction, onCopyPayload }: {
+function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, actionDeliveries = [], note, busyAction, onRunAction, onCustomerNotification, onCopyPayload }: {
     selected?: WorkbenchCase
     orgContext?: WorkbenchOrgContext
     caseDetail?: CaseDetailState
     alertDetail?: AlertDetailState
     actionDeliveries?: WorkbenchDeliveryEvidence[]
+    note: string
     busyAction: string | null
     onRunAction: (action: WorkbenchAction) => void | Promise<void>
+    onCustomerNotification: () => void | Promise<void>
     onCopyPayload: (payload?: unknown) => void | Promise<void>
 }) {
-    const rows = actionRailRows(selected, orgContext, caseDetail, alertDetail, actionDeliveries)
+    const rows = actionRailRows(selected, orgContext, caseDetail, alertDetail, actionDeliveries, note)
 
     return (
         <section className='rounded-lg border border-[#d8e1ef] bg-white dark:border-[#2d3a52] dark:bg-[#0f172a]'>
@@ -1258,7 +1262,18 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                     Copy handoff
                                 </button>
                             ) : null}
-                            {!row.href && !row.action && row.copyPayload === undefined && (
+                            {row.customerNotification ? (
+                                <button
+                                    type='button'
+                                    disabled={Boolean(busyAction) || Boolean(row.disabledReason)}
+                                    title={row.disabledReason}
+                                    onClick={onCustomerNotification}
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#d8deea] dark:hover:border-[#3b4b68]'
+                                >
+                                    {busyAction === `case:${selected?.id}:customer_notification` ? 'Recording...' : 'Record receipt'}
+                                </button>
+                            ) : null}
+                            {!row.href && !row.action && row.copyPayload === undefined && !row.customerNotification && (
                                 <button type='button' disabled title={row.disabledReason} className='inline-flex min-h-8 cursor-not-allowed items-center rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-2.5 text-xs font-semibold text-[#98a2b3] dark:border-[#2d3a52] dark:bg-[#111827] dark:text-[#8795ad]'>
                                     Blocked
                                 </button>
@@ -1279,10 +1294,11 @@ export type OperatorActionRailRow = {
     href?: string
     action?: WorkbenchAction
     copyPayload?: unknown
+    customerNotification?: boolean
     disabledReason?: string
 }
 
-function actionRailRows(selected: WorkbenchCase | undefined, orgContext: WorkbenchOrgContext | undefined, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, actionDeliveries: WorkbenchDeliveryEvidence[] = []): OperatorActionRailRow[] {
+function actionRailRows(selected: WorkbenchCase | undefined, orgContext: WorkbenchOrgContext | undefined, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, actionDeliveries: WorkbenchDeliveryEvidence[] = [], note = ''): OperatorActionRailRow[] {
     if (!selected) return [{
         id: 'select_case',
         label: 'Select work',
@@ -1313,6 +1329,16 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             detail: `GET ${caseExportHref(backedCaseHref)}.`,
             tone: 'ready',
             href: caseExportHref(backedCaseHref),
+        })
+        const notificationState = customerNotificationActionState(caseDetail)
+        const notificationDisabledReason = notificationState.disabledReason || (!note.trim() ? 'Customer notification receipt requires decision rationale.' : undefined)
+        rows.push({
+            id: 'record_customer_notification',
+            label: 'Record receipt',
+            detail: `POST ${caseCustomerNotificationHref(backedCaseHref)} after delivered webhook evidence is present.`,
+            tone: notificationDisabledReason ? 'blocked' : 'ready',
+            customerNotification: true,
+            disabledReason: notificationDisabledReason,
         })
     } else if (selected.kind === 'dwm_alert') {
         rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'No backed case ID is attached to this alert.', tone: 'blocked' })
