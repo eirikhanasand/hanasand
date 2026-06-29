@@ -2626,10 +2626,13 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.scraperEnrichmentLifecycle.rows | all(has(\"sourceFamily\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"enrichmentGap\") and .safeOutput.liveNetworkScrapeStarted == false)",
+          ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.rows | all(has(\"sourceFamily\") and has(\"alertType\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"alertGenerationImpact\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.rows | all(has(\"sourceOperationsReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.dashboardSourceReadiness.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
+          ".proofArtifacts.dashboardSourceReadiness.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
       }
@@ -3449,6 +3452,33 @@ describe("dwm source requests", () => {
             sourceFamilies: expect.arrayContaining(["darkweb_onion"])
           }),
           lifecycleFields: expect.arrayContaining(["sourceId", "sourceFamily", "policyStatus", "parserStatus", "retryState", "provenance", "freshness", "enrichmentGap"]),
+          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+        }),
+        parserHealthAlerts: expect.objectContaining({
+          schemaVersion: "ti.public_actor.parser_health_alerts.v1",
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              sourceFamily: "darkweb_onion",
+              alertType: expect.stringMatching(/policy_blocked|parser_not_ready|enrichment_gap/),
+              parserStatus: expect.objectContaining({ state: expect.any(String) }),
+              retryState: expect.objectContaining({ retryable: expect.any(Boolean) }),
+              provenance: expect.objectContaining({ candidateIds: expect.any(Array) }),
+              alertGenerationImpact: expect.objectContaining({
+                blockedAlertRows: expect.any(Number),
+                webhookConsumable: expect.any(Boolean)
+              }),
+              route: expect.objectContaining({
+                path: "/v1/dwm/source-requests",
+                liveNetworkFetch: false,
+                body: expect.objectContaining({ dryRun: true })
+              }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            })
+          ]),
+          summary: expect.objectContaining({
+            sourceFamilies: expect.arrayContaining(["darkweb_onion"]),
+            actionTypes: expect.arrayContaining([expect.any(String)])
+          }),
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         }),
         alertEvidenceHandoff: expect.objectContaining({
