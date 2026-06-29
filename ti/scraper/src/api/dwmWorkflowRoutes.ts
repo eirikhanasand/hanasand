@@ -1935,6 +1935,7 @@ function buildDwmAlertWorkflowSummary(alert: any) {
     workflowNote: alert.workflowNote,
     workflowRationale: alert.workflowRationale,
     eventCount: events.length,
+    workflowTransitionEvents: events.map((event: any, index: number) => buildDwmAlertWorkflowTransitionEvent(alert, event, index)),
     lastEventAt: lastEvent?.at,
     lastEventType: lastEvent?.eventType,
     lastActor: lastEvent?.actor,
@@ -1957,4 +1958,50 @@ function buildDwmAlertWorkflowSummary(alert: any) {
     matchedTermCategory: alert.workflowContext?.matchedTermCategory ?? alert.webhookContext?.matchedTermCategory,
     membershipContext: alert.workflowContext?.membershipContext ?? alert.webhookContext?.membershipContext
   };
+}
+
+function buildDwmAlertWorkflowTransitionEvent(alert: any, event: any, index: number) {
+  const toStatus = String(event.toWorkflowStatus ?? alert.workflowStatus ?? "new");
+  return {
+    schemaVersion: "dwm.alert_workflow_transition_event.v1",
+    id: event.id ? String(event.id) : stableWorkflowEventId(alert, event, index),
+    at: event.at ? String(event.at) : undefined,
+    actor: event.actor ? String(event.actor) : undefined,
+    eventType: event.eventType ? String(event.eventType) : "workflow.transition",
+    action: workflowTransitionAction(event, toStatus),
+    fromStatus: event.fromWorkflowStatus ? String(event.fromWorkflowStatus) : undefined,
+    toStatus,
+    fromReviewState: event.fromReviewState,
+    toReviewState: event.toReviewState,
+    fromDeliveryState: event.fromDeliveryState,
+    toDeliveryState: event.toDeliveryState,
+    fromOwner: event.fromOwner,
+    toOwner: event.toOwner,
+    fromSeverityOverride: event.fromSeverityOverride,
+    toSeverityOverride: event.toSeverityOverride,
+    caseId: event.toCaseId ?? alert.caseId,
+    casePath: event.toCasePath ?? alert.casePath,
+    hasNote: Boolean(event.note),
+    hasRationale: Boolean(event.rationale),
+    dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
+    sourceFamily: alert.sourceFamily,
+    watchlistIds: alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [],
+    captureIds: alert.workflowContext?.captureIds ?? alert.provenance?.captureIds ?? []
+  };
+}
+
+function workflowTransitionAction(event: any, toStatus: string) {
+  if (toStatus === "closed") return "closed";
+  if (toStatus === "suppressed") return "suppressed";
+  if (toStatus === "reopened") return "reopened";
+  if (event.toCaseId || event.toCasePath) return "escalated";
+  if (toStatus === "investigating") return "escalated";
+  if (toStatus === "triaged") return "reviewed";
+  if (event.toOwner !== event.fromOwner) return "assigned";
+  if (event.eventType === "workflow.note") return "note";
+  return "transition";
+}
+
+function stableWorkflowEventId(alert: any, event: any, index: number) {
+  return `workflow_event_${String(alert.id ?? "alert")}_${String(event.at ?? index).replace(/[^a-z0-9]+/gi, "_")}`;
 }

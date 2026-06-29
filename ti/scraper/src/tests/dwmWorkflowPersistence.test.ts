@@ -574,6 +574,27 @@ describe("dwm workflow persistence", () => {
     const closed = await closedResponse.json() as any;
     expect(closedResponse.status).toBe(200);
     expect(closed.alert.workflowSummary).toMatchObject({ status: "closed", eventCount: 3 });
+    expect(closed.alert.workflowSummary.workflowTransitionEvents.map((event: any) => event.action)).toEqual(["escalated", "suppressed", "closed"]);
+    expect(closed.alert.workflowSummary.workflowTransitionEvents[0]).toMatchObject({
+      schemaVersion: "dwm.alert_workflow_transition_event.v1",
+      action: "escalated",
+      toStatus: "triaged",
+      caseId: "case_workflow_live",
+      casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
+      hasNote: true,
+      hasRationale: true,
+      dedupeKey: alert.dedupeKey,
+      sourceFamily: "telegram_public",
+      watchlistIds: alert.watchlistIds,
+      captureIds: ["cap_workflow_acme"]
+    });
+    expect(closed.alert.workflowSummary.workflowTransitionEvents[2]).toMatchObject({
+      action: "closed",
+      toStatus: "closed",
+      hasRationale: true,
+      caseId: "case_workflow_live",
+      sourceFamily: "telegram_public"
+    });
     expect(closed.alert.closedAt).toBeTruthy();
 
     const listClosedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}&status=closed&watchlistId=${alert.watchlistIds[0]}&captureId=cap_workflow_acme`, {
@@ -582,6 +603,7 @@ describe("dwm workflow persistence", () => {
     const listClosed = await listClosedResponse.json() as any;
     expect(listClosed.alerts).toHaveLength(1);
     expect(listClosed.alerts[0].workflowSummary).toMatchObject({ status: "closed", eventCount: 3 });
+    expect(listClosed.alerts[0].workflowSummary.workflowTransitionEvents.map((event: any) => event.action)).toEqual(["escalated", "suppressed", "closed"]);
     expect(listClosed.alerts[0].deliveryReadiness).toMatchObject({ ready: false, state: "closed" });
 
     const reopenedResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
@@ -592,6 +614,16 @@ describe("dwm workflow persistence", () => {
     const reopened = await reopenedResponse.json() as any;
     expect(reopenedResponse.status).toBe(200);
     expect(reopened.alert.workflowSummary).toMatchObject({ status: "reopened", eventCount: 4 });
+    expect(reopened.alert.workflowSummary.workflowTransitionEvents.at(-1)).toMatchObject({
+      schemaVersion: "dwm.alert_workflow_transition_event.v1",
+      action: "reopened",
+      fromStatus: "closed",
+      toStatus: "reopened",
+      hasNote: true,
+      caseId: "case_workflow_live",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"]
+    });
     expect(reopened.alert.customerProofHandoff).toMatchObject({
       workflow: {
         status: "reopened",
@@ -640,6 +672,8 @@ describe("dwm workflow persistence", () => {
       eventCount: 4,
       evidenceCount: 1
     });
+    expect(detail.workflowSummary.workflowTransitionEvents.map((event: any) => event.action)).toEqual(["escalated", "suppressed", "closed", "reopened"]);
+    expect(detail.workflowSummary.workflowTransitionEvents.every((event: any) => event.schemaVersion === "dwm.alert_workflow_transition_event.v1")).toBe(true);
     expect(detail.workflowExecutionReadiness).toMatchObject({
       ready: true,
       currentWorkflowEventCount: 4
