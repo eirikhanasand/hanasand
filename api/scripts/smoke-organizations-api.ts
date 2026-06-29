@@ -705,6 +705,35 @@ assert.equal(deactivatedWorkflow.invitedCount, 0)
 assert.equal(deactivatedWorkflow.skippedCount, 1)
 assert.equal(deactivatedWorkflow.results[0].outcome, 'blocked_deactivated_user')
 
+const staleDeactivatedInvite = nowRow({
+    id: 'stale-deactivated-invite',
+    organization_id: organization.id,
+    email: 'deactivated@example.test',
+    role: 'member',
+    invited_by: 'org_smoke_owner',
+    status: 'pending',
+    accepted_at: null,
+    accepted_by: null,
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+})
+invites.set(staleDeactivatedInvite.id, staleDeactivatedInvite)
+const staleDeactivatedAcceptResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/invites/${staleDeactivatedInvite.id}/accept`,
+    headers: authHeaders('org_smoke_deactivated', 'deactivated-token'),
+})
+assert.equal(staleDeactivatedAcceptResponse.statusCode, 409, staleDeactivatedAcceptResponse.body)
+const staleDeactivatedAcceptDenial = parseBody(staleDeactivatedAcceptResponse.body).inviteAcceptanceDenial
+assert.equal(staleDeactivatedAcceptDenial.schemaVersion, 'organization.invite_acceptance_denial.v1')
+assert.equal(staleDeactivatedAcceptDenial.organizationId, organization.id)
+assert.equal(staleDeactivatedAcceptDenial.inviteId, staleDeactivatedInvite.id)
+assert.equal(staleDeactivatedAcceptDenial.inviteStatus, 'pending')
+assert.equal(staleDeactivatedAcceptDenial.userActive, false)
+assert.equal(staleDeactivatedAcceptDenial.blockerCode, 'member_deactivated')
+assert.equal(staleDeactivatedAcceptDenial.deactivatedUserDenied, true)
+assert.equal(staleDeactivatedAcceptDenial.nonmemberEnumeration, false)
+assert.ok(staleDeactivatedAcceptDenial.safeFields.includes('userActive'))
+
 const expiredInvite = nowRow({
     id: 'expired-invite',
     organization_id: organization.id,
@@ -1312,15 +1341,15 @@ assert.equal(readiness.ownerCount, 1)
 assert.deepEqual(readiness.allowedViewerRoles, ['owner', 'admin'])
 assert.equal(readiness.removedMemberDenialReason, 'member_removed')
 assert.equal(readiness.deactivatedMemberDenialReason, 'member_deactivated')
-assert.equal(readiness.pendingInviteCount, 11)
+assert.equal(readiness.pendingInviteCount, 12)
 assert.equal(readiness.sharedWatchlistCount, 5)
 assert.equal(readiness.readinessStatus, 'ready')
 assert.equal(readiness.ready, true)
 assert.equal(readiness.teamOnboardingReadiness.schemaVersion, 'organization.team_onboarding_readiness.v1')
 assert.equal(readiness.teamOnboardingReadiness.targetMemberCount, 10)
 assert.equal(readiness.teamOnboardingReadiness.activeMemberCount, 4)
-assert.equal(readiness.teamOnboardingReadiness.pendingInviteCount, 11)
-assert.equal(readiness.teamOnboardingReadiness.acceptedOrInvitedCount, 15)
+assert.equal(readiness.teamOnboardingReadiness.pendingInviteCount, 12)
+assert.equal(readiness.teamOnboardingReadiness.acceptedOrInvitedCount, 16)
 assert.equal(readiness.teamOnboardingReadiness.sharedWatchlistCount, 5)
 assert.equal(readiness.teamOnboardingReadiness.canSupportTenMemberSharedWatchlistRollout, true)
 assert.deepEqual(readiness.teamOnboardingReadiness.blockedReasons, [])
@@ -1328,7 +1357,7 @@ assert.equal(readiness.lifecycleReadiness.schemaVersion, 'organization.lifecycle
 assert.equal(readiness.lifecycleReadiness.actorRole, 'member')
 assert.equal(readiness.lifecycleReadiness.counts.memberCount, 4)
 assert.equal(readiness.lifecycleReadiness.counts.activeAdminCount, 2)
-assert.equal(readiness.lifecycleReadiness.counts.pendingInviteCount, 11)
+assert.equal(readiness.lifecycleReadiness.counts.pendingInviteCount, 12)
 assert.equal(readiness.lifecycleReadiness.counts.sharedWatchlistCount, 5)
 assert.equal(readiness.lifecycleReadiness.watchlistReadiness.ready, true)
 assert.equal(readiness.lifecycleReadiness.alertExportReadiness.ready, true)
@@ -1389,7 +1418,7 @@ assert.deepEqual(readiness.readinessProof.actor, {
     canExportActiveTerms: false,
 })
 assert.equal(readiness.readinessProof.counts.activeAdminCount, 2)
-assert.equal(readiness.readinessProof.counts.pendingInviteCount, 11)
+assert.equal(readiness.readinessProof.counts.pendingInviteCount, 12)
 assert.equal(readiness.readinessProof.counts.activeWatchlistTermCount, 5)
 assert.equal(readiness.readinessProof.counts.pausedWatchlistCount, 0)
 assert.equal(readiness.readinessProof.counts.archivedWatchlistCount, 0)
@@ -1451,7 +1480,7 @@ assert.ok(readiness.readinessProof.memberLifecycleProof.noLeakFields.includes('d
 assert.ok(readiness.readinessProof.memberLifecycleProof.auditActions.includes('organization_member_removed'))
 assert.equal(readiness.readinessProof.memberLifecycleProof.nonmemberEnumeration, false)
 assert.equal(readiness.readinessProof.inviteLifecycleProof.schemaVersion, 'organization.invite_lifecycle_readiness_proof.v1')
-assert.equal(readiness.readinessProof.inviteLifecycleProof.pendingInviteCount, 11)
+assert.equal(readiness.readinessProof.inviteLifecycleProof.pendingInviteCount, 12)
 assert.equal(readiness.readinessProof.inviteLifecycleProof.inviteTenSupported, true)
 assert.equal(readiness.readinessProof.inviteLifecycleProof.maxRecipientsPerRequest, 25)
 assert.equal(readiness.readinessProof.inviteLifecycleProof.defaultExpiryDays, 14)
@@ -1572,7 +1601,7 @@ assert.equal(readiness.sharedWatchlistDownstreamProof.webhookBridge.deliveryCont
 assert.equal(readiness.sharedWatchlistDownstreamProof.webhookBridge.deliveryContract.roleGates.denialReason, 'role_not_allowed')
 assert.deepEqual(readiness.sharedWatchlistDownstreamProof.webhookBridge.deliveryContract.blockerCodes, ['manual_webhook_selection_required'])
 assert.equal(readiness.sharedWatchlistDownstreamProof.watchlistOwnership.activeCount, 5)
-assert.equal(readiness.sharedWatchlistDownstreamProof.inviteLifecycle.pendingInviteCount, 11)
+assert.equal(readiness.sharedWatchlistDownstreamProof.inviteLifecycle.pendingInviteCount, 12)
 assert.ok(readiness.sharedWatchlistDownstreamProof.audit.eventActions.includes('organization_watchlist_alert_terms_exported'))
 
 const memberAlertCaseVisibilityResponse = await app.inject({
@@ -1924,7 +1953,7 @@ assert.deepEqual(alertTermsExport.sharedWatchlistDownstreamProof.actor, {
         'manage_invites',
     ],
 })
-assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.inviteLifecycle.pendingInviteCount, 11)
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.inviteLifecycle.pendingInviteCount, 12)
 assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.inviteLifecycle.acceptedInviteCreatesMembership, true)
 assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.inviteLifecycle.acceptedInviteRevocationBlocked, true)
 assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.inviteLifecycle.removedMemberReinviteBlocked, true)
@@ -3276,7 +3305,7 @@ assert.equal(domainReference.alert.ownerCount, 1)
 assert.deepEqual(domainReference.alert.allowedViewerRoles, ['owner', 'admin'])
 assert.equal(domainReference.alert.removedMemberDenialReason, 'member_removed')
 assert.equal(domainReference.alert.deactivatedMemberDenialReason, 'member_deactivated')
-assert.equal(domainReference.alert.pendingInviteCount, 11)
+assert.equal(domainReference.alert.pendingInviteCount, 12)
 assert.equal(domainReference.alert.sharedWatchlistCount, 5)
 assert.equal(domainReference.alert.readinessStatus, 'ready')
 assert.equal(domainReference.webhookContract.orgId, organization.id)
@@ -3778,6 +3807,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created'
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === invite.id && log.metadata.blockerCode === 'invite_already_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === pendingOpsInvite.id && log.metadata.blockerCode === 'member_revoked'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === staleDeactivatedInvite.id && log.metadata.blockerCode === 'member_deactivated'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === expiredInvite.id && log.metadata.blockerCode === 'invite_expired'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === staleRemovedViewerInvite.id && log.metadata.blockerCode === 'member_revoked'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_action_denied' && log.metadata.inviteId === invite.id && log.metadata.requestId === 'smoke-accepted-revoke-denied' && log.metadata.blockerCode === 'invite_already_accepted'))
@@ -3923,6 +3953,8 @@ async function fakeRun(query: string, params: any[] = []) {
         if (!invite || invite.status !== 'pending' || Date.parse(invite.expires_at) <= Date.now()) return rows([])
         const organization = organizations.get(invite.organization_id)
         if (!organization || (organization.status ?? 'active') !== 'active') return rows([])
+        const acceptingUser = users.get(userId)
+        if (acceptingUser?.active === false) return rows([])
         const existingMember = members.get(memberKey(invite.organization_id, userId))
         if (existingMember?.status === 'removed') return rows([])
         const acceptedAt = iso()
@@ -3960,6 +3992,11 @@ async function fakeRun(query: string, params: any[] = []) {
         const [organizationId, userId] = params
         const member = members.get(memberKey(organizationId, userId))
         return rows(member ? [{ status: member.status }] : [])
+    }
+
+    if (compact.startsWith('SELECT COALESCE(active, TRUE) AS active FROM users')) {
+        const user = users.get(params[0])
+        return rows(user ? [{ active: user.active !== false }] : [])
     }
 
     if (compact.includes('FROM organization_members om JOIN users u') && compact.includes('AND om.user_id = $2')) {

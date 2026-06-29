@@ -4650,6 +4650,7 @@ export function organizationInviteAcceptanceDenial(input: {
     invite?: OrganizationInviteRow | null
     organizationStatus?: OrganizationLifecycleStatus | null
     memberStatus?: OrganizationMemberRow['status'] | null
+    userActive?: boolean | null
     requestId?: string | null
 }) {
     const status = input.invite?.status ?? null
@@ -4664,11 +4665,13 @@ export function organizationInviteAcceptanceDenial(input: {
                     ? 'invite_already_accepted'
                     : input.memberStatus === 'removed'
                         ? 'member_revoked'
-                        : status === 'revoked'
-                            ? 'member_revoked'
-                            : Date.parse(input.invite.expires_at) <= Date.now()
-                                ? 'invite_expired'
-                                : 'invite_not_pending'
+                        : input.userActive === false
+                            ? 'member_deactivated'
+                            : status === 'revoked'
+                                ? 'member_revoked'
+                                : Date.parse(input.invite.expires_at) <= Date.now()
+                                    ? 'invite_expired'
+                                    : 'invite_not_pending'
 
     return {
         schemaVersion: 'organization.invite_acceptance_denial.v1' as const,
@@ -4679,9 +4682,11 @@ export function organizationInviteAcceptanceDenial(input: {
         inviteStatus: status,
         organizationStatus,
         memberStatus: input.memberStatus ?? null,
+        userActive: input.userActive ?? null,
         blockerCode,
         statusCode: input.invite ? 409 : 404,
         removedMemberDenied: input.memberStatus === 'removed',
+        deactivatedUserDenied: input.userActive === false,
         nonmemberEnumeration: false as const,
         safeFields: [
             'schemaVersion',
@@ -4691,6 +4696,7 @@ export function organizationInviteAcceptanceDenial(input: {
             'inviteStatus',
             'organizationStatus',
             'memberStatus',
+            'userActive',
             'blockerCode',
             'requestId',
         ],
