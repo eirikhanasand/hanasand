@@ -622,6 +622,15 @@ describe("dwm alert repository", () => {
       recommendedRoute: "identity_response",
       alertDetailPath: telegramAlert?.alertDetailPath
     });
+    expect(telegramHandoff.createdEvent?.consumerPayload).toMatchObject({
+      schemaVersion: "dwm.alert_event_consumer_payload.v1",
+      selectedCaptureIds: ["cap_repo_tg_acme"]
+    });
+    expect(telegramHandoff.createdEvent?.consumerPayload?.evidenceExcerpts[0]).toMatchObject({
+      captureId: "cap_repo_tg_acme",
+      sourceFamily: "telegram_public",
+      observedAt: "2026-06-28T13:04:00.000Z"
+    });
     expect(telegramHandoff.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramHandoff.evidence.generationEvidenceWindow).toMatchObject({
       captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_darkweb_acme", "cap_repo_public_ti_acme"]),
@@ -635,6 +644,15 @@ describe("dwm alert repository", () => {
       captureIds: ["cap_repo_tg_acme"],
       recommendedRoute: "identity_response",
       alertDetailPath: telegramAlert?.alertDetailPath
+    });
+    expect(telegramProof.createdEvent?.consumerPayload).toMatchObject({
+      schemaVersion: "dwm.alert_event_consumer_payload.v1",
+      selectedCaptureIds: ["cap_repo_tg_acme"]
+    });
+    expect(telegramProof.createdEvent?.consumerPayload?.evidenceExcerpts[0]).toMatchObject({
+      captureId: "cap_repo_tg_acme",
+      sourceFamily: "telegram_public",
+      observedAt: "2026-06-28T13:04:00.000Z"
     });
     expect(telegramProof.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramProof.consumerAdapter.dashboard.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
@@ -1350,7 +1368,16 @@ describe("dwm alert repository", () => {
         evidenceCount: 2,
         previousEvidenceCount: 1,
         dedupeKey: alert.dedupeKey,
-        deliveryDedupeKey: alert.dedupeKey
+        deliveryDedupeKey: alert.dedupeKey,
+        consumerPayload: expect.objectContaining({
+          schemaVersion: "dwm.alert_event_consumer_payload.v1",
+          selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+          addedCaptureIds: ["cap_repo_tg_acme_followup"],
+          evidenceExcerpts: expect.arrayContaining([
+            expect.objectContaining({ captureId: "cap_repo_tg_acme", sourceFamily: "telegram_public" }),
+            expect.objectContaining({ captureId: "cap_repo_tg_acme_followup", sourceFamily: "telegram_public" })
+          ])
+        })
       },
       workflow: {
         status: "investigating",

@@ -139,6 +139,7 @@ export type DwmAlertWorkflowExecutionReadiness = {
     deliveryDedupeKey?: string;
     recommendedRoute?: string;
     alertDetailPath?: string;
+    consumerPayload?: Record<string, any>;
   };
   createdEventDispatch?: {
     schemaVersion: "dwm.alert_created_event_dispatch.v1";
@@ -221,6 +222,7 @@ export type DwmAlertCustomerProofHandoffRow = {
     deliveryDedupeKey?: string;
     recommendedRoute?: string;
     alertDetailPath?: string;
+    consumerPayload?: Record<string, any>;
   };
   updatedEvent?: {
     schemaVersion: "dwm.alert_updated_event.v1";
@@ -236,6 +238,8 @@ export type DwmAlertCustomerProofHandoffRow = {
     dedupeKey?: string;
     deliveryDedupeKey?: string;
     recommendedRoute?: string;
+    alertDetailPath?: string;
+    consumerPayload?: Record<string, any>;
   };
   workflow: {
     status: string;
@@ -459,6 +463,8 @@ export type DwmAlertDownstreamHandoff = {
     dedupeKey?: string;
     deliveryDedupeKey?: string;
     recommendedRoute?: string;
+    alertDetailPath?: string;
+    consumerPayload?: Record<string, any>;
   };
   workflowVersion: {
     eventCount: number;
@@ -1827,7 +1833,8 @@ function normalizeDwmAlertCreatedEvent(alert: any | undefined, context: any, fal
     dedupeKey: event?.dedupeKey ?? alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,
     deliveryDedupeKey: event?.deliveryDedupeKey ?? context?.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey,
     recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute,
-    alertDetailPath: event?.alertDetailPath ?? context?.alertDetailPath ?? alert?.alertDetailPath
+    alertDetailPath: event?.alertDetailPath ?? context?.alertDetailPath ?? alert?.alertDetailPath,
+    consumerPayload: event?.consumerPayload
   };
 }
 
@@ -1850,7 +1857,8 @@ function normalizeDwmAlertUpdatedEvent(alert: any | undefined, context: any, fal
     dedupeKey: event?.dedupeKey ?? alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,
     deliveryDedupeKey: event?.deliveryDedupeKey ?? context?.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey,
     recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute,
-    alertDetailPath: event?.alertDetailPath ?? context?.alertDetailPath ?? alert?.alertDetailPath
+    alertDetailPath: event?.alertDetailPath ?? context?.alertDetailPath ?? alert?.alertDetailPath,
+    consumerPayload: event?.consumerPayload
   };
 }
 
