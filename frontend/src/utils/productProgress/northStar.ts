@@ -59,6 +59,15 @@ export type ProductNorthStarScoreboard = {
     rows: ProductNorthStarRow[]
 }
 
+export function parseProductNorthStarScoreboard(input: unknown): ProductNorthStarScoreboard | null {
+    if (!input || typeof input !== 'object') return null
+    const candidate = input as Partial<ProductNorthStarScoreboard>
+    if (candidate.schemaVersion !== 'product.north_star.readiness.v1') return null
+    if (!Array.isArray(candidate.rows) || !Array.isArray(candidate.direction)) return null
+    if (typeof candidate.fullChainReady !== 'boolean') return null
+    return candidate as ProductNorthStarScoreboard
+}
+
 type BuildOptions = {
     generatedAt: string
     query?: string

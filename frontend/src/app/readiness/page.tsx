@@ -2,8 +2,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { AlertCircle, CheckCircle2, CircleDashed, Clock3, ExternalLink } from 'lucide-react'
-import { parseProductProgressReadinessPayload, type ProductProgressReadinessPayload } from '@/app/dashboard/operatorConsoleModel'
-import { buildProductNorthStarScoreboard, type ProductNorthStarDirection, type ProductNorthStarRow } from '@/utils/productProgress/northStar'
+import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarDirection, type ProductNorthStarRow, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
 import { buildRouteMetadata } from '../seo'
 
 export const dynamic = 'force-dynamic'
@@ -24,8 +23,7 @@ export default async function Page({
     const query = firstParam(params?.q) || 'watchlist terms'
     const Headers = await headers()
     const generatedAt = new Date().toISOString()
-    const payload = await loadProductProgress(Headers, query)
-    const scoreboard = buildProductNorthStarScoreboard(payload, { generatedAt, query })
+    const scoreboard = await loadProductReadiness(Headers, query) || buildProductNorthStarScoreboard(null, { generatedAt, query })
     const stateTone = scoreboard.fullChainReady
         ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
         : 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
@@ -198,11 +196,11 @@ function Fact({ label, value }: { label: string, value: string }) {
     )
 }
 
-async function loadProductProgress(requestHeaders: Headers, query: string): Promise<ProductProgressReadinessPayload | null> {
+async function loadProductReadiness(requestHeaders: Headers, query: string): Promise<ProductNorthStarScoreboard | null> {
     const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host')
     if (!host) return null
     const proto = requestHeaders.get('x-forwarded-proto') || 'http'
-    const target = new URL('/api/product-progress', `${proto}://${host}`)
+    const target = new URL('/api/product-readiness', `${proto}://${host}`)
     target.searchParams.set('q', query)
     try {
         const response = await fetch(target, {
@@ -211,7 +209,7 @@ async function loadProductProgress(requestHeaders: Headers, query: string): Prom
             signal: AbortSignal.timeout(3500),
         })
         if (!response.ok) return null
-        return parseProductProgressReadinessPayload(await response.json())
+        return parseProductNorthStarScoreboard(await response.json())
     } catch {
         return null
     }

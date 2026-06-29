@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildProductProgressPayload } from '../src/utils/productProgress/readiness'
-import { buildProductNorthStarScoreboard } from '../src/utils/productProgress/northStar'
+import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard } from '../src/utils/productProgress/northStar'
 
 const here = new URL('.', import.meta.url)
 const pageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
@@ -77,6 +77,19 @@ assert.ok(partialScoreboard.direction.every(item => item.ownerLanes.length && it
 assert.ok(partialScoreboard.direction.every(item => item.state === 'ready' || item.blocker))
 assert.ok(partialScoreboard.direction.some(item => item.id === 'source_backed_intelligence' && item.backedRowIds.includes('public_ti_enrichment') && item.state !== 'ready'))
 assert.ok(partialScoreboard.direction.some(item => item.id === 'shared_alert_workflow' && item.backedRowIds.includes('real_alert_generation') && item.state !== 'ready'))
+assert.deepEqual(rowHrefs(partialScoreboard), {
+    organizations: '/dashboard/dwm',
+    shared_watchlists: '/dashboard/dwm',
+    source_coverage: '/dashboard/ti/sources',
+    real_alert_generation: '/dashboard',
+    webhook_delivery: '/dashboard/automations?setup=dwm',
+    analyst_workflow: '/dashboard',
+    support_admin_audit: '/dashboard/system/impersonation',
+    public_ti_enrichment: '/ti',
+    deploy_live_status: '/status',
+})
+assert.equal(parseProductNorthStarScoreboard(partialScoreboard)?.schemaVersion, 'product.north_star.readiness.v1')
+assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, schemaVersion: 'wrong' }), null)
 
 const readyPayload = {
     ...partialPayload,
@@ -106,7 +119,8 @@ for (const token of [
     'data-north-star-direction-state',
     'data-north-star-direction-backed-rows',
     'data-north-star-direction-owner-lanes',
-    '/api/product-progress',
+    '/api/product-readiness',
+    'parseProductNorthStarScoreboard',
     'Operational proof',
     'Open workflow',
 ]) {
@@ -128,4 +142,8 @@ for (const phrase of ['powered by', 'confidence', 'signals', 'control room', 'na
     assert.equal(pageSource.toLowerCase().includes(phrase), false, `Readiness page contains banned copy: ${phrase}`)
     assert.equal(modelSource.toLowerCase().includes(phrase), false, `North-star model contains banned copy: ${phrase}`)
     assert.equal(routeSource.toLowerCase().includes(phrase), false, `Product readiness API route contains banned copy: ${phrase}`)
+}
+
+function rowHrefs(scoreboard: ReturnType<typeof buildProductNorthStarScoreboard>) {
+    return Object.fromEntries(scoreboard.rows.map(row => [row.id, row.href]))
 }
