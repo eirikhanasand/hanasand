@@ -66,6 +66,8 @@ type SupportInspectionQuery = {
     reason?: string
     context?: string
     scope?: string
+    idempotencyKey?: string
+    idempotency_key?: string
     durationMinutes?: string
     duration_minutes?: string
     expiresAt?: string
@@ -192,6 +194,7 @@ type SupportActionPreparationInput = {
     reason: string
     context: string
     scope: string[]
+    idempotencyKey: string
     durationMinutes: number | null
     expiresAt: string | null
 }
@@ -216,6 +219,8 @@ const supportInspectionFilters = new Set([
     'reason',
     'context',
     'scope',
+    'idempotencyKey',
+    'idempotency_key',
     'durationMinutes',
     'duration_minutes',
     'expiresAt',
@@ -2408,6 +2413,25 @@ function buildSupportActionPreparation(input: {
     const organizationId = input.organizationIds[0] || null
     const targetId = input.user || input.email || organizationId || null
     const requestId = input.request || 'generated-on-submit'
+    const correlationId = requestId === 'generated-on-submit' ? input.input.idempotencyKey : requestId
+    const handoffExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+    const executionHandoff = supportActionExecutionHandoff({
+        action: input.input.action,
+        allowed,
+        organizationId,
+        user: input.user,
+        email: input.email,
+        requestId,
+        correlationId,
+        idempotencyKey: input.input.idempotencyKey,
+        reason: input.input.reason,
+        context: input.input.context,
+        scope: input.input.scope,
+        durationMinutes: input.input.durationMinutes,
+        expiresAt: input.input.expiresAt,
+        handoffExpiresAt,
+        blockers,
+    })
 
     return {
         schemaVersion: 'support.action_prepare.v1',
@@ -2417,6 +2441,9 @@ function buildSupportActionPreparation(input: {
         allowed,
         outcome: allowed ? 'success' : 'denied',
         requestId,
+        correlationId,
+        idempotencyKey: input.input.idempotencyKey,
+        handoffExpiresAt,
         target: {
             organizationId,
             organizationIds: input.organizationIds,
@@ -2429,6 +2456,7 @@ function buildSupportActionPreparation(input: {
         durationMinutes: input.input.durationMinutes,
         expiresAt: input.input.expiresAt,
         blockers,
+        executionHandoff,
         auditPreview: {
             actionType,
             source: 'admin',
@@ -2445,6 +2473,10 @@ function buildSupportActionPreparation(input: {
                 schemaVersion: 'support.action_prepare.audit_preview.v1',
                 action: input.input.action,
                 dryRun: true,
+                correlationId,
+                idempotencyKey: input.input.idempotencyKey,
+                handoffExpiresAt,
+                execution: executionHandoff.execution,
                 targetUserId: input.user || null,
                 email: input.email || null,
                 organizationIds: input.organizationIds,
@@ -2452,6 +2484,7 @@ function buildSupportActionPreparation(input: {
                 durationMinutes: input.input.durationMinutes,
                 expiresAt: input.input.expiresAt,
                 blockers,
+                blockerCode: blockers[0] || null,
                 timelineEventIds: input.timeline.map(event => event.id),
             }),
         },
@@ -2469,6 +2502,118 @@ function buildSupportActionPreparation(input: {
             `Request: ${requestId}`,
             `Reason: ${input.input.reason}`,
         ].join('\n'),
+    }
+}
+
+function supportActionExecutionHandoff(input: {
+    action: SupportActionPreparationInput['action']
+    allowed: boolean
+    organizationId: string | null
+    user: string
+    email: string
+    requestId: string
+    correlationId: string
+    idempotencyKey: string
+    reason: string
+    context: string
+    scope: string[]
+    durationMinutes: number | null
+    expiresAt: string | null
+    handoffExpiresAt: string
+    blockers: string[]
+}) {
+    const execution = supportActionExecutionTarget(input)
+    return {
+        schemaVersion: 'support.action_execution_handoff.v1',
+        immutable: true,
+        dryRun: true,
+        executable: input.allowed,
+        action: input.action,
+        idempotencyKey: input.idempotencyKey,
+        correlationId: input.correlationId,
+        requestId: input.requestId,
+        expiresAt: input.handoffExpiresAt,
+        staleBlocker: 'stale_prepare_payload',
+        duplicateBlocker: 'duplicate_request',
+        blockers: input.blockers,
+        execution,
+        audit: {
+            actionType: execution.auditActionType,
+            source: 'admin',
+            service: 'hanasand-api',
+            requestId: input.requestId,
+            correlationId: input.correlationId,
+            idempotencyKey: input.idempotencyKey,
+            outcome: input.allowed ? 'success' : 'denied',
+            blockerCode: input.blockers[0] || null,
+        },
+    }
+}
+
+function supportActionExecutionTarget(input: {
+    action: SupportActionPreparationInput['action']
+    organizationId: string | null
+    user: string
+    email: string
+    requestId: string
+    idempotencyKey: string
+    reason: string
+    context: string
+    scope: string[]
+    durationMinutes: number | null
+    expiresAt: string | null
+}) {
+    const headers = {
+        'x-request-id': input.requestId,
+        'x-idempotency-key': input.idempotencyKey,
+    }
+    if (input.action === 'impersonation') {
+        return {
+            method: 'POST',
+            path: '/api/impersonation/start',
+            headers,
+            auditActionType: 'impersonation.start',
+            body: redactAuditValue({
+                target_id: input.user,
+                organization_id: input.organizationId,
+                reason: input.reason,
+                scope: input.scope,
+                duration_minutes: input.durationMinutes,
+                context: input.context,
+            }),
+        }
+    }
+
+    const organizationPath = input.organizationId ? encodeURIComponent(input.organizationId) : ':organizationId'
+    if (input.action === 'access_recovery') {
+        return {
+            method: 'POST',
+            path: `/api/admin/support/organizations/${organizationPath}/access-recovery`,
+            headers,
+            auditActionType: 'support.organization.access_recovery',
+            body: redactAuditValue({
+                email: input.email,
+                targetUserId: input.user || null,
+                reason: input.reason,
+                context: input.context,
+                scope: input.scope,
+                expiresAt: input.expiresAt,
+            }),
+        }
+    }
+
+    return {
+        method: 'POST',
+        path: `/api/admin/support/organizations/${organizationPath}/invites`,
+        headers,
+        auditActionType: 'support.organization.invite_assist',
+        body: redactAuditValue({
+            email: input.email,
+            reason: input.reason,
+            context: input.context,
+            scope: input.scope,
+            expiresAt: input.expiresAt,
+        }),
     }
 }
 
@@ -2501,6 +2646,7 @@ function supportActionPreparationInput(query: SupportInspectionQuery, action: st
     if (durationResult.error) return { value: null, error: durationResult.error }
     const expiryResult = normalizeSupportPreparationExpiry(query.expiresAt ?? query.expires_at)
     if (expiryResult.error) return { value: null, error: expiryResult.error }
+    const idempotencyKey = supportActionIdempotencyKey(query.idempotencyKey || query.idempotency_key, action)
 
     return {
         value: {
@@ -2508,11 +2654,17 @@ function supportActionPreparationInput(query: SupportInspectionQuery, action: st
             reason,
             context: cleanContext(query.context),
             scope: scopeResult.value,
+            idempotencyKey,
             durationMinutes: durationResult.value,
             expiresAt: expiryResult.value,
         },
         error: null,
     }
+}
+
+function supportActionIdempotencyKey(value: unknown, action: string) {
+    const cleaned = text(value).replace(/[^a-zA-Z0-9._:-]/g, '').slice(0, 120)
+    return cleaned || `support-${action}-${randomUUID()}`
 }
 
 function normalizeSupportPreparationScope(value: unknown, action: string): { value: string[], error: Record<string, unknown> | null } {
