@@ -299,16 +299,22 @@ assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('activeTe
 assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('alertBridgeContract.caseRouteExpectation.pathTemplate'))
 assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('alertBridgeContract.redactedSummary'))
 assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('alertBridgeContract.lifecycleReadiness'))
+assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('alertBridgeContract.alertCaseProof'))
 assert.equal(alertTermsExport.alertBridgeContract.alertGeneratorKeyExpectation, 'alertGenerationRef.dedupe.key')
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_active_org'))
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_active_admin'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('org_deleted'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('invite_expired'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('member_revoked'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('watchlist_archived'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('watchlist_paused'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_active_terms'))
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('paused_archived_only'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('cleanup_required'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('alert_bridge_unavailable'))
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('alert_export_unavailable'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('case_route_unavailable'))
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('support_redaction_required'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_active_watchlist_terms'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_case_route'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('support_only_access'))
@@ -331,6 +337,29 @@ assert.equal(alertTermsExport.alertBridgeContract.lifecycleReadiness.watchlists.
 assert.deepEqual(alertTermsExport.alertBridgeContract.lifecycleReadiness.typedBlockers.map(blocker => blocker.code), ['watchlist_paused', 'cleanup_required'])
 assert.equal(alertTermsExport.alertBridgeContract.lifecycleReadiness.alertReplay.status, 'ready')
 assert.equal(alertTermsExport.alertBridgeContract.lifecycleReadiness.caseRoute.status, 'expected')
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.schemaVersion, 'organization.watchlist_alert_case_proof.v1')
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.organizationId, 'org_acme')
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.tenantId, 'org_acme')
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.readyForReplay, true)
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.activeAdminCount, 1)
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.activeTermCount, 1)
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.replayRoute, 'organization_watchlist')
+assert.ok(alertTermsExport.alertBridgeContract.alertCaseProof.expectedAlertFields.includes('alertGenerationRef.dedupe.key'))
+assert.ok(alertTermsExport.alertBridgeContract.alertCaseProof.expectedCaseFields.includes('casePath'))
+assert.ok(alertTermsExport.alertBridgeContract.alertCaseProof.expectedSupportFields.includes('redactedSummary'))
+assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.memberVisibility, {
+    mode: 'member_scoped_export',
+    userId: 'org_smoke_admin',
+    role: 'admin',
+    status: 'active',
+    nonmemberEnumeration: false,
+    revokedMemberDenial: 'member_revoked',
+})
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.supportRedaction.blockerCode, 'support_redaction_required')
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.cleanupRequired, true)
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.pausedExcludedCount, 1)
+assert.equal(alertTermsExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.archivedExcludedCount, 0)
+assert.deepEqual(alertTermsExport.alertBridgeContract.alertCaseProof.typedBlockers.map(blocker => blocker.code), ['cleanup_required'])
 assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.schemaVersion, 'organization.watchlist_alert_generation_ref.v1')
 assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.status, 'active')
 assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.lifecycle.requestId, 'proof-fixture-create')
@@ -362,6 +391,62 @@ assert.deepEqual(emptyAlertTermsExport.alertBridgeContract.typedBlockers.map(blo
 assert.equal(emptyAlertTermsExport.alertBridgeContract.typedBlockers[0].severity, 'blocker')
 assert.deepEqual(emptyAlertTermsExport.alertBridgeContract.lifecycleReadiness.typedBlockers.map(blocker => blocker.code), ['no_active_terms', 'alert_bridge_unavailable'])
 assert.equal(emptyAlertTermsExport.alertBridgeContract.lifecycleReadiness.alertReplay.status, 'blocked')
+assert.equal(emptyAlertTermsExport.alertBridgeContract.alertCaseProof.readyForReplay, false)
+assert.deepEqual(emptyAlertTermsExport.alertBridgeContract.alertCaseProof.typedBlockers.map(blocker => blocker.code), ['no_active_terms', 'alert_export_unavailable'])
+
+const inactiveOnlyAlertTermsExport = organizationWatchlistAlertTermsExport(
+    {
+        id: 'org_inactive_only',
+        name: 'Inactive Only Org',
+        slug: 'inactive-only',
+        member_count: 2,
+        owner_count: 1,
+        pending_invite_count: 0,
+        shared_watchlist_count: 2,
+    },
+    [
+        {
+            id: 'watch_paused_only',
+            organization_id: 'org_inactive_only',
+            kind: 'domain',
+            value: 'paused-only.example',
+            notes: '',
+            status: 'paused',
+            created_by: 'owner',
+            updated_by: 'owner',
+            lifecycle_reason: 'Pause proof term.',
+            lifecycle_request_id: 'proof-pause-only',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        },
+        {
+            id: 'watch_archived_only',
+            organization_id: 'org_inactive_only',
+            kind: 'vendor',
+            value: 'Archived Only Vendor',
+            notes: '',
+            status: 'archived',
+            created_by: 'owner',
+            updated_by: 'owner',
+            lifecycle_reason: 'Archive proof term.',
+            lifecycle_request_id: 'proof-archive-only',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        },
+    ],
+    { userId: 'org_inactive_admin', role: 'admin' }
+)
+assert.equal(inactiveOnlyAlertTermsExport.activeTerms.length, 0)
+assert.equal(inactiveOnlyAlertTermsExport.excluded.pausedCount, 1)
+assert.equal(inactiveOnlyAlertTermsExport.excluded.archivedCount, 1)
+assert.equal(inactiveOnlyAlertTermsExport.alertBridgeContract.alertCaseProof.readyForReplay, false)
+assert.deepEqual(inactiveOnlyAlertTermsExport.alertBridgeContract.alertCaseProof.typedBlockers.map(blocker => blocker.code), [
+    'no_active_terms',
+    'alert_export_unavailable',
+    'paused_archived_only',
+    'cleanup_required',
+])
+assert.equal(inactiveOnlyAlertTermsExport.alertBridgeContract.alertCaseProof.cleanupLifecycle.cleanupRequired, true)
 
 assert.deepEqual(organizationVisibilityDecision({
     role: 'viewer',
