@@ -546,6 +546,27 @@ export async function getAdminAuditEvent(req: FastifyRequest<{ Params: AuditEven
 
     const event = toAdminAuditEvent(row)
     const relatedTimeline = await loadAdminAuditEventRelatedTimeline(event)
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.audit_event.inspect',
+        actorId: actor.id,
+        targetType: 'admin_audit_event',
+        targetId: String(event.id),
+        organizationId: event.detail?.organizationId || null,
+        entityId: event.detail?.entityId || String(event.id),
+        requestId: supportRequestId(req),
+        severity: 'info',
+        outcome: 'success',
+        context: {
+            schemaVersion: 'support.audit_event.inspect.v1',
+            inspectedEventId: Number(event.id),
+            inspectedActionType: event.detail?.actionType || null,
+            inspectedOutcome: event.detail?.outcome || null,
+            inspectedRequestId: event.detail?.requestId || null,
+            inspectedEntityId: event.detail?.entityId || null,
+            relatedEventIds: relatedTimeline.map(item => item.id),
+            redactionRequired: true,
+        },
+    })
     return res.send({
         event,
         detail: supportAuditEventDetailResponse(event, relatedTimeline),
