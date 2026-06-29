@@ -21,6 +21,7 @@ export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "t
 export const TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION = "ti.source_provenance_alert_handoff_state.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION = "ti.source_provenance_source_ops_action_queue.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_OPS_FIXTURE_BUNDLE_SCHEMA_VERSION = "ti.source_provenance_source_ops_fixture_bundle.v1" as const;
+export const TI_SOURCE_PROVENANCE_PUBLIC_TI_SOURCE_OPS_PROJECTION_SCHEMA_VERSION = "ti.source_provenance_public_ti_source_ops_projection.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -1341,6 +1342,90 @@ export type TiSourceProvenanceSourceOpsFixtureValidationIssue = {
   };
 };
 
+export type TiSourceProvenancePublicTiSourceOpsProjection = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_PUBLIC_TI_SOURCE_OPS_PROJECTION_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceOpsFixtureBundleId: string;
+  pageReadiness: {
+    state: "ready" | "partial" | "blocked";
+    canRender: true;
+    publicTI: boolean;
+    dashboard: boolean;
+    sourceOps: boolean;
+    alertGeneration: boolean;
+  };
+  sourceCoverage: {
+    families: string[];
+    freshnessState: TiSourceProvenanceSourceOpsFixtureBundle["sourceHealth"]["freshnessState"];
+    parserAlertCount: number;
+    operatorActionCount: number;
+    validationIssueCount: number;
+    nextRetryAt?: string;
+  };
+  provenanceRows: TiSourceProvenancePublicTiSourceOpsProjectionRow[];
+  enrichmentGaps: TiSourceProvenancePublicTiSourceOpsProjectionGap[];
+  consumerContracts: TiSourceProvenanceSourceOpsFixtureBundle["fixtureContracts"];
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenancePublicTiSourceOpsProjectionRow = {
+  rowId: string;
+  sourceFamily?: string;
+  state: "ready" | "needs_action" | "validation_blocked";
+  reasonCode?: string;
+  ownerLane: "source" | "parser" | "policy" | "publicTI" | "alert" | "case";
+  parserStatus?: {
+    state?: string;
+    failureReason?: string;
+  };
+  freshness?: {
+    state: TiSourceProvenanceSourceOpsActionQueueRow["freshness"]["state"];
+    newestEvidenceAt?: string;
+    ageDays?: number;
+  };
+  provenance: {
+    sourceOpsFixtureBundleId: string;
+    sourceFreshnessGapPacketId: string;
+    parserHealthAlertPacketId: string;
+    sourceOpsActionQueueId: string;
+    sourceHealthProofId?: string;
+    fixtureBacked: true;
+  };
+  route: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenancePublicTiSourceOpsProjectionGap = {
+  code: string;
+  ownerLane: "source" | "parser" | "policy" | "publicTI" | "alert" | "case";
+  sourceFamily?: string;
+  nextAction: string;
+  route: TiSourceProvenancePublicTiSourceOpsProjectionRow["route"];
+};
+
 export type TiSourceProvenanceAlertHandoffState = {
   schemaVersion: typeof TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION;
   id: string;
@@ -2659,6 +2744,72 @@ export function buildSourceProvenanceSourceOpsFixtureBundle(input: {
       "sourceHealth.sourceFamilies",
       "operatorActions[].route",
       "validationIssues[].code"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenancePublicTiSourceOpsProjection(input: {
+  bundle: TiSourceProvenanceSourceOpsFixtureBundle;
+  generatedAt?: string;
+}): TiSourceProvenancePublicTiSourceOpsProjection {
+  const generatedAt = input.generatedAt ?? input.bundle.generatedAt;
+  const provenanceRows = [
+    ...input.bundle.operatorActions.map((action) => publicTiProjectionRowFromAction(input.bundle, action, generatedAt)),
+    ...input.bundle.validationIssues.map((issue) => publicTiProjectionRowFromValidationIssue(input.bundle, issue, generatedAt))
+  ];
+  const enrichmentGaps = [
+    ...input.bundle.operatorActions.map((action) => publicTiProjectionGapFromAction(action)),
+    ...input.bundle.validationIssues.map((issue) => publicTiProjectionGapFromValidationIssue(issue))
+  ];
+  const publicRoute = input.bundle.publicTiRoute ?? `/ti/${encodeURIComponent(input.bundle.actor)}`;
+  const hasBlockingValidation = input.bundle.validationIssues.some((issue) => issue.severity === "blocking");
+  const state = input.bundle.readiness.publicTI && input.bundle.readiness.alertGeneration && !hasBlockingValidation
+    ? "ready"
+    : (input.bundle.readiness.sourceOps || input.bundle.readiness.dashboard ? "partial" : "blocked");
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_PUBLIC_TI_SOURCE_OPS_PROJECTION_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_public_ti_source_ops_projection", `${input.bundle.id}:${generatedAt}:${state}:${provenanceRows.map((row) => row.rowId).join(",")}`),
+    generatedAt,
+    ok: state === "ready",
+    tenantId: input.bundle.tenantId,
+    organizationId: input.bundle.organizationId,
+    actor: input.bundle.actor,
+    publicTiRoute: publicRoute,
+    sourceOpsFixtureBundleId: input.bundle.id,
+    pageReadiness: {
+      state,
+      canRender: true,
+      publicTI: input.bundle.readiness.publicTI && !hasBlockingValidation,
+      dashboard: input.bundle.readiness.dashboard,
+      sourceOps: input.bundle.readiness.sourceOps,
+      alertGeneration: input.bundle.readiness.alertGeneration && !hasBlockingValidation
+    },
+    sourceCoverage: {
+      families: input.bundle.sourceHealth.sourceFamilies,
+      freshnessState: input.bundle.sourceHealth.freshnessState,
+      parserAlertCount: input.bundle.sourceHealth.parserAlertCount,
+      operatorActionCount: input.bundle.readiness.operatorActionCount,
+      validationIssueCount: input.bundle.readiness.validationIssueCount,
+      nextRetryAt: input.bundle.sourceHealth.nextRetryAt
+    },
+    provenanceRows,
+    enrichmentGaps,
+    consumerContracts: input.bundle.fixtureContracts,
+    payloadShape: [
+      "pageReadiness.state",
+      "sourceCoverage.families",
+      "sourceCoverage.freshnessState",
+      "provenanceRows[].provenance",
+      "provenanceRows[].route",
+      "enrichmentGaps[].code",
+      "consumerContracts[]"
     ],
     safeOutput: {
       rawTargetsExposed: false,
@@ -4070,6 +4221,89 @@ function uniqueSourceOpsFixtureValidationIssues(
     seen.add(key);
     return true;
   });
+}
+
+function publicTiProjectionRowFromAction(
+  bundle: TiSourceProvenanceSourceOpsFixtureBundle,
+  action: TiSourceProvenanceSourceOpsActionQueueRow,
+  generatedAt: string
+): TiSourceProvenancePublicTiSourceOpsProjectionRow {
+  return {
+    rowId: stableId("ti_source_provenance_public_ti_source_ops_row", `${bundle.id}:${action.actionId}:${generatedAt}`),
+    sourceFamily: action.sourceFamily,
+    state: "needs_action",
+    reasonCode: action.reasonCode,
+    ownerLane: action.ownerLane,
+    parserStatus: action.parserStatus,
+    freshness: action.freshness,
+    provenance: {
+      sourceOpsFixtureBundleId: bundle.id,
+      sourceFreshnessGapPacketId: bundle.packetRefs.sourceFreshnessGapPacketId,
+      parserHealthAlertPacketId: bundle.packetRefs.parserHealthAlertPacketId,
+      sourceOpsActionQueueId: bundle.packetRefs.sourceOpsActionQueueId,
+      sourceHealthProofId: action.provenance.sourceHealthProofId,
+      fixtureBacked: true
+    },
+    route: action.route,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function publicTiProjectionRowFromValidationIssue(
+  bundle: TiSourceProvenanceSourceOpsFixtureBundle,
+  issue: TiSourceProvenanceSourceOpsFixtureValidationIssue,
+  generatedAt: string
+): TiSourceProvenancePublicTiSourceOpsProjectionRow {
+  return {
+    rowId: stableId("ti_source_provenance_public_ti_source_ops_validation_row", `${bundle.id}:${issue.code}:${issue.sourceFamily ?? ""}:${issue.expectedActor ?? ""}:${issue.actualActor ?? ""}:${generatedAt}`),
+    sourceFamily: issue.sourceFamily,
+    state: "validation_blocked",
+    reasonCode: issue.code,
+    ownerLane: issue.ownerLane,
+    provenance: {
+      sourceOpsFixtureBundleId: bundle.id,
+      sourceFreshnessGapPacketId: bundle.packetRefs.sourceFreshnessGapPacketId,
+      parserHealthAlertPacketId: bundle.packetRefs.parserHealthAlertPacketId,
+      sourceOpsActionQueueId: bundle.packetRefs.sourceOpsActionQueueId,
+      fixtureBacked: true
+    },
+    route: issue.route,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function publicTiProjectionGapFromAction(
+  action: TiSourceProvenanceSourceOpsActionQueueRow
+): TiSourceProvenancePublicTiSourceOpsProjectionGap {
+  return {
+    code: action.reasonCode,
+    ownerLane: action.ownerLane,
+    sourceFamily: action.sourceFamily,
+    nextAction: action.action,
+    route: action.route
+  };
+}
+
+function publicTiProjectionGapFromValidationIssue(
+  issue: TiSourceProvenanceSourceOpsFixtureValidationIssue
+): TiSourceProvenancePublicTiSourceOpsProjectionGap {
+  return {
+    code: issue.code,
+    ownerLane: issue.ownerLane,
+    sourceFamily: issue.sourceFamily,
+    nextAction: issue.nextAction,
+    route: issue.route
+  };
 }
 
 function uniqueSourceFreshnessGaps(

@@ -17,6 +17,7 @@ import {
   TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_OPS_FIXTURE_BUNDLE_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_PUBLIC_TI_SOURCE_OPS_PROJECTION_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
@@ -37,6 +38,7 @@ import {
   buildSourceProvenanceAlertHandoffState,
   buildSourceProvenanceSourceOpsActionQueue,
   buildSourceProvenanceSourceOpsFixtureBundle,
+  buildSourceProvenancePublicTiSourceOpsProjection,
   buildSourceProvenanceWatchlistAlertBridgePacket,
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
@@ -2722,6 +2724,202 @@ describe("source provenance TI page contract", () => {
       },
       operatorActions: [],
       validationIssues: [],
+      safeOutput: {
+        liveNetworkScrapeStarted: false
+      }
+    });
+  });
+
+  test("projects source operations bundle into public TI consumable enrichment rows", () => {
+    const { lifecycle } = buildBlockedSourceLifecycle();
+    const freshnessPacket = buildSourceProvenanceSourceFreshnessGapPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:45:00.000Z",
+      maxAgeDays: 7
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const actionQueue = buildSourceProvenanceSourceOpsActionQueue({
+      freshnessPacket,
+      parserHealthPacket,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+    const bundle = buildSourceProvenanceSourceOpsFixtureBundle({
+      freshnessPacket,
+      parserHealthPacket,
+      actionQueue,
+      expectedActor: "LockBit",
+      validationIssues: [{
+        code: "duplicate_candidate",
+        sourceFamily: "telegram_public",
+        duplicateOf: "src_existing_public_telegram"
+      }, {
+        code: "unsupported_source_family",
+        sourceFamily: "pastebin_dump"
+      }],
+      generatedAt: "2026-06-29T12:48:00.000Z"
+    });
+    const projection = buildSourceProvenancePublicTiSourceOpsProjection({
+      bundle,
+      generatedAt: "2026-06-29T12:49:00.000Z"
+    });
+
+    expect(projection).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_PUBLIC_TI_SOURCE_OPS_PROJECTION_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      sourceOpsFixtureBundleId: bundle.id,
+      pageReadiness: {
+        state: "partial",
+        canRender: true,
+        publicTI: false,
+        dashboard: true,
+        sourceOps: true,
+        alertGeneration: false
+      },
+      sourceCoverage: {
+        freshnessState: "stale",
+        parserAlertCount: parserHealthPacket.summary.alertCount,
+        operatorActionCount: actionQueue.summary.actionCount,
+        validationIssueCount: 3,
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(projection.sourceCoverage.families).toEqual(expect.arrayContaining([
+      "actor_page",
+      "darkweb_metadata",
+      "telegram_public",
+      "pastebin_dump"
+    ]));
+    expect(projection.provenanceRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        state: "needs_action",
+        reasonCode: "parser_retry_scheduled",
+        ownerLane: "parser",
+        parserStatus: expect.objectContaining({ state: "retry_scheduled" }),
+        provenance: expect.objectContaining({
+          sourceOpsFixtureBundleId: bundle.id,
+          sourceFreshnessGapPacketId: freshnessPacket.id,
+          parserHealthAlertPacketId: parserHealthPacket.id,
+          sourceOpsActionQueueId: actionQueue.id,
+          fixtureBacked: true
+        }),
+        route: expect.objectContaining({
+          path: "/v1/dwm/source-requests",
+          body: expect.objectContaining({ action: "retry", dryRun: true }),
+          liveNetworkFetch: false
+        })
+      }),
+      expect.objectContaining({
+        state: "validation_blocked",
+        reasonCode: "wrong_actor_query",
+        ownerLane: "publicTI",
+        route: expect.objectContaining({ path: "/ti/APT28", liveNetworkFetch: false })
+      }),
+      expect.objectContaining({
+        state: "validation_blocked",
+        reasonCode: "unsupported_source_family",
+        sourceFamily: "pastebin_dump"
+      })
+    ]));
+    expect(projection.enrichmentGaps).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "parser_retry_scheduled",
+        ownerLane: "parser",
+        nextAction: "retry_parser"
+      }),
+      expect.objectContaining({
+        code: "wrong_actor_query",
+        ownerLane: "publicTI",
+        nextAction: "retry_query"
+      }),
+      expect.objectContaining({
+        code: "unsupported_source_family",
+        ownerLane: "source",
+        nextAction: "review_source_family"
+      })
+    ]));
+    expect(projection.consumerContracts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "publicTI",
+        requiredFields: expect.arrayContaining(["readiness.publicTI", "sourceHealth.freshnessState"])
+      }),
+      expect.objectContaining({
+        consumer: "dashboard",
+        requiredFields: expect.arrayContaining(["operatorActions[].action", "validationIssues[].code"])
+      })
+    ]));
+    expect(projection.payloadShape).toEqual(expect.arrayContaining([
+      "pageReadiness.state",
+      "sourceCoverage.families",
+      "provenanceRows[].route",
+      "enrichmentGaps[].code"
+    ]));
+    expect(JSON.stringify(projection)).not.toContain("rawText");
+    expect(JSON.stringify(projection)).not.toContain("password");
+  });
+
+  test("projects ready ransomware actor source operations without enrichment gaps", () => {
+    const { lifecycle } = buildFreshSourceLifecycle({ actor: "LockBit" });
+    const freshnessPacket = buildSourceProvenanceSourceFreshnessGapPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:45:00.000Z",
+      maxAgeDays: 7
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const actionQueue = buildSourceProvenanceSourceOpsActionQueue({
+      freshnessPacket,
+      parserHealthPacket,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+    const bundle = buildSourceProvenanceSourceOpsFixtureBundle({
+      freshnessPacket,
+      parserHealthPacket,
+      actionQueue,
+      expectedActor: "LockBit",
+      generatedAt: "2026-06-29T12:48:00.000Z"
+    });
+    const projection = buildSourceProvenancePublicTiSourceOpsProjection({
+      bundle,
+      generatedAt: "2026-06-29T12:49:00.000Z"
+    });
+
+    expect(projection).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_PUBLIC_TI_SOURCE_OPS_PROJECTION_SCHEMA_VERSION,
+      ok: true,
+      actor: "LockBit",
+      publicTiRoute: "/ti/LockBit",
+      pageReadiness: {
+        state: "ready",
+        canRender: true,
+        publicTI: true,
+        dashboard: true,
+        sourceOps: true,
+        alertGeneration: true
+      },
+      sourceCoverage: {
+        families: [],
+        freshnessState: "fresh",
+        parserAlertCount: 0,
+        operatorActionCount: 0,
+        validationIssueCount: 0
+      },
+      provenanceRows: [],
+      enrichmentGaps: [],
       safeOutput: {
         liveNetworkScrapeStarted: false
       }
