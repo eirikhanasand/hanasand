@@ -74,6 +74,7 @@ assert.equal(partialPayload.dashboardEvidence?.deployProbeFresh, false)
 assert.equal(partialPayload.deployProbe?.status, 'needs_action')
 assert.equal(partialPayload.publicTiProvenance?.status, 'unavailable')
 assert.equal(partialPayload.helpdeskAudit?.status, 'unavailable')
+assert.equal(partialPayload.entitlement?.status, 'unavailable')
 assert.equal(partialPayload.orgAlertExport?.status, 'unavailable')
 assert.equal(partialPayload.webhookHealth?.status, 'needs_action')
 
@@ -81,6 +82,7 @@ for (const dependency of [
     partialPayload.publicTiProvenance,
     partialPayload.helpdeskAudit,
     partialPayload.deployProbe,
+    partialPayload.entitlement,
     partialPayload.orgAlertExport,
     partialPayload.webhookHealth,
     partialPayload.dashboardEvidence,
@@ -93,6 +95,9 @@ assert.equal(partialPayload.helpdeskAudit?.ownerLane, 'helpdesk')
 assert.equal(partialPayload.helpdeskAudit?.unavailableReason, 'missing_helpdesk_audit_readiness_api')
 assert.equal(partialPayload.deployProbe?.ownerLane, 'integration')
 assert.equal(partialPayload.deployProbe?.unavailableReason, 'missing_live_deploy_probe')
+assert.equal(partialPayload.entitlement?.ownerLane, 'org')
+assert.equal(partialPayload.entitlement?.unavailableReason, 'missing_dwm_entitlement_readiness_api')
+assert.equal(partialPayload.entitlement?.expectedDashboardRowId, 'entitlement_readiness')
 assert.equal(partialPayload.orgAlertExport?.ownerLane, 'org')
 assert.equal(partialPayload.orgAlertExport?.unavailableReason, 'missing_org_alert_export_readiness_api')
 assert.equal(partialPayload.webhookHealth?.ownerLane, 'webhook')
@@ -226,7 +231,7 @@ assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 
 const readyPayload = {
     ...partialPayload,
     publicTiProvenance: { ...partialPayload.publicTiProvenance!, status: 'ready' as const, blockers: [], sourceCount: 3, evidenceCount: 5 },
-    entitlement: { schemaVersion: 'dwm.entitlement.readiness.v1', status: 'ready' as const, blockers: [], allowed: true, policy: 'shared_watchlist', checkedRole: 'analyst', source: routes.entitlement, href: '/dashboard/dwm' },
+    entitlement: { ...partialPayload.entitlement!, status: 'ready' as const, blockers: [], allowed: true, policy: 'shared_watchlist', checkedRole: 'analyst', source: routes.entitlement, href: '/dashboard/dwm', unavailableReason: undefined },
     helpdeskAudit: { ...partialPayload.helpdeskAudit!, status: 'ready' as const, blockers: [], auditedActions: 2, openRecoveryRequests: 0 },
     orgAlertExport: { ...partialPayload.orgAlertExport!, status: 'ready' as const, blockers: [], activeTermCount: 1, canGenerateAlerts: true },
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1 },
@@ -326,6 +331,7 @@ assert.equal(degradedContext.readiness.productReadiness.find(item => item.id ===
 
 for (const dependency of [
     readyPayload.publicTiProvenance,
+    readyPayload.entitlement,
     readyPayload.helpdeskAudit,
     readyPayload.deployProbe,
     readyPayload.orgAlertExport,
@@ -387,6 +393,29 @@ for (const bannedClass of ['border-white/', 'bg-white/10', 'bg-white/15']) {
 }
 
 assert.ok(workbenchSource.includes('return item.href ? <Link key={item.id} href={item.href}>'), 'Readiness rows should deep-link through the backed href.')
+
+const backendProofCommits = {
+    helpdeskAuditFilters: '016a8ef7',
+    sourceReadiness: '930f93af',
+    orgLifecycle: '414c72a4',
+    publicTiProvenance: 'def920a7',
+    productProgress: '89d9547e',
+    entitlement: '4da6a209',
+    helpdeskSupportAction: '9e25b6ad',
+    analystHandoffReport: '99b75073',
+    sourceActionContracts: '178ec078',
+}
+assert.deepEqual(Object.keys(backendProofCommits).sort(), [
+    'analystHandoffReport',
+    'entitlement',
+    'helpdeskAuditFilters',
+    'helpdeskSupportAction',
+    'orgLifecycle',
+    'productProgress',
+    'publicTiProvenance',
+    'sourceActionContracts',
+    'sourceReadiness',
+])
 
 function assertDependencyProofFields(input: {
     status?: string
