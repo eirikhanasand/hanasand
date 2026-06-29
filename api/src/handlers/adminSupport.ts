@@ -6947,6 +6947,18 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
             timeRange: auditFilterQuery({ from: filters.from || '2026-01-01T00:00:00.000Z', to: filters.to || '2026-01-02T00:00:00.000Z' }),
             textQuery: auditFilterQuery({ q: filters.q || 'customer@example.com' }),
         },
+        integrationReadiness: {
+            fixtureName: 'support-audit-timeline-replay',
+            expectedResponsePath: 'detail.timelineReplayContract',
+            focusedCheck: 'cd api && bun run smoke:admin-support-unit',
+            apiTypecheck: 'cd api && ./node_modules/.bin/tsc --noEmit --pretty false',
+            validation: [
+                'detail.timelineReplayContract.schemaVersion = support.audit.timeline_replay_contract.v1',
+                'detail.timelineReplayContract.replay.eventIds contains returned audit event ids',
+                'detail.timelineReplayContract.exampleQueries.actionOutcome is copy-ready',
+                'detail.timelineReplayContract.timelineShape.redactionRequired = true',
+            ],
+        },
         blockers: [
             timeline.length ? '' : 'audit_unavailable',
             replayQuery.includes('?') ? '' : 'missing_replay_filter',
