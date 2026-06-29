@@ -14,6 +14,8 @@ import {
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
@@ -31,6 +33,8 @@ import {
   buildSourceProvenanceScraperEnrichmentLifecycle,
   buildSourceProvenanceSourceFreshnessGapPacket,
   buildSourceProvenanceParserHealthAlertPacket,
+  buildSourceProvenanceAlertHandoffState,
+  buildSourceProvenanceSourceOpsActionQueue,
   buildSourceProvenanceWatchlistAlertBridgePacket,
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
@@ -2199,6 +2203,174 @@ describe("source provenance TI page contract", () => {
       expect.objectContaining({ consumer: "alertGeneration", ready: true }),
       expect.objectContaining({ consumer: "sourceOps", ready: true }),
       expect.objectContaining({ consumer: "webhook", ready: false })
+    ]));
+  });
+
+  test("builds source operations action queue from freshness and parser health gaps", () => {
+    const { lifecycle } = buildBlockedSourceLifecycle();
+    const freshnessPacket = buildSourceProvenanceSourceFreshnessGapPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:45:00.000Z",
+      maxAgeDays: 7
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const queue = buildSourceProvenanceSourceOpsActionQueue({
+      freshnessPacket,
+      parserHealthPacket,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+
+    expect(queue).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      sourceFreshnessGapPacketId: freshnessPacket.id,
+      parserHealthAlertPacketId: parserHealthPacket.id,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(queue.summary).toMatchObject({
+      retryCount: expect.any(Number),
+      approvalCount: expect.any(Number),
+      refreshCount: expect.any(Number),
+      repairCount: expect.any(Number),
+      publicTiReady: false,
+      alertGenerationReady: false,
+      nextRetryAt: "2026-06-29T12:37:00.000Z"
+    });
+    expect(queue.summary.actionCount).toBeGreaterThanOrEqual(4);
+    expect(queue.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: "retry_parser",
+        priority: "high",
+        ownerLane: "parser",
+        reasonCode: "parser_retry_scheduled",
+        retryState: expect.objectContaining({
+          retryable: true,
+          nextRetryAt: "2026-06-29T12:37:00.000Z"
+        }),
+        parserStatus: expect.objectContaining({
+          state: "retry_scheduled"
+        }),
+        provenance: expect.objectContaining({
+          sourceFreshnessGapPacketId: freshnessPacket.id,
+          parserHealthAlertPacketId: parserHealthPacket.id,
+          parserHealthAlertId: expect.any(String),
+          sourceHealthProofId: expect.any(String),
+          fixtureBacked: true
+        }),
+        route: expect.objectContaining({
+          path: "/v1/dwm/source-requests",
+          body: expect.objectContaining({ action: "retry", dryRun: true }),
+          liveNetworkFetch: false
+        })
+      }),
+      expect.objectContaining({
+        action: "request_policy_approval",
+        ownerLane: "policy",
+        reasonCode: "policy_blocked",
+        route: expect.objectContaining({
+          body: expect.objectContaining({ action: "request_approval", dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        action: "queue_source_refresh",
+        ownerLane: "source",
+        reasonCode: "stale_source_evidence",
+        freshness: expect.objectContaining({
+          state: "stale",
+          newestEvidenceAt: "2026-06-01T10:15:00.000Z"
+        })
+      }),
+      expect.objectContaining({
+        action: "repair_provenance",
+        ownerLane: "case",
+        reasonCode: "case_handoff_blocked"
+      })
+    ]));
+    expect(queue.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "sourceOps",
+        ready: true,
+        route: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+      }),
+      expect.objectContaining({
+        consumer: "dashboard",
+        ready: true,
+        requiredFields: expect.arrayContaining(["rows[].ownerLane", "rows[].parserStatus"])
+      }),
+      expect.objectContaining({
+        consumer: "publicTI",
+        ready: false
+      }),
+      expect.objectContaining({
+        consumer: "alertGeneration",
+        ready: false,
+        route: expect.objectContaining({
+          path: "/v1/dwm/alerts/rebuild",
+          body: expect.objectContaining({ dryRun: true })
+        })
+      })
+    ]));
+    expect(queue.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].action",
+      "rows[].route",
+      "summary.publicTiReady",
+      "summary.alertGenerationReady"
+    ]));
+    expect(JSON.stringify(queue)).not.toContain("rawText");
+    expect(JSON.stringify(queue)).not.toContain("password");
+  });
+
+  test("keeps source operations action queue empty when freshness and parser health are ready", () => {
+    const { lifecycle } = buildFreshSourceLifecycle();
+    const freshnessPacket = buildSourceProvenanceSourceFreshnessGapPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:45:00.000Z",
+      maxAgeDays: 7
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const queue = buildSourceProvenanceSourceOpsActionQueue({
+      freshnessPacket,
+      parserHealthPacket,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+
+    expect(queue).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION,
+      ok: true,
+      rows: [],
+      summary: {
+        actionCount: 0,
+        retryCount: 0,
+        approvalCount: 0,
+        refreshCount: 0,
+        repairCount: 0,
+        sourceFamilies: [],
+        publicTiReady: true,
+        alertGenerationReady: true
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(queue.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "sourceOps", ready: true }),
+      expect.objectContaining({ consumer: "publicTI", ready: true }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true })
     ]));
   });
 

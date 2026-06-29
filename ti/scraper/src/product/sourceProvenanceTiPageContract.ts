@@ -18,6 +18,8 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSIO
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION = "ti.source_provenance_alert_handoff_state.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION = "ti.source_provenance_source_ops_action_queue.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -1177,6 +1179,170 @@ export type TiSourceProvenanceParserHealthAlertConsumer = {
   };
 };
 
+export type TiSourceProvenanceSourceOpsActionQueue = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute?: string;
+  sourceFreshnessGapPacketId: string;
+  parserHealthAlertPacketId: string;
+  rows: TiSourceProvenanceSourceOpsActionQueueRow[];
+  summary: {
+    actionCount: number;
+    retryCount: number;
+    approvalCount: number;
+    refreshCount: number;
+    repairCount: number;
+    sourceFamilies: string[];
+    nextRetryAt?: string;
+    publicTiReady: boolean;
+    alertGenerationReady: boolean;
+  };
+  consumers: Array<{
+    consumer: "sourceOps" | "publicTI" | "dashboard" | "alertGeneration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceSourceOpsActionQueueRow = {
+  actionId: string;
+  action:
+    | "retry_parser"
+    | "request_policy_approval"
+    | "test_source"
+    | "repair_provenance"
+    | "queue_source_refresh"
+    | "inspect_source_health";
+  priority: "high" | "medium" | "low";
+  ownerLane: "source" | "parser" | "policy" | "publicTI" | "alert" | "case";
+  sourceFamily?: string;
+  candidateIds: string[];
+  sourceIds: string[];
+  reasonCode: string;
+  retryState: {
+    retryable: boolean;
+    nextRetryAt?: string;
+  };
+  parserStatus: {
+    state?: string;
+    failureReason?: string;
+  };
+  freshness: {
+    state: TiSourceProvenanceSourceFreshnessGapPacket["freshness"]["state"];
+    newestEvidenceAt?: string;
+    ageDays?: number;
+  };
+  provenance: {
+    sourceFreshnessGapPacketId: string;
+    parserHealthAlertPacketId: string;
+    parserHealthAlertId?: string;
+    sourceHealthProofId?: string;
+    gapCode?: string;
+    fixtureBacked: true;
+  };
+  route: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceAlertHandoffState = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute?: string;
+  parserHealthAlertPacketId: string;
+  state: "ready" | "blocked";
+  alertGeneration: {
+    ready: boolean;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    blockedAlertIds: string[];
+    nextRetryAt?: string;
+    route: TiSourceProvenanceParserHealthAlertConsumer["route"];
+  };
+  publicTi: {
+    ready: boolean;
+    route: TiSourceProvenanceParserHealthAlertConsumer["route"];
+    requiredFields: string[];
+  };
+  webhook: {
+    ready: boolean;
+    route: TiSourceProvenanceParserHealthAlertConsumer["route"];
+    sourceAlertRows: string[];
+  };
+  sourceOps: {
+    ready: boolean;
+    nextActions: TiSourceProvenanceParserHealthAlertRow["retryState"]["nextAction"][];
+    routes: TiSourceProvenanceParserHealthAlertRow["route"][];
+  };
+  blockers: TiSourceProvenanceAlertHandoffStateBlocker[];
+  consumerContracts: {
+    alertGeneration: {
+      requiredFields: string[];
+      sourceSchema: typeof TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION;
+    };
+    publicTi: {
+      requiredFields: string[];
+      sourceSchema: typeof TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION;
+    };
+    webhook: {
+      requiredFields: string[];
+      sourceSchema: typeof TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION;
+    };
+    sourceOps: {
+      requiredFields: string[];
+      sourceSchema: typeof TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION;
+    };
+  };
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceAlertHandoffStateBlocker = {
+  code: "missing_org_scope" | "source_org_mismatch" | "parser_health_blocked" | "duplicate_alert_id";
+  ownerLane: "org" | "source" | "alert";
+  path: string;
+  message: string;
+  alertId?: string;
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -2286,6 +2452,142 @@ export function buildSourceProvenanceParserHealthAlertPacket(input: {
   };
 }
 
+export function buildSourceProvenanceSourceOpsActionQueue(input: {
+  freshnessPacket: TiSourceProvenanceSourceFreshnessGapPacket;
+  parserHealthPacket: TiSourceProvenanceParserHealthAlertPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourceOpsActionQueue {
+  const generatedAt = input.generatedAt ?? input.parserHealthPacket.generatedAt;
+  const rows = uniqueSourceOpsActionRows([
+    ...input.parserHealthPacket.rows.map((row) => sourceOpsActionRowFromParserAlert(input.freshnessPacket, input.parserHealthPacket, row, generatedAt)),
+    ...input.freshnessPacket.gaps.map((gap) => sourceOpsActionRowFromFreshnessGap(input.freshnessPacket, input.parserHealthPacket, gap, generatedAt))
+  ]);
+  const publicTiConsumer = input.freshnessPacket.consumers.find((consumer) => consumer.consumer === "publicTI");
+  const alertConsumer = input.freshnessPacket.consumers.find((consumer) => consumer.consumer === "alertRebuild");
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_ops_action_queue", `${input.freshnessPacket.id}:${input.parserHealthPacket.id}:${generatedAt}:${rows.map((row) => row.actionId).join(",")}`),
+    generatedAt,
+    ok: rows.length === 0,
+    tenantId: input.freshnessPacket.tenantId,
+    organizationId: input.freshnessPacket.organizationId,
+    actor: input.freshnessPacket.actor,
+    publicTiRoute: input.freshnessPacket.publicTiRoute,
+    sourceFreshnessGapPacketId: input.freshnessPacket.id,
+    parserHealthAlertPacketId: input.parserHealthPacket.id,
+    rows,
+    summary: {
+      actionCount: rows.length,
+      retryCount: rows.filter((row) => row.action === "retry_parser").length,
+      approvalCount: rows.filter((row) => row.action === "request_policy_approval").length,
+      refreshCount: rows.filter((row) => row.action === "queue_source_refresh" || row.action === "inspect_source_health").length,
+      repairCount: rows.filter((row) => row.action === "repair_provenance").length,
+      sourceFamilies: uniqueStrings(rows.map((row) => row.sourceFamily).filter(Boolean).map(String)),
+      nextRetryAt: earliestTimestamp(rows.map((row) => row.retryState.nextRetryAt)),
+      publicTiReady: publicTiConsumer?.ready === true,
+      alertGenerationReady: alertConsumer?.ready === true && input.parserHealthPacket.summary.alertGenerationReady
+    },
+    consumers: sourceOpsActionQueueConsumers(input.freshnessPacket, rows),
+    payloadShape: [
+      "rows[].action",
+      "rows[].ownerLane",
+      "rows[].sourceFamily",
+      "rows[].parserStatus",
+      "rows[].freshness",
+      "rows[].provenance",
+      "rows[].route",
+      "summary.publicTiReady",
+      "summary.alertGenerationReady"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenanceAlertHandoffState(input: {
+  packet: TiSourceProvenanceParserHealthAlertPacket;
+  expectedOrganizationId?: string;
+  generatedAt?: string;
+}): TiSourceProvenanceAlertHandoffState {
+  const packet = input.packet;
+  const generatedAt = input.generatedAt ?? packet.generatedAt;
+  const consumers = new Map(packet.consumers.map((consumer) => [consumer.consumer, consumer]));
+  const alertGeneration = consumers.get("alertGeneration") ?? fallbackParserHealthConsumer("alertGeneration", packet);
+  const publicTi = consumers.get("publicTI") ?? fallbackParserHealthConsumer("publicTI", packet);
+  const webhook = consumers.get("webhook") ?? fallbackParserHealthConsumer("webhook", packet);
+  const sourceOps = consumers.get("sourceOps") ?? fallbackParserHealthConsumer("sourceOps", packet);
+  const blockers = uniqueAlertHandoffStateBlockers([
+    ...alertHandoffOrgBlockers(packet, input.expectedOrganizationId),
+    ...packet.rows.map((row) => alertHandoffStateBlocker("parser_health_blocked", "source", "rows[]", "Parser or freshness state blocks alert handoff.", row.alertId, row.sourceFamily)),
+    ...duplicateAlertHandoffBlockers(packet.rows)
+  ]);
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_alert_handoff_state", `${packet.id}:${input.expectedOrganizationId ?? ""}:${generatedAt}`),
+    generatedAt,
+    ok: blockers.length === 0 && packet.summary.alertGenerationReady,
+    tenantId: packet.tenantId,
+    organizationId: packet.organizationId,
+    actor: packet.actor,
+    publicTiRoute: packet.publicTiRoute,
+    parserHealthAlertPacketId: packet.id,
+    state: blockers.length === 0 && packet.summary.alertGenerationReady ? "ready" : "blocked",
+    alertGeneration: {
+      ready: alertGeneration.ready && blockers.length === 0,
+      sourceFamilies: packet.summary.sourceFamilies,
+      blockedAlertIds: uniqueStrings(packet.rows.map((row) => row.alertId)),
+      nextRetryAt: packet.summary.nextRetryAt,
+      route: alertGeneration.route
+    },
+    publicTi: {
+      ready: publicTi.ready && blockers.length === 0,
+      route: publicTi.route,
+      requiredFields: publicTi.requiredFields
+    },
+    webhook: {
+      ready: webhook.ready && blockers.every((blocker) => blocker.code !== "source_org_mismatch" && blocker.code !== "missing_org_scope"),
+      route: webhook.route,
+      sourceAlertRows: packet.rows.map((row) => row.alertId)
+    },
+    sourceOps: {
+      ready: sourceOps.ready || packet.rows.length > 0,
+      nextActions: uniqueStrings(packet.rows.map((row) => row.retryState.nextAction)) as TiSourceProvenanceParserHealthAlertRow["retryState"]["nextAction"][],
+      routes: uniqueParserHealthRoutes(packet.rows.map((row) => row.route))
+    },
+    blockers,
+    consumerContracts: {
+      alertGeneration: {
+        requiredFields: ["tenantId", "organizationId", "actor", "parserHealthAlertPacketId", "alertGeneration.ready"],
+        sourceSchema: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION
+      },
+      publicTi: {
+        requiredFields: ["actor", "publicTiRoute", "publicTi.ready", "blockers[]"],
+        sourceSchema: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION
+      },
+      webhook: {
+        requiredFields: ["organizationId", "webhook.sourceAlertRows", "sourceOps.nextActions", "safeOutput"],
+        sourceSchema: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION
+      },
+      sourceOps: {
+        requiredFields: ["sourceOps.routes", "sourceOps.nextActions", "rows[].route"],
+        sourceSchema: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION
+      }
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -3077,12 +3379,345 @@ function parserHealthAlertConsumers(
   }];
 }
 
+function fallbackParserHealthConsumer(
+  consumer: TiSourceProvenanceParserHealthAlertConsumer["consumer"],
+  packet: TiSourceProvenanceParserHealthAlertPacket
+): TiSourceProvenanceParserHealthAlertConsumer {
+  if (consumer === "publicTI") {
+    return {
+      consumer,
+      ready: false,
+      requiredFields: ["actor", "publicTiRoute", "safeOutput"],
+      route: {
+        method: "GET",
+        path: packet.publicTiRoute ?? `/ti/${encodeURIComponent(packet.actor)}`,
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  if (consumer === "alertGeneration") {
+    return {
+      consumer,
+      ready: false,
+      requiredFields: ["summary.alertGenerationReady", "rows[]"],
+      route: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: { actor: packet.actor, organizationId: packet.organizationId, dryRun: true },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  if (consumer === "webhook") {
+    return {
+      consumer,
+      ready: false,
+      requiredFields: ["rows[].alertId", "rows[].provenance"],
+      route: {
+        method: "POST",
+        path: "/v1/dwm/webhooks/dry-run",
+        body: { actor: packet.actor, dryRun: true, sourceAlertRows: [] },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  return {
+    consumer,
+    ready: false,
+    requiredFields: ["rows[].route", "rows[].retryState"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  };
+}
+
+function alertHandoffOrgBlockers(
+  packet: TiSourceProvenanceParserHealthAlertPacket,
+  expectedOrganizationId?: string
+): TiSourceProvenanceAlertHandoffStateBlocker[] {
+  if (!packet.organizationId) {
+    return [alertHandoffStateBlocker("missing_org_scope", "org", "organizationId", "Alert handoff state requires organization scope.")];
+  }
+  if (expectedOrganizationId && expectedOrganizationId !== packet.organizationId) {
+    return [alertHandoffStateBlocker("source_org_mismatch", "source", "organizationId", "Parser health packet belongs to a different organization.")];
+  }
+  return [];
+}
+
+function duplicateAlertHandoffBlockers(
+  rows: TiSourceProvenanceParserHealthAlertRow[]
+): TiSourceProvenanceAlertHandoffStateBlocker[] {
+  const seen = new Set<string>();
+  const duplicates: TiSourceProvenanceAlertHandoffStateBlocker[] = [];
+  for (const row of rows) {
+    if (!seen.has(row.alertId)) {
+      seen.add(row.alertId);
+      continue;
+    }
+    duplicates.push(alertHandoffStateBlocker("duplicate_alert_id", "alert", "rows[].alertId", "Parser health packet repeats an alert handoff row.", row.alertId, row.sourceFamily));
+  }
+  return duplicates;
+}
+
+function alertHandoffStateBlocker(
+  code: TiSourceProvenanceAlertHandoffStateBlocker["code"],
+  ownerLane: TiSourceProvenanceAlertHandoffStateBlocker["ownerLane"],
+  path: string,
+  message: string,
+  alertId?: string,
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"]
+): TiSourceProvenanceAlertHandoffStateBlocker {
+  return { code, ownerLane, path, message, alertId, sourceFamily };
+}
+
+function uniqueAlertHandoffStateBlockers(
+  blockers: TiSourceProvenanceAlertHandoffStateBlocker[]
+): TiSourceProvenanceAlertHandoffStateBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}:${blocker.alertId ?? ""}:${blocker.sourceFamily ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueParserHealthRoutes(
+  routes: TiSourceProvenanceParserHealthAlertRow["route"][]
+): TiSourceProvenanceParserHealthAlertRow["route"][] {
+  const seen = new Set<string>();
+  return routes.filter((route) => {
+    const key = `${route.path}:${route.body.action}:${route.body.sourceFamily}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function uniqueParserHealthAlertRows(
   rows: TiSourceProvenanceParserHealthAlertRow[]
 ): TiSourceProvenanceParserHealthAlertRow[] {
   const seen = new Set<string>();
   return rows.filter((row) => {
     const key = `${row.sourceFamily}:${row.alertType}:${row.retryState.nextRetryAt ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sourceOpsActionRowFromParserAlert(
+  freshnessPacket: TiSourceProvenanceSourceFreshnessGapPacket,
+  parserHealthPacket: TiSourceProvenanceParserHealthAlertPacket,
+  alert: TiSourceProvenanceParserHealthAlertRow,
+  generatedAt: string
+): TiSourceProvenanceSourceOpsActionQueueRow {
+  const action = sourceOpsActionForParserAlert(alert);
+  return {
+    actionId: stableId("ti_source_provenance_source_ops_action", `${parserHealthPacket.id}:${alert.alertId}:${action}:${generatedAt}`),
+    action,
+    priority: alert.severity === "blocking" ? "high" : "medium",
+    ownerLane: alert.enrichmentGap.ownerLane,
+    sourceFamily: alert.sourceFamily,
+    candidateIds: alert.candidateIds,
+    sourceIds: alert.sourceIds,
+    reasonCode: alert.alertType,
+    retryState: {
+      retryable: alert.retryState.retryable,
+      nextRetryAt: alert.retryState.nextRetryAt
+    },
+    parserStatus: {
+      state: alert.parserStatus.state,
+      failureReason: alert.parserStatus.failureReason
+    },
+    freshness: {
+      state: freshnessPacket.freshness.state,
+      newestEvidenceAt: freshnessPacket.freshness.newestEvidenceAt,
+      ageDays: freshnessPacket.freshness.ageDays
+    },
+    provenance: {
+      sourceFreshnessGapPacketId: freshnessPacket.id,
+      parserHealthAlertPacketId: parserHealthPacket.id,
+      parserHealthAlertId: alert.alertId,
+      sourceHealthProofId: alert.provenance.sourceHealthProofId,
+      fixtureBacked: true
+    },
+    route: sourceOpsRouteForAction(action, alert.sourceFamily, alert.candidateIds[0]),
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceOpsActionRowFromFreshnessGap(
+  freshnessPacket: TiSourceProvenanceSourceFreshnessGapPacket,
+  parserHealthPacket: TiSourceProvenanceParserHealthAlertPacket,
+  gap: TiSourceProvenanceSourceFreshnessGap,
+  generatedAt: string
+): TiSourceProvenanceSourceOpsActionQueueRow {
+  const action = sourceOpsActionForFreshnessGap(gap);
+  return {
+    actionId: stableId("ti_source_provenance_source_ops_action", `${freshnessPacket.id}:${gap.code}:${gap.candidateId ?? ""}:${gap.alertId ?? ""}:${action}:${generatedAt}`),
+    action,
+    priority: gap.ownerLane === "source" || gap.ownerLane === "parser" || gap.ownerLane === "policy" ? "high" : "medium",
+    ownerLane: gap.ownerLane,
+    candidateIds: uniqueStrings([gap.candidateId].filter(Boolean).map(String)),
+    sourceIds: [],
+    reasonCode: gap.code,
+    retryState: {
+      retryable: gap.nextAction === "retry_parser",
+      nextRetryAt: gap.retryAfter
+    },
+    parserStatus: {
+      state: gap.nextAction === "retry_parser" ? "retry_scheduled" : undefined,
+      failureReason: gap.message
+    },
+    freshness: {
+      state: freshnessPacket.freshness.state,
+      newestEvidenceAt: freshnessPacket.freshness.newestEvidenceAt,
+      ageDays: freshnessPacket.freshness.ageDays
+    },
+    provenance: {
+      sourceFreshnessGapPacketId: freshnessPacket.id,
+      parserHealthAlertPacketId: parserHealthPacket.id,
+      gapCode: gap.code,
+      fixtureBacked: true
+    },
+    route: sourceOpsRouteForAction(action, undefined, gap.candidateId),
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceOpsActionForParserAlert(
+  alert: TiSourceProvenanceParserHealthAlertRow
+): TiSourceProvenanceSourceOpsActionQueueRow["action"] {
+  if (alert.alertType === "parser_retry_scheduled") return "retry_parser";
+  if (alert.alertType === "policy_blocked") return "request_policy_approval";
+  if (alert.alertType === "freshness_missing") return "repair_provenance";
+  return "test_source";
+}
+
+function sourceOpsActionForFreshnessGap(
+  gap: TiSourceProvenanceSourceFreshnessGap
+): TiSourceProvenanceSourceOpsActionQueueRow["action"] {
+  if (gap.nextAction === "retry_parser") return "retry_parser";
+  if (gap.nextAction === "request_policy_approval") return "request_policy_approval";
+  if (gap.nextAction === "repair_provenance" || gap.nextAction === "wait_for_case_handoff" || gap.nextAction === "open_case_handoff") return "repair_provenance";
+  if (gap.code === "stale_source_evidence") return "queue_source_refresh";
+  if (gap.nextAction === "inspect_source_health") return "inspect_source_health";
+  return "test_source";
+}
+
+function sourceOpsRouteForAction(
+  action: TiSourceProvenanceSourceOpsActionQueueRow["action"],
+  sourceFamily?: string,
+  candidateId?: string
+): TiSourceProvenanceSourceOpsActionQueueRow["route"] {
+  if (action === "inspect_source_health") {
+    return {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    };
+  }
+  return {
+    method: "POST",
+    path: "/v1/dwm/source-requests",
+    body: {
+      action: sourceOpsRouteAction(action),
+      sourceFamily,
+      candidateId,
+      dryRun: true
+    },
+    dryRunSupported: true,
+    liveNetworkFetch: false
+  };
+}
+
+function sourceOpsRouteAction(
+  action: TiSourceProvenanceSourceOpsActionQueueRow["action"]
+): string {
+  if (action === "request_policy_approval") return "request_approval";
+  if (action === "retry_parser") return "retry";
+  if (action === "test_source") return "test";
+  if (action === "queue_source_refresh") return "source_health";
+  if (action === "repair_provenance") return "source_health";
+  return "source_health";
+}
+
+function sourceOpsActionQueueConsumers(
+  freshnessPacket: TiSourceProvenanceSourceFreshnessGapPacket,
+  rows: TiSourceProvenanceSourceOpsActionQueueRow[]
+): TiSourceProvenanceSourceOpsActionQueue["consumers"] {
+  return [{
+    consumer: "sourceOps",
+    ready: true,
+    requiredFields: ["rows[].action", "rows[].route", "rows[].provenance", "rows[].retryState"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "publicTI",
+    ready: rows.length === 0 && freshnessPacket.freshness.state === "fresh",
+    requiredFields: ["summary.publicTiReady", "rows[].freshness", "rows[].reasonCode"],
+    route: {
+      method: "GET",
+      path: freshnessPacket.publicTiRoute ?? `/ti/${encodeURIComponent(freshnessPacket.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: true,
+    requiredFields: ["rows[].ownerLane", "rows[].sourceFamily", "rows[].parserStatus", "safeOutput.liveNetworkScrapeStarted"],
+    route: {
+      method: "GET",
+      path: `/dashboard/ti/sources?actor=${encodeURIComponent(freshnessPacket.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: rows.length === 0,
+    requiredFields: ["summary.alertGenerationReady", "rows[].reasonCode", "rows[].provenance"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        actor: freshnessPacket.actor,
+        organizationId: freshnessPacket.organizationId,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function uniqueSourceOpsActionRows(
+  rows: TiSourceProvenanceSourceOpsActionQueueRow[]
+): TiSourceProvenanceSourceOpsActionQueueRow[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = `${row.action}:${row.reasonCode}:${row.sourceFamily ?? ""}:${row.candidateIds.join(",")}:${row.retryState.nextRetryAt ?? ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
