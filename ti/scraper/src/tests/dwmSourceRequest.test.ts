@@ -1377,6 +1377,70 @@ describe("dwm source requests", () => {
         privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true })
       })
     ]));
+    const actorReadiness = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "actor_enrichment_readiness",
+        sourcePackId: "pack_activation_proof_mixed",
+        query: "APT29",
+        tenantId: "tenant_acme",
+        orgId: "org_acme",
+        scope: "APT29,example.com"
+      })
+    }), options);
+    const actorReadinessBody = await actorReadiness.json() as any;
+    expect(actorReadiness.status).toBe(200);
+    expect(actorReadinessBody).toMatchObject({
+      schemaVersion: "dwm.actor_page_source_readiness.v1",
+      query: "APT29",
+      actorReadiness: {
+        state: "ready",
+        freshness: {
+          lastSuccessfulCaptureAt: expect.any(String),
+          lastSuccessfulEnrichmentAt: expect.any(String),
+          stale: false
+        },
+        alertability: {
+          activeSourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"]),
+          matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve", "extractedTerms"])
+        },
+        safeOutput: {
+          liveNetworkScrapeStarted: false,
+          privateTelegramContentExposed: false,
+          restrictedMetadataLeaked: false
+        }
+      },
+      candidateIntakeContract: {
+        schemaVersion: "dwm.actor_source_candidate_intake.v1",
+        mode: "prepare_no_network",
+        policyValidation: {
+          publicTelegramOnly: true,
+          darkwebMetadataOnly: true,
+          liveNetworkFetch: false,
+          rawRestrictedPayloadStorage: false
+        }
+      }
+    });
+    expect(actorReadinessBody.actorReadiness.actorSections).toMatchObject({
+      overview: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]) }),
+      infrastructure: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]) }),
+      targeting: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["darkweb_metadata", "public_advisory"]) }),
+      evidence: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "clear_web"]) }),
+      freshness: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "clear_web"]) })
+    });
+    expect(actorReadinessBody.actorReadiness.provenance).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        family: "telegram",
+        lastCaptureAt: expect.any(String),
+        privacyBoundary: expect.objectContaining({ noPrivateTelegram: true }),
+        safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+      }),
+      expect.objectContaining({
+        family: "darkweb_onion",
+        privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true })
+      })
+    ]));
+    expect(actorReadinessBody.actorReadiness.candidateGaps).toEqual([]);
     expect(configBody.sourceConfigs.every((row: any) => row.activationProof.safeOutput.liveNetworkScrapeStarted === false)).toBe(true);
     expect(frontier.snapshot()).toHaveLength(6);
     expect(JSON.stringify(configBody)).not.toContain("apt29/claims");
@@ -1423,6 +1487,108 @@ describe("dwm source requests", () => {
     });
     expect(pausedConfigBody.sourceReadinessArtifact.sharedWatchlistAlertability.activeSourceFamilies).not.toContain("telegram");
     expect(pausedConfigBody.sourceReadinessArtifact.sharedWatchlistAlertability.pausedSourceFamilies).toContain("telegram");
+  });
+
+  test("prepares actor enrichment candidate gaps from partial source coverage without network fetches", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const options = { store, frontier };
+
+    const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_actor_gap_partial",
+        sourcePackLabel: "Actor gap partial source pack",
+        tenantId: "tenant_acme",
+        scope: "APT28",
+        requestedBy: "source-gap-worker",
+        candidates: [
+          { target: "@apt28_public_updates", type: "telegram_channel", family: "telegram" }
+        ]
+      })
+    }), options);
+    expect(created.status).toBe(201);
+
+    const worker = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_worker_run", sourcePackId: "pack_actor_gap_partial", chunkSize: 10 })
+    }), options);
+    expect(worker.status).toBe(200);
+
+    const readiness = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "actor_enrichment_readiness",
+        sourcePackId: "pack_actor_gap_partial",
+        query: "APT28",
+        tenantId: "tenant_acme",
+        orgId: "org_acme"
+      })
+    }), options);
+    const body = await readiness.json() as any;
+    expect(readiness.status).toBe(200);
+    expect(body.actorReadiness).toMatchObject({
+      query: "APT28",
+      state: "partial",
+      sourceFamilies: {
+        active: expect.arrayContaining(["telegram"]),
+        enrichable: expect.arrayContaining(["telegram"])
+      },
+      freshness: {
+        stale: false,
+        lastSuccessfulEnrichmentAt: expect.any(String)
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false,
+        privateTelegramContentExposed: false,
+        restrictedMetadataLeaked: false
+      }
+    });
+    expect(body.actorReadiness.missingSections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ section: "infrastructure" }),
+      expect.objectContaining({ section: "targeting" })
+    ]));
+    expect(body.actorReadiness.candidateGaps).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        family: "darkweb_onion",
+        state: "missing",
+        intakeRecommendation: expect.objectContaining({
+          type: "restricted_metadata",
+          family: "darkweb_onion",
+          policyBoundary: "metadata_only_restricted_source"
+        })
+      }),
+      expect.objectContaining({
+        family: "actor_page",
+        state: "missing",
+        intakeRecommendation: expect.objectContaining({
+          type: "public_url",
+          family: "actor_page",
+          policyBoundary: "public_metadata_only"
+        })
+      })
+    ]));
+    expect(body.candidateIntakeContract).toMatchObject({
+      schemaVersion: "dwm.actor_source_candidate_intake.v1",
+      mode: "prepare_no_network",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          sourcePackLabel: "APT28 enrichment source pack",
+          scope: "APT28",
+          candidates: expect.arrayContaining([
+            expect.objectContaining({ family: "darkweb_onion", type: "restricted_metadata" }),
+            expect.objectContaining({ family: "actor_page", type: "public_url" })
+          ])
+        }
+      },
+      policyValidation: {
+        liveNetworkFetch: false,
+        rawRestrictedPayloadStorage: false
+      }
+    });
+    expect(frontier.snapshot()).toHaveLength(1);
   });
 
   test("retrieves source packs across scraper store restarts through durable adapter", async () => {

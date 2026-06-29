@@ -40,6 +40,7 @@ import type { SourceRecord } from "../types.ts";
 
 type DwmSourceRequestBody = {
   target?: string;
+  query?: string;
   type?: "telegram_channel" | "restricted_metadata" | "public_url";
   tenantId?: string;
   scope?: string;
@@ -64,7 +65,7 @@ type DwmSourceRequestBody = {
   requestId?: string;
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
-  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list" | "pack_worker_run" | "pack_customer_config";
+  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list" | "pack_worker_run" | "pack_customer_config" | "actor_enrichment_readiness";
   packAction?: "approve" | "promote" | "reject" | "retry" | "suppress";
   orgId?: string;
   customerId?: string;
@@ -2998,6 +2999,160 @@ function sourcePackCustomerConfigResponse(body: DwmSourceRequestBody, options: A
   };
 }
 
+function sourceActorEnrichmentReadinessResponse(body: DwmSourceRequestBody, options: ApiServerOptions) {
+  const query = String(body.query ?? body.scope ?? body.target ?? "").split(",")[0]?.trim() || "unknown_actor";
+  const config = sourcePackCustomerConfigResponse({
+    ...body,
+    action: "pack_customer_config",
+    scope: body.scope ?? query
+  }, options) as Record<string, any>;
+  const actorReadiness = buildActorPageSourceReadiness(query, config.sourceReadinessArtifact);
+  return {
+    action: "actor_enrichment_readiness",
+    schemaVersion: "dwm.actor_page_source_readiness.v1",
+    generatedAt: config.generatedAt,
+    query,
+    sourcePackId: config.sourcePackId,
+    sourcePackLabel: config.sourcePackLabel,
+    actorReadiness,
+    sourceReadinessArtifact: config.sourceReadinessArtifact,
+    candidateIntakeContract: sourceActorCandidateIntakeContract(query, actorReadiness),
+    safeOutput: {
+      rawTargetsExposed: false,
+      rawUnsafeRowsStored: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<string, any>) {
+  const coverage = (readinessArtifact.actorCoverage ?? []).find((row: any) => String(row.watchlistTerm).toLowerCase() === query.toLowerCase())
+    ?? readinessArtifact.actorCoverage?.[0]
+    ?? {};
+  const ledgerRows = Array.isArray(readinessArtifact.readinessLedgerRows) ? readinessArtifact.readinessLedgerRows : [];
+  const familyRows = Array.isArray(readinessArtifact.sourceFamilyReadiness) ? readinessArtifact.sourceFamilyReadiness : [];
+  const candidateGaps = familyRows
+    .filter((row: any) => Number(row.candidateCount ?? 0) === 0 || row.failed > 0 || row.blocked > 0 || row.policyBlocked > 0 || (!row.canEnrichActor && !row.canProduceAlert))
+    .map((row: any) => ({
+      family: row.family,
+      state: Number(row.candidateCount ?? 0) === 0 ? "missing" : row.failed > 0 ? "failed" : row.blocked > 0 || row.policyBlocked > 0 ? "policy_blocked" : "not_ready",
+      parserStatuses: row.parserStatuses ?? [],
+      retryBackoff: row.retryBackoff,
+      blockers: row.blockers ?? [],
+      intakeRecommendation: sourceActorIntakeRecommendation(query, row.family)
+    }));
+  const provenance = ledgerRows
+    .filter((row: any) => row.canEnrichActor || row.canProduceAlert || row.lastCaptureAt)
+    .map((row: any) => ({
+      family: row.family,
+      state: row.state,
+      lastCaptureAt: row.lastCaptureAt,
+      lastEnrichmentAt: row.lastEnrichmentAt,
+      matchableFields: row.matchableFields ?? [],
+      alertableFields: row.alertableFields ?? [],
+      privacyBoundary: row.privacyBoundary,
+      sourceTrust: row.sourceTrust,
+      safeOutput: row.safeOutput
+    }));
+  const actorSections = coverage.actorSections ?? {};
+  const missingSections = Object.entries(actorSections)
+    .filter(([, value]: [string, any]) => value?.covered !== true)
+    .map(([section, value]: [string, any]) => ({
+      section,
+      blockers: value?.blockers ?? [{ code: "missing_source_family", severity: "warning", retryable: true }]
+    }));
+  const freshnessRows = ledgerRows.filter((row: any) => row.lastCaptureAt || row.lastEnrichmentAt);
+  return {
+    query,
+    state: candidateGaps.some((gap: any) => gap.state === "policy_blocked")
+      ? "blocked"
+      : missingSections.length > 0
+        ? "partial"
+        : provenance.length > 0
+          ? "ready"
+          : "missing",
+    sourceFamilies: {
+      active: readinessArtifact.sharedWatchlistAlertability?.activeSourceFamilies ?? [],
+      enrichable: readinessArtifact.sharedWatchlistAlertability?.enrichableSourceFamilies ?? [],
+      paused: readinessArtifact.sharedWatchlistAlertability?.pausedSourceFamilies ?? [],
+      failed: readinessArtifact.sharedWatchlistAlertability?.failedSourceFamilies ?? [],
+      blocked: readinessArtifact.sharedWatchlistAlertability?.blockedSourceFamilies ?? []
+    },
+    parserStatusByFamily: Object.fromEntries(familyRows.map((row: any) => [row.family, row.parserStatuses ?? []])),
+    actorSections,
+    missingSections,
+    provenance,
+    freshness: {
+      lastSuccessfulCaptureAt: latestIso(freshnessRows.map((row: any) => row.lastCaptureAt)),
+      lastSuccessfulEnrichmentAt: latestIso(freshnessRows.map((row: any) => row.lastEnrichmentAt)),
+      stale: freshnessRows.length === 0,
+      checkedAt: readinessArtifact.generatedAt
+    },
+    candidateGaps,
+    retryBlockers: ledgerRows
+      .filter((row: any) => row.retryBackoff?.retryable || (row.blockerCodes ?? []).length > 0)
+      .map((row: any) => ({
+        family: row.family,
+        retryBackoff: row.retryBackoff,
+        blockerCodes: row.blockerCodes ?? []
+      })),
+    alertability: {
+      activeSourceFamilies: readinessArtifact.sharedWatchlistAlertability?.activeSourceFamilies ?? [],
+      matchableFields: readinessArtifact.sharedWatchlistAlertability?.matchableFields ?? [],
+      sourceTrust: readinessArtifact.sharedWatchlistAlertability?.sourceTrust,
+      blockerReasons: readinessArtifact.sharedWatchlistAlertability?.blockerReasons ?? [],
+      sourcePolicyLimits: readinessArtifact.sharedWatchlistAlertability?.sourcePolicyLimits ?? []
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourceActorIntakeRecommendation(query: string, family: string) {
+  const normalized = query.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "actor";
+  if (family === "telegram") return { type: "telegram_channel", family, targetTemplate: `@${normalized}_public_updates`, policyBoundary: "public_telegram_only" };
+  if (family === "darkweb_onion") return { type: "restricted_metadata", family, targetTemplate: `metadata://darkweb/onion/${normalized}-index`, policyBoundary: "metadata_only_restricted_source" };
+  if (family === "darkweb_metadata") return { type: "restricted_metadata", family, targetTemplate: `metadata://darkweb/${normalized}/claims`, policyBoundary: "metadata_only_restricted_source" };
+  if (family === "public_advisory") return { type: "public_url", family, targetTemplate: `https://example.com/security/advisory/${normalized}`, policyBoundary: "public_metadata_only" };
+  if (family === "actor_page") return { type: "public_url", family, targetTemplate: `https://example.com/threat-actors/${normalized}`, policyBoundary: "public_metadata_only" };
+  return { type: "public_url", family, targetTemplate: `https://example.com/blog/${normalized}-analysis`, policyBoundary: "public_metadata_only" };
+}
+
+function sourceActorCandidateIntakeContract(query: string, actorReadiness: Record<string, any>) {
+  return {
+    schemaVersion: "dwm.actor_source_candidate_intake.v1",
+    mode: "prepare_no_network",
+    query,
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: {
+        sourcePackLabel: `${query} enrichment source pack`,
+        scope: query,
+        candidates: actorReadiness.candidateGaps.map((gap: any) => gap.intakeRecommendation)
+      }
+    },
+    acceptedFamilies: SOURCE_GROWTH_FAMILIES,
+    policyValidation: {
+      publicTelegramOnly: true,
+      darkwebMetadataOnly: true,
+      publicWebMetadataOnly: true,
+      liveNetworkFetch: false,
+      rawRestrictedPayloadStorage: false
+    },
+    candidateGaps: actorReadiness.candidateGaps,
+    safeOutput: actorReadiness.safeOutput
+  };
+}
+
 function sourcePackActionContract(input: {
   pack?: SourcePackRegistry;
   candidate: any;
@@ -3642,6 +3797,7 @@ function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiSer
   if (body.action === "pack_list") return json(sourcePackListResponse(body, options), 200);
   if (body.action === "pack_status") return json(sourcePackStatusResponse(body, options), 200);
   if (body.action === "pack_customer_config") return json(sourcePackCustomerConfigResponse(body, options), 200);
+  if (body.action === "actor_enrichment_readiness") return json(sourceActorEnrichmentReadinessResponse(body, options), 200);
   if (body.action === "pack_review") return handleSourcePackReview(body, options);
   if (body.action === "pack_worker_run") return handleSourcePackWorkerRun(body, options);
 
