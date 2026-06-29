@@ -297,9 +297,11 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
       generatedAt
     })
   });
+  const workflowExecutionReadiness = buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: workflowActionFromBody(body) });
   return json({
     visibilityDecision: access.visibilityDecision,
-    workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: workflowActionFromBody(body) }),
+    workflowExecutionReadiness,
+    workflowActionEvent: workflowExecutionReadiness.workflowActionEvent,
     alert: buildDwmAlertListItem(alert, options, deliveries),
     event
   });

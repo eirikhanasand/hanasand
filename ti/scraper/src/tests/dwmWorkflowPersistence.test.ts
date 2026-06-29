@@ -361,7 +361,40 @@ describe("dwm workflow persistence", () => {
       alertId: alert.id,
       currentWorkflowEventCount: 1
     });
+    expect(triage.workflowActionEvent).toMatchObject({
+      schemaVersion: "dwm.alert_workflow_action_event.v1",
+      ready: true,
+      action: "case_link",
+      alertId: alert.id,
+      organizationId,
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"],
+      selectedCaptureIds: ["cap_workflow_acme"],
+      evidenceCount: 1,
+      dedupeKey: alert.dedupeKey,
+      deliveryDedupeKey: alert.dedupeKey,
+      alertDetailPath: alert.alertDetailPath,
+      caseIdCandidate: alert.caseIdCandidate,
+      caseId: "case_workflow_live",
+      casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
+      workflowEventCount: 1,
+      blockerCodes: []
+    });
+    expect(triage.workflowActionEvent.watchlistIds).toEqual(alert.watchlistIds);
+    expect(triage.workflowActionEvent.watchlistItemIds).toEqual(alert.watchlistItemIds);
+    expect(triage.workflowActionEvent.idempotencyKey).toMatch(/^dwm_alert_workflow_action_event_/);
     expect(triage.alert.workflowExecutionReadiness).toMatchObject({ ready: true, currentWorkflowEventCount: 1 });
+    expect(triage.alert.workflowExecutionReadiness.workflowActionEvent).toMatchObject({
+      schemaVersion: "dwm.alert_workflow_action_event.v1",
+      ready: true,
+      organizationId,
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"],
+      selectedCaptureIds: ["cap_workflow_acme"],
+      dedupeKey: alert.dedupeKey,
+      caseId: "case_workflow_live",
+      workflowEventCount: 1
+    });
     expect(triage.alert.customerProofHandoff).toMatchObject({
       schemaVersion: "dwm.customer_alert_proof.v1",
       alertId: alert.id,
@@ -468,6 +501,21 @@ describe("dwm workflow persistence", () => {
       blockerCodes: ["stale_workflow_version"]
     });
     expect(staleMutation.workflowExecutionReadiness.createdEventDispatch.idempotencyKey).toMatch(/^dwm_alert_created_workflow_dispatch_/);
+    expect(staleMutation.workflowExecutionReadiness.workflowActionEvent).toMatchObject({
+      schemaVersion: "dwm.alert_workflow_action_event.v1",
+      ready: false,
+      action: "note",
+      alertId: alert.id,
+      organizationId,
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"],
+      selectedCaptureIds: ["cap_workflow_acme"],
+      dedupeKey: alert.dedupeKey,
+      caseId: "case_workflow_live",
+      workflowEventCount: 1,
+      expectedWorkflowEventCount: 0,
+      blockerCodes: ["stale_workflow_version"]
+    });
     expect((store as any).getDwmAlert(alert.id).workflowEvents).toHaveLength(1);
 
     const invalidTransitionResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
