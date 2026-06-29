@@ -2205,7 +2205,31 @@ describe("dwm source requests", () => {
             mode: "no_network_fixture",
             publicTiContract: expect.objectContaining({
               path: "/ti/apt29",
-              requiredFields: expect.arrayContaining(["sourceFamily", "parserStatus", "confidence", "timestamps", "provenance", "gap", "safeOutput"])
+              requiredFields: expect.arrayContaining(["sourceFamily", "parserStatus", "confidence", "timestamps", "provenance", "gap", "safeOutput", "sourceEnrichmentProfile"])
+            }),
+            sourceEnrichmentProfileContract: expect.objectContaining({
+              schemaVersion: "ti.public_actor.source_enrichment_profile_contract.v1",
+              mode: "no_network_fixture",
+              requiredFields: expect.arrayContaining([
+                "sourceEnrichmentProfile.fields[].field",
+                "sourceEnrichmentProfile.fields[].state",
+                "sourceEnrichmentProfile.fields[].confidence",
+                "sourceEnrichmentProfile.fields[].freshness",
+                "sourceEnrichmentProfile.fields[].provenance",
+                "sourceEnrichmentProfile.fields[].gaps"
+              ]),
+              profile: expect.objectContaining({
+                schemaVersion: "ti.public_actor.enrichment_profile.v1",
+                fields: expect.arrayContaining([
+                  expect.objectContaining({ field: "aliases", state: "value_ready" })
+                ]),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              }),
+              policyBoundary: expect.objectContaining({
+                liveNetworkFetch: false,
+                rawActorClaimsSynthesized: false,
+                restrictedPayloadStorage: false
+              })
             }),
             alertGenerationContract: expect.objectContaining({
               path: "/v1/dwm/alerts/rebuild",
@@ -2510,6 +2534,19 @@ describe("dwm source requests", () => {
               alertReadyFamilies: expect.arrayContaining(["telegram"])
             })
           }),
+          sourceEnrichmentProfile: expect.objectContaining({
+            schemaVersion: "ti.public_actor.enrichment_profile.v1",
+            fields: expect.arrayContaining([
+              expect.objectContaining({
+                field: "aliases",
+                state: "value_ready",
+                provenance: expect.arrayContaining([
+                  expect.objectContaining({ safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false }) })
+                ])
+              })
+            ]),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
           sourceConsumerBridge: expect.objectContaining({
             summary: expect.objectContaining({
               publicTiReady: true,
@@ -2568,6 +2605,8 @@ describe("dwm source requests", () => {
           ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
           ".actorReadiness.sourceConsumerBridge.schemaVersion == \"dwm.actor_source_consumer_bridge.v1\"",
           ".actorReadiness.sourceSectionReadiness.schemaVersion == \"dwm.actor_source_section_readiness.v1\"",
+          ".actorReadiness.sourceEnrichmentProfile.schemaVersion == \"ti.public_actor.enrichment_profile.v1\"",
+          ".actorReadiness.sourceEnrichmentProfile.fields | all(has(\"field\") and has(\"state\") and has(\"provenance\") and has(\"gaps\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.publicTiQueryAdapter.schemaVersion == \"ti.public_actor.query_adapter.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.alertEvidenceHandoff.schemaVersion == \"ti.public_actor.alert_evidence_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
@@ -2576,6 +2615,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceEnrichmentProfileContract.requiredFields | index(\"sourceEnrichmentProfile.fields[].provenance\")",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsContract.requiredFields | index(\"sourceOperationsReadiness.rows[].proofId\")",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.downstream_source_operations_readiness.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and has(\"fixtureReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",

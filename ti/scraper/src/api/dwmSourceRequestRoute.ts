@@ -3098,6 +3098,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourceConsumerBridge: actorReadiness.sourceConsumerBridge,
       sourceSectionReadiness: actorReadiness.sourceSectionReadiness,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
+      sourceEnrichmentProfile: actorReadiness.sourceEnrichmentProfile,
       sourceOperationsAdapter: dashboardSourceOperationsAdapter,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
@@ -3131,6 +3132,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.sourceConsumerBridge.consumers | all(has(\"consumer\") and has(\"ready\") and has(\"sourceFamilies\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".actorReadiness.sourceSectionReadiness.schemaVersion == \"dwm.actor_source_section_readiness.v1\"",
       ".actorReadiness.sourceSectionReadiness.sections | all(has(\"section\") and has(\"state\") and has(\"sourceFamilies\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".actorReadiness.sourceEnrichmentProfile.schemaVersion == \"ti.public_actor.enrichment_profile.v1\"",
+      ".actorReadiness.sourceEnrichmentProfile.fields | all(has(\"field\") and has(\"state\") and has(\"provenance\") and has(\"gaps\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.schemaVersion == \"ti.public_actor.query_adapter.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sections | all(has(\"section\") and has(\"state\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.alertEvidenceHandoff.schemaVersion == \"ti.public_actor.alert_evidence_handoff.v1\"",
@@ -3140,6 +3143,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceEnrichmentProfileContract.requiredFields | index(\"sourceEnrichmentProfile.fields[].provenance\")",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsContract.requiredFields | index(\"sourceOperationsReadiness.rows[].proofId\")",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.downstream_source_operations_readiness.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and has(\"fixtureReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
@@ -4446,7 +4450,32 @@ function sourceActorPublicTiDownstreamFixtureExport(input: {
     },
     publicTiContract: {
       path: `/ti/${encodeURIComponent(input.query.toLowerCase())}`,
-      requiredFields: ["sourceFamily", "parserStatus", "confidence", "timestamps", "provenance", "gap", "safeOutput"]
+      requiredFields: ["sourceFamily", "parserStatus", "confidence", "timestamps", "provenance", "gap", "safeOutput", "sourceEnrichmentProfile"]
+    },
+    sourceEnrichmentProfileContract: {
+      schemaVersion: "ti.public_actor.source_enrichment_profile_contract.v1",
+      mode: "no_network_fixture",
+      profile: input.actorReadiness.sourceEnrichmentProfile,
+      requiredFields: [
+        "sourceEnrichmentProfile.schemaVersion",
+        "sourceEnrichmentProfile.fields[].field",
+        "sourceEnrichmentProfile.fields[].state",
+        "sourceEnrichmentProfile.fields[].values",
+        "sourceEnrichmentProfile.fields[].confidence",
+        "sourceEnrichmentProfile.fields[].freshness",
+        "sourceEnrichmentProfile.fields[].provenance",
+        "sourceEnrichmentProfile.fields[].gaps",
+        "sourceEnrichmentProfile.safeOutput"
+      ],
+      consumerRoutes: {
+        publicTi: `/ti/${encodeURIComponent(input.query.toLowerCase())}`,
+        dashboardSourceOps: "/dashboard/ti/control"
+      },
+      policyBoundary: {
+        liveNetworkFetch: false,
+        rawActorClaimsSynthesized: false,
+        restrictedPayloadStorage: false
+      }
     },
     alertGenerationContract: {
       path: "/v1/dwm/alerts/rebuild",
