@@ -1996,6 +1996,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
             <div className='mt-3 grid gap-2'>
                 {payloads.map(payload => {
                     const primaryBlocker = payload.blockedBy[0]
+                    const summaryLines = actionPayloadSummaryLines(payload, actionability)
                     return (
                         <div key={payload.kind} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
@@ -2007,6 +2008,15 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                                         </span>
                                     </div>
                                     <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{payload.route}</p>
+                                    {summaryLines.length ? (
+                                        <div data-ti-action-export-summary='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                            {summaryLines.map(line => (
+                                                <span key={`${payload.kind}-${line}`} className={sourceHealthChipClass(payload.ready ? 'ready' : primaryBlocker ? 'blocked' : 'review')}>
+                                                    {line}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : null}
                                     {primaryBlocker ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(primaryBlocker.ownerLane)}: {displayRequirementText(primaryBlocker.handoff)}</p>
                                     ) : (
@@ -2029,6 +2039,47 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
             </div>
         </div>
     )
+}
+
+function actionPayloadSummaryLines(
+    payload: TiActionabilityModel['actionPayloads']['payloads'][keyof TiActionabilityModel['actionPayloads']['payloads']],
+    actionability: TiActionabilityModel,
+) {
+    if (payload.kind === 'watchlist_add') {
+        return [
+            `${actionability.watchlistRelevance.terms.length} watchlist term${actionability.watchlistRelevance.terms.length === 1 ? '' : 's'}`,
+            `${actionability.watchlistRelevance.matches.length} org match${actionability.watchlistRelevance.matches.length === 1 ? '' : 'es'}`,
+            `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+        ]
+    }
+    if (payload.kind === 'case_handoff') {
+        return [
+            `${actionability.caseReviewIntake.summary.total} case candidate${actionability.caseReviewIntake.summary.total === 1 ? '' : 's'}`,
+            `${actionability.caseReviewIntake.summary.alerts} alert${actionability.caseReviewIntake.summary.alerts === 1 ? '' : 's'}`,
+            `${actionability.caseReviewIntake.summary.captures} capture${actionability.caseReviewIntake.summary.captures === 1 ? '' : 's'}`,
+            `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+        ]
+    }
+    if (payload.kind === 'webhook_delivery') {
+        return [
+            `${actionability.readiness.backedIds.webhookDestinationIds.length} destination${actionability.readiness.backedIds.webhookDestinationIds.length === 1 ? '' : 's'}`,
+            `${actionability.readiness.backedIds.captureIds.length} capture${actionability.readiness.backedIds.captureIds.length === 1 ? '' : 's'}`,
+            `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+        ]
+    }
+    if (payload.kind === 'analyst_handoff_bundle') {
+        return [
+            `${actionability.consumerReadiness.stages.length} workflow stage${actionability.consumerReadiness.stages.length === 1 ? '' : 's'}`,
+            `${actionability.readiness.backedIds.alertIds.length} alert${actionability.readiness.backedIds.alertIds.length === 1 ? '' : 's'}`,
+            `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+        ]
+    }
+    return [
+        `${actionability.sourceEnrichmentIntake.summary.total} intake item${actionability.sourceEnrichmentIntake.summary.total === 1 ? '' : 's'}`,
+        `${actionability.sourceEnrichmentIntake.summary.sourceRequests} source request${actionability.sourceEnrichmentIntake.summary.sourceRequests === 1 ? '' : 's'}`,
+        `${actionability.sourceEnrichmentIntake.summary.captures} capture${actionability.sourceEnrichmentIntake.summary.captures === 1 ? '' : 's'}`,
+        `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
+    ]
 }
 
 function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabilityModel }) {
