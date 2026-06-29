@@ -57,6 +57,7 @@ app.post('/api/organizations/:id/ownership-transfer', handlers.postOrganizationO
 app.get('/api/organizations/:id/settings', handlers.getOrganizationSettings)
 app.put('/api/organizations/:id/settings', handlers.putOrganizationSettings)
 app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertReadiness)
+app.get('/api/organizations/:id/alert-case-visibility', handlers.getOrganizationAlertCaseVisibility)
 app.get('/api/organizations/:id/watchlists/alert-terms', handlers.getOrganizationWatchlistAlertTerms)
 app.get('/api/organizations/:id/watchlists', handlers.getOrganizationWatchlists)
 app.post('/api/organizations/:id/watchlists', handlers.postOrganizationWatchlist)
@@ -977,6 +978,15 @@ assert.equal(readiness.sharedWatchlistDownstreamProof.actor.canExportActiveTerms
 assert.deepEqual(readiness.sharedWatchlistDownstreamProof.actor.allowedActions, ['acknowledge_alert'])
 assert.deepEqual(readiness.sharedWatchlistDownstreamProof.caseBridge.blockerCodes, ['role_not_allowed'])
 assert.deepEqual(readiness.sharedWatchlistDownstreamProof.alertBridge.blockerCodes, [])
+assert.equal(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.schemaVersion, 'organization.shared_watchlist_monitoring_workflow.v1')
+assert.equal(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.organizationId, organization.id)
+assert.equal(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.persistenceLevel, 'organization_persisted')
+assert.equal(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.entrypoint.route, 'GET /api/organizations/:id/watchlists/alert-terms')
+assert.equal(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'alert_queue_visibility').state, 'blocked')
+assert.deepEqual(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'alert_queue_visibility').blockerCodes, ['role_not_allowed'])
+assert.equal(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.operatorActions.acknowledgeAlert, true)
+assert.equal(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.operatorActions.linkCase, false)
+assert.equal(readiness.sharedWatchlistDownstreamProof.monitoringWorkflow.evidenceContract.containsRawTerms, false)
 assert.equal(readiness.sharedWatchlistDownstreamProof.alertBridge.queueVisibilityContract.schemaVersion, 'organization.watchlist_alert_visibility_contract.v1')
 assert.equal(readiness.sharedWatchlistDownstreamProof.alertBridge.queueVisibilityContract.organizationId, organization.id)
 assert.equal(readiness.sharedWatchlistDownstreamProof.alertBridge.queueVisibilityContract.actorVisibility.policy, 'admins')
@@ -1010,6 +1020,41 @@ assert.deepEqual(readiness.sharedWatchlistDownstreamProof.webhookBridge.delivery
 assert.equal(readiness.sharedWatchlistDownstreamProof.watchlistOwnership.activeCount, 5)
 assert.equal(readiness.sharedWatchlistDownstreamProof.inviteLifecycle.pendingInviteCount, 11)
 assert.ok(readiness.sharedWatchlistDownstreamProof.audit.eventActions.includes('organization_watchlist_alert_terms_exported'))
+
+const memberAlertCaseVisibilityResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-case-visibility`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(memberAlertCaseVisibilityResponse.statusCode, 403, memberAlertCaseVisibilityResponse.body)
+const memberAlertCaseVisibility = parseBody(memberAlertCaseVisibilityResponse.body).alertCaseVisibility
+assert.equal(memberAlertCaseVisibility.schemaVersion, 'organization.alert_case_visibility_denial.v1')
+assert.equal(memberAlertCaseVisibility.organizationId, organization.id)
+assert.equal(memberAlertCaseVisibility.tenantId, organization.id)
+assert.deepEqual(memberAlertCaseVisibility.member, {
+    userId: 'org_smoke_member',
+    role: 'member',
+    status: 'active',
+})
+assert.equal(memberAlertCaseVisibility.visibility.allowed, false)
+assert.equal(memberAlertCaseVisibility.visibility.reason, 'role_not_allowed')
+assert.deepEqual(memberAlertCaseVisibility.visibility.allowedRoles, ['owner', 'admin'])
+assert.equal(memberAlertCaseVisibility.routes.alertList, 'GET /v1/dwm/alerts?organizationId=:organizationId')
+assert.equal(memberAlertCaseVisibility.routes.caseList, 'GET /v1/cases?organizationId=:organizationId')
+assert.deepEqual(memberAlertCaseVisibility.requiredQueryFields, ['organizationId'])
+assert.ok(memberAlertCaseVisibility.safeFields.includes('visibility.reason'))
+assert.ok(memberAlertCaseVisibility.redactedFields.includes('watchlistScope.alertGeneratorKeys'))
+assert.ok(memberAlertCaseVisibility.redactedFields.includes('case.evidence.rawContent'))
+assert.deepEqual(memberAlertCaseVisibility.blockerCodes, ['role_not_allowed'])
+assert.equal(memberAlertCaseVisibility.nonmemberEnumeration, false)
+assert.equal(memberAlertCaseVisibility.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
+
+const outsiderAlertCaseVisibilityResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-case-visibility`,
+    headers: authHeaders('org_smoke_outsider', 'outsider-token'),
+})
+assert.equal(outsiderAlertCaseVisibilityResponse.statusCode, 404, outsiderAlertCaseVisibilityResponse.body)
 
 const adminReadinessResponse = await app.inject({
     method: 'GET',
@@ -1045,6 +1090,52 @@ assert.equal(adminReadiness.sharedWatchlistDownstreamProof.actor.canManageWatchl
 assert.equal(adminReadiness.sharedWatchlistDownstreamProof.actor.canExportActiveTerms, true)
 assert.deepEqual(adminReadiness.sharedWatchlistDownstreamProof.caseBridge.blockerCodes, [])
 assert.deepEqual(adminReadiness.sharedWatchlistDownstreamProof.alertBridge.blockerCodes, [])
+
+const adminAlertCaseVisibilityResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-case-visibility`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(adminAlertCaseVisibilityResponse.statusCode, 200, adminAlertCaseVisibilityResponse.body)
+const adminAlertCaseVisibility = parseBody(adminAlertCaseVisibilityResponse.body).alertCaseVisibility
+assert.equal(adminAlertCaseVisibility.schemaVersion, 'organization.alert_case_visibility.v1')
+assert.equal(adminAlertCaseVisibility.organizationId, organization.id)
+assert.equal(adminAlertCaseVisibility.tenantId, organization.id)
+assert.deepEqual(adminAlertCaseVisibility.member, {
+    userId: 'org_smoke_admin',
+    role: 'admin',
+    status: 'active',
+})
+assert.equal(adminAlertCaseVisibility.visibility.allowed, true)
+assert.equal(adminAlertCaseVisibility.routes.alertList, 'GET /v1/dwm/alerts?organizationId=:organizationId')
+assert.equal(adminAlertCaseVisibility.routes.caseList, 'GET /v1/cases?organizationId=:organizationId')
+assert.deepEqual(adminAlertCaseVisibility.requiredQueryFields, ['organizationId'])
+assert.ok(adminAlertCaseVisibility.allowedActions.includes('acknowledge_alert'))
+assert.ok(adminAlertCaseVisibility.allowedActions.includes('assign_case'))
+assert.equal(adminAlertCaseVisibility.alertQueue.route, 'GET /v1/dwm/alerts')
+assert.deepEqual(adminAlertCaseVisibility.alertQueue.requiredQueryFields, ['organizationId'])
+assert.deepEqual(adminAlertCaseVisibility.alertQueue.watchlistItemIds.sort(), adminReadiness.alertGenerationBridge.activeWatchlistTerms.map((term: Row) => term.watchlistItemId).sort())
+assert.deepEqual(adminAlertCaseVisibility.alertQueue.alertGeneratorKeys.sort(), adminReadiness.sharedWatchlistDownstreamProof.alertBridge.alertGeneratorKeys.sort())
+assert.equal(adminAlertCaseVisibility.alertQueue.actionGates.readAlertsAllowed, true)
+assert.equal(adminAlertCaseVisibility.alertQueue.actionGates.assignAllowed, true)
+assert.deepEqual(adminAlertCaseVisibility.alertQueue.blockerCodes, [])
+assert.equal(adminAlertCaseVisibility.caseWorkflow.route, 'GET /v1/cases')
+assert.equal(adminAlertCaseVisibility.caseWorkflow.casePathTemplate, '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId')
+assert.deepEqual(adminAlertCaseVisibility.caseWorkflow.requiredQueryFields, ['organizationId'])
+assert.deepEqual(adminAlertCaseVisibility.caseWorkflow.watchlistItemIds.sort(), adminAlertCaseVisibility.alertQueue.watchlistItemIds.sort())
+assert.deepEqual(adminAlertCaseVisibility.caseWorkflow.alertGeneratorKeys.sort(), adminAlertCaseVisibility.alertQueue.alertGeneratorKeys.sort())
+assert.equal(adminAlertCaseVisibility.caseWorkflow.actorActions.canReadCases, true)
+assert.equal(adminAlertCaseVisibility.caseWorkflow.actorActions.canAssignCase, true)
+assert.deepEqual(adminAlertCaseVisibility.caseWorkflow.blockerCodes, [])
+assert.equal(adminAlertCaseVisibility.guardrails.schemaVersion, 'organization.alert_case_visibility_guardrails.v1')
+assert.equal(adminAlertCaseVisibility.guardrails.partitionKey, 'organizationId')
+assert.equal(adminAlertCaseVisibility.guardrails.tenantIdField, 'tenantId')
+assert.ok(adminAlertCaseVisibility.guardrails.requiredWorkflowContextFields.includes('workflowContext.visibilityDecision'))
+assert.equal(adminAlertCaseVisibility.guardrails.crossTenantCollisionAllowed, false)
+assert.equal(adminAlertCaseVisibility.guardrails.nonmemberEnumeration, false)
+assert.ok(adminAlertCaseVisibility.guardrails.noLeakFields.includes('otherOrg.alertGeneratorKeys'))
+assert.ok(adminAlertCaseVisibility.guardrails.lifecycleBlockers.includes('org_archived'))
+assert.equal(adminAlertCaseVisibility.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 const adapterContract = orgUtils.organizationWatchlistAlertGenerationContract(
     organizationSummary(organization.id, 'member'),
     [...watchlists.values()].filter(item => item.organization_id === organization.id && !item.archived_at)
@@ -1217,6 +1308,57 @@ assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.webhookBridge.delivery
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.webhookBridge.deliveryContract.evidenceFields.includes('auditEventContracts'))
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.webhookBridge.deliveryContract.redactedFields.includes('destination.secret'))
 assert.deepEqual(alertTermsExport.sharedWatchlistDownstreamProof.webhookBridge.deliveryContract.blockerCodes, ['manual_webhook_selection_required'])
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.schemaVersion, 'organization.shared_watchlist_monitoring_workflow.v1')
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.organizationId, organization.id)
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.tenantId, organization.id)
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.sourceFamily, 'organization_watchlist')
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.persistenceLevel, 'organization_persisted')
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.expectedAdapter, 'organizationSharedWatchlistMonitoringWorkflow')
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
+assert.deepEqual(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.entrypoint.requiredQueryFields, ['organizationId', 'requestId'])
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.entrypoint.responseField, 'alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow')
+assert.deepEqual(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.map((step: Row) => step.id), ['watchlist_export', 'alert_upsert', 'alert_queue_visibility', 'case_link', 'webhook_delivery', 'audit_timeline'])
+const monitoringWatchlistExport = alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'watchlist_export')
+assert.ok(monitoringWatchlistExport)
+assert.equal(monitoringWatchlistExport.ownerLane, 'org_watchlist')
+assert.equal(monitoringWatchlistExport.state, 'ready')
+assert.deepEqual(monitoringWatchlistExport.blockerCodes, [])
+assert.ok(monitoringWatchlistExport.requiredPayloadFields.includes('activeTerms[].alertGenerationRef'))
+assert.ok(monitoringWatchlistExport.redactedFields.includes('activeTerms[].term'))
+const monitoringAlertUpsert = alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'alert_upsert')
+assert.ok(monitoringAlertUpsert)
+assert.equal(monitoringAlertUpsert.ownerLane, 'dwm_alert_workflow')
+assert.equal(monitoringAlertUpsert.storageModule, 'ti/scraper/src/storage/dwmAlertRepository.ts')
+assert.equal(monitoringAlertUpsert.state, 'ready')
+assert.ok(monitoringAlertUpsert.requiredPayloadFields.includes('workflowContext.alertGeneratorKeys'))
+const monitoringCaseLink = alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'case_link')
+assert.ok(monitoringCaseLink)
+assert.equal(monitoringCaseLink.route, 'POST /v1/cases')
+assert.equal(monitoringCaseLink.storageModule, 'ti/scraper/src/api/caseRoutes.ts')
+assert.equal(monitoringCaseLink.state, 'ready')
+assert.ok(monitoringCaseLink.requiredPayloadFields.includes('evidence.provenance'))
+const monitoringWebhookDelivery = alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'webhook_delivery')
+assert.ok(monitoringWebhookDelivery)
+assert.equal(monitoringWebhookDelivery.route, 'POST /v1/dwm/webhooks/deliver')
+assert.equal(monitoringWebhookDelivery.storageModule, 'ti/scraper/src/api/dwmWorkflowRoutes.ts')
+assert.equal(monitoringWebhookDelivery.state, 'blocked')
+assert.deepEqual(monitoringWebhookDelivery.blockerCodes, ['manual_webhook_selection_required'])
+assert.ok(monitoringWebhookDelivery.redactedFields.includes('destination.secret'))
+const monitoringAuditTimeline = alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'audit_timeline')
+assert.ok(monitoringAuditTimeline)
+assert.equal(monitoringAuditTimeline.route, 'GET /api/admin/support/audit')
+assert.equal(monitoringAuditTimeline.storageModule, 'api/src/handlers/adminSupport.ts')
+assert.equal(monitoringAuditTimeline.state, 'ready')
+assert.deepEqual(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.operatorActions, {
+    acknowledgeAlert: true,
+    assignCase: true,
+    linkCase: true,
+    replayAlert: true,
+    deliverWebhook: false,
+})
+assert.deepEqual(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.evidenceContract.requiredFields, ['organizationId', 'tenantId', 'watchlistItemIds', 'alertGeneratorKeys', 'casePath', 'audit.eventBridge', 'visibilityDecision'])
+assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.evidenceContract.containsRawTerms, false)
+assert.deepEqual(alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.blockerCodes, ['manual_webhook_selection_required'])
 assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.integration.expectedAdapter, 'organizationSharedWatchlistDownstreamProof')
 assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.integration.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.integration.nonmemberEnumeration, false)
@@ -1230,6 +1372,7 @@ assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.payloadSha
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.payloadShape.includes('caseBridge.caseWorkflowContract.watchlistScope'))
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.payloadShape.includes('webhookBridge.deliveryContract.destinationSelection'))
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.payloadShape.includes('webhookBridge.deliveryContract.idempotency'))
+assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.payloadShape.includes('monitoringWorkflow'))
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.routeHandlers.includes('api/src/handlers/organizations.ts'))
 assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.integration.storageModules.includes('ti/scraper/src/storage/dwmAlertRepository.ts'))
 assert.equal(alertTermsExport.sharedWatchlistDownstreamProof.audit.schemaVersion, 'organization.shared_watchlist_audit_contract.v1')
@@ -1300,6 +1443,7 @@ assert.ok(alertTermsExport.sharedWatchlistIntegrationGuardrails.checkedContracts
 assert.ok(alertTermsExport.sharedWatchlistIntegrationGuardrails.checkedContracts.includes('organization.watchlist_webhook_delivery_contract.v1'))
 assert.ok(alertTermsExport.sharedWatchlistIntegrationGuardrails.requiredPayloadShape.includes('alertBridge.persistenceContract.workflowContextFields'))
 assert.ok(alertTermsExport.sharedWatchlistIntegrationGuardrails.requiredPayloadShape.includes('caseBridge.caseWorkflowContract.watchlistScope'))
+assert.ok(alertTermsExport.sharedWatchlistIntegrationGuardrails.requiredPayloadShape.includes('monitoringWorkflow'))
 assert.ok(alertTermsExport.sharedWatchlistIntegrationGuardrails.requiredPayloadShape.includes('audit.eventBridge'))
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.downstreamRoutes.alertReplay, 'POST /v1/dwm/alerts/:id/replay')
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.downstreamRoutes.caseOpen, 'POST /v1/cases')
@@ -2030,6 +2174,13 @@ assert.equal(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.audit.even
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.audit.eventBridge.blockerCodes, [])
 assert.ok(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.audit.eventBridge.eventDescriptors.every((event: Row) => event.redactedMetadataFields.includes('alertBridge.alertGeneratorKeys')))
 assert.ok(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.audit.eventBridge.eventDescriptors.every((event: Row) => event.organizationField === 'organizationId'))
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.organizationId, secondOrganization.id)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.tenantId, secondOrganization.id)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.persistenceLevel, 'organization_persisted')
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'alert_upsert').state, 'ready')
+assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.steps.find((step: Row) => step.id === 'alert_upsert').blockerCodes, [])
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow.evidenceContract.containsRawTerms, false)
+assert.notDeepEqual(secondOrgAlertTermsExport.sharedWatchlistDownstreamProof.alertBridge.alertGeneratorKeys, alertTermsExport.sharedWatchlistDownstreamProof.alertBridge.alertGeneratorKeys)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.organizationId, secondOrganization.id)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.tenantId, secondOrganization.id)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.visibility.allowed, true)
@@ -2056,6 +2207,26 @@ assert.ok(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.auditCon
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.proofLogQuery, 'GET /api/logs?service=api&message=organization_watchlist')
 assert.ok(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.redactedFields.includes('activeTerms[].term'))
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.blockerCodes, [])
+
+const secondOrgAlertCaseVisibilityResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${secondOrganization.id}/alert-case-visibility`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(secondOrgAlertCaseVisibilityResponse.statusCode, 200, secondOrgAlertCaseVisibilityResponse.body)
+const secondOrgAlertCaseVisibility = parseBody(secondOrgAlertCaseVisibilityResponse.body).alertCaseVisibility
+assert.equal(secondOrgAlertCaseVisibility.schemaVersion, 'organization.alert_case_visibility.v1')
+assert.equal(secondOrgAlertCaseVisibility.organizationId, secondOrganization.id)
+assert.equal(secondOrgAlertCaseVisibility.tenantId, secondOrganization.id)
+assert.equal(secondOrgAlertCaseVisibility.member.role, 'owner')
+assert.deepEqual(secondOrgAlertCaseVisibility.alertQueue.watchlistItemIds, [secondOrgWatchlistItem.id])
+assert.notDeepEqual(secondOrgAlertCaseVisibility.alertQueue.watchlistItemIds, adminAlertCaseVisibility.alertQueue.watchlistItemIds)
+assert.notDeepEqual(secondOrgAlertCaseVisibility.alertQueue.alertGeneratorKeys, adminAlertCaseVisibility.alertQueue.alertGeneratorKeys)
+assert.deepEqual(secondOrgAlertCaseVisibility.caseWorkflow.watchlistItemIds, [secondOrgWatchlistItem.id])
+assert.notDeepEqual(secondOrgAlertCaseVisibility.caseWorkflow.alertGeneratorKeys, adminAlertCaseVisibility.caseWorkflow.alertGeneratorKeys)
+assert.equal(secondOrgAlertCaseVisibility.guardrails.crossTenantCollisionAllowed, false)
+assert.equal(secondOrgAlertCaseVisibility.guardrails.nonmemberEnumeration, false)
+assert.ok(secondOrgAlertCaseVisibility.guardrails.noLeakFields.includes('otherOrg.watchlistItemIds'))
 
 const secondOrgListResponse = await app.inject({
     method: 'GET',

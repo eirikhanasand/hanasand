@@ -42,6 +42,13 @@ export type OrganizationSharedWatchlistAuditConsumer =
     | 'webhook_delivery'
     | 'support_timeline'
     | 'dashboard_readiness'
+export type OrganizationSharedWatchlistMonitoringWorkflowStep =
+    | 'watchlist_export'
+    | 'alert_upsert'
+    | 'alert_queue_visibility'
+    | 'case_link'
+    | 'webhook_delivery'
+    | 'audit_timeline'
 
 export type OrganizationInput = {
     name?: unknown
@@ -711,6 +718,45 @@ export type OrganizationSharedWatchlistDownstreamProof = {
             blockerCodes: string[]
         }
         expectedDeliveryFields: string[]
+        blockerCodes: string[]
+    }
+    monitoringWorkflow: {
+        schemaVersion: 'organization.shared_watchlist_monitoring_workflow.v1'
+        organizationId: string
+        tenantId: string
+        sourceFamily: 'organization_watchlist'
+        persistenceLevel: 'organization_persisted'
+        expectedAdapter: 'organizationSharedWatchlistMonitoringWorkflow'
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+        entrypoint: {
+            route: 'GET /api/organizations/:id/watchlists/alert-terms'
+            requiredQueryFields: Array<'organizationId' | 'requestId'>
+            responseField: 'alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow'
+        }
+        steps: Array<{
+            id: OrganizationSharedWatchlistMonitoringWorkflowStep
+            ownerLane: 'org_watchlist' | 'dwm_alert_workflow' | 'case_workflow' | 'webhook_delivery' | 'support_audit'
+            route: string
+            storageModule: string
+            requiredPayloadFields: string[]
+            requiredAuditActions: OrganizationSharedWatchlistAuditEventAction[]
+            allowedRoles: OrganizationAlertCaseRole[]
+            state: 'ready' | 'blocked'
+            blockerCodes: string[]
+            redactedFields: Array<'activeTerms[].term' | 'activeTerms[].value' | 'destination.secret' | 'case.evidence.rawContent' | 'member.userId'>
+        }>
+        operatorActions: {
+            acknowledgeAlert: boolean
+            assignCase: boolean
+            linkCase: boolean
+            replayAlert: boolean
+            deliverWebhook: boolean
+        }
+        evidenceContract: {
+            requiredFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'alertGeneratorKeys' | 'casePath' | 'audit.eventBridge' | 'visibilityDecision'>
+            redactedFields: Array<'activeTerms[].term' | 'activeTerms[].value' | 'destination.secret' | 'case.evidence.rawContent'>
+            containsRawTerms: false
+        }
         blockerCodes: string[]
     }
     integration: {
@@ -2139,6 +2185,20 @@ export function organizationSharedWatchlistDownstreamProof(
             ],
             blockerCodes: webhookBlockers,
         },
+        monitoringWorkflow: organizationSharedWatchlistMonitoringWorkflow({
+            organizationId: organization.id,
+            activeWatchlistItemIds: activeTerms.map(term => term.watchlistItemId),
+            alertGeneratorKeys,
+            alertAllowedRoles: downstreamAuthorization.visibility.allowedRoles,
+            allowedActions: downstreamAuthorization.allowedActions,
+            alertReadAllowed,
+            caseReadAllowed,
+            webhookManualAllowed: webhookDeliveryAllowedByRole && downstreamAuthorization.organizationLifecycleState === 'active',
+            alertBlockers,
+            caseBlockers,
+            webhookBlockers,
+            auditEventActions,
+        }),
         integration: {
             expectedAdapter: 'organizationSharedWatchlistDownstreamProof',
             payloadShape: [
@@ -2159,6 +2219,7 @@ export function organizationSharedWatchlistDownstreamProof(
                 'webhookBridge.expectedDeliveryFields',
                 'webhookBridge.deliveryContract.destinationSelection',
                 'webhookBridge.deliveryContract.idempotency',
+                'monitoringWorkflow',
                 'audit.eventActions',
                 'audit.eventBridge',
                 'audit.requiredMetadataFields',
@@ -2308,6 +2369,137 @@ function organizationSharedWatchlistAuditIsIdempotent(action: OrganizationShared
         || action === 'organization_watchlist_alert_terms_exported'
 }
 
+function organizationSharedWatchlistMonitoringWorkflow(input: {
+    organizationId: string
+    activeWatchlistItemIds: string[]
+    alertGeneratorKeys: string[]
+    alertAllowedRoles: OrganizationRole[]
+    allowedActions: OrganizationAlertCaseAction[]
+    alertReadAllowed: boolean
+    caseReadAllowed: boolean
+    webhookManualAllowed: boolean
+    alertBlockers: string[]
+    caseBlockers: string[]
+    webhookBlockers: string[]
+    auditEventActions: OrganizationSharedWatchlistAuditEventAction[]
+}): OrganizationSharedWatchlistDownstreamProof['monitoringWorkflow'] {
+    const activeScopeReady = input.activeWatchlistItemIds.length > 0 && input.alertGeneratorKeys.length > 0
+    const watchlistExportReady = activeScopeReady && input.alertBlockers.length === 0
+    const alertUpsertReady = watchlistExportReady && input.alertReadAllowed
+    const caseLinkReady = input.caseReadAllowed && input.allowedActions.includes('link_case') && input.caseBlockers.length === 0
+    const webhookReady = input.webhookManualAllowed && input.webhookBlockers.length === 0
+    const auditReady = input.auditEventActions.includes('organization_watchlist_alert_terms_exported')
+        && input.auditEventActions.includes('organization_watchlist_alert_terms_export_denied')
+    const workflowBlockers = Array.from(new Set([
+        ...input.alertBlockers,
+        ...input.caseBlockers,
+        ...input.webhookBlockers,
+        ...(activeScopeReady ? [] : ['no_active_terms']),
+    ])).sort()
+
+    return {
+        schemaVersion: 'organization.shared_watchlist_monitoring_workflow.v1',
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        sourceFamily: 'organization_watchlist',
+        persistenceLevel: 'organization_persisted',
+        expectedAdapter: 'organizationSharedWatchlistMonitoringWorkflow',
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        entrypoint: {
+            route: 'GET /api/organizations/:id/watchlists/alert-terms',
+            requiredQueryFields: ['organizationId', 'requestId'],
+            responseField: 'alertTermsExport.sharedWatchlistDownstreamProof.monitoringWorkflow',
+        },
+        steps: [
+            {
+                id: 'watchlist_export',
+                ownerLane: 'org_watchlist',
+                route: 'GET /api/organizations/:id/watchlists/alert-terms',
+                storageModule: 'api/src/utils/organizations.ts',
+                requiredPayloadFields: ['organizationId', 'tenantId', 'activeTerms[].alertGenerationRef', 'sharedWatchlistDownstreamProof.audit.eventBridge'],
+                requiredAuditActions: ['organization_watchlist_alert_terms_exported', 'organization_watchlist_alert_terms_export_denied'],
+                allowedRoles: input.alertAllowedRoles,
+                state: watchlistExportReady ? 'ready' : 'blocked',
+                blockerCodes: watchlistExportReady ? [] : Array.from(new Set([...input.alertBlockers, ...(activeScopeReady ? [] : ['no_active_terms'])])).sort(),
+                redactedFields: ['activeTerms[].term', 'activeTerms[].value', 'member.userId'],
+            },
+            {
+                id: 'alert_upsert',
+                ownerLane: 'dwm_alert_workflow',
+                route: 'POST /v1/dwm/alerts/rebuild',
+                storageModule: 'ti/scraper/src/storage/dwmAlertRepository.ts',
+                requiredPayloadFields: ['organizationId', 'tenantId', 'watchlistItemIds', 'workflowContext.alertGeneratorKeys', 'workflowContext.visibilityDecision', 'casePath'],
+                requiredAuditActions: ['organization_watchlist_alert_terms_exported'],
+                allowedRoles: input.alertAllowedRoles,
+                state: alertUpsertReady ? 'ready' : 'blocked',
+                blockerCodes: alertUpsertReady ? [] : Array.from(new Set(input.alertBlockers.length ? input.alertBlockers : ['role_not_allowed'])).sort(),
+                redactedFields: ['activeTerms[].term', 'activeTerms[].value'],
+            },
+            {
+                id: 'alert_queue_visibility',
+                ownerLane: 'dwm_alert_workflow',
+                route: 'GET /v1/dwm/alerts',
+                storageModule: 'ti/scraper/src/storage/dwmAlertRepository.ts',
+                requiredPayloadFields: ['organizationId', 'workflowContext.organizationId', 'workflowContext.alertGeneratorKeys', 'workflowContext.allowedActions'],
+                requiredAuditActions: ['organization_watchlist_alert_terms_exported', 'organization_watchlist_alert_terms_export_denied'],
+                allowedRoles: input.alertAllowedRoles,
+                state: input.alertReadAllowed ? 'ready' : 'blocked',
+                blockerCodes: input.alertReadAllowed ? [] : ['role_not_allowed'],
+                redactedFields: ['activeTerms[].term', 'activeTerms[].value'],
+            },
+            {
+                id: 'case_link',
+                ownerLane: 'case_workflow',
+                route: 'POST /v1/cases',
+                storageModule: 'ti/scraper/src/api/caseRoutes.ts',
+                requiredPayloadFields: ['organizationId', 'tenantId', 'alertId', 'casePath', 'watchlistItemIds', 'evidence.provenance'],
+                requiredAuditActions: ['organization_watchlist_alert_terms_exported'],
+                allowedRoles: ['owner', 'admin', 'analyst'],
+                state: caseLinkReady ? 'ready' : 'blocked',
+                blockerCodes: caseLinkReady ? [] : Array.from(new Set(input.caseBlockers.length ? input.caseBlockers : ['role_not_allowed'])).sort(),
+                redactedFields: ['activeTerms[].term', 'case.evidence.rawContent'],
+            },
+            {
+                id: 'webhook_delivery',
+                ownerLane: 'webhook_delivery',
+                route: 'POST /v1/dwm/webhooks/deliver',
+                storageModule: 'ti/scraper/src/api/dwmWorkflowRoutes.ts',
+                requiredPayloadFields: ['organizationId', 'destinationId', 'alert.dedupeKey', 'casePath', 'watchlistItemIds', 'auditEventContracts'],
+                requiredAuditActions: ['organization_watchlist_alert_terms_exported'],
+                allowedRoles: ['owner', 'admin'],
+                state: webhookReady ? 'ready' : 'blocked',
+                blockerCodes: webhookReady ? [] : Array.from(new Set(input.webhookBlockers.length ? input.webhookBlockers : ['manual_webhook_selection_required'])).sort(),
+                redactedFields: ['activeTerms[].term', 'destination.secret'],
+            },
+            {
+                id: 'audit_timeline',
+                ownerLane: 'support_audit',
+                route: 'GET /api/admin/support/audit',
+                storageModule: 'api/src/handlers/adminSupport.ts',
+                requiredPayloadFields: ['organizationId', 'action', 'metadata.requestId', 'actor.userId', 'audit.eventBridge.eventDescriptors'],
+                requiredAuditActions: ['organization_watchlist_alert_terms_exported', 'organization_watchlist_alert_terms_export_denied', 'organization_lifecycle_mutation_blocked'],
+                allowedRoles: ['owner', 'admin', 'support'],
+                state: auditReady ? 'ready' : 'blocked',
+                blockerCodes: auditReady ? [] : ['missing_required_action'],
+                redactedFields: ['activeTerms[].term', 'activeTerms[].value', 'member.userId'],
+            },
+        ],
+        operatorActions: {
+            acknowledgeAlert: input.allowedActions.includes('acknowledge_alert'),
+            assignCase: input.caseReadAllowed && input.allowedActions.includes('assign_case'),
+            linkCase: caseLinkReady,
+            replayAlert: alertUpsertReady,
+            deliverWebhook: webhookReady,
+        },
+        evidenceContract: {
+            requiredFields: ['organizationId', 'tenantId', 'watchlistItemIds', 'alertGeneratorKeys', 'casePath', 'audit.eventBridge', 'visibilityDecision'],
+            redactedFields: ['activeTerms[].term', 'activeTerms[].value', 'destination.secret', 'case.evidence.rawContent'],
+            containsRawTerms: false,
+        },
+        blockerCodes: workflowBlockers,
+    }
+}
+
 export function organizationSharedWatchlistIntegrationGuardrails(
     proof: OrganizationSharedWatchlistDownstreamProof
 ): OrganizationSharedWatchlistIntegrationGuardrails {
@@ -2321,6 +2513,7 @@ export function organizationSharedWatchlistIntegrationGuardrails(
         'caseBridge.caseWorkflowContract.watchlistScope',
         'webhookBridge.deliveryContract.destinationSelection',
         'webhookBridge.deliveryContract.idempotency',
+        'monitoringWorkflow',
         'audit.eventActions',
         'audit.eventBridge',
         'audit.requiredMetadataFields',
