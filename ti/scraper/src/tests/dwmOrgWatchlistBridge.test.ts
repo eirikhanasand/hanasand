@@ -143,8 +143,7 @@ describe("DWM org watchlist bridge", () => {
       allowedViewerRoles: ["owner", "admin", "member", "viewer"],
       entitlementStatus: "active",
       canGenerateAlerts: true,
-      activeWatchlistTerms: [{
-        watchlistId: "org_watch_acme_domain",
+      activeTerms: [{
         watchlistItemId: "org_item_acme_domain",
         itemId: "org_item_acme_domain",
         organizationId,
@@ -157,7 +156,20 @@ describe("DWM org watchlist bridge", () => {
         terms: ["acme.com"],
         status: "active",
         createdBy: "owner-org-bridge",
-        updatedBy: "owner-org-bridge"
+        updatedBy: "owner-org-bridge",
+        lifecycleReason: "Live proof watchlist term from recent capture.",
+        lifecycleRequestId: "req-org-bridge-watchlist-create",
+        alertGeneratorKey: `org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`,
+        alertGenerationRef: alertGenerationRef({
+          organizationId,
+          watchlistItemId: "org_item_acme_domain",
+          term: "acme.com",
+          termFamily: "domain",
+          createdBy: "owner-org-bridge",
+          updatedBy: "owner-org-bridge",
+          reason: "Live proof watchlist term from recent capture.",
+          requestId: "req-org-bridge-watchlist-create"
+        })
       }],
       watchlistTerms: [{
         watchlistId: "org_watch_acme_paused",
@@ -190,7 +202,13 @@ describe("DWM org watchlist bridge", () => {
     const rebuild = await rebuildResponse.json() as any;
     expect(rebuildResponse.status).toBe(200);
     expect(rebuild.savedAlertCount).toBe(3);
-    expect(rebuild.generationPlan.activeWatchlistIds).toEqual(["org_watch_acme_domain"]);
+    expect(rebuild.generationPlan.activeWatchlistIds).toEqual(["org_item_acme_domain"]);
+    const generationCandidate = rebuild.generationPlan.candidates[0];
+    expect(generationCandidate.alertGeneratorKeys).toEqual([`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`]);
+    expect(generationCandidate.alertGenerationRefs[0]).toMatchObject({
+      watchlistItemId: "org_item_acme_domain",
+      dedupe: { key: `org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com` }
+    });
     expect(rebuild.generationPlan.skippedWatchlists).toEqual([
       { watchlistId: "org_watch_acme_paused", reason: "paused" },
       { watchlistId: "org_watch_acme_archived", reason: "paused" }
@@ -198,7 +216,7 @@ describe("DWM org watchlist bridge", () => {
     expect(rebuild.alerts.map((alert: any) => alert.sourceFamily).sort()).toEqual(["actor_page", "darkweb_metadata", "telegram_public"]);
     for (const alert of rebuild.alerts) {
       expect(alert.organizationId).toBe(organizationId);
-      expect(alert.watchlistIds).toEqual(["org_watch_acme_domain"]);
+      expect(alert.watchlistIds).toEqual(["org_item_acme_domain"]);
       expect(alert.watchlistItemIds).toEqual(["org_item_acme_domain"]);
       expect(alert.workflowContext).toMatchObject({
         organizationId,
@@ -211,23 +229,51 @@ describe("DWM org watchlist bridge", () => {
           allowedViewerRoles: ["owner", "admin", "member", "viewer"]
         },
         watchlistTermContexts: [{
-          watchlistId: "org_watch_acme_domain",
+          watchlistId: "org_item_acme_domain",
           watchlistItemId: "org_item_acme_domain",
           category: "domain",
+          alertGeneratorKey: `org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`,
+          lifecycleReason: "Live proof watchlist term from recent capture.",
+          lifecycleRequestId: "req-org-bridge-watchlist-create",
           status: "active",
           value: "acme.com"
-        }]
+        }],
+        alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`]
+      });
+      expect(alert.workflowContext.alertGenerationRefs[0]).toMatchObject({
+        schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+        source: "organization_shared_watchlist",
+        organizationId,
+        tenantId: organizationId,
+        watchlistId: "org_item_acme_domain",
+        watchlistItemId: "org_item_acme_domain",
+        normalizedTerm: "acme.com",
+        lifecycle: {
+          reason: "Live proof watchlist term from recent capture.",
+          requestId: "req-org-bridge-watchlist-create"
+        },
+        dedupe: {
+          key: `org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`,
+          parts: {
+            organizationId,
+            tenantId: organizationId,
+            watchlistItemId: "org_item_acme_domain",
+            termFamily: "domain",
+            normalizedTerm: "acme.com"
+          }
+        }
       });
       expect(alert.webhookContext).toMatchObject({
         organizationId,
         matchedTermCategory: "domain",
+        alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
         watchlistTermContexts: [{ watchlistItemId: "org_item_acme_domain" }]
       });
       expect(JSON.stringify(alert)).not.toContain("org_item_acme_paused");
       expect(JSON.stringify(alert)).not.toContain("org_item_acme_archived");
     }
 
-    const memberListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}&category=domain&allowedRole=member&watchlistId=org_watch_acme_domain&watchlistItemId=org_item_acme_domain`, {
+    const memberListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}&category=domain&allowedRole=member&watchlistId=org_item_acme_domain&watchlistItemId=org_item_acme_domain&alertGeneratorKey=${encodeURIComponent(`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`)}`, {
       headers: { "x-user-email": "member@org-bridge.example" }
     }), options);
     const memberList = await memberListResponse.json() as any;
@@ -236,6 +282,7 @@ describe("DWM org watchlist bridge", () => {
     expect(memberList.alerts[0].workflowSummary).toMatchObject({
       matchedTermCategory: "domain",
       watchlistTermContexts: [{ watchlistItemId: "org_item_acme_domain" }],
+      alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
       membershipContext: { visibilityPolicy: "members" }
     });
 
@@ -344,7 +391,7 @@ describe("DWM org watchlist bridge", () => {
       severityOverride: "high",
       caseId: "case_org_bridge_live",
       casePath: `/v1/cases/case_org_bridge_live?alertId=${telegramAlert.id}`,
-      watchlistIds: ["org_watch_acme_domain"],
+      watchlistIds: ["org_item_acme_domain"],
       watchlistItemIds: ["org_item_acme_domain"]
     });
     expect(afterDeniedWrite.workflowEvents).toHaveLength(1);
@@ -397,3 +444,50 @@ describe("DWM org watchlist bridge", () => {
     });
   });
 });
+
+function alertGenerationRef(input: {
+  organizationId: string;
+  watchlistItemId: string;
+  term: string;
+  termFamily: "company" | "domain" | "vendor" | "actor" | "keyword";
+  createdBy: string;
+  updatedBy: string | null;
+  reason: string | null;
+  requestId: string | null;
+}) {
+  const normalizedTerm = input.term.toLowerCase();
+  const key = `org:${input.organizationId}:watchlist:${input.watchlistItemId}:${input.termFamily}:${normalizedTerm}`;
+  return {
+    schemaVersion: "organization.watchlist_alert_generation_ref.v1" as const,
+    source: "organization_shared_watchlist" as const,
+    organizationId: input.organizationId,
+    tenantId: input.organizationId,
+    ownerOrganizationId: input.organizationId,
+    watchlistId: input.watchlistItemId,
+    watchlistItemId: input.watchlistItemId,
+    itemId: input.watchlistItemId,
+    termFamily: input.termFamily,
+    category: input.termFamily,
+    term: input.term,
+    normalizedTerm,
+    status: "active" as const,
+    lifecycle: {
+      status: "active" as const,
+      reason: input.reason,
+      requestId: input.requestId,
+      createdBy: input.createdBy,
+      updatedBy: input.updatedBy
+    },
+    dedupe: {
+      scope: "organization_watchlist_term" as const,
+      key,
+      parts: {
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        watchlistItemId: input.watchlistItemId,
+        termFamily: input.termFamily,
+        normalizedTerm
+      }
+    }
+  };
+}

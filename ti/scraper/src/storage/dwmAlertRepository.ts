@@ -40,6 +40,8 @@ export type DwmAlertGenerationCandidate = {
   sourceFamilies: string[];
   captureRefs: DwmAlertGenerationCaptureRef[];
   watchlistTermContexts: RuntimeOrgWatchlistTermContext[];
+  alertGeneratorKeys: string[];
+  alertGenerationRefs: RuntimeOrgWatchlistTermContext["alertGenerationRef"][];
   dedupeSeed: string;
   dedupeKeyCandidate: string;
 };
@@ -252,11 +254,13 @@ export function buildDwmAlertGenerationPlan(input: {
         existing.captureRefs = mergeCaptureRefs(existing.captureRefs, captureRefs);
         existing.sourceFamilies = uniqueStrings([...existing.sourceFamilies, ...sourceFamilies]);
         existing.watchlistTermContexts = mergeWatchlistTermContexts(existing.watchlistTermContexts, watchlistTermContexts);
+        existing.alertGeneratorKeys = uniqueStrings([...existing.alertGeneratorKeys, ...watchlistTermContexts.map((term) => term.alertGeneratorKey)]);
+        existing.alertGenerationRefs = mergeAlertGenerationRefs(existing.alertGenerationRefs, watchlistTermContexts.map((term) => term.alertGenerationRef));
         existing.membershipContext = existing.membershipContext ?? watchlist.orgMembershipContext;
         continue;
       }
 
-      const dedupeSeed = `${normalizedTerm}:${term.kind}`;
+      const dedupeSeed = watchlistTermContexts[0]?.alertGeneratorKey ?? `${normalizedTerm}:${term.kind}`;
       candidates.set(key, {
         id: stableId("dwm_alert_generation_candidate", `${input.tenantId}:${input.organizationId ?? ""}:${dedupeSeed}`),
         tenantId: input.tenantId,
@@ -272,6 +276,8 @@ export function buildDwmAlertGenerationPlan(input: {
         sourceFamilies,
         captureRefs,
         watchlistTermContexts,
+        alertGeneratorKeys: uniqueStrings(watchlistTermContexts.map((term) => term.alertGeneratorKey)),
+        alertGenerationRefs: mergeAlertGenerationRefs([], watchlistTermContexts.map((term) => term.alertGenerationRef)),
         dedupeSeed,
         dedupeKeyCandidate: stableId("dwm_dedupe_candidate", `${input.tenantId}:${input.organizationId ?? ""}:${dedupeSeed}`)
       });
@@ -431,7 +437,9 @@ export function buildDwmAlertWorkflowContext(input: {
     watchlistIds,
     watchlistItemIds,
     watchlistTermContexts: input.generationCandidate?.watchlistTermContexts ?? [],
-    matchedTermCategory: input.generationCandidate?.watchlistTermContexts?.find((term) => term.value.toLowerCase() === input.alert.matchedTerm?.value?.toLowerCase())?.category,
+    alertGenerationRefs: input.generationCandidate?.alertGenerationRefs ?? [],
+    alertGeneratorKeys: input.generationCandidate?.alertGeneratorKeys ?? [],
+    matchedTermCategory: input.generationCandidate?.watchlistTermContexts?.find((term) => term.normalizedTerm === input.alert.matchedTerm?.value?.toLowerCase() || term.value.toLowerCase() === input.alert.matchedTerm?.value?.toLowerCase())?.category,
     matchedTerm: input.alert.matchedTerm,
     sourceFamily: input.alert.sourceFamily,
     captureIds,
@@ -457,6 +465,8 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     watchlistIds: workflowContext.watchlistIds,
     watchlistItemIds: workflowContext.watchlistItemIds,
     watchlistTermContexts: workflowContext.watchlistTermContexts,
+    alertGenerationRefs: workflowContext.alertGenerationRefs,
+    alertGeneratorKeys: workflowContext.alertGeneratorKeys,
     matchedTermCategory: workflowContext.matchedTermCategory,
     sourceFamily: workflowContext.sourceFamily,
     captureIds: workflowContext.captureIds,
@@ -496,7 +506,7 @@ function watchlistTermContextsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: s
   if (!matchedTerm) return [];
   const normalized = matchedTerm.toLowerCase();
   return (watchlist.orgWatchlistTerms ?? [])
-    .filter((term) => term.value.toLowerCase() === normalized || term.terms.some((value) => value.toLowerCase() === normalized));
+    .filter((term) => term.normalizedTerm === normalized || term.value.toLowerCase() === normalized || term.terms.some((value) => value.toLowerCase() === normalized));
 }
 
 function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]; captures: RawCapture[] }): DwmAlertGenerationCaptureRef[] {
@@ -524,6 +534,12 @@ function mergeWatchlistTermContexts(existing: RuntimeOrgWatchlistTermContext[], 
   const byId = new Map(existing.map((term) => [term.watchlistItemId, term]));
   for (const term of next) byId.set(term.watchlistItemId, byId.get(term.watchlistItemId) ?? term);
   return [...byId.values()];
+}
+
+function mergeAlertGenerationRefs(existing: RuntimeOrgWatchlistTermContext["alertGenerationRef"][], next: RuntimeOrgWatchlistTermContext["alertGenerationRef"][]): RuntimeOrgWatchlistTermContext["alertGenerationRef"][] {
+  const byKey = new Map(existing.map((ref) => [ref.dedupe.key, ref]));
+  for (const ref of next) byKey.set(ref.dedupe.key, byKey.get(ref.dedupe.key) ?? ref);
+  return [...byKey.values()];
 }
 
 function buildSourceFamilyCoverage(candidates: DwmAlertGenerationCandidate[]): DwmAlertGenerationReadiness["sourceFamilyCoverage"] {

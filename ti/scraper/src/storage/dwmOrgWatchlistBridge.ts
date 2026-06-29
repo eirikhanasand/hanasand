@@ -22,6 +22,55 @@ export type OrgWatchlistContractTerm = {
   status?: OrgWatchlistStatus;
   createdBy?: string;
   updatedBy?: string | null;
+  lifecycleReason?: string | null;
+  lifecycleRequestId?: string | null;
+  alertGeneratorKey?: string;
+  alertGenerationRef?: OrgWatchlistAlertGenerationRef;
+  alertGenerationReference?: {
+    schemaVersion?: "organization.watchlist_item_alert_reference.v1" | string;
+    organizationId?: string;
+    tenantId?: string;
+    watchlistItemId?: string;
+    itemId?: string;
+    termFamily?: OrgWatchlistTermFamily | string;
+    category?: OrgWatchlistTermFamily | string;
+    term?: string;
+    status?: OrgWatchlistStatus | string;
+  };
+};
+
+export type OrgWatchlistAlertGenerationRef = {
+  schemaVersion?: "organization.watchlist_alert_generation_ref.v1" | string;
+  source?: "organization_shared_watchlist" | string;
+  organizationId?: string;
+  tenantId?: string;
+  ownerOrganizationId?: string;
+  watchlistId?: string;
+  watchlistItemId?: string;
+  itemId?: string;
+  termFamily?: OrgWatchlistTermFamily | string;
+  category?: OrgWatchlistTermFamily | string;
+  term?: string;
+  normalizedTerm?: string;
+  status?: OrgWatchlistStatus | string;
+  lifecycle?: {
+    status?: OrgWatchlistStatus | string;
+    reason?: string | null;
+    requestId?: string | null;
+    createdBy?: string;
+    updatedBy?: string | null;
+  };
+  dedupe?: {
+    scope?: "organization_watchlist_term" | string;
+    key?: string;
+    parts?: {
+      organizationId?: string;
+      tenantId?: string;
+      watchlistItemId?: string;
+      termFamily?: OrgWatchlistTermFamily | string;
+      normalizedTerm?: string;
+    };
+  };
 };
 
 export type OrgWatchlistAlertGenerationContractLike = {
@@ -32,6 +81,7 @@ export type OrgWatchlistAlertGenerationContractLike = {
   entitlementStatus?: "active" | "suspended" | string;
   visibilityPolicy?: OrgAlertVisibilityPolicy;
   allowedViewerRoles?: string[];
+  activeTerms?: OrgWatchlistContractTerm[];
   activeWatchlistTerms?: OrgWatchlistContractTerm[];
   watchlistTerms?: OrgWatchlistContractTerm[];
   terms?: OrgWatchlistContractTerm[];
@@ -48,6 +98,7 @@ export type RuntimeOrgWatchlistTermContext = {
   tenantId: string;
   term: string;
   value: string;
+  normalizedTerm: string;
   terms: string[];
   kind: OrgWatchlistTermFamily;
   category: OrgWatchlistTermFamily;
@@ -55,6 +106,16 @@ export type RuntimeOrgWatchlistTermContext = {
   status: OrgWatchlistStatus;
   createdBy?: string;
   updatedBy?: string | null;
+  lifecycleReason?: string | null;
+  lifecycleRequestId?: string | null;
+  alertGeneratorKey: string;
+  alertGenerationRef: Required<Pick<OrgWatchlistAlertGenerationRef, "schemaVersion" | "source" | "organizationId" | "tenantId" | "ownerOrganizationId" | "watchlistId" | "watchlistItemId" | "itemId" | "termFamily" | "category" | "term" | "normalizedTerm" | "status">> & {
+    lifecycle: NonNullable<OrgWatchlistAlertGenerationRef["lifecycle"]>;
+    dedupe: NonNullable<OrgWatchlistAlertGenerationRef["dedupe"]> & {
+      key: string;
+      parts: NonNullable<NonNullable<OrgWatchlistAlertGenerationRef["dedupe"]>["parts"]>;
+    };
+  };
 };
 
 export type RuntimeOrgMembershipContext = {
@@ -90,11 +151,19 @@ export function orgWatchlistContractToRuntimeDwmWatchlists(contract: OrgWatchlis
 }
 
 export function orgWatchlistTermsFromContract(contract: OrgWatchlistAlertGenerationContractLike): OrgWatchlistContractTerm[] {
-  return [
+  const terms = [
+    ...(contract.activeTerms ?? []),
     ...(contract.activeWatchlistTerms ?? []),
     ...(contract.watchlistTerms ?? []),
     ...(contract.terms ?? [])
   ].filter((term) => Boolean(normalizeTermValue(term)));
+  const byKey = new Map<string, OrgWatchlistContractTerm>();
+  for (const term of terms) {
+    const key = String(term.alertGenerationRef?.watchlistItemId ?? term.alertGenerationReference?.watchlistItemId ?? term.watchlistItemId ?? term.itemId ?? `${normalizeOrgTermKind(term.termFamily ?? term.category ?? term.kind ?? term.family)}:${normalizeTermValue(term).toLowerCase()}`);
+    const existing = byKey.get(key);
+    if (!existing || (!existing.alertGenerationRef && term.alertGenerationRef)) byKey.set(key, term);
+  }
+  return [...byKey.values()];
 }
 
 function orgMembershipContext(contract: OrgWatchlistAlertGenerationContractLike): RuntimeOrgMembershipContext {
@@ -115,29 +184,76 @@ function orgMembershipContext(contract: OrgWatchlistAlertGenerationContractLike)
 
 function orgWatchlistTermContext(term: OrgWatchlistContractTerm, membership: RuntimeOrgMembershipContext): RuntimeOrgWatchlistTermContext {
   const value = normalizeTermValue(term);
-  const kind = normalizeOrgTermKind(term.termFamily ?? term.category ?? term.kind ?? term.family);
-  const watchlistItemId = String(term.watchlistItemId ?? term.itemId ?? stableId("org_watchlist_item", `${membership.organizationId}:${kind}:${value}`));
-  const watchlistId = String(term.watchlistId ?? watchlistItemId);
+  const kind = normalizeOrgTermKind(term.alertGenerationRef?.termFamily ?? term.alertGenerationReference?.termFamily ?? term.termFamily ?? term.category ?? term.kind ?? term.family);
+  const watchlistItemId = String(term.alertGenerationRef?.watchlistItemId ?? term.alertGenerationReference?.watchlistItemId ?? term.watchlistItemId ?? term.itemId ?? stableId("org_watchlist_item", `${membership.organizationId}:${kind}:${value}`));
+  const watchlistId = String(term.watchlistId ?? term.alertGenerationRef?.watchlistId ?? watchlistItemId);
+  const normalizedTerm = String(term.alertGenerationRef?.normalizedTerm ?? value).trim().toLowerCase();
+  const lifecycleReason = term.lifecycleReason ?? term.alertGenerationRef?.lifecycle?.reason ?? null;
+  const lifecycleRequestId = term.lifecycleRequestId ?? term.alertGenerationRef?.lifecycle?.requestId ?? null;
+  const createdBy = term.createdBy ?? term.alertGenerationRef?.lifecycle?.createdBy;
+  const updatedBy = term.updatedBy === undefined ? term.alertGenerationRef?.lifecycle?.updatedBy : term.updatedBy;
+  const status = normalizeOrgStatus(term.alertGenerationRef?.status ?? term.status);
+  const category = normalizeOrgTermKind(term.alertGenerationRef?.category ?? term.alertGenerationReference?.category ?? term.category ?? kind);
+  const termFamily = normalizeOrgTermKind(term.alertGenerationRef?.termFamily ?? term.alertGenerationReference?.termFamily ?? term.termFamily ?? kind);
+  const itemId = String(term.alertGenerationRef?.itemId ?? term.alertGenerationReference?.itemId ?? term.itemId ?? watchlistItemId);
+  const alertGeneratorKey = String(term.alertGeneratorKey ?? term.alertGenerationRef?.dedupe?.key ?? `org:${membership.organizationId}:watchlist:${watchlistItemId}:${termFamily}:${normalizedTerm}`);
   return {
     watchlistId,
     watchlistItemId,
-    itemId: String(term.itemId ?? watchlistItemId),
-    organizationId: String(term.organizationId ?? membership.organizationId),
-    tenantId: String(term.tenantId ?? membership.tenantId),
+    itemId,
+    organizationId: String(term.alertGenerationRef?.organizationId ?? term.alertGenerationReference?.organizationId ?? term.organizationId ?? membership.organizationId),
+    tenantId: String(term.alertGenerationRef?.tenantId ?? term.alertGenerationReference?.tenantId ?? term.tenantId ?? membership.tenantId),
     term: value,
     value,
+    normalizedTerm,
     terms: Array.isArray(term.terms) && term.terms.length ? term.terms.map(String) : [value],
     kind,
-    category: normalizeOrgTermKind(term.category ?? kind),
-    termFamily: normalizeOrgTermKind(term.termFamily ?? kind),
-    status: normalizeOrgStatus(term.status),
-    createdBy: term.createdBy ? String(term.createdBy) : undefined,
-    updatedBy: term.updatedBy === null ? null : term.updatedBy ? String(term.updatedBy) : undefined
+    category,
+    termFamily,
+    status,
+    createdBy: createdBy ? String(createdBy) : undefined,
+    updatedBy: updatedBy === null ? null : updatedBy ? String(updatedBy) : undefined,
+    lifecycleReason,
+    lifecycleRequestId,
+    alertGeneratorKey,
+    alertGenerationRef: {
+      schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+      source: "organization_shared_watchlist",
+      organizationId: String(term.alertGenerationRef?.organizationId ?? term.alertGenerationReference?.organizationId ?? term.organizationId ?? membership.organizationId),
+      tenantId: String(term.alertGenerationRef?.tenantId ?? term.alertGenerationReference?.tenantId ?? term.tenantId ?? membership.tenantId),
+      ownerOrganizationId: String(term.alertGenerationRef?.ownerOrganizationId ?? membership.ownerOrganizationId),
+      watchlistId,
+      watchlistItemId,
+      itemId,
+      termFamily,
+      category,
+      term: value,
+      normalizedTerm,
+      status,
+      lifecycle: {
+        status,
+        reason: lifecycleReason,
+        requestId: lifecycleRequestId,
+        createdBy: createdBy ? String(createdBy) : undefined,
+        updatedBy: updatedBy === null ? null : updatedBy ? String(updatedBy) : undefined
+      },
+      dedupe: {
+        scope: "organization_watchlist_term",
+        key: alertGeneratorKey,
+        parts: {
+          organizationId: String(term.alertGenerationRef?.dedupe?.parts?.organizationId ?? term.alertGenerationRef?.organizationId ?? term.organizationId ?? membership.organizationId),
+          tenantId: String(term.alertGenerationRef?.dedupe?.parts?.tenantId ?? term.alertGenerationRef?.tenantId ?? term.tenantId ?? membership.tenantId),
+          watchlistItemId: String(term.alertGenerationRef?.dedupe?.parts?.watchlistItemId ?? watchlistItemId),
+          termFamily: normalizeOrgTermKind(term.alertGenerationRef?.dedupe?.parts?.termFamily ?? termFamily),
+          normalizedTerm: String(term.alertGenerationRef?.dedupe?.parts?.normalizedTerm ?? normalizedTerm)
+        }
+      }
+    }
   };
 }
 
 function normalizeTermValue(term: OrgWatchlistContractTerm): string {
-  return String(term.value ?? term.term ?? term.terms?.[0] ?? "").trim();
+  return String(term.alertGenerationRef?.term ?? term.alertGenerationReference?.term ?? term.value ?? term.term ?? term.terms?.[0] ?? "").trim();
 }
 
 function normalizeOrgTermKind(value: unknown): OrgWatchlistTermFamily {

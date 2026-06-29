@@ -1063,6 +1063,7 @@ function alertMatchesDwmAlertFilters(alert: any, url: URL) {
   if (!matchesParam(url, ["recommendedRoute", "route"], alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute)) return false;
   if (!matchesAnyParam(url, ["watchlistId"], alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [])) return false;
   if (!matchesAnyParam(url, ["watchlistItemId"], alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [])) return false;
+  if (!matchesAnyParam(url, ["alertGeneratorKey", "generationRef"], alert.workflowContext?.alertGeneratorKeys ?? alert.webhookContext?.alertGeneratorKeys ?? [])) return false;
   if (!matchesAnyParam(url, ["captureId"], alert.workflowContext?.captureIds ?? alert.webhookContext?.captureIds ?? alert.provenance?.captureIds ?? [])) return false;
   if (!matchesParam(url, ["caseId"], alert.caseId ?? alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate)) return false;
   const query = String(url.searchParams.get("q") ?? url.searchParams.get("term") ?? "").trim().toLowerCase();
@@ -1147,6 +1148,8 @@ function buildDwmAlertWorkflowSummary(alert: any) {
     watchlistIds: alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [],
     watchlistItemIds: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [],
     watchlistTermContexts: alert.workflowContext?.watchlistTermContexts ?? [],
+    alertGenerationRefs: alert.workflowContext?.alertGenerationRefs ?? alert.webhookContext?.alertGenerationRefs ?? [],
+    alertGeneratorKeys: alert.workflowContext?.alertGeneratorKeys ?? alert.webhookContext?.alertGeneratorKeys ?? [],
     matchedTermCategory: alert.workflowContext?.matchedTermCategory ?? alert.webhookContext?.matchedTermCategory,
     membershipContext: alert.workflowContext?.membershipContext ?? alert.webhookContext?.membershipContext
   };
