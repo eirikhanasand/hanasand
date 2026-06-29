@@ -42,15 +42,23 @@ export type DwmCustomerProofBlockerCode = DwmAlertGenerationBlockerCode | DwmDel
 export type DwmAlertDownstreamHandoffBlockerCode =
   | "missing_alert"
   | "org_mismatch"
+  | "archived_org"
+  | "retired_watchlist"
+  | "disabled_destination"
   | "case_unavailable"
   | "destination_unavailable"
   | "entitlement_denied"
   | "stale_workflow"
-  | "duplicate_replay";
+  | "duplicate_replay"
+  | "closed_alert"
+  | "suppressed_alert"
+  | "revoked_actor"
+  | "no_active_source_match";
 
 export type DwmAlertWorkflowExecutionBlockerCode =
   | "missing_alert"
   | "org_mismatch"
+  | "revoked_actor"
   | "revoked_nonmember_actor"
   | "role_not_allowed"
   | "invalid_transition"
@@ -59,7 +67,13 @@ export type DwmAlertWorkflowExecutionBlockerCode =
   | "delivery_unavailable"
   | "entitlement_denied"
   | "duplicate_replay"
-  | "support_redaction_only";
+  | "support_redaction_only"
+  | "archived_org"
+  | "retired_watchlist"
+  | "disabled_destination"
+  | "closed_alert"
+  | "suppressed_alert"
+  | "no_active_source_match";
 
 export type DwmAlertWorkflowExecutionReadiness = {
   schemaVersion: "dwm.alert_workflow_execution_readiness.v1";
@@ -229,6 +243,14 @@ export type DwmAlertDownstreamHandoff = {
     lastDeliveryAt?: string;
     idempotencyKey?: string;
   };
+  lifecycle: {
+    organizationStatus?: string;
+    retiredWatchlistIds: string[];
+    disabledDestinationIds: string[];
+    alertStatus: string;
+    actorAllowed?: boolean;
+    activeSourceMatch: boolean;
+  };
   replay: {
     idempotent: true;
     duplicate: boolean;
@@ -261,6 +283,7 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
   entitlementAllowed?: boolean;
   duplicateReplay?: boolean;
   supportOnlyRedactionNeeded?: boolean;
+  lifecycleBlockers?: DwmAlertWorkflowExecutionBlockerCode[];
 }): DwmAlertWorkflowExecutionReadiness {
   const alert = input.alert;
   const action = input.action ?? "transition";
@@ -270,6 +293,9 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
   }) : undefined;
   const currentWorkflowEventCount = alert ? (alert.workflowEvents ?? []).length : undefined;
   const currentUpdatedAt = alert?.updatedAt;
+  const lifecycleBlockers = (uniqueStrings(input.lifecycleBlockers ?? []) as DwmAlertWorkflowExecutionBlockerCode[]).map((code) =>
+    workflowExecutionBlocker(code, "lifecycle", workflowLifecycleBlockerDetail(code), code !== "retired_watchlist")
+  );
   const blockers = [
     !alert ? workflowExecutionBlocker("missing_alert", "alertId", "Persisted alert is required for analyst workflow execution.", true) : undefined,
     alert && input.organizationId && alert.organizationId && alert.organizationId !== input.organizationId ? workflowExecutionBlocker("org_mismatch", "organizationId", "Alert organization does not match the requested workflow scope.", false) : undefined,
@@ -282,7 +308,8 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
     input.deliveryAvailable === false ? workflowExecutionBlocker("delivery_unavailable", "deliveryReadinessContext", "Delivery context is unavailable for this transition.", true) : undefined,
     input.entitlementAllowed === false ? workflowExecutionBlocker("entitlement_denied", "entitlement", "Entitlement policy blocks this alert workflow action.", true) : undefined,
     input.duplicateReplay === true ? workflowExecutionBlocker("duplicate_replay", "replayMarker", "Replay has already been recorded for this delivered dedupe key.", false) : undefined,
-    input.supportOnlyRedactionNeeded === true ? workflowExecutionBlocker("support_redaction_only", "support.redactionRequired", "Actor can only consume redacted support context for this alert.", true) : undefined
+    input.supportOnlyRedactionNeeded === true ? workflowExecutionBlocker("support_redaction_only", "support.redactionRequired", "Actor can only consume redacted support context for this alert.", true) : undefined,
+    ...lifecycleBlockers
   ].filter(Boolean) as DwmAlertWorkflowExecutionReadiness["blockers"];
   return {
     schemaVersion: "dwm.alert_workflow_execution_readiness.v1",
@@ -303,6 +330,17 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
 
 function workflowExecutionBlocker(code: DwmAlertWorkflowExecutionBlockerCode, field: string, detail: string, recoverable: boolean): DwmAlertWorkflowExecutionReadiness["blockers"][number] {
   return { code, field, detail, recoverable };
+}
+
+function workflowLifecycleBlockerDetail(code: DwmAlertWorkflowExecutionBlockerCode): string {
+  if (code === "archived_org") return "Organization lifecycle is not active for alert workflow execution.";
+  if (code === "retired_watchlist") return "Retired watchlist alerts are visible for audit but cannot be replayed.";
+  if (code === "disabled_destination") return "Webhook destination is disabled for downstream replay.";
+  if (code === "closed_alert") return "Closed alerts are visible for audit but cannot create new replay workflow events.";
+  if (code === "suppressed_alert") return "Suppressed alerts are visible for audit but cannot create new replay workflow events.";
+  if (code === "revoked_actor") return "Actor is not active for this organization.";
+  if (code === "no_active_source_match") return "No active source currently backs this alert source family.";
+  return "Lifecycle state blocks this alert workflow action.";
 }
 
 export function buildDwmOrgAlertCaseRoleGate(input: {
@@ -1028,6 +1066,11 @@ export function buildDwmAlertDownstreamHandoff(input: {
   destinationAvailable?: boolean;
   entitlementAllowed?: boolean;
   currentReplayAttempt?: boolean;
+  organizationStatus?: string;
+  retiredWatchlistIds?: string[];
+  disabledDestinationIds?: string[];
+  actorAllowed?: boolean;
+  activeSourceMatch?: boolean;
   generatedAt?: string;
 }): DwmAlertDownstreamHandoff {
   const alert = input.alert;
@@ -1060,17 +1103,35 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const deliveryDedupeKey = String(context.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey ?? "");
   const delivered = Boolean(alert?.deliveredAt) || alert?.deliveryState === "delivered" || context.state === "delivered" || deliveries.some((delivery) => delivery.status === "delivered");
   const duplicateReplay = delivered && Number(alert?.replayCount ?? 0) > 0 && input.currentReplayAttempt !== true;
-  const destinationReady = input.destinationAvailable !== false && webhookDestinationIds.length > 0 && selectedCaptureIds.length > 0;
+  const organizationStatus = input.organizationStatus ?? alert?.organizationStatus ?? workflow.organizationStatus;
+  const archivedOrg = organizationStatus !== undefined && !["active", "enabled"].includes(String(organizationStatus).toLowerCase());
+  const retiredWatchlistIds = uniqueStrings(input.retiredWatchlistIds ?? []);
+  const disabledDestinationIds = uniqueStrings(input.disabledDestinationIds ?? []);
+  const disabledDestinationSet = new Set(disabledDestinationIds);
+  const alertStatus = effectiveLifecycleAlertStatus(alert);
+  const closedAlert = alertStatus === "closed" || alert?.reviewState === "resolved" || context.state === "closed";
+  const suppressedAlert = alertStatus === "suppressed" || alert?.deliveryState === "muted" || alert?.reviewState === "false_positive" || context.state === "suppressed";
+  const actorAllowed = input.actorAllowed !== false;
+  const activeSourceMatch = input.activeSourceMatch !== false;
+  const enabledWebhookDestinationIds = webhookDestinationIds.filter((id) => !disabledDestinationSet.has(id));
+  const destinationReady = input.destinationAvailable !== false && enabledWebhookDestinationIds.length > 0 && selectedCaptureIds.length > 0;
   const caseReady = input.caseAvailable !== false && Boolean(casePath && caseIdCandidate);
   const entitlementDenied = input.entitlementAllowed === false || context.entitlement?.status === "suspended" || (context.entitlement?.blockedReasons ?? []).length > 0 || workflow.membershipContext?.canGenerateAlerts === false;
   const blockers = [
     !alert ? downstreamHandoffBlocker("missing_alert", "alertId", "Persisted alert is required for downstream handoff.", true) : undefined,
     alert && input.organizationId && orgId && input.organizationId !== orgId ? downstreamHandoffBlocker("org_mismatch", "organizationId", "Alert organization does not match the downstream handoff scope.", false) : undefined,
+    archivedOrg ? downstreamHandoffBlocker("archived_org", "organization.status", "Organization lifecycle is not active; downstream alert handoff is disabled.", true) : undefined,
+    retiredWatchlistIds.length ? downstreamHandoffBlocker("retired_watchlist", "watchlist.status", "One or more watchlists tied to this alert are retired or archived.", true) : undefined,
+    disabledDestinationIds.length ? downstreamHandoffBlocker("disabled_destination", "webhookDestinationIds", "One or more webhook destinations tied to this alert are disabled.", true) : undefined,
     !caseReady ? downstreamHandoffBlocker("case_unavailable", "casePath", "Case route/id candidate is required before case handoff.", true) : undefined,
     !destinationReady ? downstreamHandoffBlocker("destination_unavailable", "webhookDestinationIds", "A verified or configured webhook destination is required before delivery handoff.", true) : undefined,
     entitlementDenied ? downstreamHandoffBlocker("entitlement_denied", "entitlement", "Entitlement policy blocks downstream alert handoff.", true) : undefined,
     input.expectedWorkflowEventCount !== undefined && input.expectedWorkflowEventCount !== eventCount ? downstreamHandoffBlocker("stale_workflow", "expectedWorkflowEventCount", "Workflow event count changed; reload before replaying downstream handoff.", true) : undefined,
-    duplicateReplay ? downstreamHandoffBlocker("duplicate_replay", "replayMarker", "Delivered replay has already been recorded for this dedupe key.", false) : undefined
+    duplicateReplay ? downstreamHandoffBlocker("duplicate_replay", "replayMarker", "Delivered replay has already been recorded for this dedupe key.", false) : undefined,
+    closedAlert ? downstreamHandoffBlocker("closed_alert", "workflowStatus", "Closed alerts remain visible for audit but are not eligible for new downstream replay.", true) : undefined,
+    suppressedAlert ? downstreamHandoffBlocker("suppressed_alert", "workflowStatus", "Suppressed alerts remain visible for audit but are not eligible for delivery handoff.", true) : undefined,
+    !actorAllowed ? downstreamHandoffBlocker("revoked_actor", "actor", "Actor is not an active organization member for this alert.", false) : undefined,
+    !activeSourceMatch ? downstreamHandoffBlocker("no_active_source_match", "sourceFamily", "No active source currently backs this alert source family.", true) : undefined
   ].filter(Boolean) as DwmAlertDownstreamHandoff["blockers"];
   const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmAlertDownstreamHandoffBlockerCode[];
   const alertId = alert?.id ? String(alert.id) : undefined;
@@ -1117,7 +1178,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
       idempotencyKey: alertId && caseIdCandidate ? stableId("dwm_case_handoff", `${orgId ?? tenantId}:${alertId}:${caseIdCandidate}`) : undefined
     },
     deliveryReadiness: {
-      ready: destinationReady && !duplicateReplay && !entitlementDenied,
+      ready: destinationReady && !duplicateReplay && !entitlementDenied && !archivedOrg && !closedAlert && !suppressedAlert && activeSourceMatch,
       webhookDestinationIds,
       destinationReady,
       deliveryHistoryRefs,
@@ -1125,10 +1186,28 @@ export function buildDwmAlertDownstreamHandoff(input: {
       lastDeliveryAt: context.lastDeliveryAt ?? lastDelivery?.attemptedAt,
       idempotencyKey: alertId && deliveryDedupeKey ? stableId("dwm_delivery_handoff", `${orgId ?? tenantId}:${alertId}:${deliveryDedupeKey}`) : undefined
     },
+    lifecycle: {
+      organizationStatus,
+      retiredWatchlistIds,
+      disabledDestinationIds,
+      alertStatus,
+      actorAllowed,
+      activeSourceMatch
+    },
     replay: {
       idempotent: true,
       duplicate: duplicateReplay,
-      canReplay: !duplicateReplay && !blockerCodes.includes("stale_workflow") && !blockerCodes.includes("org_mismatch") && !blockerCodes.includes("entitlement_denied"),
+      canReplay: !duplicateReplay
+        && !blockerCodes.includes("stale_workflow")
+        && !blockerCodes.includes("org_mismatch")
+        && !blockerCodes.includes("entitlement_denied")
+        && !blockerCodes.includes("archived_org")
+        && !blockerCodes.includes("retired_watchlist")
+        && !blockerCodes.includes("disabled_destination")
+        && !blockerCodes.includes("closed_alert")
+        && !blockerCodes.includes("suppressed_alert")
+        && !blockerCodes.includes("revoked_actor")
+        && !blockerCodes.includes("no_active_source_match"),
       replayMarker: context.replayMarker,
       nextReplayIdempotencyKey: alertId && context.replayMarker ? stableId("dwm_replay_handoff", `${orgId ?? tenantId}:${alertId}:${context.replayMarker}:${eventCount}`) : undefined
     },
@@ -1144,6 +1223,14 @@ export function buildDwmAlertDownstreamHandoff(input: {
 
 function downstreamHandoffBlocker(code: DwmAlertDownstreamHandoffBlockerCode, field: string, detail: string, recoverable: boolean): DwmAlertDownstreamHandoff["blockers"][number] {
   return { code, field, detail, recoverable };
+}
+
+function effectiveLifecycleAlertStatus(alert: any): string {
+  if (alert?.workflowStatus === "closed") return "closed";
+  if (alert?.workflowStatus === "suppressed") return "suppressed";
+  if (alert?.reviewState === "resolved") return "resolved";
+  if (alert?.reviewState === "false_positive" || alert?.deliveryState === "muted") return "suppressed";
+  return String(alert?.workflowStatus ?? alert?.reviewState ?? "new");
 }
 
 function customerProofBlocker(code: DwmCustomerProofBlockerCode, field: string, detail: string, recoverable: boolean): DwmAlertCustomerProofHandoffRow["typedBlockers"][number] {

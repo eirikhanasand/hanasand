@@ -588,7 +588,9 @@ describe("dwm case workflow", () => {
       expect(replayAfterDelivery.downstreamHandoff).toMatchObject({
         schemaVersion: "dwm.alert_downstream_handoff.v1",
         organizationId,
-        replay: { duplicate: false, canReplay: true },
+        blockerCodes: ["closed_alert"],
+        lifecycle: { alertStatus: "resolved" },
+        replay: { duplicate: false, canReplay: false },
         deliveryReadiness: {
           deliveryHistoryRefs: [deliveryPayload.deliveries[0].id]
         }
@@ -596,6 +598,7 @@ describe("dwm case workflow", () => {
 
       const afterFirstReplay = (store as any).getDwmAlert(alert.id);
       const firstReplayEventCount = afterFirstReplay.workflowEvents.length;
+      expect(afterFirstReplay.replayCount ?? 0).toBe(0);
       const duplicateReplayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
         method: "POST",
         headers: { "x-actor-id": "analyst-1" },
@@ -605,17 +608,17 @@ describe("dwm case workflow", () => {
       expect(duplicateReplayResponse.status).toBe(200);
       expect(duplicateReplay.workflowExecutionReadiness).toMatchObject({
         ready: false,
-        blockerCodes: ["duplicate_replay"]
+        blockerCodes: ["closed_alert"]
       });
       expect(duplicateReplay.downstreamHandoff).toMatchObject({
-        blockerCodes: ["duplicate_replay"],
-        replay: { duplicate: true, canReplay: false },
+        blockerCodes: ["closed_alert"],
+        replay: { duplicate: false, canReplay: false },
         deliveryReadiness: {
           deliveryHistoryRefs: [deliveryPayload.deliveries[0].id]
         }
       });
       expect((store as any).getDwmAlert(alert.id).workflowEvents).toHaveLength(firstReplayEventCount);
-      expect((store as any).getDwmAlert(alert.id).replayCount).toBe(1);
+      expect((store as any).getDwmAlert(alert.id).replayCount ?? 0).toBe(0);
       expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
 
       const replayProof = buildDwmAlertCustomerProofHandoffRow({
@@ -633,7 +636,7 @@ describe("dwm case workflow", () => {
         workflow: {
           assignedOwner: "ir-lead",
           eventCount: expect.any(Number),
-          replayCount: 1
+          replayCount: 0
         },
         caseHandoff: {
           ready: true,

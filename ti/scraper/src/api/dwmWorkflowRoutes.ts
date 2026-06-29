@@ -1,4 +1,4 @@
-import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
+import { classifySourceFamily, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { nowIso, stableId } from "../utils.ts";
@@ -286,12 +286,29 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
     organizationId: scope.organizationId,
     expectedWorkflowEventCount: body.expectedWorkflowEventCount,
     entitlementAllowed: true,
+    ...downstreamLifecycleForAlert(options, existing, scope),
     generatedAt
   });
-  if (downstreamHandoff.blockerCodes.includes("duplicate_replay")) {
+  const replayBlocked = downstreamHandoff.blockerCodes.some((code: string) => [
+    "duplicate_replay",
+    "archived_org",
+    "retired_watchlist",
+    "disabled_destination",
+    "closed_alert",
+    "suppressed_alert",
+    "revoked_actor",
+    "no_active_source_match"
+  ].includes(code));
+  if (replayBlocked) {
     return json({
       ...buildDwmAlertDetail(existing, options, access),
-      workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert: existing, organizationId: scope.organizationId, action: "replay", duplicateReplay: true }),
+      workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({
+        alert: existing,
+        organizationId: scope.organizationId,
+        action: "replay",
+        duplicateReplay: downstreamHandoff.blockerCodes.includes("duplicate_replay"),
+        lifecycleBlockers: downstreamHandoff.blockerCodes.filter((code: string) => code !== "duplicate_replay") as any
+      }),
       downstreamHandoff,
       entitlement: entitlement.adapter
     });
@@ -326,7 +343,7 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
     })
   });
   const usageEvent = recordDwmEntitlementUsageEvent(options, { organizationId: scope.organizationId, tenantId: scope.tenantId, action: "alert_rebuild", actor: entitlement.actor, requestId: entitlement.requestId, metadata: { route: "replay_dwm_alert", alertId: alert.id }, at: generatedAt });
-  return json({ ...buildDwmAlertDetail(alert, options, access), workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: "replay" }), downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries: existingDeliveries, organizationId: scope.organizationId, currentReplayAttempt: true, generatedAt }), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
+  return json({ ...buildDwmAlertDetail(alert, options, access), workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: "replay" }), downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries: existingDeliveries, organizationId: scope.organizationId, currentReplayAttempt: true, ...downstreamLifecycleForAlert(options, alert, scope), generatedAt }), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
 }
 
 export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, request?: Request): Response {
@@ -362,6 +379,12 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
   const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
+  if (scope.organization && !organizationLifecycleActive(scope.organization)) {
+    return json({
+      error: { code: "archived_org", message: "Organization lifecycle is not active; alert rebuild is disabled." },
+      lifecycleReadiness: buildDwmAlertDownstreamHandoff({ organizationId: scope.organizationId, organizationStatus: (scope.organization as any).status, activeSourceMatch: false })
+    }, 409);
+  }
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const terms = watchlists.flatMap((watchlist: DwmWatchlist) => watchlist.terms);
   if (!terms.length) return json({ error: { code: "missing_watchlist", message: "Create an active DWM watchlist before rebuilding alerts." } }, 400);
@@ -380,6 +403,9 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
   const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
+  if (scope.organization && !organizationLifecycleActive(scope.organization)) {
+    return json({ error: { code: "archived_org", message: "Organization lifecycle is not active; webhook delivery is disabled." } }, 409);
+  }
   const dryRun = body.dryRun === true;
   const fetcher = typeof options.webhookFetch === "function" ? options.webhookFetch as typeof fetch : fetch;
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
@@ -389,8 +415,33 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
   const deliveries: any[] = [];
 
   for (const alert of alerts.slice(0, Math.max(1, Math.min(Number(body.limit ?? 25), 100)))) {
-    const watchlist = watchlists.find((row: DwmWatchlist) => alert.watchlistIds?.includes(row.id)) ?? watchlists[0];
+    const alertWatchlistIds = new Set((alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? []).map(String));
+    const watchlist = watchlists.find((row: DwmWatchlist) => alertWatchlistIds.has(row.id)) ?? (!alertWatchlistIds.size ? watchlists[0] : undefined);
     const destination = selectWebhookDestination(options, orgDestinations, watchlist, body.webhookDestinationId ? String(body.webhookDestinationId) : undefined);
+    const disabledDestination = findDisabledWebhookDestination(options, body.webhookDestinationId ? String(body.webhookDestinationId) : watchlist?.webhookDestinationId);
+    if (!watchlist || disabledDestination) {
+      const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${disabledDestination ? "disabled-destination" : "retired-watchlist"}:${generatedAt}`);
+      const delivery = (options.store as any).saveDwmWebhookDelivery({
+        id: deliveryId,
+        organizationId: scope.organizationId,
+        tenantId,
+        alertId: alert.id,
+        watchlistId: alert.watchlistIds?.[0] ?? "retired_watchlist",
+        webhookDestinationId: disabledDestination?.id,
+        endpointHash: disabledDestination ? "disabled_webhook_destination" : "retired_watchlist",
+        dedupeKey: alert.webhookDelivery?.dedupeKey ?? deliveryId,
+        attemptedAt: generatedAt,
+        dryRun,
+        payloadHash: "not_sent",
+        deliveryKind: disabledDestination?.kind ?? "generic",
+        status: "skipped",
+        httpStatus: 0,
+        error: disabledDestination ? "Webhook destination is disabled for this organization." : "No active watchlist remains for this alert."
+      });
+      deliveries.push(delivery);
+      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
+      continue;
+    }
     const webhookUrl = normalizeWebhookUrl(destination?.url) ?? normalizeWebhookUrl(watchlist?.webhookUrl);
     const deliveryKind = destination?.kind ?? inferWebhookKind(webhookUrl ?? "");
     if (!webhookUrl) {
@@ -594,6 +645,11 @@ function selectWebhookDestination(options: ApiServerOptions, orgDestinations: We
   const watchlistDestination = findWebhookDestination(options, watchlist?.webhookDestinationId);
   if (watchlistDestination && orgDestinations.some((row) => row.id === watchlistDestination.id)) return watchlistDestination;
   return orgDestinations[0];
+}
+
+function findDisabledWebhookDestination(options: ApiServerOptions, destinationId: string | undefined): WebhookDestination | undefined {
+  const destination = findWebhookDestination(options, destinationId);
+  return destination && destination.status !== "active" ? destination : undefined;
 }
 
 function refreshAlertDeliveryReadiness(options: ApiServerOptions, alert: any, scope: { tenantId: string; organizationId?: string }, deliveries: any[], generatedAt: string) {
@@ -1017,7 +1073,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     workflowSummary: buildDwmAlertWorkflowSummary(alert),
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries }),
-    downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries }),
+    downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries, ...downstreamLifecycleForAlert(options, alert) }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, deliveries),
     deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, deliveries),
@@ -1043,13 +1099,54 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
     workflowSummary,
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries: alertDeliveries }),
-    downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries: alertDeliveries }),
+    downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries: alertDeliveries, ...downstreamLifecycleForAlert(options, alert) }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, alertDeliveries),
     deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, alertDeliveries),
     evidenceFreshness: buildDwmAlertEvidenceFreshness(alert),
     provenanceFreshness: buildDwmAlertProvenanceFreshness(alert)
   };
+}
+
+function downstreamLifecycleForAlert(options: ApiServerOptions, alert: any, scope?: { organization?: unknown; organizationId?: string }) {
+  const organizationId = scope?.organizationId ?? alert.organizationId ?? alert.workflowContext?.organizationId ?? alert.webhookContext?.organizationId;
+  const organization = scope?.organization ?? findOrganizationForDwmLifecycle(options, organizationId);
+  const watchlistIds = new Set([...(alert.watchlistIds ?? []), ...(alert.workflowContext?.watchlistIds ?? []), ...(alert.webhookContext?.watchlistIds ?? [])].filter(Boolean).map(String));
+  const retiredWatchlistIds = ((options.store as any).listDwmWatchlists?.() ?? [])
+    .filter((watchlist: any) => watchlistIds.has(String(watchlist.id)))
+    .filter((watchlist: any) => watchlist.status !== "active" || watchlist.lifecycleStatus === "archived")
+    .map((watchlist: any) => String(watchlist.id));
+  const webhookDestinationIds = new Set([
+    ...(alert.deliveryReadinessContext?.webhookDestinationIds ?? []),
+    ...(alert.workflowContext?.webhookDestinationIds ?? []),
+    ...(alert.webhookContext?.webhookDestinationIds ?? [])
+  ].filter(Boolean).map(String));
+  const disabledDestinationIds = ((options.store as any).listWebhookDestinations?.() ?? [])
+    .filter((destination: any) => webhookDestinationIds.has(String(destination.id)))
+    .filter((destination: any) => destination.status !== "active")
+    .map((destination: any) => String(destination.id));
+  const sourceFamily = String(alert.deliveryReadinessContext?.sourceFamily ?? alert.sourceFamily ?? alert.workflowContext?.sourceFamily ?? alert.webhookContext?.sourceFamily ?? "");
+  const activeSourceMatch = !sourceFamily || options.store.listSources().some((source: any) =>
+    ["active", "approved", "canary"].includes(String(source.status ?? "").toLowerCase())
+      && classifySourceFamily(source) === sourceFamily
+  );
+  return {
+    organizationStatus: (organization as any)?.status,
+    retiredWatchlistIds,
+    disabledDestinationIds,
+    activeSourceMatch
+  };
+}
+
+function organizationLifecycleActive(organization: unknown): boolean {
+  const status = String((organization as any)?.status ?? "active").toLowerCase();
+  return status === "active" || status === "enabled";
+}
+
+function findOrganizationForDwmLifecycle(options: ApiServerOptions, organizationId: string | undefined) {
+  if (!organizationId) return undefined;
+  return (options.store as any).getOrganization?.(organizationId)
+    ?? ((options.store as any).listOrganizations?.() ?? []).find((organization: any) => organization.id === organizationId);
 }
 
 function nextActionsForAlert(alert: any, deliveries: any[]) {

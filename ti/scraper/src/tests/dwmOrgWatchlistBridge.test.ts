@@ -464,6 +464,221 @@ describe("DWM org watchlist bridge", () => {
       provenanceFreshness: { matchBasis: "watchlist_capture_text", captureIds: ["cap_org_bridge_tg_acme"] }
     });
   });
+
+  test("keeps org alert lifecycle cleanup tenant-safe across archived orgs, retired watchlists, disabled destinations, and revoked actors", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveCapture(telegramCapture);
+    const options = { store, frontier: new FocusedFrontier() };
+
+    const activeOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+      method: "POST",
+      headers: { "x-user-email": "owner-active@lifecycle.example" },
+      body: JSON.stringify({ name: "Lifecycle Active Org", ownerEmail: "owner-active@lifecycle.example", ownerUserId: "owner-active-lifecycle" })
+    }), options);
+    const activeOrg = await activeOrgResponse.json() as any;
+    const activeOrgId = activeOrg.organization.id;
+    const archivedOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+      method: "POST",
+      headers: { "x-user-email": "owner-archived@lifecycle.example" },
+      body: JSON.stringify({ name: "Lifecycle Archived Org", ownerEmail: "owner-archived@lifecycle.example", ownerUserId: "owner-archived-lifecycle" })
+    }), options);
+    const archivedOrg = await archivedOrgResponse.json() as any;
+    const archivedOrgId = archivedOrg.organization.id;
+    store.saveOrganization({ ...archivedOrg.organization, status: "archived", updatedAt: "2026-06-28T19:00:00.000Z" });
+    store.saveOrganizationMember({
+      id: "member-active-lifecycle",
+      organizationId: activeOrgId,
+      email: "analyst-active@lifecycle.example",
+      userId: "analyst-active-lifecycle",
+      role: "analyst",
+      status: "active",
+      createdAt: "2026-06-28T19:00:00.000Z",
+      updatedAt: "2026-06-28T19:00:00.000Z"
+    });
+    store.saveOrganizationMember({
+      id: "member-revoked-lifecycle",
+      organizationId: activeOrgId,
+      email: "revoked@lifecycle.example",
+      userId: "revoked-lifecycle",
+      role: "analyst",
+      status: "removed",
+      createdAt: "2026-06-28T19:00:00.000Z",
+      updatedAt: "2026-06-28T19:00:00.000Z"
+    });
+    store.saveWebhookDestination({
+      id: "webhook_lifecycle_active",
+      organizationId: activeOrgId,
+      tenantId: activeOrgId,
+      name: "Lifecycle active delivery",
+      url: "https://hooks.example.com/lifecycle-active",
+      kind: "generic",
+      status: "active",
+      createdAt: "2026-06-28T19:00:00.000Z",
+      updatedAt: "2026-06-28T19:00:00.000Z"
+    });
+
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: activeOrgId,
+      tenantId: activeOrgId,
+      ownerOrganizationId: activeOrgId,
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_lifecycle_active",
+        watchlistItemId: "watch_item_lifecycle_active",
+        organizationId: activeOrgId,
+        tenantId: activeOrgId,
+        kind: "domain",
+        termFamily: "domain",
+        term: "acme.com",
+        category: "domain",
+        status: "active",
+        alertGeneratorKey: `org:${activeOrgId}:watchlist:watch_item_lifecycle_active:domain:acme.com`,
+        alertGenerationRef: alertGenerationRef({
+          organizationId: activeOrgId,
+          watchlistItemId: "watch_item_lifecycle_active",
+          term: "acme.com",
+          termFamily: "domain",
+          createdBy: "owner-active-lifecycle",
+          updatedBy: "owner-active-lifecycle",
+          reason: "Lifecycle proof active term.",
+          requestId: "req-lifecycle-active"
+        })
+      }]
+    }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_lifecycle_active" }))) {
+      store.saveDwmWatchlist(watchlist);
+    }
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: archivedOrgId,
+      tenantId: archivedOrgId,
+      ownerOrganizationId: archivedOrgId,
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_lifecycle_archived",
+        watchlistItemId: "watch_item_lifecycle_archived",
+        organizationId: archivedOrgId,
+        tenantId: archivedOrgId,
+        kind: "domain",
+        termFamily: "domain",
+        term: "acme.com",
+        category: "domain",
+        status: "active",
+        alertGeneratorKey: `org:${archivedOrgId}:watchlist:watch_item_lifecycle_archived:domain:acme.com`
+      }]
+    })) {
+      store.saveDwmWatchlist(watchlist);
+    }
+
+    const archivedRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-archived@lifecycle.example" },
+      body: JSON.stringify({ organizationId: archivedOrgId })
+    }), options);
+    const archivedRebuild = await archivedRebuildResponse.json() as any;
+    expect(archivedRebuildResponse.status).toBe(409);
+    expect(archivedRebuild.error.code).toBe("archived_org");
+    expect(archivedRebuild.lifecycleReadiness.blockerCodes).toEqual(expect.arrayContaining(["missing_alert", "archived_org", "no_active_source_match"]));
+    expect(store.listDwmAlerts()).toHaveLength(0);
+
+    const activeRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-active@lifecycle.example" },
+      body: JSON.stringify({ organizationId: activeOrgId })
+    }), options);
+    const activeRebuild = await activeRebuildResponse.json() as any;
+    expect(activeRebuildResponse.status).toBe(200);
+    expect(activeRebuild.savedAlertCount).toBe(1);
+    const alert = activeRebuild.alerts[0];
+    expect(alert.organizationId).toBe(activeOrgId);
+    const activeDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}?organizationId=${activeOrgId}`, {
+      headers: { "x-user-email": "owner-active@lifecycle.example" }
+    }), options);
+    const activeDetail = await activeDetailResponse.json() as any;
+    expect(activeDetailResponse.status).toBe(200);
+    expect(activeDetail.downstreamHandoff).toMatchObject({
+      ready: true,
+      blockerCodes: [],
+      lifecycle: {
+        organizationStatus: "active",
+        retiredWatchlistIds: [],
+        disabledDestinationIds: [],
+        activeSourceMatch: true
+      },
+      deliveryReadiness: {
+        destinationReady: true,
+        webhookDestinationIds: ["webhook_lifecycle_active"]
+      }
+    });
+
+    store.saveDwmWatchlist({ ...store.getDwmWatchlist("watch_lifecycle_active"), status: "paused", lifecycleStatus: "archived", updatedAt: "2026-06-28T19:10:00.000Z" });
+    store.saveWebhookDestination({ ...store.getWebhookDestination("webhook_lifecycle_active"), status: "paused", updatedAt: "2026-06-28T19:10:00.000Z" });
+    store.saveSource({ ...telegramSource, status: "candidate", updatedAt: "2026-06-28T19:10:00.000Z" } as any);
+
+    const revokedMutationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "revoked@lifecycle.example" },
+      body: JSON.stringify({ organizationId: activeOrgId, status: "triaged", note: "Revoked actor must not mutate lifecycle alert." })
+    }), options);
+    expect(revokedMutationResponse.status).toBe(403);
+    expect(store.getDwmAlert(alert.id).workflowEvents ?? []).toHaveLength(0);
+
+    const lifecycleDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}?organizationId=${activeOrgId}`, {
+      headers: { "x-user-email": "owner-active@lifecycle.example" }
+    }), options);
+    const lifecycleDetail = await lifecycleDetailResponse.json() as any;
+    expect(lifecycleDetailResponse.status).toBe(200);
+    expect(lifecycleDetail.downstreamHandoff).toMatchObject({
+      ready: false,
+      blockerCodes: expect.arrayContaining(["retired_watchlist", "disabled_destination", "destination_unavailable", "no_active_source_match"]),
+      lifecycle: {
+        retiredWatchlistIds: ["watch_lifecycle_active"],
+        disabledDestinationIds: ["webhook_lifecycle_active"],
+        activeSourceMatch: false
+      },
+      replay: { canReplay: false },
+      deliveryReadiness: { destinationReady: false }
+    });
+
+    const replayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
+      method: "POST",
+      headers: { "x-user-email": "owner-active@lifecycle.example" },
+      body: JSON.stringify({ organizationId: activeOrgId })
+    }), options);
+    const replay = await replayResponse.json() as any;
+    expect(replayResponse.status).toBe(200);
+    expect(replay.workflowExecutionReadiness.blockerCodes).toEqual(expect.arrayContaining(["retired_watchlist", "disabled_destination", "no_active_source_match"]));
+    expect(store.getDwmAlert(alert.id).workflowEvents ?? []).toHaveLength(0);
+    expect(store.getDwmAlert(alert.id).replayCount ?? 0).toBe(0);
+
+    const deliveryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      headers: { "x-user-email": "owner-active@lifecycle.example" },
+      body: JSON.stringify({ organizationId: activeOrgId, alertId: alert.id })
+    }), options);
+    const delivery = await deliveryResponse.json() as any;
+    expect(deliveryResponse.status).toBe(200);
+    expect(delivery.deliveries[0]).toMatchObject({
+      status: "skipped",
+      endpointHash: "retired_watchlist",
+      error: "No active watchlist remains for this alert.",
+      watchlistId: "watch_lifecycle_active"
+    });
+
+    const finalRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-active@lifecycle.example" },
+      body: JSON.stringify({ organizationId: activeOrgId })
+    }), options);
+    expect(finalRebuildResponse.status).toBe(400);
+    expect(store.listDwmAlerts()).toHaveLength(1);
+    expect(JSON.stringify(store.listDwmAlerts())).not.toContain(archivedOrgId);
+  });
 });
 
 function alertGenerationRef(input: {
