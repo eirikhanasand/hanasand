@@ -1800,6 +1800,31 @@ describe("dwm source requests", () => {
               safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
             })
           ]),
+          parserStatusLedger: {
+            schemaVersion: "ti.public_actor.parser_status_ledger.v1",
+            summary: expect.objectContaining({
+              readyFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
+              retryFamilies: [],
+              missingFamilies: [],
+              latestCaptureAt: expect.any(String),
+              latestEnrichmentAt: expect.any(String)
+            }),
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                family: "telegram",
+                parserState: "ready",
+                captureState: "capture_observed",
+                confidence: expect.any(Number),
+                timestamps: expect.objectContaining({
+                  lastCaptureAt: expect.any(String),
+                  lastEnrichmentAt: expect.any(String)
+                }),
+                sourceIds: expect.arrayContaining([expect.any(String)]),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              })
+            ]),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          },
           alertability: expect.objectContaining({
             matchableFields: expect.arrayContaining(["text", "victimName"]),
             watchlistMatchReadiness: expect.objectContaining({
@@ -1983,6 +2008,7 @@ describe("dwm source requests", () => {
           ".actorReadiness.sourceSectionReadiness.schemaVersion == \"dwm.actor_source_section_readiness.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.schemaVersion == \"ti.public_actor.query_adapter.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.alertEvidenceHandoff.schemaVersion == \"ti.public_actor.alert_evidence_handoff.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -2569,6 +2595,28 @@ describe("dwm source requests", () => {
             confidenceTier: "missing"
           })
         ]),
+        parserStatusLedger: expect.objectContaining({
+          schemaVersion: "ti.public_actor.parser_status_ledger.v1",
+          summary: expect.objectContaining({
+            readyFamilies: expect.arrayContaining(["telegram"]),
+            missingFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+            captureRequiredFamilies: expect.arrayContaining(["telegram"])
+          }),
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              family: "darkweb_onion",
+              parserState: "missing_source",
+              confidenceTier: "missing",
+              gap: expect.objectContaining({
+                state: "missing",
+                intakeRecommendation: expect.objectContaining({ policyBoundary: "metadata_only_restricted_source" })
+              }),
+              nextActions: expect.arrayContaining([
+                expect.objectContaining({ type: "request_candidate", liveNetworkFetch: false })
+              ])
+            })
+          ])
+        }),
         alertEvidenceHandoff: expect.objectContaining({
           schemaVersion: "ti.public_actor.alert_evidence_handoff.v1",
           ready: false,
@@ -2942,6 +2990,27 @@ describe("dwm source requests", () => {
               ])
             })
           ]),
+          parserStatusLedger: expect.objectContaining({
+            schemaVersion: "ti.public_actor.parser_status_ledger.v1",
+            summary: expect.objectContaining({
+              retryFamilies: expect.arrayContaining(["telegram"]),
+              missingFamilies: expect.arrayContaining(["actor_page"]),
+              nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+            }),
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                family: "telegram",
+                parserState: "retry_required",
+                retryBackoff: expect.objectContaining({
+                  retryable: true,
+                  failureCategories: expect.arrayContaining(["parser_timeout"])
+                }),
+                nextActions: expect.arrayContaining([
+                  expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false })
+                ])
+              })
+            ])
+          }),
           alertEvidenceHandoff: expect.objectContaining({
             schemaVersion: "ti.public_actor.alert_evidence_handoff.v1",
             ready: false,

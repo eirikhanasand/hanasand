@@ -3127,6 +3127,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.schemaVersion == \"ti.public_actor.query_adapter.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sections | all(has(\"section\") and has(\"state\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.alertEvidenceHandoff.schemaVersion == \"ti.public_actor.alert_evidence_handoff.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3365,6 +3366,7 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     sourceIds: row.sourceIds ?? [],
     candidateIds: row.candidateIds ?? [],
     privacyBoundary: row.privacyBoundary,
+    retryBackoff: row.retryBackoff,
     blockers: row.blockers ?? [],
     nextActions: row.nextActions ?? [],
     safeOutput: row.safeOutput
@@ -3439,6 +3441,11 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     sections: sectionRows,
     evidence: evidenceRows,
     sourceHealth: sourceHealthRows,
+    parserStatusLedger: sourceActorPublicTiParserStatusLedger({
+      query,
+      actorReadiness,
+      sourceHealthRows
+    }),
     alertability: {
       matchableFields: actorReadiness.alertability?.matchableFields ?? [],
       activeSourceFamilies: actorReadiness.alertability?.activeSourceFamilies ?? [],
@@ -3453,6 +3460,73 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
       sourceHealthRows
     }),
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiParserStatusLedger(input: {
+  query: string;
+  actorReadiness: Record<string, any>;
+  sourceHealthRows: Array<Record<string, any>>;
+}) {
+  const gapByFamily = new Map<string, Record<string, any>>((input.actorReadiness.candidateGaps ?? []).map((gap: any) => [String(gap.family), gap]));
+  const rows = input.sourceHealthRows.map((row) => {
+    const gap = gapByFamily.get(String(row.family));
+    return {
+      schemaVersion: "ti.public_actor.parser_status_ledger_row.v1",
+      proofId: stableId("ti_public_actor_parser_status_ledger_row", `${input.query}:${row.family}:${row.state}:${row.parserState}:${row.captureState}`),
+      query: input.query,
+      family: row.family,
+      state: row.state,
+      parserState: row.parserState,
+      captureState: row.captureState,
+      freshnessState: row.freshnessState,
+      confidence: row.confidence,
+      confidenceTier: row.confidenceTier,
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      timestamps: row.timestamps,
+      retryBackoff: row.retryBackoff,
+      blockers: row.blockers ?? [],
+      gap: gap ? {
+        state: gap.state,
+        intakeRecommendation: gap.intakeRecommendation
+      } : undefined,
+      nextActions: (row.nextActions ?? []).map((action: any) => ({
+        type: action.type,
+        priority: action.priority,
+        reasonCode: action.reasonCode,
+        route: action.route,
+        liveNetworkFetch: false
+      })),
+      privacyBoundary: row.privacyBoundary,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.parser_status_ledger.v1",
+    proofId: stableId("ti_public_actor_parser_status_ledger", `${input.query}:${rows.map((row: any) => `${row.family}:${row.parserState}:${row.captureState}`).join(",")}`),
+    query: input.query,
+    rows,
+    summary: {
+      readyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.parserState === "ready").map((row: any) => row.family)),
+      retryFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.parserState === "retry_required").map((row: any) => row.family)),
+      missingFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.parserState === "missing_source").map((row: any) => row.family)),
+      captureRequiredFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.captureState === "capture_required").map((row: any) => row.family)),
+      latestCaptureAt: latestIso(rows.map((row: any) => row.timestamps?.lastCaptureAt)),
+      latestEnrichmentAt: latestIso(rows.map((row: any) => row.timestamps?.lastEnrichmentAt)),
+      nextActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => (row.nextActions ?? []).map((action: any) => action.type)))
+    },
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
