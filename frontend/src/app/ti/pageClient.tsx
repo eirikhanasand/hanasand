@@ -697,6 +697,7 @@ type EnrichmentTask = {
 }
 
 type SourceHealthRow = TiActionabilityModel['sourceHealthQueue']['rows'][number]
+type WatchlistIntersectionRow = TiActionabilityModel['orgRelevance']['watchlistIntersections'][number]
 
 function ActorIntelligenceDossier({ actor, actionability, result, artifacts, selectedArtifactId, onSelectArtifact }: {
     actor: TiActorIntelligenceProfile
@@ -1901,7 +1902,10 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                 </div>
                                 <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
                             </div>
-                            <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.casePath || item.route}</p>
+                            <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                                <p className='min-w-0 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.casePath || item.route}</p>
+                                <CopyPayloadButton label='Watchlist intersection' payload={watchlistIntersectionPayloadFor(item)} />
+                            </div>
                         </div>
                     )) : (
                         <p className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No organization watchlist intersection is attached yet.</p>
@@ -2680,6 +2684,30 @@ function sourceRefreshPayloadFor(row: SourceHealthRow) {
         })),
         recommendedAction: row.captureId ? 'inspect_capture' : row.sourceRequestId ? 'track_source_request' : 'queue_enrichment',
         nextAction: row.nextAction,
+    }
+}
+
+function watchlistIntersectionPayloadFor(row: WatchlistIntersectionRow) {
+    return {
+        schemaVersion: 'ti.public_actor.watchlist_intersection_request.v1',
+        intersectionId: row.intersectionId,
+        kind: row.kind,
+        value: row.value,
+        state: row.state,
+        route: row.route,
+        tenantId: row.tenantId,
+        organizationId: row.organizationId,
+        watchlistId: row.watchlistId,
+        watchlistItemId: row.watchlistItemId,
+        alertIds: row.alertIds,
+        caseIds: row.caseIds,
+        casePaths: row.casePaths,
+        captureIds: row.captureIds,
+        webhookDestinationIds: row.webhookDestinationIds,
+        sourceEvidenceRefs: row.sourceEvidenceRefs,
+        sourceFamilies: row.sourceFamilies,
+        recommendedAction: row.recommendedAction,
+        blockers: row.blockers,
     }
 }
 
