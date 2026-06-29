@@ -2206,6 +2206,143 @@ describe("source provenance TI page contract", () => {
     ]));
   });
 
+  test("packages parser health alert handoff state for alert public TI and source consumers", () => {
+    const { lifecycle } = buildFreshSourceLifecycle();
+    const packet = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const handoff = buildSourceProvenanceAlertHandoffState({
+      packet,
+      expectedOrganizationId: "org_acme",
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+
+    expect(handoff).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      parserHealthAlertPacketId: packet.id,
+      state: "ready",
+      alertGeneration: {
+        ready: true,
+        sourceFamilies: [],
+        blockedAlertIds: [],
+        route: expect.objectContaining({
+          path: "/v1/dwm/alerts/rebuild",
+          body: expect.objectContaining({ organizationId: "org_acme", dryRun: true }),
+          liveNetworkFetch: false
+        })
+      },
+      publicTi: {
+        ready: true,
+        route: expect.objectContaining({ path: "/ti/APT28", liveNetworkFetch: false })
+      },
+      webhook: {
+        ready: false,
+        sourceAlertRows: []
+      },
+      sourceOps: {
+        ready: true,
+        nextActions: [],
+        routes: []
+      },
+      blockers: [],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(handoff.consumerContracts).toMatchObject({
+      alertGeneration: {
+        requiredFields: expect.arrayContaining(["organizationId", "parserHealthAlertPacketId", "alertGeneration.ready"]),
+        sourceSchema: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION
+      },
+      publicTi: {
+        requiredFields: expect.arrayContaining(["publicTiRoute", "blockers[]"])
+      },
+      sourceOps: {
+        requiredFields: expect.arrayContaining(["sourceOps.routes", "sourceOps.nextActions"])
+      }
+    });
+    expect(JSON.stringify(handoff)).not.toContain("rawText");
+    expect(JSON.stringify(handoff)).not.toContain("password");
+  });
+
+  test("blocks parser health alert handoff state on source org mismatch duplicate alerts and parser gaps", () => {
+    const { lifecycle } = buildBlockedSourceLifecycle();
+    const packet = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const duplicatedPacket = {
+      ...packet,
+      rows: [...packet.rows, packet.rows[0]]
+    };
+    const handoff = buildSourceProvenanceAlertHandoffState({
+      packet: duplicatedPacket,
+      expectedOrganizationId: "org_other",
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+
+    expect(handoff.ok).toBe(false);
+    expect(handoff.state).toBe("blocked");
+    expect(handoff.alertGeneration).toMatchObject({
+      ready: false,
+      sourceFamilies: expect.arrayContaining(["actor_page", "darkweb_metadata", "telegram_public"]),
+      blockedAlertIds: expect.arrayContaining([packet.rows[0].alertId]),
+      nextRetryAt: "2026-06-29T12:37:00.000Z"
+    });
+    expect(handoff.webhook).toMatchObject({
+      ready: false,
+      sourceAlertRows: expect.arrayContaining([packet.rows[0].alertId])
+    });
+    expect(handoff.sourceOps).toMatchObject({
+      ready: true,
+      nextActions: expect.arrayContaining(["retry_parser", "request_policy_approval"])
+    });
+    expect(handoff.sourceOps.routes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: "/v1/dwm/source-requests",
+        body: expect.objectContaining({ action: "retry", dryRun: true })
+      }),
+      expect.objectContaining({
+        path: "/v1/dwm/source-requests",
+        body: expect.objectContaining({ action: "request_approval", dryRun: true })
+      })
+    ]));
+    expect(handoff.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "source_org_mismatch",
+        ownerLane: "source",
+        path: "organizationId"
+      }),
+      expect.objectContaining({
+        code: "parser_health_blocked",
+        ownerLane: "source",
+        path: "rows[]",
+        alertId: packet.rows[0].alertId
+      }),
+      expect.objectContaining({
+        code: "duplicate_alert_id",
+        ownerLane: "alert",
+        path: "rows[].alertId",
+        alertId: packet.rows[0].alertId
+      })
+    ]));
+    expect(handoff.consumerContracts.webhook.requiredFields).toEqual(expect.arrayContaining([
+      "webhook.sourceAlertRows",
+      "sourceOps.nextActions"
+    ]));
+    expect(JSON.stringify(handoff)).not.toContain("rawText");
+    expect(JSON.stringify(handoff)).not.toContain("password");
+  });
+
   test("builds source operations action queue from freshness and parser health gaps", () => {
     const { lifecycle } = buildBlockedSourceLifecycle();
     const freshnessPacket = buildSourceProvenanceSourceFreshnessGapPacket({
