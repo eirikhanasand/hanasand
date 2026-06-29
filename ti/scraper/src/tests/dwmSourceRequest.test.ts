@@ -1136,15 +1136,17 @@ describe("dwm source requests", () => {
         requestedBy: "source-proof-worker",
         candidates: [
           { target: "@activation_proof_public", type: "telegram_channel", family: "telegram" },
+          { target: "metadata://darkweb/onion/apt29-index", type: "restricted_metadata", family: "darkweb_onion" },
           { target: "metadata://darkweb/apt29/claims", type: "restricted_metadata", family: "darkweb_metadata" },
           { target: "https://example.com/security/advisory/apt29", type: "public_url", family: "public_advisory" },
-          { target: "https://example.com/threat-actors/apt29", type: "public_url", family: "actor_page" }
+          { target: "https://example.com/threat-actors/apt29", type: "public_url", family: "actor_page" },
+          { target: "https://example.com/blog/apt29-analysis", type: "public_url", family: "clear_web" }
         ]
       })
     }), options);
     const createdBody = await created.json() as any;
     expect(created.status).toBe(201);
-    expect(createdBody.summary).toMatchObject({ acceptedCount: 4, rejectedCount: 0 });
+    expect(createdBody.summary).toMatchObject({ acceptedCount: 6, rejectedCount: 0 });
 
     const worker = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -1152,8 +1154,8 @@ describe("dwm source requests", () => {
     }), options);
     const workerBody = await worker.json() as any;
     expect(worker.status).toBe(200);
-    expect(workerBody.activation.summary.activeSourceCount).toBe(4);
-    expect(workerBody.collectionQueue.summary.taskCount).toBe(4);
+    expect(workerBody.activation.summary.activeSourceCount).toBe(6);
+    expect(workerBody.collectionQueue.summary.taskCount).toBe(6);
 
     const config = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -1184,6 +1186,20 @@ describe("dwm source requests", () => {
             canEnrichActor: true,
             actorSignals: expect.arrayContaining(["actorHints"]),
             watchlistMatchFields: expect.arrayContaining(["text"])
+          })
+        })
+      }),
+      expect.objectContaining({
+        family: "darkweb_onion",
+        activationProof: expect.objectContaining({
+          state: "active",
+          policyResult: expect.objectContaining({ allowed: true, category: "restricted_metadata_only", metadataOnly: true }),
+          expectedCapture: expect.objectContaining({ type: "darkweb_onion_metadata_observation", restrictedPayloadStored: false }),
+          alertability: expect.objectContaining({ alertableFields: expect.arrayContaining(["victimHints", "claimType"]) }),
+          actorEnrichment: expect.objectContaining({
+            canEnrichActor: true,
+            actorSignals: expect.arrayContaining(["actorHandle", "victimName"]),
+            watchlistMatchFields: expect.arrayContaining(["victimName"])
           })
         })
       }),
@@ -1230,11 +1246,66 @@ describe("dwm source requests", () => {
             watchlistMatchFields: expect.arrayContaining(["actorName", "aliases"])
           })
         })
+      }),
+      expect.objectContaining({
+        family: "clear_web",
+        activationProof: expect.objectContaining({
+          state: "canary",
+          policyResult: expect.objectContaining({ allowed: true, category: "public_ti_metadata", metadataOnly: true }),
+          parserAvailability: expect.objectContaining({ profile: "clear_web", available: true }),
+          expectedCapture: expect.objectContaining({ type: "clear_web_metadata", liveNetworkRequiredForProof: false }),
+          alertability: expect.objectContaining({ alertableFields: expect.arrayContaining(["extractedTerms"]) }),
+          actorEnrichment: expect.objectContaining({
+            canEnrichActor: true,
+            actorSignals: expect.arrayContaining(["extractedEntities"]),
+            watchlistMatchFields: expect.arrayContaining(["extractedTerms"])
+          })
+        })
       })
     ]));
+    expect(configBody.sourceReadinessArtifact).toMatchObject({
+      schemaVersion: "dwm.source_readiness_artifact.v1",
+      sharedWatchlistAlertability: {
+        activeSourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "darkweb_metadata", "public_advisory", "actor_page", "clear_web"]),
+        enrichableSourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "darkweb_metadata", "public_advisory", "actor_page", "clear_web"]),
+        matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve", "extractedTerms"]),
+        watchlistTerms: ["APT29", "example.com"],
+        sourcePolicyLimits: expect.arrayContaining([
+          expect.objectContaining({ code: "public_telegram_only", family: "telegram" }),
+          expect.objectContaining({ code: "metadata_only_restricted_source", family: "darkweb_onion" }),
+          expect.objectContaining({ code: "metadata_only_restricted_source", family: "darkweb_metadata" })
+        ])
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false,
+        privateTelegramContentExposed: false,
+        restrictedMetadataLeaked: false
+      }
+    });
+    expect(configBody.sourceReadinessArtifact.actorCoverage).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        watchlistTerm: "APT29",
+        activeSourceFamilies: expect.arrayContaining(["telegram", "darkweb_metadata", "actor_page"]),
+        actorSignals: expect.arrayContaining(["actorHints", "actorHandle", "actorName", "extractedEntities"]),
+        alertableFields: expect.arrayContaining(["text", "victimHints", "cve", "extractedTerms"])
+      }),
+      expect.objectContaining({
+        watchlistTerm: "example.com",
+        watchlistMatchFields: expect.arrayContaining(["urls", "victimName", "actorName", "extractedTerms"])
+      })
+    ]));
+    expect(configBody.sourceReadinessArtifact.sourceFamilyReadiness).toEqual(expect.arrayContaining([
+      expect.objectContaining({ family: "telegram", canProduceAlert: true, canEnrichActor: true }),
+      expect.objectContaining({ family: "darkweb_onion", canProduceAlert: true, canEnrichActor: true }),
+      expect.objectContaining({ family: "darkweb_metadata", canProduceAlert: true, canEnrichActor: true }),
+      expect.objectContaining({ family: "public_advisory", canProduceAlert: true, canEnrichActor: true }),
+      expect.objectContaining({ family: "actor_page", canProduceAlert: true, canEnrichActor: true }),
+      expect.objectContaining({ family: "clear_web", canProduceAlert: true, canEnrichActor: true })
+    ]));
     expect(configBody.sourceConfigs.every((row: any) => row.activationProof.safeOutput.liveNetworkScrapeStarted === false)).toBe(true);
-    expect(frontier.snapshot()).toHaveLength(4);
+    expect(frontier.snapshot()).toHaveLength(6);
     expect(JSON.stringify(configBody)).not.toContain("apt29/claims");
+    expect(JSON.stringify(configBody)).not.toContain("apt29-index");
 
     const status = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -1275,6 +1346,8 @@ describe("dwm source requests", () => {
         ])
       }
     });
+    expect(pausedConfigBody.sourceReadinessArtifact.sharedWatchlistAlertability.activeSourceFamilies).not.toContain("telegram");
+    expect(pausedConfigBody.sourceReadinessArtifact.sharedWatchlistAlertability.pausedSourceFamilies).toContain("telegram");
   });
 
   test("retrieves source packs across scraper store restarts through durable adapter", async () => {

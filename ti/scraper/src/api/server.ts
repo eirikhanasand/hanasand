@@ -132,6 +132,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         sourceHealth: sourcePackWorker.sourceHealth,
         sourceOperationsReadiness: sourcePackWorker.sourceOperationsReadiness,
         sourceCustomerConfig: sourcePackWorker.sourceCustomerConfig,
+        sourceReadinessArtifact: sourcePackWorker.sourceReadinessArtifact,
         lastRun: sourcePackWorker.lastRun,
         sourceGrowthCounters: sourcePackWorker.counters,
         parserSourceFamilyCounts: sourcePackWorker.parserSourceFamilyCounts,

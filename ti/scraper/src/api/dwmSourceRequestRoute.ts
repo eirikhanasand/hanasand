@@ -260,6 +260,13 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
     customerId: input.customerId,
     scope: input.scope
   });
+  const sourceReadinessArtifact = buildDwmSourceReadinessArtifact(sourceCustomerConfig, {
+    generatedAt,
+    scope: input.scope,
+    tenantId: input.tenantId,
+    orgId: input.orgId,
+    customerId: input.customerId
+  });
   const snapshot = {
     schemaVersion: "dwm.source_pack_worker_readiness.v1",
     generatedAt,
@@ -288,6 +295,7 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
     sourceHealth,
     sourceOperationsReadiness: buildDwmSourceOperationsReadinessSnapshot(packs, options, { freshness, staleAfterMinutes, generatedAt, sourceHealth }),
     sourceCustomerConfig,
+    sourceReadinessArtifact,
     parserSourceFamilyCounts: growth.parserSourceFamilyCounts,
     sourceFamilyCounts: growth.sourceFamilyCounts,
     redactedSourcePackIds: packs.map((pack) => ({
@@ -341,6 +349,7 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
   sourceHealth: Record<string, any>;
   sourceOperationsReadiness: Record<string, any>;
   sourceCustomerConfig: Record<string, any>;
+  sourceReadinessArtifact: Record<string, any>;
   parserSourceFamilyCounts: Record<string, Record<string, number>>;
   sourceFamilyCounts: Record<string, unknown>;
   redactedSourcePackIds: Array<{ id: string; safeRef: string; rawTargetsExposed: boolean }>;
@@ -365,6 +374,7 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
     verificationCheck("source_operations_next_actions_present", Array.isArray(snapshot.sourceOperationsReadiness.nextOperatorActions), snapshot.sourceOperationsReadiness.nextOperatorActions?.length ?? "missing"),
     verificationCheck("source_customer_config_present", snapshot.sourceCustomerConfig.schemaVersion === "dwm.source_pack_customer_config.v1", snapshot.sourceCustomerConfig.schemaVersion),
     verificationCheck("source_customer_config_redacted", snapshot.sourceCustomerConfig.safeOutput?.rawTargetsExposed === false && snapshot.sourceCustomerConfig.safeOutput?.privateTelegramContentExposed === false, snapshot.sourceCustomerConfig.safeOutput),
+    verificationCheck("source_readiness_artifact_present", snapshot.sourceReadinessArtifact.schemaVersion === "dwm.source_readiness_artifact.v1", snapshot.sourceReadinessArtifact.schemaVersion),
     verificationCheck("parser_family_counts_present", Object.keys(snapshot.parserSourceFamilyCounts).length > 0, Object.keys(snapshot.parserSourceFamilyCounts)),
     verificationCheck("source_family_counts_present", Object.keys(snapshot.sourceFamilyCounts).length > 0, Object.keys(snapshot.sourceFamilyCounts)),
     verificationCheck("pack_ids_redacted", snapshot.redactedSourcePackIds.every((pack) => pack.safeRef && pack.rawTargetsExposed === false), snapshot.redactedSourcePackIds.length),
@@ -400,6 +410,8 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       "sourceInventory.sourcePackWorker.sourceCustomerConfig.schemaVersion",
       "sourceInventory.sourcePackWorker.sourceCustomerConfig.sourceConfigs[].redactedIdentity.rawStored",
       "sourceInventory.sourcePackWorker.sourceCustomerConfig.allowedOperatorActions[].action",
+      "sourceInventory.sourcePackWorker.sourceReadinessArtifact.actorCoverage[].watchlistTerm",
+      "sourceInventory.sourcePackWorker.sourceReadinessArtifact.sharedWatchlistAlertability.activeSourceFamilies[]",
       "sourceInventory.sourcePackWorker.parserSourceFamilyCounts",
       "sourceInventory.sourcePackWorker.sourceFamilyCounts",
       "sourceInventory.sourcePackWorker.rejectedCandidates[].targetRef.rawStored",
@@ -409,6 +421,7 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       "sourcePacks.sourceHealth.typedBlockers",
       "sourcePacks.sourceOperationsReadiness.summary.candidateCount",
       "sourcePacks.sourceCustomerConfig.summary.configurableCount",
+      "sourcePacks.sourceReadinessArtifact.sharedWatchlistAlertability.matchableFields[]",
       "sourcePacks.readiness.state",
       "sourcePacks.proxyVerification.state"
     ],
@@ -427,6 +440,8 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       ".sourceInventory.sourcePackWorker.sourceCustomerConfig.schemaVersion == \"dwm.source_pack_customer_config.v1\"",
       ".sourceInventory.sourcePackWorker.sourceCustomerConfig.sourceConfigs | all(.redactedIdentity.rawStored == false)",
       ".sourceInventory.sourcePackWorker.sourceCustomerConfig.safeOutput.liveNetworkScrapeStarted == false",
+      ".sourceInventory.sourcePackWorker.sourceReadinessArtifact.schemaVersion == \"dwm.source_readiness_artifact.v1\"",
+      ".sourceInventory.sourcePackWorker.sourceReadinessArtifact.safeOutput.liveNetworkScrapeStarted == false",
       ".sourcePacks.proxyVerification.checks | any(.id == \"safe_output_no_live_network\" and .status == \"pass\")"
     ],
     blockers: snapshot.readiness.blockers,
@@ -877,6 +892,159 @@ function buildDwmSourcePackCustomerConfigReadiness(
       restrictedPayloadDownloadAllowed: false
     }
   };
+}
+
+function buildDwmSourceReadinessArtifact(
+  sourceCustomerConfig: Record<string, any>,
+  input: { generatedAt: string; scope?: string; tenantId?: string; orgId?: string; customerId?: string }
+) {
+  const sourceConfigs = Array.isArray(sourceCustomerConfig.sourceConfigs) ? sourceCustomerConfig.sourceConfigs : [];
+  const activationProofs = sourceConfigs
+    .map((row: any) => row.activationProof)
+    .filter(Boolean);
+  const scopeTerms = String(input.scope ?? sourceCustomerConfig.scope ?? "")
+    .split(/[,\n]/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+  const watchlistTerms = uniqueSourceReadinessStrings([
+    ...scopeTerms,
+    ...activationProofs.flatMap((proof: any) => proof.alertability?.watchlistTerms ?? []),
+    ...activationProofs.flatMap((proof: any) => proof.actorEnrichment?.watchlistTerms ?? [])
+  ]);
+  const activeProofs = activationProofs.filter((proof: any) => proof.state === "active" || proof.state === "canary");
+  const alertCapableProofs = activeProofs.filter((proof: any) => proof.alertability?.canProduceAlert === true);
+  const enrichmentCapableProofs = activeProofs.filter((proof: any) => proof.actorEnrichment?.canEnrichActor === true);
+  const sourceFamilyReadiness = SOURCE_GROWTH_FAMILIES.map((family) => {
+    const familyProofs = activationProofs.filter((proof: any) => proof.family === family);
+    const blockers = uniqueSourceReadinessBlockers(familyProofs.flatMap((proof: any) => [
+      ...(proof.activationBlockers ?? []),
+      ...(proof.actorEnrichment?.blockers ?? [])
+    ]));
+    return {
+      family,
+      candidateCount: familyProofs.length,
+      active: familyProofs.filter((proof: any) => proof.state === "active").length,
+      canary: familyProofs.filter((proof: any) => proof.state === "canary").length,
+      paused: familyProofs.filter((proof: any) => proof.state === "paused").length,
+      failed: familyProofs.filter((proof: any) => proof.state === "failed").length,
+      blocked: familyProofs.filter((proof: any) => proof.state === "blocked").length,
+      canEnrichActor: familyProofs.some((proof: any) => proof.actorEnrichment?.canEnrichActor === true),
+      canProduceAlert: familyProofs.some((proof: any) => proof.alertability?.canProduceAlert === true),
+      matchableFields: uniqueSourceReadinessStrings(familyProofs.flatMap((proof: any) => proof.actorEnrichment?.watchlistMatchFields ?? [])),
+      alertableFields: uniqueSourceReadinessStrings(familyProofs.flatMap((proof: any) => proof.alertability?.alertableFields ?? [])),
+      actorSignals: uniqueSourceReadinessStrings(familyProofs.flatMap((proof: any) => proof.actorEnrichment?.actorSignals ?? [])),
+      parserStatuses: uniqueSourceReadinessStrings(familyProofs.map((proof: any) => proof.parserAvailability?.status).filter(Boolean)),
+      expectedCaptureTypes: uniqueSourceReadinessStrings(familyProofs.map((proof: any) => proof.expectedCapture?.type).filter(Boolean)),
+      blockers
+    };
+  });
+  const activeSourceFamilies = uniqueSourceReadinessStrings(alertCapableProofs.map((proof: any) => proof.family));
+  const enrichableSourceFamilies = uniqueSourceReadinessStrings(enrichmentCapableProofs.map((proof: any) => proof.family));
+  const pausedSourceFamilies = uniqueSourceReadinessStrings(activationProofs.filter((proof: any) => proof.state === "paused").map((proof: any) => proof.family));
+  const failedSourceFamilies = uniqueSourceReadinessStrings(activationProofs.filter((proof: any) => proof.state === "failed").map((proof: any) => proof.family));
+  const blockedSourceFamilies = uniqueSourceReadinessStrings(activationProofs.filter((proof: any) => proof.state === "blocked").map((proof: any) => proof.family));
+  const missingCoverage = sourceFamilyReadiness
+    .filter((row) => row.candidateCount === 0 || (!row.canEnrichActor && !row.canProduceAlert))
+    .map((row) => ({
+      family: row.family,
+      reason: row.candidateCount === 0 ? "no_candidate_or_source" : "source_not_alert_or_enrichment_ready",
+      blockers: row.blockers
+    }));
+  const latestCaptureAt = latestIso(activationProofs.flatMap((proof: any) => [
+    proof.retryReadiness?.lastRun?.status === "capture_observed" ? proof.retryReadiness?.lastRun?.at : undefined,
+    proof.retryReadiness?.lastRun?.status === "completed" ? proof.retryReadiness?.lastRun?.at : undefined
+  ]));
+  const actorCoverage = (watchlistTerms.length > 0 ? watchlistTerms : ["default_watchlist_scope"]).map((watchlistTerm) => ({
+    watchlistTerm,
+    enrichableSourceFamilies,
+    activeSourceFamilies,
+    missingCoverage,
+    actorSignals: uniqueSourceReadinessStrings(enrichmentCapableProofs.flatMap((proof: any) => proof.actorEnrichment?.actorSignals ?? [])),
+    watchlistMatchFields: uniqueSourceReadinessStrings(enrichmentCapableProofs.flatMap((proof: any) => proof.actorEnrichment?.watchlistMatchFields ?? [])),
+    alertableFields: uniqueSourceReadinessStrings(alertCapableProofs.flatMap((proof: any) => proof.alertability?.alertableFields ?? [])),
+    lastSuccessfulCaptureAt: latestCaptureAt,
+    lastSuccessfulEnrichmentAt: enrichmentCapableProofs.length > 0 ? input.generatedAt : undefined,
+    blockers: uniqueSourceReadinessBlockers(activationProofs.flatMap((proof: any) => [
+      ...(proof.activationBlockers ?? []),
+      ...(proof.actorEnrichment?.blockers ?? [])
+    ]))
+  }));
+  return {
+    schemaVersion: "dwm.source_readiness_artifact.v1",
+    generatedAt: input.generatedAt,
+    tenantId: input.tenantId ?? sourceCustomerConfig.tenantId,
+    orgId: input.orgId ?? sourceCustomerConfig.orgId,
+    customerId: input.customerId ?? sourceCustomerConfig.customerId,
+    scope: input.scope ?? sourceCustomerConfig.scope,
+    sourceFamilyReadiness,
+    actorCoverage,
+    sharedWatchlistAlertability: {
+      activeSourceFamilies,
+      enrichableSourceFamilies,
+      pausedSourceFamilies,
+      failedSourceFamilies,
+      blockedSourceFamilies,
+      matchableFields: uniqueSourceReadinessStrings([
+        ...alertCapableProofs.flatMap((proof: any) => proof.alertability?.alertableFields ?? []),
+        ...enrichmentCapableProofs.flatMap((proof: any) => proof.actorEnrichment?.watchlistMatchFields ?? [])
+      ]),
+      watchlistTerms,
+      blockers: uniqueSourceReadinessBlockers(sourceFamilyReadiness.flatMap((row) => row.blockers)),
+      sourcePolicyLimits: sourceReadinessPolicyLimits(activationProofs)
+    },
+    lastHealthProof: {
+      sourceConfigCount: sourceConfigs.length,
+      canaryCount: activationProofs.filter((proof: any) => proof.state === "canary").length,
+      activeCount: activationProofs.filter((proof: any) => proof.state === "active").length,
+      pausedCount: pausedSourceFamilies.length,
+      failedCount: failedSourceFamilies.length,
+      blockedCount: blockedSourceFamilies.length,
+      sourceCustomerConfigReadiness: sourceCustomerConfig.readiness?.state,
+      generatedAt: input.generatedAt
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      rawUnsafeRowsStored: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function uniqueSourceReadinessStrings(values: unknown[]): string[] {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
+}
+
+function uniqueSourceReadinessBlockers(blockers: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return dedupeBlockers(blockers.map((blocker) => ({
+    code: blocker.code ?? "unknown_blocker",
+    severity: blocker.severity ?? "warning",
+    family: blocker.family,
+    retryable: blocker.retryable
+  })));
+}
+
+function latestIso(values: unknown[]): string | undefined {
+  return values
+    .map((value) => String(value ?? ""))
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+}
+
+function sourceReadinessPolicyLimits(activationProofs: Array<Record<string, any>>) {
+  return uniqueSourceReadinessBlockers(activationProofs.map((proof) => {
+    const family = String(proof.family ?? "unknown");
+    if (family === "telegram") {
+      return { code: "public_telegram_only", severity: "info", family, retryable: false };
+    }
+    if (family === "darkweb_onion" || family === "darkweb_metadata") {
+      return { code: "metadata_only_restricted_source", severity: "warning", family, retryable: false };
+    }
+    return { code: "public_metadata_only", severity: "info", family, retryable: false };
+  }));
 }
 
 function sourcePackCustomerConfigBlockers(input: {
@@ -2633,26 +2801,34 @@ function sourcePackCustomerConfigResponse(body: DwmSourceRequestBody, options: A
     : ageMinutes !== undefined && ageMinutes > staleAfterMinutes
       ? "stale"
       : "fresh";
+  const sourceCustomerConfig = buildDwmSourcePackCustomerConfigReadiness(packs, options, {
+    generatedAt,
+    freshness,
+    staleAfterMinutes,
+    tenantId: body.tenantId,
+    orgId: body.orgId,
+    customerId: body.customerId,
+    scope: body.scope,
+    family: body.family,
+    mode: body.configMode ?? (body.dryRun === true ? "prepare" : "read"),
+    operation: body.configOperation,
+    target: body.target,
+    operatorRole: body.operatorRole,
+    ownerLane: body.ownerLane,
+    idempotencyKey: body.idempotencyKey,
+    auditReason: body.auditReason ?? body.reason
+  });
   return {
     action: "pack_customer_config",
     sourcePackId: registry?.id ?? body.sourcePackId,
     sourcePackLabel: registry?.label,
-    ...buildDwmSourcePackCustomerConfigReadiness(packs, options, {
+    ...sourceCustomerConfig,
+    sourceReadinessArtifact: buildDwmSourceReadinessArtifact(sourceCustomerConfig, {
       generatedAt,
-      freshness,
-      staleAfterMinutes,
       tenantId: body.tenantId,
       orgId: body.orgId,
       customerId: body.customerId,
-      scope: body.scope,
-      family: body.family,
-      mode: body.configMode ?? (body.dryRun === true ? "prepare" : "read"),
-      operation: body.configOperation,
-      target: body.target,
-      operatorRole: body.operatorRole,
-      ownerLane: body.ownerLane,
-      idempotencyKey: body.idempotencyKey,
-      auditReason: body.auditReason ?? body.reason
+      scope: body.scope
     })
   };
 }
