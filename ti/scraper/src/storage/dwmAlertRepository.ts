@@ -274,6 +274,14 @@ export type DwmAlertCustomerProofHandoffRow = {
     severityOverride?: string;
     note?: string;
     rationale?: string;
+    decision?: {
+      value?: string;
+      rationale?: string;
+      falsePositiveReason?: string;
+      suppressionReason?: string;
+      decidedAt?: string;
+      decidedBy?: string;
+    };
     eventCount: number;
     transitionEvents: Array<{
       schemaVersion: "dwm.alert_workflow_transition_event.v1";
@@ -1168,6 +1176,12 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       workflowEvents: existing?.workflowEvents ?? [],
       workflowNote: existing?.workflowNote,
       workflowRationale: existing?.workflowRationale,
+      workflowDecision: existing?.workflowDecision,
+      decisionRationale: existing?.decisionRationale,
+      falsePositiveReason: existing?.falsePositiveReason,
+      suppressionReason: existing?.suppressionReason,
+      decisionAt: existing?.decisionAt,
+      decisionBy: existing?.decisionBy,
       assignedOwner: existing?.assignedOwner,
       severityOverride: existing?.severityOverride,
       suppressedAt: existing?.suppressedAt,
@@ -1818,6 +1832,14 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       severityOverride: alert.severityOverride,
       note: alert.workflowNote,
       rationale: alert.workflowRationale,
+      decision: {
+        value: alert.workflowDecision,
+        rationale: alert.decisionRationale ?? alert.workflowRationale,
+        falsePositiveReason: alert.falsePositiveReason,
+        suppressionReason: alert.suppressionReason,
+        decidedAt: alert.decisionAt,
+        decidedBy: alert.decisionBy
+      },
       eventCount: (alert.workflowEvents ?? []).length,
       transitionEvents: workflowTransitionEvents,
       replayCount: Number(alert.replayCount ?? 0)

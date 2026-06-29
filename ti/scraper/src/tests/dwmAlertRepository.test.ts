@@ -861,6 +861,12 @@ describe("dwm alert repository", () => {
       assignedOwner: "analyst-1",
       caseId: "case_existing_repo",
       workflowNote: "Owner suppressed this as a duplicate customer-domain decision.",
+      workflowDecision: "false_positive",
+      decisionRationale: "Duplicate customer-domain exposure already reviewed.",
+      falsePositiveReason: "Known duplicate alert from the same watchlist term.",
+      suppressionReason: "Do not page customer twice for the same evidence cluster.",
+      decisionAt: "2026-06-28T13:12:30.000Z",
+      decisionBy: "analyst-1",
       workflowEvents: [{ id: "evt_1", at: "2026-06-28T13:12:00.000Z", toReviewState: "false_positive", toDeliveryState: "muted" }],
       replayCount: 2,
       lastReplayedAt: "2026-06-28T13:13:00.000Z",
@@ -875,6 +881,12 @@ describe("dwm alert repository", () => {
     expect(preserved?.deliveryState).toBe("muted");
     expect(preserved?.assignedOwner).toBe("analyst-1");
     expect(preserved?.workflowNote).toBe("Owner suppressed this as a duplicate customer-domain decision.");
+    expect(preserved?.workflowDecision).toBe("false_positive");
+    expect(preserved?.decisionRationale).toBe("Duplicate customer-domain exposure already reviewed.");
+    expect(preserved?.falsePositiveReason).toBe("Known duplicate alert from the same watchlist term.");
+    expect(preserved?.suppressionReason).toBe("Do not page customer twice for the same evidence cluster.");
+    expect(preserved?.decisionAt).toBe("2026-06-28T13:12:30.000Z");
+    expect(preserved?.decisionBy).toBe("analyst-1");
     expect(preserved?.workflowEvents).toHaveLength(1);
     expect(preserved?.alertCreatedEvent).toEqual(existing.alertCreatedEvent);
     expect(preserved?.orgWatchlistScope).toEqual(existing.orgWatchlistScope);
@@ -967,6 +979,14 @@ describe("dwm alert repository", () => {
     expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).evidence.generationEvidenceWindow).toMatchObject({
       captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
       lastObservedAt: "2026-06-28T13:16:00.000Z"
+    });
+    expect(buildDwmAlertCustomerProofHandoffRow({ alert: preserved }).workflow.decision).toMatchObject({
+      value: "false_positive",
+      rationale: "Duplicate customer-domain exposure already reviewed.",
+      falsePositiveReason: "Known duplicate alert from the same watchlist term.",
+      suppressionReason: "Do not page customer twice for the same evidence cluster.",
+      decidedAt: "2026-06-28T13:12:30.000Z",
+      decidedBy: "analyst-1"
     });
     expect(buildDwmAlertWorkflowExecutionReadiness({
       alert: preserved,
