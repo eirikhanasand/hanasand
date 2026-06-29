@@ -296,7 +296,7 @@ function publicTiProvenanceReadiness(input: {
         ledgerRefs.length > 0 ? '' : 'Public TI search route returned no evidence ledger references.',
         actionabilityLoaded ? '' : 'Public TI search route did not return ti.query.actionability.v1.',
         sourceProvenance.length > 0 ? '' : 'Public TI actionability returned no source provenance rows.',
-        handoffRoutes.length >= 3 ? '' : 'Public TI actionability returned incomplete watchlist, alert, and case handoff routes.',
+        handoffRoutes.length >= 3 ? '' : 'Public TI actionability returned incomplete watchlist, alert, and case workflow routes.',
         sourceIds.size > 0 ? '' : 'Public TI search route returned no source references.',
         ...warningCodes.map(code => `Public TI quality warning: ${code}.`),
     ].filter(Boolean)
@@ -326,11 +326,11 @@ function publicTiProvenanceReadiness(input: {
         staleAfterSeconds: 3600,
         proofTimestamp: latestArtifactAt || input.generatedAt,
         expectedDashboardRowId: 'public_ti_provenance',
-        integrationProbeHint: 'GET /api/ti/search?q=<query>&limit=10 must return publicTiAnswer.status=ready, rows, source references, evidenceLedgerReferences, and actionability.schemaVersion=ti.query.actionability.v1 with watchlist, alert, and case handoff routes.',
+        integrationProbeHint: 'GET /api/ti/search?q=<query>&limit=10 must return publicTiAnswer.status=ready, rows, source references, evidenceLedgerReferences, and actionability.schemaVersion=ti.query.actionability.v1 with watchlist, alert, and case workflow routes.',
         backendProofContractVersion: actionabilityLoaded ? 'ti.search.public_answer.v1 + ti.query.actionability.v1' : 'ti.search.public_answer.v1',
         detail: blockers.length
             ? blockers.join('; ')
-            : `${evidenceRows.length} public TI row${evidenceRows.length === 1 ? '' : 's'} from ${sourceIds.size} source${sourceIds.size === 1 ? '' : 's'} with ${ledgerRefs.length} evidence reference${ledgerRefs.length === 1 ? '' : 's'} and ${handoffRoutes.length} backed handoff route${handoffRoutes.length === 1 ? '' : 's'}.`,
+            : `${evidenceRows.length} public TI row${evidenceRows.length === 1 ? '' : 's'} from ${sourceIds.size} source${sourceIds.size === 1 ? '' : 's'} with ${ledgerRefs.length} evidence reference${ledgerRefs.length === 1 ? '' : 's'} and ${handoffRoutes.length} backed workflow route${handoffRoutes.length === 1 ? '' : 's'}.`,
     }
 }
 

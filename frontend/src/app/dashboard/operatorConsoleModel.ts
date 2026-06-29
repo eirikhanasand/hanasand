@@ -1684,7 +1684,7 @@ function publicTiProvenanceDetail(input: PublicTiProvenanceReadiness) {
         typeof input.artifactCount === 'number' ? `${input.artifactCount} artifact${input.artifactCount === 1 ? '' : 's'}` : '',
         typeof input.sourceCount === 'number' ? `${input.sourceCount} source${input.sourceCount === 1 ? '' : 's'}` : '',
         typeof input.evidenceCount === 'number' ? `${input.evidenceCount} evidence item${input.evidenceCount === 1 ? '' : 's'}` : '',
-        typeof input.dashboardHandoffCount === 'number' ? `${input.dashboardHandoffCount} dashboard handoff${input.dashboardHandoffCount === 1 ? '' : 's'}` : '',
+        typeof input.dashboardHandoffCount === 'number' ? `${input.dashboardHandoffCount} operator workflow${input.dashboardHandoffCount === 1 ? '' : 's'}` : '',
         typeof input.sourceProvenanceCount === 'number' ? `${input.sourceProvenanceCount} provenance row${input.sourceProvenanceCount === 1 ? '' : 's'}` : '',
         typeof input.watchlistCandidateCount === 'number' ? `${input.watchlistCandidateCount} watchlist candidate${input.watchlistCandidateCount === 1 ? '' : 's'}` : '',
         typeof input.handoffRouteCount === 'number' ? `${input.handoffRouteCount} handoff route${input.handoffRouteCount === 1 ? '' : 's'}` : '',
