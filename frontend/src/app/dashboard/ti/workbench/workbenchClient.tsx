@@ -1401,6 +1401,14 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         })
     }
     if (activeWebhook && orgContext?.organization) {
+        const destinationHref = organizationWebhookDestinationHref(orgContext.organization.id, activeWebhook.id)
+        rows.push({
+            id: 'inspect_webhook_destination',
+            label: 'Open destination',
+            detail: `GET ${destinationHref}; ${activeWebhook.name} ${activeWebhook.status}${activeWebhook.lastTestStatus ? `, last test ${activeWebhook.lastTestStatus}` : ''}.`,
+            tone: activeWebhook.status === 'active' ? 'ready' : 'needs_action',
+            href: destinationHref,
+        })
         rows.push({
             id: 'test_webhook',
             label: 'Test webhook',
@@ -3086,6 +3094,12 @@ function deliveryLedgerHref(orgContext: WorkbenchOrgContext | undefined, selecte
     if (delivery?.webhookDestinationId) params.set('webhookDestinationId', delivery.webhookDestinationId)
     const query = params.toString()
     return `/api/dwm/webhooks/deliveries${query ? `?${query}` : ''}`
+}
+
+function organizationWebhookDestinationHref(organizationId: string, webhookDestinationId: string) {
+    const params = new URLSearchParams()
+    params.set('destinationId', webhookDestinationId)
+    return `/api/organizations/${encodeURIComponent(organizationId)}/webhooks?${params.toString()}`
 }
 
 function latestDeliveryForActionRail(selected: WorkbenchCase, caseDetail: CaseDetailState | undefined, actionDeliveries: WorkbenchDeliveryEvidence[], orgContext: WorkbenchOrgContext | undefined) {
