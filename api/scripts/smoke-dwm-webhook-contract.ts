@@ -2934,6 +2934,8 @@ expect(proofLiveRequest?.externalSendEnabled === false && proofLiveRequest.noNet
 expect(proofLiveRequest?.expectedIdempotencyKey === proofDryRunRequest?.expectedIdempotencyKey, 'Alert delivery proof live and dry-run requests should share duplicate-send guard keys.', proofLiveRequest)
 expect(proofLiveRequest?.expectedAuditAction === 'delivery.replayed', 'Alert delivery proof live request should expose expected replay audit action even when blocked.', proofLiveRequest)
 expect(proofTestRequest?.route === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && proofTestRequest.noNetwork === true && proofTestRequest.body.eventType === 'dwm.alert.test' && proofTestRequest.expectedIdempotencyKey === 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test' && proofTestRequest.expectedAuditAction === 'delivery.tested', 'Alert delivery proof should include a safe destination test request with idempotency and audit proof.', proofTestRequest)
+expect(proofTestRequest?.payloadPreview?.schemaVersion === 'dwm.webhook.destination_test_payload_preview.v1' && proofTestRequest.payloadPreview.discord.fieldNames.includes('Watchlist'), 'Alert delivery proof destination test request should include the no-network Discord payload preview.', proofTestRequest)
+expect(proofTestRequest?.payloadPreview?.context.orgId === 'org_contract' && proofTestRequest.payloadPreview.context.dedupeKey.includes('webhook_test'), 'Alert delivery proof destination test preview should preserve org and test dedupe context.', proofTestRequest?.payloadPreview)
 expect(orgAlertDeliveryProof.actionRequests.deliveryHistory.query.alertId === 'alert_replay_contract' && orgAlertDeliveryProof.actionRequests.deliveryHistory.query.dedupeKey === 'dwm_dedupe_replay_contract', 'Alert delivery proof should include a delivery history query for the alert/dedupe key.', orgAlertDeliveryProof.actionRequests.deliveryHistory)
 expect(orgAlertDeliveryProof.actionRequests.deliveryHistory.expectedAuditActions.includes('delivery.replayed') && orgAlertDeliveryProof.actionRequests.deliveryHistory.expectedAuditActions.includes('delivery.failed'), 'Alert delivery proof should list expected audit actions for delivery history verification.', orgAlertDeliveryProof.actionRequests.deliveryHistory)
 expect(!JSON.stringify(orgAlertDeliveryProof).includes(secret), 'Alert delivery proof should not leak endpoint, response, or audit secrets.', orgAlertDeliveryProof)
@@ -3164,6 +3166,7 @@ console.log(JSON.stringify({
         'customer setup proof secret redaction',
         'alert delivery proof setup/readiness bridge',
         'alert delivery proof no-network blockers',
+        'alert delivery proof destination test payload preview',
         'alert delivery proof audit/dashboard probe fields',
         'delivery retry eligibility contract',
         'delivery retry typed blockers',
@@ -3360,6 +3363,7 @@ console.log(JSON.stringify({
             'orgAlertDelivery.alertDeliveryProof.actionRequests.destinationTests[].route',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.destinationTests[].expectedIdempotencyKey',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.destinationTests[].expectedAuditAction',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.destinationTests[].payloadPreview.discord.fieldNames',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.deliveryHistory.query',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.deliveryHistory.expectedAuditActions',
             'orgAlertDelivery.alertDeliveryProof.blockerCodes',

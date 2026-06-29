@@ -4163,6 +4163,12 @@ function buildDwmWebhookAlertDeliveryProof({
             blockers: destinationBlockers,
         }
     })
+    const customerSetupDryRunRequests = Array.isArray((customerSetup as { dryRunTestRequests?: unknown }).dryRunTestRequests)
+        ? (customerSetup as { dryRunTestRequests: Array<{ destinationId?: string, payloadPreview?: unknown }> }).dryRunTestRequests
+        : []
+    const customerSetupDryRunRequestByDestination = new Map(customerSetupDryRunRequests
+        .map(request => [clean(request.destinationId), request] as const)
+        .filter(([destinationId]) => Boolean(destinationId)))
     const destinationTestRequests = selectedDestinations.map(destination => ({
         destinationId: destination.id,
         expectedIdempotencyKey: buildIdempotencyKey('dwm.alert.test', orgId, destination.id, 'webhook_test'),
@@ -4179,6 +4185,7 @@ function buildDwmWebhookAlertDeliveryProof({
             live: false,
             alert: safeAlertBody,
         },
+        payloadPreview: customerSetupDryRunRequestByDestination.get(destination.id)?.payloadPreview || null,
     }))
     const status = customerSetup.status === 'permission_denied'
         ? 'permission_denied'
