@@ -427,11 +427,22 @@ const deliveryAttemptContract = buildDwmWebhookDeliveryAttemptContract({
     input: apiDeliveryRequestInput,
     destinations: [{
         id: 'destination_replay_contract',
-        org_id: 'org_contract',
+        orgId: 'org_contract',
+        ownerId: 'owner_contract',
         name: 'Replay Discord',
         kind: 'discord',
+        endpointHint: 'https://discord.com/api/webhooks/1234567890/...',
+        endpointHash: 'endpoint_replay_contract',
         status: 'active',
         events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: null,
+        lastTestStatus: null,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T12:00:00.000Z',
+        updatedAt: '2026-06-28T12:00:00.000Z',
     }],
     deliveries: [replayAttemptDelivery],
 })
@@ -561,6 +572,7 @@ expect(deliveryAttemptContract.destinationSelection.selectedDestinationIds.join(
 expect(deliveryAttemptContract.attempts[0]?.status === 'dry_run' && deliveryAttemptContract.attempts[0]?.replay === true && deliveryAttemptContract.attempts[0]?.retry.attemptCount === 2, 'Delivery attempt contract should produce a persisted dry-run replay attempt with retry count.', deliveryAttemptContract.attempts[0])
 expect(deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.discord.fieldNames.includes('Alert URL') && deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract', 'Delivery attempt contract should include Discord-ready payload preview context.', deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview)
 expect(deliveryAttemptContract.attempts[0]?.audit.expectedAction === 'delivery.tested' && deliveryAttemptContract.attempts[0]?.redactedDestination.endpointExposed === false, 'Delivery attempt contract should expose audit proof and redacted destination metadata.', deliveryAttemptContract.attempts[0])
+expect(deliveryAttemptContract.attempts[0]?.redactedDestination.endpointHash === 'endpoint_replay_contract' && deliveryAttemptContract.attempts[0]?.redactedDestination.endpointHint === 'https://discord.com/api/webhooks/1234567890/...', 'Delivery attempt contract should expose safe endpoint refs before persistence.', deliveryAttemptContract.attempts[0]?.redactedDestination)
 expect(deliveryAttemptPersistence.schemaVersion === 'dwm.webhook.delivery_attempt_persistence.v1' && deliveryAttemptPersistence.ok === true && deliveryAttemptPersistence.totals.persistedAttempts === 1, 'Delivery attempt persistence should match typed contract attempts to persisted rows.', deliveryAttemptPersistence)
 expect(deliveryAttemptPersistence.rows[0]?.persistedDeliveryId === 'prior_attempt_contract' && deliveryAttemptPersistence.rows[0]?.audit.auditEventId === 'audit_attempt_contract', 'Delivery attempt persistence should expose delivery and audit ids.', deliveryAttemptPersistence.rows[0])
 expect(deliveryAttemptPersistence.rows[0]?.sanitizedPayloadPreview?.discord.fieldNames.includes('Alert URL') && deliveryAttemptPersistence.rows[0]?.replay === true, 'Delivery attempt persistence should preserve Discord preview and replay context.', deliveryAttemptPersistence.rows[0])

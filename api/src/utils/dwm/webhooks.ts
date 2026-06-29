@@ -5536,6 +5536,7 @@ export function buildDwmWebhookDeliveryAttemptContract({
     const normalizedInput = buildDwmWebhookDeliveryRequestInput(input)
     const dryRun = parseBoolean(normalizedInput.dryRun ?? normalizedInput.dry_run, true)
     const live = parseBoolean(normalizedInput.live, false)
+    const destinationMetadataById = new Map(destinations.map(destination => [destination.id, destination]))
     const dispatchDestinations = destinations.map(toDwmWebhookDispatchDestinationForContract)
     const plan = buildDwmAlertWebhookDispatchPlan({ ownerId, input: normalizedInput, destinations: dispatchDestinations })
     const alert = normalizeAlert(plan.alert)
@@ -5572,6 +5573,7 @@ export function buildDwmWebhookDeliveryAttemptContract({
                 id: destination.id,
                 label: destination.name,
                 type: destination.kind,
+                ...deliveryAttemptRedactedEndpoint(destinationMetadataById.get(destination.id)),
                 endpointExposed: false,
             },
             responseSummary: dryRun ? 'Dry-run delivery payload prepared without external network.' : liveDeliveryEnabled ? 'Live delivery is explicitly enabled.' : 'Live delivery is disabled for this environment.',
@@ -5611,6 +5613,7 @@ export function buildDwmWebhookDeliveryAttemptContract({
             id: intent.destinationId,
             label: null,
             type: null,
+            ...deliveryAttemptRedactedEndpoint(destinationMetadataById.get(intent.destinationId)),
             endpointExposed: false,
         },
         responseSummary: intent.error,
@@ -5650,6 +5653,7 @@ export function buildDwmWebhookDeliveryAttemptContract({
             id: missingIntent.requestedDestinationId,
             label: null,
             type: null,
+            ...deliveryAttemptRedactedEndpoint(destinationMetadataById.get(clean(missingIntent.requestedDestinationId))),
             endpointExposed: false,
         },
         responseSummary: missingIntent.error,
@@ -5704,6 +5708,14 @@ export function buildDwmWebhookDeliveryAttemptContract({
         },
         attempts,
         blockers: requiredBlockers,
+    }
+}
+
+function deliveryAttemptRedactedEndpoint(destination: DwmWebhookDispatchDestination | DwmWebhookDestinationPublic | undefined) {
+    const publicDestination = destination as DwmWebhookDestinationPublic | undefined
+    return {
+        endpointHint: publicDestination?.endpointHint ? redactDeliveryEvidenceText(publicDestination.endpointHint) : null,
+        endpointHash: publicDestination?.endpointHash || null,
     }
 }
 
