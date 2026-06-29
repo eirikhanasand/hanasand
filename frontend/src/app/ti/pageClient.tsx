@@ -386,7 +386,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         )}
                     </main>
 
-                    <aside className='order-3 grid min-w-0 content-start gap-4 border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:border-l lg:border-t-0'>
+                    <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:border-l lg:border-t-0'>
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <ActionabilityPanel actionability={actionability} query={result.query} />
                         <EnrichmentTasksPanel tasks={enrichmentTasks} />
@@ -664,8 +664,8 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
     const bridge = handoffs.authBridge
     const payloadRows = [
         { id: 'watchlist', label: 'Watchlist package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
-        { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : `Ready for ${handoffs.alertRebuild.endpoint}` },
-        { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : `Ready for ${handoffs.case.endpoint}` },
+        { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : 'Ready to rebuild from this selected artifact.' },
+        { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : 'Ready to open with this selected artifact.' },
         { id: 'enrichment', label: 'Enrichment item', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
     ]
 
@@ -921,9 +921,10 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
     const decisionSteps = decisionStepsFor(actionability)
 
     return (
-        <Panel title='Workflow' description='Org watchlist, alert, case, source, and enrichment readiness from returned model fields.' icon={<ShieldCheck className='h-4 w-4' />}>
+        <Panel title='Workflow' description='Readiness for watchlist, alert, case, delivery, and source work.' icon={<ShieldCheck className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <DecisionFlow steps={decisionSteps} disposition={actionability.alertDisposition} shouldAlert={actionability.shouldAlert} rationale={actionability.rationale} />
+                <ConsumerReadinessPanel actionability={actionability} />
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex items-center justify-between gap-2'>
@@ -932,7 +933,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                             {formatLabel(actionability.watchlistRelevance.state)}
                         </span>
                     </div>
-                    <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>POST {actionability.watchlistRelevance.endpoint}</p>
+                    <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Org-scoped watchlist create request with provenance carried in the copied package.</p>
                     <div className='mt-2 flex flex-wrap gap-1.5'>
                         {actionability.watchlistRelevance.terms.length ? actionability.watchlistRelevance.terms.slice(0, 6).map(payload => (
                             <span key={`${payload.kind}-${payload.value}`} className={payload.matched ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]' : 'max-w-full wrap-break-word rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'}>{payload.kind}: {payload.value}</span>
@@ -1010,6 +1011,50 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
             </div>
         </Panel>
+    )
+}
+
+function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabilityModel }) {
+    const readyStages = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff readiness</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {readyStages} of {actionability.consumerReadiness.stages.length} stages ready for console work.
+                    </p>
+                </div>
+                <CopyPayloadButton label='Handoff readiness' payload={actionability.consumerReadiness.bundlePreview} />
+            </div>
+            <div className='mt-3 grid gap-2'>
+                {actionability.consumerReadiness.stages.map(stage => (
+                    <div key={stage.id} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{stage.label}</p>
+                                    <span className={decisionStepStatusClass(stage.state)}>{decisionStepStatusLabel(stage.state)}</span>
+                                </div>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{stage.detail}</p>
+                                {stage.missing.length ? (
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{stage.missing.slice(0, 2).join('; ')}</p>
+                                ) : null}
+                            </div>
+                            <div className='flex shrink-0 items-center gap-1.5'>
+                                {stage.route ? (
+                                    <a href={stage.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                        <ExternalLink className='h-3.5 w-3.5' />
+                                        Open
+                                    </a>
+                                ) : null}
+                                <CopyPayloadButton label={`${stage.label} request`} payload={stage.request ?? stage.payload} />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
     )
 }
 
@@ -1099,7 +1144,7 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
             id: 'alert-rebuild',
             label: 'Rebuild alerts',
             status: actionability.createAlertHandoff.blocked ? 'blocked' : 'ready',
-            detail: actionability.createAlertHandoff.blocked ? 'Alert rebuild needs watchlist or org context.' : `Ready for ${actionability.createAlertHandoff.endpoint}.`,
+            detail: actionability.createAlertHandoff.blocked ? 'Alert rebuild needs watchlist or org context.' : 'Ready to rebuild from matched watchlist terms.',
             payload: actionability.createAlertHandoff,
             route: actionability.createAlertHandoff.backedRoute,
             missing: actionability.createAlertHandoff.missing,
@@ -1108,7 +1153,7 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
             id: 'case',
             label: 'Open case',
             status: actionability.caseHandoff.blocked ? 'blocked' : 'ready',
-            detail: actionability.caseHandoff.blocked ? 'Case creation needs an alert ID and org-scoped context.' : `Ready for ${actionability.caseHandoff.endpoint}.`,
+            detail: actionability.caseHandoff.blocked ? 'Case creation needs an alert ID and org-scoped context.' : 'Ready to open from related alert context.',
             payload: actionability.caseHandoff,
             route: actionability.caseHandoff.backedRoute,
             missing: actionability.caseHandoff.missing,
@@ -1117,7 +1162,7 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
             id: 'webhook-delivery',
             label: 'Deliver webhook',
             status: actionability.webhookDeliveryHandoff.blocked ? 'blocked' : 'ready',
-            detail: actionability.webhookDeliveryHandoff.blocked ? 'Delivery needs alert, capture, and destination context.' : `Ready for ${actionability.webhookDeliveryHandoff.endpoint}.`,
+            detail: actionability.webhookDeliveryHandoff.blocked ? 'Delivery needs alert, capture, and destination context.' : 'Dry-run delivery can be prepared from alert and destination context.',
             payload: actionability.webhookDeliveryHandoff,
             route: actionability.webhookDeliveryHandoff.backedRoute,
             missing: actionability.webhookDeliveryHandoff.missing,
@@ -1198,10 +1243,10 @@ function BlockerList({ blockers }: { blockers: string[] }) {
 function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     return (
         <Panel title='Enrichment Queue' description='Source and API work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
-            <div className='grid gap-2'>
+            <div className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2'>
                 {tasks.map(task => (
-                    <div key={task.title} className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                        <div className='flex items-center justify-between gap-2'>
+                    <div key={task.title} className='min-w-0 max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex flex-wrap items-start justify-between gap-2'>
                             <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{task.title}</p>
                             <span className={`${taskStatusClass(task.status)} shrink-0 whitespace-nowrap`}>{taskStatusLabel(task.status)}</span>
                         </div>

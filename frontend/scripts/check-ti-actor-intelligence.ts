@@ -125,6 +125,8 @@ const bannedUiCopy = [
     'related backed objects',
     'backed objects',
     'contract',
+    'acceptance criteria',
+    'dashboard slop',
 ]
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
@@ -147,6 +149,13 @@ assert(actionability.caseHandoff.kind === 'case' && actionability.caseHandoff.en
 assert(actionability.caseHandoff.blocked && actionability.caseHandoff.missing.some(item => /DWM alert ID/i.test(item)), 'Blocked case handoff should expose missing alert dependency.')
 assert(actionability.webhookDeliveryHandoff.kind === 'webhook_delivery' && actionability.webhookDeliveryHandoff.endpoint === '/v1/dwm/webhooks/deliver', 'Actionability should expose explicit webhook delivery fields.')
 assert(actionability.webhookDeliveryHandoff.blocked && actionability.webhookDeliveryHandoff.missing.some(item => /webhook destination/i.test(item)), 'Blocked webhook delivery should expose missing destination dependency.')
+assert(actionability.consumerReadiness.schemaVersion === 'ti.public_actor.consumer_readiness.v1', 'Actionability should expose consumer readiness for authenticated workflow lanes.')
+assert(actionability.consumerReadiness.consumerSchemaVersion === 'hanasand.analyst_handoff.consumer.v1', 'Consumer readiness should align to the analyst handoff consumer schema.')
+assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'publicTi' && stage.request?.path === '/v1/dwm/watchlists'), 'Consumer readiness should include org watchlist create request shape.')
+assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'orgWatchlist' && stage.request?.path === '/v1/dwm/alerts/rebuild'), 'Consumer readiness should include alert rebuild request shape.')
+assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'caseHandoff' && stage.request?.path === '/v1/cases'), 'Consumer readiness should include case request shape.')
+assert(actionability.consumerReadiness.stages.some(stage => stage.id === 'webhookTrigger' && stage.request?.path === '/v1/dwm/webhooks/deliver'), 'Consumer readiness should include webhook dry-run request shape.')
+assert(actionability.consumerReadiness.blockers.some(blocker => blocker.code === 'missing_org'), 'Public APT29 readiness should keep org-required blockers explicit.')
 assert(actionability.enrichmentGapQueue.some(item => item.route === '/dashboard/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
 assert(actionability.exportPayloads.enrichment.backedRoute === '/dashboard/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
@@ -221,7 +230,9 @@ const backed = buildTiActionability({
         alertDisposition: 'case_ready',
         shouldAlert: true,
         watchlistMatches: [{
+            tenantId: 'tenant_1',
             organizationId: 'org_1',
+            watchlistId: 'watchlist_1',
             watchlistItemId: 'watch_1',
             kind: 'company',
             value: 'Microsoft',
@@ -280,6 +291,10 @@ assert(backed.caseHandoff.backedRoute === '/v1/cases/case_1?alertId=dwm_alert_1'
 assert(backed.webhookDeliveryHandoff.ready, 'Backed webhook delivery should be ready when alert, capture, and destination context exists.')
 assert(backed.exportPayloads.webhookDelivery.body.alertId === 'dwm_alert_1', 'Backed webhook delivery should carry the DWM alert ID.')
 assert(JSON.stringify(backed.exportPayloads.webhookDelivery.body).includes('webhook_1'), 'Backed webhook delivery should carry destination IDs.')
+assert(backed.consumerReadiness.ready, 'Backed consumer readiness should be ready when watchlist, alert, case, capture, and webhook context exist.')
+assert(backed.consumerReadiness.stages.every(stage => stage.state === 'ready'), 'Backed consumer readiness stages should all be ready.')
+assert(backed.consumerReadiness.bundlePreview.stages.orgWatchlist?.request?.body.watchlistId === 'watchlist_1', 'Consumer readiness should carry persisted watchlist ID for alert rebuild.')
+assert(backed.consumerReadiness.bundlePreview.stages.webhookTrigger?.request?.body.idempotencyKey, 'Webhook consumer readiness should carry idempotency key.')
 
 const quietFixture: TiSearchResponse = {
     ...fixture,
@@ -316,6 +331,8 @@ assert(quiet.watchlistRelevance.state === 'missing_terms', 'Unknown actor should
 assert(quiet.createAlertHandoff.blocked, 'Unknown actor should block alert handoff.')
 assert(quiet.caseHandoff.blocked, 'Unknown actor should block case handoff.')
 assert(quiet.webhookDeliveryHandoff.blocked, 'Unknown actor should block webhook delivery handoff.')
+assert(!quiet.consumerReadiness.ready, 'Unknown actor should block consumer readiness.')
+assert(quiet.consumerReadiness.blockers.some(blocker => blocker.code === 'missing_watchlist_term'), 'Unknown actor should expose missing watchlist term blocker.')
 assert(quietArtifacts.length === 0, 'Sparse actor path should not invent selectable artifacts.')
 assert(nextActorArtifactId(quietArtifacts, undefined, 'next') === '', 'Keyboard helper should stay empty for sparse actor artifacts.')
 for (const phrase of bannedUiCopy) {
@@ -323,15 +340,18 @@ for (const phrase of bannedUiCopy) {
 }
 assert(pageClientSource.includes('Console handoff'), 'Public TI page should use professional console handoff language.')
 assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')
+assert(pageClientSource.includes('Handoff readiness'), 'Public TI page should expose consumer-ready workflow state.')
 assert(pageClientSource.includes('Review sources'), 'Public TI decision flow should start with source review.')
 assert(pageClientSource.includes('Prepare watchlist'), 'Public TI decision flow should include watchlist preparation.')
 assert(pageClientSource.includes('Rebuild alerts'), 'Public TI decision flow should include alert rebuild.')
 assert(pageClientSource.includes('Open case'), 'Public TI decision flow should include case routing.')
 assert(pageClientSource.includes('Deliver webhook'), 'Public TI decision flow should include webhook delivery readiness.')
 assert(pageClientSource.includes('Queue enrichment'), 'Public TI decision flow should include enrichment routing.')
+assert(!pageClientSource.includes('Ready for ${'), 'Public TI visible copy should not expose endpoint-shaped ready labels.')
 assert(pageClientSource.includes('whitespace-nowrap'), 'Public TI action buttons should prevent stacked action text.')
 assert(pageClientSource.includes('break-all font-mono'), 'Public TI source/provenance rows should wrap long technical values.')
 assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
+assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')

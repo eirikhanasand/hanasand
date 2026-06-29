@@ -106,7 +106,9 @@ export interface TiActionabilityContract {
         confidence?: number
     }>
     watchlistMatches?: Array<{
+        tenantId?: string
         organizationId?: string
+        watchlistId?: string
         watchlistItemId?: string
         kind: 'company' | 'domain' | 'vendor'
         value: string
