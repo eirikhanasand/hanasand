@@ -2330,6 +2330,26 @@ function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnTyp
     if (payload.case?.id) return `Case ${payload.case.id} is ${payload.case.status || 'open'}.`
     if (typeof payload.savedAlertCount === 'number') return `Rebuilt ${payload.savedAlertCount} alert${payload.savedAlertCount === 1 ? '' : 's'}.`
     if (typeof payload.attemptedCount === 'number') return `Webhook delivery attempted for ${payload.attemptedCount} alert${payload.attemptedCount === 1 ? '' : 's'}.`
+    if (action.id === 'request_source_coverage') {
+        const sourcePayload = payload as Record<string, unknown>
+        const summary = sourcePayload.summary && typeof sourcePayload.summary === 'object' ? sourcePayload.summary as Record<string, unknown> : {}
+        const createdCount = Number(summary.telegramPublicCreated ?? summary.darkwebMetadataCreated ?? summary.createdCount ?? 0)
+        const duplicateCount = Number(summary.duplicateCount ?? 0)
+        if (Number.isFinite(createdCount) && Number.isFinite(duplicateCount) && (createdCount || duplicateCount)) return `Source request applied: ${createdCount} created, ${duplicateCount} duplicate${duplicateCount === 1 ? '' : 's'}.`
+        const source = sourcePayload.source && typeof sourcePayload.source === 'object' ? sourcePayload.source as { id?: string } : undefined
+        const candidate = sourcePayload.candidate && typeof sourcePayload.candidate === 'object' ? sourcePayload.candidate as { id?: string } : undefined
+        if (source?.id) return `Source ${source.id} queued for coverage.`
+        if (candidate?.id) return `Source candidate ${candidate.id} queued for review.`
+        return 'Source coverage request accepted.'
+    }
+    if (action.id === 'run_canary_collection') {
+        const canaryPayload = payload as Record<string, unknown>
+        const canaryRun = canaryPayload.canaryRun && typeof canaryPayload.canaryRun === 'object' ? canaryPayload.canaryRun as Record<string, unknown> : {}
+        const inserted = Number(canaryRun.insertedCaptureCount ?? canaryPayload.insertedCaptureCount ?? 0)
+        const failed = Number(canaryRun.failedTaskCount ?? canaryPayload.failedTaskCount ?? 0)
+        if (Number.isFinite(inserted) || Number.isFinite(failed)) return `Canary run finished with ${Number.isFinite(inserted) ? inserted : 0} capture${inserted === 1 ? '' : 's'} and ${Number.isFinite(failed) ? failed : 0} failure${failed === 1 ? '' : 's'}.`
+        return 'Canary collection run accepted.'
+    }
     if (payload.delivery?.id) return `Webhook test ${payload.delivery.status || 'recorded'} as ${payload.delivery.id}.`
     if (payload.deliveries?.[0]?.id) return `Latest delivery ${payload.deliveries[0].id} is ${payload.deliveries[0].status || 'recorded'}.`
     if (payload.testedAt) return `Webhook test recorded at ${payload.testedAt}.`

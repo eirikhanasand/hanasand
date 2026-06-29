@@ -665,6 +665,9 @@ assert.ok(workbenchSource.includes('send_alert'), 'Operator action rail should e
 assert.ok(workbenchSource.includes('/api/dwm/webhooks/deliver'), 'Send action should call the webhook delivery endpoint.')
 assert.ok(workbenchSource.includes('request_source_coverage'), 'Operator action rail should expose source coverage requests.')
 assert.ok(workbenchSource.includes('run_canary_collection'), 'Operator action rail should expose canary collection runs.')
+assert.ok(workbenchSource.includes('insertedCaptureCount'), 'Canary collection action should report inserted capture count.')
+assert.ok(workbenchSource.includes('failedTaskCount'), 'Canary collection action should report failed task count.')
+assert.ok(workbenchSource.includes('telegramPublicCreated'), 'Source coverage action should report source request summary fields.')
 assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
 assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
 
