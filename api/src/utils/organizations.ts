@@ -1160,6 +1160,20 @@ export type OrganizationWatchlistAlertTermsExport = {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
         alertGenerationRef: OrganizationWatchlistAlertGenerationRef
+        ownerContext: {
+            schemaVersion: 'organization.watchlist_term_owner_context.v1'
+            organizationId: string
+            tenantId: string
+            ownerOrganizationId: string
+            watchlistItemId: string
+            itemId: string
+            createdBy: string
+            updatedBy: string | null
+            visibilityPolicy: OrganizationAlertVisibilityPolicy
+            allowedViewerRoles: OrganizationRole[]
+            webhookDestinationOrgField: 'destination.org_id'
+            alertGeneratorKey: string
+        }
         alertGenerationReference: {
             schemaVersion: 'organization.watchlist_item_alert_reference.v1'
             organizationId: string
@@ -5296,11 +5310,26 @@ export function organizationWatchlistAlertTermsExport(
     const downstreamAuthorization = organizationDownstreamAuthorizationExport(organization, items, member)
     const activeTerms = alertGeneration.activeWatchlistTerms.map(term => {
         const alertGenerationRef = organizationWatchlistAlertGenerationRef(term)
+        const alertGeneratorKey = alertGenerationRef.dedupe.key
         return {
             ...term,
             source: 'organization_shared_watchlist' as const,
-            alertGeneratorKey: alertGenerationRef.dedupe.key,
+            alertGeneratorKey,
             alertGenerationRef,
+            ownerContext: {
+                schemaVersion: 'organization.watchlist_term_owner_context.v1' as const,
+                organizationId: term.organizationId,
+                tenantId: term.tenantId,
+                ownerOrganizationId: term.organizationId,
+                watchlistItemId: term.watchlistItemId,
+                itemId: term.itemId,
+                createdBy: term.createdBy,
+                updatedBy: term.updatedBy,
+                visibilityPolicy: alertGeneration.visibilityPolicy,
+                allowedViewerRoles: alertGeneration.allowedViewerRoles,
+                webhookDestinationOrgField: 'destination.org_id' as const,
+                alertGeneratorKey,
+            },
             alertGenerationReference: {
                 schemaVersion: 'organization.watchlist_item_alert_reference.v1' as const,
                 organizationId: term.organizationId,
@@ -5655,6 +5684,7 @@ export function organizationWatchlistAlertTermsExport(
                 'activeTerms[].term',
                 'activeTerms[].alertGenerationRef',
                 'activeTerms[].alertGenerationRef.dedupe.key',
+                'activeTerms[].ownerContext',
                 'activeTerms[].alertGeneratorKey',
                 'alertBridgeContract.caseRouteExpectation.pathTemplate',
                 'alertBridgeContract.redactedSummary',
