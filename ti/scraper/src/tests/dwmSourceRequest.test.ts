@@ -1523,6 +1523,40 @@ describe("dwm source requests", () => {
           }),
           blockers: []
         },
+        sourceOperationsQueue: {
+          schemaVersion: "dwm.actor_source_operations_queue.v1",
+          proofId: expect.any(String),
+          summary: expect.objectContaining({
+            total: expect.any(Number),
+            high: expect.any(Number),
+            alertRebuildReady: true,
+            actionTypes: expect.arrayContaining(["record_capture", "rebuild_alerts"])
+          }),
+          queueItems: expect.arrayContaining([
+            expect.objectContaining({
+              type: "record_capture",
+              priority: "high",
+              route: expect.objectContaining({
+                method: "POST",
+                path: "/v1/dwm/source-requests",
+                liveNetworkFetch: false
+              }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            }),
+            expect.objectContaining({
+              type: "rebuild_alerts",
+              priority: "high",
+              family: "all_active",
+              route: expect.objectContaining({
+                method: "POST",
+                path: "/v1/dwm/alerts/rebuild",
+                liveNetworkFetch: false
+              }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            })
+          ]),
+          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+        },
         alertCaseHandoffReadiness: {
           schemaVersion: "dwm.actor_alert_case_handoff_readiness.v1",
           alertReady: true,
@@ -1588,6 +1622,12 @@ describe("dwm source requests", () => {
             schemaVersion: "dwm.actor_alert_generation_readiness.v1",
             alertReady: true
           }),
+          sourceOperationsQueue: expect.objectContaining({
+            schemaVersion: "dwm.actor_source_operations_queue.v1",
+            queueItems: expect.arrayContaining([
+              expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
+            ])
+          }),
           freshness: expect.objectContaining({
             captureFreshness: expect.objectContaining({ state: "fresh" })
           })
@@ -1612,6 +1652,12 @@ describe("dwm source requests", () => {
             canRebuildAlerts: true,
             rebuildPlan: expect.objectContaining({ liveNetworkFetch: false })
           }),
+          sourceOperationsQueue: expect.objectContaining({
+            schemaVersion: "dwm.actor_source_operations_queue.v1",
+            queueItems: expect.arrayContaining([
+              expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
+            ])
+          }),
           freshnessState: "fresh"
         },
         worker3Assertions: expect.arrayContaining([
@@ -1619,6 +1665,7 @@ describe("dwm source requests", () => {
           ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".actorReadiness.captureReadiness.schemaVersion == \"dwm.actor_capture_readiness.v1\"",
           ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
+          ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -1874,6 +1921,45 @@ describe("dwm source requests", () => {
           expect.objectContaining({ code: "missing_actor_section_source", severity: "warning" })
         ])
       },
+      sourceOperationsQueue: {
+        schemaVersion: "dwm.actor_source_operations_queue.v1",
+        proofId: expect.any(String),
+        summary: expect.objectContaining({
+          high: 1,
+          medium: expect.any(Number),
+          alertRebuildReady: false,
+          actionTypes: expect.arrayContaining(["record_capture", "request_candidate"])
+        }),
+        queueItems: expect.arrayContaining([
+          expect.objectContaining({
+            type: "record_capture",
+            priority: "high",
+            family: "telegram",
+            route: expect.objectContaining({
+              path: "/v1/dwm/source-requests",
+              body: expect.objectContaining({ action: "record_capture" }),
+              liveNetworkFetch: false
+            }),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
+          expect.objectContaining({
+            type: "request_candidate",
+            priority: "medium",
+            family: "darkweb_onion",
+            route: expect.objectContaining({
+              path: "/v1/dwm/source-requests",
+              liveNetworkFetch: false
+            }),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
+          expect.objectContaining({
+            type: "request_candidate",
+            priority: "medium",
+            family: "actor_page"
+          })
+        ]),
+        safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+      },
       safeOutput: {
         liveNetworkScrapeStarted: false,
         privateTelegramContentExposed: false,
@@ -2029,6 +2115,13 @@ describe("dwm source requests", () => {
             expect.objectContaining({ action: "request_candidate", family: "darkweb_onion", liveNetworkFetch: false })
           ])
         }),
+        sourceOperationsQueue: expect.objectContaining({
+          schemaVersion: "dwm.actor_source_operations_queue.v1",
+          queueItems: expect.arrayContaining([
+            expect.objectContaining({ type: "record_capture", family: "telegram", liveNetworkFetch: false }),
+            expect.objectContaining({ type: "request_candidate", family: "darkweb_onion", liveNetworkFetch: false })
+          ])
+        }),
         freshnessState: "needs_capture"
       }
     });
@@ -2160,6 +2253,37 @@ describe("dwm source requests", () => {
           expect.objectContaining({ code: "retry_required", family: "telegram" })
         ]),
         rebuildPlan: expect.objectContaining({ dryRunSupported: true, liveNetworkFetch: false })
+      },
+      sourceOperationsQueue: {
+        schemaVersion: "dwm.actor_source_operations_queue.v1",
+        summary: expect.objectContaining({
+          critical: expect.any(Number),
+          alertRebuildReady: false,
+          actionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+        }),
+        queueItems: expect.arrayContaining([
+          expect.objectContaining({
+            type: "retry_parser",
+            priority: "critical",
+            family: "telegram",
+            route: expect.objectContaining({
+              path: "/v1/dwm/source-requests",
+              body: expect.objectContaining({ action: "pack_review", packAction: "retry" }),
+              liveNetworkFetch: false
+            }),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
+          expect.objectContaining({
+            type: "retry_capture",
+            priority: "critical",
+            family: "telegram",
+            route: expect.objectContaining({
+              body: expect.objectContaining({ action: "record_capture" }),
+              liveNetworkFetch: false
+            })
+          })
+        ]),
+        safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
       }
     });
     expect(retryBody.proofArtifacts).toMatchObject({
@@ -2168,7 +2292,12 @@ describe("dwm source requests", () => {
         caseReady: false,
         retryBlockers: expect.arrayContaining([
           expect.objectContaining({ family: "telegram" })
-        ])
+        ]),
+        sourceOperationsQueue: expect.objectContaining({
+          queueItems: expect.arrayContaining([
+            expect.objectContaining({ type: "retry_parser", family: "telegram", liveNetworkFetch: false })
+          ])
+        })
       },
       publicTiActorPage: {
         alertCaseHandoffReadiness: expect.objectContaining({

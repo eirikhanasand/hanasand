@@ -3061,6 +3061,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
       captureReadiness: actorReadiness.captureReadiness,
       alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
+      sourceOperationsQueue: actorReadiness.sourceOperationsQueue,
       missingDataGaps: actorReadiness.candidateGaps,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
@@ -3076,6 +3077,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
       captureReadiness: actorReadiness.captureReadiness,
       alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
+      sourceOperationsQueue: actorReadiness.sourceOperationsQueue,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
@@ -3100,6 +3102,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".actorReadiness.captureReadiness.schemaVersion == \"dwm.actor_capture_readiness.v1\"",
       ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
+      ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
+      ".actorReadiness.sourceOperationsQueue.queueItems | all(.route.path | length > 0 and .liveNetworkFetch == false and .safeOutput.liveNetworkScrapeStarted == false)",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3221,6 +3225,13 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     retryBlockers,
     missingSections
   });
+  const sourceOperationsQueue = sourceActorOperationsQueue({
+    query,
+    parserHealthReadiness,
+    captureReadiness,
+    alertGenerationReadiness,
+    sourcePackActionReadiness
+  });
   return {
     proofId: stableId("dwm_actor_source_readiness", `${query}:${readinessArtifact.generatedAt}:${latestCaptureAt ?? "no_capture"}:${latestEnrichmentAt ?? "no_enrichment"}`),
     query,
@@ -3253,6 +3264,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     sourceReadinessLedgerRows,
     captureReadiness,
     alertGenerationReadiness,
+    sourceOperationsQueue,
     alertability,
     alertCaseHandoffReadiness: sourceActorAlertCaseHandoffReadiness({
       query,
@@ -3641,6 +3653,126 @@ function sourceActorAlertGenerationReadiness(input: {
       liveNetworkFetch: false
     },
     blockers,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorOperationsQueue(input: {
+  query: string;
+  parserHealthReadiness: Record<string, any>;
+  captureReadiness: Record<string, any>;
+  alertGenerationReadiness: Record<string, any>;
+  sourcePackActionReadiness: Record<string, any>;
+}) {
+  const queueItems = [
+    ...(input.parserHealthReadiness.rows ?? [])
+      .filter((row: any) => row.parserState === "retry_required" && row.actionability?.retryAction?.route)
+      .map((row: any) => sourceActorOperationsQueueItem({
+        query: input.query,
+        type: "retry_parser",
+        priority: "critical",
+        family: row.family,
+        sourceIds: row.sourceIds ?? [],
+        candidateIds: row.candidateIds ?? [],
+        route: row.actionability.retryAction.route,
+        blockers: row.blockers ?? [],
+        reasonCode: "parser_retry_required"
+      })),
+    ...(input.captureReadiness.captureRows ?? [])
+      .filter((row: any) => row.state !== "capture_observed" && row.recordCapturePlan?.path)
+      .map((row: any) => sourceActorOperationsQueueItem({
+        query: input.query,
+        type: row.state === "retry_required" ? "retry_capture" : "record_capture",
+        priority: row.state === "retry_required" ? "critical" : "high",
+        family: row.family,
+        sourceIds: row.sourceIds ?? [],
+        candidateIds: row.candidateIds ?? [],
+        route: row.recordCapturePlan,
+        blockers: row.blockers ?? [],
+        reasonCode: row.state === "retry_required" ? "capture_retry_required" : "capture_required"
+      })),
+    ...(input.sourcePackActionReadiness.intakeActions ?? []).map((action: any) => sourceActorOperationsQueueItem({
+      query: input.query,
+      type: "request_candidate",
+      priority: "medium",
+      family: action.family,
+      sourceIds: action.sourceIds ?? [],
+      candidateIds: action.candidateIds ?? [],
+      route: action.route,
+      blockers: [{ code: "candidate_required", severity: "warning", family: action.family, retryable: true }],
+      reasonCode: "candidate_required"
+    })),
+    ...(input.alertGenerationReadiness.canRebuildAlerts === true ? [sourceActorOperationsQueueItem({
+      query: input.query,
+      type: "rebuild_alerts",
+      priority: "high",
+      family: "all_active",
+      sourceIds: [],
+      candidateIds: [],
+      route: input.alertGenerationReadiness.rebuildPlan,
+      blockers: [],
+      reasonCode: "alert_rebuild_ready"
+    })] : [])
+  ];
+  const deduped = Array.from(new Map(queueItems.map((item) => [item.id, item])).values());
+  return {
+    schemaVersion: "dwm.actor_source_operations_queue.v1",
+    proofId: stableId("dwm_actor_source_operations_queue", `${input.query}:${deduped.map((item) => `${item.type}:${item.family}:${item.priority}`).join(",")}`),
+    query: input.query,
+    queueItems: deduped,
+    summary: {
+      total: deduped.length,
+      critical: deduped.filter((item) => item.priority === "critical").length,
+      high: deduped.filter((item) => item.priority === "high").length,
+      medium: deduped.filter((item) => item.priority === "medium").length,
+      families: uniqueSourceReadinessStrings(deduped.map((item) => item.family)),
+      actionTypes: uniqueSourceReadinessStrings(deduped.map((item) => item.type)),
+      alertRebuildReady: input.alertGenerationReadiness.canRebuildAlerts === true
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorOperationsQueueItem(input: {
+  query: string;
+  type: string;
+  priority: "critical" | "high" | "medium";
+  family: string;
+  sourceIds: string[];
+  candidateIds: string[];
+  route: Record<string, any>;
+  blockers: Array<Record<string, any>>;
+  reasonCode: string;
+}) {
+  const route = {
+    method: input.route?.method ?? "POST",
+    path: input.route?.path ?? "/v1/dwm/source-requests",
+    body: input.route?.body ?? {},
+    dryRunSupported: input.route?.dryRunSupported !== false,
+    liveNetworkFetch: false
+  };
+  return {
+    id: stableId("dwm_actor_source_operations_queue_item", `${input.query}:${input.type}:${input.family}:${(input.sourceIds ?? []).join(",")}:${(input.candidateIds ?? []).join(",")}:${input.reasonCode}`),
+    type: input.type,
+    priority: input.priority,
+    family: input.family,
+    reasonCode: input.reasonCode,
+    sourceIds: input.sourceIds ?? [],
+    candidateIds: input.candidateIds ?? [],
+    route,
+    blockers: dedupeBlockers(input.blockers ?? []),
+    dryRunSupported: route.dryRunSupported,
+    liveNetworkFetch: false,
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
