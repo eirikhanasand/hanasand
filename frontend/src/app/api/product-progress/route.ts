@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
             generatedAt,
             route: selectedOrganization ? `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks` : routes.webhookHealth || '/api/organizations/:id/webhooks',
             organization: selectedOrganization,
+            productProgress: webhookProductProgressProof(organizationWebhooks),
             destinations: webhookRows,
             deliveries: deliveryRows,
             fetchOk: organizationWebhooks.ok,
@@ -113,6 +114,18 @@ export async function GET(request: NextRequest) {
 
 function sourceProxyReady(input: DashboardSourceProofProxyPayload) {
     return Boolean(input.ok && input.endpoints?.sourceInventory?.ok && input.endpoints?.sourcePacks?.ok)
+}
+
+type DwmWebhookProductProgressProof = {
+    schemaVersion: 'dwm.webhook.destination_admin_product_progress.v1'
+    status?: string
+    destinationCount?: number
+    activeDestinationCount?: number
+    deliveryReadyCount?: number
+    retryEligibleCount?: number
+    liveDeliveryEnabled?: boolean
+    blockerCodes?: string[]
+    href?: string
 }
 
 function productProgressRoutes(query: string) {
@@ -549,12 +562,47 @@ function webhookHealthReadiness(input: {
     generatedAt: string
     route: string
     organization?: DwmOrganizationSummary
+    productProgress?: DwmWebhookProductProgressProof
     destinations: DwmOrganizationWebhookDestination[]
     deliveries: DwmDeliveryItem[]
     fetchOk: boolean
     fetchStatus: number
     fetchError?: string
 }): WebhookHealthReadiness {
+    if (input.productProgress) {
+        const proof = input.productProgress
+        const blockerCodes = Array.isArray(proof.blockerCodes) ? proof.blockerCodes.filter(Boolean).map(String) : []
+        const blockers = [
+            input.organization ? '' : 'No selected organization was loaded for webhook readiness.',
+            input.fetchOk ? '' : input.fetchError || `Organization webhook route returned HTTP ${input.fetchStatus}.`,
+            proof.status === 'ready' ? '' : 'Webhook product-progress proof is not ready.',
+            ...blockerCodes.map(code => `Webhook blocker: ${code}.`),
+        ].filter(Boolean)
+        return {
+            schemaVersion: 'dwm.webhook_health.readiness.v1',
+            status: blockers.length ? 'needs_action' : 'ready',
+            checkedAt: input.generatedAt,
+            source: input.route,
+            href: proof.href || '/dashboard/automations?setup=dwm',
+            destinationCount: proof.destinationCount,
+            activeDestinationCount: proof.activeDestinationCount,
+            deliveryReadyCount: proof.deliveryReadyCount,
+            latestDeliveryAt: input.deliveries.map(row => row.attemptedAt).filter(Boolean).sort().at(-1),
+            latestAuditEventAt: input.destinations.map(row => row.lastTestedAt || row.updatedAt).filter(Boolean).sort().at(-1),
+            blockers,
+            ownerLane: 'webhook',
+            unavailableReason: blockers.length ? 'missing_webhook_lifecycle_health_api' : undefined,
+            staleAfterSeconds: 900,
+            proofTimestamp: input.generatedAt,
+            expectedDashboardRowId: 'webhook_health',
+            integrationProbeHint: 'GET /api/organizations/:id/webhooks must return destinationAdminProof.productProgress with dwm.webhook.destination_admin_product_progress.v1.',
+            backendProofContractVersion: proof.schemaVersion,
+            detail: blockers.length
+                ? blockers.join('; ')
+                : `${proof.activeDestinationCount || 0} active webhook destination${proof.activeDestinationCount === 1 ? '' : 's'} with ${proof.deliveryReadyCount || 0} delivery-ready destination${proof.deliveryReadyCount === 1 ? '' : 's'}.`,
+        }
+    }
+
     const activeDestinations = input.destinations.filter(item => item.status === 'active')
     const deliveryReadyCount = input.deliveries.filter(row => row.status !== 'failed' && row.status !== 'skipped').length
     const latestDeliveryAt = input.deliveries.map(row => row.attemptedAt).filter(Boolean).sort().at(-1)
@@ -586,6 +634,15 @@ function webhookHealthReadiness(input: {
         backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
         detail: blockers.length ? blockers.join('; ') : `${activeDestinations.length} active webhook destination${activeDestinations.length === 1 ? '' : 's'} with ${deliveryReadyCount} delivery-ready row${deliveryReadyCount === 1 ? '' : 's'}.`,
     }
+}
+
+function webhookProductProgressProof(result: FetchResult): DwmWebhookProductProgressProof | undefined {
+    const payload = result.json as { destinationAdminProof?: { productProgress?: unknown } } | undefined
+    const proof = payload?.destinationAdminProof?.productProgress
+    if (!proof || typeof proof !== 'object') return undefined
+    const candidate = proof as Partial<DwmWebhookProductProgressProof>
+    if (candidate.schemaVersion !== 'dwm.webhook.destination_admin_product_progress.v1') return undefined
+    return candidate as DwmWebhookProductProgressProof
 }
 
 function helpdeskAuditReadiness(input: {
