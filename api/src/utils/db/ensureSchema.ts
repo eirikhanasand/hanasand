@@ -662,6 +662,9 @@ export default async function ensureSchema() {
             response_status INT,
             response_body TEXT,
             error TEXT,
+            error_class TEXT,
+            attempt_count INT NOT NULL DEFAULT 1,
+            next_retry_at TIMESTAMPTZ,
             idempotency_key TEXT NOT NULL,
             watchlist_id TEXT,
             watchlist_name TEXT,
@@ -678,6 +681,9 @@ export default async function ensureSchema() {
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS watchlist_name TEXT')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS route TEXT')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS case_path TEXT')
+    await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS error_class TEXT')
+    await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS attempt_count INT NOT NULL DEFAULT 1')
+    await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()')
     await run('ALTER TABLE dwm_webhook_deliveries DROP CONSTRAINT IF EXISTS dwm_webhook_deliveries_event_type_check')
@@ -688,6 +694,7 @@ export default async function ensureSchema() {
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_destination_created ON dwm_webhook_deliveries(destination_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_alert_attempted ON dwm_webhook_deliveries(alert_id, attempted_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_payload_hash ON dwm_webhook_deliveries(payload_hash)')
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_next_retry ON dwm_webhook_deliveries(next_retry_at) WHERE next_retry_at IS NOT NULL')
     await run(`
         CREATE TABLE IF NOT EXISTS dwm_webhook_audit_events (
             id TEXT PRIMARY KEY,

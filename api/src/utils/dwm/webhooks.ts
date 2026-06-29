@@ -43,6 +43,9 @@ export type DwmWebhookDeliveryRow = {
     response_status: number | null
     response_body: string | null
     error: string | null
+    error_class: string | null
+    attempt_count: number | null
+    next_retry_at: string | null
     idempotency_key: string
     watchlist_id: string | null
     watchlist_name: string | null
@@ -255,6 +258,9 @@ export function toDwmWebhookDelivery(row: DwmWebhookDeliveryRow) {
         responseStatus: row.response_status,
         responseBody: row.response_body,
         error: row.error,
+        errorClass: row.error_class,
+        attemptCount: row.attempt_count ?? null,
+        nextRetryAt: row.next_retry_at,
         idempotencyKey: row.idempotency_key,
         watchlistId: row.watchlist_id,
         watchlistName: row.watchlist_name,
@@ -649,7 +655,9 @@ export function buildDwmWebhookDeliveryLedger({
                 attemptCount: 1,
                 now,
             })
-        const attemptCount = delivery ? attemptCounts.get(delivery.idempotencyKey || delivery.id) || 1 : 1
+        const attemptCount = delivery ? delivery.attemptCount || attemptCounts.get(delivery.idempotencyKey || delivery.id) || 1 : 1
+        const errorClass = delivery?.errorClass ?? retryPlan.errorClass
+        const nextRetryAt = delivery?.nextRetryAt ?? retryPlan.nextRetryAt
 
         return {
             requestId: item.requestId,
@@ -675,13 +683,13 @@ export function buildDwmWebhookDeliveryLedger({
             responseStatus: item.response.httpStatus,
             responseSummary: item.response.summary,
             error: item.error,
-            errorClass: retryPlan.errorClass,
+            errorClass,
             attemptCount,
             attemptedAt: item.attemptedAt,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
-            nextRetryAt: retryPlan.nextRetryAt,
-            retryable: retryPlan.retryable,
+            nextRetryAt,
+            retryable: Boolean(nextRetryAt) || retryPlan.retryable,
             retryReason: retryPlan.reason,
             payloadHash: item.payloadHash,
             auditEventId: item.auditEventId,
@@ -5201,6 +5209,8 @@ async function deliverToDwmWebhookDestination({
     let responseStatus: number | null = null
     let responseBody: string | null = null
     let error: string | null = null
+    const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
+    const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, destination.org_id, destination.id, idempotencyKey) + 1
 
     if (!dryRun && live && process.env.DWM_WEBHOOK_LIVE_DELIVERY !== 'true') {
         error = 'Live DWM webhook delivery is disabled. Set DWM_WEBHOOK_LIVE_DELIVERY=true and send live=true to enable external calls.'
@@ -5245,6 +5255,9 @@ async function deliverToDwmWebhookDestination({
             response_status,
             response_body,
             error,
+            error_class,
+            attempt_count,
+            next_retry_at,
             idempotency_key,
             watchlist_id,
             watchlist_name,
@@ -5252,7 +5265,7 @@ async function deliverToDwmWebhookDestination({
             case_path,
             attempted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::JSONB, $13, $14, $15, $16, $17, $18, $19, $20, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::JSONB, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW())
         RETURNING *
     `, [
         deliveryId,
@@ -5270,7 +5283,10 @@ async function deliverToDwmWebhookDestination({
         responseStatus,
         responseBody,
         error,
-        buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
+        classifyDeliveryError({ status, dryRun, responseStatus, error }),
+        attemptCount,
+        planDwmWebhookDeliveryRetry({ status, dryRun, responseStatus, error, attemptCount }).nextRetryAt,
+        idempotencyKey,
         watchlist.id,
         watchlist.name,
         normalizedAlert.route,
@@ -5315,6 +5331,9 @@ async function deliverToDwmWebhookDestination({
             dryRun: delivery.dry_run,
             responseStatus: delivery.response_status,
             error: delivery.error,
+            errorClass: delivery.error_class,
+            attemptCount: delivery.attempt_count,
+            nextRetryAt: delivery.next_retry_at,
             idempotencyKey: delivery.idempotency_key,
             watchlistId: delivery.watchlist_id,
             route: delivery.route,
@@ -5345,6 +5364,8 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
     const payloadHash = hashValue('payload', JSON.stringify(payload))
     const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
     const error = 'Delivery skipped because this destination already has a delivered attempt for the same idempotency key.'
+    const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, destination.org_id, destination.id, idempotencyKey) + 1
+    const errorClass = classifyDeliveryError({ status: 'skipped', dryRun: false, error })
     const result = await run(`
         INSERT INTO dwm_webhook_deliveries (
             id,
@@ -5362,6 +5383,9 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
             response_status,
             response_body,
             error,
+            error_class,
+            attempt_count,
+            next_retry_at,
             idempotency_key,
             watchlist_id,
             watchlist_name,
@@ -5369,7 +5393,7 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
             case_path,
             attempted_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, 'skipped', FALSE, $7, $8, $9, $10::JSONB, NULL, NULL, $11, $12, $13, $14, $15, $16, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, 'skipped', FALSE, $7, $8, $9, $10::JSONB, NULL, NULL, $11, $12, $13, NULL, $14, $15, $16, $17, $18, NOW())
         RETURNING *
     `, [
         deliveryId,
@@ -5383,6 +5407,8 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
         payloadHash,
         JSON.stringify(payload),
         error,
+        errorClass,
+        attemptCount,
         idempotencyKey,
         watchlist.id,
         watchlist.name,
@@ -5407,6 +5433,9 @@ async function recordSkippedDuplicateDwmWebhookDelivery({
             payloadHash: delivery.payload_hash,
             dryRun: delivery.dry_run,
             error: delivery.error,
+            errorClass: delivery.error_class,
+            attemptCount: delivery.attempt_count,
+            nextRetryAt: delivery.next_retry_at,
             idempotencyKey: delivery.idempotency_key,
             priorDeliveryId: priorDelivery.id,
             priorDeliveredAt: priorDelivery.attempted_at,
@@ -5524,6 +5553,24 @@ async function findDeliveredDwmWebhookDelivery(
     `, [ownerId, orgId, destinationId, idempotencyKey])
 
     return (result.rows as DwmWebhookDeliveryRow[])[0] || null
+}
+
+async function countDwmWebhookDeliveryAttempts(
+    ownerId: string,
+    orgId: string,
+    destinationId: string,
+    idempotencyKey: string
+) {
+    const result = await run(`
+        SELECT COUNT(*)::INT AS count
+        FROM dwm_webhook_deliveries
+        WHERE owner_id = $1
+          AND org_id = $2
+          AND destination_id = $3
+          AND idempotency_key = $4
+    `, [ownerId, orgId, destinationId, idempotencyKey])
+
+    return Number(result.rows[0]?.count ?? 0)
 }
 
 function normalizeWebhookUrl(raw: string) {

@@ -879,6 +879,9 @@ const retryLedgerRows = [
         responseStatus: 503,
         responseBody: `retry failed with token=${secret}`,
         error: `upstream unavailable token=${secret}`,
+        errorClass: 'upstream_5xx',
+        attemptCount: 2,
+        nextRetryAt: '2026-06-28T12:11:00.000Z',
         idempotencyKey: 'dwm.alert.created:org_contract:destination_live_contract:dwm_dedupe_live_contract',
         watchlistId: 'watchlist_item_live_contract',
         watchlistName: 'Live watchlist',
@@ -985,6 +988,7 @@ expect(queuedLedger?.status === 'queued' && queuedLedger.rawStatus === 'dry_run'
 expect(sentLedger?.status === 'sent' && sentLedger.retryable === false && sentLedger.responseStatus === 204, 'Delivery ledger should map delivered attempts to sent state.', sentLedger)
 expect(retryLedger?.status === 'failed' && retryLedger.retryable === true && retryLedger.attemptCount === 2, 'Delivery ledger should expose retryable failed attempts and attempt count.', retryLedger)
 expect(retryLedger?.nextRetryAt === '2026-06-28T12:11:00.000Z' && retryLedger.errorClass === 'upstream_5xx', 'Retry planner should use backoff from the latest failed attempt.', retryLedger)
+expect(retryLedger?.attemptCount === 2 && retryLedger.retryReason === 'upstream_retryable', 'Delivery ledger should preserve persisted retry metadata while keeping retry reason derivable.', retryLedger)
 expect(skippedLedger?.status === 'skipped' && skippedLedger.retryable === false && skippedLedger.errorClass === 'live_delivery_disabled', 'Delivery ledger should keep live-disabled skipped attempts non-retryable.', skippedLedger)
 expect(rateLimitRetry.retryable === true && rateLimitRetry.nextRetryAt === '2026-06-28T12:11:00.000Z' && rateLimitRetry.reason === 'rate_limited', 'Retry planner should retry rate-limited failed sends.', rateLimitRetry)
 expect(!JSON.stringify(deliveryLedger).includes(secret), 'Delivery ledger should not expose endpoint, response, or error secrets.', deliveryLedger)
@@ -2860,6 +2864,7 @@ console.log(JSON.stringify({
         'delivery ledger queued/sent/failed/skipped states',
         'delivery ledger retry backoff',
         'delivery ledger attempt counts',
+        'delivery ledger persisted retry metadata',
         'destination readiness rollup',
         'destination readiness live blockers',
         'destination readiness retry/failure class',
@@ -3073,6 +3078,7 @@ console.log(JSON.stringify({
             'deliveryReplayGuard.entries[].latestReceipt.discordPreview.fieldNames',
             'deliveryRetryPersistence.schemaVersion',
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
+            'deliveryRetryPersistence.deliveryKeys[].retry.persistedAttemptCount',
             'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',
             'deliveryRetryPersistence.deliveryKeys[].dedupe.duplicateAttemptCount',
             'deliveryRetryQueue.schemaVersion',
