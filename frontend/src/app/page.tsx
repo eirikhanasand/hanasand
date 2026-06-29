@@ -247,9 +247,10 @@ export default async function Page({
 
 function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
     const stateLabel = scoreboard.fullChainReady ? 'ready' : 'needs proof'
+    const firstMissingRow = scoreboard.rows.find(row => row.state !== 'ready')
     const nextStep = scoreboard.fullChainReady
         ? 'Source, alert, delivery, and analyst proof are loaded.'
-        : scoreboard.firstBlocker || 'Product readiness proof is not loaded.'
+        : formatProofText(scoreboard.firstBlocker || 'Product readiness proof is not loaded.')
 
     return (
         <div
@@ -259,6 +260,10 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
             data-home-readiness-ready-rows={scoreboard.readyRows}
             data-home-readiness-total-rows={scoreboard.totalRows}
             data-home-readiness-query={scoreboard.query}
+            data-home-first-blocker-row={firstMissingRow?.id || ''}
+            data-home-first-blocker-owner={firstMissingRow?.ownerLane || ''}
+            data-home-first-blocker-contract={firstMissingRow?.backendProofContractVersion || ''}
+            data-home-first-blocker-raw={scoreboard.firstBlocker || ''}
         >
             <HomeReadinessFact label='Product category' value='Company exposure monitoring API and analyst console' />
             <HomeReadinessFact label='Proof state' value={`${scoreboard.readyRows}/${scoreboard.totalRows} rows ready`} />
@@ -331,7 +336,7 @@ function HomeWorkflowProof({ scoreboard }: { scoreboard: ProductNorthStarScorebo
                                 {homeStateLabel(item.state)}
                             </span>
                             <p className='min-w-0 wrap-break-word text-[#596170] dark:text-[#b9c4d6]' title={item.blocker || item.proofSummary}>
-                                {item.state === 'ready' ? item.proofSummary : item.blocker || item.detail}
+                                {item.state === 'ready' ? item.proofSummary : formatProofText(item.blocker || item.detail)}
                             </p>
                             <Link href={item.href} className='w-fit text-sm font-semibold text-[#3056d3] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white md:justify-self-end'>
                                 Open
@@ -353,6 +358,24 @@ function homeStateTone(state: ProductNorthStarScoreboard['rows'][number]['state'
 
 function homeStateLabel(state: ProductNorthStarScoreboard['rows'][number]['state']) {
     return state === 'needs_action' ? 'needs action' : state
+}
+
+function formatProofText(value: string) {
+    const normalized = value
+        .replace(/\bmissing_dwm_entitlement_readiness_api\b/g, 'DWM entitlement readiness API is not loaded')
+        .replace(/\bmissing_org_alert_export_readiness_api\b/g, 'organization watchlist alert proof is not loaded')
+        .replace(/\bmissing_source_proxy_worker_readiness\b/g, 'source worker readiness proof is not loaded')
+        .replace(/\bmissing_dashboard_alert\b/g, 'no backed alert is visible in the analyst console')
+        .replace(/\bMissing dashboard alert evidence\b/g, 'No backed alert is visible in the analyst console')
+        .replace(/\bDashboard-visible alert proof is not loaded\b/g, 'No backed alert is visible in the analyst console')
+        .replace(/\bmissing_webhook_lifecycle_health_api\b/g, 'webhook lifecycle proof is not loaded')
+        .replace(/\bmissing_helpdesk_audit_readiness_api\b/g, 'support audit readiness proof is not loaded')
+        .replace(/\bmissing_live_deploy_probe\b/g, 'live deploy probe proof is not loaded')
+        .replace(/\bmissing_public_ti_provenance_readiness_api\b/g, 'public TI provenance proof is not loaded')
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    return normalized ? normalized[0].toUpperCase() + normalized.slice(1) : 'Product readiness proof is not loaded.'
 }
 
 async function loadProductReadiness(requestHeaders: Headers, query: string): Promise<ProductNorthStarScoreboard | null> {

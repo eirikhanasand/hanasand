@@ -170,6 +170,10 @@ for (const token of [
     'data-home-readiness-ready-rows',
     'data-home-readiness-total-rows',
     'data-home-readiness-query',
+    'data-home-first-blocker-row',
+    'data-home-first-blocker-owner',
+    'data-home-first-blocker-contract',
+    'data-home-first-blocker-raw',
     '/api/product-readiness',
     'parseProductNorthStarScoreboard',
     'buildProductNorthStarScoreboard',
@@ -200,8 +204,22 @@ for (const token of [
     'item.href',
     'md:grid-cols-[1.1fr_8rem_1.5fr_8rem]',
     'wrap-break-word',
+    'formatProofText(item.blocker || item.detail)',
 ]) {
     assert.ok(homeSource.includes(token), `Homepage workflow proof is not wired to north-star direction data: ${token}.`)
+}
+
+for (const token of [
+    'DWM entitlement readiness API is not loaded',
+    'organization watchlist alert proof is not loaded',
+    'source worker readiness proof is not loaded',
+    'no backed alert is visible in the analyst console',
+    'Dashboard-visible alert proof is not loaded',
+    'webhook lifecycle proof is not loaded',
+    'support audit readiness proof is not loaded',
+    'public TI provenance proof is not loaded',
+]) {
+    assert.ok(homeSource.includes(token), `Homepage proof formatter missing human-readable blocker: ${token}.`)
 }
 
 for (const phrase of ['Refresh signal', ' item.signal', 'High-speed', 'Buyer workflow']) {
