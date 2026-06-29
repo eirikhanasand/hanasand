@@ -8,6 +8,7 @@ export const DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION = "dwm.webhook_dispat
 export const DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION = "dwm.webhook_dispatch_support_packet.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION = "dwm.webhook_dispatch_replay_request.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION = "dwm.webhook_dispatch_replay_history.v1" as const;
+export const DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION = "dwm.webhook_dispatch_retry_audit.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -400,6 +401,56 @@ export type DwmWebhookDispatchReplayHistory = {
     blockerCodes: Array<DwmWebhookDispatchReadinessBlocker["code"] | "missing_replay_target">;
   };
   blockers: DwmWebhookDispatchReplayRequest["blockers"];
+  nextActions: DwmWebhookDispatchReadiness["nextActions"];
+};
+
+export type DwmWebhookDispatchRetryAudit = {
+  schemaVersion: typeof DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  retry: {
+    eligible: boolean;
+    nextRetryAt?: string;
+    attemptCount: number;
+    lastErrorCategory?: string;
+  };
+  request: {
+    method: "POST";
+    route: "/v1/dwm/webhooks/deliver";
+    canSend: boolean;
+    noNetwork: true;
+    body?: {
+      tenantId: string;
+      organizationId?: string;
+      alertId: string;
+      caseId?: string;
+      dedupeKey?: string;
+      webhookDestinationIds: string[];
+      dryRun: true;
+      reason: "webhook_dispatch_retry";
+      requestId?: string;
+      idempotencyKey: string;
+    };
+  };
+  auditPreview: {
+    eventType: "dwm.webhook.dispatch_retry_prepared";
+    outcome: "prepared" | "blocked";
+    replayHistoryId: string;
+    nextAuditAction: "delivery.retry_requested" | "delivery.retry_blocked";
+    blockerCodes: Array<DwmWebhookDispatchReadinessBlocker["code"] | "missing_replay_target" | "retry_not_eligible">;
+  };
+  blockers: Array<DwmWebhookDispatchReplayRequest["blockers"][number] | {
+    code: "retry_not_eligible";
+    ownerLane: "webhook";
+    path: string;
+    message: string;
+  }>;
   nextActions: DwmWebhookDispatchReadiness["nextActions"];
 };
 
@@ -957,6 +1008,73 @@ export function buildWebhookDispatchReplayHistory(input: {
     },
     blockers,
     nextActions: replayRequest.nextActions
+  };
+}
+
+export function buildWebhookDispatchRetryAudit(input: {
+  history: DwmWebhookDispatchReplayHistory;
+  requestId?: string;
+  generatedAt?: string;
+}): DwmWebhookDispatchRetryAudit {
+  const history = input.history;
+  const retryBlockers: DwmWebhookDispatchRetryAudit["blockers"] = [...history.blockers];
+  if (!history.retry.retryable) {
+    retryBlockers.push({
+      code: "retry_not_eligible",
+      ownerLane: "webhook",
+      path: "history.retry.retryable",
+      message: "Webhook dispatch retry requires a retryable failed delivery attempt."
+    });
+  }
+  const blockerCodes = uniqueStrings(retryBlockers.map((blocker) => blocker.code)) as DwmWebhookDispatchRetryAudit["auditPreview"]["blockerCodes"];
+  const canSend = history.ok && history.retry.retryable && retryBlockers.length === 0;
+  const idempotencyKey = stableId("dwm_webhook_dispatch_retry", `${history.id}:${input.requestId ?? ""}:${history.retry.nextRetryAt ?? ""}`);
+
+  return {
+    schemaVersion: DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_dispatch_retry_audit", `${history.id}:${input.requestId ?? ""}`),
+    generatedAt: input.generatedAt ?? history.generatedAt,
+    ok: canSend,
+    tenantId: history.tenantId,
+    organizationId: history.organizationId,
+    alertId: history.alertId,
+    caseId: history.caseId,
+    redacted: true,
+    retry: {
+      eligible: canSend,
+      nextRetryAt: history.retry.nextRetryAt,
+      attemptCount: history.retry.attemptCount,
+      lastErrorCategory: history.retry.lastErrorCategory
+    },
+    request: {
+      method: "POST",
+      route: history.request.route,
+      canSend,
+      noNetwork: true,
+      body: canSend
+        ? {
+          tenantId: history.tenantId,
+          organizationId: history.organizationId,
+          alertId: history.alertId,
+          caseId: history.caseId,
+          dedupeKey: history.target.dedupeKey,
+          webhookDestinationIds: history.target.destinationIds,
+          dryRun: true,
+          reason: "webhook_dispatch_retry",
+          requestId: stringValue(input.requestId),
+          idempotencyKey
+        }
+        : undefined
+    },
+    auditPreview: {
+      eventType: "dwm.webhook.dispatch_retry_prepared",
+      outcome: canSend ? "prepared" : "blocked",
+      replayHistoryId: history.id,
+      nextAuditAction: canSend ? "delivery.retry_requested" : "delivery.retry_blocked",
+      blockerCodes
+    },
+    blockers: retryBlockers,
+    nextActions: history.nextActions
   };
 }
 
