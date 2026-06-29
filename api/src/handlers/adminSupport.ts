@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { randomUUID } from 'crypto'
 import run from '#db'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
-import { actorHasAdminSupportAccess, recordAdminAuditEvent, redactAuditValue, requireAuditReason } from '#utils/adminAudit.ts'
+import { actorHasAdminSupportAccess, recordAdminAuditEvent, redactAuditValue, requireAuditReason, supportTimelineAuditBridgeEvent } from '#utils/adminAudit.ts'
 import {
     buildOrganizationDwmAlertReference,
     normalizeInviteInput,
@@ -876,6 +876,28 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
 
     const watchlistItems = watchlists.rows as OrganizationWatchlistRow[]
     const alertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(organization, item))
+    const alertReadinessBridge = supportTimelineAuditBridgeEvent({
+        workflow: 'watchlist',
+        action: 'support.organization.alert_readiness.inspect',
+        actorId: actor.id,
+        targetType: 'organization',
+        targetId: organization.id,
+        organizationId: organization.id,
+        entityId: organization.id,
+        requestId: supportRequestId(req),
+        severity: 'info',
+        outcome: 'success',
+        reason: 'Support inspected organization alert readiness.',
+        source: 'support',
+        service: 'hanasand-api',
+        context: {
+            watchlistItemCount: watchlistItems.length,
+            generatedAlertReferenceCount: alertReferences.length,
+        },
+        after: {
+            generatedAlertReferenceCount: alertReferences.length,
+        },
+    })
     return res.send({
         organization: toOrganization(organization),
         members: members.rows.map(toSupportMember),
@@ -890,6 +912,12 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
                 api: `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`,
                 console: `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}`,
                 audit: `/dashboard/system/impersonation?org=${encodeURIComponent(organization.id)}&action=support.organization`,
+            },
+            supportTimelineBridge: {
+                schemaVersion: 'support.organization.alert_readiness.audit_bridge.v1',
+                event: alertReadinessBridge,
+                auditFields: ['actionType', 'actorId', 'targetType', 'targetId', 'organizationId', 'entityId', 'requestId', 'severity', 'outcome', 'reason', 'source', 'service', 'context'],
+                testCommand: 'cd api && bun run smoke:admin-support-unit',
             },
         },
         supportLinks: {

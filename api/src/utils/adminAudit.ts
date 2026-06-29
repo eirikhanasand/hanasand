@@ -135,6 +135,10 @@ export function supportTimelineAuditBridgeEvent(input: SupportTimelineAuditBridg
     }
 }
 
+export async function recordSupportTimelineAuditBridgeEvent(req: FastifyRequest, input: SupportTimelineAuditBridgeInput) {
+    await recordAdminAuditEvent(req, supportTimelineAuditBridgeEvent(input))
+}
+
 export async function actorHasAdminSupportAccess(actorId: string) {
     const result = await run(`
         SELECT r.id, r.name

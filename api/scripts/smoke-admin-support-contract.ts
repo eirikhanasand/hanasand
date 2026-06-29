@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { requireAuditReason, cleanAuditReason, redactAuditValue, supportTimelineAuditBridgeEvent } from '../src/utils/adminAudit.ts'
+import { requireAuditReason, cleanAuditReason, redactAuditValue, supportTimelineAuditBridgeEvent, recordSupportTimelineAuditBridgeEvent } from '../src/utils/adminAudit.ts'
 
 assert.equal(cleanAuditReason('  Customer   owner locked out  '), 'Customer owner locked out')
 assert.equal(requireAuditReason('Customer owner locked out'), 'Customer owner locked out')
@@ -43,6 +43,7 @@ assert.deepEqual((bridgedAudit.context?.before as Record<string, unknown>), { st
 assert.deepEqual((bridgedAudit.context?.after as Record<string, unknown>), { status: 'active', privateSourceUrl: '[redacted]' })
 assert.equal((bridgedAudit.context?.supportTimeline as Record<string, any>)?.filters?.action, 'organization.watchlist.updated')
 assert.equal((bridgedAudit.context?.supportTimeline as Record<string, any>)?.detailRouteTemplate, '/api/admin/audit-events/:id')
+assert.equal(typeof recordSupportTimelineAuditBridgeEvent, 'function')
 
 const routes = await readFile(new URL('../src/routes.ts', import.meta.url), 'utf8')
 assert.match(routes, /fastify\.get\('\/admin\/audit-events'/)
@@ -398,6 +399,9 @@ assert.match(adminSupport, /actorHasAdminSupportAccess/)
 assert.match(adminSupport, /pendingInvites/)
 assert.match(adminSupport, /watchlistItems/)
 assert.match(adminSupport, /alertReadiness/)
+assert.match(adminSupport, /support\.organization\.alert_readiness\.audit_bridge\.v1/)
+assert.match(adminSupport, /supportTimelineBridge/)
+assert.match(adminSupport, /supportTimelineAuditBridgeEvent\(\{/)
 assert.match(adminSupport, /supportLinks/)
 assert.match(adminSupport, /schemaVersion: 'support\.access_recovery\.v1'/)
 assert.match(adminSupport, /support\.access_recovery\.session_guard\.v1/)
