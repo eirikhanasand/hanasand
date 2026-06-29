@@ -973,6 +973,26 @@ describe("dwm alert repository", () => {
         blockerCodes: []
       }
     });
+    const initialHandoff = buildDwmAlertDownstreamHandoff({
+      alert,
+      organizationId: "org_repo_customer",
+      generatedAt: "2026-06-28T13:10:00.000Z"
+    });
+    expect(initialHandoff.createdEventDispatch).toMatchObject({
+      schemaVersion: "dwm.alert_created_event_dispatch.v1",
+      ready: true,
+      eventId: alert.alertCreatedEvent.id,
+      eventType: "dwm.alert.created",
+      alertId: alert.id,
+      organizationId: "org_repo_customer",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_repo_tg_acme"],
+      selectedCaptureIds: ["cap_repo_tg_acme"],
+      deliveryDedupeKey: alert.deliveryReadinessContext.deliveryDedupeKey,
+      workflowEventCount: 0,
+      blockerCodes: []
+    });
+    expect(initialHandoff.createdEventDispatch.idempotencyKey).toMatch(/^dwm_alert_created_dispatch_/);
 
     store.saveDwmAlert({
       ...alert,
@@ -1019,13 +1039,39 @@ describe("dwm alert repository", () => {
       replayCount: 3,
       sourceFamily: "telegram_public",
       generationEvidenceWindow: {
-        captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
         firstObservedAt: "2026-06-28T13:04:00.000Z",
         lastObservedAt: "2026-06-28T13:16:00.000Z"
       }
     });
-    expect(preserved.deliveryReadinessContext.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
-    expect(preserved.deliveryReadinessContext.blockerCodes).toEqual(expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]));
+    expect(preserved.deliveryReadinessContext.generationEvidenceWindow?.captureIds).toContain("cap_repo_tg_acme");
+    expect(preserved.deliveryReadinessContext.generationEvidenceWindow?.captureIds).toContain("cap_repo_tg_acme_followup");
+    expect(preserved.deliveryReadinessContext.selectedCaptureIds).toContain("cap_repo_tg_acme");
+    expect(preserved.deliveryReadinessContext.selectedCaptureIds).toContain("cap_repo_tg_acme_followup");
+    expect(preserved.deliveryReadinessContext.blockerCodes).toContain("replay_already_delivered");
+    expect(preserved.deliveryReadinessContext.blockerCodes).toContain("duplicate_delivered_dedupe");
+    const preservedHandoff = buildDwmAlertDownstreamHandoff({
+      alert: preserved,
+      deliveries: [delivery],
+      organizationId: "org_repo_customer",
+      generatedAt: "2026-06-28T13:30:00.000Z"
+    });
+    expect(preservedHandoff.createdEventDispatch).toMatchObject({
+      ready: false,
+      eventId: alert.alertCreatedEvent.id,
+      captureIds: ["cap_repo_tg_acme"],
+      workflowEventCount: 1
+    });
+    expect(preservedHandoff.createdEventDispatch.blockerCodes).toContain("replay_already_delivered");
+    expect(preservedHandoff.createdEventDispatch.blockerCodes).toContain("duplicate_delivered_dedupe");
+    expect(preservedHandoff.createdEventDispatch.selectedCaptureIds).toContain("cap_repo_tg_acme");
+    expect(preservedHandoff.createdEventDispatch.selectedCaptureIds).toContain("cap_repo_tg_acme_followup");
+    expect(preservedHandoff.evidence.generationEvidenceWindow).toMatchObject({
+      sourceFamilies: ["telegram_public"],
+      firstObservedAt: "2026-06-28T13:04:00.000Z",
+      lastObservedAt: "2026-06-28T13:16:00.000Z"
+    });
+    expect(preservedHandoff.evidence.generationEvidenceWindow?.captureIds).toContain("cap_repo_tg_acme");
+    expect(preservedHandoff.evidence.generationEvidenceWindow?.captureIds).toContain("cap_repo_tg_acme_followup");
 
     const proof = buildDwmAlertCustomerProofHandoffRow({
       alert: preserved,

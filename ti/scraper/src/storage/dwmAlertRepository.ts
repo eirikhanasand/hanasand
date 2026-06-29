@@ -341,6 +341,22 @@ export type DwmAlertDownstreamHandoff = {
     idempotencyKey?: string;
     blockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
   };
+  createdEventDispatch: {
+    schemaVersion: "dwm.alert_created_event_dispatch.v1";
+    ready: boolean;
+    eventId?: string;
+    eventType: string;
+    alertId?: string;
+    tenantId?: string;
+    organizationId?: string;
+    sourceFamily?: string;
+    captureIds: string[];
+    selectedCaptureIds: string[];
+    deliveryDedupeKey?: string;
+    idempotencyKey?: string;
+    workflowEventCount: number;
+    blockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
+  };
   lifecycle: {
     organizationStatus?: string;
     retiredWatchlistIds: string[];
@@ -1411,6 +1427,13 @@ export function buildDwmAlertDownstreamHandoff(input: {
   ].filter(Boolean).map(String)) as Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
   const deliverySelectionReady = deliverySelectionBlockerCodes.length === 0 && enabledWebhookDestinationIds.length > 0;
   const deliveryIdempotencyKey = alertId && deliveryDedupeKey ? stableId("dwm_delivery_handoff", `${orgId ?? tenantId}:${alertId}:${deliveryDedupeKey}`) : undefined;
+  const createdEventCaptureIds = uniqueStrings(asStringArray(createdEvent?.captureIds ?? selectedCaptureIds));
+  const createdEventDispatchBlockerCodes = uniqueStrings([
+    ...deliverySelectionBlockerCodes,
+    !createdEvent?.eventId ? "missing_alert" : undefined,
+    !createdEventCaptureIds.length || evidenceCount === 0 ? "missing_capture_evidence" : undefined
+  ].filter(Boolean).map(String)) as Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
+  const createdEventDispatchReady = Boolean(createdEvent?.eventId) && createdEventDispatchBlockerCodes.length === 0;
   return {
     schemaVersion: "dwm.alert_downstream_handoff.v1",
     handoffId: stableId("dwm_downstream_handoff", `${tenantId ?? "missing"}:${orgId ?? "missing"}:${alertId ?? "missing"}:${deliveryDedupeKey}:${eventCount}`),
@@ -1475,6 +1498,22 @@ export function buildDwmAlertDownstreamHandoff(input: {
       deliveryDedupeKey,
       idempotencyKey: deliveryIdempotencyKey,
       blockerCodes: deliverySelectionBlockerCodes
+    },
+    createdEventDispatch: {
+      schemaVersion: "dwm.alert_created_event_dispatch.v1",
+      ready: createdEventDispatchReady,
+      eventId: createdEvent?.eventId,
+      eventType: createdEvent?.eventType ?? "dwm.alert.created",
+      alertId,
+      tenantId,
+      organizationId: orgId,
+      sourceFamily: createdEvent?.sourceFamily ?? context.sourceFamily ?? alert?.sourceFamily ?? workflow.sourceFamily ?? webhook.sourceFamily,
+      captureIds: createdEventCaptureIds,
+      selectedCaptureIds,
+      deliveryDedupeKey,
+      idempotencyKey: createdEvent?.eventId && deliveryDedupeKey ? stableId("dwm_alert_created_dispatch", `${orgId ?? tenantId}:${createdEvent.eventId}:${deliveryDedupeKey}:${eventCount}`) : undefined,
+      workflowEventCount: eventCount,
+      blockerCodes: createdEventDispatchBlockerCodes
     },
     lifecycle: {
       organizationStatus,
