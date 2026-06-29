@@ -1425,6 +1425,15 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             tone: selectedDelivery.status === 'failed' || selectedDelivery.status === 'skipped' ? 'blocked' : 'ready',
             href: ledgerHref,
         })
+    } else if (selected.kind === 'dwm_alert' && alertDetail?.status === 'ready' && alertDetail.detail.deliveryReadiness?.deliveryHistoryRefs?.length) {
+        const ledgerHref = deliveryLedgerHref(orgContext, selected)
+        rows.push({
+            id: 'inspect_alert_delivery_history',
+            label: 'Delivery history',
+            detail: `GET ${ledgerHref}; alert detail returned ${alertDetail.detail.deliveryReadiness.deliveryHistoryRefs.length} delivery history reference${alertDetail.detail.deliveryReadiness.deliveryHistoryRefs.length === 1 ? '' : 's'}.`,
+            tone: alertDetail.detail.deliveryReadiness.ready ? 'ready' : 'needs_action',
+            href: ledgerHref,
+        })
     }
     if (activeWebhook && orgContext?.organization) {
         const destinationHref = organizationWebhookDestinationHref(orgContext.organization.id, activeWebhook.id)
