@@ -627,7 +627,7 @@ export default async function ensureSchema() {
             endpoint_hint TEXT NOT NULL,
             endpoint_hash TEXT NOT NULL DEFAULT '',
             status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
-            events TEXT[] NOT NULL DEFAULT ARRAY['dwm.alert.created', 'dwm.alert.replayed']::TEXT[],
+            events TEXT[] NOT NULL DEFAULT ARRAY['dwm.alert.created', 'dwm.alert.updated', 'dwm.alert.replayed']::TEXT[],
             created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             last_tested_at TIMESTAMPTZ,
             last_test_status TEXT CHECK (last_test_status IN ('dry_run', 'delivered', 'failed', 'skipped')),
@@ -652,7 +652,7 @@ export default async function ensureSchema() {
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             org_id TEXT NOT NULL,
             alert_id TEXT NOT NULL,
-            event_type TEXT NOT NULL CHECK (event_type IN ('dwm.alert.created', 'dwm.alert.replayed', 'dwm.alert.test')),
+            event_type TEXT NOT NULL CHECK (event_type IN ('dwm.alert.created', 'dwm.alert.updated', 'dwm.alert.replayed', 'dwm.alert.test')),
             status TEXT NOT NULL CHECK (status IN ('dry_run', 'delivered', 'failed', 'skipped')),
             dry_run BOOLEAN NOT NULL DEFAULT TRUE,
             endpoint_hint TEXT NOT NULL DEFAULT '',
@@ -680,6 +680,8 @@ export default async function ensureSchema() {
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS case_path TEXT')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()')
+    await run('ALTER TABLE dwm_webhook_deliveries DROP CONSTRAINT IF EXISTS dwm_webhook_deliveries_event_type_check')
+    await run('ALTER TABLE dwm_webhook_deliveries ADD CONSTRAINT dwm_webhook_deliveries_event_type_check CHECK (event_type IN (\'dwm.alert.created\', \'dwm.alert.updated\', \'dwm.alert.replayed\', \'dwm.alert.test\'))')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_owner_created ON dwm_webhook_deliveries(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_org_created ON dwm_webhook_deliveries(org_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_org_updated ON dwm_webhook_deliveries(org_id, updated_at DESC)')

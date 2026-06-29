@@ -388,6 +388,52 @@ expect((replayDeliveryContext.workflowState as Record<string, unknown>).delivery
 expect(replayWatchlistContext.id === 'watchlist_item_replay_contract', 'Replay payload should preserve watchlist context.', replayPayload)
 expect(replaySerialized.includes('dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract'), 'Replay payload should use event-scoped idempotency for the same dedupe key.', replayPayload)
 expect(replaySerialized.includes('Evidence summary') && replaySerialized.includes('Credential paste'), 'Replay payload should include multi-evidence summary fields.', replayPayload)
+
+const updatedTriggerInput = buildDwmAlertWebhookNotificationInput(replayWorkflowAlert, {
+    eventType: 'dwm.alert.updated',
+    dryRun: true,
+    live: false,
+})
+const updatedPlan = buildDwmAlertWebhookDispatchPlan({
+    ownerId: workflowReplayHandoff.ownerId,
+    input: updatedTriggerInput,
+    destinations: [
+        {
+            id: 'destination_update_contract',
+            org_id: 'org_contract',
+            name: 'Alert update Discord',
+            kind: 'discord',
+            status: 'active',
+            events: ['dwm.alert.updated'],
+        },
+        {
+            id: 'destination_created_contract',
+            org_id: 'org_contract',
+            name: 'Created only Discord',
+            kind: 'discord',
+            status: 'active',
+            events: ['dwm.alert.created'],
+        },
+    ],
+})
+const updatedPayload = buildDwmAlertDeliveryPayload({
+    destination: {
+        id: updatedPlan.selectedDestinations[0].id,
+        kind: 'discord',
+        name: updatedPlan.selectedDestinations[0].name,
+        org_id: updatedPlan.orgId,
+    },
+    eventType: updatedPlan.eventType,
+    deliveryId: 'delivery_update_contract',
+    alert: updatedPlan.alert,
+}) as Record<string, unknown>
+const updatedSerialized = JSON.stringify(updatedPayload)
+const updatedDeliveryContext = (updatedPayload._hanasand as Record<string, unknown>).delivery as Record<string, unknown>
+expect(updatedTriggerInput.eventType === 'dwm.alert.updated' && updatedTriggerInput.dryRun === true && updatedTriggerInput.live === false, 'Alert-updated trigger input should preserve dry-run/no-network delivery mode.', updatedTriggerInput)
+expect(updatedPlan.eventType === 'dwm.alert.updated' && updatedPlan.selectedDestinations.map(item => item.id).join(',') === 'destination_update_contract', 'Alert-updated dispatch should select only destinations subscribed to update events.', updatedPlan)
+expect(updatedPlan.skippedDestinations.some(item => item.id === 'destination_created_contract' && item.reason === 'event_not_subscribed'), 'Alert-updated dispatch should skip destinations that only subscribe to created alerts.', updatedPlan)
+expect(updatedDeliveryContext.replay === false && updatedSerialized.includes('dwm.alert.updated:org_contract:destination_update_contract:dwm_dedupe_replay_contract'), 'Alert-updated Discord payload should use update-scoped idempotency without marking replay.', updatedPayload)
+expect(updatedSerialized.includes('Workflow') && updatedSerialized.includes('updated') && !updatedSerialized.includes(secret), 'Alert-updated Discord payload should expose workflow context without leaking secrets.', updatedPayload)
 expect(JSON.stringify(replayWorkflowAlert) === replayWorkflowBefore, 'Replay dispatch/payload builders should not mutate alert workflow state.', replayWorkflowAlert)
 
 const duplicateReplayPayload = buildDwmAlertDeliveryPayload({

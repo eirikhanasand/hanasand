@@ -818,7 +818,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     captures
   });
 
-  const alerts = snapshot.alerts
+  const alerts = mergeSnapshotAlertsForGeneration(snapshot.alerts, generationPlan, input)
     .filter((alert) => alertSourceFamilyActive(sources, alert.sourceFamily))
     .map((alert) => {
     const generationCandidate = findGenerationCandidate(generationPlan, alert);
@@ -2236,16 +2236,80 @@ function scopeAlertForGenerationCandidate(alert: DwmAlert, candidate: DwmAlertGe
 
 function findExistingAlert(store: RuntimeDwmAlertStore, alert: DwmAlert, tenantId: string, organizationId?: string) {
   const dedupeKey = alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey;
+  const matchedTermValue = normalizeTerm(alert.matchedTerm?.value);
+  const matchedTermKind = String(alert.matchedTerm?.kind ?? "");
   return store.listDwmAlerts()
     .filter((row) => String(row.tenantId ?? "") === tenantId)
     .filter((row) => organizationId ? row.organizationId === organizationId : !row.organizationId)
-    .find((row) => row.id === alert.id || row.dedupeKey === dedupeKey || row.webhookDelivery?.dedupeKey === dedupeKey);
+    .find((row) => row.id === alert.id
+      || row.dedupeKey === dedupeKey
+      || row.webhookDelivery?.dedupeKey === dedupeKey
+      || (matchedTermValue
+        && row.sourceFamily === alert.sourceFamily
+        && row.artifactType === alert.artifactType
+        && normalizeTerm(row.matchedTerm?.value) === matchedTermValue
+        && String(row.matchedTerm?.kind ?? "") === matchedTermKind));
 }
 
 function findGenerationCandidate(plan: DwmAlertGenerationPlan, alert: DwmAlert): DwmAlertGenerationCandidate | undefined {
   const normalizedTerm = normalizeTerm(alert.matchedTerm?.value);
   return plan.candidates.find((candidate) => candidate.normalizedTerm === normalizedTerm && candidate.term.kind === alert.matchedTerm?.kind)
     ?? plan.candidates.find((candidate) => candidate.normalizedTerm === normalizedTerm);
+}
+
+function mergeSnapshotAlertsForGeneration(alerts: DwmAlert[], plan: DwmAlertGenerationPlan, input: RebuildDwmRuntimeAlertsInput): DwmAlert[] {
+  const merged = new Map<string, DwmAlert>();
+  for (const alert of alerts) {
+    const candidate = findGenerationCandidate(plan, alert);
+    const key = candidate
+      ? `${input.tenantId}:${input.organizationId ?? ""}:${candidate.id}:${alert.sourceFamily}`
+      : `${input.tenantId}:${input.organizationId ?? ""}:${normalizeTerm(alert.matchedTerm?.value)}:${alert.matchedTerm?.kind ?? ""}:${alert.artifactType}:${alert.sourceFamily}`;
+    const current = merged.get(key);
+    if (!current) {
+      merged.set(key, alert);
+      continue;
+    }
+    merged.set(key, mergeGeneratedAlert(current, alert));
+  }
+  return [...merged.values()];
+}
+
+function mergeGeneratedAlert(current: DwmAlert, next: DwmAlert): DwmAlert {
+  const evidence = mergeGeneratedEvidence([...(current.evidence ?? []), ...(next.evidence ?? [])]);
+  const observed = evidence.map((item: any) => item.observedAt ?? item.firstSeenAt).filter(Boolean).map(String).sort();
+  const sourceIds = uniqueStrings([
+    ...asStringArray(current.provenance?.sourceIds),
+    ...asStringArray(next.provenance?.sourceIds),
+    ...evidence.map((item: any) => item.sourceId ?? item.provenance?.sourceId).filter(Boolean).map(String)
+  ]);
+  const captureIds = uniqueStrings([
+    ...asStringArray(current.provenance?.captureIds),
+    ...asStringArray(next.provenance?.captureIds),
+    ...evidence.map((item: any) => item.provenance?.captureId ?? item.id).filter(Boolean).map(String)
+  ]);
+  return {
+    ...current,
+    evidence,
+    sourceCount: evidence.length,
+    firstSeenAt: observed[0] ?? current.firstSeenAt ?? next.firstSeenAt,
+    lastSeenAt: observed.at(-1) ?? next.lastSeenAt ?? current.lastSeenAt,
+    confidence: Math.max(Number(current.confidence ?? 0), Number(next.confidence ?? 0)),
+    confidenceReasoning: uniqueStrings([...(current.confidenceReasoning ?? []), ...(next.confidenceReasoning ?? [])].map(String)),
+    provenance: {
+      ...current.provenance,
+      captureIds,
+      sourceIds
+    }
+  };
+}
+
+function mergeGeneratedEvidence(evidence: any[]): any[] {
+  const byIdentity = new Map<string, any>();
+  for (const item of evidence) {
+    const identity = item.contentHash ? `${item.sourceFamily}:${item.contentHash}` : `capture:${item.provenance?.captureId ?? item.id}`;
+    byIdentity.set(identity, byIdentity.get(identity) ?? item);
+  }
+  return [...byIdentity.values()].sort((a, b) => String(a.observedAt ?? a.firstSeenAt ?? "").localeCompare(String(b.observedAt ?? b.firstSeenAt ?? "")));
 }
 
 function watchlistItemIdsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: string | undefined): string[] {

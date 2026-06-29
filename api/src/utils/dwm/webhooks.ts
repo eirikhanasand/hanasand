@@ -4,7 +4,7 @@ import { organizationVisibilityDecision, type OrganizationRole, type Organizatio
 
 export type DwmWebhookKind = 'webhook' | 'discord'
 export type DwmWebhookStatus = 'active' | 'paused' | 'archived'
-export type DwmAlertEventType = 'dwm.alert.created' | 'dwm.alert.replayed' | 'dwm.alert.test'
+export type DwmAlertEventType = 'dwm.alert.created' | 'dwm.alert.updated' | 'dwm.alert.replayed' | 'dwm.alert.test'
 
 export type DwmWebhookDestinationRow = {
     id: string
@@ -197,8 +197,8 @@ type NormalizedDestinationInput = {
     events: DwmAlertEventType[]
 }
 
-const DEFAULT_EVENTS: DwmAlertEventType[] = ['dwm.alert.created', 'dwm.alert.replayed']
-const EVENT_TYPES = new Set<DwmAlertEventType>(['dwm.alert.created', 'dwm.alert.replayed', 'dwm.alert.test'])
+const DEFAULT_EVENTS: DwmAlertEventType[] = ['dwm.alert.created', 'dwm.alert.updated', 'dwm.alert.replayed']
+const EVENT_TYPES = new Set<DwmAlertEventType>(['dwm.alert.created', 'dwm.alert.updated', 'dwm.alert.replayed', 'dwm.alert.test'])
 const DESTINATION_STATUSES = new Set<DwmWebhookStatus>(['active', 'paused', 'archived'])
 const WEBHOOK_KINDS = new Set<DwmWebhookKind>(['webhook', 'discord'])
 const SECRET_KEY_SOURCE = process.env.DWM_WEBHOOK_SECRET_KEY
@@ -4076,7 +4076,7 @@ function buildDwmWebhookAlertDeliveryProof({
     const dryRunDeliveryRequests = selectedDestinations.map(destination => ({
         destinationId: destination.id,
         expectedIdempotencyKey: buildIdempotencyKey(eventType, orgId, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
-        expectedAuditAction: eventType === 'dwm.alert.replayed' ? 'delivery.replayed' : 'delivery.created',
+        expectedAuditAction: deliveryAuditActionForEvent(eventType),
         method: 'POST',
         route: 'POST /api/dwm/webhook-deliveries',
         noNetwork: true,
@@ -4091,7 +4091,7 @@ function buildDwmWebhookAlertDeliveryProof({
         return {
             destinationId: destination.id,
             expectedIdempotencyKey: buildIdempotencyKey(eventType, orgId, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
-            expectedAuditAction: eventType === 'dwm.alert.replayed' ? 'delivery.replayed' : 'delivery.created',
+            expectedAuditAction: deliveryAuditActionForEvent(eventType),
             method: 'POST',
             route: 'POST /api/dwm/webhook-deliveries',
             noNetwork: !canSend,
@@ -5224,9 +5224,11 @@ async function deliverToDwmWebhookDestination({
     const delivery = result.rows[0] as DwmWebhookDeliveryRow
     const auditAction = markTested
         ? 'delivery.tested'
-        : delivery.event_type === 'dwm.alert.replayed'
-            ? 'delivery.replayed'
-            : `delivery.${delivery.status}`
+        : delivery.status === 'failed'
+            ? 'delivery.failed'
+            : delivery.status === 'skipped'
+                ? 'delivery.skipped'
+                : deliveryAuditActionForEvent(delivery.event_type)
     await recordDwmWebhookAudit({
         ownerId,
         actorId: ownerId,
@@ -5803,6 +5805,8 @@ function webhookAuditOutcome(action: string, status?: string | null) {
     if (action === 'destination.created') return 'created'
     if (action === 'destination.updated') return 'updated'
     if (action === 'destination.archived') return 'disabled'
+    if (action === 'delivery.created') return status || 'created'
+    if (action === 'delivery.updated') return status || 'updated'
     if (action === 'delivery.tested') return 'tested'
     if (action === 'delivery.replayed') return status || 'replayed'
     if (action === 'delivery.failed') return 'failed'
@@ -5810,6 +5814,13 @@ function webhookAuditOutcome(action: string, status?: string | null) {
     if (action === 'delivery.skipped') return 'skipped'
     if (action === 'delivery.dry_run') return 'dry_run'
     return status || action.split('.').pop() || 'unknown'
+}
+
+function deliveryAuditActionForEvent(eventType: DwmAlertEventType) {
+    if (eventType === 'dwm.alert.test') return 'delivery.tested'
+    if (eventType === 'dwm.alert.replayed') return 'delivery.replayed'
+    if (eventType === 'dwm.alert.updated') return 'delivery.updated'
+    return 'delivery.created'
 }
 
 function webhookAuditSeverity(action: string, status?: string | null) {

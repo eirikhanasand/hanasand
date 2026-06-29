@@ -30,6 +30,19 @@ const capture: RawCapture = {
   metadata: { adapter: "telegram_public", channel: "webhook_public", messageId: 44 }
 } as RawCapture;
 
+const followupCapture: RawCapture = {
+  id: "cap_webhook_acme_followup",
+  sourceId: source.id,
+  url: "https://t.me/webhook_public/45",
+  collectedAt: "2026-06-27T21:11:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-webhook-acme-followup",
+  sensitive: false,
+  body: "Follow-up Telegram post repeats acme.com Lumma C2 Okta exposure with a new AWS IAM key reference.",
+  metadata: { adapter: "telegram_public", channel: "webhook_public", messageId: 45 }
+} as RawCapture;
+
 describe("dwm webhook delivery", () => {
   test("delivers saved alerts and records delivery attempts", async () => {
     const store = new InMemoryScraperStore();
@@ -167,6 +180,82 @@ describe("dwm webhook delivery", () => {
       error: "Delivery selection blocked by replay already delivered."
     });
     expect(seen).toHaveLength(1);
+  });
+
+  test("delivers alert updated event context after a matching follow-up capture rebuild", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source);
+    store.saveCapture(capture);
+    const seen: Array<{ url: string; body: any }> = [];
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      webhookFetch: async (url: string, init: RequestInit) => {
+        seen.push({ url, body: JSON.parse(String(init.body)) });
+        return new Response("ok", { status: 202 });
+      }
+    };
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme_update", terms: ["acme.com"], webhookUrl: "https://hooks.example.com/dwm-update" })
+    }), options);
+    const firstRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme_update" })
+    }), options);
+    const firstRebuild = await firstRebuildResponse.json() as any;
+    expect(firstRebuild.savedAlertCount).toBe(1);
+
+    store.saveCapture(followupCapture);
+    const secondRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme_update" })
+    }), options);
+    const secondRebuild = await secondRebuildResponse.json() as any;
+    expect(secondRebuild.savedAlertCount).toBe(1);
+    expect(secondRebuild.alerts[0].id).toBe(firstRebuild.alerts[0].id);
+    expect(secondRebuild.alerts[0].alertUpdatedEvent).toMatchObject({
+      schemaVersion: "dwm.alert_updated_event.v1",
+      eventType: "dwm.alert.updated",
+      alertId: firstRebuild.alerts[0].id,
+      tenantId: "tenant_acme_update",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_webhook_acme", "cap_webhook_acme_followup"],
+      addedCaptureIds: ["cap_webhook_acme_followup"],
+      evidenceCount: 2,
+      previousEvidenceCount: 1,
+      dedupeKey: firstRebuild.alerts[0].dedupeKey
+    });
+
+    const deliverResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme_update" })
+    }), options);
+    const delivered = await deliverResponse.json() as any;
+
+    expect(deliverResponse.status).toBe(200);
+    expect(delivered.attemptedCount).toBe(1);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toBe("https://hooks.example.com/dwm-update");
+    expect(seen[0].body.selectedCaptureIds).toEqual(["cap_webhook_acme", "cap_webhook_acme_followup"]);
+    expect(seen[0].body.alertUpdatedEvent).toMatchObject({
+      schemaVersion: "dwm.alert_updated_event.v1",
+      eventType: "dwm.alert.updated",
+      alertId: firstRebuild.alerts[0].id,
+      addedCaptureIds: ["cap_webhook_acme_followup"],
+      evidenceCount: 2,
+      previousEvidenceCount: 1
+    });
+    expect(seen[0].body.alertUpdatedEventId).toBe(seen[0].body.alertUpdatedEvent.id);
+    expect(seen[0].body.alertUpdatedAt).toBe(seen[0].body.alertUpdatedEvent.at);
+    expect(seen[0].body.alertEvents.map((event: any) => event.eventType)).toEqual(["dwm.alert.created", "dwm.alert.updated"]);
+    expect(seen[0].body.generationEvidenceWindow).toMatchObject({
+      captureIds: ["cap_webhook_acme", "cap_webhook_acme_followup"],
+      sourceFamilies: ["telegram_public"],
+      firstObservedAt: "2026-06-27T21:02:00.000Z",
+      lastObservedAt: "2026-06-27T21:11:00.000Z"
+    });
   });
 
   test("uses alert delivery selection for org webhook destination choice", async () => {
