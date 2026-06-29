@@ -1437,6 +1437,23 @@ describe("dwm source requests", () => {
           activeSourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"]),
           matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve", "extractedTerms"])
         },
+        alertGenerationReadiness: {
+          schemaVersion: "dwm.actor_alert_generation_readiness.v1",
+          proofId: expect.any(String),
+          alertReady: true,
+          canRebuildAlerts: true,
+          sourceFamilies: expect.objectContaining({
+            alertCapable: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"])
+          }),
+          matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve", "extractedTerms"]),
+          rebuildPlan: expect.objectContaining({
+            method: "POST",
+            path: "/v1/dwm/alerts/rebuild",
+            dryRunSupported: true,
+            liveNetworkFetch: false
+          }),
+          blockers: []
+        },
         alertCaseHandoffReadiness: {
           schemaVersion: "dwm.actor_alert_case_handoff_readiness.v1",
           alertReady: true,
@@ -1480,6 +1497,10 @@ describe("dwm source requests", () => {
           sourceReadinessLedgerRows: expect.arrayContaining([
             expect.objectContaining({ family: "telegram", freshnessState: "fresh" })
           ]),
+          alertGenerationReadiness: expect.objectContaining({
+            schemaVersion: "dwm.actor_alert_generation_readiness.v1",
+            alertReady: true
+          }),
           freshness: expect.objectContaining({
             captureFreshness: expect.objectContaining({ state: "fresh" })
           })
@@ -1495,11 +1516,16 @@ describe("dwm source requests", () => {
           sourceReadinessLedgerRows: expect.arrayContaining([
             expect.objectContaining({ family: "public_advisory", downstreamConsumers: expect.objectContaining({ sharedWatchlistAlerts: true }) })
           ]),
+          alertGenerationReadiness: expect.objectContaining({
+            canRebuildAlerts: true,
+            rebuildPlan: expect.objectContaining({ liveNetworkFetch: false })
+          }),
           freshnessState: "fresh"
         },
         worker3Assertions: expect.arrayContaining([
           ".actorReadiness.proofId | length > 0",
           ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
+          ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -1681,6 +1707,20 @@ describe("dwm source requests", () => {
       alertCaseHandoffReadiness: {
         alertReady: false,
         caseReady: false,
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "capture_required", severity: "blocking" }),
+          expect.objectContaining({ code: "missing_actor_section_source", severity: "warning" })
+        ])
+      },
+      alertGenerationReadiness: {
+        schemaVersion: "dwm.actor_alert_generation_readiness.v1",
+        alertReady: false,
+        canRebuildAlerts: false,
+        sourceFamilies: expect.objectContaining({
+          alertCapable: expect.arrayContaining(["telegram"]),
+          missing: expect.arrayContaining(["darkweb_onion", "actor_page"])
+        }),
+        rebuildPlan: expect.objectContaining({ liveNetworkFetch: false }),
         blockers: expect.arrayContaining([
           expect.objectContaining({ code: "capture_required", severity: "blocking" }),
           expect.objectContaining({ code: "missing_actor_section_source", severity: "warning" })
@@ -1929,6 +1969,17 @@ describe("dwm source requests", () => {
           expect.objectContaining({ code: "capture_required" }),
           expect.objectContaining({ code: "retry_required", family: "telegram" })
         ])
+      },
+      alertGenerationReadiness: {
+        alertReady: false,
+        canRebuildAlerts: false,
+        sourceFamilies: expect.objectContaining({
+          blocked: expect.arrayContaining(["telegram"])
+        }),
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "retry_required", family: "telegram" })
+        ]),
+        rebuildPlan: expect.objectContaining({ dryRunSupported: true, liveNetworkFetch: false })
       }
     });
     expect(retryBody.proofArtifacts).toMatchObject({

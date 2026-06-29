@@ -3057,6 +3057,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       freshness: actorReadiness.freshness,
       sourceCoverage: actorReadiness.sourceCoverage,
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
+      alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
       missingDataGaps: actorReadiness.candidateGaps,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
@@ -3068,6 +3069,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       activeSourceFamilies: actorReadiness.alertability.activeSourceFamilies,
       sourceCoverage: actorReadiness.sourceCoverage,
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
+      alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
@@ -3088,6 +3090,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
       ".actorReadiness.sourcePackActionReadiness.schemaVersion == \"dwm.actor_source_pack_action_readiness.v1\"",
       ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3179,6 +3182,15 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     sourcePackActionReadiness,
     freshness
   });
+  const alertGenerationReadiness = sourceActorAlertGenerationReadiness({
+    query,
+    alertability,
+    sourceReadinessLedgerRows,
+    latestCaptureAt,
+    candidateGaps,
+    retryBlockers,
+    missingSections
+  });
   return {
     proofId: stableId("dwm_actor_source_readiness", `${query}:${readinessArtifact.generatedAt}:${latestCaptureAt ?? "no_capture"}:${latestEnrichmentAt ?? "no_enrichment"}`),
     query,
@@ -3207,6 +3219,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     retryBlockers,
     sourcePackActionReadiness,
     sourceReadinessLedgerRows,
+    alertGenerationReadiness,
     alertability,
     alertCaseHandoffReadiness: sourceActorAlertCaseHandoffReadiness({
       query,
@@ -3298,6 +3311,72 @@ function sourceActorDownstreamReadinessRows(input: {
       }
     };
   });
+}
+
+function sourceActorAlertGenerationReadiness(input: {
+  query: string;
+  alertability: Record<string, any>;
+  sourceReadinessLedgerRows: Array<Record<string, any>>;
+  latestCaptureAt?: string;
+  candidateGaps: Array<Record<string, any>>;
+  retryBlockers: Array<Record<string, any>>;
+  missingSections: Array<Record<string, any>>;
+}) {
+  const alertCapableRows = input.sourceReadinessLedgerRows.filter((row) => row.alertability?.canProduceAlert === true);
+  const blockers = dedupeBlockers([
+    ...(!input.latestCaptureAt ? [{ code: "capture_required", severity: "blocking", retryable: true }] : []),
+    ...(alertCapableRows.length === 0 ? [{ code: "no_alert_capable_source", severity: "blocking", retryable: true }] : []),
+    ...(input.alertability.matchableFields.length === 0 ? [{ code: "no_matchable_fields", severity: "blocking", retryable: true }] : []),
+    ...input.candidateGaps.filter((gap) => gap.state === "policy_blocked").map((gap) => ({ code: "policy_blocked_source", severity: "blocking", family: gap.family, retryable: false })),
+    ...input.retryBlockers.map((row) => ({ code: "retry_required", severity: "warning", family: row.family, retryable: true })),
+    ...input.missingSections.map((row) => ({ code: "missing_actor_section_source", severity: "warning", section: row.section, retryable: true }))
+  ]);
+  const blocking = blockers.some((blocker) => blocker.severity === "blocking");
+  return {
+    schemaVersion: "dwm.actor_alert_generation_readiness.v1",
+    proofId: stableId("dwm_actor_alert_generation_readiness", `${input.query}:${input.latestCaptureAt ?? "no_capture"}:${alertCapableRows.map((row) => row.family).join(",")}:${input.alertability.matchableFields.join(",")}`),
+    query: input.query,
+    alertReady: !blocking,
+    canRebuildAlerts: !blocking,
+    sourceFamilies: {
+      active: input.alertability.activeSourceFamilies,
+      alertCapable: uniqueSourceReadinessStrings(alertCapableRows.map((row) => row.family)),
+      blocked: uniqueSourceReadinessStrings(input.sourceReadinessLedgerRows.filter((row) => row.state === "policy_blocked" || row.state === "failed").map((row) => row.family)),
+      missing: uniqueSourceReadinessStrings(input.candidateGaps.map((gap) => gap.family))
+    },
+    matchableFields: input.alertability.matchableFields,
+    sourceTrust: input.alertability.sourceTrust,
+    latestCaptureAt: input.latestCaptureAt,
+    sourceRows: alertCapableRows.map((row) => ({
+      family: row.family,
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      freshnessState: row.freshnessState,
+      alertableFields: row.alertability?.alertableFields ?? [],
+      matchableFields: row.alertability?.matchableFields ?? [],
+      privacyBoundary: row.privacyBoundary,
+      safeOutput: row.safeOutput
+    })),
+    rebuildPlan: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        actor: input.query,
+        sourceFamilies: uniqueSourceReadinessStrings(alertCapableRows.map((row) => row.family)),
+        matchableFields: input.alertability.matchableFields,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    blockers,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
 }
 
 function sourceActorMetadata(query: string, provenance: Array<Record<string, any>>, coverage: Record<string, any>) {
