@@ -460,6 +460,34 @@ describe("DWM org watchlist bridge", () => {
       alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
       membershipContext: { visibilityPolicy: "members" }
     });
+    const memberDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${memberList.alerts[0].id}?organizationId=${organizationId}&watchlistItemId=org_item_acme_domain`, {
+      headers: { "x-user-email": "member@org-bridge.example" }
+    }), options);
+    const memberDetail = await memberDetailResponse.json() as any;
+    expect(memberDetailResponse.status).toBe(200);
+    expect(memberDetail.alertQueueVisibility).toMatchObject({
+      schemaVersion: "dwm.org_alert_queue_visibility.v1",
+      organizationId,
+      tenantId: organizationId,
+      member: { userId: "member-org-bridge", role: "member", status: "active" },
+      allowedActions: ["acknowledge_alert"],
+      actionGates: {
+        assign_case: { allowed: false, denialReason: "role_not_allowed" }
+      },
+      counts: {
+        visibleAlertCount: 1,
+        watchlistItemCount: 1,
+        alertGeneratorKeyCount: 1
+      },
+      watchlistScope: {
+        watchlistItemIds: ["org_item_acme_domain"],
+        alertGeneratorKeys: [`org:${organizationId}:watchlist:org_item_acme_domain:domain:acme.com`],
+        activeOnly: true,
+        blockedLifecycleCodes: ["destination_unavailable"]
+      },
+      routes: { detail: "/v1/dwm/alerts/:id" },
+      filters: { watchlistItemId: "org_item_acme_domain" }
+    });
 
     const viewerListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${organizationId}`, {
       headers: { "x-user-email": "viewer@org-bridge.example" }
@@ -887,6 +915,30 @@ describe("DWM org watchlist bridge", () => {
       }
     });
     expect(lifecycleDetail.downstreamHandoff.deliverySelection).not.toHaveProperty("selectedWebhookDestinationId");
+    expect(lifecycleDetail.alertQueueVisibility).toMatchObject({
+      schemaVersion: "dwm.org_alert_queue_visibility.v1",
+      organizationId: activeOrgId,
+      organizationLifecycleState: "active",
+      member: { userId: "owner-active-lifecycle", role: "owner", status: "active" },
+      allowedActions: ["acknowledge_alert", "assign_case", "link_case", "replay_alert", "deliver_webhook"],
+      counts: {
+        visibleAlertCount: 1,
+        watchlistItemCount: 1,
+        alertGeneratorKeyCount: 1
+      },
+      watchlistScope: {
+        watchlistItemIds: ["watch_item_lifecycle_active"],
+        activeOnly: true,
+        blockedLifecycleCodes: expect.arrayContaining(["retired_watchlist", "disabled_destination", "destination_unavailable", "no_active_source_match"])
+      },
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: "retired_watchlist", field: "alertQueue.lifecycle" }),
+        expect.objectContaining({ code: "disabled_destination", field: "alertQueue.lifecycle" }),
+        expect.objectContaining({ code: "destination_unavailable", field: "alertQueue.lifecycle" }),
+        expect.objectContaining({ code: "no_active_source_match", field: "alertQueue.lifecycle" })
+      ]),
+      routes: { detail: "/v1/dwm/alerts/:id" }
+    });
     expect(lifecycleDetail.retentionAudit).toMatchObject({
       schemaVersion: "dwm.alert_retention_audit.v1",
       retentionState: "lifecycle_blocked_retained",

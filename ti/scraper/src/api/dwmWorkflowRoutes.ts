@@ -178,7 +178,18 @@ export function getDwmAlertDetail(url: URL, options: ApiServerOptions, alertId: 
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   if (alert.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
-  return json(buildDwmAlertDetail(alert, options, access));
+  return json({
+    ...buildDwmAlertDetail(alert, options, access),
+    alertQueueVisibility: buildDwmAlertQueueVisibility({
+      organizationId: scope.organizationId,
+      tenantId: scope.tenantId,
+      organization: scope.organization,
+      access,
+      alerts: [alert],
+      options,
+      url
+    })
+  });
 }
 
 export async function updateDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
