@@ -13,6 +13,7 @@ export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION =
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION = "ti.source_provenance_actor_profile_source_update_workflow.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION = "ti.source_provenance_source_pack_activation_readiness.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -812,6 +813,50 @@ export type TiSourceProvenanceSourcePackIntakeReceiptRow = {
   policyBoundary: TiSourceProvenanceActorProfileGapSourceCandidate["policyBoundary"];
 };
 
+export type TiSourceProvenanceSourcePackActivationReadiness = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  sourcePackIntakeReceiptId: string;
+  actions: TiSourceProvenanceSourcePackActivationAction[];
+  sourceHealth: TiSourceProvenanceSourcePackIntakeReceipt["sourceHealth"];
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceSourcePackActivationAction = {
+  actionId: string;
+  action: "test_source" | "retry_parser" | "request_policy_approval";
+  candidateId: string;
+  sourceId?: string;
+  family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  activationState: TiSourceProvenanceActorProfileSourceUpdateTask["activationState"];
+  reason: string;
+  nextRetryAt?: string;
+  route: {
+    method: "POST";
+    path: "/v1/dwm/source-requests";
+    body: {
+      action: "test" | "retry" | "request_approval";
+      candidateId: string;
+      sourceId?: string;
+      dryRun: true;
+    };
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -1576,6 +1621,41 @@ export function buildSourceProvenanceSourcePackIntakeReceipt(input: {
   };
 }
 
+export function buildSourceProvenanceSourcePackActivationReadiness(input: {
+  receipt: TiSourceProvenanceSourcePackIntakeReceipt;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackActivationReadiness {
+  const generatedAt = input.generatedAt ?? input.receipt.generatedAt;
+  const actions = input.receipt.rows.map(sourcePackActivationAction);
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_activation_readiness", `${input.receipt.id}:${generatedAt}:${actions.map((action) => `${action.candidateId}:${action.action}`).join(",")}`),
+    generatedAt,
+    ok: actions.length > 0 && actions.some((action) => action.action === "test_source"),
+    tenantId: input.receipt.tenantId,
+    organizationId: input.receipt.organizationId,
+    actor: input.receipt.actor,
+    sourcePackIntakeReceiptId: input.receipt.id,
+    actions,
+    sourceHealth: input.receipt.sourceHealth,
+    payloadShape: [
+      "actions[].action",
+      "actions[].candidateId",
+      "actions[].sourceId",
+      "actions[].route",
+      "actions[].nextRetryAt",
+      "sourceHealth"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -2165,6 +2245,43 @@ function sourcePackIntakeReceiptHealth(
     families,
     nextRetryAt: earliestTimestamp(rows.map((row) => row.nextRetryAt))
   };
+}
+
+function sourcePackActivationAction(row: TiSourceProvenanceSourcePackIntakeReceiptRow): TiSourceProvenanceSourcePackActivationAction {
+  const action = row.status === "queued_for_review"
+    ? "test_source"
+    : row.status === "retry_scheduled"
+      ? "retry_parser"
+      : "request_policy_approval";
+  return {
+    actionId: stableId("ti_source_provenance_source_pack_activation_action", `${row.candidateId}:${row.status}:${row.sourceId ?? ""}`),
+    action,
+    candidateId: row.candidateId,
+    sourceId: row.sourceId,
+    family: row.family,
+    parserStatus: row.parserStatus,
+    activationState: row.activationState,
+    reason: sourcePackActivationReason(row),
+    nextRetryAt: row.nextRetryAt,
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: {
+        action: action === "test_source" ? "test" : action === "retry_parser" ? "retry" : "request_approval",
+        candidateId: row.candidateId,
+        sourceId: row.sourceId,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  };
+}
+
+function sourcePackActivationReason(row: TiSourceProvenanceSourcePackIntakeReceiptRow): string {
+  if (row.status === "queued_for_review") return "Candidate has a queued source row and can run fixture-backed parser/source health test.";
+  if (row.status === "retry_scheduled") return row.failureReason ?? "Parser retry is scheduled before candidate can be tested again.";
+  return row.failureReason ?? "Policy approval is required before this source can be activated.";
 }
 
 function rowsForActorProfileField(
