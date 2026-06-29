@@ -2154,6 +2154,18 @@ export function buildReadinessCases(input: {
                         maxTasks: 24,
                     },
                 },
+                {
+                    id: 'preview_source_apply_plan',
+                    label: 'Preview source plan',
+                    method: 'POST',
+                    href: '/api/ti/scraper/control',
+                    body: {
+                        action: 'source_apply_plan',
+                        query: input.scope.organizationId || input.scope.tenantId,
+                        sourcePackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'darkweb-actor-metadata-core'],
+                        actions: ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'],
+                    },
+                },
             ],
         }),
         readinessCase({
