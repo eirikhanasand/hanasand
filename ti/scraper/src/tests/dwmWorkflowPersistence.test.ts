@@ -3,6 +3,7 @@ import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+import { orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
 const source: SourceRecord = {
@@ -49,6 +50,82 @@ const duplicateCapture: RawCapture = {
   id: "cap_workflow_acme_duplicate",
   url: "https://t.me/workflow_public/42?mirror=1",
   collectedAt: "2026-06-27T21:09:00.000Z"
+} as RawCapture;
+
+const darkwebSource: SourceRecord = {
+  id: "src_workflow_onion",
+  name: "Workflow onion metadata",
+  type: "tor_metadata",
+  url: "http://workflow-example.onion",
+  accessMethod: "approved_proxy",
+  status: "active",
+  trustScore: 0.78,
+  legalNotes: "Metadata-only onion source.",
+  createdAt: "2026-06-27T21:00:00.000Z",
+  updatedAt: "2026-06-27T21:00:00.000Z"
+} as SourceRecord;
+
+const darkwebCapture: RawCapture = {
+  id: "cap_workflow_onion_acme",
+  sourceId: darkwebSource.id,
+  url: "http://workflow-example.onion/acme",
+  collectedAt: "2026-06-27T21:04:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "metadata_only",
+  contentHash: "hash-workflow-onion-acme",
+  sensitive: true,
+  metadata: {
+    adapter: "darknet_metadata",
+    leakSite: {
+      actorName: "Akira",
+      victimName: "acme.com",
+      description: "Metadata-only onion page claims acme.com procurement exports.",
+      captureMode: "metadata_only"
+    }
+  }
+} as RawCapture;
+
+const darkwebFollowupCapture: RawCapture = {
+  ...darkwebCapture,
+  id: "cap_workflow_onion_acme_followup",
+  url: "http://workflow-example.onion/acme-followup",
+  collectedAt: "2026-06-27T21:12:00.000Z",
+  contentHash: "hash-workflow-onion-acme-followup",
+  metadata: {
+    adapter: "darknet_metadata",
+    leakSite: {
+      actorName: "Akira",
+      victimName: "acme.com",
+      description: "Follow-up metadata-only onion page repeats acme.com procurement export claims.",
+      captureMode: "metadata_only"
+    }
+  }
+} as RawCapture;
+
+const actorSource: SourceRecord = {
+  id: "src_workflow_actor",
+  name: "Workflow actor metadata",
+  type: "actor_page",
+  url: "https://intel.example/actors/workflow-actor",
+  accessMethod: "public_http_metadata",
+  status: "active",
+  trustScore: 0.74,
+  legalNotes: "Public actor-page metadata only.",
+  createdAt: "2026-06-27T21:00:00.000Z",
+  updatedAt: "2026-06-27T21:00:00.000Z"
+} as SourceRecord;
+
+const actorCapture: RawCapture = {
+  id: "cap_workflow_actor_beta",
+  sourceId: actorSource.id,
+  url: "https://intel.example/actors/workflow-actor#beta",
+  collectedAt: "2026-06-27T21:06:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "metadata_only",
+  contentHash: "hash-workflow-actor-beta",
+  sensitive: false,
+  body: "Actor page lists beta-payments.example as a current credential broker target.",
+  metadata: { adapter: "actor_page_metadata", actorName: "WorkflowActor", victimName: "beta-payments.example" }
 } as RawCapture;
 
 describe("dwm workflow persistence", () => {
@@ -444,4 +521,275 @@ describe("dwm workflow persistence", () => {
     expect(detail.evidenceFreshness).toMatchObject({ evidenceCount: 1, newestEvidenceAt: "2026-06-27T21:02:00.000Z" });
     expect(detail.provenanceFreshness).toMatchObject({ matchBasis: "watchlist_capture_text", captureIds: ["cap_workflow_acme"] });
   });
+
+  test("keeps multi-source org alert lifecycle isolated across darkweb Telegram and actor captures", async () => {
+    const store = new InMemoryScraperStore();
+    for (const row of [source, darkwebSource, actorSource]) store.saveSource(row);
+    for (const row of [capture, darkwebCapture, actorCapture]) store.saveCapture(row);
+    const options = { store, frontier: new FocusedFrontier() };
+
+    const alphaOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+      method: "POST",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({ name: "Workflow Alpha Org", ownerEmail: "owner-alpha@workflow.example", ownerUserId: "owner-alpha-workflow" })
+    }), options);
+    const betaOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+      method: "POST",
+      headers: { "x-user-email": "owner-beta@workflow.example" },
+      body: JSON.stringify({ name: "Workflow Beta Org", ownerEmail: "owner-beta@workflow.example", ownerUserId: "owner-beta-workflow" })
+    }), options);
+    const alphaOrg = (await alphaOrgResponse.json() as any).organization;
+    const betaOrg = (await betaOrgResponse.json() as any).organization;
+    (store as any).saveWebhookDestination({
+      id: "webhook_workflow_alpha",
+      organizationId: alphaOrg.id,
+      tenantId: alphaOrg.id,
+      name: "Alpha workflow delivery",
+      url: "https://hooks.example.com/workflow-alpha",
+      kind: "generic",
+      status: "active",
+      createdAt: "2026-06-27T21:00:00.000Z",
+      updatedAt: "2026-06-27T21:00:00.000Z"
+    });
+    (store as any).saveWebhookDestination({
+      id: "webhook_workflow_beta",
+      organizationId: betaOrg.id,
+      tenantId: betaOrg.id,
+      name: "Beta workflow delivery",
+      url: "https://hooks.example.com/workflow-beta",
+      kind: "generic",
+      status: "active",
+      createdAt: "2026-06-27T21:00:00.000Z",
+      updatedAt: "2026-06-27T21:00:00.000Z"
+    });
+
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: alphaOrg.id,
+      tenantId: alphaOrg.id,
+      ownerOrganizationId: alphaOrg.id,
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_workflow_alpha_acme",
+        watchlistItemId: "watch_item_workflow_alpha_acme",
+        organizationId: alphaOrg.id,
+        tenantId: alphaOrg.id,
+        kind: "domain",
+        termFamily: "domain",
+        term: "acme.com",
+        category: "domain",
+        status: "active",
+        alertGenerationRef: workflowAlertGenerationRef({
+          organizationId: alphaOrg.id,
+          watchlistItemId: "watch_item_workflow_alpha_acme",
+          term: "acme.com",
+          termFamily: "domain"
+        })
+      }]
+    }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_workflow_alpha" }))) {
+      (store as any).saveDwmWatchlist(watchlist);
+    }
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: betaOrg.id,
+      tenantId: betaOrg.id,
+      ownerOrganizationId: betaOrg.id,
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_workflow_beta_actor",
+        watchlistItemId: "watch_item_workflow_beta_actor",
+        organizationId: betaOrg.id,
+        tenantId: betaOrg.id,
+        kind: "domain",
+        termFamily: "domain",
+        term: "beta-payments.example",
+        category: "domain",
+        status: "active",
+        alertGenerationRef: workflowAlertGenerationRef({
+          organizationId: betaOrg.id,
+          watchlistItemId: "watch_item_workflow_beta_actor",
+          term: "beta-payments.example",
+          termFamily: "domain"
+        })
+      }]
+    }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_workflow_beta" }))) {
+      (store as any).saveDwmWatchlist(watchlist);
+    }
+
+    const alphaRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({ organizationId: alphaOrg.id })
+    }), options);
+    const betaRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-beta@workflow.example" },
+      body: JSON.stringify({ organizationId: betaOrg.id })
+    }), options);
+    const alphaRebuild = await alphaRebuildResponse.json() as any;
+    const betaRebuild = await betaRebuildResponse.json() as any;
+    expect(alphaRebuild.savedAlertCount).toBe(2);
+    expect(alphaRebuild.alerts.map((alert: any) => alert.sourceFamily).sort()).toEqual(["darkweb_metadata", "telegram_public"]);
+    expect(betaRebuild.savedAlertCount).toBe(1);
+    expect(betaRebuild.alerts[0].sourceFamily).toBe("actor_page");
+
+    const alphaDarkweb = alphaRebuild.alerts.find((alert: any) => alert.sourceFamily === "darkweb_metadata");
+    const betaActor = betaRebuild.alerts[0];
+    expect(alphaDarkweb.provenance).toMatchObject({
+      metadataOnly: true,
+      captureIds: ["cap_workflow_onion_acme"]
+    });
+    expect(betaActor.provenance.captureIds).toEqual(["cap_workflow_actor_beta"]);
+
+    const triageResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({
+        organizationId: alphaOrg.id,
+        status: "investigating",
+        assignedOwner: "owner-alpha-workflow",
+        severityOverride: "high",
+        caseId: "case_alpha_darkweb",
+        casePath: `/v1/cases/case_alpha_darkweb?alertId=${alphaDarkweb.id}`,
+        note: "Darkweb metadata reviewed.",
+        rationale: "Metadata-only onion source matched the org domain."
+      })
+    }), options);
+    const triage = await triageResponse.json() as any;
+    expect(triageResponse.status).toBe(200);
+    expect(triage.alert.workflowSummary).toMatchObject({
+      status: "investigating",
+      assignedOwner: "owner-alpha-workflow",
+      severityOverride: "high",
+      caseId: "case_alpha_darkweb",
+      eventCount: 1
+    });
+    expect(triage.alert.downstreamHandoff).toMatchObject({
+      organizationId: alphaOrg.id,
+      sourceFamily: "darkweb_metadata",
+      deliverySelection: {
+        ready: true,
+        selectedWebhookDestinationId: "webhook_workflow_alpha",
+        selectedCaptureIds: ["cap_workflow_onion_acme"]
+      },
+      caseReadiness: {
+        ready: true,
+        caseId: "case_alpha_darkweb"
+      }
+    });
+    expect(triage.alert.customerProofHandoff).toMatchObject({
+      organizationId: alphaOrg.id,
+      sourceFamily: "darkweb_metadata",
+      workflow: { status: "investigating", eventCount: 1 },
+      caseHandoff: { ready: true, caseId: "case_alpha_darkweb" },
+      delivery: { ready: true }
+    });
+
+    const staleReplayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}/replay`, {
+      method: "POST",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({ organizationId: alphaOrg.id, expectedWorkflowEventCount: 0 })
+    }), options);
+    const staleReplay = await staleReplayResponse.json() as any;
+    expect(staleReplayResponse.status).toBe(409);
+    expect(staleReplay.workflowExecutionReadiness).toMatchObject({
+      ready: false,
+      blockerCodes: ["stale_workflow_version"],
+      expectedWorkflowEventCount: 0,
+      currentWorkflowEventCount: 1
+    });
+
+    store.saveCapture(darkwebFollowupCapture);
+    const alphaSecondRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({ organizationId: alphaOrg.id })
+    }), options);
+    const alphaSecondRebuild = await alphaSecondRebuildResponse.json() as any;
+    const preservedDarkweb = alphaSecondRebuild.alerts.find((alert: any) => alert.id === alphaDarkweb.id);
+    expect(preservedDarkweb).toMatchObject({
+      workflowStatus: "investigating",
+      assignedOwner: "owner-alpha-workflow",
+      severityOverride: "high",
+      caseId: "case_alpha_darkweb",
+      workflowNote: "Darkweb metadata reviewed.",
+      workflowRationale: "Metadata-only onion source matched the org domain."
+    });
+    expect(preservedDarkweb.workflowEvents).toHaveLength(1);
+    expect(preservedDarkweb.provenance.captureIds).toEqual(expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]));
+    expect(preservedDarkweb.deliveryReadinessContext).toMatchObject({
+      webhookDestinationIds: ["webhook_workflow_alpha"],
+      caseId: "case_alpha_darkweb",
+      selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"])
+    });
+
+    const betaListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${betaOrg.id}`, {
+      headers: { "x-user-email": "owner-beta@workflow.example" }
+    }), options);
+    const betaList = await betaListResponse.json() as any;
+    expect(betaList.alerts).toHaveLength(1);
+    expect(betaList.alerts[0]).toMatchObject({
+      id: betaActor.id,
+      organizationId: betaOrg.id,
+      sourceFamily: "actor_page"
+    });
+    expect(JSON.stringify(betaList)).not.toContain("case_alpha_darkweb");
+    expect(JSON.stringify(betaList)).not.toContain("webhook_workflow_alpha");
+
+    const crossOrgDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}?organizationId=${betaOrg.id}`, {
+      headers: { "x-user-email": "owner-beta@workflow.example" }
+    }), options);
+    const crossOrgDetail = await crossOrgDetailResponse.json() as any;
+    expect(crossOrgDetailResponse.status).toBe(403);
+    expect(crossOrgDetail.error.code).toBe("organization_visibility_denied");
+    expect(JSON.stringify(crossOrgDetail)).not.toContain("case_alpha_darkweb");
+    expect(JSON.stringify(crossOrgDetail)).not.toContain("cap_workflow_onion_acme");
+  });
 });
+
+function workflowAlertGenerationRef(input: {
+  organizationId: string;
+  watchlistItemId: string;
+  term: string;
+  termFamily: "company" | "domain" | "vendor" | "actor" | "keyword";
+}) {
+  const normalizedTerm = input.term.toLowerCase();
+  const key = `org:${input.organizationId}:watchlist:${input.watchlistItemId}:${input.termFamily}:${normalizedTerm}`;
+  return {
+    schemaVersion: "organization.watchlist_alert_generation_ref.v1" as const,
+    source: "organization_shared_watchlist" as const,
+    organizationId: input.organizationId,
+    tenantId: input.organizationId,
+    ownerOrganizationId: input.organizationId,
+    watchlistId: input.watchlistItemId,
+    watchlistItemId: input.watchlistItemId,
+    itemId: input.watchlistItemId,
+    termFamily: input.termFamily,
+    category: input.termFamily,
+    term: input.term,
+    normalizedTerm,
+    status: "active" as const,
+    lifecycle: {
+      status: "active" as const,
+      reason: "Workflow persistence org bridge fixture.",
+      requestId: `req-${input.watchlistItemId}`,
+      createdBy: "workflow-persistence-test",
+      updatedBy: "workflow-persistence-test"
+    },
+    dedupe: {
+      scope: "organization_watchlist_term" as const,
+      key,
+      parts: {
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        watchlistItemId: input.watchlistItemId,
+        termFamily: input.termFamily,
+        normalizedTerm
+      }
+    }
+  };
+}
