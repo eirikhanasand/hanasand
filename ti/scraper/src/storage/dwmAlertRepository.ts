@@ -65,6 +65,7 @@ export type DwmZeroAlertProof = {
     unmatchedCandidateCount: number;
   };
   sourceFamilyCoverage: Array<{ sourceFamily: string; candidateCount: number; captureRefCount: number; watchlistIds: string[] }>;
+  sourceFamilyGaps: DwmAlertGenerationReadiness["sourceFamilyGaps"];
   watchlistIds: string[];
   watchlistTerms: Array<{
     candidateId: string;
@@ -1455,6 +1456,7 @@ export function buildDwmAlertGenerationReadiness(input: {
       blockerCodes,
       typedBlockers,
       sourceFamilyCoverage,
+      sourceFamilyGaps,
       watchlistIds: plan.activeWatchlistIds,
       candidates: plan.candidates,
       candidateIdsMissingRoute
@@ -2497,6 +2499,7 @@ function buildDwmZeroAlertProof(input: {
   blockerCodes: DwmAlertGenerationBlockerCode[];
   typedBlockers: DwmAlertGenerationBlocker[];
   sourceFamilyCoverage: DwmAlertGenerationReadiness["sourceFamilyCoverage"];
+  sourceFamilyGaps: DwmAlertGenerationReadiness["sourceFamilyGaps"];
   watchlistIds: string[];
   candidates: DwmAlertGenerationCandidate[];
   candidateIdsMissingRoute: string[];
@@ -2520,6 +2523,7 @@ function buildDwmZeroAlertProof(input: {
       unmatchedCandidateCount: input.counts.unmatchedCandidateCount
     },
     sourceFamilyCoverage: input.sourceFamilyCoverage,
+    sourceFamilyGaps: input.sourceFamilyGaps,
     watchlistIds: input.watchlistIds,
     watchlistTerms: input.candidates.map((candidate) => ({
       candidateId: candidate.id,

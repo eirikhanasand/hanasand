@@ -1263,6 +1263,19 @@ describe("dwm alert repository", () => {
         expectedAlertDelta: 0,
         blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"]),
         counts: { activeWatchlists: 1, candidateCount: 1, captureRefCount: 0, matchedCandidateCount: 0, unmatchedCandidateCount: 1 },
+        sourceFamilyGaps: expect.arrayContaining([
+          expect.objectContaining({
+            sourceFamily: "telegram_public",
+            state: "active_no_match",
+            blockerCode: "no_matching_captures",
+            watchlistIds: ["watch_repo_nomatch"]
+          }),
+          expect.objectContaining({
+            sourceFamily: "darkweb_metadata",
+            state: "inactive_or_unconfigured",
+            blockerCode: "source_family_inactive"
+          })
+        ]),
         watchlistIds: ["watch_repo_nomatch"],
         watchlistTerms: [{
           candidateId: expect.any(String),
@@ -1304,7 +1317,10 @@ describe("dwm alert repository", () => {
       schemaVersion: "dwm.zero_alert_proof.v1",
       zeroAlert: true,
       state: "blocked_no_matching_capture",
-      expectedAlertDelta: 0
+      expectedAlertDelta: 0,
+      sourceFamilyGaps: expect.arrayContaining([
+        expect.objectContaining({ sourceFamily: "telegram_public", state: "active_no_match" })
+      ])
     });
     expect(noMatchRebuild.zeroAlertProof.watchlistTerms[0]).toMatchObject({
       term: "acme.com",
@@ -1338,7 +1354,16 @@ describe("dwm alert repository", () => {
       zeroAlert: true,
       state: "blocked_inactive_source",
       expectedAlertDelta: 0,
-      blockerCodes: expect.arrayContaining(["source_family_inactive"])
+      blockerCodes: expect.arrayContaining(["source_family_inactive"]),
+      sourceFamilyGaps: expect.arrayContaining([
+        expect.objectContaining({
+          sourceFamily: "telegram_public",
+          state: "matched",
+          active: false,
+          candidateCount: 1,
+          captureRefCount: 1
+        })
+      ])
     });
     expect(inactiveReadiness.typedBlockers.find((blocker) => blocker.code === "source_family_inactive")).toMatchObject({
       sourceFamilies: ["telegram_public"]
