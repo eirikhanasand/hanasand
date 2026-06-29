@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
 import { deployLedgerFromStatusPayload } from '@/utils/productProgress/deployLedger'
+import { helpdeskAuditFetchResultsFromLedger, loadProductHelpdeskAuditProofLedger } from '@/utils/productProgress/helpdeskAuditProofSource'
 import type { DwmAlertGenerationReadinessInput } from '@/utils/productProgress/readiness'
 import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
@@ -42,6 +43,10 @@ export async function GET(request: NextRequest) {
     const watchlistRows = rows((watchlists.json as { watchlists?: unknown[] } | undefined)?.watchlists) as DwmWatchlistSummary[]
     const webhookRows = rows((organizationWebhooks.json as { destinations?: unknown[] } | undefined)?.destinations) as DwmOrganizationWebhookDestination[]
     const normalizedSourceProxy = normalizeSourceProxy(sourceProxy, query, generatedAt)
+    const helpdeskProofLedger = (!supportRecovery.ok || !auditEvents.ok || !supportAuditExportProof(auditEvents))
+        ? await loadProductHelpdeskAuditProofLedger()
+        : undefined
+    const helpdeskFallback = helpdeskProofLedger ? helpdeskAuditFetchResultsFromLedger(helpdeskProofLedger) : undefined
 
     const payload = buildProductProgressPayload({
         generatedAt,
@@ -99,8 +104,8 @@ export async function GET(request: NextRequest) {
             generatedAt,
             recoveryRoute: routes.supportRecovery || '/api/backend/admin/support/access-recovery',
             auditRoute: routes.adminAuditEvents || '/api/backend/admin/audit-events?limit=50',
-            recovery: supportRecovery,
-            audit: auditEvents,
+            recovery: helpdeskFallback?.recovery || supportRecovery,
+            audit: helpdeskFallback?.audit || auditEvents,
         }),
         deploy: deployProbeReadiness({
             generatedAt,
