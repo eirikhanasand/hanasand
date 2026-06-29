@@ -741,6 +741,9 @@ assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readines
 assert.ok(dashboardModelSource.includes('open_alert_generation_readiness'), 'Alert readiness case should expose the backed generation-readiness proof.')
 assert.ok(dashboardModelSource.includes('/api/dwm/alerts/generation-readiness'), 'Alert readiness case should link to generation-readiness API.')
 assert.ok(dashboardModelSource.includes('Inspect generation readiness before treating fallback rows as customer evidence.'), 'Fallback alert queue should name the exact generation-readiness blocker.')
+assert.ok(productProgressRouteSource.includes('webhookProductProgressProof'), 'Product-progress route should consume webhook destination product-progress proof.')
+assert.ok(productProgressRouteSource.includes('destinationAdminProof'), 'Product-progress route should read webhook destination admin proof.')
+assert.ok(productProgressRouteSource.includes('dwm.webhook.destination_admin_product_progress.v1'), 'Webhook readiness should be backed by destination admin product-progress contract.')
 
 const backendProofCommits = {
     helpdeskAuditFilters: '016a8ef7',
@@ -760,6 +763,7 @@ const backendProofCommits = {
     sourceActionContracts: '178ec078',
     webhookDeliveryReadiness: '14210040',
     webhookAdminProof: 'b3600c7e',
+    webhookProductProgressProof: 'adbe584b',
     alertMatching: '9d4c7118',
     customerAlertProof: '03d8d1ec',
 }
@@ -783,6 +787,7 @@ assert.deepEqual(Object.keys(backendProofCommits).sort(), [
     'sourceReadiness',
     'webhookAdminProof',
     'webhookDeliveryReadiness',
+    'webhookProductProgressProof',
 ])
 
 function assertDependencyProofFields(input: {

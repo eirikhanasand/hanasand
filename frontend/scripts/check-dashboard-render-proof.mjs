@@ -6,6 +6,7 @@ const modelSource = readFileSync(new URL('../src/app/dashboard/operatorConsoleMo
 const pageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', import.meta.url), 'utf8')
 const sourceOpsSource = readFileSync(new URL('../src/app/dashboard/ti/control/scraperControlClient.tsx', import.meta.url), 'utf8')
 const checkerSource = readFileSync(new URL('./check-product-progress-contract.ts', import.meta.url), 'utf8')
+const webhookProofCheckerSource = readFileSync(new URL('./check-product-progress-webhook-proof.ts', import.meta.url), 'utf8')
 const progressSource = readFileSync(new URL('../src/utils/productProgress/readiness.ts', import.meta.url), 'utf8')
 const renderDomSource = readFileSync(new URL('./check-dashboard-render-dom.mjs', import.meta.url), 'utf8')
 
@@ -42,8 +43,8 @@ const readinessRows = {
     },
     webhook_health: {
         href: '/dashboard/automations?setup=dwm',
-        backendProbe: 'GET /api/organizations/:id/webhooks + GET /api/dwm/webhooks/deliveries',
-        commits: ['b3600c7e'],
+        backendProbe: 'GET /api/organizations/:id/webhooks destinationAdminProof.productProgress',
+        commits: ['b3600c7e', 'adbe584b'],
     },
     helpdesk_audit: {
         href: '/dashboard/system/impersonation',
@@ -72,6 +73,15 @@ for (const [id, spec] of Object.entries(readinessRows)) {
     for (const commit of spec.commits) {
         assert.ok(checkerSource.includes(commit) || spec.backendProbe.includes(commit), `Missing backend commit assertion ${commit} for ${id}`)
     }
+}
+
+for (const webhookProofToken of [
+    'webhookProductProgressProof',
+    'destinationAdminProof',
+    'dwm.webhook.destination_admin_product_progress.v1',
+    'GET /api/organizations/:id/webhooks must return destinationAdminProof.productProgress',
+]) {
+    assert.ok(webhookProofCheckerSource.includes(webhookProofToken), `Webhook product-progress checker missing token: ${webhookProofToken}`)
 }
 
 for (const attr of [
