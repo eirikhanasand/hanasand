@@ -79,9 +79,32 @@ const organization = parseBody(organizationResponse.body).organization
 assert.equal(organization.role, 'owner')
 assert.equal(organization.memberCount, 1)
 assert.equal(organization.ownerCount, 1)
+assert.equal(organization.activeAdminCount, 1)
 assert.equal(organization.settings.defaultWebhookPolicy, 'active_destinations')
 assert.equal(organization.settings.alertVisibilityPolicy, 'members')
 assert.equal(organization.settings.retentionDays, 365)
+const createdLifecycleReadiness = parseBody(organizationResponse.body).lifecycleReadiness
+assert.equal(createdLifecycleReadiness.schemaVersion, 'organization.lifecycle_readiness.v1')
+assert.equal(createdLifecycleReadiness.organizationId, organization.id)
+assert.equal(createdLifecycleReadiness.tenantId, organization.id)
+assert.equal(createdLifecycleReadiness.lifecycleStatus, 'active')
+assert.equal(createdLifecycleReadiness.actorRole, 'owner')
+assert.equal(createdLifecycleReadiness.counts.memberCount, 1)
+assert.equal(createdLifecycleReadiness.counts.activeAdminCount, 1)
+assert.equal(createdLifecycleReadiness.watchlistReadiness.ready, false)
+assert.equal(createdLifecycleReadiness.alertExportReadiness.ready, false)
+assert.deepEqual(createdLifecycleReadiness.typedBlockers, ['watchlist_setup_required', 'alert_export_unavailable'])
+assert.equal(createdLifecycleReadiness.memberRoleReadiness.ownerCanMutate, true)
+assert.equal(createdLifecycleReadiness.memberRoleReadiness.supportReadMode, 'redacted_support_contract_only')
+assert.equal(createdLifecycleReadiness.memberRoleReadiness.nonmemberEnumeration, false)
+assert.equal(createdLifecycleReadiness.memberRoleReadiness.revokedMemberDenial, 'member_revoked')
+assert.equal(createdLifecycleReadiness.memberRoleReadiness.expiredInviteDenial, 'invite_expired')
+assert.equal(createdLifecycleReadiness.supportVisibility.redactionBlocker, 'support_redaction_required')
+assert.ok(createdLifecycleReadiness.blockerCatalog.includes('org_missing'))
+assert.ok(createdLifecycleReadiness.blockerCatalog.includes('org_archived'))
+assert.ok(createdLifecycleReadiness.blockerCatalog.includes('org_deleted'))
+assert.ok(createdLifecycleReadiness.blockerCatalog.includes('no_active_admin'))
+assert.ok(createdLifecycleReadiness.blockerCatalog.includes('cleanup_required'))
 
 const ownerReadOrganizationResponse = await app.inject({
     method: 'GET',
@@ -94,6 +117,7 @@ assert.equal(ownerReadOrganization.id, organization.id)
 assert.equal(ownerReadOrganization.role, 'owner')
 assert.equal(ownerReadOrganization.memberCount, 1)
 assert.equal(ownerReadOrganization.settings.defaultWebhookPolicy, 'active_destinations')
+assert.deepEqual(parseBody(ownerReadOrganizationResponse.body).lifecycleReadiness.typedBlockers, ['watchlist_setup_required', 'alert_export_unavailable'])
 
 const ownerDefaultSettingsResponse = await app.inject({
     method: 'GET',
@@ -104,6 +128,7 @@ assert.equal(ownerDefaultSettingsResponse.statusCode, 200, ownerDefaultSettingsR
 const ownerDefaultSettings = parseBody(ownerDefaultSettingsResponse.body)
 assert.equal(ownerDefaultSettings.permissions.canEdit, true)
 assert.equal(ownerDefaultSettings.settings.defaultWebhookPolicy, 'active_destinations')
+assert.equal(ownerDefaultSettings.lifecycleReadiness.counts.activeAdminCount, 1)
 
 const inviteResponse = await app.inject({
     method: 'POST',
@@ -282,6 +307,11 @@ assert.equal(memberReadUpdatedOrganization.slug, 'shared-ops')
 assert.equal(memberReadUpdatedOrganization.role, 'member')
 assert.equal(memberReadUpdatedOrganization.settings.defaultWebhookPolicy, 'manual_selection')
 assert.equal(memberReadUpdatedOrganization.settings.alertVisibilityPolicy, 'admins')
+const memberReadLifecycle = parseBody(memberReadUpdatedOrganizationResponse.body).lifecycleReadiness
+assert.equal(memberReadLifecycle.actorRole, 'member')
+assert.equal(memberReadLifecycle.memberRoleReadiness.ownerCanMutate, false)
+assert.equal(memberReadLifecycle.memberRoleReadiness.adminCanMutate, false)
+assert.equal(memberReadLifecycle.memberRoleReadiness.memberCanReadAndExport, true)
 
 for (const [userId, token, canEdit] of [
     ['org_smoke_member', 'member-token', false],
@@ -297,6 +327,7 @@ for (const [userId, token, canEdit] of [
     assert.equal(readableSettings.settings.defaultWebhookPolicy, 'manual_selection')
     assert.equal(readableSettings.settings.alertVisibilityPolicy, 'admins')
     assert.equal(readableSettings.permissions.canEdit, canEdit)
+    assert.equal(readableSettings.lifecycleReadiness.supportVisibility.mode, 'redacted_summary_only')
 }
 
 const outsiderSettingsResponse = await app.inject({
@@ -779,6 +810,18 @@ assert.equal(readiness.teamOnboardingReadiness.acceptedOrInvitedCount, 15)
 assert.equal(readiness.teamOnboardingReadiness.sharedWatchlistCount, 5)
 assert.equal(readiness.teamOnboardingReadiness.canSupportTenMemberSharedWatchlistRollout, true)
 assert.deepEqual(readiness.teamOnboardingReadiness.blockedReasons, [])
+assert.equal(readiness.lifecycleReadiness.schemaVersion, 'organization.lifecycle_readiness.v1')
+assert.equal(readiness.lifecycleReadiness.actorRole, 'member')
+assert.equal(readiness.lifecycleReadiness.counts.memberCount, 4)
+assert.equal(readiness.lifecycleReadiness.counts.activeAdminCount, 2)
+assert.equal(readiness.lifecycleReadiness.counts.pendingInviteCount, 11)
+assert.equal(readiness.lifecycleReadiness.counts.sharedWatchlistCount, 5)
+assert.equal(readiness.lifecycleReadiness.watchlistReadiness.ready, true)
+assert.equal(readiness.lifecycleReadiness.alertExportReadiness.ready, true)
+assert.equal(readiness.lifecycleReadiness.cleanupReadiness.cleanupIdempotent, true)
+assert.equal(readiness.lifecycleReadiness.supportVisibility.mode, 'redacted_summary_only')
+assert.deepEqual(readiness.lifecycleReadiness.typedBlockers, [])
+assert.equal(readiness.lifecycleReadiness.readyForOnboarding, true)
 assert.equal(readiness.alertGenerationBridge.schemaVersion, 'organization.watchlist_alert_generation.v1')
 assert.equal(readiness.alertGenerationBridge.organizationId, organization.id)
 assert.equal(readiness.alertGenerationBridge.tenantId, organization.id)
@@ -1585,6 +1628,7 @@ function organizationSummary(organizationId: string, role: string) {
     const org = organizations.get(organizationId)
     const activeMembers = [...members.values()].filter(member => member.organization_id === organizationId && member.status === 'active' && users.get(member.user_id)?.active !== false)
     const activeOwners = activeMembers.filter(member => member.role === 'owner')
+    const activeAdmins = activeMembers.filter(member => member.role === 'owner' || member.role === 'admin')
     const pendingInvites = [...invites.values()].filter(invite => invite.organization_id === organizationId && invite.status === 'pending' && Date.parse(invite.expires_at) > Date.now())
     const sharedWatchlists = [...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at && item.status === 'active')
     return {
@@ -1592,6 +1636,7 @@ function organizationSummary(organizationId: string, role: string) {
         role,
         member_count: activeMembers.length,
         owner_count: activeOwners.length,
+        admin_count: activeAdmins.length,
         pending_invite_count: pendingInvites.length,
         shared_watchlist_count: sharedWatchlists.length,
     }

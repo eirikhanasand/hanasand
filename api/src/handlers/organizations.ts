@@ -16,6 +16,7 @@ import {
     normalizeWatchlistCleanupInput,
     normalizeWatchlistInput,
     normalizeWatchlistRequestId,
+    organizationLifecycleReadiness,
     organizationSettingsFromRow,
     organizationVisibilityDecision,
     organizationWatchlistAlertGenerationContract,
@@ -99,6 +100,7 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
             om.role,
             COUNT(DISTINCT active_member_users.id)::int AS member_count,
             COUNT(DISTINCT active_owner_users.id)::int AS owner_count,
+            COUNT(DISTINCT active_admin_users.id)::int AS admin_count,
             COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count,
             COUNT(DISTINCT active_watchlist_items.id)::int AS shared_watchlist_count
         FROM organizations o
@@ -122,6 +124,13 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
         LEFT JOIN users active_owner_users
           ON active_owner_users.id = active_owners.user_id
          AND active_owner_users.active = TRUE
+        LEFT JOIN organization_members active_admins
+          ON active_admins.organization_id = o.id
+         AND active_admins.status = 'active'
+         AND active_admins.role IN ('owner', 'admin')
+        LEFT JOIN users active_admin_users
+          ON active_admin_users.id = active_admins.user_id
+         AND active_admin_users.active = TRUE
         LEFT JOIN organization_invites pending_invites
           ON pending_invites.organization_id = o.id
          AND pending_invites.status = 'pending'
@@ -175,13 +184,18 @@ export async function postOrganization(req: FastifyRequest<{ Body: OrganizationI
         slug,
     })
 
-    return res.status(201).send({ organization: toOrganization({
+    const createdOrganization: OrganizationRow = {
         ...(organization.rows[0] as OrganizationRow),
         role: 'owner',
         member_count: 1,
         owner_count: 1,
+        admin_count: 1,
         pending_invite_count: 0,
-    }) })
+    }
+    return res.status(201).send({
+        organization: toOrganization(createdOrganization),
+        lifecycleReadiness: organizationLifecycleReadiness(createdOrganization),
+    })
 }
 
 export async function getOrganization(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
@@ -195,7 +209,10 @@ export async function getOrganization(req: FastifyRequest<{ Params: Organization
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
-    return res.send({ organization: toOrganization(organization) })
+    return res.send({
+        organization: toOrganization(organization),
+        lifecycleReadiness: organizationLifecycleReadiness(organization),
+    })
 }
 
 export async function getOrganizationSettings(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
@@ -213,6 +230,7 @@ export async function getOrganizationSettings(req: FastifyRequest<{ Params: Orga
         organization: toOrganization(organization),
         settings: organizationSettingsFromRow(organization),
         permissions: organizationSettingsPermissions(organization.role),
+        lifecycleReadiness: organizationLifecycleReadiness(organization),
     })
 }
 
@@ -276,6 +294,7 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
         organization: updated ? toOrganization(updated) : null,
         settings: updated ? organizationSettingsFromRow(updated) : null,
         permissions: organizationSettingsPermissions(updated?.role),
+        lifecycleReadiness: updated ? organizationLifecycleReadiness(updated) : null,
     })
 }
 
@@ -948,6 +967,10 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
     const generatedAlertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(bridgeOrganization, item))
     const teamOnboardingReadiness = organizationTeamOnboardingReadiness(bridgeContext)
     const alertGenerationBridge = organizationAlertGenerationBridge(bridgeContext, watchlistItems)
+    const lifecycleReadiness = organizationLifecycleReadiness({
+        ...organization,
+        shared_watchlist_count: bridgeContext.sharedWatchlistCount,
+    })
 
     return res.send({
         organization: toOrganization(organization),
@@ -968,6 +991,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
             readinessStatus: bridgeContext.readinessStatus,
             ready: generatedAlertReferences.length > 0,
             teamOnboardingReadiness,
+            lifecycleReadiness,
             alertGenerationBridge,
             watchlistItemCount: generatedAlertReferences.length,
             generatedAlertReferences,
@@ -996,6 +1020,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'sharedWatchlistCount',
                 'readinessStatus',
                 'teamOnboardingReadiness',
+                'lifecycleReadiness',
                 'alertGenerationBridge',
                 'alertGenerationBridge.activeWatchlistTerms',
                 'alertGenerationBridge.activeWatchlistTerms.status',
@@ -1381,6 +1406,7 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
             om.role,
             COUNT(DISTINCT active_member_users.id)::int AS member_count,
             COUNT(DISTINCT active_owner_users.id)::int AS owner_count,
+            COUNT(DISTINCT active_admin_users.id)::int AS admin_count,
             COUNT(DISTINCT pending_invites.id)::int AS pending_invite_count,
             COUNT(DISTINCT active_watchlist_items.id)::int AS shared_watchlist_count
         FROM organizations o
@@ -1404,6 +1430,13 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
         LEFT JOIN users active_owner_users
           ON active_owner_users.id = active_owners.user_id
          AND active_owner_users.active = TRUE
+        LEFT JOIN organization_members active_admins
+          ON active_admins.organization_id = o.id
+         AND active_admins.status = 'active'
+         AND active_admins.role IN ('owner', 'admin')
+        LEFT JOIN users active_admin_users
+          ON active_admin_users.id = active_admins.user_id
+         AND active_admin_users.active = TRUE
         LEFT JOIN organization_invites pending_invites
           ON pending_invites.organization_id = o.id
          AND pending_invites.status = 'pending'

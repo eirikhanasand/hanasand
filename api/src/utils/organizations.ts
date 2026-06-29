@@ -89,6 +89,7 @@ export type OrganizationRow = {
     updated_at: string
     member_count?: number
     owner_count?: number
+    admin_count?: number
     pending_invite_count?: number
     shared_watchlist_count?: number
     default_webhook_policy?: OrganizationDefaultWebhookPolicy
@@ -465,6 +466,74 @@ export type OrganizationVisibilityDecision = {
     allowedRoles: OrganizationRole[]
 }
 
+export type OrganizationLifecycleReadinessBlockerCode =
+    | 'org_missing'
+    | 'org_archived'
+    | 'org_deleted'
+    | 'no_active_admin'
+    | 'member_revoked'
+    | 'invite_expired'
+    | 'watchlist_setup_required'
+    | 'alert_export_unavailable'
+    | 'support_redaction_required'
+    | 'cleanup_required'
+
+export type OrganizationLifecycleReadiness = {
+    schemaVersion: 'organization.lifecycle_readiness.v1'
+    organizationId: string
+    tenantId: string
+    lifecycleStatus: 'active'
+    actorRole: OrganizationRole
+    counts: {
+        memberCount: number
+        activeMemberCount: number
+        ownerCount: number
+        activeAdminCount: number
+        pendingInviteCount: number
+        sharedWatchlistCount: number
+    }
+    memberRoleReadiness: {
+        ownerCanMutate: boolean
+        adminCanMutate: boolean
+        memberCanReadAndExport: boolean
+        supportReadMode: 'redacted_support_contract_only'
+        nonmemberEnumeration: false
+        revokedMemberDenial: 'member_revoked'
+        expiredInviteDenial: 'invite_expired'
+        noActiveAdminBlocker: 'no_active_admin'
+    }
+    organizationLifecycle: {
+        missingBlocker: 'org_missing'
+        archivedBlocker: 'org_archived'
+        deletedBlocker: 'org_deleted'
+    }
+    watchlistReadiness: {
+        ready: boolean
+        activeSharedWatchlistCount: number
+        setupBlocker: 'watchlist_setup_required'
+    }
+    alertExportReadiness: {
+        ready: boolean
+        route: 'GET /api/organizations/:id/watchlists/alert-terms'
+        unavailableBlocker: 'alert_export_unavailable'
+    }
+    cleanupReadiness: {
+        cleanupRequired: boolean
+        cleanupIdempotent: true
+        route: 'POST /api/organizations/:id/watchlists/cleanup'
+        cleanupRequiredBlocker: 'cleanup_required'
+    }
+    supportVisibility: {
+        mode: 'redacted_summary_only'
+        contract: 'admin_support'
+        redactionBlocker: 'support_redaction_required'
+    }
+    dashboardFields: string[]
+    typedBlockers: OrganizationLifecycleReadinessBlockerCode[]
+    blockerCatalog: OrganizationLifecycleReadinessBlockerCode[]
+    readyForOnboarding: boolean
+}
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin'])
 const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
@@ -703,12 +772,111 @@ export function toOrganization(row: OrganizationRow) {
         role: row.role,
         memberCount: Number(row.member_count ?? 0),
         ownerCount: Number(row.owner_count ?? 0),
+        activeAdminCount: Number(row.admin_count ?? row.owner_count ?? 0),
         pendingInviteCount: Number(row.pending_invite_count ?? 0),
         sharedWatchlistCount: Number(row.shared_watchlist_count ?? 0),
         settings,
         createdBy: row.created_by,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+    }
+}
+
+export function organizationLifecycleReadiness(row: OrganizationRow): OrganizationLifecycleReadiness {
+    const memberCount = Number(row.member_count ?? 0)
+    const ownerCount = Number(row.owner_count ?? 0)
+    const activeAdminCount = Number(row.admin_count ?? row.owner_count ?? 0)
+    const pendingInviteCount = Number(row.pending_invite_count ?? 0)
+    const sharedWatchlistCount = Number(row.shared_watchlist_count ?? 0)
+    const actorRole = row.role ?? 'viewer'
+    const typedBlockers: OrganizationLifecycleReadinessBlockerCode[] = []
+    if (activeAdminCount < 1) {
+        typedBlockers.push('no_active_admin')
+    }
+
+    if (sharedWatchlistCount < 1) {
+        typedBlockers.push('watchlist_setup_required', 'alert_export_unavailable')
+    }
+
+    return {
+        schemaVersion: 'organization.lifecycle_readiness.v1',
+        organizationId: row.id,
+        tenantId: row.id,
+        lifecycleStatus: 'active',
+        actorRole,
+        counts: {
+            memberCount,
+            activeMemberCount: memberCount,
+            ownerCount,
+            activeAdminCount,
+            pendingInviteCount,
+            sharedWatchlistCount,
+        },
+        memberRoleReadiness: {
+            ownerCanMutate: actorRole === 'owner',
+            adminCanMutate: actorRole === 'owner' || actorRole === 'admin',
+            memberCanReadAndExport: actorRole === 'owner' || actorRole === 'admin' || actorRole === 'member' || actorRole === 'viewer',
+            supportReadMode: 'redacted_support_contract_only',
+            nonmemberEnumeration: false,
+            revokedMemberDenial: 'member_revoked',
+            expiredInviteDenial: 'invite_expired',
+            noActiveAdminBlocker: 'no_active_admin',
+        },
+        organizationLifecycle: {
+            missingBlocker: 'org_missing',
+            archivedBlocker: 'org_archived',
+            deletedBlocker: 'org_deleted',
+        },
+        watchlistReadiness: {
+            ready: sharedWatchlistCount > 0,
+            activeSharedWatchlistCount: sharedWatchlistCount,
+            setupBlocker: 'watchlist_setup_required',
+        },
+        alertExportReadiness: {
+            ready: sharedWatchlistCount > 0 && activeAdminCount > 0,
+            route: 'GET /api/organizations/:id/watchlists/alert-terms',
+            unavailableBlocker: 'alert_export_unavailable',
+        },
+        cleanupReadiness: {
+            cleanupRequired: false,
+            cleanupIdempotent: true,
+            route: 'POST /api/organizations/:id/watchlists/cleanup',
+            cleanupRequiredBlocker: 'cleanup_required',
+        },
+        supportVisibility: {
+            mode: 'redacted_summary_only',
+            contract: 'admin_support',
+            redactionBlocker: 'support_redaction_required',
+        },
+        dashboardFields: [
+            'organizationId',
+            'tenantId',
+            'lifecycleStatus',
+            'counts.memberCount',
+            'counts.activeAdminCount',
+            'counts.pendingInviteCount',
+            'counts.sharedWatchlistCount',
+            'memberRoleReadiness',
+            'watchlistReadiness',
+            'alertExportReadiness',
+            'cleanupReadiness',
+            'supportVisibility',
+            'typedBlockers',
+        ],
+        typedBlockers,
+        blockerCatalog: [
+            'org_missing',
+            'org_archived',
+            'org_deleted',
+            'no_active_admin',
+            'member_revoked',
+            'invite_expired',
+            'watchlist_setup_required',
+            'alert_export_unavailable',
+            'support_redaction_required',
+            'cleanup_required',
+        ],
+        readyForOnboarding: typedBlockers.length === 0,
     }
 }
 
