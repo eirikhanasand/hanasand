@@ -446,6 +446,50 @@ describe("dwm alert repository", () => {
     expect(telegramAlert?.webhookContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramAlert?.deliveryReadinessContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramAlert?.alertCreatedEvent.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramAlert?.sourceProvenanceSummary.schemaVersion).toBe("dwm.alert_source_provenance.v1");
+    expect(telegramAlert?.sourceProvenanceSummary.tenantId).toBe("tenant_repo_acme");
+    expect(telegramAlert?.sourceProvenanceSummary.organizationId).toBe("org_repo_acme");
+    expect(telegramAlert?.sourceProvenanceSummary.sourceFamily).toBe("telegram_public");
+    expect(telegramAlert?.sourceProvenanceSummary.sourceFamilies).toEqual(["telegram_public"]);
+    expect(telegramAlert?.sourceProvenanceSummary.captureIds).toEqual(["cap_repo_tg_acme"]);
+    expect(telegramAlert?.sourceProvenanceSummary.sourceIds).toEqual(["src_repo_tg"]);
+    expect(telegramAlert?.sourceProvenanceSummary.contentHashes).toEqual(["hash-repo-tg-acme"]);
+    expect(telegramAlert?.sourceProvenanceSummary.evidenceCount).toBe(1);
+    expect(telegramAlert?.sourceProvenanceSummary.firstObservedAt).toBe("2026-06-28T13:04:00.000Z");
+    expect(telegramAlert?.sourceProvenanceSummary.lastObservedAt).toBe("2026-06-28T13:04:00.000Z");
+    expect(telegramAlert?.sourceProvenanceSummary.recommendedRoute).toBe("identity_response");
+    expect(telegramAlert?.sourceProvenanceSummary.confidenceReasoning.join(" ")).toContain("Watchlist term matched");
+    expect(telegramAlert?.sourceProvenanceSummary.provenance).toEqual({
+      matchBasis: "watchlist_capture_text",
+      generatedAt: telegramAlert?.provenance.generatedAt,
+      metadataOnly: false
+    });
+    expect(telegramAlert?.sourceProvenanceSummary.evidenceExcerpts[0]).toMatchObject({
+      evidenceId: "cap_repo_tg_acme",
+      captureId: "cap_repo_tg_acme",
+      sourceFamily: "telegram_public",
+      observedAt: "2026-06-28T13:04:00.000Z"
+    });
+    expect(telegramAlert?.sourceProvenanceSummary.evidenceExcerpts[0].excerpt).toContain("acme.com");
+    expect(telegramAlert?.sourceProvenanceSummary.generationEvidenceWindow?.captureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_darkweb_acme", "cap_repo_public_ti_acme"]));
+    expect(telegramAlert?.sourceProvenanceSummary.generationEvidenceWindow?.sourceFamilies).toEqual(["telegram_public", "darkweb_metadata", "public_advisory"]);
+    expect(telegramAlert?.sourceProvenanceSummary.generationEvidenceWindow?.contentHashes).toEqual(expect.arrayContaining(["hash-repo-tg-acme", "hash-repo-darkweb-acme", "hash-repo-public-ti-acme"]));
+    const darkwebAlert = first.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata");
+    expect(darkwebAlert?.sourceProvenanceSummary.sourceFamily).toBe("darkweb_metadata");
+    expect(darkwebAlert?.sourceProvenanceSummary.sourceFamilies).toEqual(["darkweb_metadata"]);
+    expect(darkwebAlert?.sourceProvenanceSummary.captureIds).toEqual(["cap_repo_darkweb_acme"]);
+    expect(darkwebAlert?.sourceProvenanceSummary.provenance).toEqual({
+      matchBasis: "watchlist_capture_text",
+      generatedAt: darkwebAlert?.provenance.generatedAt,
+      metadataOnly: true
+    });
+    expect(darkwebAlert?.sourceProvenanceSummary.evidenceExcerpts[0]).toMatchObject({
+      evidenceId: "cap_repo_darkweb_acme",
+      captureId: "cap_repo_darkweb_acme",
+      sourceFamily: "darkweb_metadata",
+      redactionState: "metadata_only"
+    });
+    expect(darkwebAlert?.sourceProvenanceSummary.evidenceExcerpts[0].excerpt).toContain("acme.com");
 
     const telegramSql = dwmAlertToSqlRecord(telegramAlert);
     expect(telegramSql).toMatchObject({
@@ -479,6 +523,15 @@ describe("dwm alert repository", () => {
       alertCreatedEventId: telegramAlert?.alertCreatedEvent.id,
       alertCreatedAt: telegramAlert?.alertCreatedEvent.at
     });
+    expect(telegramSql.source_provenance_summary.schemaVersion).toBe("dwm.alert_source_provenance.v1");
+    expect(telegramSql.source_provenance_summary.captureIds).toEqual(["cap_repo_tg_acme"]);
+    expect(telegramSql.source_provenance_summary.sourceFamilies).toEqual(["telegram_public"]);
+    expect(telegramSql.source_provenance_summary.evidenceExcerpts[0]).toMatchObject({
+      captureId: "cap_repo_tg_acme",
+      sourceFamily: "telegram_public",
+      observedAt: "2026-06-28T13:04:00.000Z"
+    });
+    expect(telegramSql.source_provenance_summary.evidenceExcerpts[0].excerpt).toContain("acme.com");
     expect(telegramSql.case_id_candidate).toBe(telegramAlert?.caseIdCandidate);
     expect(telegramSql.case_path).toContain(`/v1/cases/${telegramAlert?.caseIdCandidate}`);
     const telegramHandoff = buildDwmAlertDownstreamHandoff({ alert: telegramAlert });
@@ -623,6 +676,20 @@ describe("dwm alert repository", () => {
     expect(preserved?.evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_acme_duplicate");
     expect(preserved?.evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_quiet");
     expect(preserved?.provenance.captureIds).toContain("cap_repo_tg_acme_followup");
+    expect(preserved?.sourceProvenanceSummary).toMatchObject({
+      schemaVersion: "dwm.alert_source_provenance.v1",
+      captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+      contentHashes: ["hash-repo-tg-acme", "hash-repo-tg-acme-followup"],
+      evidenceCount: 2,
+      firstObservedAt: "2026-06-28T13:04:00.000Z",
+      lastObservedAt: "2026-06-28T13:16:00.000Z",
+      generationEvidenceWindow: {
+        captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+        contentHashes: expect.arrayContaining(["hash-repo-tg-acme", "hash-repo-tg-acme-followup"])
+      }
+    });
+    expect(preserved?.sourceProvenanceSummary.captureIds).not.toContain("cap_repo_tg_acme_duplicate");
+    expect(preserved?.sourceProvenanceSummary.evidenceExcerpts.map((item: any) => item.captureId)).toContain("cap_repo_tg_acme_followup");
     expect(preserved?.deliveryReadinessContext).toMatchObject({
       state: "delivered",
       blockerCodes: expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]),

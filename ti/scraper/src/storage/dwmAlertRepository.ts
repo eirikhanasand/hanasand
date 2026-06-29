@@ -346,6 +346,45 @@ export type DwmAlertCustomerProofHandoffRow = {
   generatedAt: string;
 };
 
+export type DwmAlertSourceProvenanceSummary = {
+  schemaVersion: "dwm.alert_source_provenance.v1";
+  alertId?: string;
+  tenantId?: string;
+  organizationId?: string;
+  sourceFamily?: string;
+  sourceFamilies: string[];
+  captureIds: string[];
+  sourceIds: string[];
+  contentHashes: string[];
+  evidenceCount: number;
+  firstObservedAt?: string;
+  lastObservedAt?: string;
+  recommendedRoute?: string;
+  confidenceReasoning: string[];
+  provenance: {
+    matchBasis?: string;
+    generatedAt?: string;
+    metadataOnly?: boolean;
+  };
+  evidenceExcerpts: Array<{
+    evidenceId: string;
+    captureId?: string;
+    sourceId?: string;
+    sourceFamily?: string;
+    observedAt?: string;
+    contentHash?: string;
+    excerpt?: string;
+    redactionState?: string;
+  }>;
+  generationEvidenceWindow?: {
+    captureIds: string[];
+    sourceFamilies: string[];
+    contentHashes: string[];
+    firstObservedAt?: string;
+    lastObservedAt?: string;
+  };
+};
+
 export type DwmAlertDownstreamHandoff = {
   schemaVersion: "dwm.alert_downstream_handoff.v1";
   handoffId: string;
@@ -968,6 +1007,12 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       generatedAt: snapshot.generatedAt
     }) : undefined;
     const alertEvents = mergeAlertEvents(existing?.alertEvents ?? [alertCreatedEvent], alertUpdatedEvent);
+    const sourceProvenanceSummary = buildDwmAlertSourceProvenanceSummary({
+      alert: { ...scopedAlert, id: alertId },
+      tenantId: input.tenantId,
+      organizationId: input.organizationId ?? existing?.organizationId,
+      workflowContext
+    });
     return input.store.saveDwmAlert({
       ...scopedAlert,
       id: alertId,
@@ -979,6 +1024,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       workflowContext,
       webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
       deliveryReadinessContext: persistedDeliveryReadinessContext,
+      sourceProvenanceSummary,
       alertCreatedEvent,
       alertUpdatedEvent: alertUpdatedEvent ?? existing?.alertUpdatedEvent,
       alertEvents,
@@ -1527,6 +1573,7 @@ export function dwmAlertToSqlRecord(alert: any) {
     evidence: alert.evidence ?? [],
     webhook_delivery: alert.webhookDelivery,
     delivery_readiness_context: alert.deliveryReadinessContext,
+    source_provenance_summary: alert.sourceProvenanceSummary ?? buildDwmAlertSourceProvenanceSummary({ alert }),
     workflow_context: alert.workflowContext,
     webhook_context: alert.webhookContext,
     case_id_candidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate ?? null,
@@ -2458,6 +2505,67 @@ function buildDwmAlertDetailPath(alertId: string, input: { organizationId?: stri
   if (input.dedupeKey) params.set("dedupeKey", input.dedupeKey);
   const query = params.toString();
   return `/v1/dwm/alerts/${encodeURIComponent(alertId)}${query ? `?${query}` : ""}`;
+}
+
+export function buildDwmAlertSourceProvenanceSummary(input: {
+  alert: Record<string, any>;
+  tenantId?: string;
+  organizationId?: string;
+  workflowContext?: Record<string, any>;
+}): DwmAlertSourceProvenanceSummary {
+  const alert = input.alert ?? {};
+  const workflowContext = input.workflowContext ?? alert.workflowContext ?? {};
+  const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
+  const generationEvidenceWindow = normalizeGenerationEvidenceWindow(
+    workflowContext.generationEvidenceWindow ?? alert.webhookContext?.generationEvidenceWindow ?? alert.deliveryReadinessContext?.generationEvidenceWindow
+  );
+  const observedAt = uniqueStrings(evidence.map((item: any) => item.observedAt ?? item.firstSeenAt).filter(Boolean).map(String)).sort();
+  const captureIds = uniqueStrings([
+    ...asStringArray(alert.provenance?.captureIds),
+    ...asStringArray(workflowContext.captureIds),
+    ...evidence.map((item: any) => item.provenance?.captureId ?? item.id).filter(Boolean).map(String)
+  ]);
+  const sourceFamilies = uniqueStrings([
+    ...asStringArray(alert.sourceFamily),
+    ...asStringArray(alert.provenance?.sourceFamilies),
+    ...evidence.map((item: any) => item.sourceFamily).filter(Boolean).map(String)
+  ]);
+  const contentHashes = uniqueStrings(evidence.map((item: any) => item.contentHash).filter(Boolean).map(String));
+  return {
+    schemaVersion: "dwm.alert_source_provenance.v1",
+    alertId: alert.id ? String(alert.id) : undefined,
+    tenantId: input.tenantId ?? alert.tenantId ?? workflowContext.tenantId,
+    organizationId: input.organizationId ?? alert.organizationId ?? workflowContext.organizationId,
+    sourceFamily: alert.sourceFamily ? String(alert.sourceFamily) : undefined,
+    sourceFamilies,
+    captureIds,
+    sourceIds: uniqueStrings([
+      ...asStringArray(alert.provenance?.sourceIds),
+      ...evidence.map((item: any) => item.provenance?.sourceId ?? item.sourceId).filter(Boolean).map(String)
+    ]),
+    contentHashes,
+    evidenceCount: evidence.length,
+    firstObservedAt: observedAt[0] ?? generationEvidenceWindow?.firstObservedAt,
+    lastObservedAt: observedAt.at(-1) ?? generationEvidenceWindow?.lastObservedAt,
+    recommendedRoute: alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute ?? workflowContext.recommendedRoute,
+    confidenceReasoning: uniqueStrings(asStringArray(alert.confidenceReasoning)),
+    provenance: {
+      matchBasis: alert.provenance?.matchBasis,
+      generatedAt: alert.provenance?.generatedAt,
+      metadataOnly: alert.provenance?.metadataOnly
+    },
+    evidenceExcerpts: evidence.map((item: any) => ({
+      evidenceId: String(item.id),
+      captureId: item.provenance?.captureId ? String(item.provenance.captureId) : item.id ? String(item.id) : undefined,
+      sourceId: item.provenance?.sourceId ? String(item.provenance.sourceId) : item.sourceId ? String(item.sourceId) : undefined,
+      sourceFamily: item.sourceFamily ? String(item.sourceFamily) : undefined,
+      observedAt: item.observedAt ?? item.firstSeenAt ? String(item.observedAt ?? item.firstSeenAt) : undefined,
+      contentHash: item.contentHash ? String(item.contentHash) : undefined,
+      excerpt: item.excerpt ? String(item.excerpt) : undefined,
+      redactionState: item.redactionState ? String(item.redactionState) : undefined
+    })),
+    generationEvidenceWindow
+  };
 }
 
 export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: ReturnType<typeof buildDwmAlertWorkflowContext>) {
