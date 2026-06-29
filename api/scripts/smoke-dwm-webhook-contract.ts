@@ -2693,11 +2693,14 @@ const proofLiveRequest = orgAlertDeliveryProof.actionRequests.liveDeliveries.fin
 const proofTestRequest = orgAlertDeliveryProof.actionRequests.destinationTests.find(item => item.destinationId === 'destination_replay_contract')
 expect(proofDryRunRequest?.route === 'POST /api/dwm/webhook-deliveries' && proofDryRunRequest.noNetwork === true && proofDryRunRequest.body.dryRun === true && proofDryRunRequest.body.live === false, 'Alert delivery proof should include a safe dry-run delivery request.', proofDryRunRequest)
 expect(proofDryRunRequest?.expectedIdempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract', 'Alert delivery proof dry-run request should expose the replay idempotency key.', proofDryRunRequest)
+expect(proofDryRunRequest?.expectedAuditAction === 'delivery.replayed', 'Alert delivery proof dry-run request should expose expected replay audit action.', proofDryRunRequest)
 expect(proofDryRunRequest?.body.alert.casePath === replayWorkflowAlert.casePath && proofDryRunRequest.body.alert.alertUrl === replayWorkflowAlert.alertUrl && proofDryRunRequest.body.alert.watchlist.id === 'watchlist_item_replay_contract', 'Alert delivery proof dry-run request should preserve alert/watchlist/deep-link context.', proofDryRunRequest?.body)
 expect(proofLiveRequest?.externalSendEnabled === false && proofLiveRequest.noNetwork === true && proofLiveRequest.body === null && proofLiveRequest.blockers.some(item => item.code === 'live_delivery_disabled'), 'Alert delivery proof should block live request bodies unless live delivery is enabled and allowed.', proofLiveRequest)
 expect(proofLiveRequest?.expectedIdempotencyKey === proofDryRunRequest?.expectedIdempotencyKey, 'Alert delivery proof live and dry-run requests should share duplicate-send guard keys.', proofLiveRequest)
-expect(proofTestRequest?.route === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && proofTestRequest.noNetwork === true && proofTestRequest.body.eventType === 'dwm.alert.test' && proofTestRequest.expectedIdempotencyKey === 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test', 'Alert delivery proof should include a safe destination test request with idempotency proof.', proofTestRequest)
+expect(proofLiveRequest?.expectedAuditAction === 'delivery.replayed', 'Alert delivery proof live request should expose expected replay audit action even when blocked.', proofLiveRequest)
+expect(proofTestRequest?.route === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && proofTestRequest.noNetwork === true && proofTestRequest.body.eventType === 'dwm.alert.test' && proofTestRequest.expectedIdempotencyKey === 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test' && proofTestRequest.expectedAuditAction === 'delivery.tested', 'Alert delivery proof should include a safe destination test request with idempotency and audit proof.', proofTestRequest)
 expect(orgAlertDeliveryProof.actionRequests.deliveryHistory.query.alertId === 'alert_replay_contract' && orgAlertDeliveryProof.actionRequests.deliveryHistory.query.dedupeKey === 'dwm_dedupe_replay_contract', 'Alert delivery proof should include a delivery history query for the alert/dedupe key.', orgAlertDeliveryProof.actionRequests.deliveryHistory)
+expect(orgAlertDeliveryProof.actionRequests.deliveryHistory.expectedAuditActions.includes('delivery.replayed') && orgAlertDeliveryProof.actionRequests.deliveryHistory.expectedAuditActions.includes('delivery.failed'), 'Alert delivery proof should list expected audit actions for delivery history verification.', orgAlertDeliveryProof.actionRequests.deliveryHistory)
 expect(!JSON.stringify(orgAlertDeliveryProof).includes(secret), 'Alert delivery proof should not leak endpoint, response, or audit secrets.', orgAlertDeliveryProof)
 expect(dashboardReadiness.schemaVersion === 'dwm.webhook.dashboard_readiness.v1' && dashboardReadiness.summary.destinationCount === operationDestinations.length, 'Dashboard readiness should summarize all org destinations.', dashboardReadiness)
 expect(dashboardVerified?.healthStates.includes('verified') && dashboardVerified.latestDeliveryProof.auditEventId === 'audit_replay_duplicate_contract', 'Dashboard readiness should expose verified dry-run/latest delivery proof.', dashboardVerified)
@@ -3067,11 +3070,15 @@ console.log(JSON.stringify({
             'orgAlertDelivery.alertDeliveryProof.dashboardProof.productProgress.status',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.dryRunDeliveries[].body',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.dryRunDeliveries[].expectedIdempotencyKey',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.dryRunDeliveries[].expectedAuditAction',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.liveDeliveries[].blockers[].code',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.liveDeliveries[].expectedIdempotencyKey',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.liveDeliveries[].expectedAuditAction',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.destinationTests[].route',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.destinationTests[].expectedIdempotencyKey',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.destinationTests[].expectedAuditAction',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.deliveryHistory.query',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.deliveryHistory.expectedAuditActions',
             'orgAlertDelivery.alertDeliveryProof.blockerCodes',
             'orgAlertDelivery.alertDeliveryProof.alertScopedBlockerCodes',
             'orgAlertDelivery.alertDeliveryProof.blockerGroups.setupBlockerCodes',

@@ -4060,6 +4060,7 @@ function buildDwmWebhookAlertDeliveryProof({
     const dryRunDeliveryRequests = selectedDestinations.map(destination => ({
         destinationId: destination.id,
         expectedIdempotencyKey: buildIdempotencyKey(eventType, orgId, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
+        expectedAuditAction: eventType === 'dwm.alert.replayed' ? 'delivery.replayed' : 'delivery.created',
         method: 'POST',
         route: 'POST /api/dwm/webhook-deliveries',
         noNetwork: true,
@@ -4074,6 +4075,7 @@ function buildDwmWebhookAlertDeliveryProof({
         return {
             destinationId: destination.id,
             expectedIdempotencyKey: buildIdempotencyKey(eventType, orgId, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
+            expectedAuditAction: eventType === 'dwm.alert.replayed' ? 'delivery.replayed' : 'delivery.created',
             method: 'POST',
             route: 'POST /api/dwm/webhook-deliveries',
             noNetwork: !canSend,
@@ -4085,6 +4087,7 @@ function buildDwmWebhookAlertDeliveryProof({
     const destinationTestRequests = selectedDestinations.map(destination => ({
         destinationId: destination.id,
         expectedIdempotencyKey: buildIdempotencyKey('dwm.alert.test', orgId, destination.id, 'webhook_test'),
+        expectedAuditAction: 'delivery.tested',
         method: 'POST',
         route: `POST /api/dwm/webhook-destinations/${destination.id}/test`,
         noNetwork: true,
@@ -4204,6 +4207,7 @@ function buildDwmWebhookAlertDeliveryProof({
             deliveryHistory: {
                 method: 'GET',
                 route: customerSetup.routes.deliveryHistory,
+                expectedAuditActions: [...new Set(auditEventContracts.map(audit => audit.action).filter(Boolean))],
                 query: {
                     orgId,
                     alertId: normalizedAlert.id,

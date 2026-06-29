@@ -730,17 +730,36 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
 function buildWebhookPayloadAlertCreatedDispatch(alert: any, watchlist: DwmWatchlist, destination?: WebhookDestination, downstreamHandoff?: ReturnType<typeof buildDwmAlertDownstreamHandoff>) {
   const dispatch = downstreamHandoff?.createdEventDispatch;
   if (!dispatch) return undefined;
-  const hasSelectedWebhookRoute = Boolean(destination?.id ?? normalizeWebhookUrl(destination?.url) ?? normalizeWebhookUrl(watchlist.webhookUrl));
-  const hasOrgContext = Boolean(dispatch.organizationId ?? alert.organizationId ?? watchlist.organizationId);
+  const dispatchWithRoutes = dispatch as typeof dispatch & { webhookDestinationIds?: string[] };
+  const organizationId = dispatch.organizationId ?? alert.organizationId ?? watchlist.organizationId;
+  const tenantId = dispatch.tenantId ?? alert.tenantId ?? watchlist.tenantId;
+  const selectedDestinationIds = [
+    destination?.id,
+    alert.webhookDestinationId,
+    alert.webhookDelivery?.webhookDestinationId,
+    alert.deliveryReadinessContext?.webhookDestinationIds?.[0],
+    alert.workflowContext?.webhookDestinationIds?.[0],
+    alert.webhookContext?.webhookDestinationIds?.[0],
+    watchlist.webhookDestinationId
+  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  const hasSelectedWebhookRoute = Boolean(
+    selectedDestinationIds.length
+      || normalizeWebhookUrl(destination?.url)
+      || normalizeWebhookUrl(alert.webhookUrl)
+      || normalizeWebhookUrl(alert.webhookDelivery?.webhookUrl)
+      || normalizeWebhookUrl(watchlist.webhookUrl)
+  );
+  const hasOrgContext = Boolean(organizationId ?? tenantId);
   const blockerCodes = (dispatch.blockerCodes ?? []).filter((code: string) => {
     if (hasSelectedWebhookRoute && ["destination_unavailable", "delivery_disabled"].includes(code)) return false;
     if (hasOrgContext && code === "missing_org_ref") return false;
-    if (!hasOrgContext && code === "missing_org_ref" && !alert.organizationId && !watchlist.organizationId) return false;
     return true;
   });
   return {
     ...dispatch,
-    organizationId: dispatch.organizationId ?? alert.organizationId ?? watchlist.organizationId,
+    organizationId,
+    tenantId,
+    webhookDestinationIds: dispatchWithRoutes.webhookDestinationIds?.length ? dispatchWithRoutes.webhookDestinationIds : selectedDestinationIds,
     blockerCodes,
     ready: Boolean(dispatch.eventId) && blockerCodes.length === 0
   };
