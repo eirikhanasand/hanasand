@@ -31,6 +31,7 @@ type EventQuery = {
     method?: string
     path?: string
     session?: string
+    reason?: string
     from?: string
     to?: string
     limit?: string
@@ -451,6 +452,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
     const methodFilter = String(query.method || '').trim().toUpperCase()
     const pathFilter = String(query.path || '').trim()
     const sessionFilter = String(query.session || '').trim()
+    const reasonFilter = String(query.reason || '').trim()
     const fromFilter = String(query.from || '').trim()
     const toFilter = String(query.to || '').trim()
     const parsedLimit = Number(query.limit || 200)
@@ -468,6 +470,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             OR e.ip ILIKE ${placeholder}
             OR e.user_agent ILIKE ${placeholder}
             OR e.session_id::text ILIKE ${placeholder}
+            OR session.reason ILIKE ${placeholder}
         )`)
     }
     if (actorFilter) {
@@ -501,6 +504,9 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
     if (sessionFilter) {
         where.push(`e.session_id::text ILIKE ${add(`%${sessionFilter}%`)}`)
     }
+    if (reasonFilter) {
+        where.push(`session.reason ILIKE ${add(`%${reasonFilter}%`)}`)
+    }
     if (fromFilter && !Number.isNaN(Date.parse(fromFilter))) {
         where.push(`e.created_at >= ${add(new Date(fromFilter).toISOString())}`)
     }
@@ -520,15 +526,20 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             e.path,
             e.ip,
             e.user_agent,
-            e.created_at
+            e.created_at,
+            session.reason AS session_reason,
+            session.created_at AS session_created_at,
+            session.expires_at AS session_expires_at,
+            session.revoked_at AS session_revoked_at
         FROM impersonation_events e
+        LEFT JOIN impersonation_sessions session ON session.id = e.session_id
         LEFT JOIN users actor ON actor.id = e.actor_id
         LEFT JOIN users target ON target.id = e.target_id
         ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY e.created_at DESC
         LIMIT ${add(limit)}
     `, values)
-    const filters = { q, actor: actorFilter, target: targetFilter, action: actionFilter, outcome: outcomeFilter || 'success', method: methodFilter, path: pathFilter, session: sessionFilter, from: fromFilter, to: toFilter, limit }
+    const filters = { q, actor: actorFilter, target: targetFilter, action: actionFilter, outcome: outcomeFilter || 'success', method: methodFilter, path: pathFilter, session: sessionFilter, reason: reasonFilter, from: fromFilter, to: toFilter, limit }
     const timeline = result.rows.map(toImpersonationTimelineEvent)
     return res.send({
         events: result.rows,
@@ -553,6 +564,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
 function toImpersonationTimelineEvent(row: Record<string, any>) {
     const actionType = String(row.path || '').includes('/stop') ? 'impersonation.stop' : 'impersonation.start'
     const id = Number(row.id)
+    const durationMinutes = impersonationSessionDurationMinutes(row.session_created_at, row.session_expires_at)
     return {
         schemaVersion: 'support.impersonation.timeline_event.v1',
         id,
@@ -575,12 +587,29 @@ function toImpersonationTimelineEvent(row: Record<string, any>) {
         },
         method: row.method,
         path: row.path,
+        reason: row.session_reason || '',
+        scope: {
+            durationMinutes,
+            expiresAt: row.session_expires_at || null,
+            revokedAt: row.session_revoked_at || null,
+            supportSessionRequired: true,
+            reasonRequired: true,
+            auditRequired: true,
+        },
         links: {
             detail: `/api/impersonation/events?session=${encodeURIComponent(String(row.session_id || ''))}`,
             audit: `/api/admin/audit-events?action=${encodeURIComponent(actionType)}&entity=${encodeURIComponent(String(row.session_id || ''))}&source=admin&service=hanasand-api`,
+            request: `/api/admin/audit-events?action=${encodeURIComponent(actionType)}&entity=${encodeURIComponent(String(row.session_id || ''))}&reason=${encodeURIComponent(String(row.session_reason || ''))}&source=admin&service=hanasand-api`,
         },
-        copyText: `${row.created_at} ${actionType} actor=${row.actor_id} target=${row.target_id} session=${row.session_id || ''}`,
+        copyText: `${row.created_at} ${actionType} actor=${row.actor_id} target=${row.target_id} session=${row.session_id || ''} duration=${durationMinutes ?? ''} reason=${row.session_reason || ''}`,
     }
+}
+
+function impersonationSessionDurationMinutes(createdAt: unknown, expiresAt: unknown) {
+    const created = Date.parse(String(createdAt || ''))
+    const expires = Date.parse(String(expiresAt || ''))
+    if (Number.isNaN(created) || Number.isNaN(expires) || expires <= created) return null
+    return Math.round((expires - created) / 60000)
 }
 
 function impersonationTimelineSummary(timeline: Array<Record<string, any>>) {
@@ -599,7 +628,7 @@ function impersonationTimelineFilterContract(filters: Record<string, unknown>, t
     return {
         schemaVersion: 'support.impersonation.timeline_filter_contract.v1',
         filters,
-        supportedFilters: ['q', 'actor', 'target', 'action', 'outcome', 'method', 'path', 'session', 'from', 'to', 'limit'],
+        supportedFilters: ['q', 'actor', 'target', 'action', 'outcome', 'method', 'path', 'session', 'reason', 'from', 'to', 'limit'],
         lifecycleStorage: 'impersonation_events',
         auditStorage: 'admin_audit_events',
         eventCount: timeline.length,
