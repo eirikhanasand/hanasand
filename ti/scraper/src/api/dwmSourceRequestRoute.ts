@@ -3062,6 +3062,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       captureReadiness: actorReadiness.captureReadiness,
       alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
       sourceOperationsQueue: actorReadiness.sourceOperationsQueue,
+      sourceFamilyHealth: actorReadiness.sourceFamilyHealth,
       missingDataGaps: actorReadiness.candidateGaps,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
@@ -3078,6 +3079,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       captureReadiness: actorReadiness.captureReadiness,
       alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
       sourceOperationsQueue: actorReadiness.sourceOperationsQueue,
+      sourceFamilyHealth: actorReadiness.sourceFamilyHealth,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
@@ -3104,6 +3106,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
       ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
       ".actorReadiness.sourceOperationsQueue.queueItems | all(.route.path | length > 0 and .liveNetworkFetch == false and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
+      ".actorReadiness.sourceFamilyHealth.rows | all(has(\"family\") and has(\"parserState\") and has(\"timestamps\") and has(\"confidence\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3232,6 +3236,16 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     alertGenerationReadiness,
     sourcePackActionReadiness
   });
+  const sourceFamilyHealth = sourceActorFamilyHealth({
+    query,
+    sourceCoverage,
+    parserHealthReadiness,
+    evidenceReadiness,
+    captureReadiness,
+    alertGenerationReadiness,
+    sourceOperationsQueue,
+    freshness
+  });
   return {
     proofId: stableId("dwm_actor_source_readiness", `${query}:${readinessArtifact.generatedAt}:${latestCaptureAt ?? "no_capture"}:${latestEnrichmentAt ?? "no_enrichment"}`),
     query,
@@ -3265,6 +3279,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     captureReadiness,
     alertGenerationReadiness,
     sourceOperationsQueue,
+    sourceFamilyHealth,
     alertability,
     alertCaseHandoffReadiness: sourceActorAlertCaseHandoffReadiness({
       query,
@@ -3773,6 +3788,118 @@ function sourceActorOperationsQueueItem(input: {
     blockers: dedupeBlockers(input.blockers ?? []),
     dryRunSupported: route.dryRunSupported,
     liveNetworkFetch: false,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorFamilyHealth(input: {
+  query: string;
+  sourceCoverage: Array<Record<string, any>>;
+  parserHealthReadiness: Record<string, any>;
+  evidenceReadiness: Record<string, any>;
+  captureReadiness: Record<string, any>;
+  alertGenerationReadiness: Record<string, any>;
+  sourceOperationsQueue: Record<string, any>;
+  freshness: Record<string, any>;
+}) {
+  const parserByFamily = new Map<string, Record<string, any>>((input.parserHealthReadiness.rows ?? []).map((row: any) => [String(row.family), row]));
+  const evidenceByFamily = new Map<string, Record<string, any>>((input.evidenceReadiness.rows ?? []).map((row: any) => [String(row.family), row]));
+  const captureByFamily = new Map<string, Record<string, any>>((input.captureReadiness.captureRows ?? []).map((row: any) => [String(row.family), row]));
+  const alertFamilySet = new Set(input.alertGenerationReadiness.sourceFamilies?.alertCapable ?? []);
+  const queueByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const item of input.sourceOperationsQueue.queueItems ?? []) {
+    const families = item.family === "all_active" ? input.sourceCoverage.map((row) => String(row.family)) : [String(item.family)];
+    for (const family of families) queueByFamily.set(family, [...(queueByFamily.get(family) ?? []), item]);
+  }
+  const rows = input.sourceCoverage.map((coverage) => {
+    const family = String(coverage.family);
+    const parser = parserByFamily.get(family);
+    const evidence = evidenceByFamily.get(family);
+    const capture = captureByFamily.get(family);
+    const queueItems = queueByFamily.get(family) ?? [];
+    const hasSourceRecord = (coverage.sourceIds ?? []).length > 0 || (parser?.sourceIds ?? []).length > 0 || (evidence?.sourceIds ?? []).length > 0;
+    const isMissingFamily = coverage.state === "missing" || parser?.parserState === "missing_source";
+    const confidence = isMissingFamily ? 0 : Number(evidence?.confidence ?? (hasSourceRecord ? coverage.sourceTrust?.score : 0) ?? 0);
+    const blockers = dedupeBlockers([
+      ...(coverage.blockers ?? []),
+      ...(parser?.blockers ?? []),
+      ...(capture?.blockers ?? []),
+      ...(evidence?.blockers ?? []),
+      ...(evidence?.gap ? [{ code: "candidate_gap", severity: "warning", family, retryable: true }] : [])
+    ]);
+    return {
+      schemaVersion: "dwm.actor_source_family_health_row.v1",
+      proofId: stableId("dwm_actor_source_family_health_row", `${input.query}:${family}:${coverage.state}:${parser?.parserState ?? "unknown"}:${capture?.state ?? "no_capture_row"}:${confidence}`),
+      query: input.query,
+      family,
+      state: coverage.state,
+      parserState: parser?.parserState ?? "unknown",
+      parserStatuses: uniqueSourceReadinessStrings([...(coverage.parserStatuses ?? []), ...(parser?.parserStatuses ?? [])]),
+      sourceIds: coverage.sourceIds ?? parser?.sourceIds ?? evidence?.sourceIds ?? [],
+      candidateIds: coverage.candidateIds ?? parser?.candidateIds ?? evidence?.candidateIds ?? [],
+      timestamps: {
+        lastCaptureAt: capture?.lastCaptureAt ?? coverage.lastCaptureAt ?? evidence?.timestamps?.lastCaptureAt,
+        lastEnrichmentAt: coverage.lastEnrichmentAt ?? evidence?.timestamps?.lastEnrichmentAt,
+        checkedAt: input.freshness.checkedAt
+      },
+      freshnessState: capture?.freshnessState ?? (coverage.lastCaptureAt ? sourceActorCaptureFreshness(coverage.lastCaptureAt, input.freshness.checkedAt).state : "needs_capture"),
+      confidence,
+      confidenceTier: isMissingFamily ? "missing" : evidence?.confidenceTier ?? (confidence >= 0.85 ? "high" : confidence >= 0.6 ? "medium" : confidence > 0 ? "low" : "missing"),
+      alertability: {
+        canEnrichActor: coverage.canEnrichActor === true,
+        canProduceAlert: coverage.canProduceAlert === true,
+        alertReady: input.alertGenerationReadiness.alertReady === true && alertFamilySet.has(family),
+        matchableFields: coverage.matchableFields ?? evidence?.evidenceFields ?? [],
+        alertableFields: coverage.alertableFields ?? []
+      },
+      captureState: capture?.state ?? (coverage.lastCaptureAt ? "capture_observed" : "capture_required"),
+      gap: evidence?.gap,
+      retryBackoff: coverage.retryBackoff ?? parser?.retryBackoff,
+      blockers,
+      nextActions: queueItems.map((item) => ({
+        id: item.id,
+        type: item.type,
+        priority: item.priority,
+        reasonCode: item.reasonCode,
+        route: item.route,
+        liveNetworkFetch: false
+      })),
+      privacyBoundary: coverage.privacyBoundary,
+      sourceTrust: coverage.sourceTrust,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  const confidenceRows = rows.filter((row) => row.confidence > 0);
+  return {
+    schemaVersion: "dwm.actor_source_family_health.v1",
+    proofId: stableId("dwm_actor_source_family_health", `${input.query}:${rows.map((row) => `${row.family}:${row.state}:${row.parserState}:${row.confidenceTier}`).join(",")}`),
+    query: input.query,
+    rows,
+    summary: {
+      activeFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "active" || row.state === "canary").map((row) => row.family)),
+      pausedFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "paused").map((row) => row.family)),
+      failedFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "failed" || row.parserState === "retry_required").map((row) => row.family)),
+      blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "policy_blocked").map((row) => row.family)),
+      missingFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "missing" || row.parserState === "missing_source").map((row) => row.family)),
+      alertReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.alertability.alertReady === true).map((row) => row.family)),
+      gapFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.gap).map((row) => row.family)),
+      retryFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.retryBackoff?.retryable === true || row.nextActions.some((action: any) => String(action.type).startsWith("retry"))).map((row) => row.family)),
+      lastCaptureAt: latestIso(rows.map((row) => row.timestamps.lastCaptureAt)),
+      lastEnrichmentAt: latestIso(rows.map((row) => row.timestamps.lastEnrichmentAt)),
+      averageConfidence: confidenceRows.length > 0
+        ? Math.round((confidenceRows.reduce((sum, row) => sum + row.confidence, 0) / confidenceRows.length) * 100) / 100
+        : 0
+    },
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,

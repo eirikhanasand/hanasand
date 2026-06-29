@@ -1557,6 +1557,47 @@ describe("dwm source requests", () => {
           ]),
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         },
+        sourceFamilyHealth: {
+          schemaVersion: "dwm.actor_source_family_health.v1",
+          proofId: expect.any(String),
+          summary: expect.objectContaining({
+            activeFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
+            alertReadyFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
+            averageConfidence: expect.any(Number),
+            lastCaptureAt: expect.any(String),
+            lastEnrichmentAt: expect.any(String)
+          }),
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              family: "telegram",
+              state: "canary",
+              parserState: "ready",
+              timestamps: expect.objectContaining({
+                lastCaptureAt: expect.any(String),
+                lastEnrichmentAt: expect.any(String),
+                checkedAt: expect.any(String)
+              }),
+              confidence: expect.any(Number),
+              confidenceTier: expect.stringMatching(/medium|high|low/),
+              alertability: expect.objectContaining({
+                canEnrichActor: true,
+                canProduceAlert: true,
+                alertReady: true,
+                matchableFields: expect.arrayContaining(["text"])
+              }),
+              nextActions: expect.arrayContaining([
+                expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
+              ]),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            }),
+            expect.objectContaining({
+              family: "darkweb_onion",
+              privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true }),
+              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+            })
+          ]),
+          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+        },
         alertCaseHandoffReadiness: {
           schemaVersion: "dwm.actor_alert_case_handoff_readiness.v1",
           alertReady: true,
@@ -1628,6 +1669,12 @@ describe("dwm source requests", () => {
               expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
             ])
           }),
+          sourceFamilyHealth: expect.objectContaining({
+            schemaVersion: "dwm.actor_source_family_health.v1",
+            rows: expect.arrayContaining([
+              expect.objectContaining({ family: "telegram", confidence: expect.any(Number), parserState: "ready" })
+            ])
+          }),
           freshness: expect.objectContaining({
             captureFreshness: expect.objectContaining({ state: "fresh" })
           })
@@ -1658,6 +1705,11 @@ describe("dwm source requests", () => {
               expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
             ])
           }),
+          sourceFamilyHealth: expect.objectContaining({
+            summary: expect.objectContaining({
+              alertReadyFamilies: expect.arrayContaining(["telegram"])
+            })
+          }),
           freshnessState: "fresh"
         },
         worker3Assertions: expect.arrayContaining([
@@ -1666,6 +1718,7 @@ describe("dwm source requests", () => {
           ".actorReadiness.captureReadiness.schemaVersion == \"dwm.actor_capture_readiness.v1\"",
           ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
           ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
+          ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -1960,6 +2013,47 @@ describe("dwm source requests", () => {
         ]),
         safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
       },
+      sourceFamilyHealth: {
+        schemaVersion: "dwm.actor_source_family_health.v1",
+        proofId: expect.any(String),
+        summary: expect.objectContaining({
+          activeFamilies: expect.arrayContaining(["telegram"]),
+          missingFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+          gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+          alertReadyFamilies: []
+        }),
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            family: "telegram",
+            parserState: "ready",
+            captureState: "capture_required",
+            confidence: expect.any(Number),
+            timestamps: expect.objectContaining({
+              lastEnrichmentAt: expect.any(String),
+              checkedAt: expect.any(String)
+            }),
+            nextActions: expect.arrayContaining([
+              expect.objectContaining({ type: "record_capture", liveNetworkFetch: false })
+            ]),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
+          expect.objectContaining({
+            family: "darkweb_onion",
+            state: "missing",
+            parserState: "missing_source",
+            confidenceTier: "missing",
+            gap: expect.objectContaining({
+              state: "missing",
+              intakeRecommendation: expect.objectContaining({ policyBoundary: "metadata_only_restricted_source" })
+            }),
+            nextActions: expect.arrayContaining([
+              expect.objectContaining({ type: "request_candidate", liveNetworkFetch: false })
+            ]),
+            safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+          })
+        ]),
+        safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+      },
       safeOutput: {
         liveNetworkScrapeStarted: false,
         privateTelegramContentExposed: false,
@@ -2120,6 +2214,12 @@ describe("dwm source requests", () => {
           queueItems: expect.arrayContaining([
             expect.objectContaining({ type: "record_capture", family: "telegram", liveNetworkFetch: false }),
             expect.objectContaining({ type: "request_candidate", family: "darkweb_onion", liveNetworkFetch: false })
+          ])
+        }),
+        sourceFamilyHealth: expect.objectContaining({
+          schemaVersion: "dwm.actor_source_family_health.v1",
+          rows: expect.arrayContaining([
+            expect.objectContaining({ family: "darkweb_onion", parserState: "missing_source" })
           ])
         }),
         freshnessState: "needs_capture"
@@ -2284,6 +2384,33 @@ describe("dwm source requests", () => {
           })
         ]),
         safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+      },
+      sourceFamilyHealth: {
+        schemaVersion: "dwm.actor_source_family_health.v1",
+        summary: expect.objectContaining({
+          failedFamilies: expect.arrayContaining(["telegram"]),
+          retryFamilies: expect.arrayContaining(["telegram"]),
+          alertReadyFamilies: []
+        }),
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            family: "telegram",
+            state: "failed",
+            parserState: "retry_required",
+            retryBackoff: expect.objectContaining({
+              retryable: true,
+              failureCategories: expect.arrayContaining(["parser_timeout"])
+            }),
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
+            ]),
+            nextActions: expect.arrayContaining([
+              expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false }),
+              expect.objectContaining({ type: "retry_capture", liveNetworkFetch: false })
+            ]),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          })
+        ])
       }
     });
     expect(retryBody.proofArtifacts).toMatchObject({
@@ -2296,6 +2423,11 @@ describe("dwm source requests", () => {
         sourceOperationsQueue: expect.objectContaining({
           queueItems: expect.arrayContaining([
             expect.objectContaining({ type: "retry_parser", family: "telegram", liveNetworkFetch: false })
+          ])
+        }),
+        sourceFamilyHealth: expect.objectContaining({
+          rows: expect.arrayContaining([
+            expect.objectContaining({ family: "telegram", parserState: "retry_required" })
           ])
         })
       },
