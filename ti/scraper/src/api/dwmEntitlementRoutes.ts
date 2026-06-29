@@ -1,4 +1,5 @@
 import { nowIso, stableId } from "../utils.ts";
+import { validateAnalystHandoffConsumerBundle, type AnalystHandoffConsumerBlocker } from "../product/analystHandoffConsumer.ts";
 import { json, readJson } from "./http.ts";
 import type { Organization, OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
@@ -95,6 +96,59 @@ export type DwmEntitlementEvaluation = {
 
 export type DwmEntitlementPolicyEvaluation = DwmEntitlementEvaluation & { policy: DwmEntitlementPolicy };
 
+export type DwmEntitlementReadinessActionId =
+  | "watchlist_create"
+  | "watchlist_update"
+  | "alert_rebuild"
+  | "alert_replay"
+  | "source_growth"
+  | "webhook_delivery"
+  | "analyst_handoff";
+
+export type DwmEntitlementReadinessAction = {
+  id: DwmEntitlementReadinessActionId;
+  ownerLane: "entitlement" | "source-growth" | "webhook" | "alert-workflow" | "analyst-handoff";
+  status: "allowed" | "blocked" | "permissive_no_policy" | "needs_input";
+  blockerCodes: string[];
+  usage: DwmEntitlementUsage;
+  limits: DwmEntitlementLimits;
+  projectedUsage?: DwmEntitlementUsage;
+  limit?: { code: string; used: number; limit: number; remaining: number };
+  blockedAction: string | null;
+  requestId?: string;
+  nextStep: string;
+  helpdeskText: string;
+  dashboardText: string;
+  route?: string;
+  redactedAudit?: ReturnType<typeof redactedLatestAuditEvent>;
+  analystHandoff?: {
+    ok: boolean;
+    blockerCount: number;
+    blockers: Array<Pick<AnalystHandoffConsumerBlocker, "code" | "stage" | "field" | "recoverable">>;
+  };
+};
+
+export type DwmEntitlementReadinessModel = {
+  schemaVersion: "dwm.entitlement_readiness.v1";
+  generatedAt: string;
+  requestId?: string;
+  organization: Pick<Organization, "id" | "tenantId" | "name">;
+  access: { allowed: boolean; role?: string; readOnly?: boolean; reason: string | null };
+  policy: {
+    id: string;
+    plan: DwmEntitlementPlan;
+    status: DwmEntitlementStatus;
+    persistedPolicy: boolean;
+    limits: DwmEntitlementLimits;
+    updatedAt: string;
+  };
+  usage: DwmEntitlementUsage;
+  checks: DwmEntitlementEvaluation["checks"];
+  defaultNoPolicyBehavior: "permissive_until_policy_persisted";
+  integrationHints: DwmEntitlementIntegrationHints;
+  actions: Record<DwmEntitlementReadinessActionId, DwmEntitlementReadinessAction>;
+};
+
 const planLimits: Record<DwmEntitlementPlan, DwmEntitlementLimits> = {
   trial: { activeWatchlists: 1, watchTerms: 5, webhookDestinations: 1, sourcePacks: 2, alertRebuildsPerDay: 5, openCases: 10 },
   team: { activeWatchlists: 10, watchTerms: 250, webhookDestinations: 5, sourcePacks: 25, alertRebuildsPerDay: 100, openCases: 100 },
@@ -108,6 +162,18 @@ export function getOrganizationEntitlements(_url: URL, options: ApiServerOptions
   if (access.error) return access.error;
   const policy = getOrDefaultEntitlementPolicy(options, access.organization);
   return json({ organization: access.organization, access: access.access, entitlement: policy, evaluation: evaluateDwmEntitlementPolicy(options, access.organization, policy) });
+}
+
+export async function getOrganizationEntitlementReadiness(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
+  const body = request.method === "POST" ? await readJson<any>(request) : undefined;
+  const access = authorizeEntitlementAccess(options, organizationId, request, body, "read");
+  if (access.error) return access.error;
+  return json(buildOrganizationEntitlementReadiness(options, access.organization, {
+    requestId: String(body?.requestId ?? request.headers.get("x-request-id") ?? "").trim() || undefined,
+    proposedWatchlistTerms: normalizeReadinessTerms(body?.proposedWatchlistTerms ?? body?.terms),
+    analystHandoffBundle: body?.analystHandoffBundle ?? body?.bundle,
+    access: access.access
+  }));
 }
 
 export async function upsertOrganizationEntitlements(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
@@ -293,6 +359,238 @@ export function buildDwmEntitlementBlocker(input: {
   };
 }
 
+export function buildOrganizationEntitlementReadiness(options: ApiServerOptions, organization: Organization, input: {
+  requestId?: string;
+  proposedWatchlistTerms?: Array<{ value: string }>;
+  analystHandoffBundle?: unknown;
+  access?: { allowed: boolean; role?: string; readOnly?: boolean; reason: string | null };
+} = {}): DwmEntitlementReadinessModel {
+  const storedPolicy = getStoredEntitlementPolicy(options, organization.id);
+  const policy = storedPolicy ?? getOrDefaultEntitlementPolicy(options, organization);
+  const evaluation = evaluateDwmEntitlementPolicy(options, organization, policy);
+  const persistedPolicy = Boolean(storedPolicy);
+  const proposedTerms = input.proposedWatchlistTerms?.length ? input.proposedWatchlistTerms : [{ value: "proposed-watch-term" }];
+  const watchlistCreate = evaluateProposedDwmWatchlistEntitlement(options, { organizationId: organization.id, tenantId: organization.tenantId, terms: proposedTerms, status: "active" });
+  const rebuild = evaluateProposedDwmAlertRebuildEntitlement(options, { organizationId: organization.id, tenantId: organization.tenantId });
+  const sourceGrowth = projectLimitAction({
+    actionId: "source_growth",
+    ownerLane: "source-growth",
+    actionName: "source_growth",
+    policy,
+    persistedPolicy,
+    usage: evaluation.usage,
+    projectedUsage: { ...evaluation.usage, sourcePacks: evaluation.usage.sourcePacks + 1 },
+    checkCode: "source_packs",
+    requestId: input.requestId,
+    route: "/v1/dwm/source-requests"
+  });
+  const webhookDelivery = projectWebhookDeliveryAction({ options, organization, policy, persistedPolicy, usage: evaluation.usage, requestId: input.requestId });
+  const handoff = projectAnalystHandoffAction({ bundle: input.analystHandoffBundle, policy, persistedPolicy, usage: evaluation.usage, requestId: input.requestId });
+
+  return {
+    schemaVersion: "dwm.entitlement_readiness.v1",
+    generatedAt: nowIso(),
+    requestId: input.requestId,
+    organization: { id: organization.id, tenantId: organization.tenantId, name: organization.name },
+    access: input.access ?? { allowed: true, reason: null },
+    policy: {
+      id: policy.id,
+      plan: policy.plan,
+      status: policy.status,
+      persistedPolicy,
+      limits: policy.limits,
+      updatedAt: policy.updatedAt
+    },
+    usage: evaluation.usage,
+    checks: evaluation.checks,
+    defaultNoPolicyBehavior: "permissive_until_policy_persisted",
+    integrationHints: policy.integrationHints,
+    actions: {
+      watchlist_create: actionFromEvaluation("watchlist_create", "entitlement", "create_dwm_watchlist", watchlistCreate, input.requestId, "/v1/dwm/watchlists"),
+      watchlist_update: actionFromEvaluation("watchlist_update", "entitlement", "update_dwm_watchlist", watchlistCreate, input.requestId, "/v1/dwm/watchlists/:id"),
+      alert_rebuild: actionFromEvaluation("alert_rebuild", "alert-workflow", "rebuild_dwm_alerts", rebuild, input.requestId, "/v1/dwm/alerts/rebuild"),
+      alert_replay: actionFromEvaluation("alert_replay", "alert-workflow", "replay_dwm_alert", rebuild, input.requestId, "/v1/dwm/alerts/:id/replay"),
+      source_growth: sourceGrowth,
+      webhook_delivery: webhookDelivery,
+      analyst_handoff: handoff
+    }
+  };
+}
+
+function actionFromEvaluation(
+  id: DwmEntitlementReadinessActionId,
+  ownerLane: DwmEntitlementReadinessAction["ownerLane"],
+  actionName: string,
+  result: { allowed: boolean; reason: string | null; evaluation?: DwmEntitlementPolicyEvaluation },
+  requestId: string | undefined,
+  route: string
+): DwmEntitlementReadinessAction {
+  if (!result.evaluation) return permissiveAction(id, ownerLane, requestId, route);
+  const adapter = buildDwmEntitlementReadAdapter({ action: actionName, reason: result.reason, evaluation: result.evaluation, requestId });
+  const status = result.reason
+    ? "blocked"
+    : result.evaluation.persistedPolicy ? "allowed" : "permissive_no_policy";
+  return {
+    id,
+    ownerLane,
+    status,
+    blockerCodes: result.reason ? [result.reason] : [],
+    usage: result.evaluation.usage,
+    limits: result.evaluation.policy.limits,
+    projectedUsage: result.evaluation.projectedUsage,
+    limit: adapter.limit,
+    blockedAction: adapter.blockedAction,
+    requestId,
+    route,
+    nextStep: adapter.nextStep,
+    helpdeskText: result.reason
+      ? `${adapter.helpdesk.escalationHint} Limit ${result.reason} blocked ${actionName}.`
+      : result.evaluation.persistedPolicy ? `${actionName} is within the persisted organization entitlement.` : `${actionName} is allowed because no persisted entitlement policy exists yet.`,
+    dashboardText: result.reason ? adapter.dashboard.blockedActionCopy : adapter.nextStep,
+    redactedAudit: adapter.audit.latestPolicyChange
+  };
+}
+
+function projectLimitAction(input: {
+  actionId: DwmEntitlementReadinessActionId;
+  ownerLane: DwmEntitlementReadinessAction["ownerLane"];
+  actionName: string;
+  policy: DwmEntitlementPolicy;
+  persistedPolicy: boolean;
+  usage: DwmEntitlementUsage;
+  projectedUsage: DwmEntitlementUsage;
+  checkCode: string;
+  requestId?: string;
+  route: string;
+}): DwmEntitlementReadinessAction {
+  const checks = entitlementChecks(input.policy, input.projectedUsage);
+  const failed = input.persistedPolicy && input.policy.status !== "active"
+    ? "entitlement_suspended"
+    : input.persistedPolicy ? checks.find((check) => !check.allowed)?.code ?? null : null;
+  return actionFromEvaluation(input.actionId, input.ownerLane, input.actionName, {
+    allowed: !failed,
+    reason: failed,
+    evaluation: {
+      policy: input.policy,
+      status: input.policy.status,
+      persistedPolicy: input.persistedPolicy,
+      usage: input.usage,
+      projectedUsage: input.projectedUsage,
+      checks,
+      integrationHints: input.policy.integrationHints
+    }
+  }, input.requestId, input.route);
+}
+
+function projectWebhookDeliveryAction(input: {
+  options: ApiServerOptions;
+  organization: Organization;
+  policy: DwmEntitlementPolicy;
+  persistedPolicy: boolean;
+  usage: DwmEntitlementUsage;
+  requestId?: string;
+}): DwmEntitlementReadinessAction {
+  const activeDestinations = ((input.options.store as any).listWebhookDestinations?.() ?? [])
+    .filter((row: any) => row.organizationId === input.organization.id && row.status === "active");
+  if (!activeDestinations.length) {
+    return {
+      id: "webhook_delivery",
+      ownerLane: "webhook",
+      status: "needs_input",
+      blockerCodes: ["missing_webhook_destination"],
+      usage: input.usage,
+      limits: input.policy.limits,
+      blockedAction: "deliver_dwm_webhook",
+      requestId: input.requestId,
+      route: "/v1/dwm/webhooks/deliver",
+      nextStep: "Create an active organization webhook destination before delivery.",
+      helpdeskText: "Webhook delivery is blocked because the organization has no active destination.",
+      dashboardText: "Add an active Discord or webhook destination.",
+      redactedAudit: redactedLatestAuditEvent(input.policy)
+    };
+  }
+  return actionFromEvaluation("webhook_delivery", "webhook", "deliver_dwm_webhook", {
+    allowed: true,
+    reason: null,
+    evaluation: {
+      policy: input.policy,
+      status: input.policy.status,
+      persistedPolicy: input.persistedPolicy,
+      usage: input.usage,
+      projectedUsage: input.usage,
+      checks: entitlementChecks(input.policy, input.usage),
+      integrationHints: input.policy.integrationHints
+    }
+  }, input.requestId, "/v1/dwm/webhooks/deliver");
+}
+
+function projectAnalystHandoffAction(input: {
+  bundle?: unknown;
+  policy: DwmEntitlementPolicy;
+  persistedPolicy: boolean;
+  usage: DwmEntitlementUsage;
+  requestId?: string;
+}): DwmEntitlementReadinessAction {
+  if (!input.bundle) {
+    return {
+      id: "analyst_handoff",
+      ownerLane: "analyst-handoff",
+      status: "needs_input",
+      blockerCodes: ["missing_handoff_bundle"],
+      usage: input.usage,
+      limits: input.policy.limits,
+      blockedAction: null,
+      requestId: input.requestId,
+      route: "analyst_handoff_consumer",
+      nextStep: "Provide an analyst handoff consumer bundle to validate stage prerequisites.",
+      helpdeskText: "No analyst handoff bundle was provided for readiness validation.",
+      dashboardText: "Handoff validation waits for a consumer bundle.",
+      redactedAudit: redactedLatestAuditEvent(input.policy)
+    };
+  }
+  const validation = validateAnalystHandoffConsumerBundle(input.bundle);
+  const blockerCodes = Array.from(new Set(validation.blockers.map((item) => item.code)));
+  return {
+    id: "analyst_handoff",
+    ownerLane: "analyst-handoff",
+    status: validation.ok ? (input.persistedPolicy ? "allowed" : "permissive_no_policy") : "blocked",
+    blockerCodes,
+    usage: input.usage,
+    limits: input.policy.limits,
+    projectedUsage: input.usage,
+    blockedAction: validation.ok ? null : "consume_analyst_handoff",
+    requestId: input.requestId,
+    route: "analyst_handoff_consumer",
+    nextStep: validation.ok ? "Analyst handoff prerequisites are satisfied." : "Resolve analyst handoff blockers before dispatching case or webhook actions.",
+    helpdeskText: validation.ok ? "Analyst handoff consumer contract is ready." : `Analyst handoff blocked by: ${blockerCodes.join(", ")}.`,
+    dashboardText: validation.ok ? "Analyst handoff ready." : `${validation.blockers.length} analyst handoff blocker${validation.blockers.length === 1 ? "" : "s"} found.`,
+    redactedAudit: redactedLatestAuditEvent(input.policy),
+    analystHandoff: {
+      ok: validation.ok,
+      blockerCount: validation.blockers.length,
+      blockers: validation.blockers.map(({ code, stage, field, recoverable }) => ({ code, stage, field, recoverable }))
+    }
+  };
+}
+
+function permissiveAction(id: DwmEntitlementReadinessActionId, ownerLane: DwmEntitlementReadinessAction["ownerLane"], requestId: string | undefined, route: string): DwmEntitlementReadinessAction {
+  const emptyUsage = { activeWatchlists: 0, watchTerms: 0, webhookDestinations: 0, sourcePacks: 0, alertRebuildsToday: 0, openCases: 0 };
+  return {
+    id,
+    ownerLane,
+    status: "permissive_no_policy",
+    blockerCodes: [],
+    usage: emptyUsage,
+    limits: planLimits.team,
+    blockedAction: null,
+    requestId,
+    route,
+    nextStep: "Allowed because this request is not organization-scoped.",
+    helpdeskText: "No organization-scoped entitlement policy applies.",
+    dashboardText: "No organization-scoped entitlement policy applies."
+  };
+}
+
 function saveEntitlementPolicy(options: ApiServerOptions, policy: DwmEntitlementPolicy): DwmEntitlementPolicy {
   return (options.store as any).savePlan(policy);
 }
@@ -412,6 +710,15 @@ function requestIdentity(request: Request | undefined, body?: any): string[] {
     body?.actorEmail,
     body?.actor
   ].map(normalizeIdentity).filter(Boolean) as string[];
+}
+
+function normalizeReadinessTerms(value: unknown): Array<{ value: string }> | undefined {
+  const raw = Array.isArray(value) ? value : String(value ?? "").split(/[,\n]/);
+  const terms = raw
+    .map((item: any) => typeof item === "object" && item ? String(item.value ?? item.term ?? "").trim() : String(item ?? "").trim())
+    .filter(Boolean)
+    .map((value) => ({ value }));
+  return terms.length ? terms : undefined;
 }
 
 function identityMatchesMember(identity: string[], member: OrganizationMember): boolean {

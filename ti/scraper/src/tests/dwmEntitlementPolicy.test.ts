@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir } from "./apiTestHarness.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { evaluateProposedDwmWatchlistEntitlement } from "../api/dwmEntitlementRoutes.ts";
@@ -523,6 +524,172 @@ describe("dwm entitlement policy", () => {
       const permissiveRebuild = await permissiveRebuildResponse.json() as any;
       expect(permissiveRebuildResponse.status).toBe(200);
       expect(permissiveRebuild.entitlement).toMatchObject({ persistedPolicy: false, blockedAction: null, projectedUsage: { alertRebuildsToday: 101 } });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("exposes org entitlement readiness for dashboard, helpdesk, webhook, alerts, and handoff consumers", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dwm-entitlement-readiness-"));
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath: join(dir, "store.json") });
+      const options = { store, frontier: new FocusedFrontier() };
+
+      const orgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        headers: { "x-user-email": "owner@readiness.example" },
+        body: JSON.stringify({ name: "Readiness Monitor", ownerEmail: "owner@readiness.example", ownerUserId: "owner-readiness" })
+      }), options);
+      const orgPayload = await orgResponse.json() as any;
+      const organizationId = orgPayload.organization.id;
+
+      store.saveSource({
+        id: "src_readiness_org",
+        name: "Readiness org source",
+        type: "telegram_public",
+        url: "https://t.me/readiness_org",
+        accessMethod: "public_http",
+        status: "active",
+        trustScore: 0.8,
+        legalNotes: "Public preview only.",
+        tenantId: organizationId,
+        organizationId,
+        createdAt: "2026-06-29T11:00:00.000Z",
+        updatedAt: "2026-06-29T11:00:00.000Z"
+      } as SourceRecord);
+
+      const webhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/webhooks`, {
+        method: "POST",
+        headers: { "x-actor-id": "owner-readiness" },
+        body: JSON.stringify({ name: "Readiness Discord", url: "https://discord.com/api/webhooks/readiness/token" })
+      }), options);
+      expect(webhookResponse.status).toBe(201);
+
+      (store as any).saveDwmWatchlist({
+        id: "watch_readiness",
+        organizationId,
+        tenantId: organizationId,
+        name: "Readiness watch",
+        terms: [{ value: "readiness.example", kind: "domain" }],
+        status: "active",
+        createdAt: "2026-06-29T11:01:00.000Z",
+        updatedAt: "2026-06-29T11:01:00.000Z"
+      });
+      (store as any).savePlan({
+        id: "usage_readiness_rebuild",
+        recordType: "dwm_entitlement_usage_event",
+        organizationId,
+        tenantId: organizationId,
+        action: "alert_rebuild",
+        at: new Date().toISOString()
+      });
+
+      const policyResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/entitlements`, {
+        method: "PUT",
+        headers: { "x-user-email": "owner@readiness.example", "x-request-id": "req-readiness-policy" },
+        body: JSON.stringify({
+          plan: "custom",
+          limits: { activeWatchlists: 1, watchTerms: 1, webhookDestinations: 1, sourcePacks: 1, alertRebuildsPerDay: 1, openCases: 5 },
+          reason: "Readiness contract pins all limits for blocker rendering."
+        })
+      }), options);
+      expect(policyResponse.status).toBe(201);
+
+      const readinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/entitlements/readiness`, {
+        headers: { "x-user-email": "owner@readiness.example", "x-request-id": "req-readiness-get" }
+      }), options);
+      const readiness = await readinessResponse.json() as any;
+      expect(readinessResponse.status).toBe(200);
+      expect(readiness).toMatchObject({
+        schemaVersion: "dwm.entitlement_readiness.v1",
+        requestId: "req-readiness-get",
+        policy: { plan: "custom", status: "active", persistedPolicy: true },
+        usage: { activeWatchlists: 1, watchTerms: 1, webhookDestinations: 1, sourcePacks: 1, alertRebuildsToday: 1 },
+        defaultNoPolicyBehavior: "permissive_until_policy_persisted"
+      });
+      expect(readiness.actions.watchlist_create).toMatchObject({
+        ownerLane: "entitlement",
+        status: "blocked",
+        blockedAction: "create_dwm_watchlist",
+        blockerCodes: ["active_watchlists"],
+        limit: { code: "active_watchlists", used: 2, limit: 1, remaining: 0 },
+        requestId: "req-readiness-get"
+      });
+      expect(readiness.actions.alert_rebuild).toMatchObject({
+        ownerLane: "alert-workflow",
+        status: "blocked",
+        blockedAction: "rebuild_dwm_alerts",
+        blockerCodes: ["alert_rebuilds_today"],
+        limit: { code: "alert_rebuilds_today", used: 2, limit: 1, remaining: 0 }
+      });
+      expect(readiness.actions.source_growth).toMatchObject({
+        ownerLane: "source-growth",
+        status: "blocked",
+        blockerCodes: ["source_packs"],
+        limit: { code: "source_packs", used: 2, limit: 1, remaining: 0 }
+      });
+      expect(readiness.actions.webhook_delivery).toMatchObject({
+        ownerLane: "webhook",
+        status: "allowed",
+        blockedAction: null
+      });
+      expect(readiness.actions.analyst_handoff).toMatchObject({
+        ownerLane: "analyst-handoff",
+        status: "needs_input",
+        blockerCodes: ["missing_handoff_bundle"]
+      });
+      expect(readiness.actions.alert_rebuild.helpdeskText).toContain("Limit alert_rebuilds_today");
+      expect(readiness.actions.alert_rebuild.redactedAudit).toMatchObject({ action: "created", requestId: "req-readiness-policy" });
+
+      const blockerBundle = JSON.parse(readFileSync(new URL("./fixtures/analyst-handoff-blockers.json", import.meta.url), "utf8"));
+      const handoffResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/entitlements/readiness`, {
+        method: "POST",
+        headers: { "x-user-email": "owner@readiness.example", "x-request-id": "req-readiness-handoff" },
+        body: JSON.stringify({ analystHandoffBundle: blockerBundle })
+      }), options);
+      const handoffReadiness = await handoffResponse.json() as any;
+      expect(handoffResponse.status).toBe(200);
+      expect(handoffReadiness.actions.analyst_handoff).toMatchObject({
+        status: "blocked",
+        blockedAction: "consume_analyst_handoff",
+        requestId: "req-readiness-handoff"
+      });
+      expect(handoffReadiness.actions.analyst_handoff.blockerCodes).toContain("entitlement_blocked");
+      expect(handoffReadiness.actions.analyst_handoff.blockerCodes).toContain("webhook_audit_contract_mismatch");
+      expect(handoffReadiness.actions.analyst_handoff.analystHandoff.blockerCount).toBeGreaterThan(0);
+
+      const outsiderResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/entitlements/readiness`, {
+        headers: { "x-user-email": "outsider@readiness.example" }
+      }), options);
+      const outsiderPayload = await outsiderResponse.json() as any;
+      expect(outsiderResponse.status).toBe(403);
+      expect(outsiderPayload.error.code).toBe("organization_entitlement_denied");
+      expect(outsiderPayload.actions).toBeUndefined();
+
+      const openOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        headers: { "x-user-email": "owner@readiness-open.example" },
+        body: JSON.stringify({ name: "Open Readiness Monitor", ownerEmail: "owner@readiness-open.example", ownerUserId: "owner-readiness-open" })
+      }), options);
+      const openOrg = await openOrgResponse.json() as any;
+      for (let index = 0; index < 100; index += 1) {
+        (store as any).savePlan({
+          id: `usage_readiness_open_${index}`,
+          recordType: "dwm_entitlement_usage_event",
+          organizationId: openOrg.organization.id,
+          tenantId: openOrg.organization.id,
+          action: "alert_rebuild",
+          at: new Date().toISOString()
+        });
+      }
+      const openReadinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${openOrg.organization.id}/entitlements/readiness`, {
+        headers: { "x-user-email": "owner@readiness-open.example" }
+      }), options);
+      const openReadiness = await openReadinessResponse.json() as any;
+      expect(openReadinessResponse.status).toBe(200);
+      expect(openReadiness.policy.persistedPolicy).toBe(false);
+      expect(openReadiness.actions.alert_rebuild).toMatchObject({ status: "permissive_no_policy", blockedAction: null });
+      expect(openReadiness.actions.watchlist_create).toMatchObject({ status: "permissive_no_policy", blockedAction: null });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -1,6 +1,6 @@
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
-import { getOrganizationEntitlements, upsertOrganizationEntitlements } from "./dwmEntitlementRoutes.ts";
+import { getOrganizationEntitlementReadiness, getOrganizationEntitlements, upsertOrganizationEntitlements } from "./dwmEntitlementRoutes.ts";
 import { buildDwmSourcePackWorkerReadinessSnapshot, createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
 import { createDwmWatchlist, deliverDwmWebhooks, disableDwmWatchlist, getDwmAlertDetail, getDwmAlertGenerationReadiness, getDwmWatchlistDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert, updateDwmWatchlist } from "./dwmWorkflowRoutes.ts";
 import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
@@ -34,6 +34,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/organizations" && request.method === "POST") return createOrganization(request, options);
     if (/^\/v1\/organizations\/[^/]+\/members$/.test(url.pathname) && request.method === "GET") return listOrganizationMembers(url, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/invites$/.test(url.pathname) && request.method === "POST") return createOrganizationInvites(request, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/organizations\/[^/]+\/entitlements\/readiness$/.test(url.pathname) && (request.method === "GET" || request.method === "POST")) return getOrganizationEntitlementReadiness(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/entitlements$/.test(url.pathname) && request.method === "GET") return getOrganizationEntitlements(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/organizations\/[^/]+\/entitlements$/.test(url.pathname) && request.method === "PUT") return upsertOrganizationEntitlements(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "GET") return listWebhookDestinations(url, options, url.pathname.split("/")[3]);
