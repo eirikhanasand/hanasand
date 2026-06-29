@@ -218,7 +218,7 @@ export type WorkbenchOrgContext = {
 
 export type WorkbenchCase = {
     id: string
-    kind: 'dwm_alert' | 'ti_domain' | 'source_capture' | 'org_readiness' | 'watchlist_readiness' | 'webhook_readiness' | 'source_readiness' | 'alert_readiness' | 'support_readiness' | 'public_ti_handoff'
+    kind: 'dwm_alert' | 'ti_domain' | 'source_capture' | 'org_readiness' | 'watchlist_readiness' | 'webhook_readiness' | 'source_readiness' | 'alert_readiness' | 'public_ti_handoff'
     queue: string
     title: string
     subtitle: string

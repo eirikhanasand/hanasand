@@ -1793,7 +1793,6 @@ export function buildReadinessCases(input: {
     liveAlertCount: number
     renderedAlertCount: number
     alertAccessState?: DwmAlertAccessState
-    externalReadiness?: ProductReadinessExternalState
 }): WorkbenchCase[] {
     const now = new Date().toISOString()
     const organization = input.organizationState.selectedOrganization
@@ -1811,16 +1810,6 @@ export function buildReadinessCases(input: {
     const alertAccessMessage = input.alertAccessState?.message || (input.alertAccessState?.status === 'identity_missing'
         ? 'DWM alert access requires an active organization member identity.'
         : 'DWM alert visibility could not be verified for this organization scope.')
-    const helpdeskAudit = input.externalReadiness?.helpdeskAudit
-    const helpdeskBlockers = helpdeskAudit?.blockers?.filter(Boolean) || []
-    const helpdeskReady = helpdeskAudit?.status === 'ready'
-    const helpdeskCheckedAt = helpdeskAudit?.checkedAt || helpdeskAudit?.latestAuditEventAt || helpdeskAudit?.proofTimestamp || now
-    const helpdeskAuditCount = typeof helpdeskAudit?.auditedActions === 'number' ? helpdeskAudit.auditedActions : 0
-    const helpdeskQueueDepth = typeof helpdeskAudit?.supportQueueDepth === 'number'
-        ? helpdeskAudit.supportQueueDepth
-        : typeof helpdeskAudit?.openRecoveryRequests === 'number'
-            ? helpdeskAudit.openRecoveryRequests
-            : 0
     const attemptedAlertIdentity = [
         input.alertAccessState?.attemptedIdentity?.userEmail ? `userEmail=${input.alertAccessState.attemptedIdentity.userEmail}` : '',
         input.alertAccessState?.attemptedIdentity?.userId ? `userId=${input.alertAccessState.attemptedIdentity.userId}` : '',
@@ -1952,55 +1941,6 @@ export function buildReadinessCases(input: {
             })),
             missingDependency: input.deliveries.length ? undefined : 'No webhook delivery rows returned from /api/dwm/webhooks/deliveries. Run Test org webhook or Send queued alerts to create DB delivery evidence.',
             actions: webhookActions(input.scope, organization, orgWebhooks, hasWebhookDestination),
-        }),
-        readinessCase({
-            id: 'support_admin_readiness',
-            kind: 'support_readiness',
-            queue: 'Support readiness',
-            title: helpdeskReady ? 'Support audit proof loaded' : 'Verify support audit proof',
-            severity: helpdeskReady ? 'medium' : 'high',
-            status: helpdeskAudit?.status || 'unavailable',
-            priority: helpdeskReady ? 248 : 365,
-            confidence: helpdeskAudit ? 88 : 55,
-            subtitle: helpdeskAudit
-                ? helpdeskAudit.detail || helpdeskAuditDetail(helpdeskAudit)
-                : 'Support recovery and admin audit routes were not returned by product-progress readiness.',
-            recommendedAction: helpdeskReady
-                ? 'Review the audited support queue before customer-facing readiness is marked complete.'
-                : 'Open the helpdesk workbench and verify support recovery plus admin audit export proof.',
-            evidence: [{
-                id: 'ev_support_audit_readiness',
-                sourceName: 'Support audit readiness',
-                sourceFamily: 'admin support',
-                captureMode: 'api snapshot',
-                redactionState: 'customer safe',
-                contentHash: helpdeskAudit?.backendProofContractVersion || helpdeskAudit?.schemaVersion || 'support.audit.readiness.v1',
-                excerpt: helpdeskAudit
-                    ? `${helpdeskAuditCount} audited support action${helpdeskAuditCount === 1 ? '' : 's'}; ${helpdeskQueueDepth} recovery queue item${helpdeskQueueDepth === 1 ? '' : 's'}.`
-                    : 'Expected product-progress support readiness from recovery and admin audit routes.',
-                observedAt: helpdeskCheckedAt,
-                provenance: helpdeskAudit?.source || '/api/backend/admin/support/access-recovery + /api/backend/admin/audit-events?limit=50',
-                confidence: helpdeskAudit ? 88 : 55,
-            }],
-            timeline: [{
-                id: 'support_audit_readiness_at',
-                at: helpdeskCheckedAt,
-                title: helpdeskReady ? 'Support proof loaded' : 'Support proof required',
-                body: helpdeskReady
-                    ? `${helpdeskAuditCount} audited support action${helpdeskAuditCount === 1 ? '' : 's'} loaded with ${helpdeskQueueDepth} recovery queue item${helpdeskQueueDepth === 1 ? '' : 's'}.`
-                    : helpdeskBlockers.join('; ') || helpdeskAudit?.unavailableReason || 'Support readiness requires recovery queue and admin audit export proof.',
-            }],
-            nextTasks: helpdeskReady
-                ? ['Owner: support ops. Review recovery requests that need approval.', 'Open the admin audit export before closing readiness.', 'Keep support actions auditable before customer rollout.']
-                : ['Owner: support ops. Open the helpdesk workbench.', 'Verify recovery queue state from the backed support route.', 'Confirm admin audit export proof before readiness is marked ready.'],
-            relatedLinks: [
-                { href: '/dashboard/system/impersonation', label: 'Helpdesk workbench' },
-                { href: '/api/backend/admin/support/access-recovery', label: 'Recovery API' },
-                { href: '/api/backend/admin/audit-events?limit=50', label: 'Admin audit API' },
-            ],
-            workflowPath: path,
-            missingDependency: helpdeskReady ? undefined : helpdeskBlockers.join('; ') || helpdeskAudit?.unavailableReason || 'Missing support audit readiness proof.',
-            actions: [{ id: 'open_helpdesk_workbench', label: 'Open helpdesk', method: 'GET', href: '/dashboard/system/impersonation' }],
         }),
         readinessCase({
             id: 'source_coverage',
