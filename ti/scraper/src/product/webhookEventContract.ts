@@ -2,6 +2,7 @@ import { stableId, uniqueStrings } from "../utils.ts";
 
 export const DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION = "dwm.webhook_event_contract.v1" as const;
 export const DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION = "dwm.webhook_event_chain.v1" as const;
+export const DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION = "dwm.webhook_event_support_handoff.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -71,6 +72,54 @@ export type DwmWebhookEventChainBlocker = {
   ownerLane: "webhook" | "case" | "source";
   message: string;
   path: string;
+};
+
+export type DwmWebhookEventSupportHandoff = {
+  schemaVersion: typeof DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION;
+  id: string;
+  checkedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  webhookDeliveryId?: string;
+  webhookDestinationId?: string;
+  helpdesk: {
+    redacted: true;
+    lookupKey: string;
+    supportAction: "inspect_webhook_delivery" | "restore_webhook_delivery_chain";
+    routeHints: {
+      caseDetail?: string;
+      alertDetail?: string;
+      webhookDelivery?: string;
+    };
+    customerVisible: false;
+  };
+  audit: {
+    eventType: "dwm.webhook.customer_notification_chain_checked";
+    outcome: "verified" | "blocked";
+    actorIds: string[];
+    deliveryMode?: string;
+    deliveryKind?: string;
+    blockerCodes: DwmWebhookEventChainBlocker["code"][];
+    ownerLanes: DwmWebhookEventChainBlocker["ownerLane"][];
+  };
+  evidence: {
+    redacted: true;
+    evidenceCount: number;
+    captureIds: string[];
+    sourceIds: string[];
+    contentHashes: string[];
+    endpointHash?: string;
+    payloadHash?: string;
+  };
+  nextActions: {
+    ownerLane: DwmWebhookEventChainBlocker["ownerLane"];
+    action: "record_delivery" | "record_customer_notification" | "retry_delivery" | "record_live_delivery" | "attach_case" | "restore_provenance" | "resolve_identity";
+    blockerCode: DwmWebhookEventChainBlocker["code"];
+    path: string;
+  }[];
 };
 
 export function buildWebhookDeliveryEventContract(input: {
@@ -206,6 +255,72 @@ export function validateWebhookEventChain(input: {
   };
 }
 
+export function buildWebhookEventSupportHandoff(input: {
+  chain: DwmWebhookEventChain;
+  checkedAt?: string;
+}): DwmWebhookEventSupportHandoff {
+  const chain = input.chain;
+  const delivery = chain.events.find((event) => event.eventKind === "webhook.delivery_recorded");
+  const notification = chain.events.find((event) => event.eventKind === "case.customer_notification_recorded");
+  const identity = chain.identity;
+  const tenantId = identity?.tenantId ?? notification?.tenantId ?? delivery?.tenantId ?? "";
+  const organizationId = identity?.organizationId ?? notification?.organizationId ?? delivery?.organizationId;
+  const alertId = identity?.alertId ?? notification?.alertId ?? delivery?.alertId ?? "";
+  const caseId = identity?.caseId ?? notification?.caseId ?? delivery?.caseId;
+  const webhookDeliveryId = identity?.webhookDeliveryId ?? notification?.webhookDeliveryId ?? delivery?.webhookDeliveryId;
+  const webhookDestinationId = identity?.webhookDestinationId ?? notification?.webhookDestinationId ?? delivery?.webhookDestinationId;
+  const blockerCodes = chain.blockers.map((item) => item.code);
+  const ownerLanes = uniqueStrings(chain.blockers.map((item) => item.ownerLane)) as DwmWebhookEventChainBlocker["ownerLane"][];
+
+  return {
+    schemaVersion: DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_event_support_handoff", `${tenantId}:${organizationId ?? ""}:${alertId}:${caseId ?? ""}:${webhookDeliveryId ?? ""}:${blockerCodes.join(",")}`),
+    checkedAt: input.checkedAt ?? chain.checkedAt,
+    ok: chain.ok,
+    tenantId,
+    organizationId,
+    alertId,
+    caseId,
+    webhookDeliveryId,
+    webhookDestinationId,
+    helpdesk: {
+      redacted: true,
+      lookupKey: organizationId ?? tenantId,
+      supportAction: chain.ok ? "inspect_webhook_delivery" : "restore_webhook_delivery_chain",
+      routeHints: {
+        caseDetail: caseId ? `/v1/cases/${encodeURIComponent(caseId)}` : undefined,
+        alertDetail: alertId ? `/v1/dwm/alerts/${encodeURIComponent(alertId)}` : undefined,
+        webhookDelivery: webhookDeliveryId ? `/v1/dwm/webhook-deliveries/${encodeURIComponent(webhookDeliveryId)}` : undefined
+      },
+      customerVisible: false
+    },
+    audit: {
+      eventType: "dwm.webhook.customer_notification_chain_checked",
+      outcome: chain.ok ? "verified" : "blocked",
+      actorIds: uniqueStrings(chain.events.map((event) => event.actor).filter(Boolean).map(String)),
+      deliveryMode: notification?.customerNotification?.deliveryMode,
+      deliveryKind: delivery?.delivery?.deliveryKind,
+      blockerCodes,
+      ownerLanes
+    },
+    evidence: {
+      redacted: true,
+      evidenceCount: maxEvidenceCount(chain.events),
+      captureIds: uniqueStrings(chain.events.flatMap((event) => event.evidence.captureIds)),
+      sourceIds: uniqueStrings(chain.events.flatMap((event) => event.evidence.sourceIds)),
+      contentHashes: uniqueStrings(chain.events.flatMap((event) => event.evidence.contentHashes)),
+      endpointHash: delivery?.delivery?.endpointHash,
+      payloadHash: delivery?.delivery?.payloadHash
+    },
+    nextActions: chain.blockers.map((item) => ({
+      ownerLane: item.ownerLane,
+      action: supportActionFor(item.code),
+      blockerCode: item.code,
+      path: item.path
+    }))
+  };
+}
+
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
   return {
@@ -228,6 +343,20 @@ function evidenceFromReceiptCaseAndAlert(receipt: Record<string, any>, caseRecor
 
 function hasProvenance(event: DwmWebhookEventContract): boolean {
   return event.evidence.evidenceCount > 0 || event.evidence.captureIds.length > 0 || event.evidence.sourceIds.length > 0 || event.evidence.contentHashes.length > 0;
+}
+
+function maxEvidenceCount(events: DwmWebhookEventContract[]): number {
+  return events.reduce((max, event) => Math.max(max, event.evidence.evidenceCount), 0);
+}
+
+function supportActionFor(code: DwmWebhookEventChainBlocker["code"]): DwmWebhookEventSupportHandoff["nextActions"][number]["action"] {
+  if (code === "missing_delivery_event") return "record_delivery";
+  if (code === "missing_customer_notification_event") return "record_customer_notification";
+  if (code === "delivery_not_delivered") return "retry_delivery";
+  if (code === "dry_run_delivery") return "record_live_delivery";
+  if (code === "missing_case_id") return "attach_case";
+  if (code === "missing_provenance") return "restore_provenance";
+  return "resolve_identity";
 }
 
 function blocker(code: DwmWebhookEventChainBlocker["code"], ownerLane: DwmWebhookEventChainBlocker["ownerLane"], path: string, message: string): DwmWebhookEventChainBlocker {

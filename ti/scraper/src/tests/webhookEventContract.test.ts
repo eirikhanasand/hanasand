@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+  DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
+  buildWebhookEventSupportHandoff,
   buildWebhookDeliveryEventContract,
   validateWebhookEventChain
 } from "../product/webhookEventContract.ts";
@@ -68,6 +70,60 @@ describe("webhook event contract", () => {
     expect(chain.events).toHaveLength(2);
   });
 
+  test("builds redacted support handoff for verified webhook notification chain", () => {
+    const deliveryEvent = buildWebhookDeliveryEventContract({ delivery: deliveryFixture(), alert: alertFixture(), actor: "analyst_acme" });
+    const notificationEvent = buildCaseCustomerNotificationEventContract({ receipt: notificationReceiptFixture(), caseRecord: caseFixture(), alert: alertFixture() });
+    const chain = validateWebhookEventChain({
+      deliveryEvent,
+      customerNotificationEvent: notificationEvent,
+      checkedAt: "2026-06-29T12:30:00.000Z"
+    });
+    const handoff = buildWebhookEventSupportHandoff({ chain });
+
+    expect(handoff).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      webhookDeliveryId: "delivery_acme_lumma",
+      webhookDestinationId: "webhook_discord",
+      helpdesk: {
+        redacted: true,
+        lookupKey: "org_acme",
+        supportAction: "inspect_webhook_delivery",
+        routeHints: {
+          caseDetail: "/v1/cases/case_acme_lumma",
+          alertDetail: "/v1/dwm/alerts/alert_acme_lumma",
+          webhookDelivery: "/v1/dwm/webhook-deliveries/delivery_acme_lumma"
+        },
+        customerVisible: false
+      },
+      audit: {
+        eventType: "dwm.webhook.customer_notification_chain_checked",
+        outcome: "verified",
+        actorIds: ["analyst_acme"],
+        deliveryMode: "webhook_delivery",
+        deliveryKind: "discord",
+        blockerCodes: [],
+        ownerLanes: []
+      },
+      evidence: {
+        redacted: true,
+        evidenceCount: 1,
+        captureIds: ["capture_acme_lumma"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_lumma"],
+        endpointHash: "endpoint_hash_acme",
+        payloadHash: "payload_hash_acme"
+      },
+      nextActions: []
+    });
+    expect(JSON.stringify(handoff)).not.toContain("https://discord.com");
+    expect(JSON.stringify(handoff)).not.toContain("Customer SOC acknowledged");
+  });
+
   test("validates checked-in fixture as integration proof", () => {
     const chain = validateWebhookEventChain({
       deliveryEvent: fixture.events[0] as any,
@@ -118,6 +174,61 @@ describe("webhook event contract", () => {
       expect.objectContaining({ ownerLane: "webhook", path: "deliveryEvent.status" }),
       expect.objectContaining({ ownerLane: "case", path: "customerNotificationEvent.webhookDeliveryId" }),
       expect.objectContaining({ ownerLane: "source", path: "deliveryEvent.evidence" })
+    ]));
+  });
+
+  test("maps blocked webhook event chain to support-safe next actions", () => {
+    const alert = {
+      ...alertFixture(),
+      evidence: [],
+      provenance: { captureIds: [] },
+      workflowContext: { ...alertFixture().workflowContext, captureIds: [], evidenceCount: 0 }
+    };
+    const deliveryEvent = buildWebhookDeliveryEventContract({
+      delivery: { ...deliveryFixture(), id: "delivery_failed", status: "failed", dryRun: true, webhookDestinationId: "webhook_a" },
+      alert
+    });
+    const notificationEvent = buildCaseCustomerNotificationEventContract({
+      receipt: {
+        ...notificationReceiptFixture(),
+        webhookDeliveryId: "delivery_other",
+        webhookDestinationId: "webhook_b",
+        evidence: { evidenceCount: 0, sourceIds: [], contentHashes: [] }
+      },
+      caseRecord: caseFixture(),
+      alert
+    });
+    const chain = validateWebhookEventChain({
+      deliveryEvent,
+      customerNotificationEvent: notificationEvent,
+      checkedAt: "2026-06-29T12:31:00.000Z"
+    });
+    const handoff = buildWebhookEventSupportHandoff({ chain });
+
+    expect(handoff).toMatchObject({
+      ok: false,
+      helpdesk: {
+        redacted: true,
+        supportAction: "restore_webhook_delivery_chain",
+        customerVisible: false
+      },
+      audit: {
+        outcome: "blocked",
+        blockerCodes: expect.arrayContaining([
+          "delivery_not_delivered",
+          "dry_run_delivery",
+          "identity_mismatch",
+          "notification_delivery_mismatch",
+          "missing_provenance"
+        ]),
+        ownerLanes: expect.arrayContaining(["webhook", "case", "source"])
+      }
+    });
+    expect(handoff.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ownerLane: "webhook", blockerCode: "delivery_not_delivered", action: "retry_delivery" }),
+      expect.objectContaining({ ownerLane: "webhook", blockerCode: "dry_run_delivery", action: "record_live_delivery" }),
+      expect.objectContaining({ ownerLane: "case", blockerCode: "notification_delivery_mismatch", action: "resolve_identity" }),
+      expect.objectContaining({ ownerLane: "source", blockerCode: "missing_provenance", action: "restore_provenance" })
     ]));
   });
 });
