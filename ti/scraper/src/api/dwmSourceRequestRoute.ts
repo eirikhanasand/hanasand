@@ -3054,6 +3054,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
   });
   const scraperEnrichmentLifecycle = publicTiQueryAdapter.scraperEnrichmentLifecycle;
   const parserHealthAlerts = publicTiQueryAdapter.parserHealthAlerts;
+  const enrichmentGapQueue = publicTiQueryAdapter.enrichmentGapQueue;
   return {
     schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
     proofId: actorReadiness.proofId,
@@ -3084,7 +3085,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness,
       scraperEnrichmentLifecycle,
-      parserHealthAlerts
+      parserHealthAlerts,
+      enrichmentGapQueue
     },
     dashboardSourceReadiness: {
       schemaVersion: "dwm.dashboard.source_readiness_row.v1",
@@ -3106,6 +3108,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourceOperationsAdapter: dashboardSourceOperationsAdapter,
       scraperEnrichmentLifecycle,
       parserHealthAlerts,
+      enrichmentGapQueue,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
       blockerCount: [
@@ -3162,12 +3165,15 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.scraperEnrichmentLifecycle.rows | all(has(\"sourceFamily\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"enrichmentGap\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.rows | all(has(\"sourceFamily\") and has(\"alertType\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"alertGenerationImpact\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.items | all(has(\"sourceFamily\") and has(\"gapType\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"route\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.rows | all(has(\"sourceOperationsReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
+      ".proofArtifacts.dashboardSourceReadiness.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
     ],
     safeOutput: {
@@ -3707,6 +3713,11 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     scraperEnrichmentLifecycle,
     alertEnrichmentHandoff
   });
+  const enrichmentGapQueue = sourceActorPublicTiEnrichmentGapQueue({
+    query,
+    scraperEnrichmentLifecycle,
+    parserHealthAlerts
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3755,6 +3766,7 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     watchlistAlertabilityBridge,
     scraperEnrichmentLifecycle,
     parserHealthAlerts,
+    enrichmentGapQueue,
     gaps: actorReadiness.candidateGaps ?? [],
     safeOutput: {
       rawTargetsExposed: false,
@@ -4047,6 +4059,127 @@ function sourceActorPublicTiParserHealthAlerts(input: {
       liveNetworkScrapeStarted: false
     }
   };
+}
+
+function sourceActorPublicTiEnrichmentGapQueue(input: {
+  query: string;
+  scraperEnrichmentLifecycle: Record<string, any>;
+  parserHealthAlerts: Record<string, any>;
+}) {
+  const alertByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const alert of input.parserHealthAlerts.rows ?? []) {
+    const family = String(alert.sourceFamily);
+    alertByFamily.set(family, [...(alertByFamily.get(family) ?? []), alert]);
+  }
+  const items = (input.scraperEnrichmentLifecycle.rows ?? [])
+    .filter((row: any) => sourceActorEnrichmentGapQueueAction(row) !== undefined)
+    .map((row: any) => {
+      const action = sourceActorEnrichmentGapQueueAction(row) ?? "inspect_gap";
+      const alerts = alertByFamily.get(String(row.sourceFamily)) ?? [];
+      const gapType = String(row.enrichmentGap?.type ?? row.parserStatus?.state ?? "unknown");
+      return {
+        schemaVersion: "ti.public_actor.enrichment_gap_queue_item.v1",
+        itemId: stableId("ti_public_actor_enrichment_gap_queue_item", `${input.query}:${row.sourceFamily}:${gapType}:${action}`),
+        query: input.query,
+        sourceFamily: row.sourceFamily,
+        gapType,
+        priority: sourceActorEnrichmentGapPriority(row, alerts),
+        operatorAction: action,
+        policyStatus: row.policyStatus,
+        parserStatus: row.parserStatus,
+        retryState: row.retryState,
+        provenance: row.provenance,
+        freshness: row.freshness,
+        enrichmentGap: row.enrichmentGap,
+        alertGenerationImpact: {
+          ready: row.alertGeneration?.ready === true,
+          watchlistTerms: row.alertGeneration?.watchlistTerms ?? [],
+          blockedAlertRows: alerts.reduce((total, alert) => total + Number(alert.alertGenerationImpact?.blockedAlertRows ?? 0), 0),
+          webhookConsumable: row.alertGeneration?.webhookConsumable === true || alerts.some((alert) => alert.alertGenerationImpact?.webhookConsumable === true)
+        },
+        route: {
+          method: "POST",
+          path: "/v1/dwm/source-requests",
+          body: {
+            action: sourceActorEnrichmentGapRouteAction(action),
+            sourceFamily: row.sourceFamily,
+            sourceIds: row.provenance?.sourceIds ?? [],
+            candidateIds: row.provenance?.candidateIds ?? [],
+            dryRun: true
+          },
+          dryRunSupported: true,
+          liveNetworkFetch: false
+        },
+        audit: {
+          required: true,
+          reasonCode: gapType,
+          sourceProofIds: uniqueSourceReadinessStrings([
+            row.provenance?.sourceHealthProofId,
+            row.provenance?.parserProofId,
+            row.provenance?.freshnessProofId,
+            row.provenance?.sourceOperationsProofId,
+            ...alerts.map((alert) => alert.alertId)
+          ])
+        },
+        blockers: dedupeBlockers([
+          ...(row.blockers ?? []),
+          ...alerts.flatMap((alert) => alert.blockers ?? [])
+        ]),
+        safeOutput: {
+          rawTargetsExposed: false,
+          restrictedMetadataLeaked: false,
+          privateTelegramContentExposed: false,
+          liveNetworkScrapeStarted: false
+        }
+      };
+    });
+  return {
+    schemaVersion: "ti.public_actor.enrichment_gap_queue.v1",
+    proofId: stableId("ti_public_actor_enrichment_gap_queue", `${input.query}:${items.map((item: any) => `${item.sourceFamily}:${item.gapType}:${item.operatorAction}`).join(",")}`),
+    query: input.query,
+    mode: "no_network_fixture",
+    items,
+    summary: {
+      total: items.length,
+      sourceFamilies: uniqueSourceReadinessStrings(items.map((item: any) => item.sourceFamily)),
+      highPriorityFamilies: uniqueSourceReadinessStrings(items.filter((item: any) => item.priority === "high").map((item: any) => item.sourceFamily)),
+      actionTypes: uniqueSourceReadinessStrings(items.map((item: any) => item.operatorAction)),
+      retryableFamilies: uniqueSourceReadinessStrings(items.filter((item: any) => item.retryState?.retryable === true).map((item: any) => item.sourceFamily)),
+      alertImpactedFamilies: uniqueSourceReadinessStrings(items.filter((item: any) => item.alertGenerationImpact?.blockedAlertRows > 0 || item.alertGenerationImpact?.ready !== true).map((item: any) => item.sourceFamily))
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorEnrichmentGapQueueAction(row: Record<string, any>): "request_policy_approval" | "retry_parser" | "test_parser" | "record_capture" | "inspect_gap" | undefined {
+  if (row.policyStatus?.state === "blocked") return "request_policy_approval";
+  if (row.retryState?.retryable === true) return "retry_parser";
+  const parserState = String(row.parserStatus?.state ?? "");
+  if (parserState && !["ready", "observed", "capture_observed"].includes(parserState)) return "test_parser";
+  const freshnessState = String(row.freshness?.state ?? "");
+  if (freshnessState === "missing" || freshnessState === "needs_capture" || freshnessState === "stale") return "record_capture";
+  const gapType = String(row.enrichmentGap?.type ?? "");
+  if (gapType && !["ready", "unknown", "fresh"].includes(gapType)) return "inspect_gap";
+  return undefined;
+}
+
+function sourceActorEnrichmentGapRouteAction(action: string): string {
+  if (action === "request_policy_approval") return "pack_review";
+  if (action === "retry_parser") return "retry";
+  if (action === "test_parser") return "test";
+  if (action === "record_capture") return "record_capture";
+  return "inspect";
+}
+
+function sourceActorEnrichmentGapPriority(row: Record<string, any>, alerts: Array<Record<string, any>>): "high" | "medium" | "low" {
+  if (row.policyStatus?.state === "blocked" || alerts.some((alert) => alert.severity === "blocking")) return "high";
+  if (row.retryState?.retryable === true || alerts.some((alert) => alert.severity === "warning")) return "medium";
+  return "low";
 }
 
 function sourceActorParserHealthAlertType(row: Record<string, any>): "policy_blocked" | "parser_retry_due" | "parser_not_ready" | "enrichment_gap" | undefined {

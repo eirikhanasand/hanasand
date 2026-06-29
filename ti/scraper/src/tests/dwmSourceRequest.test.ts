@@ -2628,11 +2628,14 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.scraperEnrichmentLifecycle.rows | all(has(\"sourceFamily\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"enrichmentGap\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.rows | all(has(\"sourceFamily\") and has(\"alertType\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"alertGenerationImpact\") and .safeOutput.liveNetworkScrapeStarted == false)",
+          ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.items | all(has(\"sourceFamily\") and has(\"gapType\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"route\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.rows | all(has(\"sourceOperationsReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.dashboardSourceReadiness.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
+          ".proofArtifacts.dashboardSourceReadiness.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
       }
@@ -3471,6 +3474,42 @@ describe("dwm source requests", () => {
                 path: "/v1/dwm/source-requests",
                 liveNetworkFetch: false,
                 body: expect.objectContaining({ dryRun: true })
+              }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            })
+          ]),
+          summary: expect.objectContaining({
+            sourceFamilies: expect.arrayContaining(["darkweb_onion"]),
+            actionTypes: expect.arrayContaining([expect.any(String)])
+          }),
+          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+        }),
+        enrichmentGapQueue: expect.objectContaining({
+          schemaVersion: "ti.public_actor.enrichment_gap_queue.v1",
+          mode: "no_network_fixture",
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              sourceFamily: "darkweb_onion",
+              gapType: expect.any(String),
+              priority: expect.stringMatching(/high|medium|low/),
+              operatorAction: expect.stringMatching(/request_policy_approval|retry_parser|test_parser|record_capture|inspect_gap/),
+              policyStatus: expect.objectContaining({ liveNetworkFetch: false }),
+              parserStatus: expect.objectContaining({ state: expect.any(String) }),
+              retryState: expect.objectContaining({ retryable: expect.any(Boolean) }),
+              provenance: expect.objectContaining({ candidateIds: expect.any(Array) }),
+              freshness: expect.objectContaining({ state: expect.any(String) }),
+              alertGenerationImpact: expect.objectContaining({
+                blockedAlertRows: expect.any(Number),
+                webhookConsumable: expect.any(Boolean)
+              }),
+              route: expect.objectContaining({
+                path: "/v1/dwm/source-requests",
+                liveNetworkFetch: false,
+                body: expect.objectContaining({ dryRun: true })
+              }),
+              audit: expect.objectContaining({
+                required: true,
+                sourceProofIds: expect.any(Array)
               }),
               safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
             })
