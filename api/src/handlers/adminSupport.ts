@@ -26,6 +26,9 @@ type AuditQuery = {
     actorId?: string
     target?: string
     targetId?: string
+    user?: string
+    userId?: string
+    targetUserId?: string
     action?: string
     actionType?: string
     severity?: string
@@ -329,6 +332,9 @@ const adminAuditFilters = new Set([
     'actorId',
     'target',
     'targetId',
+    'user',
+    'userId',
+    'targetUserId',
     'action',
     'actionType',
     'severity',
@@ -371,7 +377,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const q = text(query.q)
     const org = text(query.org || query.orgId || query.organizationId)
     const actorFilter = text(query.actor || query.actorId)
-    const target = text(query.target || query.targetId)
+    const target = text(query.target || query.targetId || query.user || query.userId || query.targetUserId)
     const action = text(query.action || query.actionType)
     const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
     const source = text(query.source)
