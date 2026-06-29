@@ -2107,6 +2107,135 @@ describe("dwm alert repository", () => {
     expect(dwmAlertToSqlRecord(preserved).alert_detail_path).toBe(preserved.alertDetailPath);
   });
 
+  test("normalizes reviewed assigned suppressed closed and reopened workflow transitions for generated alerts", () => {
+    const proof = buildDwmAlertCustomerProofHandoffRow({
+      alert: {
+        id: "alert_transition_acme",
+        tenantId: "tenant_transition",
+        organizationId: "org_transition",
+        sourceFamily: "telegram_public",
+        dedupeKey: "dedupe_transition_acme",
+        workflowStatus: "reopened",
+        reviewState: "reviewing",
+        deliveryState: "pending_review",
+        watchlistIds: ["watch_transition"],
+        watchlistItemIds: ["watch_item_transition"],
+        provenance: {
+          matchBasis: "watchlist_capture_text",
+          captureIds: ["cap_transition_acme"],
+          sourceIds: ["src_transition_tg"],
+          generatedAt: "2026-06-28T13:00:00.000Z"
+        },
+        workflowContext: {
+          organizationId: "org_transition",
+          sourceFamily: "telegram_public",
+          captureIds: ["cap_transition_acme"],
+          selectedCaptureIds: ["cap_transition_acme"],
+          evidenceCount: 1,
+          watchlistIds: ["watch_transition"],
+          watchlistItemIds: ["watch_item_transition"],
+          alertGeneratorKeys: ["org:org_transition:watchlist:watch_item_transition:domain:acme.com"],
+          casePath: "/v1/cases/case_transition?alertId=alert_transition_acme",
+          caseIdCandidate: "case_transition"
+        },
+        deliveryReadinessContext: {
+          ready: true,
+          selectedCaptureIds: ["cap_transition_acme"],
+          evidenceCount: 1,
+          webhookDestinationIds: ["webhook_transition"],
+          alertGeneratorKeys: ["org:org_transition:watchlist:watch_item_transition:domain:acme.com"],
+          casePath: "/v1/cases/case_transition?alertId=alert_transition_acme",
+          caseIdCandidate: "case_transition"
+        },
+        evidence: [{
+          id: "cap_transition_acme",
+          sourceId: "src_transition_tg",
+          sourceFamily: "telegram_public",
+          observedAt: "2026-06-28T13:00:00.000Z",
+          contentHash: "hash-transition-acme",
+          provenance: { captureId: "cap_transition_acme", sourceId: "src_transition_tg" }
+        }],
+        workflowEvents: [{
+          id: "evt_transition_reviewed",
+          at: "2026-06-28T13:01:00.000Z",
+          actor: "analyst-transition",
+          fromWorkflowStatus: "new",
+          toWorkflowStatus: "triaged",
+          note: "Reviewed source capture."
+        }, {
+          id: "evt_transition_assigned",
+          at: "2026-06-28T13:02:00.000Z",
+          actor: "lead-transition",
+          fromWorkflowStatus: "triaged",
+          toWorkflowStatus: "triaged",
+          fromOwner: "queue",
+          toOwner: "analyst-transition"
+        }, {
+          id: "evt_transition_suppressed",
+          at: "2026-06-28T13:03:00.000Z",
+          actor: "analyst-transition",
+          fromWorkflowStatus: "triaged",
+          toWorkflowStatus: "suppressed",
+          rationale: "Duplicate notification suppressed."
+        }, {
+          id: "evt_transition_closed",
+          at: "2026-06-28T13:04:00.000Z",
+          actor: "analyst-transition",
+          fromWorkflowStatus: "suppressed",
+          toWorkflowStatus: "closed",
+          rationale: "No additional action required."
+        }, {
+          id: "evt_transition_reopened",
+          at: "2026-06-28T13:05:00.000Z",
+          actor: "lead-transition",
+          fromWorkflowStatus: "closed",
+          toWorkflowStatus: "reopened",
+          note: "New capture arrived."
+        }],
+        alertCreatedEvent: {
+          schemaVersion: "dwm.alert_created_event.v1",
+          id: "evt_created_transition",
+          eventType: "dwm.alert.created",
+          at: "2026-06-28T13:00:00.000Z",
+          captureIds: ["cap_transition_acme"],
+          sourceFamily: "telegram_public"
+        }
+      }
+    });
+
+    expect(proof.workflow.transitionEvents.map((event) => event.action)).toEqual([
+      "reviewed",
+      "assigned",
+      "suppressed",
+      "closed",
+      "reopened"
+    ]);
+    expect(proof.workflow.transitionEvents[0]).toMatchObject({
+      id: "evt_transition_reviewed",
+      action: "reviewed",
+      fromStatus: "new",
+      toStatus: "triaged",
+      hasNote: true,
+      hasRationale: false,
+      dedupeKey: "dedupe_transition_acme",
+      sourceFamily: "telegram_public",
+      watchlistIds: ["watch_transition"],
+      captureIds: ["cap_transition_acme"]
+    });
+    expect(proof.workflow.transitionEvents[2]).toMatchObject({
+      action: "suppressed",
+      hasRationale: true
+    });
+    expect(proof.workflow.transitionEvents[4]).toMatchObject({
+      action: "reopened",
+      fromStatus: "closed",
+      toStatus: "reopened",
+      hasNote: true
+    });
+    expect(proof.consumerAdapter.dashboard.fields).toContain("workflow.transitionEvents");
+    expect(proof.consumerContract.queue.stableFields).toContain("workflow.transitionEvents");
+  });
+
   test("builds isolated downstream handoff records for overlapping org watchlist terms across Telegram, darkweb, and actor captures", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramSource);

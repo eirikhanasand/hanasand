@@ -1989,8 +1989,8 @@ function customerProofWorkflowTransitionAction(event: any, toStatus: string): Dw
   if (toStatus === "suppressed") return "suppressed";
   if (toStatus === "reopened") return "reopened";
   if (event.toCaseId || event.toCasePath || toStatus === "investigating") return "escalated";
-  if (toStatus === "triaged") return "reviewed";
   if (event.toOwner !== event.fromOwner) return "assigned";
+  if (toStatus === "triaged") return "reviewed";
   if (event.eventType === "workflow.note") return "note";
   return "transition";
 }
