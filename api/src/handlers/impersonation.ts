@@ -552,6 +552,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             eventIds: timeline.map(event => event.id),
             summary: impersonationTimelineSummary(timeline),
             filterContract: impersonationTimelineFilterContract(filters, timeline),
+            decisionPacket: impersonationTimelineDecisionPacket(filters, timeline),
             events: timeline,
             redacted: true,
             links: {
@@ -699,6 +700,77 @@ function impersonationTimelineFilterReadiness(filters: Record<string, unknown>, 
             timeline.length ? '' : 'lifecycle_events_unavailable',
         ].filter(Boolean),
         redacted: true,
+    }
+}
+
+function impersonationTimelineDecisionPacket(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const missingReasonEventIds = timeline
+        .filter(event => !cleanText(event.reason))
+        .map(event => Number(event.id))
+        .filter(id => Number.isFinite(id))
+    const missingDurationEventIds = timeline
+        .filter(event => event.actionType === 'impersonation.start' && !event.scope?.durationMinutes)
+        .map(event => Number(event.id))
+        .filter(id => Number.isFinite(id))
+    const stoppedSessionIds = new Set(timeline
+        .filter(event => event.actionType === 'impersonation.stop' || event.scope?.revokedAt)
+        .map(event => cleanText(event.entity?.id))
+        .filter(Boolean))
+    const activeSessionIds = timeline
+        .filter(event => event.actionType === 'impersonation.start' && cleanText(event.entity?.id) && !stoppedSessionIds.has(cleanText(event.entity?.id)))
+        .map(event => cleanText(event.entity?.id))
+    const blockers = [
+        timeline.length ? '' : 'lifecycle_events_unavailable',
+        missingReasonEventIds.length ? 'missing_reason_on_impersonation_event' : '',
+        missingDurationEventIds.length ? 'missing_duration_on_impersonation_start' : '',
+    ].filter(Boolean)
+    return {
+        schemaVersion: 'support.impersonation.decision_packet.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        noSilentImpersonation: true,
+        supportRoleRequired: true,
+        requiredOperatorInputs: {
+            reason: true,
+            context: true,
+            scope: true,
+            durationMinutes: true,
+            targetUser: true,
+            organizationId: true,
+            supportSessionId: true,
+        },
+        lifecycle: {
+            eventCount: timeline.length,
+            startEventIds: timeline.filter(event => event.actionType === 'impersonation.start').map(event => event.id),
+            stopEventIds: timeline.filter(event => event.actionType === 'impersonation.stop').map(event => event.id),
+            activeSessionIds,
+            missingReasonEventIds,
+            missingDurationEventIds,
+        },
+        auditReplay: {
+            lifecycle: impersonationEventsQuery(filters),
+            audit: `/api/admin/audit-events?action=impersonation&source=admin&service=hanasand-api${filters.session ? `&entity=${encodeURIComponent(String(filters.session))}` : ''}`,
+            denied: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
+            supportSession: filters.session ? `/api/admin/support/sessions/${encodeURIComponent(String(filters.session))}` : null,
+        },
+        nextActions: [
+            activeSessionIds.length ? {
+                action: 'review_active_impersonation_session',
+                route: impersonationEventsQuery({ ...filters, session: activeSessionIds[0] }),
+            } : null,
+            missingReasonEventIds.length || missingDurationEventIds.length ? {
+                action: 'review_admin_audit_denials',
+                route: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
+            } : null,
+        ].filter(Boolean),
+        blockers,
+        copyText: [
+            'Support impersonation decision packet',
+            `Lifecycle replay: ${impersonationEventsQuery(filters)}`,
+            `Events: ${timeline.map(event => event.id).join(', ') || 'none'}`,
+            `Active sessions: ${activeSessionIds.join(', ') || 'none'}`,
+            `Blockers: ${blockers.join(', ') || 'none'}`,
+        ].join('\n'),
     }
 }
 
