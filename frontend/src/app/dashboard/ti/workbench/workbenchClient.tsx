@@ -1354,6 +1354,26 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             disabledReason: domainHref ? undefined : 'Domain drill-in requires /dashboard/ti/domains/:domain.',
         })
     }
+    if (selected.kind === 'ti_domain') {
+        const domainHref = relatedLinkHref(selected, 'Open domain')
+        const sourcesHref = relatedLinkHref(selected, 'Review sources')
+        rows.push({
+            id: 'open_domain_review',
+            label: 'Open domain',
+            detail: domainHref ? `${selected.matchedTerm || selected.company} via ${domainHref}.` : 'Selected domain item did not include a domain review link.',
+            tone: domainHref ? 'ready' : 'blocked',
+            href: domainHref,
+            disabledReason: domainHref ? undefined : 'Domain review requires /dashboard/ti/domains/:domain.',
+        })
+        rows.push({
+            id: 'review_domain_sources',
+            label: 'Review sources',
+            detail: sourcesHref ? `${selected.sourceLabel} via ${sourcesHref}.` : 'Selected domain item did not include a source review link.',
+            tone: sourcesHref ? 'ready' : 'blocked',
+            href: sourcesHref,
+            disabledReason: sourcesHref ? undefined : 'Source review requires /dashboard/ti/sources.',
+        })
+    }
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
     const sendAction = sendDeliveryActionFor(selected)
     if (sendAction) {
