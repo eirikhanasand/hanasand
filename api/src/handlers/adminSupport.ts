@@ -5817,6 +5817,15 @@ function supportAuditEntityLinks(input: {
     const inviteId = text(input.context.inviteId)
         || (Array.isArray(input.context.inviteIds) ? text(input.context.inviteIds[0]) : '')
         || (input.event.target_type === 'invite' ? text(input.event.entity_id || input.event.target_id) : '')
+    const memberId = text(input.context.memberId)
+        || (input.event.target_type === 'member' ? text(input.event.entity_id || input.event.target_id) : '')
+        || (input.event.target_type === 'user' ? targetUserId : '')
+    const alertId = text(input.context.alertId || input.context.alert_id || input.context.dwmAlertId || input.context.alertReferenceId)
+        || (input.event.target_type === 'alert' ? text(input.event.entity_id || input.event.target_id) : '')
+    const watchlistId = text(input.context.watchlistId || input.context.watchlistItemId || input.context.watchlist_item_id)
+        || (input.event.target_type === 'watchlist' ? text(input.event.entity_id || input.event.target_id) : '')
+    const webhookId = text(input.context.webhookId || input.context.deliveryId || input.context.webhookDeliveryId)
+        || (input.event.target_type === 'webhook' ? text(input.event.entity_id || input.event.target_id) : '')
     const requestId = text(input.event.request_id || input.context.requestId)
     const entityId = text(input.entityId)
     const inspectionParams = new URLSearchParams()
@@ -5834,7 +5843,48 @@ function supportAuditEntityLinks(input: {
         memberRoleRecovery: organizationId && targetUserId ? `/api/admin/support/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(targetUserId)}/role-recovery` : null,
         impersonation: targetUserId ? `/api/impersonation/events?target=${encodeURIComponent(targetUserId)}` : null,
         auditEntity: entityId ? `/api/admin/audit-events?entity=${encodeURIComponent(entityId)}` : null,
+        member: memberId ? `/api/admin/audit-events?entity=${encodeURIComponent(memberId)}&entityType=member` : null,
+        alert: alertId ? `/api/admin/audit-events?entity=${encodeURIComponent(alertId)}&action=alert` : null,
+        watchlist: watchlistId ? `/api/admin/audit-events?entity=${encodeURIComponent(watchlistId)}&action=watchlist` : null,
+        webhook: webhookId ? `/api/admin/audit-events?entity=${encodeURIComponent(webhookId)}&action=webhook` : null,
         supportSession: input.supportSessionId ? `/api/admin/support/sessions/${encodeURIComponent(input.supportSessionId)}` : null,
+        timelineFilters: supportAuditEntityTimelineFilters({
+            organizationId,
+            targetUserId,
+            inviteId,
+            memberId,
+            alertId,
+            watchlistId,
+            webhookId,
+            requestId,
+            entityId,
+        }),
+    }
+}
+
+function supportAuditEntityTimelineFilters(input: {
+    organizationId: string
+    targetUserId: string
+    inviteId: string
+    memberId: string
+    alertId: string
+    watchlistId: string
+    webhookId: string
+    requestId: string
+    entityId: string
+}) {
+    return {
+        schemaVersion: 'support.audit.entity_timeline_filters.v1',
+        organization: input.organizationId ? auditFilterQuery({ org: input.organizationId }) : null,
+        user: input.targetUserId ? auditFilterQuery({ target: input.targetUserId }) : null,
+        invite: input.inviteId ? auditFilterQuery({ entity: input.inviteId, entityType: 'invite' }) : null,
+        member: input.memberId ? auditFilterQuery({ entity: input.memberId, entityType: 'member' }) : null,
+        alert: input.alertId ? auditFilterQuery({ entity: input.alertId, action: 'alert' }) : null,
+        watchlist: input.watchlistId ? auditFilterQuery({ entity: input.watchlistId, action: 'watchlist' }) : null,
+        webhook: input.webhookId ? auditFilterQuery({ entity: input.webhookId, action: 'webhook' }) : null,
+        request: input.requestId ? auditFilterQuery({ request: input.requestId }) : null,
+        entity: input.entityId ? auditFilterQuery({ entity: input.entityId }) : null,
+        redacted: true,
     }
 }
 
@@ -6444,7 +6494,16 @@ function supportAuditEntityLinkRollup(timeline: Array<Record<string, any>>) {
         memberRoleRecovery: valuesFor('memberRoleRecovery'),
         impersonation: valuesFor('impersonation'),
         auditEntity: valuesFor('auditEntity'),
+        member: valuesFor('member'),
+        alert: valuesFor('alert'),
+        watchlist: valuesFor('watchlist'),
+        webhook: valuesFor('webhook'),
         supportSession: valuesFor('supportSession'),
+        timelineFilters: uniqueTimelineValues(links.flatMap(item => {
+            const filters = (item as Record<string, any>).timelineFilters
+            if (!filters || typeof filters !== 'object') return []
+            return Object.values(filters).filter(value => typeof value === 'string')
+        })),
         redacted: true,
     }
 }
