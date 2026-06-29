@@ -23,6 +23,7 @@ import {
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryRetryPersistence,
+    buildDwmWebhookDeliveryRetryQueue,
     buildDwmWebhookDeliveryRequestInput,
     buildDwmWebhookDeliveryRetryContract,
     createDwmWebhookDestination,
@@ -108,13 +109,27 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
             visibility: orgId && orgId !== userId
                 ? {
                     role: membership?.role,
-                    status: membership?.status,
-                    userActive: membership?.user_active,
+                    status: 'active',
+                    userActive: true,
                     alertVisibilityPolicy: membership?.alert_visibility_policy,
                 }
                 : null,
         }),
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents }),
+        deliveryRetryQueue: buildDwmWebhookDeliveryRetryQueue({
+            destinations,
+            deliveries,
+            auditEvents,
+            ...lifecycleAccess,
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: membership?.role,
+                    status: 'active',
+                    userActive: true,
+                    alertVisibilityPolicy: membership?.alert_visibility_policy,
+                }
+                : null,
+        }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations }),
     })
 }
@@ -480,6 +495,37 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                 destinations,
                 filters: deliveryFilters,
             }),
+        deliveryRetryQueue: visibilityResult && !visibilityResult.decision.allowed
+            ? buildDwmWebhookDeliveryRetryQueue({
+                deliveries: [],
+                auditEvents: [],
+                destinations: [],
+                filters: deliveryFilters,
+                ...destinationLifecycleAccess(orgId, userId, visibility),
+                visibility: orgId && orgId !== userId
+                    ? {
+                        role: visibility?.role,
+                        status: visibility?.status,
+                        userActive: visibility?.user_active,
+                        alertVisibilityPolicy: visibility?.alert_visibility_policy,
+                    }
+                    : null,
+            })
+            : buildDwmWebhookDeliveryRetryQueue({
+                deliveries,
+                auditEvents,
+                destinations,
+                filters: deliveryFilters,
+                ...destinationLifecycleAccess(orgId, userId, visibility),
+                visibility: orgId && orgId !== userId
+                    ? {
+                        role: visibility?.role,
+                        status: visibility?.status,
+                        userActive: visibility?.user_active,
+                        alertVisibilityPolicy: visibility?.alert_visibility_policy,
+                    }
+                    : null,
+            }),
         dashboardReadiness: buildDwmWebhookDashboardReadinessAdapter({
             destinations,
             deliveries,
@@ -616,6 +662,20 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
                 casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
                 dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
             },
+        }),
+        deliveryRetryQueue: buildDwmWebhookDeliveryRetryQueue({
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            destinations,
+            filters: {
+                orgId,
+                destinationId: clean(input.destinationId) || clean(input.destination_id),
+                alertId: clean(input.alertId) || clean(input.alert?.id),
+                casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
+                dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
+            },
+            viewerRole: 'admin',
+            canManage: true,
         }),
         dashboardReadiness: buildDwmWebhookDashboardReadinessAdapter({
             destinations,

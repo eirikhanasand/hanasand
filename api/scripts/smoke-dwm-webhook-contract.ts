@@ -19,6 +19,7 @@ import {
     buildDwmWebhookDeliveryRequestInput,
     buildDwmWebhookDeliveryRetryContract,
     buildDwmWebhookDeliveryRetryPersistence,
+    buildDwmWebhookDeliveryRetryQueue,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     filterDwmWebhookDestinationHealthForVisibility,
@@ -1802,6 +1803,36 @@ const deliveryRetryPersistence = buildDwmWebhookDeliveryRetryPersistence({
     auditEvents: operationAuditEvents,
     filters: { orgId: 'org_contract' },
 })
+const deliveryRetryQueue = buildDwmWebhookDeliveryRetryQueue({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: 'admin',
+    canManage: true,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const memberDeliveryRetryQueue = buildDwmWebhookDeliveryRetryQueue({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: 'member',
+    canManage: false,
+    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberDeliveryRetryQueue = buildDwmWebhookDeliveryRetryQueue({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: null,
+    canManage: false,
+    visibility: { role: undefined, status: undefined, userActive: true, alertVisibilityPolicy: 'members' },
+})
 const dashboardReadiness = buildDwmWebhookDashboardReadinessAdapter({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -2238,6 +2269,9 @@ const persistedRetryKey = deliveryRetryPersistence.deliveryKeys.find(item => ite
 const persistedReplayKey = deliveryRetryPersistence.deliveryKeys.find(item => item.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract')
 const persistedTerminalKey = deliveryRetryPersistence.deliveryKeys.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract')
 const persistedSentKey = deliveryRetryPersistence.deliveryKeys.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract')
+const queuedRetryEntry = deliveryRetryQueue.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_live_contract:dwm_dedupe_live_contract')
+const queuedDeliveredEntry = deliveryRetryQueue.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract')
+const queuedTerminalEntry = deliveryRetryQueue.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract')
 expect(deliveryRetryPersistence.schemaVersion === 'dwm.webhook.delivery_retry_persistence.v1' && deliveryRetryPersistence.counts.retryable >= 1, 'Delivery retry persistence should expose grouped retry proof.', deliveryRetryPersistence)
 expect(persistedRetryKey?.retry.retryable === true && persistedRetryKey.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && persistedRetryKey.retry.persistedAttemptCount === 2, 'Delivery retry persistence should keep retry/backoff attempts by idempotency key.', persistedRetryKey)
 expect(persistedReplayKey?.replay === true && persistedReplayKey.dedupe.duplicate === true && persistedReplayKey.dedupe.duplicateAttemptCount === 2, 'Delivery retry persistence should expose duplicate replay/dedupe proof.', persistedReplayKey)
@@ -2245,6 +2279,14 @@ expect(persistedTerminalKey?.status === 'terminal_failure' && persistedTerminalK
 expect(persistedSentKey?.dedupe.alreadyDelivered === true && persistedSentKey.status === 'delivered', 'Delivery retry persistence should mark already delivered dedupe keys.', persistedSentKey)
 expect(foreignDeliveryRetryPersistence.deliveryKeys.length === 1 && foreignDeliveryRetryPersistence.deliveryKeys.every(item => item.orgId === 'org_foreign'), 'Delivery retry persistence org filter should not leak other org attempts.', foreignDeliveryRetryPersistence)
 expect(!JSON.stringify(deliveryRetryPersistence).includes(secret), 'Delivery retry persistence should redact endpoint, response, and error secrets.', deliveryRetryPersistence)
+expect(deliveryRetryQueue.schemaVersion === 'dwm.webhook.delivery_retry_queue.v1' && deliveryRetryQueue.noNetwork === true && deliveryRetryQueue.counts.retryable >= 1, 'Delivery retry queue should expose no-network retryable delivery proof.', deliveryRetryQueue)
+expect(queuedRetryEntry?.retry.dryRunReady === true && queuedRetryEntry.retry.liveReady === false && queuedRetryEntry.retry.mode === 'dry_run', 'Delivery retry queue should allow dry-run retry proof while live delivery is disabled.', queuedRetryEntry)
+expect(queuedRetryEntry?.blockers.some(item => item.code === 'live_delivery_disabled' && item.blocking === false) && queuedRetryEntry.audit.auditEventIds.includes('audit_live_retry_contract'), 'Delivery retry queue should expose live-disabled blocker and audit linkage.', queuedRetryEntry)
+expect(queuedDeliveredEntry?.blockers.some(item => item.code === 'dedupe_already_delivered') && queuedDeliveredEntry.dedupe.alreadyDelivered === true, 'Delivery retry queue should block already-delivered idempotency keys.', queuedDeliveredEntry)
+expect(queuedTerminalEntry?.blockers.some(item => item.code === 'terminal_failure') && queuedTerminalEntry.retry.terminalFailure === true, 'Delivery retry queue should expose terminal failure blockers.', queuedTerminalEntry)
+expect(memberDeliveryRetryQueue.entries.some(item => item.blockers.some(blocker => blocker.code === 'permission_denied')) && memberDeliveryRetryQueue.access.memberSafe === true, 'Delivery retry queue should keep members read-only without retry permission.', memberDeliveryRetryQueue)
+expect(nonmemberDeliveryRetryQueue.entries.length === 0 && nonmemberDeliveryRetryQueue.blockers.some(item => item.code === 'permission_denied'), 'Delivery retry queue should deny nonmembers without destination leakage.', nonmemberDeliveryRetryQueue)
+expect(!JSON.stringify(deliveryRetryQueue).includes(secret), 'Delivery retry queue should redact endpoint, response, and error secrets.', deliveryRetryQueue)
 const dashboardVerified = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const dashboardDisabled = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
 const dashboardSecretMissing = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_missing_url_contract')
@@ -2393,6 +2435,11 @@ console.log(JSON.stringify({
         'delivery retry persistence duplicate replay dedupe',
         'delivery retry persistence wrong-org filtering',
         'delivery retry persistence secret redaction',
+        'delivery retry queue no-network dry-run readiness',
+        'delivery retry queue live-disabled blocker',
+        'delivery retry queue delivered/terminal blockers',
+        'delivery retry queue member/nonmember gates',
+        'delivery retry queue secret redaction',
         'dashboard readiness verified delivery proof',
         'dashboard readiness failed test-send state',
         'dashboard readiness disabled/secret-missing blockers',
@@ -2473,6 +2520,12 @@ console.log(JSON.stringify({
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',
             'deliveryRetryPersistence.deliveryKeys[].dedupe.duplicateAttemptCount',
+            'deliveryRetryQueue.schemaVersion',
+            'deliveryRetryQueue.noNetwork',
+            'deliveryRetryQueue.entries[].retry.dryRunReady',
+            'deliveryRetryQueue.entries[].retry.liveReady',
+            'deliveryRetryQueue.entries[].blockers[].code',
+            'deliveryRetryQueue.entries[].audit.latestAuditEventId',
             'dashboardReadiness.schemaVersion',
             'dashboardReadiness.destinations[].healthStates',
             'dashboardReadiness.destinations[].latestDeliveryProof.auditEventId',

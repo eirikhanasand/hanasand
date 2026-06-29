@@ -1394,7 +1394,19 @@ describe("dwm source requests", () => {
       schemaVersion: "dwm.actor_page_source_readiness.v1",
       query: "APT29",
       actorReadiness: {
+        proofId: expect.any(String),
+        actorMetadata: {
+          actorId: expect.any(String),
+          displayName: "APT29",
+          backedBySourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"]),
+          noSyntheticActorClaims: true
+        },
         state: "ready",
+        sourceCoverage: expect.arrayContaining([
+          expect.objectContaining({ family: "telegram", state: "canary", canEnrichActor: true, canProduceAlert: true }),
+          expect.objectContaining({ family: "darkweb_onion", state: "active", privacyBoundary: expect.objectContaining({ metadataOnly: true }) }),
+          expect.objectContaining({ family: "actor_page", state: "canary", matchableFields: expect.arrayContaining(["actorName"]) })
+        ]),
         freshness: {
           lastSuccessfulCaptureAt: expect.any(String),
           lastSuccessfulEnrichmentAt: expect.any(String),
@@ -1429,20 +1441,31 @@ describe("dwm source requests", () => {
       },
       proofArtifacts: {
         schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
+        proofId: expect.any(String),
         publicTiActorPage: {
           schemaVersion: "ti.public_actor.source_readiness.v1",
+          proofId: expect.any(String),
+          actorMetadata: expect.objectContaining({ displayName: "APT29", noSyntheticActorClaims: true }),
           state: "ready",
+          sourceCoverage: expect.arrayContaining([
+            expect.objectContaining({ family: "telegram", state: "canary" })
+          ]),
           freshness: expect.objectContaining({
             captureFreshness: expect.objectContaining({ state: "fresh" })
           })
         },
         dashboardSourceReadiness: {
           schemaVersion: "dwm.dashboard.source_readiness_row.v1",
+          proofId: expect.any(String),
           alertReady: true,
           caseReady: true,
+          sourceCoverage: expect.arrayContaining([
+            expect.objectContaining({ family: "public_advisory", state: "canary" })
+          ]),
           freshnessState: "fresh"
         },
         worker3Assertions: expect.arrayContaining([
+          ".actorReadiness.proofId | length > 0",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -1587,6 +1610,15 @@ describe("dwm source requests", () => {
     expect(body.actorReadiness).toMatchObject({
       query: "APT28",
       state: "partial",
+      actorMetadata: expect.objectContaining({
+        displayName: "APT28",
+        noSyntheticActorClaims: true
+      }),
+      sourceCoverage: expect.arrayContaining([
+        expect.objectContaining({ family: "telegram", state: "canary" }),
+        expect.objectContaining({ family: "darkweb_onion", state: "missing" }),
+        expect.objectContaining({ family: "actor_page", state: "missing" })
+      ]),
       sourceFamilies: {
         active: expect.arrayContaining(["telegram"]),
         enrichable: expect.arrayContaining(["telegram"])
@@ -1667,6 +1699,9 @@ describe("dwm source requests", () => {
         schemaVersion: "dwm.dashboard.source_readiness_row.v1",
         alertReady: false,
         caseReady: false,
+        sourceCoverage: expect.arrayContaining([
+          expect.objectContaining({ family: "darkweb_onion", state: "missing" })
+        ]),
         freshnessState: "needs_capture"
       }
     });
@@ -1699,6 +1734,9 @@ describe("dwm source requests", () => {
     expect(retryReadiness.status).toBe(200);
     expect(retryBody.actorReadiness).toMatchObject({
       state: "partial",
+      sourceCoverage: expect.arrayContaining([
+        expect.objectContaining({ family: "telegram", state: "failed", parserStatuses: expect.arrayContaining(["parser_retry_scheduled"]) })
+      ]),
       sourceFamilies: {
         failed: expect.arrayContaining(["telegram"])
       },

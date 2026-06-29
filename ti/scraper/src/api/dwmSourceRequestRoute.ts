@@ -3040,21 +3040,27 @@ function sourceActorEnrichmentReadinessResponse(body: DwmSourceRequestBody, opti
 function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Record<string, any>) {
   return {
     schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
+    proofId: actorReadiness.proofId,
     query,
     publicTiActorPage: {
       schemaVersion: "ti.public_actor.source_readiness.v1",
+      proofId: actorReadiness.proofId,
       query,
+      actorMetadata: actorReadiness.actorMetadata,
       state: actorReadiness.state,
       sections: actorReadiness.actorSections,
       provenance: actorReadiness.provenance,
       freshness: actorReadiness.freshness,
+      sourceCoverage: actorReadiness.sourceCoverage,
       missingDataGaps: actorReadiness.candidateGaps,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
     },
     dashboardSourceReadiness: {
       schemaVersion: "dwm.dashboard.source_readiness_row.v1",
+      proofId: actorReadiness.proofId,
       query,
       activeSourceFamilies: actorReadiness.alertability.activeSourceFamilies,
+      sourceCoverage: actorReadiness.sourceCoverage,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
       blockerCount: [
@@ -3068,6 +3074,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
     },
     worker3Assertions: [
       ".schemaVersion == \"dwm.actor_page_source_readiness.v1\"",
+      ".actorReadiness.proofId | length > 0",
       ".actorReadiness.safeOutput.liveNetworkScrapeStarted == false",
       ".actorReadiness.freshness.captureFreshness.state | IN(\"fresh\",\"needs_capture\",\"stale\")",
       ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
@@ -3124,6 +3131,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
   const latestCaptureAt = latestIso(freshnessRows.map((row: any) => row.lastCaptureAt));
   const latestEnrichmentAt = latestIso(freshnessRows.map((row: any) => row.lastEnrichmentAt));
   const captureFreshness = sourceActorCaptureFreshness(latestCaptureAt, readinessArtifact.generatedAt);
+  const sourceCoverage = sourceActorCoverageRows(familyRows);
   const alertability = {
     activeSourceFamilies: readinessArtifact.sharedWatchlistAlertability?.activeSourceFamilies ?? [],
     matchableFields: readinessArtifact.sharedWatchlistAlertability?.matchableFields ?? [],
@@ -3139,7 +3147,9 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
       blockerCodes: row.blockerCodes ?? []
     }));
   return {
+    proofId: stableId("dwm_actor_source_readiness", `${query}:${readinessArtifact.generatedAt}:${latestCaptureAt ?? "no_capture"}:${latestEnrichmentAt ?? "no_enrichment"}`),
     query,
+    actorMetadata: sourceActorMetadata(query, provenance, coverage),
     state: candidateGaps.some((gap: any) => gap.state === "policy_blocked")
       ? "blocked"
       : missingSections.length > 0
@@ -3154,6 +3164,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
       failed: readinessArtifact.sharedWatchlistAlertability?.failedSourceFamilies ?? [],
       blocked: readinessArtifact.sharedWatchlistAlertability?.blockedSourceFamilies ?? []
     },
+    sourceCoverage,
     parserStatusByFamily: Object.fromEntries(familyRows.map((row: any) => [row.family, row.parserStatuses ?? []])),
     actorSections,
     missingSections,
@@ -3184,6 +3195,38 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
       restrictedPayloadDownloadAllowed: false
     }
   };
+}
+
+function sourceActorMetadata(query: string, provenance: Array<Record<string, any>>, coverage: Record<string, any>) {
+  const normalized = query.trim();
+  return {
+    query: normalized,
+    actorId: stableId("ti_actor", normalized.toLowerCase()),
+    displayName: normalized,
+    aliases: uniqueSourceReadinessStrings(provenance.flatMap((row) => row.matchableFields?.includes("aliases") ? [normalized] : [])),
+    backedBySourceFamilies: uniqueSourceReadinessStrings(provenance.map((row) => row.family)),
+    sectionCoverageState: Object.fromEntries(Object.entries(coverage.actorSections ?? {}).map(([section, value]: [string, any]) => [section, value?.covered === true ? "covered" : "missing_source"])),
+    noSyntheticActorClaims: true
+  };
+}
+
+function sourceActorCoverageRows(familyRows: Array<Record<string, any>>) {
+  return familyRows.map((row) => ({
+    family: row.family,
+    state: row.active > 0 ? "active" : row.canary > 0 ? "canary" : row.failed > 0 ? "failed" : row.blocked > 0 || row.policyBlocked > 0 ? "policy_blocked" : row.paused > 0 ? "paused" : "missing",
+    candidateCount: row.candidateCount ?? 0,
+    parserStatuses: row.parserStatuses ?? [],
+    lastCaptureAt: row.lastCaptureAt,
+    lastEnrichmentAt: row.lastEnrichmentAt,
+    retryBackoff: row.retryBackoff,
+    alertableFields: row.alertableFields ?? [],
+    matchableFields: row.matchableFields ?? [],
+    canEnrichActor: row.canEnrichActor === true,
+    canProduceAlert: row.canProduceAlert === true,
+    privacyBoundary: row.privacyBoundary,
+    sourceTrust: row.sourceTrust,
+    blockers: row.blockers ?? []
+  }));
 }
 
 function sourceActorCaptureFreshness(latestCaptureAt: string | undefined, generatedAt: string | undefined) {
