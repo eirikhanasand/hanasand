@@ -2271,6 +2271,28 @@ describe("dwm source requests", () => {
                     operatorActionTypes: expect.arrayContaining(["rebuild_alerts"])
                   })
                 }),
+                analystHandoffPayload: expect.objectContaining({
+                  schemaVersion: "ti.public_actor.alert_enrichment_analyst_handoff.v1",
+                  canCreateAlert: true,
+                  canOpenCase: true,
+                  canTriggerWebhook: true,
+                  liveNetworkFetch: false,
+                  sourceFamily: "telegram",
+                  parserStatus: expect.objectContaining({ state: "ready", captureState: "capture_observed", retryable: false }),
+                  freshnessSla: expect.objectContaining({ state: "fresh", captureRequired: false, liveNetworkFetch: false }),
+                  provenance: expect.objectContaining({
+                    enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
+                    sourceOperationsReadinessProofId: expect.any(String),
+                    sourceOperationsRowProofId: expect.any(String),
+                    sourceIds: expect.arrayContaining([expect.any(String)])
+                  }),
+                  consumerRoutes: expect.objectContaining({
+                    alertRebuild: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
+                    caseWorkbench: expect.objectContaining({ path: "/v1/dwm/cases", liveNetworkFetch: false }),
+                    webhookDelivery: expect.objectContaining({ path: "/v1/dwm/webhooks/deliver", liveNetworkFetch: false })
+                  }),
+                  safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+                }),
                 safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
               })
             ]),
@@ -2280,6 +2302,9 @@ describe("dwm source requests", () => {
               enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
               sourceOperationsProofIds: expect.arrayContaining([expect.any(String)]),
               operatorActionTypes: expect.arrayContaining(["rebuild_alerts"]),
+              analystHandoffReadyRows: expect.any(Number),
+              webhookReadyRows: expect.any(Number),
+              freshnessSlaStates: expect.arrayContaining(["fresh"]),
               latestCaptureAt: expect.any(String)
             })
           }),
@@ -3456,6 +3481,31 @@ describe("dwm source requests", () => {
                 expect.objectContaining({ code: "capture_required" })
               ]),
               webhookPayload: expect.objectContaining({ canConsume: false }),
+              analystHandoffPayload: expect.objectContaining({
+                schemaVersion: "ti.public_actor.alert_enrichment_analyst_handoff.v1",
+                canCreateAlert: false,
+                canOpenCase: false,
+                canTriggerWebhook: false,
+                liveNetworkFetch: false,
+                sourceFamily: "telegram",
+                parserStatus: expect.objectContaining({ state: "ready", captureState: "capture_required", retryable: false }),
+                freshnessSla: expect.objectContaining({
+                  state: "needs_capture",
+                  captureRequired: true,
+                  retryable: false,
+                  nextRefreshAction: "record_capture",
+                  liveNetworkFetch: false
+                }),
+                consumerRoutes: expect.objectContaining({
+                  alertRebuild: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
+                  caseWorkbench: expect.objectContaining({ path: "/v1/dwm/cases", liveNetworkFetch: false }),
+                  webhookDelivery: expect.objectContaining({ path: "/v1/dwm/webhooks/deliver", liveNetworkFetch: false })
+                }),
+                blockers: expect.arrayContaining([
+                  expect.objectContaining({ code: "capture_required" })
+                ]),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              }),
               provenance: expect.objectContaining({
                 freshnessProofId: expect.any(String),
                 sourceOperationsReadinessProofId: expect.any(String),
@@ -3472,7 +3522,10 @@ describe("dwm source requests", () => {
             sourceFamilies: expect.arrayContaining(["telegram"]),
             watchlistTerms: expect.arrayContaining(["APT28"]),
             sourceOperationsProofIds: expect.arrayContaining([expect.any(String)]),
-            operatorActionTypes: expect.arrayContaining(["record_capture"])
+            operatorActionTypes: expect.arrayContaining(["record_capture"]),
+            analystHandoffReadyRows: 0,
+            webhookReadyRows: 0,
+            freshnessSlaStates: expect.arrayContaining(["needs_capture"])
           }),
           blockers: expect.arrayContaining([
             expect.objectContaining({ code: "capture_required" })
@@ -3924,6 +3977,38 @@ describe("dwm source requests", () => {
         ready: false,
         blockers: expect.arrayContaining([
           expect.objectContaining({ code: "retry_required", family: "telegram" })
+        ]),
+        summary: expect.objectContaining({
+          analystHandoffReadyRows: 0,
+          webhookReadyRows: 0,
+          freshnessSlaStates: expect.arrayContaining(["needs_capture"])
+        }),
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            sourceFamily: "telegram",
+            analystHandoffPayload: expect.objectContaining({
+              canCreateAlert: false,
+              canOpenCase: false,
+              canTriggerWebhook: false,
+              sourceFamily: "telegram",
+              parserStatus: expect.objectContaining({ state: "retry_required", retryable: true }),
+              freshnessSla: expect.objectContaining({
+                state: "needs_capture",
+                captureRequired: true,
+                retryable: true,
+                nextRefreshAction: "retry_source",
+                liveNetworkFetch: false
+              }),
+              consumerRoutes: expect.objectContaining({
+                alertRebuild: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
+                caseWorkbench: expect.objectContaining({ path: "/v1/dwm/cases", liveNetworkFetch: false }),
+                webhookDelivery: expect.objectContaining({ path: "/v1/dwm/webhooks/deliver", liveNetworkFetch: false })
+              }),
+              blockers: expect.arrayContaining([
+                expect.objectContaining({ code: "retry_required", family: "telegram" })
+              ])
+            })
+          })
         ])
       })
     });
