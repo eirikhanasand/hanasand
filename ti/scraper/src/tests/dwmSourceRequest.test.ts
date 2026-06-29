@@ -1939,6 +1939,14 @@ describe("dwm source requests", () => {
             blockers: [],
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           },
+          consumerProofLedger: expect.objectContaining({
+            schemaVersion: "ti.public_actor.consumer_proof_ledger.v1",
+            rows: expect.any(Array),
+            summary: expect.objectContaining({
+              latestCaptureAt: expect.any(String)
+            }),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
           gaps: [],
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         },
@@ -2071,6 +2079,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.schemaVersion == \"ti.public_actor.source_pack_intake_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.alertGenerationConsumerHandoff.schemaVersion == \"ti.public_actor.alert_generation_consumer_handoff.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -2786,6 +2795,15 @@ describe("dwm source requests", () => {
             expect.objectContaining({ code: "capture_required" })
           ])
         }),
+        consumerProofLedger: expect.objectContaining({
+          schemaVersion: "ti.public_actor.consumer_proof_ledger.v1",
+          rows: expect.any(Array),
+          summary: expect.objectContaining({
+            alertReadyFamilies: [],
+            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
+          }),
+          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+        }),
         gaps: expect.arrayContaining([
           expect.objectContaining({ family: "darkweb_onion", state: "missing" })
         ])
@@ -3223,6 +3241,16 @@ describe("dwm source requests", () => {
               expect.objectContaining({ family: "telegram", state: "failed" }),
               expect.objectContaining({ family: "actor_page", state: "missing" })
             ]),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
+          consumerProofLedger: expect.objectContaining({
+            schemaVersion: "ti.public_actor.consumer_proof_ledger.v1",
+            rows: expect.any(Array),
+            summary: expect.objectContaining({
+              retryFamilies: expect.arrayContaining(["telegram"]),
+              gapFamilies: expect.arrayContaining(["telegram", "actor_page"]),
+              alertReadyFamilies: []
+            }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           })
         }),

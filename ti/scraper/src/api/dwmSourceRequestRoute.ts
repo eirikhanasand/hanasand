@@ -3130,6 +3130,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.schemaVersion == \"ti.public_actor.source_pack_intake_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.alertGenerationConsumerHandoff.schemaVersion == \"ti.public_actor.alert_generation_consumer_handoff.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3417,11 +3418,26 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
       }
     };
   });
+  const parserStatusLedger = sourceActorPublicTiParserStatusLedger({
+    query,
+    actorReadiness,
+    sourceHealthRows
+  });
+  const sourcePackIntakeHandoff = sourceActorPublicTiSourcePackIntakeHandoff({
+    query,
+    actorReadiness
+  });
   const alertEvidenceHandoff = sourceActorPublicTiAlertEvidenceHandoff({
     query,
     actorReadiness,
     sectionRows,
     evidenceRows,
+    sourceHealthRows
+  });
+  const alertGenerationConsumerHandoff = sourceActorAlertGenerationConsumerHandoff({
+    query,
+    actorReadiness,
+    alertEvidenceHandoff,
     sourceHealthRows
   });
   return {
@@ -3451,15 +3467,8 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     sections: sectionRows,
     evidence: evidenceRows,
     sourceHealth: sourceHealthRows,
-    parserStatusLedger: sourceActorPublicTiParserStatusLedger({
-      query,
-      actorReadiness,
-      sourceHealthRows
-    }),
-    sourcePackIntakeHandoff: sourceActorPublicTiSourcePackIntakeHandoff({
-      query,
-      actorReadiness
-    }),
+    parserStatusLedger,
+    sourcePackIntakeHandoff,
     alertability: {
       matchableFields: actorReadiness.alertability?.matchableFields ?? [],
       activeSourceFamilies: actorReadiness.alertability?.activeSourceFamilies ?? [],
@@ -3467,13 +3476,151 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
     },
     alertEvidenceHandoff,
-    alertGenerationConsumerHandoff: sourceActorAlertGenerationConsumerHandoff({
+    alertGenerationConsumerHandoff,
+    consumerProofLedger: sourceActorPublicTiConsumerProofLedger({
       query,
       actorReadiness,
+      evidenceRows,
+      sourceHealthRows,
+      parserStatusLedger,
+      sourcePackIntakeHandoff,
       alertEvidenceHandoff,
-      sourceHealthRows
+      alertGenerationConsumerHandoff
     }),
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiConsumerProofLedger(input: {
+  query: string;
+  actorReadiness: Record<string, any>;
+  evidenceRows: Array<Record<string, any>>;
+  sourceHealthRows: Array<Record<string, any>>;
+  parserStatusLedger: Record<string, any>;
+  sourcePackIntakeHandoff: Record<string, any>;
+  alertEvidenceHandoff: Record<string, any>;
+  alertGenerationConsumerHandoff: Record<string, any>;
+}) {
+  const evidenceByFamily = new Map<string, Record<string, any>>(input.evidenceRows.map((row) => [String(row.family), row]));
+  const parserByFamily = new Map<string, Record<string, any>>((input.parserStatusLedger.rows ?? []).map((row: any) => [String(row.family), row]));
+  const intakeByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.candidates ?? []).map((row: any) => [String(row.family), row]));
+  const alertRowsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const row of input.alertGenerationConsumerHandoff.rows ?? []) {
+    const family = String(row.family);
+    alertRowsByFamily.set(family, [...(alertRowsByFamily.get(family) ?? []), row]);
+  }
+  const gapByFamily = new Map<string, Record<string, any>>((input.actorReadiness.candidateGaps ?? []).map((gap: any) => [String(gap.family), gap]));
+  const families = uniqueSourceReadinessStrings([
+    ...input.sourceHealthRows.map((row) => String(row.family)),
+    ...input.evidenceRows.map((row) => String(row.family)),
+    ...(input.sourcePackIntakeHandoff.candidates ?? []).map((row: any) => String(row.family)),
+    ...(input.alertGenerationConsumerHandoff.rows ?? []).map((row: any) => String(row.family)),
+    ...(input.actorReadiness.candidateGaps ?? []).map((gap: any) => String(gap.family))
+  ]);
+  const rows = families.map((family) => {
+    const health = input.sourceHealthRows.find((row) => String(row.family) === family);
+    const evidence = evidenceByFamily.get(family);
+    const parser = parserByFamily.get(family);
+    const intake = intakeByFamily.get(family);
+    const alertRows = alertRowsByFamily.get(family) ?? [];
+    const gap = gapByFamily.get(family);
+    const alertReady = alertRows.some((row) => row.state === "ready_for_rebuild");
+    const publicTiReady = evidence?.provenance != null || health?.alertability?.canEnrichActor === true;
+    return {
+      schemaVersion: "ti.public_actor.consumer_proof_ledger_row.v1",
+      proofId: stableId("ti_public_actor_consumer_proof_ledger_row", `${input.query}:${family}:${health?.state ?? evidence?.state ?? gap?.state ?? "unknown"}:${parser?.parserState ?? "unknown"}`),
+      query: input.query,
+      family,
+      state: health?.state ?? evidence?.state ?? gap?.state ?? "missing",
+      confidence: evidence?.confidence ?? health?.confidence ?? intake?.alertability?.confidence ?? 0,
+      confidenceTier: evidence?.confidenceTier ?? health?.confidenceTier ?? "missing",
+      parserStatus: {
+        state: parser?.parserState ?? health?.parserState,
+        captureState: parser?.captureState ?? health?.captureState,
+        statuses: parser?.parserStatuses ?? health?.parserStatuses ?? [],
+        retryBackoff: parser?.retryBackoff ?? health?.retryBackoff,
+        blockers: parser?.blockers ?? health?.blockers ?? []
+      },
+      timestamps: {
+        lastCaptureAt: evidence?.timestamps?.lastCaptureAt ?? health?.timestamps?.lastCaptureAt ?? parser?.timestamps?.lastCaptureAt,
+        lastEnrichmentAt: evidence?.timestamps?.lastEnrichmentAt ?? health?.timestamps?.lastEnrichmentAt ?? parser?.timestamps?.lastEnrichmentAt,
+        checkedAt: evidence?.timestamps?.checkedAt ?? health?.timestamps?.checkedAt ?? parser?.timestamps?.checkedAt
+      },
+      provenance: {
+        evidenceProofId: evidence?.proofId,
+        sourceHealthProofId: health?.proofId,
+        parserProofId: parser?.proofId,
+        intakeProofId: intake?.proofId,
+        sourceIds: uniqueSourceReadinessStrings([
+          ...(evidence?.sourceIds ?? []),
+          ...(health?.sourceIds ?? []),
+          ...(parser?.sourceIds ?? [])
+        ]),
+        candidateIds: uniqueSourceReadinessStrings([
+          ...(evidence?.candidateIds ?? []),
+          ...(health?.candidateIds ?? []),
+          ...(parser?.candidateIds ?? [])
+        ]),
+        privacyBoundary: evidence?.provenance?.privacyBoundary ?? health?.privacyBoundary ?? intake?.policyResult,
+        sourceTrust: evidence?.provenance?.sourceTrust ?? health?.sourceTrust
+      },
+      consumers: {
+        publicTi: {
+          ready: publicTiReady,
+          evidenceProofId: evidence?.proofId,
+          sections: (input.actorReadiness.sourceSectionReadiness?.sections ?? [])
+            .filter((section: any) => (section.sourceFamilies ?? []).includes(family) || (section.missingFamilies ?? []).includes(family))
+            .map((section: any) => section.section)
+        },
+        alertGeneration: {
+          ready: alertReady,
+          rows: alertRows.map((row) => ({
+            proofId: row.proofId,
+            watchlistTerm: row.watchlistTerm,
+            state: row.state,
+            evidenceProofId: row.evidenceProofId
+          })),
+          route: input.alertGenerationConsumerHandoff.route
+        }
+      },
+      gap: gap ? {
+        state: gap.state,
+        blockers: gap.blockers ?? [],
+        intakeRecommendation: gap.intakeRecommendation
+      } : undefined,
+      blockers: dedupeBlockers([
+        ...(health?.blockers ?? []),
+        ...(parser?.blockers ?? []),
+        ...(gap?.blockers ?? []),
+        ...alertRows.flatMap((row) => row.blockers ?? [])
+      ]),
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.consumer_proof_ledger.v1",
+    proofId: stableId("ti_public_actor_consumer_proof_ledger", `${input.query}:${rows.map((row: any) => `${row.family}:${row.state}:${row.parserStatus?.state}:${row.consumers.alertGeneration.ready}`).join(",")}`),
+    query: input.query,
+    rows,
+    summary: {
+      publicTiReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.consumers.publicTi.ready).map((row: any) => row.family)),
+      alertReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.consumers.alertGeneration.ready).map((row: any) => row.family)),
+      gapFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.gap).map((row: any) => row.family)),
+      retryFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.parserStatus?.retryBackoff?.retryable === true).map((row: any) => row.family)),
+      latestCaptureAt: latestIso(rows.map((row: any) => row.timestamps?.lastCaptureAt)),
+      latestEnrichmentAt: latestIso(rows.map((row: any) => row.timestamps?.lastEnrichmentAt))
+    },
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
