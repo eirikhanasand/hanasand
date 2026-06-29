@@ -1220,6 +1220,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     workflowSummary: buildDwmAlertWorkflowSummary(alert),
     alertEventSummary: buildDwmAlertEventSummary(alert),
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
+    analystWorkflowContract: buildDwmAlertAnalystWorkflowContract(alert),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries }),
     downstreamHandoff,
     alertCreatedDispatch: downstreamHandoff.createdEventDispatch,
@@ -1253,6 +1254,7 @@ function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) 
       "alert.watchlistIds",
       "alert.watchlistItemIds",
       "workflowSummary",
+      "analystWorkflowContract",
       "alertEventSummary",
       "customerProofHandoff",
       "downstreamHandoff",
@@ -1282,6 +1284,36 @@ function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) 
     redaction: {
       rawSensitiveEvidenceIncluded: false,
       supportSafe: true
+    }
+  };
+}
+
+function buildDwmAlertAnalystWorkflowContract(alert: any) {
+  return {
+    schemaVersion: "dwm.alert_analyst_workflow_contract.v1",
+    mutationRoute: "/v1/dwm/alerts/:id",
+    replayRoute: "/v1/dwm/alerts/:id/replay",
+    supportedStatuses: ["new", "triaged", "investigating", "suppressed", "closed", "reopened"],
+    supportedActions: ["assign", "note", "triage", "investigate", "suppress", "close", "reopen", "case_link", "replay"],
+    requiredBody: ["organizationId", "status|action|note|assignedOwner|severityOverride|caseId", "expectedWorkflowEventCount?"],
+    idempotency: {
+      workflowEventCount: (alert.workflowEvents ?? []).length,
+      updatedAt: alert.updatedAt,
+      staleVersionBlocker: "stale_workflow_version"
+    },
+    guards: {
+      orgScoped: Boolean(alert.organizationId),
+      preservesEvidence: true,
+      preservesEventsOnRebuild: true,
+      invalidTransitionBlocker: "invalid_transition"
+    },
+    current: {
+      status: String(alert.workflowStatus ?? "new"),
+      assignedOwner: alert.assignedOwner,
+      severityOverride: alert.severityOverride,
+      caseId: alert.caseId,
+      casePath: alert.casePath ?? alert.workflowContext?.casePath,
+      replayCount: Number(alert.replayCount ?? 0)
     }
   };
 }

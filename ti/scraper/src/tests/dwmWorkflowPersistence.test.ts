@@ -596,6 +596,30 @@ describe("dwm workflow persistence", () => {
       ready: true,
       currentWorkflowEventCount: 4
     });
+    expect(detail.analystWorkflowContract).toMatchObject({
+      schemaVersion: "dwm.alert_analyst_workflow_contract.v1",
+      mutationRoute: "/v1/dwm/alerts/:id",
+      replayRoute: "/v1/dwm/alerts/:id/replay",
+      supportedStatuses: ["new", "triaged", "investigating", "suppressed", "closed", "reopened"],
+      requiredBody: ["organizationId", "status|action|note|assignedOwner|severityOverride|caseId", "expectedWorkflowEventCount?"],
+      idempotency: {
+        workflowEventCount: 4,
+        staleVersionBlocker: "stale_workflow_version"
+      },
+      guards: {
+        orgScoped: true,
+        preservesEvidence: true,
+        preservesEventsOnRebuild: true,
+        invalidTransitionBlocker: "invalid_transition"
+      },
+      current: {
+        status: "reopened",
+        assignedOwner: "owner-workflow",
+        severityOverride: "critical",
+        caseId: "case_workflow_live",
+        replayCount: 0
+      }
+    });
     expect(detail.customerProofHandoff).toMatchObject({
       schemaVersion: "dwm.customer_alert_proof.v1",
       workflow: {
