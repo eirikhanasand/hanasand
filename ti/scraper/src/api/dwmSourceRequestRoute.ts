@@ -3374,10 +3374,12 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
     const family = String(row.sourceFamily);
     alertRowsByFamily.set(family, [...(alertRowsByFamily.get(family) ?? []), row]);
   }
+  const sourceOperationsReadinessByFamily = new Map<string, Record<string, any>>((input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
   const rows = freshnessRows.map((row: any) => {
     const family = String(row.sourceFamily);
     const operations = operationsByFamily.get(family) ?? [];
     const alertRows = alertRowsByFamily.get(family) ?? [];
+    const sourceOperationsReadiness = sourceOperationsReadinessByFamily.get(family);
     return {
       schemaVersion: "dwm.dashboard.source_operations_adapter_row.v1",
       proofId: stableId("dwm_dashboard_source_operations_adapter_row", `${input.query}:${family}:${row.state}:${row.parserStatus?.state}:${row.freshnessState}`),
@@ -3401,6 +3403,17 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
         blockers: operation.blockers ?? [],
         liveNetworkFetch: false
       })),
+      sourceOperationsReadiness: sourceOperationsReadiness ? {
+        proofId: sourceOperationsReadiness.proofId,
+        state: sourceOperationsReadiness.state,
+        parserStatus: sourceOperationsReadiness.parserStatus,
+        freshness: sourceOperationsReadiness.freshness,
+        candidateIntake: sourceOperationsReadiness.candidateIntake,
+        operatorActionTypes: uniqueSourceReadinessStrings((sourceOperationsReadiness.operatorActions ?? []).map((action: any) => action.type)),
+        alertability: sourceOperationsReadiness.alertability,
+        blockers: sourceOperationsReadiness.blockers ?? [],
+        safeOutput: sourceOperationsReadiness.safeOutput
+      } : undefined,
       nextActions: [
         ...(row.nextActions ?? []),
         ...operations.map((operation) => ({
@@ -3446,6 +3459,9 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
       gapFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.gapFamilies ?? [],
       retryFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.retryFamilies ?? [],
       alertableFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.alertableFamilies ?? [],
+      sourceOperationsReadyFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.readyFamilies ?? [],
+      sourceOperationsActionableFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.actionableFamilies ?? [],
+      candidateIntakeFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.candidateIntakeFamilies ?? [],
       nextActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.nextActions.map((action: any) => action.action))),
       parserStates: uniqueSourceReadinessStrings(rows.map((row: any) => row.parserStatus?.state).filter(Boolean)),
       latestCaptureAt: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.latestCaptureAt,

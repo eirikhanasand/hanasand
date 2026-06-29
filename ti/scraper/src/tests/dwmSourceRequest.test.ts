@@ -3500,12 +3500,24 @@ describe("dwm source requests", () => {
               nextActions: expect.arrayContaining([
                 expect.objectContaining({ action: "request_candidate", liveNetworkFetch: false })
               ]),
+              sourceOperationsReadiness: expect.objectContaining({
+                proofId: expect.any(String),
+                state: "actionable",
+                candidateIntake: expect.objectContaining({
+                  available: true,
+                  policyResult: expect.objectContaining({ metadataOnly: true, liveNetworkFetch: false })
+                }),
+                operatorActionTypes: expect.arrayContaining(["request_candidate"]),
+                safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+              }),
               safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
             })
           ]),
           summary: expect.objectContaining({
             alertReady: false,
             gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+            sourceOperationsActionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+            candidateIntakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
             nextActionTypes: expect.arrayContaining(["request_candidate"])
           })
         }),
@@ -3794,6 +3806,18 @@ describe("dwm source requests", () => {
                 expect.objectContaining({ action: "retry", liveNetworkFetch: false }),
                 expect.objectContaining({ action: "retry_parser", liveNetworkFetch: false })
               ]),
+              sourceOperationsReadiness: expect.objectContaining({
+                proofId: expect.any(String),
+                state: "actionable",
+                parserStatus: expect.objectContaining({
+                  state: "retry_required",
+                  retryBackoff: expect.objectContaining({ retryable: true })
+                }),
+                operatorActionTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+                blockers: expect.arrayContaining([
+                  expect.objectContaining({ code: "parser_retry_required" })
+                ])
+              }),
               blockers: expect.arrayContaining([
                 expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
               ])
@@ -3802,6 +3826,7 @@ describe("dwm source requests", () => {
           summary: expect.objectContaining({
             alertReady: false,
             retryFamilies: expect.arrayContaining(["telegram"]),
+            sourceOperationsActionableFamilies: expect.arrayContaining(["telegram"]),
             nextActionTypes: expect.arrayContaining(["retry", "retry_parser", "request_candidate"])
           })
         }),
