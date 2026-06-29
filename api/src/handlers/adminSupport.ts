@@ -1278,6 +1278,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
                 summary: auditTimelineSummary(timeline),
                 filterContract: supportAuditFilterContract(auditTimelineFilters, timeline),
                 exportProof: supportAuditExportProof(auditTimelineFilters, timeline),
+                workflowRollup: supportAuditWorkflowRollup(auditTimelineFilters, timeline),
                 events: timeline,
                 links: {
                     timeline: auditFilterQuery(auditTimelineFilters),
@@ -5509,6 +5510,7 @@ function supportRecentAuditTimeline(filters: Record<string, unknown>, rows: Reco
         summary: auditTimelineSummary(timeline),
         filterContract: supportAuditFilterContract(filters, timeline),
         exportProof: supportAuditExportProof(filters, timeline),
+        workflowRollup: supportAuditWorkflowRollup(filters, timeline),
         events,
         redacted: true,
         links: {
