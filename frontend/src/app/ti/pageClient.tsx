@@ -1820,6 +1820,13 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
                                         </span>
                                     ) : null}
                                 </div>
+                                <div data-ti-consumer-field-readiness='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                    {consumerRequestFields(stage).map(field => (
+                                        <span key={`${stage.id}-${field.label}`} className={consumerFieldClass(field.state)}>
+                                            {field.label}: {field.value}
+                                        </span>
+                                    ))}
+                                </div>
                                 {stage.missing.length ? (
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{stage.missing.slice(0, 2).join('; ')}</p>
                                 ) : null}
@@ -1839,6 +1846,70 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
             </div>
         </div>
     )
+}
+
+type ConsumerRequestField = {
+    label: string
+    value: string
+    state: DecisionStep['status']
+}
+
+function consumerRequestFields(stage: TiActionabilityModel['consumerReadiness']['stages'][number]): ConsumerRequestField[] {
+    const body = stage.request?.body ?? {}
+    const specs: Record<TiActionabilityModel['consumerReadiness']['stages'][number]['id'], Array<{ key: string; label: string; required: boolean }>> = {
+        publicTi: [
+            { key: 'organizationId', label: 'Org', required: true },
+            { key: 'terms', label: 'Terms', required: true },
+        ],
+        orgWatchlist: [
+            { key: 'organizationId', label: 'Org', required: true },
+            { key: 'watchlistId', label: 'Watchlist', required: true },
+            { key: 'watchlistItemIds', label: 'Items', required: true },
+        ],
+        caseHandoff: [
+            { key: 'organizationId', label: 'Org', required: true },
+            { key: 'alertId', label: 'Alert', required: true },
+            { key: 'captureIds', label: 'Captures', required: true },
+            { key: 'casePath', label: 'Case path', required: false },
+        ],
+        webhookTrigger: [
+            { key: 'organizationId', label: 'Org', required: true },
+            { key: 'alertId', label: 'Alert', required: true },
+            { key: 'webhookDestinationIds', label: 'Destination', required: true },
+            { key: 'captureIds', label: 'Captures', required: true },
+            { key: 'idempotencyKey', label: 'Idempotency', required: true },
+        ],
+        enrichment: [
+            { key: 'tasks', label: 'Tasks', required: true },
+            { key: 'sources', label: 'Sources', required: false },
+        ],
+    }
+
+    return specs[stage.id]
+        .map(spec => {
+            const value = readRequestField(body[spec.key])
+            return {
+                label: spec.label,
+                value: value ?? 'needed',
+                state: value ? 'ready' as const : spec.required ? 'blocked' as const : 'review' as const,
+            }
+        })
+        .filter(field => field.state !== 'review' || field.value !== 'needed')
+}
+
+function readRequestField(value: unknown) {
+    if (Array.isArray(value)) return value.length ? `${value.length}` : ''
+    if (typeof value === 'string') return value.trim() ? value : ''
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : ''
+    if (typeof value === 'boolean') return value ? 'yes' : 'no'
+    if (value && typeof value === 'object') return Object.keys(value).length ? 'set' : ''
+    return ''
+}
+
+function consumerFieldClass(state: DecisionStep['status']) {
+    if (state === 'ready') return 'max-w-full wrap-break-word rounded-md border border-[#d6eadf] bg-[#f1fbf5] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:border-[#214833] dark:bg-[#102218] dark:text-[#83d9a1]'
+    if (state === 'review') return 'max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'
+    return 'max-w-full wrap-break-word rounded-md border border-[#fff0c2] bg-[#fffdf2] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'
 }
 
 type DecisionStep = {
@@ -2705,10 +2776,10 @@ function techniqueDescription(attackId: string, name: string, tactic: string, de
 
 function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNode; label: string; value: string; dark?: boolean }) {
     return (
-        <span className={`inline-flex min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs ${dark ? 'border-[#263244] bg-[#101722] text-[#d8deea]' : 'border-[#dfe5ee] bg-[#f8fafc] text-[#667085]'}`}>
-            <span className={dark ? 'text-[#b8c5ff]' : 'text-[#3056d3]'}>{icon}</span>
-            <span>{label}</span>
-            <span className={`truncate font-semibold ${dark ? 'text-white' : 'text-[#171a21]'}`}>{value}</span>
+        <span className={`inline-flex min-w-0 flex-wrap items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs ${dark ? 'border-[#263244] bg-[#101722] text-[#d8deea]' : 'border-[#dfe5ee] bg-[#f8fafc] text-[#667085]'}`}>
+            <span className={`shrink-0 ${dark ? 'text-[#b8c5ff]' : 'text-[#3056d3]'}`}>{icon}</span>
+            <span className='shrink-0'>{label}</span>
+            <span className={`min-w-0 wrap-break-word font-semibold ${dark ? 'text-white' : 'text-[#171a21]'}`}>{value}</span>
         </span>
     )
 }
