@@ -594,6 +594,9 @@ assert(pageClientSource.includes('Watchlist intersections'), 'Public TI org rele
 assert(pageClientSource.includes('data-ti-org-enrichment-gaps'), 'Public TI org relevance should render enrichment gaps.')
 assert(pageClientSource.includes('Actor identity'), 'Public TI org relevance should label actor identity without implementation wording.')
 assert(pageClientSource.includes('Enrichment needed'), 'Public TI org relevance should expose collection/enrichment gaps.')
+assert(pageClientSource.includes('data-ti-collection-gap-intake'), 'Collection gaps should expose structured intake rows.')
+assert(pageClientSource.includes('task.requestedFields?.slice'), 'Collection gaps should show requested enrichment fields without raw payload dumping.')
+assert(pageClientSource.includes('sourceRequestRouteLabel(task.route)'), 'Collection gaps should show analyst-native route labels.')
 for (const section of ['Overview', 'Activity', 'Targeting', 'Infrastructure', 'Sources', 'Evidence', 'Watchlist Relevance', 'Related alerts/cases', 'Collection Gaps', 'Actions']) {
     assert(pageClientSource.toLowerCase().includes(section.toLowerCase()), `Public TI page should expose analyst-native section: ${section}.`)
 }

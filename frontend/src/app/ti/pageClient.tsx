@@ -690,6 +690,10 @@ type EnrichmentTask = {
     title: string
     status: 'ready' | 'needs_api' | 'needs_review' | 'watch'
     detail: string
+    route?: string
+    sourceFamily?: string
+    requestedFields?: string[]
+    ownerLane?: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']
 }
 
 type SourceHealthRow = TiActionabilityModel['sourceHealthQueue']['rows'][number]
@@ -2564,13 +2568,23 @@ function CopyPayloadButton({ label, payload }: { label: string; payload: unknown
 function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     return (
         <Panel title='Collection Gaps' description='Source, capture, and data work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
-            <div className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2'>
+            <div data-ti-collection-gap-intake='true' className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2'>
                 {tasks.map(task => (
                     <div key={task.title} className='min-w-0 max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                         <div className='flex flex-wrap items-start justify-between gap-2'>
                             <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{task.title}</p>
                             <span className={`${taskStatusClass(task.status)} shrink-0 whitespace-nowrap`}>{taskStatusLabel(task.status)}</span>
                         </div>
+                        {(task.route || task.sourceFamily || task.requestedFields?.length || task.ownerLane) ? (
+                            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                {task.sourceFamily ? <span className={sourceHealthChipClass('review')}>{formatLabel(task.sourceFamily)}</span> : null}
+                                {task.ownerLane ? <span className={sourceHealthChipClass(task.status === 'needs_api' ? 'blocked' : 'review')}>{readinessOwnerLabel(task.ownerLane)}</span> : null}
+                                {task.route ? <span className={sourceHealthChipClass('review')}>{sourceRequestRouteLabel(task.route)}</span> : null}
+                                {task.requestedFields?.slice(0, 3).map(field => (
+                                    <span key={`${task.title}-${field}`} className={sourceHealthChipClass('blocked')}>{sourceHealthFieldLabel(field)}</span>
+                                ))}
+                            </div>
+                        ) : null}
                         <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{task.detail}</p>
                     </div>
                 ))}
@@ -3346,6 +3360,10 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
         title: gap.title,
         status: gap.severity === 'high' ? 'needs_api' : 'needs_review',
         detail: `${gap.detail} Source family: ${formatLabel(gap.sourceFamily)}. Needs: ${gap.requestedFields.map(sourceHealthFieldLabel).join(', ')}. Route: ${sourceRequestRouteLabel(gap.route)}.`,
+        route: gap.route,
+        sourceFamily: gap.sourceFamily,
+        requestedFields: gap.requestedFields,
+        ownerLane: gap.sourceFamily === 'alert' ? 'alert' : gap.sourceFamily === 'case' ? 'case' : gap.sourceFamily === 'watchlist' ? 'org' : 'source',
     }))
     return [
         ...actionabilityTasks,
