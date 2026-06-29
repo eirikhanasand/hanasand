@@ -1109,6 +1109,20 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             href: '/api/backend/admin/audit-events?limit=50',
         })
     }
+    const handledActionIds = new Set(rows.flatMap(row => [row.id, row.action?.id].filter(Boolean) as string[]))
+    for (const action of selected.actions || []) {
+        if (handledActionIds.has(action.id) || action.id === 'rebuild_alerts') continue
+        rows.push({
+            id: action.id,
+            label: action.label,
+            detail: `${action.method} ${action.href}.`,
+            tone: action.disabledReason ? 'blocked' : 'ready',
+            href: action.method === 'GET' ? action.href : undefined,
+            action: action.method === 'GET' ? undefined : action,
+            disabledReason: action.disabledReason,
+        })
+        handledActionIds.add(action.id)
+    }
     rows.push(...readinessActionRows(orgContext))
     const rebuildAction = selected.actions?.find(action => action.id === 'rebuild_alerts')
     if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'POST /api/dwm/alerts/rebuild for the selected scope.', tone: 'ready', action: rebuildAction })

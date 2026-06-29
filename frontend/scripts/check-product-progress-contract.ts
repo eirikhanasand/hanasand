@@ -698,6 +698,8 @@ assert.ok(workbenchSource.includes('support_readiness'), 'Operator action rail s
 assert.ok(workbenchSource.includes('open_helpdesk_workbench'), 'Support readiness should deep-link to the helpdesk workbench.')
 assert.ok(workbenchSource.includes('support_recovery_api'), 'Support readiness should expose the recovery queue API.')
 assert.ok(workbenchSource.includes('admin_audit_api'), 'Support readiness should expose the admin audit API.')
+assert.ok(workbenchSource.includes('handledActionIds'), 'Operator action rail should dedupe selected backed actions.')
+assert.ok(workbenchSource.includes('selected.actions || []'), 'Operator action rail should expose backed actions attached to selected readiness items.')
 assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
 assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
 
